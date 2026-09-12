@@ -1,0 +1,21 @@
+{
+  "raw_input_id": "<id>",
+  "matcher_version": "<version>",
+  "decision": "SAME_VARIANT | NEW_VARIANT | NEW_MODEL | NEW_CATEGORY | AMBIGUOUS",
+  "candidate_id": null,
+  "second_candidate_id": null,
+  "candidate_margin": null,
+  "fields": {
+    "canonical_concept": {"value": null, "confidence": null},
+    "product_family": {"value": null, "confidence": null},
+    "source_identity": {"value": null, "confidence": null},
+    "garment_type": {"value": null, "confidence": null},
+    "color": {"value": null, "confidence": null},
+    "size": {"value": null, "confidence": null},
+    "length_cm": {"value": null, "confidence": null}
+  },
+  "conflicts": [],
+  "unclassified_descriptors": [],
+  "requires_human_confirmation": true,
+  "human_result": null
+}

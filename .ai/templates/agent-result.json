@@ -1,0 +1,19 @@
+{
+  "status": "complete | blocked | partial | failed | not_verified",
+  "summary": "What was accomplished",
+  "changed_files": [],
+  "artifacts": [],
+  "tests": [
+    {
+      "command": "",
+      "result": "passed | failed | not_run",
+      "details": ""
+    }
+  ],
+  "architecture_notes": [],
+  "security_notes": [],
+  "migrations": [],
+  "risks": [],
+  "unresolved": [],
+  "handoff_recommendation": ""
+}

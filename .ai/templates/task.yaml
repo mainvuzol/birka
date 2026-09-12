@@ -1,0 +1,29 @@
+id: FEAT-001
+title: "Short task title"
+owner_skill: "backend-fastapi-engineer"
+priority: P1
+objective: |
+  What must exist when this task is done.
+business_context: |
+  Why the capability matters.
+constraints:
+  - "Engineering/business constraint"
+depends_on:
+  - "ARCH-001"
+inputs:
+  - "Relevant file/path or artifact"
+allowed_tools:
+  - "repo_read"
+  - "repo_edit"
+  - "run_tests"
+prohibited_actions:
+  - "production database writes"
+acceptance_criteria:
+  - "Observable condition 1"
+  - "Observable condition 2"
+required_checks:
+  - "pytest relevant/path"
+expected_outputs:
+  - "implementation"
+  - "tests"
+  - "agent result JSON"

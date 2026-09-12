@@ -1,0 +1,116 @@
+# Skill Index v3
+
+Total skills: **96**
+
+## Adaptive catalog additions
+- adaptive-catalog-architect
+- catalog-normalization-parser
+- catalog-matcher
+- catalog-confidence-policy
+- catalog-feedback-learning
+- taxonomy-evolution-guardian
+- product-family-identity
+- source-identity-classifier
+- size-inventory-specialist
+- legacy-inventory-import
+- semantic-retrieval-pgvector
+- catalog-eval-engineer
+
+## Complete alphabetical index
+
+- `adaptive-catalog-architect` — `skills/adaptive-catalog-architect.md`
+- `adversarial-reviewer` — `skills/adversarial-reviewer.md`
+- `agent-handoff` — `skills/agent-handoff.md`
+- `ai-team-golden-evals` — `skills/ai-team-golden-evals.md`
+- `alembic-migration-engineer` — `skills/alembic-migration-engineer.md`
+- `api-contract-engineer` — `skills/api-contract-engineer.md`
+- `architecture-guardian` — `skills/architecture-guardian.md`
+- `async-workloads` — `skills/async-workloads.md`
+- `backend-fastapi-engineer` — `skills/backend-fastapi-engineer.md`
+- `business-observability` — `skills/business-observability.md`
+- `cache-consistency` — `skills/cache-consistency.md`
+- `catalog-confidence-policy` — `skills/catalog-confidence-policy.md`
+- `catalog-eval-engineer` — `skills/catalog-eval-engineer.md`
+- `catalog-feedback-learning` — `skills/catalog-feedback-learning.md`
+- `catalog-matcher` — `skills/catalog-matcher.md`
+- `catalog-normalization-parser` — `skills/catalog-normalization-parser.md`
+- `chaos-resilience-testing` — `skills/chaos-resilience-testing.md`
+- `ci-cd-engineer` — `skills/ci-cd-engineer.md`
+- `code-reviewer` — `skills/code-reviewer.md`
+- `compensating-operations` — `skills/compensating-operations.md`
+- `concurrency-test-engineer` — `skills/concurrency-test-engineer.md`
+- `concurrency-transactions` — `skills/concurrency-transactions.md`
+- `context-compressor` — `skills/context-compressor.md`
+- `context-engineer` — `skills/context-engineer.md`
+- `cost-controller` — `skills/cost-controller.md`
+- `database-performance` — `skills/database-performance.md`
+- `definition-of-done-gate` — `skills/definition-of-done-gate.md`
+- `dependency-graph-planner` — `skills/dependency-graph-planner.md`
+- `dependency-researcher` — `skills/dependency-researcher.md`
+- `design-system-agent` — `skills/design-system-agent.md`
+- `devops-docker-caddy` — `skills/devops-docker-caddy.md`
+- `disaster-recovery` — `skills/disaster-recovery.md`
+- `documentation-agent` — `skills/documentation-agent.md`
+- `domain-snapshotting` — `skills/domain-snapshotting.md`
+- `eval-engineer` — `skills/eval-engineer.md`
+- `executive-orchestrator` — `skills/executive-orchestrator.md`
+- `financial-integrity` — `skills/financial-integrity.md`
+- `frontend-react-engineer` — `skills/frontend-react-engineer.md`
+- `git-workflow-agent` — `skills/git-workflow-agent.md`
+- `golden-path-release-gate` — `skills/golden-path-release-gate.md`
+- `guardrail-agent` — `skills/guardrail-agent.md`
+- `high-frequency-pos-ux` — `skills/high-frequency-pos-ux.md`
+- `human-error-resilience` — `skills/human-error-resilience.md`
+- `human-in-the-loop` — `skills/human-in-the-loop.md`
+- `incident-responder` — `skills/incident-responder.md`
+- `inventory-ledger-specialist` — `skills/inventory-ledger-specialist.md`
+- `legacy-inventory-import` — `skills/legacy-inventory-import.md`
+- `llm-tracing` — `skills/llm-tracing.md`
+- `loop-detector` — `skills/loop-detector.md`
+- `mcp-engineer` — `skills/mcp-engineer.md`
+- `memory-manager` — `skills/memory-manager.md`
+- `mobile-api-performance` — `skills/mobile-api-performance.md`
+- `mobile-performance-rum` — `skills/mobile-performance-rum.md`
+- `model-router` — `skills/model-router.md`
+- `modular-monolith-guardian` — `skills/modular-monolith-guardian.md`
+- `multi-tenancy-architect` — `skills/multi-tenancy-architect.md`
+- `parallel-work-orchestrator` — `skills/parallel-work-orchestrator.md`
+- `performance-budget-engineer` — `skills/performance-budget-engineer.md`
+- `performance-regression-gate` — `skills/performance-regression-gate.md`
+- `playwright-e2e` — `skills/playwright-e2e.md`
+- `postgres-engineer` — `skills/postgres-engineer.md`
+- `pr-manager` — `skills/pr-manager.md`
+- `product-family-identity` — `skills/product-family-identity.md`
+- `product-slo-engineer` — `skills/product-slo-engineer.md`
+- `product-strategist` — `skills/product-strategist.md`
+- `production-readiness-review` — `skills/production-readiness-review.md`
+- `project-task-planner` — `skills/project-task-planner.md`
+- `prompt-injection-defense` — `skills/prompt-injection-defense.md`
+- `pytest-httpx-engineer` — `skills/pytest-httpx-engineer.md`
+- `qa-architect` — `skills/qa-architect.md`
+- `rbac-permission-designer` — `skills/rbac-permission-designer.md`
+- `refactoring-agent` — `skills/refactoring-agent.md`
+- `release-manager` — `skills/release-manager.md`
+- `repo-mapper` — `skills/repo-mapper.md`
+- `request-correlation` — `skills/request-correlation.md`
+- `requirements-engineer` — `skills/requirements-engineer.md`
+- `research-agent` — `skills/research-agent.md`
+- `retail-domain-expert` — `skills/retail-domain-expert.md`
+- `sandbox-execution` — `skills/sandbox-execution.md`
+- `secret-safety` — `skills/secret-safety.md`
+- `security-engineer` — `skills/security-engineer.md`
+- `semantic-retrieval-pgvector` — `skills/semantic-retrieval-pgvector.md`
+- `size-inventory-specialist` — `skills/size-inventory-specialist.md`
+- `solution-architect` — `skills/solution-architect.md`
+- `source-identity-classifier` — `skills/source-identity-classifier.md`
+- `sqlalchemy-specialist` — `skills/sqlalchemy-specialist.md`
+- `sre-observability` — `skills/sre-observability.md`
+- `structured-output` — `skills/structured-output.md`
+- `taxonomy-evolution-guardian` — `skills/taxonomy-evolution-guardian.md`
+- `telegram-mini-app-specialist` — `skills/telegram-mini-app-specialist.md`
+- `threat-model-agent` — `skills/threat-model-agent.md`
+- `tool-permission-guard` — `skills/tool-permission-guard.md`
+- `tool-use-agent` — `skills/tool-use-agent.md`
+- `transaction-outbox-engineer` — `skills/transaction-outbox-engineer.md`
+- `ux-product-designer` — `skills/ux-product-designer.md`
+- `verification-before-completion` — `skills/verification-before-completion.md`
