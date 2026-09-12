@@ -1,0 +1,63 @@
+# Local and single-server deployment stack.
+# PostgreSQL 17: ADR-0002 requires >= 15 for UNIQUE NULLS NOT DISTINCT.
+name: birka
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-birka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-birka}
+      # Deterministic collation: catalog matching compares shop language.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-birka} -d ${POSTGRES_DB:-birka}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Not published to the host in production; the api reaches it over the
+    # compose network. Override in docker-compose.override.yml for local psql.
+    expose:
+      - "5432"
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BIRKA_APP_ENV: ${BIRKA_APP_ENV:-local}
+      BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
+      BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN:?bot token is required}
+      BIRKA_SESSION_SECRET: ${BIRKA_SESSION_SECRET:?session secret is required}
+      BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
+      BIRKA_LOG_JSON: "true"
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      BIRKA_DOMAIN: ${BIRKA_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
