@@ -2,9 +2,9 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **PLAN APPROVED IN PRINCIPLE — revision 2 corrections applied. Awaiting final planning diff review before M1-001 starts.**
+Status: **PLAN APPROVED (revision 3). Gate M1A IN PROGRESS.**
 
-Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 35 physical tables · 4 gates
+Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 36 physical tables · 22 invariants · 4 gates
 Branch: `feat/foundation-milestone-1`
 
 ## Gates
@@ -18,16 +18,22 @@ Branch: `feat/foundation-milestone-1`
 
 ## Ready / blocked
 
-- **M1A is unblocked** and depends on no open question.
-- **M1-013 blocked by Q2** — is stock counted per size, or model + colour only?
-- **M1-016 blocked by Q1** — currency; price from a price list or typed at sale; discounts?
-- **M1-023 blocked by U11** — two or three real notebook/PDF pages are needed for the parser corpus.
-- Q4 (users and devices) and Q5 (transfer confirmation) have working defaults and block nothing.
+**No task is blocked by an open question.** Q1 (money), Q2 (inventory granularity) and U11 (parser corpus) were answered at revision 3. Q4 (users and devices) and Q5 (transfer confirmation) refine already-safe defaults and can be answered during M1C/M1D.
+
+Verification limits on the current development machine — these constrain evidence, not design:
+
+- no Docker → compose config authored but not executed locally;
+- no PostgreSQL → database integration tests run in CI only, and skip locally with an explicit marker rather than passing silently;
+- no Node.js → frontend scaffold authored but not built locally; frontend work is gate M1D.
 
 ## Standing constraints for this milestone
 
 - Do not freeze the final taxonomy or aggressive auto-match thresholds.
 - No LLM parsing, no embeddings (confirmed).
 - `ProductFamily` has independent identity; `(concept, source, garment_type)` is a matching signal, never a unique constraint — see ADR-0002.
+- Business uniqueness of critical commands rests on a permanent `command_id`, never on idempotency-record retention.
+- `ParseResult` is deterministic per `(raw_text, parser_version)`; catalog knowledge enters only at matching.
+- Currency is UAH; `SaleItem` freezes its own money values; acquisition cost lives on `StockLot`; no discount engine.
+- Inventory is `store + variant + size`; `UNKNOWN_SIZE` is a real domain state; reclassification is audited.
 - Sentinel rows only where the business genuinely has that state; use `UNIQUE NULLS NOT DISTINCT` where a unique constraint truly belongs. PostgreSQL ≥ 15, pinned to 17.
 - Continue collecting real store datasets in parallel with M1A/M1B.

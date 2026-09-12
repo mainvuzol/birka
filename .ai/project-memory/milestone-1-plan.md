@@ -1,12 +1,12 @@
 # Milestone 1 Plan — Production Foundation Without Irreversible Catalog Assumptions
 
-**Status:** `APPROVED IN PRINCIPLE — corrections applied, revision 2`
+**Status:** `APPROVED — revision 3. Gate M1A in progress.`
 **Branch:** `feat/foundation-milestone-1`
-**Prepared by:** Executive Orchestrator, planning runs 1–2
-**Implementation started:** NO — M1-001 is held until the final planning diff is reviewed
+**Prepared by:** Executive Orchestrator, planning runs 1–3
+**Implementation started:** YES — gate M1A only. M1B does not open until M1A's exit criterion is met and independently reviewed.
 **Verification status:** `NOT VERIFIED` — no build, test or migration has been executed, because none exists yet
 
-Revision 2 applies ten planning corrections issued at conceptual approval. §15 records what changed and why.
+Revision 2 applied ten planning corrections (§15). Revision 3 adds two technical clarifications and records the business confirmations for money, inventory granularity and the parser corpus (§16).
 
 ---
 
@@ -73,6 +73,15 @@ Governance-derived facts F1–F28 are unchanged from revision 1 and are not rest
 - **F31.** No LLM parsing and no embeddings in Milestone 1. Confirmed decision, not an assumption.
 - **F32.** Milestone 1 is delivered through four internal gates: M1A platform, M1B first complete sale vertical slice, M1C refund/transfer/legacy import, M1D client/E2E/release.
 
+Confirmed at revision 3:
+
+- **F33 (money).** Currency is **UAH**. A store/variant may carry a *current suggested selling price* so the seller does not retype it every sale. `SaleItem` always freezes its own `unit_price`, `discount_amount`, `final_unit_price` and `currency_code`, and those values are immutable afterwards. Acquisition cost belongs to `StockLot`, never to the catalog. Item-level discount **data** is supported in M1; a discount/promotion **engine** is not built. Money uses PostgreSQL `NUMERIC` and Python `Decimal` only.
+- **F34 (inventory granularity).** Inventory is tracked by `store + product_variant + size` when size is known. `UNKNOWN_SIZE` is a legitimate domain size for legacy or incomplete data. Size distribution is never invented. Reclassifying `UNKNOWN_SIZE` stock into concrete sizes is an **audited inventory reclassification**, never a silent rewrite of history.
+- **F35 (parser corpus).** The real legacy PDFs already provided satisfy the real-data requirement. Originals are private source material and are **not** committed to Git; they live under a gitignored `data/legacy/raw/`. A sanitized, versioned golden corpus derived from real lines lives under `backend/tests/fixtures/`.
+- **F36 (command identity).** Business uniqueness of a critical command rests on a **permanent** `command_id`, not on a retention-limited idempotency record. See §4.5.
+- **F37 (parse determinism).** A `ParseResult` is a pure function of `(raw_text, parser_version)`. Catalog knowledge must not leak into parsing. See §4.7.
+- **F38 (gate order).** M1A starts immediately and does not wait on M1B questions.
+
 ### 3.2 Assumptions still standing
 
 | # | Assumption | Default | If wrong |
@@ -81,9 +90,8 @@ Governance-derived facts F1–F28 are unchanged from revision 1 and are not rest
 | A2 | Two stores, one organization | org-aware schema, one org seeded | low |
 | A3 | Roles OWNER / MANAGER / SELLER composed from capabilities | 3 seeded roles | low — roles are data |
 | A4 | Parent/child is a label, not behaviour | no hierarchy column | low |
-| A5 | Single currency, 2 decimals | `NUMERIC(12,2)` + org currency code | **medium-high** → Q1 |
-| A6 | Price entered or confirmed at sale time | no price-list entity in M1 | **high** → Q1 |
-| A7 | Stock tracked per size, with "size unknown" as a real state | inventory key includes size | **high** → Q2 |
+| ~~A5, A6~~ | superseded by **F33** — currency, price source and discount handling are confirmed | — | — |
+| ~~A7~~ | superseded by **F34** — per-size inventory with `UNKNOWN_SIZE` is confirmed | — | — |
 | A8 | Transfers complete in one step | single-transaction OUT+IN | medium → Q5 |
 | A9–A14 | No barcodes/photos/customers in M1; Telegram-only client; mixed UA/RU/latin shop language; single small VPS | as stated in revision 1 | low |
 
@@ -91,12 +99,14 @@ Governance-derived facts F1–F28 are unchanged from revision 1 and are not rest
 
 | # | Question | Status |
 |---|---|---|
-| Q1 | Currency; price from a price list or typed at sale; discounts | **STILL OPEN — blocks M1-016** |
-| Q2 | Is stock counted per size, or model+colour only | **STILL OPEN — blocks M1-013** |
+| Q1 | Currency; price source; discounts | **ANSWERED → F33** |
+| Q2 | Is stock counted per size | **ANSWERED → F34** |
 | Q3 | Selling when system shows zero | **ANSWERED → F30** |
-| Q4 | Number of sellers, shared vs personal devices, cross-store visibility | open — M1-008/009 defaults hold |
-| Q5 | Transfer confirmation on receipt | open — default single-step |
-| U11 | Real legacy documents (PDF/notebook pages) | **still required before M1-023 can close** |
+| Q4 | Number of sellers, shared vs personal devices, cross-store visibility | open — M1-008/009 defaults hold, blocks nothing |
+| Q5 | Transfer confirmation on receipt | open — default single-step, blocks nothing |
+| U11 | Real legacy documents | **ANSWERED → F35** |
+
+**No open question blocks any Milestone 1 task.** Q4 and Q5 refine defaults that are already implemented safely.
 
 ---
 
@@ -197,7 +207,29 @@ Deterministic reprocessing:
 - Reprocessing never touches inventory. It can only move a row toward `PARSED`/`AMBIGUOUS`; applying a decision is a separate, permissioned step.
 - `FAILED` rows are retryable in bulk after a parser fix: select by status, reset to `PENDING`, re-run. No row is ever dropped.
 
-### 4.5 Idempotency contract
+### 4.5 Command identity and idempotency — two separate mechanisms
+
+These are not the same thing and must not share a lifetime.
+
+| | **Command identity** | **Idempotency record** |
+|---|---|---|
+| Question it answers | "Has this business operation already happened?" | "What did we answer last time?" |
+| Lifetime | **permanent** | retention-limited (7 days) |
+| Storage | `command_id` column on the business row | `idempotency_record` table |
+| Enforcement | `UNIQUE` constraint — `DB_ENFORCED` | service replay logic |
+| If it is missing | a duplicate business operation is created | a client gets a fresh execution instead of a cached answer |
+
+**Command identity (permanent).** Every critical command carries a client-generated `command_id` (UUID) that is stored on the row it creates and constrained unique for the life of the data:
+
+```text
+sale      command_id UUID NOT NULL   UNIQUE (organization_id, command_id)
+refund    command_id UUID NOT NULL   UNIQUE (organization_id, command_id)
+transfer  command_id UUID NOT NULL   UNIQUE (organization_id, command_id)
+```
+
+A replay arriving after the idempotency record has expired therefore still cannot create a second sale: the insert violates the unique constraint, the service catches it and returns the existing operation. The business invariant lives in the database and never expires.
+
+**Idempotency record (retention-limited).** A cache that lets a retry get the original *response* — including the exact HTTP status and body — without re-executing. It is an optimisation and a UX guarantee, not the correctness guarantee.
 
 ```text
 IdempotencyRecord(
@@ -219,7 +251,7 @@ UNIQUE (organization_id, endpoint, key)   -- namespaced by tenant AND operation
 | Same key + **different** fingerprint | `409 IDEMPOTENCY_CONFLICT` — never execute |
 | Same key, different tenant or different endpoint | unrelated records; no collision by construction |
 
-Retention: records expire 7 days after creation; expiry is a cleanup job, never a silent reuse window inside those 7 days.
+Retention: records expire 7 days after creation; expiry is a cleanup job, never a silent reuse window inside those 7 days. **After expiry the business is still protected by the permanent `command_id` constraint** — the client simply re-executes and receives the existing operation instead of a cached response.
 
 **Interaction with `FOUND_DURING_SALE` (§4.6):** the corrected sale carries a different payload from the rejected one, so it **must** use a new idempotency key. The client generates a fresh key when the seller confirms the correction. Reusing the original key would correctly produce `IDEMPOTENCY_CONFLICT`; the client must not do that.
 
@@ -256,20 +288,105 @@ Constraints:
 - The audit entry records actor, the system quantity before, the corrected quantity, the sale reference and the reason code.
 - Reporting must be able to answer "how often did stock turn out to be wrong?" — `FOUND_DURING_SALE` frequency is a data-quality signal, not just a workaround.
 
+### 4.7 Parsing is deterministic; learning happens in matching
+
+Parsing and learning must not be mixed, or `parser_version` stops meaning anything. If the parser consulted the alias table, then re-parsing the same line next month — after a seller confirmed one new alias — would silently produce a different `ParseResult` under the *same* version string. Every stored parse would become unreproducible, and a parser regression would be undiagnosable.
+
+```text
+RawInput  ──────────────────────────────────►  ParseResult
+          pure function of (raw_text, parser_version)
+          normalization · tokenization · slash rule
+          per-field confidence · unclassified descriptors
+          NO catalog lookups, NO alias table, NO database reads
+
+ParseResult  +  current catalog knowledge  ──►  CatalogMatchDecision
+                aliases · existing families · variants
+                trigram retrieval · attribute conflicts
+                records matcher_version AND knowledge revision
+```
+
+Rules:
+
+1. **The parser reads no catalog state.** Given the same `raw_text` and `parser_version`, the output is byte-identical, forever. That is what makes `UNIQUE (raw_input_id, parser_version)` a correct constraint and reprocessing deterministic (§4.4).
+2. **All catalog knowledge enters at the matching step.** Aliases, existing families, confirmations and rejections are matcher inputs, never parser inputs.
+3. **`CatalogMatchDecision` records the knowledge it used**, so a decision is explainable after the catalog has moved on:
+   - `matcher_version` — the matching algorithm,
+   - `knowledge_revision` — a monotonic counter bumped whenever verified aliases or family/variant identity change,
+   - the candidate set with per-field scores, margin and conflicts, as already specified.
+4. **Re-matching is expected and cheap; re-parsing is rare.** A new decision over an old `ParseResult` is normal when catalog knowledge improves. The evidence and its parse stay untouched.
+5. **Consequence for M1-020/M1-021:** the parser is unit-testable with no database at all — golden corpus in, structured fields out. That is why the parser corpus (F35) can be a pure fixture suite.
+
+### 4.8 Money (F33)
+
+Three places hold a monetary value, and each answers a different question.
+
+```text
+VariantPrice        -- "what should the seller be offered?"  MUTABLE, current only
+  id PK, organization_id FK, store_id FK NULL, product_variant_id FK
+  suggested_price NUMERIC(12,2) NOT NULL, currency_code CHAR(3) NOT NULL
+  updated_by FK, updated_at
+  UNIQUE NULLS NOT DISTINCT (organization_id, store_id, product_variant_id)
+  -- store_id NULL = organization-wide default; a store row overrides it
+
+SaleItem            -- "what was actually charged?"  IMMUTABLE, frozen at sale
+  unit_price        NUMERIC(12,2) NOT NULL   -- before discount
+  discount_amount   NUMERIC(12,2) NOT NULL DEFAULT 0
+  final_unit_price  NUMERIC(12,2) NOT NULL   -- charged per unit
+  currency_code     CHAR(3)       NOT NULL
+  quantity          INT           NOT NULL CHECK (quantity > 0)
+  line_total        NUMERIC(12,2) NOT NULL
+  display_name_snapshot TEXT NOT NULL, variant_snapshot JSONB NOT NULL
+  CHECK (final_unit_price = unit_price - discount_amount)
+  CHECK (line_total      = final_unit_price * quantity)
+
+StockLot            -- "what did it cost us?"  acquisition side, never catalog
+  unit_cost NUMERIC(12,2) NULL, currency_code CHAR(3) NULL
+```
+
+Rules:
+
+- Currency is **UAH** for the organization. `currency_code` is stored explicitly on every monetary row anyway, so historical rows stay self-describing if that ever changes.
+- The suggested price is a *convenience*, not an authority. The sale request carries the actual prices; the server validates them but does not silently substitute the catalog price. A price changed after a sale never affects that sale (I8).
+- `discount_amount` is **data**, not a rules engine. M1 stores what the seller applied. No promotion rules, no automatic discounts, no coupon model.
+- The two `CHECK` constraints make the arithmetic relationship `DB_ENFORCED`, so a rounding bug in application code cannot persist an internally inconsistent line.
+- Rounding: computed per line with `Decimal`, `ROUND_HALF_UP`, to 2 decimal places. Sale totals are the sum of stored line totals, never a recomputation from unit prices.
+
+### 4.9 UNKNOWN_SIZE reclassification (F34)
+
+`UNKNOWN_SIZE` stock is real stock. Turning it into concrete sizes is an audited operation, not an edit:
+
+```text
+BEGIN
+  permission inventory:adjust
+  decrement UNKNOWN_SIZE by n     → StockMovement(ADJUSTMENT, -n,
+                                      reason_code = SIZE_RECLASSIFICATION_OUT)
+  increment size M by n           → StockMovement(ADJUSTMENT, +n,
+                                      reason_code = SIZE_RECLASSIFICATION_IN)
+  INSERT AuditLog(before, after, reason, actor, linked movements)
+COMMIT
+```
+
+Total quantity is unchanged, both halves are in the ledger, and the reclassification is reversible by the same mechanism. Nothing is rewritten.
+
 ---
 
 ## 5. M1 Physical Schema
 
-**35 tables.** Built because Milestone 1 needs them, not because the conceptual model lists them.
+**36 tables.** Built because Milestone 1 needs them, not because the conceptual model lists them.
 
-| # | Group | Tables |
-|---|---|---|
-| 1–6 | Tenancy & access | `organization`, `store`, `app_user`, `membership`, `role`, `role_permission` |
-| 7–13 | Catalog identity | `business_category`, `garment_type`, `canonical_concept`, `source_identity`, `product_family`, `attribute_term`, `product_variant` |
-| 14–16 | Size | `size_system`, `size`, `size_alias` |
-| 17–22 | Evidence & learning | `raw_input`, `raw_input_processing`, `parse_result`, `product_alias`, `alias_evidence`, `catalog_match_decision` |
-| 23–27 | Inventory | `stock_lot`, `inventory`, `stock_movement`, `inventory_snapshot`, `inventory_snapshot_row` |
-| 28–35 | Money, movement, platform | `sale`, `sale_item`, `refund`, `refund_item`, `transfer`, `transfer_item`, `idempotency_record`, `audit_log` |
+| # | Group | Tables | Gate |
+|---|---|---|---|
+| 1–6 | Tenancy & access | `organization`, `store`, `app_user`, `membership`, `role`, `role_permission` | **M1A** |
+| 7–13 | Catalog identity | `business_category`, `garment_type`, `canonical_concept`, `source_identity`, `product_family`, `attribute_term`, `product_variant` | M1B |
+| 14–16 | Size | `size_system`, `size`, `size_alias` | M1B |
+| 17–22 | Evidence & learning | `raw_input`, `raw_input_processing`, `parse_result`, `product_alias`, `alias_evidence`, `catalog_match_decision` | M1B / M1C |
+| 23–27 | Inventory | `stock_lot`, `inventory`, `stock_movement`, `inventory_snapshot`, `inventory_snapshot_row` | M1B / M1C |
+| 28 | Price | `variant_price` — and no second price table; history is out of M1 | M1B |
+| 29–36 | Money, movement, platform | `sale`, `sale_item`, `refund`, `refund_item`, `transfer`, `transfer_item`, `idempotency_record`, `audit_log` | M1B / M1C |
+
+Exact list: 6 tenancy + 7 catalog + 3 size + 6 evidence + 5 inventory + 1 price + 8 money/platform = **36**.
+
+`sale`, `refund` and `transfer` each additionally carry a permanent `command_id` with `UNIQUE (organization_id, command_id)` — see §4.5.
 
 ### 5.1 Conceptual entities deliberately NOT built in M1
 
@@ -322,8 +439,11 @@ Per correction 6, each invariant names **what actually enforces it**. Service-la
 | I17 | Legacy import fabricates nothing | `SERVICE_ENFORCED` + `CI_ENFORCED` | approved rows emit only `OPENING_BALANCE` | no `DELIVERY`/`SALE` movement produced |
 | I18 | Stock correction during a sale is exactly the shortfall | `SERVICE_ENFORCED` | assertion in the sale service; `CORRECTION_EXCEEDS_SHORTFALL` otherwise | over-correction rejected; audit entry present |
 | I19 | Module boundaries hold | `CI_ENFORCED` | import-linter contract | a deliberate illegal import fails the build |
+| I20 | A critical command can never create a second business operation, at any distance in time | `DB_ENFORCED` | permanent `UNIQUE (organization_id, command_id)` on `sale`, `refund`, `transfer` — independent of idempotency-record retention | replay after the idempotency record is deleted still returns the original operation |
+| I21 | A parse is reproducible forever | `DB_ENFORCED` + `CI_ENFORCED` | `UNIQUE (raw_input_id, parser_version)`; the parser performs no catalog or database reads | same input + same parser version yields byte-identical output; an import-linter rule forbids `catalog.matching`/repository imports inside the parser package |
+| I22 | Money arithmetic on a sale line is internally consistent | `DB_ENFORCED` | `CHECK (final_unit_price = unit_price - discount_amount)` and `CHECK (line_total = final_unit_price * quantity)` | an inconsistent line cannot be inserted |
 
-**Honest summary:** 8 invariants have real database teeth. 9 depend on application code holding its discipline, backed by tests and CI. 2 are detected rather than prevented. The two that changed level in revision 2 are I3 (never was `DB_ENFORCED`; revision 1 implied it was) and I14 (lost its accidental database backstop when the ProductFamily unique constraint was correctly removed).
+**Honest summary:** 11 invariants have real database teeth. 9 depend on application code holding its discipline, backed by tests and CI. 2 are detected rather than prevented. The two that changed level in revision 2 are I3 (never was `DB_ENFORCED`; revision 1 implied it was) and I14 (lost its accidental database backstop when the ProductFamily unique constraint was correctly removed).
 
 ---
 
@@ -468,10 +588,10 @@ Revision 1 said "24 tasks" while listing M1-001…M1-028. The correct count is *
 | M1-010 | Catalog identity schema, **ProductFamily with independent id + non-unique signature index** (§4.2) | `adaptive-catalog-architect`, `postgres-engineer` | M1-006 |
 | M1-011 | Size systems, sizes, aliases, "size unknown" as domain state | `size-inventory-specialist` | M1-010 |
 | M1-012 | `raw_input` (append-only) + `raw_input_processing` lifecycle + `parse_result` uniqueness (§4.4) | `adaptive-catalog-architect` | M1-010 |
-| M1-013 | Inventory + stock movement + stock lot, `CHECK (quantity >= 0)`, reconciliation query | `inventory-ledger-specialist`, `postgres-engineer` | M1-011, **Q2** |
+| M1-013 | Inventory + stock movement + stock lot, `CHECK (quantity >= 0)`, reconciliation query | `inventory-ledger-specialist`, `postgres-engineer` | M1-011 |
 | M1-014 | Idempotency: fingerprint, claim/replay, conflict, namespacing (§4.5) | `concurrency-transactions` | M1-013 |
 | M1-015 | `InventoryService`: atomic conditional movement application + structured `POST /inventory/receipts` | `concurrency-transactions`, `concurrency-test-engineer` | M1-013 |
-| M1-016 | Sale service + `POST /sales` + Decimal money + immutable snapshots | `backend-fastapi-engineer`, `financial-integrity` | M1-014, M1-015, **Q1, Q2** |
+| M1-016 | Sale service + `POST /sales` + Decimal money + immutable snapshots | `backend-fastapi-engineer`, `financial-integrity` | M1-014, M1-015 |
 | M1-019 | `FOUND_DURING_SALE` correction path + `inventory:adjust` for manager/owner + audit (§4.6) | `human-error-resilience` | M1-016 |
 
 ### Gate M1C — Refund, Transfer, Catalog pipeline, Legacy import (6 tasks)
@@ -485,7 +605,7 @@ Revision 1 said "24 tasks" while listing M1-001…M1-028. The correct count is *
 | M1-020 | Normalization + deterministic parser v1: slash rule, per-field confidence, unclassified descriptors | `catalog-normalization-parser` | M1-012 |
 | M1-021 | Matcher v1: alias → `pg_trgm` → attribute compatibility → 5 decision types + margin policy + **duplicate-signature report** | `catalog-matcher`, `catalog-confidence-policy` | M1-020, M1-010 |
 | M1-022 | Alias/feedback evidence, `NEW→LEARNING→VERIFIED` promotion, review-queue API | `catalog-feedback-learning` | M1-021 |
-| M1-023 | Snapshot import: raw rows, parse, review, approve → opening balances | `legacy-inventory-import` | M1-021, M1-013, **U11** |
+| M1-023 | Snapshot import: raw rows, parse, review, approve → opening balances | `legacy-inventory-import` | M1-021, M1-013 |
 
 ### Gate M1D — Client, E2E, Release (5 tasks)
 
@@ -532,22 +652,25 @@ Per `.ai/OPERATING_MANUAL.md` §6, the implementer of M1-014, M1-015, M1-016, M1
 | Governing files read | DONE (§1) |
 | Repository inspected | DONE (§2) |
 | Corrections 1–10 applied | DONE (§15) |
-| Code written | NONE — M1-001 not started |
-| Tests run | `NOT VERIFIED` — no suite exists |
-| Migrations | `NOT VERIFIED` — none exist |
-| Build / lint / typecheck | `NOT VERIFIED` — no toolchain exists |
-| `NULLS NOT DISTINCT` behaviour on PostgreSQL 17 | `NOT VERIFIED` — to be proven by a migration test in M1-010 |
+| Revision 3 clarifications and confirmations applied | DONE (§16) |
+| Telegram initData algorithm | VERIFIED against `core.telegram.org/bots/webapps`: `secret_key = HMAC_SHA256(key="WebAppData", msg=bot_token)`, then compare `hex(HMAC_SHA256(key=secret_key, msg=data_check_string))` |
+| Python 3.14 toolchain viability | VERIFIED — fastapi, pydantic v2, sqlalchemy, alembic, asyncpg, pytest, httpx, ruff, mypy, structlog, import-linter all install |
+| Gate M1A | see the M1A completion report for evidence |
+| `NULLS NOT DISTINCT` behaviour on PostgreSQL 17 | `NOT VERIFIED` — proven by a migration test in M1-010 (gate M1B) |
 
 ---
 
-## 14. Open items blocking implementation
+## 14. Open items
 
-- **Q1** (currency, price source, discounts) blocks M1-016.
-- **Q2** (per-size stock) blocks M1-013.
-- **U11** (real legacy documents) blocks closing M1-023.
-- Q4 and Q5 have working defaults and do not block.
+**Nothing blocks Milestone 1.** Q1, Q2 and U11 were answered at revision 3 (F33, F34, F35). Q4 (users and devices) and Q5 (transfer confirmation) refine defaults that are already implemented safely and can be answered during M1C/M1D.
 
-M1A (M1-001 … M1-009) depends on none of these and is ready to start on approval of this revision.
+Environment limits that constrain *verification*, not design — recorded honestly rather than worked around:
+
+| Limit | Consequence |
+|---|---|
+| No Docker on the development machine | `docker compose` config is authored and linted by inspection but **not executed locally**; it is exercised in CI and on the server |
+| No PostgreSQL client or server locally | database integration tests are written and run **in CI only**; locally they skip with an explicit marker, never a silent pass |
+| No Node.js locally | the frontend scaffold is authored but **not built or linted locally**; CI covers it. Frontend work is gate M1D anyway |
 
 ---
 
@@ -567,3 +690,29 @@ M1A (M1-001 … M1-009) depends on none of these and is ready to start on approv
 | 10 | No LLM/embeddings in M1 | Recorded as confirmed fact F31, not an assumption; `ProductEmbedding` listed as conceptual-only | Matcher v1 stays deterministic: aliases + trigram + attribute conflicts |
 
 **On approval of this revision:** start M1-001. Q1 and Q2 must be answered before M1-013 and M1-016 open; everything in gate M1A is unblocked today.
+
+---
+
+## 16. Revision 3 — clarifications and business confirmations
+
+### Technical clarifications
+
+| # | Clarification | Change made |
+|---|---|---|
+| 1 | Idempotency retention must not carry a business invariant | Split into two mechanisms (§4.5). `command_id` is permanent with `UNIQUE (organization_id, command_id)` on `sale`, `refund` and `transfer` — new invariant **I20**, `DB_ENFORCED`. `IdempotencyRecord` is demoted to a replay/response cache with a 7-day TTL. A replay after expiry still cannot create a second business operation |
+| 2 | Evolving catalog knowledge must not change what `parser_version` means | Parsing and matching separated (§4.7). `ParseResult` is a pure function of `(raw_text, parser_version)` and performs no catalog or database reads; all learned knowledge enters at `CatalogMatchDecision`, which now records `matcher_version` **and** `knowledge_revision`. New invariant **I21**, enforced by a unique constraint plus an import-linter rule that forbids the parser from importing catalog matching or repositories |
+
+### Business confirmations
+
+| Question | Confirmed | Recorded as |
+|---|---|---|
+| Q1 money | Currency **UAH**. Store/variant may carry a current *suggested* selling price. `SaleItem` freezes `unit_price`, `discount_amount`, `final_unit_price`, `currency_code`, immutably. Acquisition cost lives on `StockLot`. Item-level discount **data** in M1, no discount engine. `NUMERIC` + `Decimal` only | **F33**, §4.8, new table `variant_price`, new invariant **I22** |
+| Q2 inventory granularity | `store + product_variant + size` when size is known. `UNKNOWN_SIZE` is a legitimate domain size. Distribution is never invented. Reclassification is an audited two-movement operation, not a rewrite | **F34**, §4.9 |
+| U11 parser corpus | The supplied legacy PDFs satisfy the real-data requirement. Originals stay private under a gitignored `data/legacy/raw/`; a sanitized versioned golden corpus lives in `backend/tests/fixtures/` | **F35**, enforced by `.gitignore` in M1-001 |
+
+### Effect on the schedule
+
+- Physical schema: 35 → **36 tables** (`variant_price` added).
+- Invariants: 19 → **22**, of which 11 are now `DB_ENFORCED` (was 8).
+- **No Milestone 1 task is blocked by an open question any more.**
+- Gate **M1A started immediately** on this approval and does not wait for anything in M1B.
