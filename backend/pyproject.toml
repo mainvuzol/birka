@@ -59,6 +59,12 @@ select = [
 ignore = [
     "S101",  # assert is fine in tests; production code is checked by review
     "B008",  # FastAPI Depends() in defaults is the framework idiom
+    # The shop speaks Ukrainian and Russian. Real product names (Лоран, шоколад,
+    # Куртки) belong in docstrings, comments and test data; flagging Cyrillic as
+    # "ambiguous" would push the domain out of the code that models it.
+    "RUF001",
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -105,12 +111,10 @@ filterwarnings = ["error::DeprecationWarning:app.*"]
 # the module it constrains, and every gate task that introduces a module also
 # adds its contract. Contracts still to be added:
 #
-#   M1B  catalog is a leaf                 (app.modules.catalog)
 #   M1B  only inventory writes stock (I3)  (app.modules.inventory.repository)
 #   M1C  parser reads no catalog state (I21)
 #        source: app.modules.catalog.parsing
 #        forbidden: app.modules.catalog.matching, .repository, app.core.db
-#   M1C  authz must not depend on business modules
 # ---------------------------------------------------------------------------
 [tool.importlinter]
 root_package = "app"
@@ -140,3 +144,33 @@ forbidden_modules = ["app.modules.identity", "app.modules.authz"]
 name = "module layering: identity -> authz -> tenancy"
 type = "layers"
 layers = ["app.modules.identity", "app.modules.authz", "app.modules.tenancy"]
+
+[[tool.importlinter.contracts]]
+name = "catalog is a leaf: it may not import another business module"
+type = "forbidden"
+source_modules = ["app.modules.catalog"]
+forbidden_modules = [
+    "app.modules.inventory",
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+]
+
+[[tool.importlinter.contracts]]
+name = "authz must not depend on business modules"
+type = "forbidden"
+source_modules = ["app.modules.authz"]
+forbidden_modules = [
+    "app.modules.catalog",
+    "app.modules.inventory",
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.audit",
+]
+
+[[tool.importlinter.contracts]]
+name = "inventory may read catalog but sales may not write stock directly"
+type = "forbidden"
+source_modules = ["app.modules.inventory"]
+forbidden_modules = ["app.modules.sales", "app.modules.refunds", "app.modules.transfers"]

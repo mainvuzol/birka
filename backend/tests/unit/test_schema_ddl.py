@@ -21,14 +21,16 @@ def ddl(table_name: str) -> str:
 
 
 def test_all_m1a_tables_are_registered() -> None:
-    assert set(metadata.tables) == {
+    """The gate-M1A tables specifically. M1B added 30 more; their own parity
+    test in test_m1b_schema_parity.py covers the full set."""
+    assert {
         "organization",
         "store",
         "app_user",
         "role",
         "role_permission",
         "membership",
-    }
+    } <= set(metadata.tables)
 
 
 def test_role_uniqueness_uses_nulls_not_distinct() -> None:
