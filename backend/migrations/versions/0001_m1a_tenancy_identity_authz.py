@@ -28,7 +28,8 @@ down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-UTC_NOW = sa.text("timezone('utc', now())")
+# now() is timestamptz; timezone('utc', now()) would be naive (see app/core/orm.py).
+UTC_NOW = sa.text("now()")
 
 
 def upgrade() -> None:
@@ -66,6 +67,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name="pk_store"),
         sa.UniqueConstraint("organization_id", "code", name="uq_store_org_code"),
+        sa.UniqueConstraint("organization_id", "id", name="uq_store_organization_id_id"),
     )
 
     op.create_table(
@@ -102,6 +104,7 @@ def upgrade() -> None:
             name="uq_role_organization_id_code",
             postgresql_nulls_not_distinct=True,
         ),
+        sa.UniqueConstraint("organization_id", "id", name="uq_role_organization_id_id"),
     )
 
     op.create_table(
@@ -130,13 +133,21 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["role_id"], ["role.id"], name="fk_membership_role_id_role", ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["store_id"], ["store.id"], name="fk_membership_store_id_store", ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
             ["user_id"], ["app_user.id"], name="fk_membership_user_id_app_user", ondelete="CASCADE"
+        ),
+        # Composite: a membership cannot reference a store or a role owned by a
+        # different organization. See app/modules/authz/models.py for why.
+        sa.ForeignKeyConstraint(
+            ["organization_id", "store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_membership_organization_id_store_id_store",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["organization_id", "role_id"],
+            ["role.organization_id", "role.id"],
+            name="fk_membership_organization_id_role_id_role",
+            ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_membership"),
         sa.UniqueConstraint(
@@ -147,9 +158,11 @@ def upgrade() -> None:
             postgresql_nulls_not_distinct=True,
         ),
     )
+    op.create_index("ix_membership_user_id", "membership", ["user_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_membership_user_id", table_name="membership")
     op.drop_table("membership")
     op.drop_table("role_permission")
     op.drop_table("role")

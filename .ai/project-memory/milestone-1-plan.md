@@ -1,10 +1,10 @@
 # Milestone 1 Plan — Production Foundation Without Irreversible Catalog Assumptions
 
-**Status:** `APPROVED — revision 3. Gate M1A in progress.`
+**Status:** `APPROVED — revision 3. Gate M1A implemented and independently reviewed.`
 **Branch:** `feat/foundation-milestone-1`
 **Prepared by:** Executive Orchestrator, planning runs 1–3
 **Implementation started:** YES — gate M1A only. M1B does not open until M1A's exit criterion is met and independently reviewed.
-**Verification status:** `NOT VERIFIED` — no build, test or migration has been executed, because none exists yet
+**Verification status:** gate M1A — lint, format, strict types, import contracts and 95 tests pass locally; 15 database tests run in CI only. See the M1A completion report in §17.
 
 Revision 2 applied ten planning corrections (§15). Revision 3 adds two technical clarifications and records the business confirmations for money, inventory granularity and the parser corpus (§16).
 
@@ -431,14 +431,14 @@ Per correction 6, each invariant names **what actually enforces it**. Service-la
 | I9 | Refund ≤ sold − already refunded | `SERVICE_ENFORCED` | `SELECT … FOR UPDATE` on sale items inside the refund transaction | two simultaneous full refunds |
 | I10 | Raw input never rewritten | `DB_ENFORCED` | trigger rejects `UPDATE`/`DELETE` on `raw_input` | trigger raises |
 | I11 | Ledger and audit are append-only | `DB_ENFORCED` | same trigger pattern on `stock_movement`, `alias_evidence`, `audit_log` | trigger raises |
-| I12 | Store/tenant boundaries hold | `SERVICE_ENFORCED` + `CI_ENFORCED` | scope from session only; repository base requires explicit scope; negative test suite | seller of A blocked in B for read/sale/refund/transfer |
+| I12 | Store/tenant boundaries hold | `DB_ENFORCED` (membership↔organization) + `SERVICE_ENFORCED` + `CI_ENFORCED` | composite foreign keys bind `membership.store_id`/`role_id` to `membership.organization_id`; scope comes from the session only | cross-organization membership rejected by the database; store isolation in `resolve_scope`. **No API-level test yet** — no store-scoped endpoint exists before M1B |
 | I13 | Authorization is server-side | `SERVICE_ENFORCED` + `CI_ENFORCED` | permission check in services, not routers or UI | one escalation test per permission code |
 | I14 | Uncertain interpretation never merges products | `SERVICE_ENFORCED` + `RECONCILIATION_DETECTED` | matcher returns `AMBIGUOUS`; merge is explicit and permissioned; duplicate-signature report lists families sharing a triple | Лоран/Belardi vs Лоран/Ponte golden case |
 | I15 | Slash is not an alias; splits are never invented | `SERVICE_ENFORCED` + `CI_ENFORCED` | parser emits variant enumeration + `UNKNOWN_DISTRIBUTION` | golden test on `Лама бежевая/персик/butter 3 шт` |
 | I16 | Transfers are movements, never sales | `SERVICE_ENFORCED` + `CI_ENFORCED` | transfer service writes only `TRANSFER_OUT`/`TRANSFER_IN` | no `sale` row, no revenue effect |
 | I17 | Legacy import fabricates nothing | `SERVICE_ENFORCED` + `CI_ENFORCED` | approved rows emit only `OPENING_BALANCE` | no `DELIVERY`/`SALE` movement produced |
 | I18 | Stock correction during a sale is exactly the shortfall | `SERVICE_ENFORCED` | assertion in the sale service; `CORRECTION_EXCEEDS_SHORTFALL` otherwise | over-correction rejected; audit entry present |
-| I19 | Module boundaries hold | `CI_ENFORCED` | import-linter contract | a deliberate illegal import fails the build |
+| I19 | Module boundaries hold | `CI_ENFORCED` (partial) | import-linter contracts. **Only the relationships already encoded** — a contract can name only modules that exist, so each ships with its module (ADR-0001 rule 5) | a deliberate illegal import fails the build |
 | I20 | A critical command can never create a second business operation, at any distance in time | `DB_ENFORCED` | permanent `UNIQUE (organization_id, command_id)` on `sale`, `refund`, `transfer` — independent of idempotency-record retention | replay after the idempotency record is deleted still returns the original operation |
 | I21 | A parse is reproducible forever | `DB_ENFORCED` + `CI_ENFORCED` | `UNIQUE (raw_input_id, parser_version)`; the parser performs no catalog or database reads | same input + same parser version yields byte-identical output; an import-linter rule forbids `catalog.matching`/repository imports inside the parser package |
 | I22 | Money arithmetic on a sale line is internally consistent | `DB_ENFORCED` | `CHECK (final_unit_price = unit_price - discount_amount)` and `CHECK (line_total = final_unit_price * quantity)` | an inconsistent line cannot be inserted |
@@ -716,3 +716,91 @@ Environment limits that constrain *verification*, not design — recorded honest
 - Invariants: 19 → **22**, of which 11 are now `DB_ENFORCED` (was 8).
 - **No Milestone 1 task is blocked by an open question any more.**
 - Gate **M1A started immediately** on this approval and does not wait for anything in M1B.
+
+---
+
+## 17. Gate M1A — completion report
+
+**Tasks delivered:** M1-001 … M1-009 (9 of 28).
+**Gate M1B is not open.** It starts only on the owner's explicit go-ahead.
+
+### 17.1 Verification evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Lint | `ruff check .` | **All checks passed** |
+| Format | `ruff format --check .` | **43 files already formatted** |
+| Types | `mypy app scripts` (strict) | **no issues in 29 source files** |
+| Architecture contracts | `lint-imports --config pyproject.toml` | **4 kept, 0 broken** |
+| Tests | `pytest -q` | **95 passed, 15 skipped** (110 collected) |
+| Migration renders | `alembic upgrade head --sql` | 6 tables + `alembic_version`, both `UNIQUE NULLS NOT DISTINCT` present |
+| App boots | `uvicorn app.main:app` + curl | `/health` 200 with `X-Request-ID`; `/me` 401 `AUTHENTICATION_FAILED`; `/auth/telegram` 401 `INVALID_INIT_DATA` |
+
+**`NOT VERIFIED` locally — no Docker, no PostgreSQL, no Node on this machine:**
+
+| Item | Where it is proven |
+|---|---|
+| 15 database integration tests | CI (`postgres:17` service). They **skip loudly** locally, never pass silently |
+| `alembic upgrade` / `downgrade` / `alembic check` drift | CI |
+| `docker compose up`, Caddy, the `web` bundle | CI and the server |
+| Frontend lint / typecheck / build | CI |
+| Interpreter parity | local venv is CPython **3.14**; CI and the Dockerfile pin **3.12**. Local green is not evidence for the deployed interpreter |
+
+### 17.2 Changed files
+
+61 files in commit `8e510d6`, plus 26 files in the review-fix commit. Structure:
+
+```text
+.gitignore  .pre-commit-config.yaml  .github/workflows/ci.yml  README.md
+backend/    pyproject.toml · alembic.ini · Dockerfile
+            app/core/      config · db · orm · errors · logging · correlation
+            app/modules/   tenancy · identity · authz
+            app/api/       deps · v1/router          app/main.py
+            migrations/    env.py · 0001_m1a_…
+            scripts/       seed_organization.py
+            tests/         unit (7 files) · integration (1 file)
+frontend/   package.json · tsconfig · vite · eslint · Dockerfile · src/
+infra/      docker-compose.yml · Caddyfile · .env.example
+```
+
+### 17.3 Migrations
+
+| Revision | Creates | Notes |
+|---|---|---|
+| `0001_m1a` | `organization`, `store`, `app_user`, `role`, `role_permission`, `membership` | Single head. Two `UNIQUE NULLS NOT DISTINCT` constraints (ADR-0002). Composite foreign keys bind `membership.store_id` and `role_id` to `membership.organization_id`. Downgrade drops the `store_kind` enum, which `drop_table` leaves behind |
+
+Amended in place after the review rather than superseded: it has never been applied to any database, so a corrective `0002` would have described a schema that never existed.
+
+### 17.4 Independent review
+
+Performed in a separate context by a reviewer that did not write the code, per `.ai/OPERATING_MANUAL.md` §6. Result: **no CRITICAL findings**, 3 HIGH, 10 MEDIUM, 13 LOW.
+
+All 3 HIGH and all 10 MEDIUM are fixed. The three that mattered most:
+
+- **Raw `initData` would have been sent to Sentry.** `send_default_pii=False` does not suppress request bodies in sentry-sdk 2.x; it only gates cookies. Since initData is a usable credential for up to an hour, anyone with Sentry read access could have replayed it. Fixed with `max_request_body_size="never"` plus a `before_send` scrubber, and the comment that claimed otherwise is gone.
+- **The CI step guarding database coverage could never fail.** `grep -qv "skipped"` succeeds whenever *any* line lacks the word, which is always true of multi-line pytest output. A completely skipped integration suite would have gone green — and every `DB_ENFORCED` claim rests on that step. Replaced with an assertion of the positive (`N passed`) and the negative (no `N skipped`).
+- **`AppUser.is_active` was dead.** Nothing read it, so disabling an account did nothing at all while its membership stayed active. Now checked at login and on every authenticated request.
+
+Also fixed: a non-ASCII `hash` crashed the login endpoint with a 500 instead of a 401 (`hmac.compare_digest` raises on non-ASCII `str`); memberships could reference another organization's store or role; a two-organization user picked a tenant from an unordered query; first-login was a check-then-insert race; `timezone('utc', now())` stored a **naive** timestamp that drifts if the server is not UTC; the compose stack had no `web` service so the Mini App path 404'd; `--locale=C` broke `lower()` for Cyrillic, which would have silently degraded catalog matching and cannot be changed after `initdb`; the frontend CI job could not start because it referenced a lockfile that does not exist.
+
+Three tests were rewritten because they could not fail: a tautological permission check, a role test whose name promised the opposite of its assertion, and config tests that read the developer's real environment.
+
+### 17.5 Unresolved risks carried into M1B
+
+| # | Risk | Status |
+|---|---|---|
+| R1 | **No dependency lockfile** — Python (`pip install -e .`) and npm both resolve latest-compatible on every build. Not reproducible; a compromised transitive release reaches production | Accepted for M1A. Fix in M1D with a constraints file and a committed `package-lock.json` |
+| R2 | **No rate limiting on `POST /auth/telegram`** — unauthenticated, does an HMAC and a database write | Accepted at two-shop scale. Revisit before public exposure |
+| R3 | **No session revocation** — a stolen token stays valid for up to 12 hours. Account and membership changes take effect immediately; the token itself cannot be killed | Accepted. Revisit if a device is ever lost |
+| R4 | **No initData replay protection** — a captured payload can mint sessions for the remainder of its 1-hour window | Accepted; the window is configurable and could be shortened |
+| R5 | `permissions_for(None)` returns only organization-wide permissions, so a store-scoped seller is denied by any organization-scoped check | Will bite immediately in M1B's `GET /sales` and `GET /inventory`. Decide the semantics there |
+| R6 | Interpreter mismatch: local 3.14 vs CI/production 3.12 | Low. CI is authoritative |
+| R7 | I19 (module boundaries) is enforced only for modules that exist | By design (ADR-0001 rule 5). Each new module must ship its contract |
+| R8 | Q4 and Q5 still unanswered | Neither blocks M1B; defaults are implemented and least-privilege |
+
+### 17.6 M1A exit criterion
+
+> *"`docker compose up` gives a running API with migrations, Telegram auth and RBAC, and CI is green."*
+
+**Met locally to the limit of this machine, and not beyond.** The API runs, migrations render, auth and RBAC work and are tested, and every local gate is green. `docker compose up` and CI cannot be executed here — no Docker, no Node. The first CI run after `git push` is what closes the gate honestly, and that push is the owner's to make.
+

@@ -2,7 +2,7 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **PLAN APPROVED (revision 3). Gate M1A IN PROGRESS.**
+Status: **Gate M1A IMPLEMENTED and independently reviewed. M1B not started — it opens only on the owner's go-ahead.**
 
 Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 36 physical tables · 22 invariants · 4 gates
 Branch: `feat/foundation-milestone-1`

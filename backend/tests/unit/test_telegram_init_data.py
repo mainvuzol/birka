@@ -190,3 +190,39 @@ def test_raw_fields_round_trip_the_user_payload() -> None:
 
     assert json.loads(result.raw_fields["user"])["language_code"] == "uk"
     assert result.user.language_code == "uk"
+
+
+def test_rejects_a_non_ascii_hash_without_crashing() -> None:
+    """`hmac.compare_digest` raises TypeError on non-ASCII str input.
+
+    The hash is fully attacker-controlled, so an unvalidated one turns the
+    login endpoint into an unauthenticated 500 instead of a 401.
+    """
+    init_data = build_init_data(override_hash="é" * 64)
+
+    with pytest.raises(InvalidInitDataError):
+        verify_init_data(init_data, TEST_BOT_TOKEN, max_age_seconds=3600)
+
+
+def test_rejects_a_hash_of_the_wrong_length() -> None:
+    init_data = build_init_data(override_hash="abc123")
+
+    with pytest.raises(InvalidInitDataError):
+        verify_init_data(init_data, TEST_BOT_TOKEN, max_age_seconds=3600)
+
+
+def test_rejects_a_non_hex_hash() -> None:
+    init_data = build_init_data(override_hash="z" * 64)
+
+    with pytest.raises(InvalidInitDataError):
+        verify_init_data(init_data, TEST_BOT_TOKEN, max_age_seconds=3600)
+
+
+def test_rejects_an_uppercase_hash() -> None:
+    """Telegram sends lowercase hex; anything else is not a Telegram payload."""
+    valid = build_init_data()
+    fields = dict(parse_qsl(valid))
+    fields["hash"] = fields["hash"].upper()
+
+    with pytest.raises(InvalidInitDataError):
+        verify_init_data(urlencode(fields), TEST_BOT_TOKEN, max_age_seconds=3600)

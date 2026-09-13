@@ -26,17 +26,25 @@ refunds   → sales, inventory, authz, tenancy, core
 transfers → inventory, authz, tenancy, core
 inventory → catalog (read-only), core
 catalog   → core            (leaf: catalog depends on nothing but core)
+identity  → authz, tenancy, core
 authz     → tenancy, core
 telegram  → identity, core
 api/v1    → modules (routers call services only)
 ```
+
+`identity → authz` is the authentication flow asking authorization what the
+user may do before it issues a session. The reverse edge is forbidden, which is
+why the "is this user still active?" check lives in the API layer
+(`api/deps.py`) rather than inside `resolve_scope` — putting it there would
+make `authz` depend on `identity` and close the cycle.
 
 Rules:
 
 1. Cross-module access goes through a service function. No module imports another module's repositories, ORM models or SQL.
 2. `inventory` is the only module that writes the `inventory` and `stock_movement` tables. This is what makes invariant I3 checkable.
 3. Routers parse the request, call one service, and shape the response. Business rules and transaction boundaries live in services (`conventions.md`).
-4. The boundary is enforced by an `import-linter` contract executed in CI (task M1-004). A violating import fails the build, not a review.
+4. The boundary is enforced by `import-linter` contracts executed in CI (task M1-004). A violating import fails the build, not a review.
+5. A contract may only name modules that exist — import-linter errors on a missing module. So **each contract ships with the module it constrains**, and every task that introduces a module must add its contract in the same change. `backend/pyproject.toml` lists the contracts still to be added and the gate that owns each. Until a contract exists, invariant I19 is enforced only for the relationships already encoded; the plan says so rather than claiming blanket coverage.
 5. Introducing microservices, a message broker, Kubernetes, Elasticsearch, Redis or a second database requires a new ADR citing measured evidence.
 
 ## Alternatives considered

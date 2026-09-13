@@ -11,7 +11,9 @@ import pytest
 from app.core.errors import AuthenticationFailedError, SessionExpiredError
 from app.modules.identity.session import decode_session_token, issue_session_token
 
-SECRET = "unit-test-session-secret"
+# 32+ bytes: PyJWT warns below the RFC 7518 minimum for HS256, and the
+# production guard in config.py enforces the same floor.
+SECRET = "unit-test-session-secret-32-bytes-min"
 
 
 def _issue(**kwargs: object) -> tuple[str, object]:
@@ -42,7 +44,7 @@ def test_rejects_a_token_signed_with_another_secret() -> None:
     token, _ = _issue()
 
     with pytest.raises(AuthenticationFailedError):
-        decode_session_token(token, secret="a-different-secret")
+        decode_session_token(token, secret="a-different-secret-of-adequate-length")
 
 
 def test_rejects_an_expired_token() -> None:

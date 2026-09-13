@@ -23,6 +23,7 @@ from urllib.parse import parse_qsl
 from app.core.errors import InvalidInitDataError
 
 _MAX_INIT_DATA_BYTES = 8192
+_HASH_HEX_LENGTH = 64  # SHA-256, lowercase hex, as Telegram sends it
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +100,13 @@ def verify_init_data(
     received_hash = fields.get("hash")
     if not received_hash:
         raise InvalidInitDataError("init data has no hash")
+    # hmac.compare_digest raises TypeError on non-ASCII str input, and the hash
+    # is fully attacker-controlled: validate the shape before comparing, or a
+    # crafted payload turns the login endpoint into an unhandled 500.
+    if len(received_hash) != _HASH_HEX_LENGTH or not all(
+        c in "0123456789abcdef" for c in received_hash
+    ):
+        raise InvalidInitDataError()
 
     expected_hash = hmac.new(
         _secret_key(bot_token),
@@ -106,7 +114,7 @@ def verify_init_data(
         hashlib.sha256,
     ).hexdigest()
 
-    if not hmac.compare_digest(expected_hash, received_hash.lower()):
+    if not hmac.compare_digest(expected_hash, received_hash):
         raise InvalidInitDataError()
 
     raw_auth_date = fields.get("auth_date")

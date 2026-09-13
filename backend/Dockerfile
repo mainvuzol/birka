@@ -6,12 +6,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Dependencies first so a code change does not reinstall the world.
 COPY pyproject.toml ./
+RUN pip install --upgrade pip && pip install .
+
 COPY app ./app
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY alembic.ini ./
-
-RUN pip install --upgrade pip && pip install .
 
 # Run as a non-root user: a container that can rewrite its own code is a
 # larger blast radius than it needs to be.

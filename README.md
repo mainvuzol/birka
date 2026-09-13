@@ -8,8 +8,13 @@ correct.
 
 ## Status
 
-**Milestone 1, gate M1A (platform foundation) — complete.**
+**Milestone 1, gate M1A (platform foundation) — implemented and independently reviewed.**
 Gate M1B (first complete sale vertical slice) has not started.
+
+Locally verified: lint, formatting, strict type checking, architecture contracts and
+95 tests. Not verified locally, because this machine has no Docker, no PostgreSQL and
+no Node: the database integration tests (15), `docker compose up`, and the frontend
+build. Those run in CI, and the first CI run on push is what proves them.
 
 The plan, the decisions and the current state live in [`.ai/`](.ai/):
 

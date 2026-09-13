@@ -3,6 +3,12 @@
 Telegram `initData` proves *who* the person is; it is not used as a session
 credential on every request. We exchange it once for a short-lived signed token
 of our own, so request authorization never depends on replaying Telegram data.
+
+There is no session store, so a token cannot be revoked before it expires: the
+`jti` claim identifies a session for logging, it is not a revocation handle.
+What *is* re-checked on every request is the user's active flag and their
+memberships, so disabling an account or a membership takes effect immediately
+even though the token itself stays cryptographically valid.
 """
 
 from __future__ import annotations

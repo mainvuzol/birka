@@ -58,7 +58,7 @@ jobs:
           ruff format --check .
 
       - name: Type check
-        run: mypy app
+        run: mypy app scripts
 
       - name: Architecture contracts (ADR-0001)
         run: lint-imports --config pyproject.toml
@@ -79,12 +79,21 @@ jobs:
       - name: Tests
         run: pytest -q
 
-      - name: Assert integration tests actually ran
-        # A skipped database suite must never be mistaken for a passing one.
+      - name: Assert the database tests actually ran
+        # A skipped database suite must never be mistaken for a passing one:
+        # pytest exits 0 when every test skips, so the exit code proves nothing.
+        # Assert the positive (tests passed) and the negative (nothing skipped).
         run: |
-          pytest -q -m integration --collect-only | tail -1
-          pytest -m integration -q --no-header -rN | tee /tmp/integration.txt
-          grep -qv "skipped" /tmp/integration.txt
+          set -o pipefail
+          pytest -m integration -q --no-header | tee /tmp/integration.txt
+          if ! grep -qE "[0-9]+ passed" /tmp/integration.txt; then
+            echo "::error::no integration test passed — the database suite did not run"
+            exit 1
+          fi
+          if grep -qE "[0-9]+ skipped" /tmp/integration.txt; then
+            echo "::error::integration tests were skipped in CI (database unreachable?)"
+            exit 1
+          fi
 
   frontend:
     name: frontend (lint, types, build)
@@ -97,9 +106,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci || npm install
+      # No lockfile is committed yet, so npm resolves on each run and the build
+      # is not reproducible. Committing frontend/package-lock.json and moving
+      # to `npm ci` is a gate-M1D task; setup-node's npm cache needs the
+      # lockfile too, so it is deliberately not enabled here rather than
+      # failing the job with "dependencies lock file is not found".
+      - run: npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build

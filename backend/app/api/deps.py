@@ -13,6 +13,7 @@ from app.core.db import get_session
 from app.core.errors import AuthenticationFailedError
 from app.modules.authz.scope import RequestScope
 from app.modules.authz.service import resolve_scope
+from app.modules.identity.service import assert_user_is_active
 from app.modules.identity.session import decode_session_token
 
 
@@ -48,12 +49,17 @@ async def get_current_scope(
     """Resolve the caller's authority from their session token.
 
     Scope is rebuilt from the database on every request rather than trusted
-    from the token, so revoking a membership takes effect immediately instead
-    of at token expiry.
+    from the token, so disabling an account or a membership takes effect on the
+    next request. The token itself cannot be revoked — there is no session
+    store — so it stays cryptographically valid until it expires.
     """
     claims = decode_session_token(
         _bearer_token(authorization), secret=settings.session_secret.get_secret_value()
     )
+    # Deactivating an account must take effect on the next request, not when
+    # the token expires. Composed here rather than inside resolve_scope so the
+    # authz module does not have to depend on identity.
+    await assert_user_is_active(session, claims.user_id)
     scope = await resolve_scope(session, claims.user_id)
     if scope.organization_id != claims.organization_id:
         # The user's organization changed after the token was issued.

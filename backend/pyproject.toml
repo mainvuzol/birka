@@ -90,6 +90,7 @@ disallow_untyped_defs = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "--strict-markers"
 markers = [
     "integration: requires a real PostgreSQL database (BIRKA_TEST_DATABASE_URL)",
 ]
@@ -129,3 +130,12 @@ name = "tenancy is the base module and depends on no sibling"
 type = "forbidden"
 source_modules = ["app.modules.tenancy"]
 forbidden_modules = ["app.modules.identity", "app.modules.authz"]
+
+# ADR-0001 permitted edges among the modules that exist today, encoded as a
+# layering: identity (authentication) may use authz (authorization), which may
+# use tenancy. The reverse direction is what would create a cycle, and this
+# contract is what stops it.
+[[tool.importlinter.contracts]]
+name = "module layering: identity -> authz -> tenancy"
+type = "layers"
+layers = ["app.modules.identity", "app.modules.authz", "app.modules.tenancy"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -15,7 +16,28 @@ from app.core.db import dispose_engine, init_engine
 from app.core.errors import DomainError
 from app.core.logging import configure_logging, get_logger
 
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
+
 logger = get_logger(__name__)
+
+
+def _scrub_request_body(event: Event, _hint: Hint) -> Event:
+    """Remove the request body from every event before it leaves the process.
+
+    `POST /auth/telegram` carries raw Telegram initData, which is a usable
+    credential until `telegram_init_data_max_age_seconds` elapses. Anyone able
+    to read the Sentry project could replay it and mint a session.
+    """
+    request = event.get("request")
+    if isinstance(request, dict):
+        request.pop("data", None)
+        request.pop("cookies", None)
+        headers = request.get("headers")
+        if isinstance(headers, dict):
+            for sensitive in ("authorization", "Authorization", "cookie", "Cookie"):
+                headers.pop(sensitive, None)
+    return event
 
 
 def _install_sentry(settings: Settings) -> None:
@@ -26,8 +48,11 @@ def _install_sentry(settings: Settings) -> None:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.app_env,
-        # Errors carry a request id; payloads are not sent.
         send_default_pii=False,
+        # send_default_pii=False only gates cookies; sentry-sdk 2.x attaches
+        # request bodies regardless. Both of the next two lines are required.
+        max_request_body_size="never",
+        before_send=_scrub_request_body,
         traces_sample_rate=0.0,
     )
 

@@ -124,3 +124,34 @@ def test_docs_are_hidden_in_production() -> None:
 
 def test_domain_error_payload_omits_empty_details() -> None:
     assert DomainError("boom").to_payload() == {"code": "INTERNAL_ERROR", "message": "boom"}
+
+
+def test_sentry_scrubber_removes_the_request_body() -> None:
+    """Raw initData is a usable credential; it must never reach Sentry.
+
+    sentry-sdk 2.x attaches request bodies regardless of send_default_pii, so
+    this scrubber — not that flag — is what protects the login payload.
+    """
+    from app.main import _scrub_request_body
+
+    event = {
+        "request": {
+            "url": "/api/v1/auth/telegram",
+            "data": {"init_data": "user=...&hash=secret"},
+            "cookies": {"session": "abc"},
+            "headers": {"Authorization": "Bearer token", "User-Agent": "tg"},
+        }
+    }
+
+    scrubbed = _scrub_request_body(event, {})
+
+    assert "data" not in scrubbed["request"]
+    assert "cookies" not in scrubbed["request"]
+    assert "Authorization" not in scrubbed["request"]["headers"]
+    assert scrubbed["request"]["headers"]["User-Agent"] == "tg"
+
+
+def test_sentry_scrubber_tolerates_an_event_without_a_request() -> None:
+    from app.main import _scrub_request_body
+
+    assert _scrub_request_body({"message": "boom"}, {}) == {"message": "boom"}

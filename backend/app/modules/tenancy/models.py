@@ -59,7 +59,12 @@ class Store(UUIDPrimaryKey, TimestampMixin, Base):
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Europe/Kyiv")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
-    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_store_org_code"),)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_store_org_code"),
+        # Target for membership's composite foreign key: a membership may only
+        # reference a store belonging to its own organization (invariant I12).
+        UniqueConstraint("organization_id", "id", name="uq_store_organization_id_id"),
+    )
 
 
 __all__ = ["Organization", "Store", "StoreKind"]

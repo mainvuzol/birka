@@ -68,3 +68,28 @@ def test_migration_is_a_single_head() -> None:
     config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
 
     assert len(ScriptDirectory.from_config(config).get_heads()) == 1
+
+
+def test_timestamp_defaults_are_timezone_aware_expressions(migration_sql: str) -> None:
+    """`timezone('utc', now())` returns timestamp WITHOUT time zone.
+
+    Assigned to a timestamptz column it is re-interpreted in the session
+    TimeZone, so every created_at silently shifts if the server is not UTC.
+    `now()` is already timestamptz.
+    """
+    assert "DEFAULT now()" in migration_sql
+    assert "timezone('utc'" not in migration_sql
+
+
+def test_membership_is_bound_to_its_organization(migration_sql: str) -> None:
+    """Separate single-column FKs would let a membership borrow another
+    tenant's store or role; the composite keys make that unrepresentable."""
+    assert "fk_membership_organization_id_store_id_store" in migration_sql
+    assert "fk_membership_organization_id_role_id_role" in migration_sql
+    assert "uq_store_organization_id_id" in migration_sql
+    assert "uq_role_organization_id_id" in migration_sql
+
+
+def test_membership_lookup_is_indexed(migration_sql: str) -> None:
+    """resolve_scope hits this on every authenticated request."""
+    assert "ix_membership_user_id" in migration_sql

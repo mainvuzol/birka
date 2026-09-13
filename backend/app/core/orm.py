@@ -9,7 +9,10 @@ from sqlalchemy import DateTime, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
 
-UTC_NOW = text("timezone('utc', now())")
+# now() is already timestamptz. timezone('utc', now()) returns timestamp
+# WITHOUT time zone, which is then re-interpreted in the session TimeZone on
+# insert — correct only while the server happens to run in UTC.
+UTC_NOW = text("now()")
 
 
 class UUIDPrimaryKey:

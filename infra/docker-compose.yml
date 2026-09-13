@@ -10,8 +10,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-birka}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-birka}
-      # Deterministic collation: catalog matching compares shop language.
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      # ICU, not C. Catalog matching lowercases Ukrainian and Russian product
+      # text; under the C locale lower('ОЛЯ') returns 'ОЛЯ' unchanged and the
+      # matcher silently misses. initdb locale cannot be changed later without
+      # dumping and reloading the database, so it has to be right now.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -42,11 +45,23 @@ services:
     expose:
       - "8000"
 
+  # Builds the Mini App and hands the static bundle to Caddy through a shared
+  # volume. It exits once the build is copied; it is not a long-running service.
+  web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    volumes:
+      - web_dist:/output
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_started
+      web:
+        condition: service_completed_successfully
     ports:
       - "80:80"
       - "443:443"
@@ -54,10 +69,12 @@ services:
       BIRKA_DOMAIN: ${BIRKA_DOMAIN:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - web_dist:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
   db_data:
+  web_dist:
   caddy_data:
   caddy_config:

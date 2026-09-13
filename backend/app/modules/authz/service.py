@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AuthenticationFailedError
@@ -45,23 +45,46 @@ async def resolve_scope(session: AsyncSession, user_id: uuid.UUID) -> RequestSco
             Membership.store_id,
             RolePermission.permission_code,
         )
-        .join(Role, Role.id == Membership.role_id)
+        .join(
+            Role,
+            and_(
+                Role.id == Membership.role_id,
+                # A membership in organization A must not borrow a role owned by
+                # organization B. Shared system templates (NULL) stay allowed.
+                or_(
+                    Role.organization_id.is_(None),
+                    Role.organization_id == Membership.organization_id,
+                ),
+            ),
+        )
         .join(RolePermission, RolePermission.role_id == Role.id)
-        .where(Membership.user_id == user_id, Membership.is_active.is_(True))
+        # A store-scoped membership dies with its store. Without this join a
+        # closed store would keep granting authority to the sellers assigned to
+        # it, while organization-wide members correctly lost access.
+        .outerjoin(Store, Store.id == Membership.store_id)
+        .where(
+            Membership.user_id == user_id,
+            Membership.is_active.is_(True),
+            or_(Membership.store_id.is_(None), Store.is_active.is_(True)),
+        )
     )
     rows = (await session.execute(stmt)).all()
     if not rows:
         raise AuthenticationFailedError("User has no active membership")
 
-    organization_id: uuid.UUID = rows[0].organization_id
+    organization_ids = {row.organization_id for row in rows}
+    if len(organization_ids) > 1:
+        # Assumption A2 is one organization. Silently picking one of them would
+        # depend on row order and would log the user into a different tenant on
+        # different requests; refusing is the honest behaviour for a state the
+        # system does not support yet.
+        raise AuthenticationFailedError("User belongs to more than one organization")
+
+    organization_id: uuid.UUID = organization_ids.pop()
     org_codes: list[str] = []
     per_store: dict[uuid.UUID, list[str]] = defaultdict(list)
 
     for row in rows:
-        if row.organization_id != organization_id:
-            # One organization per session. Multi-org users are out of scope
-            # until the business actually has them (assumption A2).
-            continue
         if row.store_id is None:
             org_codes.append(row.permission_code)
         else:

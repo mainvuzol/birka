@@ -39,10 +39,42 @@ def _scope(
 # --- permission catalogue --------------------------------------------------
 
 
-def test_every_role_grants_only_known_permissions() -> None:
-    for role, permissions in DEFAULT_ROLE_PERMISSIONS.items():
-        unknown = permissions - ALL_PERMISSIONS
-        assert not unknown, f"{role} grants unknown permissions: {unknown}"
+# The expected matrix is spelled out rather than derived, so that widening a
+# role is a visible, deliberate diff in this file. A test that computes the
+# answer the same way the code does cannot fail.
+EXPECTED_SELLER = {
+    Permission.SALE_CREATE,
+    Permission.SALE_REFUND,
+    Permission.SALE_VIEW,
+    Permission.INVENTORY_VIEW,
+    Permission.INVENTORY_RECEIVE,
+    Permission.INVENTORY_CORRECT_DURING_SALE,
+    Permission.CATALOG_CREATE,
+    Permission.CATALOG_CONFIRM,
+}
+EXPECTED_MANAGER = EXPECTED_SELLER | {
+    Permission.INVENTORY_ADJUST,
+    Permission.TRANSFER_CREATE,
+    Permission.TRANSFER_RECEIVE,
+    Permission.CATALOG_MERGE,
+    Permission.SNAPSHOT_IMPORT,
+    Permission.REPORT_VIEW_FINANCIAL,
+}
+EXPECTED_OWNER = EXPECTED_MANAGER | {
+    Permission.SNAPSHOT_APPROVE,
+    Permission.USER_MANAGE,
+}
+
+
+def test_every_role_covers_the_whole_role_catalogue() -> None:
+    assert set(DEFAULT_ROLE_PERMISSIONS) == set(RoleCode)
+
+
+def test_role_matrix_matches_the_declared_expectation() -> None:
+    """Any change to who can do what must be made here too, on purpose."""
+    assert DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER] == EXPECTED_SELLER
+    assert DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER] == EXPECTED_MANAGER
+    assert DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER] == EXPECTED_OWNER
 
 
 def test_roles_are_strictly_increasing() -> None:
@@ -154,11 +186,16 @@ def test_scope_is_immutable() -> None:
         scope.org_permissions = frozenset()  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("role", list(RoleCode))
-def test_no_role_can_do_everything_by_accident(role: RoleCode) -> None:
-    """Only OWNER should hold the full capability set."""
-    permissions = DEFAULT_ROLE_PERMISSIONS[role]
-    if role is RoleCode.OWNER:
-        assert permissions == ALL_PERMISSIONS
-    else:
-        assert permissions != ALL_PERMISSIONS
+@pytest.mark.parametrize("role", [RoleCode.SELLER, RoleCode.MANAGER])
+def test_no_role_below_owner_holds_every_capability(role: RoleCode) -> None:
+    assert DEFAULT_ROLE_PERMISSIONS[role] < ALL_PERMISSIONS
+
+
+def test_a_new_permission_is_not_silently_granted_to_anyone() -> None:
+    """A capability added to the enum must be assigned deliberately.
+
+    If this fails, someone added a Permission member without deciding which
+    roles get it — decide here, do not just widen EXPECTED_OWNER.
+    """
+    unassigned = ALL_PERMISSIONS - EXPECTED_OWNER
+    assert not unassigned, f"permissions with no role decision: {sorted(unassigned)}"

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.errors import AuthenticationFailedError
 from app.core.logging import get_logger
 from app.modules.authz.scope import RequestScope
 from app.modules.authz.service import resolve_scope
@@ -19,31 +22,51 @@ logger = get_logger(__name__)
 
 
 async def _upsert_user(session: AsyncSession, telegram_user: TelegramUser) -> AppUser:
-    """Find the user by Telegram id, creating or refreshing the profile.
+    """Insert or refresh the user for this Telegram account.
 
-    Profile fields are display data only. Changing them can never change
-    authority — that comes solely from memberships.
+    A single INSERT ... ON CONFLICT rather than SELECT-then-INSERT: a Mini App
+    fires several requests when it opens, so two concurrent first logins would
+    otherwise both see "no such user", both insert, and the loser would get an
+    IntegrityError surfacing as a 500 on a brand-new user's very first action.
+
+    Profile fields are display data. Refreshing them can never change authority
+    — that comes solely from memberships.
     """
-    user = (
-        await session.execute(
-            select(AppUser).where(AppUser.telegram_user_id == telegram_user.telegram_user_id)
-        )
-    ).scalar_one_or_none()
-
-    if user is None:
-        user = AppUser(
+    statement = (
+        pg_insert(AppUser)
+        .values(
             telegram_user_id=telegram_user.telegram_user_id,
             display_name=telegram_user.display_name,
             username=telegram_user.username,
             language_code=telegram_user.language_code,
         )
-        session.add(user)
-        await session.flush()
-        return user
+        .on_conflict_do_update(
+            index_elements=[AppUser.telegram_user_id],
+            set_={
+                "display_name": telegram_user.display_name,
+                "username": telegram_user.username,
+                "language_code": telegram_user.language_code,
+            },
+        )
+        .returning(AppUser)
+    )
+    user = (await session.execute(statement)).scalar_one()
+    await session.flush()
+    return user
 
-    user.display_name = telegram_user.display_name
-    user.username = telegram_user.username
-    user.language_code = telegram_user.language_code
+
+async def assert_user_is_active(session: AsyncSession, user_id: uuid.UUID) -> AppUser:
+    """Refuse a deactivated account.
+
+    Checked on every authenticated request, not only at login: an owner who
+    disables an account expects it to stop working now, not when a 12-hour
+    session token happens to expire.
+    """
+    user = (
+        await session.execute(select(AppUser).where(AppUser.id == user_id))
+    ).scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise AuthenticationFailedError("User account is not active")
     return user
 
 
@@ -67,6 +90,8 @@ async def authenticate_with_init_data(
     )
 
     user = await _upsert_user(session, verified.user)
+    if not user.is_active:
+        raise AuthenticationFailedError("User account is not active")
     # Raises AuthenticationFailedError when the Telegram account has no membership:
     # being a Telegram user is not being a user of this system.
     scope = await resolve_scope(session, user.id)
@@ -90,4 +115,4 @@ async def authenticate_with_init_data(
     return token, user, scope
 
 
-__all__ = ["authenticate_with_init_data"]
+__all__ = ["assert_user_is_active", "authenticate_with_init_data"]
