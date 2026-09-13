@@ -1,8 +1,9 @@
 # Builds the Mini App bundle and copies it into a volume that Caddy serves.
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+# Copy the lockfile too: npm ci requires it and installs exactly that tree.
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
