@@ -105,9 +105,39 @@ ENUM_TYPES = (
 )
 
 
-def upgrade() -> None:
-    op.execute(SCHEMA_SQL.read_text(encoding="utf-8"))
+def statements(sql: str) -> list[str]:
+    """Split generated DDL into individual commands.
 
+    asyncpg prepares every statement it is given and refuses more than one
+    command per call, so the whole file cannot be sent in a single execute.
+
+    A naive split is safe *here* specifically: the generated file contains only
+    CREATE TYPE / CREATE TABLE / CREATE INDEX, with no function bodies and no
+    dollar-quoting, so a semicolon only ever ends a statement. The parity test
+    keeps the file generated rather than hand-edited, which is what makes that
+    assumption hold; `test_migration_statement_splitting` checks it directly.
+    """
+    parts: list[str] = []
+    buffer: list[str] = []
+    for line in sql.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue
+        buffer.append(line)
+        if stripped.endswith(";"):
+            parts.append("\n".join(buffer))
+            buffer = []
+    leftover = "\n".join(buffer).strip()
+    if leftover:
+        raise RuntimeError(f"unterminated SQL statement in {SCHEMA_SQL.name}: {leftover[:80]}")
+    return parts
+
+
+def upgrade() -> None:
+    for statement in statements(SCHEMA_SQL.read_text(encoding="utf-8")):
+        op.execute(statement)
+
+    # One command, despite the semicolons inside its dollar-quoted body.
     op.execute(REJECT_MUTATION_FUNCTION)
     for table in APPEND_ONLY_TABLES:
         op.execute(

@@ -242,3 +242,28 @@ def _statement_for(sql: str, needle: str) -> str:
         if needle in statement:
             return statement
     raise AssertionError(f"{needle} not found in the schema SQL")
+
+
+def test_migration_statement_splitting() -> None:
+    """asyncpg refuses more than one command per execute, so the migration
+    sends the generated DDL statement by statement. If the splitter is wrong,
+    the migration fails on a real database and nowhere else — which is exactly
+    what happened before this test existed."""
+    module = _load_migration_module()
+    parts = module.statements(SCHEMA_SQL.read_text(encoding="utf-8"))
+
+    assert sum(1 for p in parts if p.startswith("CREATE TABLE ")) == 30
+    assert sum(1 for p in parts if p.startswith("CREATE TYPE ")) == 21
+    assert all(p.rstrip().endswith(";") for p in parts)
+    # Exactly one command each: no semicolon anywhere but the very end.
+    for part in parts:
+        assert part.rstrip()[:-1].count(";") == 0, part[:80]
+    # Nothing was dropped on the floor.
+    assert sum(1 for p in parts if p.startswith("CREATE INDEX ")) == (len(parts) - 30 - 21)
+
+
+def test_migration_splitter_rejects_an_unterminated_statement() -> None:
+    module = _load_migration_module()
+
+    with pytest.raises(RuntimeError, match="unterminated"):
+        module.statements("CREATE TABLE broken (\n  id UUID\n")
