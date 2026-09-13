@@ -4,11 +4,11 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   { ignores: ["dist", "node_modules"] },
   js.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
   {
     files: ["**/*.{ts,tsx}"],
+    extends: [...tseslint.configs.strictTypeChecked],
     languageOptions: {
-      parserOptions: { project: ["./tsconfig.json"], tsconfigRootDir: import.meta.dirname },
+      parserOptions: { project: ["./tsconfig.eslint.json"], tsconfigRootDir: import.meta.dirname },
     },
     rules: {
       // `any` hides exactly the API-shape mistakes this client must not make.
