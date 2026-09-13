@@ -189,6 +189,23 @@ async def apply_movements(
     return applied
 
 
+async def current_quantity(
+    session: AsyncSession,
+    *,
+    store_id: uuid.UUID,
+    product_variant_id: uuid.UUID,
+    size_id: uuid.UUID,
+) -> int:
+    """Quantity on hand. Exposed here so other modules never have to import
+    the repository, which is what keeps invariant I3 checkable."""
+    return await repository.current_quantity(
+        session,
+        store_id=store_id,
+        product_variant_id=product_variant_id,
+        size_id=size_id,
+    )
+
+
 async def find_divergences(
     session: AsyncSession, *, store_id: uuid.UUID | None = None
 ) -> list[repository.Divergence]:
@@ -202,6 +219,7 @@ __all__ = [
     "AppliedMovement",
     "MovementRequest",
     "apply_movements",
+    "current_quantity",
     "find_divergences",
     "validate_movement",
 ]
