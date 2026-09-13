@@ -21,7 +21,8 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.7
     hooks:
-      - id: ruff
+      # `ruff` is a deprecated alias for `ruff-check` in newer revs.
+      - id: ruff-check
         args: [--fix]
         files: ^backend/
       - id: ruff-format
