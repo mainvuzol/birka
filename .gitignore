@@ -1,0 +1,47 @@
+# ---- secrets & private source material -------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Real legacy shop documents are private source material (see .ai/project.md).
+# Originals live here and are NEVER committed; only the sanitized golden corpus
+# under backend/tests/fixtures/ is versioned.
+data/legacy/raw/
+data/legacy/**/*.pdf
+data/legacy/**/*.xlsx
+data/legacy/**/*.jpg
+data/legacy/**/*.png
+
+# ---- python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ---- node ------------------------------------------------------------------
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# ---- editors / os ----------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ---- local infra -----------------------------------------------------------
+infra/data/
+*.log

@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (lint, types, contracts, tests)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # ADR-0002: UNIQUE NULLS NOT DISTINCT needs PostgreSQL >= 15.
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: birka
+          POSTGRES_PASSWORD: birka
+          POSTGRES_DB: birka_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U birka -d birka_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      BIRKA_APP_ENV: ci
+      BIRKA_DATABASE_URL: postgresql+asyncpg://birka:birka@localhost:5432/birka_test
+      BIRKA_TEST_DATABASE_URL: postgresql+asyncpg://birka:birka@localhost:5432/birka_test
+      BIRKA_SESSION_SECRET: ci-session-secret-that-is-long-enough-32
+      BIRKA_TELEGRAM_BOT_TOKEN: "123456:ci-placeholder-token"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type check
+        run: mypy app scripts
+
+      - name: Architecture contracts (ADR-0001)
+        run: lint-imports --config pyproject.toml
+
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      - name: Migration drift check
+        # Fails when the models and the migrations disagree. Autogenerate must
+        # produce an empty diff against a freshly migrated database.
+        run: alembic check
+
+      - name: Migration downgrade is reversible
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Assert the database tests actually ran
+        # A skipped database suite must never be mistaken for a passing one:
+        # pytest exits 0 when every test skips, so the exit code proves nothing.
+        # Assert the positive (tests passed) and the negative (nothing skipped).
+        run: |
+          set -o pipefail
+          pytest -m integration -q --no-header | tee /tmp/integration.txt
+          if ! grep -qE "[0-9]+ passed" /tmp/integration.txt; then
+            echo "::error::no integration test passed — the database suite did not run"
+            exit 1
+          fi
+          if grep -qE "[0-9]+ skipped" /tmp/integration.txt; then
+            echo "::error::integration tests were skipped in CI (database unreachable?)"
+            exit 1
+          fi
+
+  frontend:
+    name: frontend (lint, types, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # No lockfile is committed yet, so npm resolves on each run and the build
+      # is not reproducible. Committing frontend/package-lock.json and moving
+      # to `npm ci` is a gate-M1D task; setup-node's npm cache needs the
+      # lockfile too, so it is deliberately not enabled here rather than
+      # failing the job with "dependencies lock file is not found".
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build

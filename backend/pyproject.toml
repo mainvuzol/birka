@@ -1,0 +1,141 @@
+[project]
+name = "birka-backend"
+version = "0.1.0"
+description = "birka — inventory and sales for two women's outerwear stores (Telegram Mini App)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy[asyncio]>=2.0.31",
+    "alembic>=1.13",
+    "asyncpg>=0.30",
+    "structlog>=24.1",
+    "pyjwt>=2.9",
+    "aiogram>=3.13",
+    "sentry-sdk[fastapi]>=2.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "import-linter>=2.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "DTZ",       # flake8-datetimez — naive datetimes are a bug in this project
+    "S",         # bandit
+    "RUF",
+]
+ignore = [
+    "S101",  # assert is fine in tests; production code is checked by review
+    "B008",  # FastAPI Depends() in defaults is the framework idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]          # hard-coded test secrets are intentional
+"migrations/versions/*" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+exclude = ["^migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--strict-markers"
+markers = [
+    "integration: requires a real PostgreSQL database (BIRKA_TEST_DATABASE_URL)",
+]
+filterwarnings = ["error::DeprecationWarning:app.*"]
+
+# ---------------------------------------------------------------------------
+# import-linter — ADR-0001 module boundaries (invariant I19)
+#
+# A contract may only name modules that exist: import-linter fails with
+# "module does not exist" otherwise. So each contract is added together with
+# the module it constrains, and every gate task that introduces a module also
+# adds its contract. Contracts still to be added:
+#
+#   M1B  catalog is a leaf                 (app.modules.catalog)
+#   M1B  only inventory writes stock (I3)  (app.modules.inventory.repository)
+#   M1C  parser reads no catalog state (I21)
+#        source: app.modules.catalog.parsing
+#        forbidden: app.modules.catalog.matching, .repository, app.core.db
+#   M1C  authz must not depend on business modules
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture: api -> modules -> core"
+type = "layers"
+layers = ["app.api", "app.modules", "app.core"]
+
+[[tool.importlinter.contracts]]
+name = "core must not depend on any module"
+type = "forbidden"
+source_modules = ["app.core"]
+forbidden_modules = ["app.modules", "app.api"]
+
+[[tool.importlinter.contracts]]
+name = "tenancy is the base module and depends on no sibling"
+type = "forbidden"
+source_modules = ["app.modules.tenancy"]
+forbidden_modules = ["app.modules.identity", "app.modules.authz"]
+
+# ADR-0001 permitted edges among the modules that exist today, encoded as a
+# layering: identity (authentication) may use authz (authorization), which may
+# use tenancy. The reverse direction is what would create a cycle, and this
+# contract is what stops it.
+[[tool.importlinter.contracts]]
+name = "module layering: identity -> authz -> tenancy"
+type = "layers"
+layers = ["app.modules.identity", "app.modules.authz", "app.modules.tenancy"]

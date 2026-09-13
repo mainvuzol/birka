@@ -1,0 +1,34 @@
+# Fast local gate. CI remains the authority (.ai/OPERATING_MANUAL.md §10).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: [--branch, main]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: no-legacy-originals
+        name: refuse to commit private legacy source documents
+        entry: >-
+          bash -c 'echo "data/legacy/raw is private source material (F35) and must never be committed"; exit 1'
+        language: system
+        files: ^data/legacy/raw/
+        pass_filenames: false

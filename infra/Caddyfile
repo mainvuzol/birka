@@ -1,0 +1,26 @@
+# Telegram requires HTTPS for a Mini App. Caddy obtains and renews the
+# certificate automatically for a real domain; on localhost it serves HTTP.
+{$BIRKA_DOMAIN} {
+	encode gzip
+
+	# API
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Mini App static build
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		# The Mini App is embedded by Telegram; everything else is denied.
+		Content-Security-Policy "frame-ancestors https://web.telegram.org https://telegram.org"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
