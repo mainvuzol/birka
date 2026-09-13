@@ -14,8 +14,12 @@ repos:
       - id: no-commit-to-branch
         args: [--branch, main]
 
+  # MUST match the ruff pinned in backend/pyproject.toml. A hook on an older
+  # ruff reformats files in the old style at commit time and CI then rejects
+  # them — a guard that actively breaks the build. tests/unit/test_toolchain.py
+  # fails if these two drift apart.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.7
     hooks:
       - id: ruff
         args: [--fix]

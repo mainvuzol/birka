@@ -82,9 +82,9 @@ def test_migration_sql_matches_the_models(committed_sql: str) -> None:
         python -c "from tests.unit.test_m1b_schema_parity import render_schema_sql, SCHEMA_SQL; \\
                    SCHEMA_SQL.write_text(render_schema_sql(), encoding='utf-8', newline='\\n')"
     """
-    assert (
-        committed_sql == render_schema_sql()
-    ), "0002_m1b_schema.sql has drifted from the models — regenerate it"
+    assert committed_sql == render_schema_sql(), (
+        "0002_m1b_schema.sql has drifted from the models — regenerate it"
+    )
 
 
 def test_all_thirty_m1b_tables_are_present(committed_sql: str) -> None:
