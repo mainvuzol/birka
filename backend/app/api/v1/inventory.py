@@ -13,19 +13,27 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
+from app.modules.audit import service as audit
 from app.modules.authz.permissions import Permission
-from app.modules.inventory.models import AcquisitionType, Inventory, MovementType, StockLot
-from app.modules.inventory.service import MovementRequest, apply_movements
+from app.modules.inventory.models import (
+    AcquisitionType,
+    Inventory,
+    MovementReason,
+    MovementType,
+    StockLot,
+)
+from app.modules.inventory.service import MovementRequest, apply_movements, current_quantity
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 RECEIPTS_ENDPOINT = "POST /inventory/receipts"
+ADJUSTMENTS_ENDPOINT = "POST /inventory/adjustments"
 
 
 class ReceiptLine(BaseModel):
@@ -205,3 +213,115 @@ async def receive_goods(
 
 
 __all__ = ["router"]
+
+
+class AdjustmentRequest(BaseModel):
+    """An arbitrary stock correction. Manager/owner only.
+
+    Distinct from the FOUND_DURING_SALE path on POST /sales, which a seller may
+    use but only for the exact shortfall of the line being sold.
+    """
+
+    store_id: uuid.UUID
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    quantity_delta: int = Field(ge=-10_000, le=10_000)
+    reason_code: MovementReason
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("quantity_delta")
+    @classmethod
+    def _must_change_something(cls, value: int) -> int:
+        # The database rejects a zero delta too; refusing here turns a 500
+        # into a message the seller can act on.
+        if value == 0:
+            raise ValueError("An adjustment must change the quantity")
+        return value
+
+
+class AdjustmentResponse(BaseModel):
+    movement_id: uuid.UUID
+    quantity_before: int
+    quantity_after: int
+
+
+@router.post("/adjustments", response_model=AdjustmentResponse, status_code=status.HTTP_201_CREATED)
+async def adjust_inventory(
+    payload: AdjustmentRequest,
+    scope: ScopeDep,
+    session: SessionDep,
+    response: Response,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)],
+) -> AdjustmentResponse:
+    """Change stock outside a sale, with a reason and an audit entry.
+
+    `.ai/workflows/inventory-adjustment.md`: authorized actor, mandatory
+    reason, always a StockMovement, always an audit record of before and after.
+    """
+    scope.require(Permission.INVENTORY_ADJUST, payload.store_id)
+
+    outcome = await idempotency.claim(
+        session,
+        organization_id=scope.organization_id,
+        endpoint=ADJUSTMENTS_ENDPOINT,
+        key=idempotency_key,
+        request_fingerprint=idempotency.fingerprint(
+            payload.model_dump(mode="json"),
+            actor_user_id=scope.user_id,
+            store_id=payload.store_id,
+        ),
+    )
+    if isinstance(outcome, idempotency.Replay):
+        response.status_code = outcome.http_status
+        return AdjustmentResponse.model_validate(outcome.response)
+
+    before = await current_quantity(
+        session,
+        store_id=payload.store_id,
+        product_variant_id=payload.product_variant_id,
+        size_id=payload.size_id,
+    )
+
+    applied = await apply_movements(
+        session,
+        organization_id=scope.organization_id,
+        requests=[
+            MovementRequest(
+                store_id=payload.store_id,
+                product_variant_id=payload.product_variant_id,
+                size_id=payload.size_id,
+                quantity_delta=payload.quantity_delta,
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=payload.reason_code,
+            )
+        ],
+        actor_user_id=scope.user_id,
+        correlation_id=get_correlation_id(),
+    )
+    entry = applied[0]
+
+    await audit.record(
+        session,
+        organization_id=scope.organization_id,
+        actor_user_id=scope.user_id,
+        action="inventory.adjusted",
+        entity_type="stock_movement",
+        entity_id=entry.movement_id,
+        before={"quantity": before},
+        after={"quantity": entry.quantity_after},
+        reason=payload.note or payload.reason_code.value,
+    )
+
+    body = AdjustmentResponse(
+        movement_id=entry.movement_id,
+        quantity_before=before,
+        quantity_after=entry.quantity_after,
+    )
+    await idempotency.complete(
+        session,
+        outcome.record_id,
+        response=body.model_dump(mode="json"),
+        http_status=status.HTTP_201_CREATED,
+    )
+    await session.commit()
+    return body

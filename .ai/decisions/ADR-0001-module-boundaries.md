@@ -28,9 +28,16 @@ inventory → catalog (read-only), core
 catalog   → core            (leaf: catalog depends on nothing but core)
 identity  → authz, tenancy, core
 authz     → tenancy, core
+*         → audit  (any module that changes business state writes its own
+                    audit entry, inside the same transaction as the change)
 telegram  → identity, core
 api/v1    → modules (routers call services only)
 ```
+
+`sales → audit` and the other audit edges exist because an audit row written
+in a different transaction from the change it describes is worse than none: it
+either records something that did not happen or misses something that did. The
+module making the change therefore writes its own entry.
 
 `identity → authz` is the authentication flow asking authorization what the
 user may do before it issues a session. The reverse edge is forbidden, which is
