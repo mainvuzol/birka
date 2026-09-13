@@ -14,10 +14,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
+from app.api.v1.inventory import router as inventory_router
 from app.modules.identity.service import authenticate_with_init_data
 from app.modules.tenancy.models import Store
 
 router = APIRouter()
+router.include_router(inventory_router)
 
 
 # --- schemas ---------------------------------------------------------------

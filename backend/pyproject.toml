@@ -115,7 +115,6 @@ filterwarnings = ["error::DeprecationWarning:app.*"]
 # the module it constrains, and every gate task that introduces a module also
 # adds its contract. Contracts still to be added:
 #
-#   M1B  only inventory writes stock (I3)  (app.modules.inventory.repository)
 #   M1C  parser reads no catalog state (I21)
 #        source: app.modules.catalog.parsing
 #        forbidden: app.modules.catalog.matching, .repository, app.core.db
@@ -178,3 +177,18 @@ name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"
 source_modules = ["app.modules.inventory"]
 forbidden_modules = ["app.modules.sales", "app.modules.refunds", "app.modules.transfers"]
+
+[[tool.importlinter.contracts]]
+name = "only the inventory module may write stock (invariant I3)"
+type = "forbidden"
+source_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.catalog",
+    "app.api",
+]
+forbidden_modules = ["app.modules.inventory.repository"]
+# Only DIRECT imports are forbidden: going through inventory.service is the
+# supported path and necessarily reaches the repository underneath it.
+allow_indirect_imports = true
