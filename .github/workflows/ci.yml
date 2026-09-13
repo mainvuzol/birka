@@ -105,13 +105,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      # No lockfile is committed yet, so npm resolves on each run and the build
-      # is not reproducible. Committing frontend/package-lock.json and moving
-      # to `npm ci` is a gate-M1D task; setup-node's npm cache needs the
-      # lockfile too, so it is deliberately not enabled here rather than
-      # failing the job with "dependencies lock file is not found".
-      - run: npm install --no-audit --no-fund
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # `npm ci` installs exactly the locked tree and fails if package.json and
+      # the lockfile disagree. `npm install` would silently resolve something
+      # else, which is how a dependency reaches production unreviewed.
+      - run: npm ci
+      # Dependabot could not act on the vite advisories while no lockfile
+      # existed. Failing the build on a known vulnerability keeps that visible.
+      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build

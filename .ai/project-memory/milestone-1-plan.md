@@ -180,7 +180,7 @@ RawInput(id PK, organization_id, store_id NULL, source_kind, source_ref,
          raw_text TEXT NOT NULL, content_hash, created_by, created_at)
   -- APPEND-ONLY; UPDATE and DELETE rejected by trigger
 
-RawInputProcessing(raw_input_id PK/FK, 
+RawInputProcessing(raw_input_id PK/FK,
          status ENUM(PENDING, PARSED, AMBIGUOUS, FAILED, RESOLVED),
          attempts INT NOT NULL DEFAULT 0,
          last_parse_result_id FK NULL,
@@ -789,7 +789,9 @@ Three tests were rewritten because they could not fail: a tautological permissio
 
 | # | Risk | Status |
 |---|---|---|
-| R1 | **No dependency lockfile** — Python (`pip install -e .`) and npm both resolve latest-compatible on every build. Not reproducible; a compromised transitive release reaches production | Accepted for M1A. Fix in M1D with a constraints file and a committed `package-lock.json` |
+| R1 | **No dependency lockfile.** Rated "not reproducible" at first. That was an under-estimate: with no lockfile Dependabot **could not apply security updates at all**, and three vite advisories (one HIGH) sat open and unfixable. Discovered when the Dependabot job failed on `main` | **Frontend: closed.** `package-lock.json` committed, vite 5 → 8.3.0, `npm ci` + `npm audit --audit-level=high` in CI, `npm audit` reports 0 vulnerabilities. **Python: still open** — `pip install -e .` resolves latest-compatible; needs a constraints file |
+| R1b | `@telegram-apps/*` packages are deprecated upstream in favour of `@tma.js/*` — which is also what `.ai/project.md` names as the approved stack | Swap during M1D, when the Telegram integration layer is actually written. No advisory, no rush |
+| R1c | `eslint@9.39.5` reports "this version is no longer supported" | Bump with the M1D frontend work; `typescript-eslint` compatibility needs checking first |
 | R2 | **No rate limiting on `POST /auth/telegram`** — unauthenticated, does an HMAC and a database write | Accepted at two-shop scale. Revisit before public exposure |
 | R3 | **No session revocation** — a stolen token stays valid for up to 12 hours. Account and membership changes take effect immediately; the token itself cannot be killed | Accepted. Revisit if a device is ever lost |
 | R4 | **No initData replay protection** — a captured payload can mint sessions for the remainder of its 1-hour window | Accepted; the window is configurable and could be shortened |
@@ -803,4 +805,3 @@ Three tests were rewritten because they could not fail: a tautological permissio
 > *"`docker compose up` gives a running API with migrations, Telegram auth and RBAC, and CI is green."*
 
 **Met locally to the limit of this machine, and not beyond.** The API runs, migrations render, auth and RBAC work and are tested, and every local gate is green. `docker compose up` and CI cannot be executed here — no Docker, no Node. The first CI run after `git push` is what closes the gate honestly, and that push is the owner's to make.
-
