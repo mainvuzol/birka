@@ -179,19 +179,31 @@ RECONCILE_SQL = text(
       AND m.product_variant_id = i.product_variant_id
       AND m.size_id = i.size_id
     WHERE COALESCE(i.quantity, 0) <> COALESCE(m.ledger_quantity, 0)
+      -- Cast explicitly: asyncpg sends an untyped NULL and PostgreSQL
+      -- cannot infer the parameter type from `IS NULL` alone.
+      AND (
+          CAST(:store_id AS uuid) IS NULL
+          OR COALESCE(i.store_id, m.store_id) = CAST(:store_id AS uuid)
+      )
     """
 )
 
 
-async def reconcile(session: AsyncSession) -> list[Divergence]:
+async def reconcile(
+    session: AsyncSession, *, store_id: uuid.UUID | None = None
+) -> list[Divergence]:
     """Every key where `Inventory.quantity` differs from the ledger sum.
 
     Invariant I3 is `SERVICE_ENFORCED` — the database cannot require a movement
     for every write. This query is the detection half of that, and an empty
     result is the evidence. A FULL OUTER JOIN so a quantity with no ledger
     history, and ledger history with no quantity, both surface.
+
+    `store_id` narrows the report to one shop. An owner asking "is the second
+    store consistent?" should not have to read the whole business, and a caller
+    checking its own work should not be answered about someone else's rows.
     """
-    rows = (await session.execute(RECONCILE_SQL)).mappings().all()
+    rows = (await session.execute(RECONCILE_SQL, {"store_id": store_id})).mappings().all()
     return [
         Divergence(
             store_id=row["store_id"],

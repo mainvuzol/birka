@@ -189,10 +189,12 @@ async def apply_movements(
     return applied
 
 
-async def find_divergences(session: AsyncSession) -> list[repository.Divergence]:
+async def find_divergences(
+    session: AsyncSession, *, store_id: uuid.UUID | None = None
+) -> list[repository.Divergence]:
     """Keys where the quantity and the ledger disagree. Empty is the evidence
-    that invariant I3 held."""
-    return await repository.reconcile(session)
+    that invariant I3 held. Narrow to one store with `store_id`."""
+    return await repository.reconcile(session, store_id=store_id)
 
 
 __all__ = [

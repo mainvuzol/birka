@@ -142,7 +142,7 @@ async def test_a_delivery_creates_the_row_the_movement_and_agrees(
         )
         == 4
     )
-    assert await find_divergences(session) == []
+    assert await find_divergences(session, store_id=world.store_id) == []
 
 
 async def test_a_sale_reduces_stock_and_the_ledger_still_agrees(
@@ -159,7 +159,7 @@ async def test_a_sale_reduces_stock_and_the_ledger_still_agrees(
     await session.commit()
 
     assert applied[0].quantity_after == 3
-    assert await find_divergences(session) == []
+    assert await find_divergences(session, store_id=world.store_id) == []
 
 
 async def test_selling_more_than_exists_is_refused_with_the_real_count(
@@ -204,7 +204,7 @@ async def test_a_refused_line_leaves_no_trace(session: AsyncSession) -> None:
         )
         == 1
     )
-    assert await find_divergences(session) == []
+    assert await find_divergences(session, store_id=world.store_id) == []
 
 
 async def test_reconciliation_detects_a_quantity_changed_behind_the_service(
@@ -225,7 +225,7 @@ async def test_reconciliation_detects_a_quantity_changed_behind_the_service(
     )
     await session.commit()
 
-    divergences = await find_divergences(session)
+    divergences = await find_divergences(session, store_id=world.store_id)
 
     assert len(divergences) == 1
     assert divergences[0].difference == 7
@@ -274,7 +274,7 @@ async def test_two_sellers_cannot_sell_the_same_last_unit(engine: AsyncEngine) -
             )
             == 0
         )
-        assert await find_divergences(check) == []
+        assert await find_divergences(check, store_id=world.store_id) == []
 
 
 async def test_ten_concurrent_sales_of_four_units_sell_exactly_four(
@@ -314,7 +314,7 @@ async def test_ten_concurrent_sales_of_four_units_sell_exactly_four(
             )
             == 0
         )
-        assert await find_divergences(check) == []
+        assert await find_divergences(check, store_id=world.store_id) == []
 
 
 async def test_multi_line_commands_in_opposite_order_do_not_deadlock(
@@ -362,7 +362,7 @@ async def test_multi_line_commands_in_opposite_order_do_not_deadlock(
     await asyncio.wait_for(asyncio.gather(sell([world, other]), sell([other, world])), timeout=20)
 
     async with maker() as check:
-        assert await find_divergences(check) == []
+        assert await find_divergences(check, store_id=world.store_id) == []
 
 
 # --- idempotency -------------------------------------------------------------
@@ -513,3 +513,28 @@ async def test_an_adjustment_records_its_reason(session: AsyncSession) -> None:
     ).scalar_one()
 
     assert recorded == "FOUND_DURING_SALE"
+
+
+async def test_reconciliation_can_be_narrowed_to_one_store(session: AsyncSession) -> None:
+    """A divergence in one shop must not be reported against the other.
+
+    The owner asking "is the second store consistent?" should get an answer
+    about that store, and a caller verifying its own work should not be handed
+    someone else's problem.
+    """
+    broken = await make_world(session)
+    healthy = await make_world(session)
+    await stock(session, broken, 3)
+    await stock(session, healthy, 3)
+
+    await session.execute(
+        text(
+            "UPDATE inventory SET quantity = quantity + 5"
+            " WHERE store_id = :s AND product_variant_id = :v AND size_id = :z"
+        ),
+        {"s": broken.store_id, "v": broken.variant_id, "z": broken.size_id},
+    )
+    await session.commit()
+
+    assert len(await find_divergences(session, store_id=broken.store_id)) == 1
+    assert await find_divergences(session, store_id=healthy.store_id) == []
