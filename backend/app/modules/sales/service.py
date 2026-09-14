@@ -1,6 +1,6 @@
 """The sale command.
 
-One transaction, owned by this service. Either the sale, every stock movement,
+One transaction, committed or rolled back by the caller. Either the sale, every stock movement,
 every correction and the audit entry all commit, or none of them do.
 
 Money is `Decimal` throughout and rounded once, per line, half-up. Totals are
@@ -16,14 +16,18 @@ sale. Stock never goes negative and both halves are in the ledger.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import idempotency
 from app.core.errors import (
     CorrectionExceedsShortfallError,
+    IdempotencyConflictError,
     NotFoundError,
     ValidationFailedError,
 )
@@ -36,7 +40,8 @@ from app.modules.inventory.models import MovementReason, MovementType
 from app.modules.inventory.service import (
     MovementRequest,
     apply_movements,
-    current_quantity,
+    lock_stock,
+    sale_correction_ids,
 )
 from app.modules.sales.models import Sale, SaleItem
 
@@ -78,56 +83,120 @@ class SaleResult:
     corrections: list[uuid.UUID] = field(default_factory=list)
 
 
-async def _resolve_corrections(
-    session: AsyncSession,
+MAX_MONEY = Decimal("9999999999.99")
+StockKey = tuple[uuid.UUID, uuid.UUID, uuid.UUID]
+
+
+def _amount(value: Decimal) -> Decimal:
+    """Accept only finite, nonnegative NUMERIC(12,2) values at the service boundary."""
+    if not isinstance(value, Decimal) or not value.is_finite() or value < 0 or value > MAX_MONEY:
+        raise ValidationFailedError("Money must be a finite nonnegative Decimal within range")
+    rounded = money(value)
+    if rounded != value:
+        raise ValidationFailedError("Money cannot have fractions of a kopeck")
+    return rounded
+
+
+def _resolve_corrections(
     *,
     store_id: uuid.UUID,
     lines: list[SaleLineInput],
     found_in_store: list[FoundInStore],
+    quantities: dict[StockKey, int],
 ) -> list[MovementRequest]:
-    """Turn "it is on the rack" into exact, audited corrections.
+    """Validate the total shortfall of each locked stock key, not isolated lines."""
+    demand: dict[StockKey, int] = {}
+    for line in lines:
+        key = (store_id, line.product_variant_id, line.size_id)
+        demand[key] = demand.get(key, 0) + line.quantity
 
-    Each correction must equal the shortfall precisely. This is not a back door
-    to arbitrary stock editing: correcting more than is missing is refused, and
-    broad adjustment stays a manager/owner permission.
-    """
-    corrections: list[MovementRequest] = []
+    requested: dict[StockKey, int] = {}
+    seen_indexes: set[int] = set()
     for found in found_in_store:
-        if not 0 <= found.line_index < len(lines):
-            raise ValidationFailedError(
-                "found_in_store refers to a line that does not exist",
-                line_index=found.line_index,
-            )
-        if found.quantity <= 0:
-            raise ValidationFailedError("A correction must add stock", line_index=found.line_index)
-
+        if type(found.line_index) is not int or not 0 <= found.line_index < len(lines):
+            raise ValidationFailedError("found_in_store refers to a line that does not exist")
+        if found.line_index in seen_indexes:
+            raise ValidationFailedError("Duplicate found_in_store line index")
+        seen_indexes.add(found.line_index)
+        if type(found.quantity) is not int or found.quantity <= 0:
+            raise ValidationFailedError("A correction must add a positive integer quantity")
         line = lines[found.line_index]
-        available = await current_quantity(
-            session,
-            store_id=store_id,
-            product_variant_id=line.product_variant_id,
-            size_id=line.size_id,
-        )
-        shortfall = line.quantity - available
-        if found.quantity != shortfall:
+        key = (store_id, line.product_variant_id, line.size_id)
+        requested[key] = requested.get(key, 0) + found.quantity
+
+    corrections: list[MovementRequest] = []
+    for key, quantity in requested.items():
+        available = quantities[key]
+        shortfall = max(demand[key] - available, 0)
+        if quantity != shortfall:
             raise CorrectionExceedsShortfallError(
-                line_index=found.line_index,
-                requested=found.quantity,
-                shortfall=max(shortfall, 0),
+                product_variant_id=str(key[1]),
+                size_id=str(key[2]),
+                requested=quantity,
+                shortfall=shortfall,
                 available=available,
             )
-
         corrections.append(
             MovementRequest(
                 store_id=store_id,
-                product_variant_id=line.product_variant_id,
-                size_id=line.size_id,
-                quantity_delta=found.quantity,
+                product_variant_id=key[1],
+                size_id=key[2],
+                quantity_delta=quantity,
                 movement_type=MovementType.ADJUSTMENT,
                 reason_code=MovementReason.FOUND_DURING_SALE,
             )
         )
     return corrections
+
+
+async def correction_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
+    """Recover the durable correction references, including receipts made before replay caching."""
+    return await sale_correction_ids(session, organization_id=sale.organization_id, sale_id=sale.id)
+
+
+async def _existing_command(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    command_id: uuid.UUID,
+    request_fingerprint: str,
+) -> SaleResult | None:
+    # Serialize this permanent command before taking stock locks. Hash collisions
+    # only serialize unrelated commands; the exact UUID pair still identifies the sale.
+    lock_key = int.from_bytes(
+        hashlib.sha256(scope.organization_id.bytes + command_id.bytes).digest()[:8],
+        byteorder="big",
+        signed=True,
+    )
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    existing = await session.scalar(
+        select(Sale).where(
+            Sale.organization_id == scope.organization_id, Sale.command_id == command_id
+        )
+    )
+    if existing is None:
+        return None
+    if existing.command_fingerprint != request_fingerprint:
+        # Older rows have no provable original payload. Never guess that a retry
+        # matches, nor turn an old command into another business operation.
+        details = {"command_id": str(command_id)}
+        if existing.store_id in scope.store_ids and scope.can(
+            Permission.SALE_VIEW, existing.store_id
+        ):
+            details["sale_id"] = str(existing.id)
+        message = (
+            "The original request for this existing sale cannot be verified"
+            if existing.command_fingerprint is None
+            else "This command_id was already used with a different request"
+        )
+        raise IdempotencyConflictError(message, **details)
+    scope.require(Permission.SALE_VIEW, existing.store_id)
+    items = list(
+        (await session.scalars(select(SaleItem).where(SaleItem.sale_id == existing.id))).all()
+    )
+    return SaleResult(
+        sale=existing, items=items, corrections=await correction_ids(session, existing)
+    )
 
 
 async def create_sale(
@@ -151,44 +220,80 @@ async def create_sale(
         # A narrow capability a seller may hold, unlike inventory:adjust.
         scope.require(Permission.INVENTORY_CORRECT_DURING_SALE, store_id)
 
+    if currency_code != "UAH":
+        raise ValidationFailedError("Only UAH is supported")
+    normalized: list[SaleLineInput] = []
+    for line in lines:
+        if type(line.quantity) is not int or not 0 < line.quantity <= 1000:
+            raise ValidationFailedError("Quantity must be an integer between 1 and 1000")
+        unit_price = _amount(line.unit_price)
+        discount_amount = _amount(line.discount_amount)
+        if discount_amount > unit_price:
+            raise ValidationFailedError("A discount cannot exceed the price")
+        normalized.append(replace(line, unit_price=unit_price, discount_amount=discount_amount))
+    lines = normalized
+    request_fingerprint = idempotency.fingerprint(
+        {
+            "currency_code": currency_code,
+            "lines": [
+                {
+                    "product_variant_id": str(line.product_variant_id),
+                    "size_id": str(line.size_id),
+                    "quantity": line.quantity,
+                    "unit_price": str(line.unit_price),
+                    "discount_amount": str(line.discount_amount),
+                }
+                for line in lines
+            ],
+            "found_in_store": [
+                {"line_index": found.line_index, "quantity": found.quantity}
+                for found in corrections_requested
+            ],
+        },
+        actor_user_id=scope.user_id,
+        store_id=store_id,
+    )
+    existing = await _existing_command(
+        session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
+    )
+    if existing is not None:
+        return existing
+
+    # Lock every stock key in one global order before reading any shortfall.
+    # This also materializes missing rows, closing the first-receipt race.
+    quantities = await lock_stock(
+        session,
+        organization_id=scope.organization_id,
+        keys=[(store_id, line.product_variant_id, line.size_id) for line in lines],
+    )
     described = await describe_variants(session, [line.product_variant_id for line in lines])
     for line in lines:
         description = described.get(line.product_variant_id)
-        if description is None:
+        if description is None or description.organization_id != scope.organization_id:
             raise NotFoundError(
                 "Unknown product variant", product_variant_id=str(line.product_variant_id)
             )
-        if description.organization_id != scope.organization_id:
-            # A variant id supplied by the client is data to validate, never
-            # proof of access (invariant I12).
-            raise NotFoundError(
-                "Unknown product variant", product_variant_id=str(line.product_variant_id)
-            )
-        if line.quantity <= 0:
-            raise ValidationFailedError("Quantity must be positive")
-        if line.unit_price < 0 or line.discount_amount < 0:
-            raise ValidationFailedError("Prices and discounts cannot be negative")
-        if line.discount_amount > line.unit_price:
-            raise ValidationFailedError("A discount cannot exceed the price")
 
-    corrections = await _resolve_corrections(
-        session, store_id=store_id, lines=lines, found_in_store=corrections_requested
+    corrections = _resolve_corrections(
+        store_id=store_id, lines=lines, found_in_store=corrections_requested, quantities=quantities
     )
-
-    subtotal = money(sum((line.unit_price * line.quantity for line in lines), Decimal("0")))
-    discount_total = money(
+    subtotal = _amount(sum((line.unit_price * line.quantity for line in lines), Decimal("0")))
+    discount_total = _amount(
         sum((line.discount_amount * line.quantity for line in lines), Decimal("0"))
     )
+    line_totals = [(line.unit_price - line.discount_amount) * line.quantity for line in lines]
+    total = _amount(sum(line_totals, Decimal("0")))
 
     sale = Sale(
         organization_id=scope.organization_id,
         store_id=store_id,
         seller_user_id=scope.user_id,
         command_id=command_id,
+        command_fingerprint=request_fingerprint,
         currency_code=currency_code,
         subtotal=subtotal,
         discount_total=discount_total,
-        total=money(subtotal - discount_total),
+        total=total,
         correlation_id=correlation_id,
     )
     session.add(sale)
@@ -277,4 +382,4 @@ async def create_sale(
     return SaleResult(sale=sale, items=items, corrections=correction_ids)
 
 
-__all__ = ["FoundInStore", "SaleLineInput", "SaleResult", "create_sale", "money"]
+__all__ = ["FoundInStore", "SaleLineInput", "SaleResult", "correction_ids", "create_sale", "money"]

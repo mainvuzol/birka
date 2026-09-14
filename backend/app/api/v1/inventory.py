@@ -28,7 +28,7 @@ from app.modules.inventory.models import (
     MovementType,
     StockLot,
 )
-from app.modules.inventory.service import MovementRequest, apply_movements, current_quantity
+from app.modules.inventory.service import MovementRequest, apply_movements, lock_stock
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -145,10 +145,15 @@ async def receive_goods(
         response.status_code = outcome.http_status
         return ReceiptResponse.model_validate(outcome.response)
 
+    await lock_stock(
+        session,
+        organization_id=scope.organization_id,
+        keys=[(payload.store_id, line.product_variant_id, line.size_id) for line in payload.lines],
+    )
     correlation_id = get_correlation_id()
     results: list[ReceiptLineResult] = []
     requests: list[MovementRequest] = []
-    lots: dict[tuple[uuid.UUID, uuid.UUID], StockLot] = {}
+    lots: list[StockLot] = []
 
     for line in payload.lines:
         lot = StockLot(
@@ -162,11 +167,10 @@ async def receive_goods(
             notes=payload.notes,
         )
         session.add(lot)
-        lots[(line.product_variant_id, line.size_id)] = lot
+        lots.append(lot)
     await session.flush()
 
-    for line in payload.lines:
-        lot = lots[(line.product_variant_id, line.size_id)]
+    for line, lot in zip(payload.lines, lots, strict=True):
         requests.append(
             MovementRequest(
                 store_id=payload.store_id,
@@ -188,8 +192,9 @@ async def receive_goods(
         correlation_id=correlation_id,
     )
 
-    for entry in applied:
-        lot = lots[(entry.request.product_variant_id, entry.request.size_id)]
+    by_lot = {entry.request.stock_lot_id: entry for entry in applied}
+    for lot in lots:
+        entry = by_lot[lot.id]
         results.append(
             ReceiptLineResult(
                 product_variant_id=entry.request.product_variant_id,
@@ -275,13 +280,6 @@ async def adjust_inventory(
         response.status_code = outcome.http_status
         return AdjustmentResponse.model_validate(outcome.response)
 
-    before = await current_quantity(
-        session,
-        store_id=payload.store_id,
-        product_variant_id=payload.product_variant_id,
-        size_id=payload.size_id,
-    )
-
     applied = await apply_movements(
         session,
         organization_id=scope.organization_id,
@@ -299,6 +297,7 @@ async def adjust_inventory(
         correlation_id=get_correlation_id(),
     )
     entry = applied[0]
+    before = entry.quantity_after - entry.request.quantity_delta
 
     await audit.record(
         session,

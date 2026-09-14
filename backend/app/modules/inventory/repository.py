@@ -20,12 +20,74 @@ from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import NotFoundError
 from app.modules.inventory.models import (
     Inventory,
     MovementReason,
     MovementType,
+    StockLot,
     StockMovement,
 )
+
+
+async def validate_lot_references(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    references: list[tuple[uuid.UUID, tuple[uuid.UUID, uuid.UUID, uuid.UUID]]],
+) -> None:
+    """A lot must belong to both the command tenant and its exact stock key."""
+    if not references:
+        return
+    lots = {
+        lot.id: lot
+        for lot in (
+            await session.scalars(
+                select(StockLot).where(
+                    StockLot.id.in_({ref[0] for ref in references}),
+                    StockLot.organization_id == organization_id,
+                )
+            )
+        ).all()
+    }
+    for lot_id, key in references:
+        lot = lots.get(lot_id)
+        if lot is None or (lot.store_id, lot.product_variant_id, lot.size_id) != key:
+            raise NotFoundError("Unknown stock lot for this stock key")
+
+
+async def ensure_and_lock(
+    session: AsyncSession, *, key: tuple[uuid.UUID, uuid.UUID, uuid.UUID]
+) -> int:
+    """Materialize an empty stock key and lock it through transaction end.
+
+    The unique-key insert also serializes concurrent first arrivals. Zero is
+    bookkeeping only: no quantity changes and no movement is required.
+    Call in the same sorted order for every key a command will touch.
+    """
+    store_id, variant_id, size_id = key
+    await session.execute(
+        pg_insert(Inventory)
+        .values(
+            id=uuid.uuid4(),
+            store_id=store_id,
+            product_variant_id=variant_id,
+            size_id=size_id,
+            quantity=0,
+        )
+        .on_conflict_do_nothing(index_elements=["store_id", "product_variant_id", "size_id"])
+    )
+    return (
+        await session.execute(
+            select(Inventory.quantity)
+            .where(
+                Inventory.store_id == store_id,
+                Inventory.product_variant_id == variant_id,
+                Inventory.size_id == size_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one()
 
 
 async def decrement(
@@ -220,7 +282,30 @@ __all__ = [
     "Divergence",
     "current_quantity",
     "decrement",
+    "ensure_and_lock",
     "increment",
     "reconcile",
     "record_movement",
+    "validate_lot_references",
 ]
+
+
+async def sale_correction_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Read correction references without exposing inventory ORM to sales."""
+    return list(
+        (
+            await session.scalars(
+                select(StockMovement.id)
+                .where(
+                    StockMovement.organization_id == organization_id,
+                    StockMovement.reference_type == "sale",
+                    StockMovement.reference_id == sale_id,
+                    StockMovement.movement_type == MovementType.ADJUSTMENT,
+                    StockMovement.reason_code == MovementReason.FOUND_DURING_SALE,
+                )
+                .order_by(StockMovement.product_variant_id, StockMovement.size_id, StockMovement.id)
+            )
+        ).all()
+    )

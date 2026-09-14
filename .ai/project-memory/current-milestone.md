@@ -2,10 +2,12 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **Gate M1A IMPLEMENTED and independently reviewed. M1B not started — it opens only on the owner's go-ahead.**
+Status: **M1A implemented; M1B catalog schema, inventory and sale backend implemented. Review defects fixed and locally verified on 2026-09-14. Full M1B exit remains open: the product-creation vertical and release-environment verification are not claimed.**
 
 Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 36 physical tables · 22 invariants · 4 gates
-Branch: `feat/foundation-milestone-1`
+Fix branch: `codex/fix-m1b-review-defects` (reviewed baseline: `b73c015`).
+
+Evidence: [M1B review fixes](m1b-review-fixes.md).
 
 ## Gates
 
@@ -23,8 +25,8 @@ Branch: `feat/foundation-milestone-1`
 Verification limits on the current development machine — these constrain evidence, not design:
 
 - no Docker → compose config authored but not executed locally;
-- no PostgreSQL → database integration tests run in CI only, and skip locally with an explicit marker rather than passing silently;
-- no Node.js → frontend scaffold authored but not built locally; frontend work is gate M1D.
+- PostgreSQL 16.2 temporary local instance: 254 backend tests passed with no skips; PostgreSQL 17 remains a CI/release check;
+- Frontend locked install, lint, typecheck and build passed in the preceding review; unchanged by these backend fixes. Telegram/E2E remains M1D.
 
 ## Standing constraints for this milestone
 

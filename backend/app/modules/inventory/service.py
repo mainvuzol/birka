@@ -24,8 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import InsufficientStockError, ValidationFailedError
 from app.core.logging import get_logger
+from app.modules.catalog.validation import validate_stock_references
 from app.modules.inventory import repository
 from app.modules.inventory.models import MovementReason, MovementType
+from app.modules.tenancy.service import validate_active_stores
 
 logger = get_logger(__name__)
 
@@ -103,6 +105,36 @@ def validate_movement(request: MovementRequest) -> None:
         )
 
 
+async def lock_stock(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]],
+) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
+    """Validate then lock the complete command basket before making decisions.
+
+    Locks, including previously absent stock keys, last until commit/rollback.
+    Callers must supply all command keys up front, never a partial correction
+    basket followed by a differently ordered sale basket.
+    """
+    ordered = sorted(set(keys))
+    if not ordered:
+        return {}
+    await validate_active_stores(
+        session, organization_id=organization_id, store_ids={key[0] for key in ordered}
+    )
+    await validate_stock_references(
+        session,
+        organization_id=organization_id,
+        variant_ids={key[1] for key in ordered},
+        size_ids={key[2] for key in ordered},
+    )
+    quantities = {}
+    for key in ordered:
+        quantities[key] = await repository.ensure_and_lock(session, key=key)
+    return quantities
+
+
 async def apply_movements(
     session: AsyncSession,
     *,
@@ -122,6 +154,21 @@ async def apply_movements(
 
     for request in requests:
         validate_movement(request)
+
+    await repository.validate_lot_references(
+        session,
+        organization_id=organization_id,
+        references=[
+            (r.stock_lot_id, (r.store_id, r.product_variant_id, r.size_id))
+            for r in requests
+            if r.stock_lot_id is not None
+        ],
+    )
+    await lock_stock(
+        session,
+        organization_id=organization_id,
+        keys=[(r.store_id, r.product_variant_id, r.size_id) for r in requests],
+    )
 
     applied: list[AppliedMovement] = []
 
@@ -221,5 +268,16 @@ __all__ = [
     "apply_movements",
     "current_quantity",
     "find_divergences",
+    "lock_stock",
+    "sale_correction_ids",
     "validate_movement",
 ]
+
+
+async def sale_correction_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Durable, tenant-scoped correction references for a sale receipt."""
+    return await repository.sale_correction_ids(
+        session, organization_id=organization_id, sale_id=sale_id
+    )
