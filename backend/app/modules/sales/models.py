@@ -65,6 +65,12 @@ class Sale(UUIDPrimaryKey, TimestampMixin, Base):
     )
     # Permanent business identity of the command that created this sale.
     command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    # Nullable only for sales written before migration 0003: their original
+    # request cannot be reconstructed safely from catalog/receipt snapshots.
+    command_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    response_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        postgresql.JSONB, nullable=True
+    )
     status: Mapped[SaleStatus] = mapped_column(
         Enum(SaleStatus, name="sale_status", native_enum=True),
         nullable=False,

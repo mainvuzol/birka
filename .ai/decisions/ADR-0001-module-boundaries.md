@@ -24,7 +24,7 @@ Permitted edges:
 sales     → inventory, catalog, authz, tenancy, core
 refunds   → sales, inventory, authz, tenancy, core
 transfers → inventory, authz, tenancy, core
-inventory → catalog (read-only), core
+inventory → catalog (read-only), tenancy (store validation), core
 catalog   → core            (leaf: catalog depends on nothing but core)
 identity  → authz, tenancy, core
 authz     → tenancy, core
@@ -83,3 +83,5 @@ Negative:
 - **Monitoring:** one correlation id per request flows through every module and into the audit log.
 - **Rollback:** one artifact to roll back. Migration rollback is reviewed per migration (M1-006).
 - **CI cost:** the import-linter contract runs in seconds; it is a lint job, not a test suite.
+
+2026-09-14 clarification: inventory validates catalog and active store ownership through public service functions before stock materialization. Sales reads correction references through inventory.service; it does not query inventory ORM tables.

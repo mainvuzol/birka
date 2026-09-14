@@ -72,28 +72,29 @@ The PostgreSQL floor comes from `UNIQUE NULLS NOT DISTINCT` — see [ADR-0002](d
 
 ## Repositories
 
-- Repository root: `D:\VScode\birka` (`github.com/mainvuzol/birka`)
-- Implementation branch: `feat/foundation-milestone-1`
-- Frontend path: `frontend/` (approved, not yet created)
-- Backend path: `backend/` (approved, not yet created)
-- Infra path: `infra/` (approved, not yet created)
+- Repository: `github.com/mainvuzol/birka` (local checkout path varies by host)
+- Current implementation status and branch: `.ai/project-memory/current-milestone.md`
+- Frontend path: `frontend/` (implemented scaffold)
+- Backend path: `backend/` (implemented scaffold)
+- Infra path: `infra/` (implemented scaffold)
 - Docs path: `.ai/` plus project docs as created
 - ADRs: `.ai/decisions/`, indexed in `.ai/project-memory/architecture-decisions.md`
 
 ## Runtime environments
 
-- Local: `<unknown>` — defined by task M1-002
+- Local: FastAPI, Vite, PostgreSQL; Compose configuration in `infra/`
 - Staging: `<unknown>`
 - Production: `<unknown>`
 
 ## Commands
 
-Nothing is scaffolded yet. These stay `<unknown>` until task M1-001 creates the toolchain; do not invent commands that do not exist.
+Run frontend commands from `frontend/`, backend commands from `backend/` with its Python environment active.
 
-- Frontend install / lint / typecheck / test / build: `<unknown>`
-- Backend install / lint / typecheck / test: `<unknown>`
+- Frontend: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build`; no test script yet.
+- Backend: `pip install -e ".[dev]"`, `ruff check .`, `ruff format --check .`, `mypy app`, `lint-imports`, `pytest -q`.
+- Real DB tests require `BIRKA_TEST_DATABASE_URL`; without it they explicitly skip.
 - E2E: `<unknown>`
-- DB migration upgrade: `<unknown>`
+- DB migration: set `BIRKA_DATABASE_URL`, run `alembic upgrade head` before starting the updated backend; verify with `alembic check`.
 
 ## Protected resources
 

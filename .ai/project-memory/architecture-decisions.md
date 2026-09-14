@@ -15,3 +15,5 @@ These were confirmed by the product owner at conceptual approval and are recorde
 - A seller may complete a sale against zero system stock when the goods are physically present; the correction and the sale commit in one transaction with reason code `FOUND_DURING_SALE`. Arbitrary inventory adjustment stays a manager/owner permission.
 - Milestone 1 is delivered through four internal gates: M1A platform, M1B first complete sale vertical slice, M1C refund/transfer/catalog pipeline/legacy import, M1D client/E2E/release.
 - `OutboxEvent` is not built in Milestone 1: no consumer exists, and `audit_log` covers traceability.
+
+- [ADR-0003 — Durable sale replay and complete basket locks](../decisions/ADR-0003-sale-command-replay.md): permanent payload/response proof, command serialization, complete ordered inventory locks, legacy 409 behavior.

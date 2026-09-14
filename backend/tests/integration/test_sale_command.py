@@ -326,17 +326,14 @@ async def test_the_same_command_id_cannot_create_a_second_sale(
     session: AsyncSession,
 ) -> None:
     """Invariant I20, independent of the idempotency record's retention."""
-    from sqlalchemy.exc import IntegrityError
-
     shop = await make_shop(session)
     await give_stock(session, shop, 5)
     command_id = uuid.uuid4()
 
-    await sell(session, shop, command_id=command_id)
+    original = await sell(session, shop, command_id=command_id)
     await session.commit()
-
-    with pytest.raises(IntegrityError):
-        await sell(session, shop, command_id=command_id)
+    replay = await sell(session, shop, command_id=command_id)
+    assert replay.sale.id == original.sale.id
 
 
 # --- found during sale (F30) -------------------------------------------------

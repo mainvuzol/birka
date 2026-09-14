@@ -53,6 +53,9 @@ def _install_sentry(settings: Settings) -> None:
         # request bodies regardless. Both of the next two lines are required.
         max_request_body_size="never",
         before_send=_scrub_request_body,
+        # Login credentials also live in traceback locals (init_data and
+        # parsed payloads). Request scrubbing does not remove those copies.
+        include_local_variables=False,
         traces_sample_rate=0.0,
     )
 

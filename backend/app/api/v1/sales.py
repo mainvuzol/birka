@@ -27,7 +27,7 @@ from app.core.correlation import get_correlation_id
 from app.core.errors import NotFoundError
 from app.modules.authz.permissions import Permission
 from app.modules.sales.models import Sale, SaleItem
-from app.modules.sales.service import FoundInStore, SaleLineInput, create_sale
+from app.modules.sales.service import FoundInStore, SaleLineInput, correction_ids, create_sale
 
 router = APIRouter(tags=["sales"])
 
@@ -119,6 +119,10 @@ async def create(
     response: Response,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)],
 ) -> SaleResponse:
+    # Revoked store access/correction capability must apply to cached receipts too.
+    scope.require(Permission.SALE_CREATE, payload.store_id)
+    if payload.found_in_store:
+        scope.require(Permission.INVENTORY_CORRECT_DURING_SALE, payload.store_id)
     outcome = await idempotency.claim(
         session,
         organization_id=scope.organization_id,
@@ -131,6 +135,7 @@ async def create(
         ),
     )
     if isinstance(outcome, idempotency.Replay):
+        scope.require(Permission.SALE_VIEW, payload.store_id)
         response.status_code = outcome.http_status
         return SaleResponse.model_validate(outcome.response)
 
@@ -157,7 +162,12 @@ async def create(
         correlation_id=get_correlation_id(),
     )
 
-    body = _to_response(result.sale, result.items, result.corrections)
+    body = (
+        SaleResponse.model_validate(result.sale.response_snapshot)
+        if result.sale.response_snapshot is not None
+        else _to_response(result.sale, result.items, result.corrections)
+    )
+    result.sale.response_snapshot = body.model_dump(mode="json")
     await idempotency.complete(
         session,
         outcome.record_id,
@@ -182,10 +192,13 @@ async def read_sale(sale_id: uuid.UUID, scope: ScopeDep, session: SessionDep) ->
 
     scope.require(Permission.SALE_VIEW, sale.store_id)
 
+    if sale.response_snapshot is not None:
+        return SaleResponse.model_validate(sale.response_snapshot)
+
     items = (
         (await session.execute(select(SaleItem).where(SaleItem.sale_id == sale.id))).scalars().all()
     )
-    return _to_response(sale, list(items), [])
+    return _to_response(sale, list(items), await correction_ids(session, sale))
 
 
 __all__ = ["router"]

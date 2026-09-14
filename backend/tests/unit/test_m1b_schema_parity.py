@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import MetaData
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex, CreateTable
 
@@ -37,7 +38,17 @@ HEADER = (
 
 def m1b_tables() -> list:
     """Every M1B table, in an order that satisfies foreign keys."""
-    return [t for t in metadata.sorted_tables if t.name not in M1A_TABLES]
+    # Freeze the historical 0002 projection; later migrations are checked
+    # against the complete current metadata with live `alembic check`.
+    baseline = MetaData(naming_convention=metadata.naming_convention)
+    for table in metadata.sorted_tables:
+        clone = table.to_metadata(baseline)
+        originals = {constraint.name: constraint for constraint in table.constraints}
+        for constraint in clone.constraints:
+            constraint._creation_order = originals[constraint.name]._creation_order
+    for name in ("command_fingerprint", "response_snapshot"):
+        baseline.tables["sale"]._columns.remove(baseline.tables["sale"].c[name])
+    return [t for t in baseline.sorted_tables if t.name not in M1A_TABLES]
 
 
 def render_schema_sql() -> str:
