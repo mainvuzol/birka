@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 
@@ -654,6 +654,11 @@ async def create_product(
     """
     if (draft.concept is None) == (draft.product_family_id is None):
         raise ValidationFailedError("Name the product or give a product_family_id, not both")
+    # Direct callers must enforce the same explanation rule as HTTP intake.
+    note = draft.distinction_note.strip() if draft.distinction_note is not None else None
+    if note is not None and len(note) > 1000:
+        raise ValidationFailedError("A distinction note must not exceed 1000 characters")
+    draft = replace(draft, distinction_note=note)
     if draft.new_model and not draft.distinction_note:
         raise ValidationFailedError("A new model needs a note saying how it is different")
     if not draft.sizes:

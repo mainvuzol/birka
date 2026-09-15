@@ -104,3 +104,24 @@ Raised by the reviews, deliberately not decided here:
 `backend/tests/integration/test_api_endpoints.py` exists only on the unmerged local branch `feat/m1b-sale-command` (commit `33d32c8`). It held 20 HTTP-level tests; the M1B review work in PR #10 replaced them with service-level regression tests and the file never reached `main`. Most of its scenarios are covered elsewhere at service level. One was not covered anywhere: the `MAX_UNIT_PRICE` guard that keeps a schema-valid request from overflowing `NUMERIC(12,2)` — a fix from the earlier review whose only regression test lived on that branch. It is re-covered here at HTTP level.
 
 `output/reviews/2026-09-14-m1b/` was committed to `main` in PR #10. It holds a review report and three throwaway scripts that depend on an undocumented `REVIEW_DATABASE_URL` and are outside every lint and test path. That is scratch output living in version control; whether to keep it as evidence or delete it is the owner's call, not something this change decided.
+
+## Follow-up validation fixes — 2026-09-15
+
+The subsequent independent review found two additional P2 input-validation defects. Both are now fixed locally:
+
+- Catalog request, variant and size schemas reject unsupported fields with422 (`extra=forbid`), preventing silent loss of submitted identity attributes or item codes. Flexible attributes are still outside this endpoint's supported contract.
+- `distinction_note` is trimmed at both HTTP and service boundaries. `new_model` rejects whitespace-only explanations; valid notes are stored consistently in the family and audit. Direct service calls also enforce the1000-character limit.
+
+Changed: `backend/app/api/v1/catalog.py`, `backend/app/modules/catalog/service.py`, `backend/tests/integration/test_product_lifecycle_api.py`, and this report. No schema changes or migrations. Existing catalog data is not rewritten. Clients sending undeclared fields now receive422 instead of silent acceptance.
+
+Ten new regression cases exercise unsupported top-level/nested fields, blank/Unicode-whitespace notes, and trimmed persistence through both HTTP and direct service calls. Before the fixes:9failed,1passed. After the fixes, full suite: **288passed,0skipped**, two existing dependency deprecation warnings, using temporary PostgreSQL16.2 and Python3.12 on macOS. This is fresh local evidence, distinct from the earlier PostgreSQL17.9 run.
+
+Commands from `backend/`, executable prefix `/tmp/birka-review-venv/bin/`:
+- `BIRKA_TEST_DATABASE_URL=postgresql+asyncpg://birka_review@127.0.0.1:55439/postgres pytest -q`:288passed.
+- `ruff check .`:pass; `ruff format --check .`:84files formatted.
+- `mypy app`:52source files passed; `lint-imports`:8kept,0broken.
+- Repository `git diff --check`:pass.
+
+Docker Compose execution remains unverified; these fixes do not claim deployment readiness. Changes remain local until committed and integrated by the owner.
+
+Independent follow-up reviewer confirmed both findings closed with no new actionable issues and separately ran schema/service boundary checks for unknown fields, Unicode whitespace, trimming and overlength notes. The full database suite above was run by the primary agent.

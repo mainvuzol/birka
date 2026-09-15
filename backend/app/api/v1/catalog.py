@@ -23,7 +23,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Response, status
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.api.deps import ScopeDep, SessionDep
 from app.core import idempotency
@@ -56,6 +56,8 @@ class VariantPayload(BaseModel):
     never filled with a placeholder.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     color: ShortLabel | None = None
     material: ShortLabel | None = None
     texture: ShortLabel | None = None
@@ -72,11 +74,15 @@ class SizePayload(BaseModel):
     them would put stock under a size they did not mean.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     system: SizeSystemCode
     code: SizeCode
 
 
 class ProductRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     store_id: uuid.UUID
 
     # Either the product is named…
@@ -91,7 +97,9 @@ class ProductRequest(BaseModel):
     # ADR-0002: a second family may share the whole signature, but only when a
     # human says it is a different model and writes down how.
     new_model: bool = False
-    distinction_note: str | None = Field(default=None, max_length=1000)
+    distinction_note: (
+        Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] | None
+    ) = None
 
     variant: VariantPayload = Field(default_factory=VariantPayload)
     sizes: list[SizePayload] = Field(min_length=1, max_length=50)
