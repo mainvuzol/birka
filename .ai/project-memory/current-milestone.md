@@ -22,11 +22,11 @@ Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](
 
 **M1B — met.** A product can be created, stock received and sold, including `FOUND_DURING_SALE`, with every M1B invariant proven by test. Re-verified on 2026-09-15 at `d85cc13`: 288 tests passing with no skips, all lint/type/boundary/migration checks clean.
 
-**M1C — 1 of 6 tasks.** `POST /sales/{sale_id}/refunds` returns goods and money against a sale without touching it, capped by what was actually sold minus prior returns, with restocking stated per line. Two independent reviewers found six major defects — a one-way migration, a replay that reordered its own lines, an untested advisory lock, an untestable authorization test, an API-wide 500 on text the database cannot store, and a closed store refunding money but refusing goods. All are fixed. See the [M1-017 report](m1-017-refund-report.md) for evidence and for five open business questions the refund raises.
+**M1C — 1 of 6 tasks.** `POST /sales/{sale_id}/refunds` returns goods and money against a sale without touching it, capped by what was actually sold minus prior returns, with restocking stated per line. Two independent reviewers found six major defects — a one-way migration, a replay that reordered its own lines, an untested advisory lock, an untestable authorization test, an API-wide 500 on text the database cannot store, and a closed store refunding money but refusing goods. All are fixed. See the [M1-017 report](m1-017-refund-report.md) for evidence and for the original questions and the [owner’s confirmed refinements](owner-decisions-2026-09-15.md). These refinements are not implemented by the existing refund command.
 
 ## Ready / blocked
 
-**No task is blocked by an open question.** Q1 (money), Q2 (inventory granularity) and U11 (parser corpus) were answered at revision 3. Q4 (users and devices) and Q5 (transfer confirmation) refine already-safe defaults and can be answered during M1C/M1D.
+**Before M1-018, update the stock-location design for the owner-confirmed shared primary warehouse and separate child warehouse.** Define store-state permissions and installment accounting before implementing those behaviors. The arbitrary-price question is resolved: it is a negotiated final price, below or above the suggested price, not a partial payment. Other independent work may continue. Q1 (money), Q2 (inventory granularity) and U11 (parser corpus) were answered at revision 3. Q4 (users and devices) and Q5 (transfer confirmation) refine already-safe defaults and can be answered during M1C/M1D.
 
 Verification limits on the current development machine — these constrain evidence, not design:
 
@@ -46,3 +46,7 @@ Verification limits on the current development machine — these constrain evide
 - Inventory is `store + variant + size`; `UNKNOWN_SIZE` is a real domain state; reclassification is audited.
 - Sentinel rows only where the business genuinely has that state; use `UNIQUE NULLS NOT DISTINCT` where a unique constraint truly belongs. PostgreSQL ≥ 15, pinned to 17.
 - Continue collecting real store datasets in parallel with M1A/M1B.
+
+## New scope confirmed on 2026-09-15
+
+[Owner decisions](owner-decisions-2026-09-15.md): shared and child warehouses, blocked/archived store states, intact/damaged returned units, negotiated final prices and full/installment payment, purchase installments and no age-based return cutoff. Current `store + variant + size` inventory is the implemented baseline, not the final warehouse design. Update the architecture/migration plan before M1-018; do not treat a shared-warehouse sale as an inter-store transfer. Payment tracking extends the existing roadmap and needs explicit task placement; no implementation or completion is implied by recording it.

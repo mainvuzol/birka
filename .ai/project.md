@@ -50,6 +50,10 @@ The PostgreSQL floor comes from `UNIQUE NULLS NOT DISTINCT` — see [ADR-0002](d
 - Item-level discount **data** is supported in M1. A discount or promotion **engine** is not built.
 - Money uses PostgreSQL `NUMERIC(12,2)` and Python `Decimal` only. Binary floating point is banned and the ban is lint-enforced.
 
+### Owner-confirmed scope update (2026-09-15)
+
+The primary warehouse supplies both stores and the child store has a separate warehouse. Add blocked/archived store states, intact/damaged return conditions, negotiated final selling prices (below or above suggested prices), full/installment sale payments and separate purchase-installment tracking. These are requirements, not implemented features. See [owner decisions](project-memory/owner-decisions-2026-09-15.md) before extending transfers, refunds or money handling. The inventory granularity below describes the current implementation pending the warehouse redesign.
+
 ### Inventory granularity
 
 - Inventory is tracked by `store + product_variant + size` when size is known.
