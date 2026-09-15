@@ -53,7 +53,16 @@ class RequestScope:
             raise ForbiddenStoreError(store_id=str(store_id))
 
     def require(self, permission: Permission, store_id: uuid.UUID | None = None) -> None:
-        """The authorization decision point. Services call this; routers do not."""
+        """The authorization decision point.
+
+        Called at the command boundary, which for every endpoint here is the
+        router — before the idempotency key is claimed, and before a stored
+        response is replayed, so that a revoked grant cannot keep returning a
+        success it was once entitled to. What matters is not which file holds
+        the call but that the decision is made from this scope, which is
+        rebuilt from the database on every request, and never from anything the
+        client sent (invariants I12 and I13).
+        """
         if store_id is not None:
             self.require_store(store_id)
         if permission not in self.permissions_for(store_id):
