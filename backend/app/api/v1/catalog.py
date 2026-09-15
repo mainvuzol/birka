@@ -23,10 +23,18 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Response, status
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from app.api.deps import ScopeDep, SessionDep
 from app.core import idempotency
+from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import SizeSystemCode
 from app.modules.catalog.service import (
@@ -43,9 +51,24 @@ PRODUCTS_ENDPOINT = "POST /catalog/products"
 # Every label is trimmed and must survive trimming. A name made of spaces is a
 # slip of the finger, and storing it would create a catalog row nobody can
 # ever type again.
-Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-ShortLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
-SizeCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+# `reject_unstorable` is on every one of them: a JSON string may carry U+0000, a
+# PostgreSQL text column may not, and without this the driver raises after the
+# write has begun and the caller gets a 500 instead of a message (app/core/text.py).
+Label = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+    AfterValidator(reject_unstorable),
+]
+ShortLabel = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=120),
+    AfterValidator(reject_unstorable),
+]
+SizeCode = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=20),
+    AfterValidator(reject_unstorable),
+]
 
 
 class VariantPayload(BaseModel):
@@ -98,7 +121,12 @@ class ProductRequest(BaseModel):
     # human says it is a different model and writes down how.
     new_model: bool = False
     distinction_note: (
-        Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] | None
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, max_length=1000),
+            AfterValidator(reject_unstorable),
+        ]
+        | None
     ) = None
 
     variant: VariantPayload = Field(default_factory=VariantPayload)
@@ -150,7 +178,9 @@ async def create(
     scope: ScopeDep,
     session: SessionDep,
     response: Response,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)],
+    idempotency_key: Annotated[
+        CleanText, Header(alias="Idempotency-Key", min_length=8, max_length=200)
+    ],
 ) -> ProductResponse:
     """Create (or find) the product identity that stock can be received against.
 

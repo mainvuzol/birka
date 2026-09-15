@@ -19,6 +19,7 @@ from sqlalchemy import select
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
+from app.core.text import CleanText
 from app.modules.audit import service as audit
 from app.modules.authz.permissions import Permission
 from app.modules.inventory.models import (
@@ -48,7 +49,7 @@ class ReceiptLine(BaseModel):
 class ReceiptRequest(BaseModel):
     store_id: uuid.UUID
     lines: list[ReceiptLine] = Field(min_length=1, max_length=200)
-    notes: str | None = Field(default=None, max_length=1000)
+    notes: CleanText | None = Field(default=None, max_length=1000)
 
 
 class ReceiptLineResult(BaseModel):
@@ -119,7 +120,9 @@ async def receive_goods(
     session: SessionDep,
     settings: SettingsDep,
     response: Response,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)],
+    idempotency_key: Annotated[
+        CleanText, Header(alias="Idempotency-Key", min_length=8, max_length=200)
+    ],
 ) -> ReceiptResponse:
     """Record goods arriving in a store.
 
@@ -232,7 +235,7 @@ class AdjustmentRequest(BaseModel):
     size_id: uuid.UUID
     quantity_delta: int = Field(ge=-10_000, le=10_000)
     reason_code: MovementReason
-    note: str | None = Field(default=None, max_length=500)
+    note: CleanText | None = Field(default=None, max_length=500)
 
     @field_validator("quantity_delta")
     @classmethod
@@ -256,7 +259,9 @@ async def adjust_inventory(
     scope: ScopeDep,
     session: SessionDep,
     response: Response,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)],
+    idempotency_key: Annotated[
+        CleanText, Header(alias="Idempotency-Key", min_length=8, max_length=200)
+    ],
 ) -> AdjustmentResponse:
     """Change stock outside a sale, with a reason and an audit entry.
 

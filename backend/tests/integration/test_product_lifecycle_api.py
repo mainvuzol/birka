@@ -40,7 +40,7 @@ from app.core.config import Settings
 from app.core.errors import CatalogAmbiguousError
 from app.main import create_app
 from app.modules.audit.models import AuditLog
-from app.modules.authz.permissions import Permission
+from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import (
     BusinessCategory,
@@ -62,19 +62,12 @@ pytestmark = [pytest.mark.integration, requires_database()]
 
 SETTINGS = Settings(app_env="local", session_secret="product-lifecycle-secret-at-least-32-bytes")
 
-# The default SELLER matrix from `app/modules/authz/permissions.py`. Tests that
-# check a refusal subtract from this set rather than inventing a role.
-SELLER = frozenset(
-    {
-        Permission.CATALOG_CREATE,
-        Permission.CATALOG_CONFIRM,
-        Permission.INVENTORY_VIEW,
-        Permission.INVENTORY_RECEIVE,
-        Permission.INVENTORY_CORRECT_DURING_SALE,
-        Permission.SALE_CREATE,
-        Permission.SALE_VIEW,
-    }
-)
+# The default SELLER matrix, read from the matrix itself rather than copied.
+# The copy that used to live here had already drifted — it was missing
+# `sale:refund`, which the real default grants — and a test claiming to carry
+# "what a seller has" while quietly carrying less proves the wrong refusals.
+# Tests that check a refusal subtract from this set rather than inventing a role.
+SELLER = DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
 
 
 @dataclass(frozen=True, slots=True)

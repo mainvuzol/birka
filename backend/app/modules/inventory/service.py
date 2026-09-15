@@ -269,6 +269,7 @@ __all__ = [
     "current_quantity",
     "find_divergences",
     "lock_stock",
+    "refund_return_movement_ids",
     "sale_correction_ids",
     "validate_movement",
 ]
@@ -280,4 +281,16 @@ async def sale_correction_ids(
     """Durable, tenant-scoped correction references for a sale receipt."""
     return await repository.sale_correction_ids(
         session, organization_id=organization_id, sale_id=sale_id
+    )
+
+
+async def refund_return_movement_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, refund_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Durable, tenant-scoped restock references for a refund.
+
+    Ordered by the stock key so a replay reads them back the same way twice.
+    """
+    return await repository.refund_return_movement_ids(
+        session, organization_id=organization_id, refund_id=refund_id
     )

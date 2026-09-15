@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router as v1_router
@@ -98,7 +99,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         logger.warning("domain_error", code=exc.code, status=exc.http_status)
         return JSONResponse(status_code=exc.http_status, content=exc.to_payload())
 
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Refuse malformed input without crashing on it.
+
+        FastAPI's own handler echoes the offending value back under `input`,
+        and some values cannot survive that round trip: a lone UTF-16
+        surrogate (`"\ud800"`) is rejected by the JSON parser and then breaks
+        the encoder rendering the error, so the client gets a 500 for what is
+        an ordinary 422. Reported by the independent security review,
+        2026-09-15; reachable on every endpoint, by anyone.
+
+        The shape FastAPI produces is kept exactly — clients already parse it —
+        and only values that cannot be encoded are replaced.
+        """
+        return JSONResponse(status_code=422, content={"detail": _encodable(exc.errors())})
+
     return app
+
+
+def _encodable(value: Any) -> Any:
+    """Return `value` with anything JSON cannot encode replaced in place.
+
+    Walks rather than blanket-stringifies so a normal validation error still
+    reads exactly as it did: only the unencodable leaf is replaced, and it is
+    replaced with a description rather than dropped, so the client can still
+    tell which field was at fault.
+    """
+    if isinstance(value, dict):
+        return {str(key): _encodable(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_encodable(item) for item in value]
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:
+            return "<value could not be encoded>"
+        return value
+    if isinstance(value, bool | int | float | type(None)):
+        return value
+    return str(value)
 
 
 app = create_app()

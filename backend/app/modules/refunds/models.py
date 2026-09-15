@@ -4,12 +4,19 @@ A refund is a compensating operation, never an edit of the original sale
 (`.ai/skills/compensating-operations.md`). Amounts are computed from the frozen
 `SaleItem` snapshots, so refunding an item whose price changed since still
 refunds what was actually charged.
+
+Command identity (invariant I20) works exactly as it does for a sale:
+`command_id` is permanent and unique, the idempotency record is a 7-day
+response cache, and `command_fingerprint` + `response_snapshot` (revision
+`0004_refund_replay`, following ADR-0003) let a retry arriving after that cache
+expires receive the original refund instead of a unique-violation error.
 """
 
 from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -49,6 +56,13 @@ class Refund(UUIDPrimaryKey, TimestampMixin, Base):
         nullable=False,
     )
     command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    # Nullable, exactly as on `sale`: NULL means this row's original request
+    # cannot be proven, and a NOT NULL column here would make revision 0004 a
+    # one-way door (see its docstring).
+    command_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    response_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        postgresql.JSONB, nullable=True
+    )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -74,6 +88,9 @@ class RefundItem(UUIDPrimaryKey, Base):
         nullable=False,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    # `final_unit_price * quantity`, taken from the frozen SaleItem. Never
+    # recomputed from the catalog and never supplied by the client
+    # (invariant I8, `.ai/skills/financial-integrity.md`).
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     # Goods physically came back, so stock returns. A refund without restock is
     # a legitimate case (damaged item kept by the shop) and must be explicit.

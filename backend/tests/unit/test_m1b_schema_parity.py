@@ -28,6 +28,16 @@ M1A_TABLES = frozenset(
     {"organization", "store", "app_user", "role", "role_permission", "membership"}
 )
 
+# Columns that later revisions added to tables 0002 created. They are part of
+# the current models but must not appear in the frozen 0002 projection, or this
+# test would demand that a historical migration be rewritten — which is exactly
+# what it exists to prevent. Add an entry here whenever a migration adds a
+# column to an M1B table; live `alembic check` covers the rest.
+ADDED_AFTER_0002: dict[str, tuple[str, ...]] = {
+    "sale": ("command_fingerprint", "response_snapshot"),  # 0003_sale_replay
+    "refund": ("command_fingerprint", "response_snapshot"),  # 0004_refund_replay
+}
+
 HEADER = (
     "-- M1B schema: catalog identity, evidence, inventory ledger, sales.\n"
     "-- GENERATED from the SQLAlchemy models; do not hand-edit.\n"
@@ -46,8 +56,10 @@ def m1b_tables() -> list:
         originals = {constraint.name: constraint for constraint in table.constraints}
         for constraint in clone.constraints:
             constraint._creation_order = originals[constraint.name]._creation_order
-    for name in ("command_fingerprint", "response_snapshot"):
-        baseline.tables["sale"]._columns.remove(baseline.tables["sale"].c[name])
+    for table_name, columns in ADDED_AFTER_0002.items():
+        frozen = baseline.tables[table_name]
+        for name in columns:
+            frozen._columns.remove(frozen.c[name])
     return [t for t in baseline.sorted_tables if t.name not in M1A_TABLES]
 
 

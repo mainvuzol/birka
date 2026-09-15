@@ -25,6 +25,7 @@ from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.errors import NotFoundError
+from app.core.text import CleanText
 from app.modules.authz.permissions import Permission
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.sales.service import FoundInStore, SaleLineInput, correction_ids, create_sale
@@ -117,7 +118,9 @@ async def create(
     session: SessionDep,
     settings: SettingsDep,
     response: Response,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)],
+    idempotency_key: Annotated[
+        CleanText, Header(alias="Idempotency-Key", min_length=8, max_length=200)
+    ],
 ) -> SaleResponse:
     # Revoked store access/correction capability must apply to cached receipts too.
     scope.require(Permission.SALE_CREATE, payload.store_id)
