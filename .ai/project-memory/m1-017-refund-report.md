@@ -102,7 +102,7 @@ Modified: `backend/app/modules/refunds/models.py` (two replay columns), `backend
 
 ## Open questions for the owner
 
-These are business decisions. The code takes the conservative option and says so; none of them is settled by an existing document.
+Historical questions from implementation. The owner answered/refined them on 2026-09-15: see [confirmed decisions](owner-decisions-2026-09-15.md). The behavior below describes the implementation at review time, not the new target requirements. In particular, question4 was clarified as sale/payment modes, not approval of refund deductions.
 
 1. **May a customer return goods to the other store?** Today a refund happens in the store of the sale, full stop. Restocking into a different store would move inventory between shops without a transfer, which I16 forbids. If returns to either shop are normal in practice, this needs a design (refund in store A, transfer to store B) rather than a relaxed check.
 2. **Is "a closed store refunds money but takes no goods back" the right split?** The alternative is to refuse the refund outright and send the customer to the store that is still trading. Nothing sets `is_active = False` from the application yet, so this is reachable only by an operator today.
