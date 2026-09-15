@@ -1077,3 +1077,101 @@ async def test_a_replay_is_refused_once_the_grant_is_gone(maker):
     assert first.status_code == 201, first.text
     assert replay.status_code == 403
     assert replay.json()["code"] == "PERMISSION_DENIED"
+
+
+@pytest.mark.parametrize("field", ["item_code", "attributes", "hood", "colour", "size_extra"])
+async def test_unsupported_catalog_fields_are_rejected_without_writes(maker, field):
+    shop = await make_shop(maker)
+    payload = product_payload(shop)
+    if field == "item_code":
+        payload[field] = "1636"
+    elif field == "size_extra":
+        payload["sizes"][0]["alias"] = "medium"
+    else:
+        payload["variant"][field] = {"hood": True} if field == "attributes" else True
+    async with api(maker, shop.scope()) as client:
+        response = await create_product(client, payload)
+        assert response.status_code == 422, response.text
+        assert any(error["type"] == "extra_forbidden" for error in response.json()["detail"])
+    async with maker() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProductFamily)
+                .where(ProductFamily.organization_id == shop.organization_id)
+            )
+            == 0
+        )
+
+
+@pytest.mark.parametrize("note", ["", "   ", "\t\n\u00a0"])
+async def test_blank_new_model_note_is_refused_by_api_and_service(maker, note):
+    from app.core.errors import ValidationFailedError
+
+    shop = await make_shop(maker)
+    async with api(maker, shop.scope()) as client:
+        original = await create_product(client, product_payload(shop))
+        assert original.status_code == 201
+        response = await create_product(
+            client, product_payload(shop, new_model=True, distinction_note=note)
+        )
+        assert response.status_code == 422, response.text
+    async with maker() as session:
+        with pytest.raises(ValidationFailedError):
+            await create_product_command(
+                session,
+                organization_id=shop.organization_id,
+                actor_user_id=shop.user_id,
+                draft=ProductDraft(
+                    concept="Лоран",
+                    new_model=True,
+                    distinction_note=note,
+                    sizes=(SizeDraft(system=SizeSystemCode.ALPHA, code="M"),),
+                ),
+            )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProductFamily)
+                .where(ProductFamily.organization_id == shop.organization_id)
+            )
+            == 1
+        )
+
+
+@pytest.mark.parametrize("via_http", [True, False])
+async def test_new_model_note_is_trimmed_and_persisted(maker, via_http):
+    shop = await make_shop(maker)
+    note = "  Інша підкладка\n"
+    if via_http:
+        async with api(maker, shop.scope()) as client:
+            response = await create_product(
+                client, product_payload(shop, new_model=True, distinction_note=note)
+            )
+            assert response.status_code == 201, response.text
+            family_id = uuid.UUID(response.json()["product_family_id"])
+    else:
+        async with maker() as session:
+            result = await create_product_command(
+                session,
+                organization_id=shop.organization_id,
+                actor_user_id=shop.user_id,
+                draft=ProductDraft(
+                    concept="Лоран",
+                    new_model=True,
+                    distinction_note=note,
+                    sizes=(SizeDraft(system=SizeSystemCode.ALPHA, code="M"),),
+                ),
+            )
+            family_id = result.product_family_id
+            await session.commit()
+    async with maker() as session:
+        family = await session.get(ProductFamily, family_id)
+        assert family.distinction_note == "Інша підкладка"
+        audit = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.organization_id == shop.organization_id,
+                AuditLog.action == "catalog.product_created",
+            )
+        )
+        assert audit.reason == "Інша підкладка"
