@@ -2,12 +2,12 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **M1A implemented; M1B catalog schema, inventory and sale backend implemented. Review defects fixed and locally verified on 2026-09-14. Full M1B exit remains open: the product-creation vertical and release-environment verification are not claimed.**
+Status: **M1A implemented. M1B implemented end to end — a product can be created, received into stock and sold, including `FOUND_DURING_SALE` — reviewed by three independent reviewers, four blocking defects fixed, and verified on PostgreSQL 17.9 with 278 passing tests and no skips (2026-09-15). The one gate element still unverified is the release environment: `docker compose up` has never been executed anywhere.**
 
 Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 36 physical tables · 22 invariants · 4 gates
-Fix branch: `codex/fix-m1b-review-defects` (reviewed baseline: `b73c015`).
+Branch: `feat/m1b-product-creation` (baseline: `1683dfb`, PR #10 merged).
 
-Evidence: [M1B review fixes](m1b-review-fixes.md).
+Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](m1b-review-fixes.md).
 
 ## Gates
 
@@ -24,9 +24,9 @@ Evidence: [M1B review fixes](m1b-review-fixes.md).
 
 Verification limits on the current development machine — these constrain evidence, not design:
 
-- no Docker → compose config authored but not executed locally;
-- PostgreSQL 16.2 temporary local instance: 254 backend tests passed with no skips; PostgreSQL 17 remains a CI/release check;
-- Frontend locked install, lint, typecheck and build passed in the preceding review; unchanged by these backend fixes. Telegram/E2E remains M1D.
+- no Docker → the compose stack is parsed and cross-checked against `.env.example`, but **`docker compose up` has never been executed**, here or in CI;
+- PostgreSQL is not installed; a throwaway **17.9** cluster is created per session on a non-standard port and destroyed afterwards. Windows cannot use the `C.UTF-8` libc locale the compose file sets, so the local cluster pairs ICU `uk-UA` with `--locale=C`; the ICU half matches production, the libc half does not;
+- frontend locked install, lint and build pass locally on Node 24 with 0 advisories. Telegram and E2E remain M1D.
 
 ## Standing constraints for this milestone
 
