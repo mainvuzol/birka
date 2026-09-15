@@ -2,7 +2,7 @@
 
 Authentication and the store directory land in gate M1A; the catalog,
 inventory and sale endpoints that make up the first vertical slice land in
-gate M1B.
+gate M1B; the refund that makes a mistake recoverable opens gate M1C.
 
 Routers parse the request, call one service and shape the response. They hold
 no business rules of their own (`.ai/conventions.md`). The one thing they do
@@ -23,6 +23,7 @@ from sqlalchemy import select
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.inventory import router as inventory_router
+from app.api.v1.refunds import router as refunds_router
 from app.api.v1.sales import router as sales_router
 from app.modules.identity.service import authenticate_with_init_data
 from app.modules.tenancy.models import Store
@@ -31,6 +32,7 @@ router = APIRouter()
 router.include_router(catalog_router)
 router.include_router(inventory_router)
 router.include_router(sales_router)
+router.include_router(refunds_router)
 
 
 # --- schemas ---------------------------------------------------------------

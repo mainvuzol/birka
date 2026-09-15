@@ -2,12 +2,12 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **M1A implemented. M1B implemented end to end — a product can be created, received into stock and sold, including `FOUND_DURING_SALE` — reviewed by three independent reviewers, four blocking defects fixed, and verified on PostgreSQL 17.9 with 278 passing tests and no skips (2026-09-15). The one gate element still unverified is the release environment: `docker compose up` has never been executed anywhere.**
+Status: **M1A implemented. M1B met and merged. M1C opened: M1-017 (refund) is implemented, independently reviewed twice and verified; M1-018 and M1-020…M1-023 are untouched.** The release environment remains the one unverified element of M1A: `docker compose up` has never been executed anywhere.
 
 Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 36 physical tables · 22 invariants · 4 gates
-Branch: `feat/m1b-product-creation` (baseline: `1683dfb`, PR #10 merged).
+Branch: `main` (M1B merged through PR #12, `d85cc13`).
 
-Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](m1b-review-fixes.md).
+Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](m1b-review-fixes.md) · [M1-017 refund report](m1-017-refund-report.md).
 
 ## Gates
 
@@ -15,8 +15,14 @@ Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](
 |---|---|---|---|
 | **M1A** | Platform & foundation | M1-001 … M1-009 (9) | `docker compose up` gives a running API with migrations, Telegram auth and RBAC; CI green |
 | **M1B** | First complete Sale vertical slice | M1-010 … M1-016, M1-019 (8) | A product can be created, stock received and sold — including `FOUND_DURING_SALE` — with every M1B invariant proven by test |
-| **M1C** | Refund, transfer, catalog pipeline, legacy import | M1-017, M1-018, M1-020 … M1-023 (6) | Mistakes recoverable, goods move between stores, NL intake works on a real corpus, legacy lists imported as traceable opening balances |
+| **M1C** | Refund, transfer, catalog pipeline, legacy import | M1-017 ✅, M1-018, M1-020 … M1-023 (6) | Mistakes recoverable, goods move between stores, NL intake works on a real corpus, legacy lists imported as traceable opening balances |
 | **M1D** | Client, E2E, release | M1-024 … M1-028 (5) | Sellers can work in Telegram, golden paths pass E2E, restore drill executed |
+
+## Gate progress
+
+**M1B — met.** A product can be created, stock received and sold, including `FOUND_DURING_SALE`, with every M1B invariant proven by test. Re-verified on 2026-09-15 at `d85cc13`: 288 tests passing with no skips, all lint/type/boundary/migration checks clean.
+
+**M1C — 1 of 6 tasks.** `POST /sales/{sale_id}/refunds` returns goods and money against a sale without touching it, capped by what was actually sold minus prior returns, with restocking stated per line. Two independent reviewers found six major defects — a one-way migration, a replay that reordered its own lines, an untested advisory lock, an untestable authorization test, an API-wide 500 on text the database cannot store, and a closed store refunding money but refusing goods. All are fixed. See the [M1-017 report](m1-017-refund-report.md) for evidence and for five open business questions the refund raises.
 
 ## Ready / blocked
 
@@ -24,9 +30,10 @@ Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](
 
 Verification limits on the current development machine — these constrain evidence, not design:
 
-- no Docker → the compose stack is parsed and cross-checked against `.env.example`, but **`docker compose up` has never been executed**, here or in CI;
-- PostgreSQL is not installed; a throwaway **17.9** cluster is created per session on a non-standard port and destroyed afterwards. Windows cannot use the `C.UTF-8` libc locale the compose file sets, so the local cluster pairs ICU `uk-UA` with `--locale=C`; the ICU half matches production, the libc half does not;
-- frontend locked install, lint and build pass locally on Node 24 with 0 advisories. Telegram and E2E remain M1D.
+- no Docker → the compose stack is parsed and every `${VAR}` cross-checked against `.env.example`, but **`docker compose up` has never been executed**, here or in CI;
+- PostgreSQL is not installed. Sessions on Windows used a throwaway **17.9** cluster; the macOS session of 2026-09-15 had only the **16.2** build bundled in the `pgserver` wheel, so the refund work is **not verified on the pinned version 17**. Neither host reproduces the compose locale exactly: one paired ICU `uk-UA` with `--locale=C`, the other ran C libc with no ICU at all;
+- the API itself does run: started under uvicorn against real PostgreSQL, it serves `/health` and completes Telegram sign-in → create product → receive → sell → refund over real HTTP. That is the release *path* exercised without the release *container*;
+- frontend locked install, lint, typecheck and build pass (Node 26.5.0, 0 advisories), and the built bundle loads and renders. Telegram and E2E remain M1D.
 
 ## Standing constraints for this milestone
 

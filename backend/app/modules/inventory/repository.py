@@ -286,6 +286,7 @@ __all__ = [
     "increment",
     "reconcile",
     "record_movement",
+    "refund_return_movement_ids",
     "validate_lot_references",
 ]
 
@@ -304,6 +305,26 @@ async def sale_correction_ids(
                     StockMovement.reference_id == sale_id,
                     StockMovement.movement_type == MovementType.ADJUSTMENT,
                     StockMovement.reason_code == MovementReason.FOUND_DURING_SALE,
+                )
+                .order_by(StockMovement.product_variant_id, StockMovement.size_id, StockMovement.id)
+            )
+        ).all()
+    )
+
+
+async def refund_return_movement_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, refund_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Read restock references without exposing inventory ORM to refunds."""
+    return list(
+        (
+            await session.scalars(
+                select(StockMovement.id)
+                .where(
+                    StockMovement.organization_id == organization_id,
+                    StockMovement.reference_type == "refund",
+                    StockMovement.reference_id == refund_id,
+                    StockMovement.movement_type == MovementType.REFUND_RETURN,
                 )
                 .order_by(StockMovement.product_variant_id, StockMovement.size_id, StockMovement.id)
             )

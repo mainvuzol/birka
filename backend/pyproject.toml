@@ -172,6 +172,22 @@ forbidden_modules = [
     "app.modules.audit",
 ]
 
+# ADR-0001 permits `refunds -> sales, inventory, authz, tenancy, core` (+ audit).
+# Catalog is deliberately absent: a refund's money and labels come from the
+# frozen SaleItem snapshot, never from live catalog rows. Without this contract,
+# "improving" a refund receipt by looking the product up again is one import
+# away, and it would break invariant I8 for every refunded receipt.
+[[tool.importlinter.contracts]]
+name = "refunds read history, not the catalog"
+type = "forbidden"
+source_modules = ["app.modules.refunds"]
+forbidden_modules = ["app.modules.catalog", "app.modules.transfers"]
+# Only DIRECT imports are forbidden. Reaching catalog underneath
+# `sales.service` (which freezes the receipt) or `inventory.service` (which
+# validates stock references) is the supported path; what must not exist is a
+# refund reading the catalog for itself.
+allow_indirect_imports = true
+
 [[tool.importlinter.contracts]]
 name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"

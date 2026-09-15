@@ -45,6 +45,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import CatalogAmbiguousError, NotFoundError, ValidationFailedError
+from app.core.text import is_storable
 from app.modules.audit import service as audit
 from app.modules.catalog.models import (
     AttributeKind,
@@ -99,6 +100,11 @@ def normalize_label(value: str, *, limit: int) -> str:
     a truncated key is a *different* key, and silently filing a product under
     one is exactly the kind of quiet mistake this module exists to avoid.
     """
+    if not is_storable(value):
+        # A NUL or a lone surrogate. Same class of defect as the overflow
+        # below: without this the driver raises after the write has begun and
+        # a 422 becomes a 500 (app/core/text.py).
+        raise ValidationFailedError("This name contains characters that cannot be stored")
     normalized = " ".join(value.split()).casefold()
     if len(normalized) > limit:
         raise ValidationFailedError(
@@ -593,6 +599,10 @@ async def _resolve_sizes(
     ordered: list[SizeDraft] = []
     seen: set[tuple[SizeSystemCode, str]] = set()
     for draft in drafts:
+        if not is_storable(draft.code):
+            # A size code is stored verbatim by design (invariant I15), so it
+            # never passes through `normalize_label` and needs its own check.
+            raise ValidationFailedError("A size code contains characters that cannot be stored")
         key = (draft.system, draft.code)
         if key in seen:
             # The same size twice in one request is a slip, not two sizes.
@@ -656,6 +666,8 @@ async def create_product(
         raise ValidationFailedError("Name the product or give a product_family_id, not both")
     # Direct callers must enforce the same explanation rule as HTTP intake.
     note = draft.distinction_note.strip() if draft.distinction_note is not None else None
+    if note is not None and not is_storable(note):
+        raise ValidationFailedError("A distinction note contains characters that cannot be stored")
     if note is not None and len(note) > 1000:
         raise ValidationFailedError("A distinction note must not exceed 1000 characters")
     draft = replace(draft, distinction_note=note)
