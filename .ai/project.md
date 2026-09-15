@@ -61,6 +61,9 @@ The PostgreSQL floor comes from `UNIQUE NULLS NOT DISTINCT` — see [ADR-0002](d
 
 - Critical commands (`sale`, `refund`, `transfer`) carry a **permanent** `command_id` with a unique constraint. Business uniqueness never depends on the retention-limited idempotency record.
 - `ParseResult` is a pure function of `(raw_text, parser_version)`; the parser reads no catalog state. All learned knowledge enters at the matching step, and `CatalogMatchDecision` records `matcher_version` and `knowledge_revision`.
+- A product enters the catalog through a **structured** command first (`POST /catalog/products`): a person names the concept, an optional source and the attributes, and the endpoint creates or reuses the identity chain with no parsing and no matching. Natural-language intake (M1C) lands on the same rows.
+- That command **refuses rather than guesses** when `(concept, source, garment_type)` already names a family: the caller either points at that family or declares a `new_model` with a written distinction (ADR-0002). A variant, by contrast, *is* its attribute combination, so restating the same attributes resolves to the same row.
+- No **item code** is accepted anywhere yet. Staff very rarely record one (owner confirmation, 2026-09-14). When codes are added they stay optional identifiers backed by evidence — never required for everyday entry, never assumed unique or attributed to an issuer, never inferred from a bare number, and never a reason to merge two products.
 
 ### Selling and stock
 

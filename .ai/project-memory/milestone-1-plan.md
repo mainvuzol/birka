@@ -431,8 +431,8 @@ Per correction 6, each invariant names **what actually enforces it**. Service-la
 | I9 | Refund ≤ sold − already refunded | `SERVICE_ENFORCED` | `SELECT … FOR UPDATE` on sale items inside the refund transaction | two simultaneous full refunds |
 | I10 | Raw input never rewritten | `DB_ENFORCED` | trigger rejects `UPDATE`/`DELETE` on `raw_input` | trigger raises |
 | I11 | Ledger and audit are append-only | `DB_ENFORCED` | same trigger pattern on `stock_movement`, `alias_evidence`, `audit_log` | trigger raises |
-| I12 | Store/tenant boundaries hold | `DB_ENFORCED` (membership↔organization) + `SERVICE_ENFORCED` + `CI_ENFORCED` | composite foreign keys bind `membership.store_id`/`role_id` to `membership.organization_id`; scope comes from the session only | cross-organization membership rejected by the database; store isolation in `resolve_scope`. **No API-level test yet** — no store-scoped endpoint exists before M1B |
-| I13 | Authorization is server-side | `SERVICE_ENFORCED` + `CI_ENFORCED` | permission check in services, not routers or UI | one escalation test per permission code |
+| I12 | Store/tenant boundaries hold | `DB_ENFORCED` (membership↔organization) + `SERVICE_ENFORCED` + `CI_ENFORCED` | composite foreign keys bind `membership.store_id`/`role_id` to `membership.organization_id`; scope comes from the session only | cross-organization membership rejected by the database; store isolation in `resolve_scope`. API-level since 2026-09-15: `test_product_lifecycle_api.py` proves over HTTP that another organization can neither extend this catalog (404) nor act in this store (403), and that a foreign variant cannot be received into stock |
+| I13 | Authorization is server-side | `SERVICE_ENFORCED` + `CI_ENFORCED` | `scope.require` at the command boundary — in practice the router, deliberately: a command must be refused before it claims an idempotency key or replays a stored response, so a revoked grant cannot keep returning an old success. The decision always reads the scope rebuilt from the database, never anything the client sent. Never in the UI | one escalation test per permission code; `test_a_replay_is_refused_once_the_grant_is_gone` covers the replay ordering |
 | I14 | Uncertain interpretation never merges products | `SERVICE_ENFORCED` + `RECONCILIATION_DETECTED` | matcher returns `AMBIGUOUS`; merge is explicit and permissioned; duplicate-signature report lists families sharing a triple | Лоран/Belardi vs Лоран/Ponte golden case |
 | I15 | Slash is not an alias; splits are never invented | `SERVICE_ENFORCED` + `CI_ENFORCED` | parser emits variant enumeration + `UNKNOWN_DISTRIBUTION` | golden test on `Лама бежевая/персик/butter 3 шт` |
 | I16 | Transfers are movements, never sales | `SERVICE_ENFORCED` + `CI_ENFORCED` | transfer service writes only `TRANSFER_OUT`/`TRANSFER_IN` | no `sale` row, no revenue effect |
@@ -656,7 +656,8 @@ Per `.ai/OPERATING_MANUAL.md` §6, the implementer of M1-014, M1-015, M1-016, M1
 | Telegram initData algorithm | VERIFIED against `core.telegram.org/bots/webapps`: `secret_key = HMAC_SHA256(key="WebAppData", msg=bot_token)`, then compare `hex(HMAC_SHA256(key=secret_key, msg=data_check_string))` |
 | Python 3.14 toolchain viability | VERIFIED — fastapi, pydantic v2, sqlalchemy, alembic, asyncpg, pytest, httpx, ruff, mypy, structlog, import-linter all install |
 | Gate M1A | see the M1A completion report for evidence |
-| `NULLS NOT DISTINCT` behaviour on PostgreSQL 17 | `NOT VERIFIED` — proven by a migration test in M1-010 (gate M1B) |
+| `NULLS NOT DISTINCT` behaviour on PostgreSQL 17 | `VERIFIED` 2026-09-15 on PostgreSQL **17.9**: all three migrations apply to an empty cluster, `pg_index` reports 4 indexes with `indnullsnotdistinct`, and the behaviour tests in `test_schema_behaviour.py` and `test_m1b_schema_behaviour.py` pass against it |
+| ICU locale choice in `infra/docker-compose.yml` | `VERIFIED` 2026-09-15 on the same cluster (`--locale-provider=icu --icu-locale=uk-UA`): `lower('ОЛЯ')` returns `оля`, which is what catalog matching depends on and what the C locale would not have done |
 
 ---
 
@@ -666,11 +667,14 @@ Per `.ai/OPERATING_MANUAL.md` §6, the implementer of M1-014, M1-015, M1-016, M1
 
 Environment limits that constrain *verification*, not design — recorded honestly rather than worked around:
 
+Updated 2026-09-15. Two of the three original limits are gone; the Docker one is not.
+
 | Limit | Consequence |
 |---|---|
-| No Docker on the development machine | `docker compose` config is authored and linted by inspection but **not executed locally**; it is exercised in CI and on the server |
-| No PostgreSQL client or server locally | database integration tests are written and run **in CI only**; locally they skip with an explicit marker, never a silent pass |
-| No Node.js locally | the frontend scaffold is authored but **not built or linted locally**; CI covers it. Frontend work is gate M1D anyway |
+| No Docker on the development machine | `docker compose` config is authored, parsed and cross-checked against `.env.example` by inspection, but **`docker compose up` has never been executed** — not locally, not in CI. The whole deployment path is reviewed design, not observed behaviour |
+| PostgreSQL is not installed; a portable cluster is stood up per session | Database tests run locally against a **throwaway PostgreSQL 17.9** cluster on a non-standard port, created and destroyed inside the session. Real, but not a standing environment: the next session has to bring one up again, or the tests skip |
+| Windows cannot use the `C.UTF-8` libc locale | The local cluster is initialised with `--locale-provider=icu --icu-locale=uk-UA --locale=C` instead of the compose file's `--locale=C.UTF-8`. ICU — the part catalog matching depends on — is identical; the libc fallback differs from production and is not exercised locally |
+| Node.js 24 is installed | The frontend lockfile install, lint and build run locally and pass. Telegram and E2E behaviour remains gate M1D |
 
 ---
 

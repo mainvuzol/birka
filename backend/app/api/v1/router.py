@@ -1,8 +1,15 @@
-"""API v1 routes available in gate M1A.
+"""API v1 routes.
+
+Authentication and the store directory land in gate M1A; the catalog,
+inventory and sale endpoints that make up the first vertical slice land in
+gate M1B.
 
 Routers parse the request, call one service and shape the response. They hold
-no business rules and make no authorization decisions of their own
-(`.ai/conventions.md`).
+no business rules of their own (`.ai/conventions.md`). The one thing they do
+decide is authorization, and only because of where it has to happen: a command
+must be refused before it claims an idempotency key or replays a stored
+answer, or a seller whose grant was revoked would keep receiving the success
+they were once entitled to. See `authz/scope.py` and invariant I13.
 """
 
 from __future__ import annotations
@@ -14,12 +21,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
+from app.api.v1.catalog import router as catalog_router
 from app.api.v1.inventory import router as inventory_router
 from app.api.v1.sales import router as sales_router
 from app.modules.identity.service import authenticate_with_init_data
 from app.modules.tenancy.models import Store
 
 router = APIRouter()
+router.include_router(catalog_router)
 router.include_router(inventory_router)
 router.include_router(sales_router)
 
