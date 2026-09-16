@@ -43,7 +43,7 @@ Requires Python 3.12+ and PostgreSQL 15 or newer (17 is what CI and production u
 
 ```bash
 cd backend
-python -m venv .venv
+py -3.12 -m venv .venv
 ```
 
 ```bash
@@ -89,6 +89,17 @@ backend/.venv/Scripts/python.exe -m pytest -q
 Database integration tests need a real PostgreSQL and are skipped without one. To run them,
 set `BIRKA_TEST_DATABASE_URL` to a migrated test database. A skipped run is never evidence
 that the database behaviour works.
+
+With Docker installed, a local PostgreSQL 17 (same image and locale as CI) and the whole CI
+backend pipeline, including the "integration tests really ran" assertion, are one command:
+
+```powershell
+.\infra\dev.ps1 test
+```
+
+`.\infra\dev.ps1 up | down | reset | migrate | psql` manage the dev database
+([`infra/docker-compose.dev.yml`](infra/docker-compose.dev.yml), `127.0.0.1:5432`, `birka`/`birka`,
+databases `birka` and `birka_test`).
 
 ## The rules that matter most
 
