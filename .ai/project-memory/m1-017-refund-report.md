@@ -123,3 +123,19 @@ Historical questions from implementation. The owner answered/refined them on 202
 - **Test sessions use `autoflush=True` while production uses `autoflush=False`.** Pre-existing across the suite, not introduced here, but it means tests and production flush at different moments.
 - **`SaleRequest` still lacks `extra="forbid"`**, which `RefundRequest` has. Noticed by a reviewer in passing; a change to an existing endpoint's contract and out of scope here.
 - **Two refunds of one receipt serialize**, including refunds of different lines. Deliberate, and cheap at this shop's volume, but it is a throughput choice that should be revisited if returns ever become a hot path.
+
+## Follow-up: validation error serialization — 2026-09-16
+
+Fixed the remaining P2 from the subsequent review: malformed Unicode dictionary keys and nonfinite floats inside validation error details could still crash JSONResponse. `_encodable` now sanitizes dictionary keys as well as values, replaces NaN/Infinity with a JSON-safe description, and sanitizes fallback string representations. Invalid requests return422 rather than500; safe error input details remain unchanged. No catalog/stock/money writes or schema changes are introduced.
+
+Changed: `backend/app/main.py`, `backend/tests/unit/test_app.py`, this report. Seven HTTP regressions use the real application auth endpoint without database writes: six reproduced failures before the fix, and the safe-input control passed.
+
+Verification on temporary PostgreSQL16.2, Python3.12:
+- From backend: `BIRKA_TEST_DATABASE_URL=postgresql+asyncpg://birka_review@127.0.0.1:55439/postgres /tmp/birka-review-venv/bin/pytest -q` — **361passed,0skipped**, two existing dependency deprecation warnings.
+- `/tmp/birka-review-venv/bin/ruff check backend` from root — pass.
+- From backend, same executable prefix: `ruff format --check .` —90files; `mypy app` —55source files; `lint-imports` —9kept/0broken.
+- `git diff --check` — pass.
+
+No migration needed. PostgreSQL17/Docker verification and owner-confirmed warehouse/payment extensions remain separate outstanding work. Fixes are local, not committed or pushed.
+
+Independent read-only review of the final handler/test diff found no actionable correctness or security issues and approved the scoped P2 fix. Full-suite runtime evidence above was produced by the primary agent.

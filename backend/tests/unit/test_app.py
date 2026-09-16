@@ -155,3 +155,40 @@ def test_sentry_scrubber_tolerates_an_event_without_a_request() -> None:
     from app.main import _scrub_request_body
 
     assert _scrub_request_body({"message": "boom"}, {}) == {"message": "boom"}
+
+
+@pytest.mark.parametrize(
+    "invalid_value",
+    [
+        {"\ud800": "value"},
+        {"nested": [{"\udfff": "value"}]},
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+        {"nested": [float("nan"), {"amount": float("inf")}]},
+    ],
+)
+def test_validation_errors_remain_json_encodable(client: TestClient, invalid_value: object) -> None:
+    import json
+
+    # Raw JSON reaches the actual auth route and validation handler. Invalid
+    # init_data must be refused before authentication/database operations.
+    response = client.post(
+        "/api/v1/auth/telegram",
+        content=json.dumps({"init_data": invalid_value}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail[0]["loc"] == ["body", "init_data"]
+    assert detail[0]["type"] == "string_type"
+    # Strict serialization proves there is no surviving NaN, Infinity or
+    # surrogate, even inside nested input dictionaries.
+    json.dumps(detail, ensure_ascii=False, allow_nan=False).encode("utf-8")
+
+
+def test_validation_errors_preserve_safe_input_details(client: TestClient) -> None:
+    original = {"ключ": [True, 12, 1.25, None, "текст"]}
+    response = client.post("/api/v1/auth/telegram", json={"init_data": original})
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["input"] == original
