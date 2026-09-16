@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from math import isfinite
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Request
@@ -129,7 +130,7 @@ def _encodable(value: Any) -> Any:
     tell which field was at fault.
     """
     if isinstance(value, dict):
-        return {str(key): _encodable(item) for key, item in value.items()}
+        return {_encodable(str(key)): _encodable(item) for key, item in value.items()}
     if isinstance(value, list | tuple):
         return [_encodable(item) for item in value]
     if isinstance(value, str):
@@ -138,9 +139,11 @@ def _encodable(value: Any) -> Any:
         except UnicodeEncodeError:
             return "<value could not be encoded>"
         return value
+    if isinstance(value, float) and not isfinite(value):
+        return "<non-finite number>"
     if isinstance(value, bool | int | float | type(None)):
         return value
-    return str(value)
+    return _encodable(str(value))
 
 
 app = create_app()

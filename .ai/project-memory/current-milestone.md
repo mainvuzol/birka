@@ -2,7 +2,7 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **M1A implemented. M1B met and merged. M1C opened: M1-017 (refund) is implemented, independently reviewed twice and verified; M1-018 and M1-020…M1-023 are untouched.** The release environment remains the one unverified element of M1A: `docker compose up` has never been executed anywhere.
+Status: **M1A implemented. M1B met and merged. M1C opened: M1-017 (refund) is implemented, independently reviewed twice and verified; M1-018 and M1-020…M1-023 are untouched.** The local Docker Compose/PostgreSQL17 verification gap was closed on2026-09-16 in an isolated VM:361tests passed. Public production deployment and Telegram E2E remain separate.
 
 Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 28 tasks · 36 physical tables · 22 invariants · 4 gates
 Branch: `main` (M1B merged through PR #12, `d85cc13`).
@@ -34,6 +34,10 @@ Verification limits on the current development machine — these constrain evide
 - PostgreSQL is not installed. Sessions on Windows used a throwaway **17.9** cluster; the macOS session of 2026-09-15 had only the **16.2** build bundled in the `pgserver` wheel, so the refund work is **not verified on the pinned version 17**. Neither host reproduces the compose locale exactly: one paired ICU `uk-UA` with `--locale=C`, the other ran C libc with no ICU at all;
 - the API itself does run: started under uvicorn against real PostgreSQL, it serves `/health` and completes Telegram sign-in → create product → receive → sell → refund over real HTTP. That is the release *path* exercised without the release *container*;
 - frontend locked install, lint, typecheck and build pass (Node 26.5.0, 0 advisories), and the built bundle loads and renders. Telegram and E2E remain M1D.
+
+## Docker verification update — 2026-09-16
+
+The environment limitations above describe prior sessions and are superseded for Docker/PostgreSQL by the [isolated verification report](docker-postgresql17-verification.md): real Docker builds/startup, PostgreSQL17.11 with the exact Compose locale,361tests, migration round trip, TLS proxy and real HTTP sale/refund flow all passed. The disposable VM and its resources were removed afterward. No host Docker installation or work-environment configuration was changed.
 
 ## Standing constraints for this milestone
 
