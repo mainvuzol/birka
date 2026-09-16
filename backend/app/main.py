@@ -107,7 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         FastAPI's own handler echoes the offending value back under `input`,
         and some values cannot survive that round trip: a lone UTF-16
-        surrogate (`"\ud800"`) is rejected by the JSON parser and then breaks
+        surrogate (`"\\ud800"`) is rejected by the JSON parser and then breaks
         the encoder rendering the error, so the client gets a 500 for what is
         an ordinary 422. Reported by the independent security review,
         2026-09-15; reachable on every endpoint, by anyone.

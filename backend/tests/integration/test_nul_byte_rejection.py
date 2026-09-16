@@ -3,7 +3,7 @@
 Found by the independent reviews of M1-017 and traced wider than that task.
 Two values do it. A JSON string may legally carry `U+0000`, which a PostgreSQL
 text column cannot hold (`CharacterNotInRepertoireError`); and it may carry a
-lone surrogate such as `\ud800`, a legal Python `str` with no UTF-8 encoding
+lone surrogate such as `\\ud800`, a legal Python `str` with no UTF-8 encoding
 at all (`DataError`).
 Both happen *after* the request has been authorized and has begun writing, so
 the client sees an unhandled 500 — raised at will by the lowest-privileged
