@@ -37,7 +37,7 @@ from app.modules.inventory.models import (
 )
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.tenancy.models import Organization, Store, StoreKind
-from tests.conftest import requires_database
+from tests.conftest import provision_location, requires_database
 
 pytestmark = [pytest.mark.integration, requires_database()]
 
@@ -82,9 +82,14 @@ async def build(session: AsyncSession) -> Fixture:
     session.add(variant)
     await session.flush()
 
+    location_id = await provision_location(
+        session, organization_id=org.id, store_id=store.id, name="Склад A"
+    )
+
     return Fixture(
         org=org,
         store=store,
+        location_id=location_id,
         concept=concept,
         size=size,
         unknown_size=unknown_size,
@@ -173,7 +178,7 @@ async def test_inventory_cannot_be_driven_negative(session: AsyncSession) -> Non
     """Invariant I1, at the database. Service logic is not the only guard."""
     f = await build(session)
     inventory = Inventory(
-        store_id=f.store.id, product_variant_id=f.variant.id, size_id=f.size.id, quantity=1
+        location_id=f.location_id, product_variant_id=f.variant.id, size_id=f.size.id, quantity=1
     )
     session.add(inventory)
     await session.flush()
@@ -183,18 +188,18 @@ async def test_inventory_cannot_be_driven_negative(session: AsyncSession) -> Non
         await session.flush()
 
 
-async def test_one_inventory_row_per_store_variant_size(session: AsyncSession) -> None:
+async def test_one_inventory_row_per_location_variant_size(session: AsyncSession) -> None:
     f = await build(session)
     session.add_all(
         [
             Inventory(
-                store_id=f.store.id,
+                location_id=f.location_id,
                 product_variant_id=f.variant.id,
                 size_id=f.size.id,
                 quantity=1,
             ),
             Inventory(
-                store_id=f.store.id,
+                location_id=f.location_id,
                 product_variant_id=f.variant.id,
                 size_id=f.size.id,
                 quantity=2,
@@ -211,7 +216,7 @@ async def test_unknown_size_is_a_normal_stockable_size(session: AsyncSession) ->
     f = await build(session)
     session.add(
         Inventory(
-            store_id=f.store.id,
+            location_id=f.location_id,
             product_variant_id=f.variant.id,
             size_id=f.unknown_size.id,
             quantity=3,
@@ -225,7 +230,8 @@ async def test_a_movement_that_changes_nothing_is_rejected(session: AsyncSession
     session.add(
         StockMovement(
             organization_id=f.org.id,
-            store_id=f.store.id,
+            location_id=f.location_id,
+            acting_store_id=f.store.id,
             product_variant_id=f.variant.id,
             size_id=f.size.id,
             movement_type=MovementType.DELIVERY,
@@ -243,7 +249,8 @@ async def test_an_adjustment_without_a_reason_is_rejected(session: AsyncSession)
     session.add(
         StockMovement(
             organization_id=f.org.id,
-            store_id=f.store.id,
+            location_id=f.location_id,
+            acting_store_id=f.store.id,
             product_variant_id=f.variant.id,
             size_id=f.size.id,
             movement_type=MovementType.ADJUSTMENT,
@@ -296,7 +303,8 @@ async def test_the_stock_ledger_cannot_be_rewritten(session: AsyncSession) -> No
     f = await build(session)
     movement = StockMovement(
         organization_id=f.org.id,
-        store_id=f.store.id,
+        location_id=f.location_id,
+        acting_store_id=f.store.id,
         product_variant_id=f.variant.id,
         size_id=f.size.id,
         movement_type=MovementType.DELIVERY,
@@ -349,6 +357,7 @@ async def test_a_sale_line_with_inconsistent_arithmetic_is_rejected(
     session.add(
         SaleItem(
             sale_id=sale.id,
+            source_location_id=f.location_id,
             product_variant_id=f.variant.id,
             size_id=f.size.id,
             quantity=2,
@@ -372,6 +381,7 @@ async def test_a_correct_sale_line_is_accepted(session: AsyncSession) -> None:
     session.add(
         SaleItem(
             sale_id=sale.id,
+            source_location_id=f.location_id,
             product_variant_id=f.variant.id,
             size_id=f.size.id,
             quantity=2,

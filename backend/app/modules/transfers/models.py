@@ -46,10 +46,21 @@ class Transfer(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("organization.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    from_store_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=False
+    # Goods move between warehouses, not between shops (ADR-0004 §2.5).
+    from_location_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_location.id", ondelete="RESTRICT"),
+        nullable=False,
     )
-    to_store_id: Mapped[uuid.UUID] = mapped_column(
+    to_location_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_location.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    # The store on whose authority the move happens, and the subject of the
+    # transfer:create permission check. Dropping every store column would
+    # leave that check with nothing to check.
+    initiating_store_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=False
     )
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
@@ -67,7 +78,7 @@ class Transfer(UUIDPrimaryKey, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "command_id", name="uq_transfer_org_command"),
-        CheckConstraint("from_store_id <> to_store_id", name="stores_differ"),
+        CheckConstraint("from_location_id <> to_location_id", name="locations_differ"),
     )
 
 

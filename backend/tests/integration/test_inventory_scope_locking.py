@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 from app.core.errors import NotFoundError
 from app.modules.inventory.models import AcquisitionType, Inventory, MovementType, StockLot
 from app.modules.inventory.service import MovementRequest, apply_movements, lock_stock
-from app.modules.tenancy.models import Store
-from tests.conftest import requires_database
+from app.modules.tenancy.models import StockLocation, Store
+from tests.conftest import provision_location, requires_database
 from tests.integration.test_sale_command import make_shop
 
 pytestmark = [pytest.mark.integration, requires_database()]
@@ -30,7 +30,16 @@ async def engine() -> AsyncIterator[AsyncEngine]:
 
 @pytest.mark.parametrize(
     "foreign_part",
-    ["store", "variant", "size", "missing_store", "missing_variant", "missing_size", "inactive"],
+    [
+        "location",
+        "variant",
+        "size",
+        "missing_location",
+        "missing_variant",
+        "missing_size",
+        "inactive_location",
+        "inactive_store",
+    ],
 )
 async def test_stock_rejects_invalid_scope_before_creating_rows(
     engine: AsyncEngine, foreign_part: str
@@ -39,30 +48,39 @@ async def test_stock_rejects_invalid_scope_before_creating_rows(
     async with maker() as session:
         own = await make_shop(session)
         foreign = await make_shop(session)
-        key = [own.store_id, own.variant_id, own.size_id]
-        if foreign_part == "inactive":
+        key = [own.location_id, own.variant_id, own.size_id]
+        if foreign_part == "inactive_location":
+            location = await session.get(StockLocation, own.location_id)
+            assert location is not None
+            location.is_active = False
+            await session.flush()
+        elif foreign_part == "inactive_store":
+            # The acting store is validated separately from the location.
+            # Before the re-key one call proved both; a location-only check
+            # would have left the acting store unvalidated entirely.
             store = await session.get(Store, own.store_id)
             assert store is not None
             store.is_active = False
             await session.flush()
         elif foreign_part.startswith("missing_"):
-            i = {"missing_store": 0, "missing_variant": 1, "missing_size": 2}[foreign_part]
+            i = {"missing_location": 0, "missing_variant": 1, "missing_size": 2}[foreign_part]
             key[i] = uuid.uuid4()
         else:
-            i = {"store": 0, "variant": 1, "size": 2}[foreign_part]
-            key[i] = [foreign.store_id, foreign.variant_id, foreign.size_id][i]
+            i = {"location": 0, "variant": 1, "size": 2}[foreign_part]
+            key[i] = [foreign.location_id, foreign.variant_id, foreign.size_id][i]
         # Include a valid key first: validation must finish before ANY upsert.
         with pytest.raises(NotFoundError):
             await lock_stock(
                 session,
                 organization_id=own.organization_id,
-                keys=[(own.store_id, own.variant_id, own.size_id), tuple(key)],
+                keys=[(own.location_id, own.variant_id, own.size_id), tuple(key)],
+                acting_store_ids={own.store_id},
             )
         assert (
             await session.scalar(
                 select(func.count())
                 .select_from(Inventory)
-                .where(Inventory.store_id == own.store_id)
+                .where(Inventory.location_id == own.location_id)
             )
             == 0
         )
@@ -83,9 +101,16 @@ async def test_movements_reject_foreign_or_mismatched_lots(
                 organization_id=foreign.organization_id
                 if lot_case == "foreign"
                 else own.organization_id,
-                store_id=foreign.store_id,
-                product_variant_id=foreign.variant_id,
-                size_id=foreign.size_id,
+                location_id=foreign.location_id
+                if lot_case == "foreign"
+                else await provision_location(
+                    session,
+                    organization_id=own.organization_id,
+                    store_id=own.store_id,
+                    name="Інший склад",
+                ),
+                product_variant_id=foreign.variant_id if lot_case == "foreign" else own.variant_id,
+                size_id=foreign.size_id if lot_case == "foreign" else own.size_id,
                 acquisition_type=AcquisitionType.PURCHASE,
             )
             session.add(lot)
@@ -97,7 +122,8 @@ async def test_movements_reject_foreign_or_mismatched_lots(
                 organization_id=own.organization_id,
                 requests=[
                     MovementRequest(
-                        store_id=own.store_id,
+                        location_id=own.location_id,
+                        acting_store_id=own.store_id,
                         product_variant_id=own.variant_id,
                         size_id=own.size_id,
                         quantity_delta=1,
@@ -110,7 +136,7 @@ async def test_movements_reject_foreign_or_mismatched_lots(
             await session.scalar(
                 select(func.count())
                 .select_from(Inventory)
-                .where(Inventory.store_id == own.store_id)
+                .where(Inventory.location_id == own.location_id)
             )
             == 0
         )
@@ -136,12 +162,22 @@ async def test_lock_serializes_receipt_until_command_finishes(
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as setup:
         shop = await make_shop(setup)
-        key = (shop.store_id, shop.variant_id, shop.size_id)
+        key = (shop.location_id, shop.variant_id, shop.size_id)
         if already_exists:
-            await lock_stock(setup, organization_id=shop.organization_id, keys=[key])
+            await lock_stock(
+                setup,
+                organization_id=shop.organization_id,
+                keys=[key],
+                acting_store_ids={shop.store_id},
+            )
             await setup.commit()
     async with maker() as command:
-        quantities = await lock_stock(command, organization_id=shop.organization_id, keys=[key])
+        quantities = await lock_stock(
+            command,
+            organization_id=shop.organization_id,
+            keys=[key],
+            acting_store_ids={shop.store_id},
+        )
         assert quantities[key] == 0
         started: asyncio.Future[int] = asyncio.get_running_loop().create_future()
 
@@ -154,7 +190,8 @@ async def test_lock_serializes_receipt_until_command_finishes(
                     organization_id=shop.organization_id,
                     requests=[
                         MovementRequest(
-                            store_id=shop.store_id,
+                            location_id=shop.location_id,
+                            acting_store_id=shop.store_id,
                             product_variant_id=shop.variant_id,
                             size_id=shop.size_id,
                             quantity_delta=1,
@@ -172,12 +209,18 @@ async def test_lock_serializes_receipt_until_command_finishes(
             await command.commit()
             await asyncio.wait_for(task, timeout=5)
     async with maker() as check:
-        assert (await lock_stock(check, organization_id=shop.organization_id, keys=[key]))[key] == 1
+        locked = await lock_stock(
+            check,
+            organization_id=shop.organization_id,
+            keys=[key],
+            acting_store_ids={shop.store_id},
+        )
+        assert locked[key] == 1
         assert (
             await check.scalar(
                 select(func.count())
                 .select_from(Inventory)
-                .where(Inventory.store_id == shop.store_id)
+                .where(Inventory.location_id == shop.location_id)
             )
             == 1
         )
@@ -189,14 +232,18 @@ async def test_opposite_input_order_locks_full_baskets_without_deadlock(
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as setup:
         shop = await make_shop(setup)
-        second_store = Store(
-            organization_id=shop.organization_id, name="Second", code="SECOND", kind="SECONDARY"
+        # A second warehouse the same store reaches — which is the real shape
+        # now that a store can hold stock in more than one place.
+        second_location = await provision_location(
+            setup,
+            organization_id=shop.organization_id,
+            store_id=shop.store_id,
+            name="Другий склад",
         )
-        setup.add(second_store)
         await setup.commit()
         keys = [
-            (shop.store_id, shop.variant_id, shop.size_id),
-            (second_store.id, shop.variant_id, shop.size_id),
+            (shop.location_id, shop.variant_id, shop.size_id),
+            (second_location, shop.variant_id, shop.size_id),
         ]
     barrier = asyncio.Barrier(2)
 
@@ -208,7 +255,8 @@ async def test_opposite_input_order_locks_full_baskets_without_deadlock(
                 organization_id=shop.organization_id,
                 requests=[
                     MovementRequest(
-                        store_id=store,
+                        location_id=store,
+                        acting_store_id=shop.store_id,
                         product_variant_id=variant,
                         size_id=size,
                         quantity_delta=1,
@@ -221,5 +269,10 @@ async def test_opposite_input_order_locks_full_baskets_without_deadlock(
 
     await asyncio.wait_for(asyncio.gather(receive(keys), receive(keys[::-1])), timeout=5)
     async with maker() as check:
-        quantities = await lock_stock(check, organization_id=shop.organization_id, keys=keys)
+        quantities = await lock_stock(
+            check,
+            organization_id=shop.organization_id,
+            keys=keys,
+            acting_store_ids={shop.store_id},
+        )
         assert quantities == dict.fromkeys(keys, 2)

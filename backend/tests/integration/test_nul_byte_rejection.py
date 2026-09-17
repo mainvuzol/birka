@@ -86,6 +86,7 @@ async def stocked_variant(client: httpx.AsyncClient, shop: Shop) -> tuple[str, s
         "/api/v1/inventory/receipts",
         json={
             "store_id": str(shop.store_id),
+            "location_id": str(shop.location_id),
             "lines": [
                 {
                     "product_variant_id": product["product_variant_id"],
@@ -119,6 +120,7 @@ async def test_a_nul_in_the_idempotency_key_is_refused_by_every_command(maker):
                 "/api/v1/inventory/receipts",
                 {
                     "store_id": str(shop.store_id),
+                    "location_id": str(shop.location_id),
                     "lines": [
                         {"product_variant_id": variant_id, "size_id": size_id, "quantity": 1}
                     ],
@@ -134,6 +136,7 @@ async def test_a_nul_in_the_idempotency_key_is_refused_by_every_command(maker):
                         {
                             "product_variant_id": variant_id,
                             "size_id": size_id,
+                            "source_location_id": str(shop.location_id),
                             "quantity": 1,
                             "unit_price": "100.00",
                         }
@@ -170,6 +173,7 @@ async def test_a_nul_in_receipt_notes_is_refused(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "notes": POISON,
                 "lines": [{"product_variant_id": variant_id, "size_id": size_id, "quantity": 1}],
             },
@@ -189,6 +193,7 @@ async def test_a_nul_in_an_adjustment_note_is_refused(maker):
             "/api/v1/inventory/adjustments",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "product_variant_id": variant_id,
                 "size_id": size_id,
                 "quantity_delta": 1,

@@ -39,6 +39,7 @@ PERMISSIONS = frozenset({Permission.INVENTORY_RECEIVE, Permission.INVENTORY_ADJU
 def receipt(shop, *, quantity=1):
     return api.ReceiptRequest(
         store_id=shop.store_id,
+        location_id=shop.location_id,
         lines=[
             api.ReceiptLine(
                 product_variant_id=shop.variant_id, size_id=shop.size_id, quantity=quantity
@@ -80,7 +81,7 @@ async def test_repeated_receipt_lines_keep_distinct_costs_and_lots(engine):
         assert replay == response
         assert (
             await session.scalar(
-                select(Inventory.quantity).where(Inventory.store_id == shop.store_id)
+                select(Inventory.quantity).where(Inventory.location_id == shop.location_id)
             )
             == 5
         )
@@ -104,6 +105,7 @@ async def test_adjustment_audit_uses_quantity_at_locked_write(engine, monkeypatc
         result = await api.adjust_inventory(
             api.AdjustmentRequest(
                 store_id=shop.store_id,
+                location_id=shop.location_id,
                 product_variant_id=shop.variant_id,
                 size_id=shop.size_id,
                 quantity_delta=1,
@@ -156,7 +158,9 @@ async def test_receipt_http_rejects_foreign_catalog_without_side_effects(engine,
         for model in (Inventory, StockLot, StockMovement):
             assert (
                 await session.scalar(
-                    select(func.count()).select_from(model).where(model.store_id == shop.store_id)
+                    select(func.count())
+                    .select_from(model)
+                    .where(model.location_id == shop.location_id)
                 )
                 == 0
             )

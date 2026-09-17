@@ -95,10 +95,24 @@ class RefundItem(UUIDPrimaryKey, Base):
     # Goods physically came back, so stock returns. A refund without restock is
     # a legitimate case (damaged item kept by the shop) and must be explicit.
     restock: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # Where the units went back — the warehouse the sale line drew them from
+    # (owner decision, 2026-09-17). Nullable on purpose: a line that was not
+    # restocked writes no movement, and asserting a shelf for goods that went
+    # in the bin would invent history. The CHECK makes the two agree in both
+    # directions, which is stronger than NOT NULL would be.
+    destination_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_location.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     __table_args__ = (
         Index("ix_refund_item_refund", "refund_id"),
         Index("ix_refund_item_sale_item", "sale_item_id"),
+        CheckConstraint(
+            "(restock IS TRUE) = (destination_location_id IS NOT NULL)",
+            name="destination_matches_restock",
+        ),
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("amount >= 0", name="amount_not_negative"),
     )

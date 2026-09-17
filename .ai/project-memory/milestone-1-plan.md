@@ -372,7 +372,7 @@ Total quantity is unchanged, both halves are in the ledger, and the reclassifica
 
 ## 5. M1 Physical Schema
 
-**36 tables.** Built because Milestone 1 needs them, not because the conceptual model lists them.
+**38 tables, including `stock_location` and `store_location_access`, which carry the stock key since M1-029.** Built because Milestone 1 needs them, not because the conceptual model lists them.
 
 | # | Group | Tables | Gate |
 |---|---|---|---|
@@ -384,7 +384,7 @@ Total quantity is unchanged, both halves are in the ledger, and the reclassifica
 | 28 | Price | `variant_price` — and no second price table; history is out of M1 | M1B |
 | 29–36 | Money, movement, platform | `sale`, `sale_item`, `refund`, `refund_item`, `transfer`, `transfer_item`, `idempotency_record`, `audit_log` | M1B / M1C |
 
-Exact list: 6 tenancy + 7 catalog + 3 size + 6 evidence + 5 inventory + 1 price + 8 money/platform = **36**.
+Exact list: 6 tenancy + 7 catalog + 3 size + 6 evidence + 5 inventory + 1 price + 8 money/platform = **36** original tables, plus `stock_location` and `store_location_access` in tenancy = **38**.
 
 `sale`, `refund` and `transfer` each additionally carry a permanent `command_id` with `UNIQUE (organization_id, command_id)` — see §4.5.
 
@@ -442,6 +442,10 @@ Per correction 6, each invariant names **what actually enforces it**. Service-la
 | I20 | A critical command can never create a second business operation, at any distance in time | `DB_ENFORCED` | permanent `UNIQUE (organization_id, command_id)` on `sale`, `refund`, `transfer` — independent of idempotency-record retention | replay after the idempotency record is deleted still returns the original operation |
 | I21 | A parse is reproducible forever | `DB_ENFORCED` + `CI_ENFORCED` | `UNIQUE (raw_input_id, parser_version)`; the parser performs no catalog or database reads | same input + same parser version yields byte-identical output; an import-linter rule forbids `catalog.matching`/repository imports inside the parser package |
 | I22 | Money arithmetic on a sale line is internally consistent | `DB_ENFORCED` | `CHECK (final_unit_price = unit_price - discount_amount)` and `CHECK (line_total = final_unit_price * quantity)` | an inconsistent line cannot be inserted |
+| I23 | A store may only read or change stock at a location it holds explicit access to | `SERVICE_ENFORCED` + `CI_ENFORCED` | `store_location_access` row required; a name or a `StoreKind` never grants reach | a store with no access row is refused before any row is read or written, and leaves no idempotency claim |
+| I24 | A `TRANSFER_OUT` is accompanied by exactly one matching `TRANSFER_IN` of equal magnitude at a different location in the same transaction, and no other movement type pairs with an opposite-signed movement at another location within one command | `SERVICE_ENFORCED` | every movement names its location; both transfer legs go through one `apply_movements` call | a multi-location sale basket is **not** a transfer; a `TRANSFER_OUT` with no matching `TRANSFER_IN` is refused |
+
+**I23 and I24 arrived with [ADR-0004](../decisions/ADR-0004-stock-locations.md). I23 is in force since M1-029. I24 is declared but *not yet in force*: no code writes a transfer, so it has no enforcement point — it becomes enforceable, and must be tested, with M1-018.** **I2 is restated** as one inventory row per *(location, variant, size)*. A new stable error code, `LOCATION_ACCESS_DENIED` (403), carries I23 at the API boundary.
 
 **Honest summary:** 11 invariants have real database teeth. 9 depend on application code holding its discipline, backed by tests and CI. 2 are detected rather than prevented. The two that changed level in revision 2 are I3 (never was `DB_ENFORCED`; revision 1 implied it was) and I14 (lost its accidental database backstop when the ProductFamily unique constraint was correctly removed).
 
@@ -543,7 +547,7 @@ Base `/api/v1`. `Idempotency-Key` required on every mutating endpoint. `X-Reques
 
 Permission codes (in application code, not a table): `sale:create`, `sale:refund`, `sale:view`, `inventory:view`, `inventory:receive`, `inventory:adjust`, `inventory:correct_during_sale`, `transfer:create`, `transfer:receive`, `catalog:create`, `catalog:confirm`, `catalog:merge`, `snapshot:import`, `snapshot:approve`, `report:view_financial`, `user:manage`.
 
-Stable error codes: `INSUFFICIENT_STOCK`, `CORRECTION_EXCEEDS_SHORTFALL`, `CATALOG_AMBIGUOUS`, `FORBIDDEN_STORE`, `PERMISSION_DENIED`, `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`, `REFUND_EXCEEDS_SOLD`, `VALIDATION_ERROR`.
+Stable error codes: `INSUFFICIENT_STOCK`, `CORRECTION_EXCEEDS_SHORTFALL`, `CATALOG_AMBIGUOUS`, `FORBIDDEN_STORE`, `PERMISSION_DENIED`, `LOCATION_ACCESS_DENIED`, `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`, `REFUND_EXCEEDS_SOLD`, `VALIDATION_ERROR`.
 
 Performance budgets (to be measured, not assumed): `/catalog/search` p95 ≤ 300 ms, `POST /sales` p95 ≤ 500 ms, time-to-sale ≤ 15 s, taps-to-sale ≤ 5.
 
@@ -594,14 +598,16 @@ Revision 1 said "24 tasks" while listing M1-001…M1-028. The correct count is *
 | M1-016 | Sale service + `POST /sales` + Decimal money + immutable snapshots | `backend-fastapi-engineer`, `financial-integrity` | M1-014, M1-015 |
 | M1-019 | `FOUND_DURING_SALE` correction path + `inventory:adjust` for manager/owner + audit (§4.6) | `human-error-resilience` | M1-016 |
 
-### Gate M1C — Refund, Transfer, Catalog pipeline, Legacy import (6 tasks)
+### Gate M1C — Refund, Transfer, Catalog pipeline, Legacy import (8 tasks)
 
 *Exit criterion: mistakes are recoverable, goods move between stores, natural-language intake works on a real corpus, and the legacy lists are imported as traceable opening balances.*
 
 | ID | Task | Owner skill | Depends on |
 |---|---|---|---|
 | M1-017 | Refund service + endpoint | `compensating-operations`, `financial-integrity` | M1-016 |
-| M1-018 | Transfer service + endpoints, `TRANSFER_OUT`/`TRANSFER_IN` | `inventory-ledger-specialist` | M1-015 |
+| **M1-029** ✅ | Stock locations: `stock_location`, `store_location_access`, stock key moved to the warehouse, `sale_item.source_location_id`, `refund_item.destination_location_id`, migrations `0005` + `0006` | `inventory-ledger-specialist`, `multi-tenancy-architect`, `concurrency-transactions` | M1-017 — **done 2026-09-17** |
+| M1-018 | Transfer service + endpoints, `TRANSFER_OUT`/`TRANSFER_IN` — **between warehouses, not stores**; both legs in one `apply_movements` call | `inventory-ledger-specialist` | M1-029 — **ready** |
+| **M1-030** | «Фізично відсутній»: a bounded negative correction during a sale | `inventory-ledger-specialist`, `rbac-permission-designer` | M1-029; **blocked on open question Q-E** |
 | M1-020 | Normalization + deterministic parser v1: slash rule, per-field confidence, unclassified descriptors | `catalog-normalization-parser` | M1-012 |
 | M1-021 | Matcher v1: alias → `pg_trgm` → attribute compatibility → 5 decision types + margin policy + **duplicate-signature report** | `catalog-matcher`, `catalog-confidence-policy` | M1-020, M1-010 |
 | M1-022 | Alias/feedback evidence, `NEW→LEARNING→VERIFIED` promotion, review-queue API | `catalog-feedback-learning` | M1-021 |

@@ -44,6 +44,7 @@ from app.modules.inventory.service import (
     sale_correction_ids,
 )
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.tenancy.service import LocationCapability, require_location_access
 
 logger = get_logger(__name__)
 
@@ -63,6 +64,10 @@ def money(value: Decimal) -> Decimal:
 class SaleLineInput:
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
+    # Which warehouse these units leave. Stated per line and never guessed:
+    # the owner's rule of 2026-09-17 forbids falling back to another location
+    # when one is short, because the mistake is invisible until someone counts.
+    source_location_id: uuid.UUID
     quantity: int
     unit_price: Decimal
     discount_amount: Decimal = Decimal("0")
@@ -70,7 +75,11 @@ class SaleLineInput:
 
 @dataclass(frozen=True, slots=True)
 class FoundInStore:
-    """ "The coat is here, the app says zero." Index into the sale's lines."""
+    """ "The coat is here, the app says zero." Index into the sale's lines.
+
+    The correction lands at the line's own `source_location_id`, so a seller
+    confirming goods is confirming them on a specific shelf.
+    """
 
     line_index: int
     quantity: int
@@ -84,6 +93,7 @@ class SaleResult:
 
 
 MAX_MONEY = Decimal("9999999999.99")
+# (location, variant, size) — the stock key since ADR-0004.
 StockKey = tuple[uuid.UUID, uuid.UUID, uuid.UUID]
 
 
@@ -107,7 +117,7 @@ def _resolve_corrections(
     """Validate the total shortfall of each locked stock key, not isolated lines."""
     demand: dict[StockKey, int] = {}
     for line in lines:
-        key = (store_id, line.product_variant_id, line.size_id)
+        key = (line.source_location_id, line.product_variant_id, line.size_id)
         demand[key] = demand.get(key, 0) + line.quantity
 
     requested: dict[StockKey, int] = {}
@@ -121,7 +131,7 @@ def _resolve_corrections(
         if type(found.quantity) is not int or found.quantity <= 0:
             raise ValidationFailedError("A correction must add a positive integer quantity")
         line = lines[found.line_index]
-        key = (store_id, line.product_variant_id, line.size_id)
+        key = (line.source_location_id, line.product_variant_id, line.size_id)
         requested[key] = requested.get(key, 0) + found.quantity
 
     corrections: list[MovementRequest] = []
@@ -138,7 +148,8 @@ def _resolve_corrections(
             )
         corrections.append(
             MovementRequest(
-                store_id=store_id,
+                location_id=key[0],
+                acting_store_id=store_id,
                 product_variant_id=key[1],
                 size_id=key[2],
                 quantity_delta=quantity,
@@ -239,6 +250,12 @@ async def create_sale(
                 {
                     "product_variant_id": str(line.product_variant_id),
                     "size_id": str(line.size_id),
+                    # Without this, the same command_id retried against a
+                    # different warehouse would be judged an identical retry
+                    # and replayed — telling the caller "sold" about stock it
+                    # never named. The 7-day cache picks the field up on its
+                    # own; this permanent one is built by hand and does not.
+                    "source_location_id": str(line.source_location_id),
                     "quantity": line.quantity,
                     "unit_price": str(line.unit_price),
                     "discount_amount": str(line.discount_amount),
@@ -259,12 +276,34 @@ async def create_sale(
     if existing is not None:
         return existing
 
+    # Invariant I23: the person may sell, but may this store sell *here*?
+    # Checked before any row is locked, and before any stock is read.
+    #
+    # `can_sell` is the whole requirement, including for a FOUND_DURING_SALE
+    # correction, and that is a deliberate rule rather than an oversight —
+    # every *other* path that adds stock demands `can_receive`. Two reasons.
+    # The owner's decision of 2026-09-17 grants a child-store seller "фізично
+    # є" at any warehouse they can reach, and the correction cannot leave that
+    # warehouse fuller than it found it: `_resolve_corrections` caps it at
+    # exactly the shortfall this sale is about to consume, so the net movement
+    # is `correction - demand`, which is never positive. A store denied
+    # `can_receive` here still cannot deliver goods into this warehouse; it can
+    # only account for goods it is simultaneously carrying out of it.
+    await require_location_access(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        location_ids={line.source_location_id for line in lines},
+        capability=LocationCapability.SELL,
+    )
+
     # Lock every stock key in one global order before reading any shortfall.
     # This also materializes missing rows, closing the first-receipt race.
     quantities = await lock_stock(
         session,
         organization_id=scope.organization_id,
-        keys=[(store_id, line.product_variant_id, line.size_id) for line in lines],
+        keys=[(line.source_location_id, line.product_variant_id, line.size_id) for line in lines],
+        acting_store_ids={store_id},
     )
     described = await describe_variants(session, [line.product_variant_id for line in lines])
     for line in lines:
@@ -332,7 +371,8 @@ async def create_sale(
         organization_id=scope.organization_id,
         requests=[
             MovementRequest(
-                store_id=store_id,
+                location_id=line.source_location_id,
+                acting_store_id=store_id,
                 product_variant_id=line.product_variant_id,
                 size_id=line.size_id,
                 quantity_delta=-line.quantity,
@@ -357,6 +397,7 @@ async def create_sale(
             sale_id=sale.id,
             product_variant_id=line.product_variant_id,
             size_id=line.size_id,
+            source_location_id=line.source_location_id,
             quantity=line.quantity,
             unit_price=money(line.unit_price),
             discount_amount=money(line.discount_amount),

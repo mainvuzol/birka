@@ -15,6 +15,7 @@ from sqlalchemy import (
     CheckConstraint,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     String,
     UniqueConstraint,
 )
@@ -67,4 +68,58 @@ class Store(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
 
-__all__ = ["Organization", "Store", "StoreKind"]
+class StockLocation(UUIDPrimaryKey, TimestampMixin, Base):
+    """A physical place, independent of selling store and goods ownership."""
+
+    __tablename__ = "stock_location"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_stock_location_org_code"),
+        UniqueConstraint("organization_id", "id", name="uq_stock_location_organization_id_id"),
+    )
+
+
+class StoreLocationAccess(UUIDPrimaryKey, TimestampMixin, Base):
+    """Explicit store access; no flag defaults may silently grant a capability.
+
+    This additive foundation is not yet used by stock services. Both foreign
+    keys bind the endpoints to the same organization even for direct SQL.
+    """
+
+    __tablename__ = "store_location_access"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    store_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    can_sell: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    can_receive: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("store_id", "location_id", name="uq_store_location_access_store_location"),
+        ForeignKeyConstraint(
+            ["organization_id", "store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_store_location_access_org_store",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_store_location_access_org_location",
+            ondelete="RESTRICT",
+        ),
+    )
+
+
+__all__ = ["Organization", "StockLocation", "Store", "StoreKind", "StoreLocationAccess"]

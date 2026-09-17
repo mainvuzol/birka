@@ -39,7 +39,7 @@ from app.modules.inventory.models import (
 )
 from app.modules.refunds.models import Refund, RefundItem
 from app.modules.sales.models import Sale, SaleItem
-from app.modules.tenancy.models import Organization, Store
+from app.modules.tenancy.models import Organization, StockLocation, Store, StoreLocationAccess
 from app.modules.transfers.models import Transfer, TransferItem
 
 __all__ = [
@@ -73,9 +73,11 @@ __all__ = [
     "SizeAlias",
     "SizeSystem",
     "SourceIdentity",
+    "StockLocation",
     "StockLot",
     "StockMovement",
     "Store",
+    "StoreLocationAccess",
     "Transfer",
     "TransferItem",
     "VariantPrice",

@@ -1,0 +1,8 @@
+negative inventory: 0
+movements with no warehouse: 0
+movements with no acting store (non-transfer): 0
+sale lines with no source warehouse: 0
+refund destination disagreeing with restock: 0
+stock at a warehouse of another organization: 0
+append-only trigger enabled: b'O'
+ledger divergences (I3): [5, 7]

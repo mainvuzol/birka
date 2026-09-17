@@ -39,7 +39,7 @@ from app.modules.inventory import repository
 from app.modules.inventory.models import MovementReason, MovementType
 from app.modules.inventory.service import MovementRequest, apply_movements, find_divergences
 from app.modules.tenancy.models import Organization, Store, StoreKind
-from tests.conftest import requires_database
+from tests.conftest import provision_location, requires_database
 
 pytestmark = [pytest.mark.integration, requires_database()]
 
@@ -92,14 +92,24 @@ async def make_world(session: AsyncSession) -> World:
     await session.flush()
     await session.commit()
 
-    return World(organization_id=org.id, store_id=store.id, size_id=size.id, variant_id=variant.id)
+    location_id = await provision_location(
+        session, organization_id=org.id, store_id=store.id, name="Склад"
+    )
+    return World(
+        organization_id=org.id,
+        store_id=store.id,
+        location_id=location_id,
+        size_id=size.id,
+        variant_id=variant.id,
+    )
 
 
 def line(
     world: World, delta: int, movement_type: MovementType, **kwargs: object
 ) -> MovementRequest:
     return MovementRequest(
-        store_id=world.store_id,
+        location_id=world.location_id,
+        acting_store_id=world.store_id,
         product_variant_id=world.variant_id,
         size_id=world.size_id,
         quantity_delta=delta,
@@ -136,13 +146,13 @@ async def test_a_delivery_creates_the_row_the_movement_and_agrees(
     assert (
         await repository.current_quantity(
             session,
-            store_id=world.store_id,
+            location_id=world.location_id,
             product_variant_id=world.variant_id,
             size_id=world.size_id,
         )
         == 4
     )
-    assert await find_divergences(session, store_id=world.store_id) == []
+    assert await find_divergences(session, location_id=world.location_id) == []
 
 
 async def test_a_sale_reduces_stock_and_the_ledger_still_agrees(
@@ -159,7 +169,7 @@ async def test_a_sale_reduces_stock_and_the_ledger_still_agrees(
     await session.commit()
 
     assert applied[0].quantity_after == 3
-    assert await find_divergences(session, store_id=world.store_id) == []
+    assert await find_divergences(session, location_id=world.location_id) == []
 
 
 async def test_selling_more_than_exists_is_refused_with_the_real_count(
@@ -198,13 +208,13 @@ async def test_a_refused_line_leaves_no_trace(session: AsyncSession) -> None:
     assert (
         await repository.current_quantity(
             session,
-            store_id=world.store_id,
+            location_id=world.location_id,
             product_variant_id=world.variant_id,
             size_id=world.size_id,
         )
         == 1
     )
-    assert await find_divergences(session, store_id=world.store_id) == []
+    assert await find_divergences(session, location_id=world.location_id) == []
 
 
 async def test_reconciliation_detects_a_quantity_changed_behind_the_service(
@@ -219,13 +229,13 @@ async def test_reconciliation_detects_a_quantity_changed_behind_the_service(
     await session.execute(
         text(
             "UPDATE inventory SET quantity = quantity + 7"
-            " WHERE store_id = :s AND product_variant_id = :v AND size_id = :z"
+            " WHERE location_id = :s AND product_variant_id = :v AND size_id = :z"
         ),
-        {"s": world.store_id, "v": world.variant_id, "z": world.size_id},
+        {"s": world.location_id, "v": world.variant_id, "z": world.size_id},
     )
     await session.commit()
 
-    divergences = await find_divergences(session, store_id=world.store_id)
+    divergences = await find_divergences(session, location_id=world.location_id)
 
     assert len(divergences) == 1
     assert divergences[0].difference == 7
@@ -268,13 +278,13 @@ async def test_two_sellers_cannot_sell_the_same_last_unit(engine: AsyncEngine) -
         assert (
             await repository.current_quantity(
                 check,
-                store_id=world.store_id,
+                location_id=world.location_id,
                 product_variant_id=world.variant_id,
                 size_id=world.size_id,
             )
             == 0
         )
-        assert await find_divergences(check, store_id=world.store_id) == []
+        assert await find_divergences(check, location_id=world.location_id) == []
 
 
 async def test_ten_concurrent_sales_of_four_units_sell_exactly_four(
@@ -308,13 +318,13 @@ async def test_ten_concurrent_sales_of_four_units_sell_exactly_four(
         assert (
             await repository.current_quantity(
                 check,
-                store_id=world.store_id,
+                location_id=world.location_id,
                 product_variant_id=world.variant_id,
                 size_id=world.size_id,
             )
             == 0
         )
-        assert await find_divergences(check, store_id=world.store_id) == []
+        assert await find_divergences(check, location_id=world.location_id) == []
 
 
 async def test_multi_line_commands_in_opposite_order_do_not_deadlock(
@@ -344,6 +354,7 @@ async def test_multi_line_commands_in_opposite_order_do_not_deadlock(
         other = World(
             organization_id=world.organization_id,
             store_id=world.store_id,
+            location_id=world.location_id,
             size_id=world.size_id,
             variant_id=second_variant.id,
         )
@@ -362,7 +373,7 @@ async def test_multi_line_commands_in_opposite_order_do_not_deadlock(
     await asyncio.wait_for(asyncio.gather(sell([world, other]), sell([other, world])), timeout=20)
 
     async with maker() as check:
-        assert await find_divergences(check, store_id=world.store_id) == []
+        assert await find_divergences(check, location_id=world.location_id) == []
 
 
 # --- idempotency -------------------------------------------------------------
@@ -506,16 +517,16 @@ async def test_an_adjustment_records_its_reason(session: AsyncSession) -> None:
         await session.execute(
             text(
                 "SELECT reason_code FROM stock_movement"
-                " WHERE movement_type = 'ADJUSTMENT' AND store_id = :s"
+                " WHERE movement_type = 'ADJUSTMENT' AND location_id = :s"
             ),
-            {"s": world.store_id},
+            {"s": world.location_id},
         )
     ).scalar_one()
 
     assert recorded == "FOUND_DURING_SALE"
 
 
-async def test_reconciliation_can_be_narrowed_to_one_store(session: AsyncSession) -> None:
+async def test_reconciliation_can_be_narrowed_to_one_warehouse(session: AsyncSession) -> None:
     """A divergence in one shop must not be reported against the other.
 
     The owner asking "is the second store consistent?" should get an answer
@@ -530,11 +541,11 @@ async def test_reconciliation_can_be_narrowed_to_one_store(session: AsyncSession
     await session.execute(
         text(
             "UPDATE inventory SET quantity = quantity + 5"
-            " WHERE store_id = :s AND product_variant_id = :v AND size_id = :z"
+            " WHERE location_id = :s AND product_variant_id = :v AND size_id = :z"
         ),
-        {"s": broken.store_id, "v": broken.variant_id, "z": broken.size_id},
+        {"s": broken.location_id, "v": broken.variant_id, "z": broken.size_id},
     )
     await session.commit()
 
-    assert len(await find_divergences(session, store_id=broken.store_id)) == 1
-    assert await find_divergences(session, store_id=healthy.store_id) == []
+    assert len(await find_divergences(session, location_id=broken.location_id)) == 1
+    assert await find_divergences(session, location_id=healthy.location_id) == []

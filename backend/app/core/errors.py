@@ -62,6 +62,19 @@ class ForbiddenStoreError(DomainError):
     message = "You do not have access to this store"
 
 
+class LocationAccessDeniedError(DomainError):
+    """The person may act; their store may not act *here*.
+
+    Distinct from `FORBIDDEN_STORE` and `PERMISSION_DENIED` on purpose: those
+    say the caller is not who they need to be, this says the goods are not
+    somewhere this store can reach (ADR-0004, invariant I23).
+    """
+
+    code = "LOCATION_ACCESS_DENIED"
+    http_status = 403
+    message = "This store has no access to that stock location"
+
+
 # --- validation -------------------------------------------------------------
 
 
@@ -129,6 +142,7 @@ __all__ = [
     "IdempotencyInProgressError",
     "InsufficientStockError",
     "InvalidInitDataError",
+    "LocationAccessDeniedError",
     "NotFoundError",
     "PermissionDeniedError",
     "RefundExceedsSoldError",

@@ -125,6 +125,7 @@ async def sell(
         "/api/v1/inventory/receipts",
         json={
             "store_id": str(shop.store_id),
+            "location_id": str(shop.location_id),
             "lines": [
                 {
                     "product_variant_id": product["product_variant_id"],
@@ -142,6 +143,7 @@ async def sell(
         {
             "product_variant_id": product["product_variant_id"],
             "size_id": size_id,
+            "source_location_id": str(shop.location_id),
             "quantity": quantity,
             "unit_price": unit_price,
             "discount_amount": discount_amount,
@@ -189,7 +191,7 @@ async def stock_of(session: AsyncSession, sold: Sold) -> int:
     return (
         await session.scalar(
             select(Inventory.quantity).where(
-                Inventory.store_id == sold.shop.store_id,
+                Inventory.location_id == sold.shop.location_id,
                 Inventory.product_variant_id == uuid.UUID(sold.variant_id),
                 Inventory.size_id == uuid.UUID(sold.size_id),
             )
@@ -261,7 +263,7 @@ async def test_a_full_refund_returns_the_money_and_the_stock(maker):
         assert returns[0].reference_type == "refund"
         assert str(returns[0].reference_id) == body["id"]
         # Invariant I3: the quantity and the ledger still agree.
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_partial_refund_leaves_the_rest_refundable(maker):
@@ -290,7 +292,7 @@ async def test_a_partial_refund_leaves_the_rest_refundable(maker):
     async with maker() as session:
         assert await stock_of(session, sold) == 5
         assert await refund_rows(session, shop) == 2
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_refund_is_capped_by_what_was_sold(maker):
@@ -582,7 +584,7 @@ async def test_a_refund_without_restock_returns_money_but_no_stock(maker):
         # Sold 2 out of 5 and kept them: still 3.
         assert await stock_of(session, sold) == 3
         assert await movements_of(session, shop, MovementType.REFUND_RETURN) == []
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_restock_must_be_stated(maker):
@@ -612,6 +614,7 @@ async def test_one_refund_may_mix_restocked_and_written_off_lines(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -631,12 +634,14 @@ async def test_one_refund_may_mix_restocked_and_written_off_lines(maker):
                     {
                         "product_variant_id": product["product_variant_id"],
                         "size_id": size_id,
+                        "source_location_id": str(shop.location_id),
                         "quantity": 1,
                         "unit_price": "1500.00",
                     },
                     {
                         "product_variant_id": product["product_variant_id"],
                         "size_id": size_id,
+                        "source_location_id": str(shop.location_id),
                         "quantity": 1,
                         "unit_price": "1500.00",
                         "discount_amount": "500.00",
@@ -664,7 +669,7 @@ async def test_one_refund_may_mix_restocked_and_written_off_lines(maker):
     async with maker() as session:
         # Received 6, sold 2, one came back.
         assert await stock_of(session, sold) == 5
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 # ---------------------------------------------------------------------------
@@ -860,6 +865,7 @@ async def test_a_refund_that_fails_halfway_leaves_nothing_behind(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -880,12 +886,14 @@ async def test_a_refund_that_fails_halfway_leaves_nothing_behind(maker):
                         {
                             "product_variant_id": product["product_variant_id"],
                             "size_id": size_id,
+                            "source_location_id": str(shop.location_id),
                             "quantity": 1,
                             "unit_price": "1500.00",
                         },
                         {
                             "product_variant_id": product["product_variant_id"],
                             "size_id": size_id,
+                            "source_location_id": str(shop.location_id),
                             "quantity": 1,
                             "unit_price": "1200.00",
                         },
@@ -916,7 +924,7 @@ async def test_a_refund_that_fails_halfway_leaves_nothing_behind(maker):
         assert await movements_of(session, shop, MovementType.REFUND_RETURN) == []
         # Received 6, sold 2, refunded none.
         assert await stock_of(session, sold) == 4
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 # ---------------------------------------------------------------------------
@@ -1003,7 +1011,7 @@ async def test_two_simultaneous_refunds_of_one_line_cannot_both_succeed(
         ) == 1
         # Received 5, sold 1, exactly one came back.
         assert await stock_of(session, sold) == 5
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_many_racing_refunds_return_exactly_what_was_sold(
@@ -1043,7 +1051,7 @@ async def test_many_racing_refunds_return_exactly_what_was_sold(
             )
         ) == 3
         assert await stock_of(session, sold) == 5
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_refund_and_a_sale_of_the_same_item_agree_on_the_ledger(
@@ -1085,6 +1093,7 @@ async def test_a_refund_and_a_sale_of_the_same_item_agree_on_the_ledger(
                         {
                             "product_variant_id": sold.variant_id,
                             "size_id": sold.size_id,
+                            "source_location_id": str(shop.location_id),
                             "quantity": 1,
                             "unit_price": "1500.00",
                         }
@@ -1102,7 +1111,7 @@ async def test_a_refund_and_a_sale_of_the_same_item_agree_on_the_ledger(
     async with maker() as session:
         # Received 5, sold 2, refunded 2, sold 1 more.
         assert await stock_of(session, sold) == 4
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 # ---------------------------------------------------------------------------
@@ -1295,6 +1304,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -1316,6 +1326,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
                         {
                             "product_variant_id": product["product_variant_id"],
                             "size_id": s,
+                            "source_location_id": str(shop.location_id),
                             "quantity": 1,
                             "unit_price": "1500.00",
                         }
@@ -1364,7 +1375,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
     async with maker() as session:
         # Both refunds land: they queued, they did not fail.
         assert await refund_rows(session, shop) == 2
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 # ---------------------------------------------------------------------------
@@ -1435,7 +1446,7 @@ async def test_the_same_command_arriving_twice_at_once_is_serialized(
             )
         ) == 1
         assert await stock_of(session, sold) == 4
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_rebuilt_multi_line_replay_matches_the_original_exactly(
@@ -1461,6 +1472,7 @@ async def test_a_rebuilt_multi_line_replay_matches_the_original_exactly(
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -1482,6 +1494,7 @@ async def test_a_rebuilt_multi_line_replay_matches_the_original_exactly(
                         {
                             "product_variant_id": product["product_variant_id"],
                             "size_id": size,
+                            "source_location_id": str(shop.location_id),
                             "quantity": 1,
                             "unit_price": price,
                         }
@@ -1517,7 +1530,7 @@ async def test_a_rebuilt_multi_line_replay_matches_the_original_exactly(
 
     async with maker() as session:
         assert await refund_rows(session, shop) == 1
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_sale_in_a_sibling_store_cannot_be_refunded(maker):
