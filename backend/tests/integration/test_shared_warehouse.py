@@ -1188,6 +1188,138 @@ async def test_a_correction_needs_can_sell_only_and_can_never_leave_the_shelf_fu
         assert await find_divergences(session, organization_id=shops.organization_id) == []
 
 
+async def test_a_shortage_at_the_shared_warehouse_takes_only_what_the_sale_named(maker):
+    """«Фізично відсутній» on a shelf two shops depend on (M1-030).
+
+    This is where the negative correction is most dangerous: the child store's
+    seller is reporting on stock the primary store also sells. Bounded by the
+    line, the write-off is one coat — the other store still sees the rest, and
+    the shared balance is one number that both of them now agree on.
+    """
+    shops = await make_two_shops(maker)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        variant, size = await stock_a_coat(
+            client, shops, store=shops.primary_store, warehouse=shops.shared_warehouse, qty=6
+        )
+
+    reporter = shops.scope(
+        shops.child_store, SELLER | {Permission.INVENTORY_REPORT_MISSING_DURING_SALE}
+    )
+    async with api(maker, reporter) as client:
+        body = sale_body(shops.child_store, shops.shared_warehouse, variant, size, qty=3)
+        body["missing_in_store"] = [{"line_index": 0, "quantity": 2}]
+        sold = await client.post("/api/v1/sales", json=body, headers=key())
+        assert sold.status_code == 201, sold.text
+        sale = sold.json()
+        # Sold what was there, charged for what was sold.
+        assert sale["items"][0]["quantity"] == 2
+        assert sale["total"] == "3000.00"
+        assert len(sale["shortages"]) == 1
+        assert sale["corrections"] == []
+
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        listed = await client.get(
+            "/api/v1/inventory", params={"store_id": str(shops.primary_store)}
+        )
+        by_location = {row["location_id"]: row["quantity"] for row in listed.json()["rows"]}
+        # 6 − 1 missing − 2 sold. Not zero: the seller counted the coats they
+        # went to fetch, not the shelf.
+        assert by_location[str(shops.shared_warehouse)] == 3
+
+    async with maker() as session:
+        movement = (
+            await session.scalars(
+                select(StockMovement).where(
+                    StockMovement.organization_id == shops.organization_id,
+                    StockMovement.movement_type == MovementType.ADJUSTMENT,
+                )
+            )
+        ).one()
+        assert movement.location_id == shops.shared_warehouse
+        assert movement.acting_store_id == shops.child_store
+        assert movement.quantity_delta == -1
+        assert await find_divergences(session, organization_id=shops.organization_id) == []
+
+
+async def test_reporting_a_shortage_needs_its_own_permission_at_the_api(maker):
+    """The seller default carries `inventory:correct_during_sale` and not this.
+    Reaching a warehouse never confers it either (owner instruction: sellers do
+    not get arbitrary balance correction)."""
+    shops = await make_two_shops(maker)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        variant, size = await stock_a_coat(
+            client, shops, store=shops.primary_store, warehouse=shops.shared_warehouse, qty=4
+        )
+
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        body = sale_body(shops.child_store, shops.shared_warehouse, variant, size, qty=2)
+        body["missing_in_store"] = [{"line_index": 0, "quantity": 1}]
+        refused = await client.post("/api/v1/sales", json=body, headers=key())
+        assert refused.status_code == 403, refused.text
+        assert refused.json()["code"] == "PERMISSION_DENIED"
+
+    async with maker() as session:
+        assert await quantity_at(session, shops.shared_warehouse, variant, size) == 4
+
+
+async def test_found_and_missing_can_stand_together_on_different_shelves(maker):
+    """One basket, two warehouses: a coat found on the shared shelf and one
+    absent from the child's. They describe different places, so both hold —
+    only contradicting statements about the *same* shelf are refused."""
+    shops = await make_two_shops(maker)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        variant, size = await stock_a_coat(
+            client, shops, store=shops.primary_store, warehouse=shops.shared_warehouse, qty=0
+        )
+
+    both = shops.scope(
+        shops.child_store, SELLER | {Permission.INVENTORY_REPORT_MISSING_DURING_SALE}
+    )
+    async with api(maker, both) as client:
+        received = await client.post(
+            "/api/v1/inventory/receipts",
+            json={
+                "store_id": str(shops.child_store),
+                "location_id": str(shops.child_warehouse),
+                "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 3}],
+            },
+            headers=key(),
+        )
+        assert received.status_code == 201, received.text
+
+        sold = await client.post(
+            "/api/v1/sales",
+            json={
+                "store_id": str(shops.child_store),
+                "command_id": str(uuid.uuid4()),
+                "lines": [
+                    {
+                        "product_variant_id": variant,
+                        "size_id": size,
+                        "source_location_id": str(warehouse),
+                        "quantity": 2,
+                        "unit_price": "1500.00",
+                    }
+                    for warehouse in (shops.shared_warehouse, shops.child_warehouse)
+                ],
+                "found_in_store": [{"line_index": 0, "quantity": 2}],
+                "missing_in_store": [{"line_index": 1, "quantity": 1}],
+            },
+            headers=key(),
+        )
+        assert sold.status_code == 201, sold.text
+        sale = sold.json()
+        assert len(sale["corrections"]) == 1
+        assert len(sale["shortages"]) == 1
+        assert [item["quantity"] for item in sale["items"]] == [2, 1]
+
+    async with maker() as session:
+        # Shared: 0 + 2 found − 2 sold. Child: 3 − 1 missing − 1 sold.
+        assert await quantity_at(session, shops.shared_warehouse, variant, size) == 0
+        assert await quantity_at(session, shops.child_warehouse, variant, size) == 1
+        assert await find_divergences(session, organization_id=shops.organization_id) == []
+
+
 async def test_a_sale_line_must_name_its_warehouse(maker):
     """No default, no inference. The client may prefill when a store reaches
     exactly one warehouse, but the request always carries it."""
