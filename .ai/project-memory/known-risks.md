@@ -20,8 +20,8 @@
 
 Stock is keyed by warehouse as of `0006_stock_rekey`, and location access is enforced on every read and write. Live risks, in order:
 
-- **PostgreSQL 17 is not verified for this change set.** All 394 tests ran on an isolated `pgserver` 16.2. The 2026-09-16 Docker/PG17 report covers the *previous* baseline, not the re-key. A PG17 run is still owed before this is trusted in production.
-- **`POST /sales` p95 was not re-measured** with the added access join, against the ≤ 500 ms budget the design sets.
+- **PostgreSQL 17 is verified for this change set** (2026-09-17, isolated Docker run: 6 revisions, round trip, 394 tests, invariant sweep — [report](docker-postgresql17-verification.md#run-2--2026-09-17--the-m1-029-stock-re-key)). No longer a risk; kept here so nobody re-opens it.
+- **`POST /sales` p95 was not re-measured** with the added access join, against the ≤ 500 ms budget the design sets. Still open: a functional run on PostgreSQL 17 is not a load profile.
 - **`0006` refuses to run if `stock_location` or `store_location_access` already has rows.** Do not provision a warehouse by hand on a database still at `0005`.
 - **Rollback of `0006` has hard bounds** and refuses outside them: a shared warehouse, a store with two warehouses, or a warehouse no store reaches. All three are states normal operation will reach — the shared-access data step and M1-018 both close the window. Prefer rolling back application code while keeping the schema, as ADR-0003 already prefers.
 - **A migrated warehouse is always active**, never inheriting the store's flag; do not read a location's state as a statement about a shop.

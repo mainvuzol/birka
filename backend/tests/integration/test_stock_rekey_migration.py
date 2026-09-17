@@ -22,6 +22,7 @@ import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
+from urllib.parse import unquote
 
 import asyncpg
 import pytest
@@ -98,6 +99,38 @@ async def scratch() -> AsyncIterator[str]:
         await _admin(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
+def _maintenance_connection_arguments() -> dict[str, object]:
+    """asyncpg arguments for a maintenance connection, read from the test URL.
+
+    Both shapes have to work. A local `pgserver` hands out a Unix-socket URL
+    with the socket directory in the query string and no host in the netloc; a
+    containerised PostgreSQL — which is what CI and the Docker/PostgreSQL 17
+    verification use — hands out an ordinary TCP URL with credentials. Reading
+    only the first is how these tests would pass on this laptop and fail
+    everywhere else.
+    """
+    url = os.environ["BIRKA_TEST_DATABASE_URL"]
+    head, _, query = url.partition("?")
+    parameters = dict(pair.split("=", 1) for pair in query.split("&") if "=" in pair)
+    netloc = head.rpartition("/")[0].rpartition("//")[2]
+    credentials, _, location = netloc.rpartition("@")
+    user, _, password = credentials.partition(":")
+    host, _, port = location.partition(":")
+
+    arguments: dict[str, object] = {"user": unquote(user) or "postgres", "database": "postgres"}
+    if password:
+        arguments["password"] = unquote(password)
+    # A `host=` parameter is a socket directory and wins; the netloc is then
+    # empty, and asyncpg would otherwise silently try TCP on localhost.
+    if "host" in parameters:
+        arguments["host"] = unquote(parameters["host"])
+    elif host:
+        arguments["host"] = host
+        if port:
+            arguments["port"] = int(port)
+    return arguments
+
+
 async def _admin(statement: str) -> None:
     """`CREATE`/`DROP DATABASE`, on a connection of its own.
 
@@ -105,12 +138,7 @@ async def _admin(statement: str) -> None:
     transaction block, and a pooled SQLAlchemy connection may already have
     autobegun one by the time the isolation level is set.
     """
-    url = os.environ["BIRKA_TEST_DATABASE_URL"]
-    head, _, query = url.partition("?")
-    parameters = dict(pair.split("=", 1) for pair in query.split("&") if "=" in pair)
-    credentials = head.rpartition("/")[0].rpartition("//")[2]
-    user = credentials.partition("@")[0].partition(":")[0] or "postgres"
-    connection = await asyncpg.connect(host=parameters.get("host"), user=user, database="postgres")
+    connection = await asyncpg.connect(**_maintenance_connection_arguments())
     try:
         await connection.execute(statement)
     finally:

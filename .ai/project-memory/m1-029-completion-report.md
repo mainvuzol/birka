@@ -42,6 +42,7 @@ Everything below ran on 2026-09-17 in the isolated Birka environment: a disposab
 | Check | Result |
 |---|---|
 | Full backend suite, real database | **394 passed, 0 skipped** (23 shared-warehouse + 10 migration + the frozen-history and migration-module cases, on top of the re-keyed suite) |
+| Full backend suite, **real PostgreSQL 17.11** under Compose, isolated VM | **394 passed, 0 skipped** (2026-09-17, [run 2](docker-postgresql17-verification.md)) |
 | `ruff check .` | clean |
 | `ruff format --check .` | 96 files, clean |
 | `mypy app` | 55 source files, no issues |
@@ -134,8 +135,7 @@ What it actually protected — *a shipped migration's bytes never change* — is
 
 ## 8. Not verified, and not claimed
 
-- **PostgreSQL 17 was not exercised for this change.** Everything above ran on the 16.2 build bundled in `pgserver`. The 2026-09-16 isolated Docker/PostgreSQL 17.11 verification covers the *previous* baseline, not this one. Nothing here uses a 16/17 behavioural difference, but that is an argument, not evidence: **the PostgreSQL 17 run for `0006` is still owed**, through CI or an isolated Compose run.
-- **No Docker/Compose run for this change**, for the same reason.
+- ~~PostgreSQL 17 was not exercised for this change.~~ **Done on 2026-09-17**, after this report was first written, in a fresh isolated Lima VM with rootless Docker and the project's own Compose file: PostgreSQL 17.11, all 6 revisions applied, `upgrade → downgrade base → upgrade` round trip clean, **394 tests passed with 0 skips**, invariant sweep identical to the local run, and the production image booting against it. Evidence: [`docker-postgresql17-verification.md`](docker-postgresql17-verification.md) run 2 and `output/verification/2026-09-17-pg17-docker/`. Running it surfaced one real defect — the migration tests could only build a maintenance connection from a Unix-socket URL, so they would have failed against any TCP PostgreSQL, CI included. Fixed there.
 - **No frontend.** `GET /inventory` and the sale payload both changed shape; the Telegram client is gate M1D and has not been touched.
 - **No production deploy, no push, no merge.** The work is local and uncommitted.
 - **`POST /sales` p95 was not re-measured** against the ≤ 500 ms budget with the added access join. The join is small and indexed, but the budget is a product requirement and should be measured, not assumed.

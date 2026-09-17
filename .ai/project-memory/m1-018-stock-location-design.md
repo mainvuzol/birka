@@ -335,7 +335,7 @@ From step 4 the migration holds `ACCESS EXCLUSIVE` on `inventory`, `stock_moveme
 
 - [x] All existing tests pass, adjusted only where they name a store as a stock key — never weakened. **394 pass**, 0 skipped, on isolated PostgreSQL 16.2.
 - [x] `ruff`, `ruff format`, `mypy`, `lint-imports`, `alembic check` clean.
-- [ ] **Not done.** Full suite on real PostgreSQL 17 under Compose, as the 2026-09-16 verification established. That report covers the *previous* baseline, not this change set.
+- [x] Full suite on real PostgreSQL 17 under Compose, as the 2026-09-16 verification established. Done 2026-09-17 in a fresh isolated VM: **394 pass** on PostgreSQL 17.11, 6 revisions applied, round trip clean.
 - [ ] **Not done.** `POST /sales` p95 re-measured against the ≤ 500 ms budget with the added access join.
 
 ### 5.6 Documentation
