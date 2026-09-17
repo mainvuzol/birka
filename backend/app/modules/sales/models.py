@@ -120,6 +120,15 @@ class SaleItem(UUIDPrimaryKey, Base):
     size_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("size.id", ondelete="RESTRICT"), nullable=False
     )
+    # Which warehouse these units actually left. Frozen beside the price: a
+    # refund reads it to know where to put goods back, and guessing instead
+    # would move stock between warehouses without a transfer (I16, ADR-0004).
+    # Per line, because one basket may legitimately draw from two warehouses.
+    source_location_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_location.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
 
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -137,6 +146,7 @@ class SaleItem(UUIDPrimaryKey, Base):
 
     __table_args__ = (
         Index("ix_sale_item_sale", "sale_id"),
+        Index("ix_sale_item_source_location", "source_location_id"),
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint(
             "unit_price >= 0 AND discount_amount >= 0 AND final_unit_price >= 0",

@@ -6,10 +6,15 @@ import hashlib
 import hmac
 import json
 import os
+import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import pytest
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 TEST_BOT_TOKEN = "123456:TEST-TOKEN-not-a-real-secret"
 
@@ -60,3 +65,44 @@ def requires_database() -> pytest.MarkDecorator:
 @pytest.fixture
 def bot_token() -> str:
     return TEST_BOT_TOKEN
+
+
+async def provision_location(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID | None = None,
+    code: str | None = None,
+    name: str = "Склад",
+    can_sell: bool = True,
+    can_receive: bool = True,
+    is_active: bool = True,
+) -> uuid.UUID:
+    """Create a warehouse, and optionally grant one store explicit access.
+
+    Access is always stated here, never derived from a store's name or kind —
+    that inference is exactly what the owner ruled out, so the tests must not
+    rely on it either. Pass `store_id=None` for a warehouse nobody can reach.
+    """
+    from app.modules.tenancy.models import StockLocation, StoreLocationAccess
+
+    location = StockLocation(
+        organization_id=organization_id,
+        code=code or f"WH-{uuid.uuid4().hex[:8]}",
+        name=name,
+        is_active=is_active,
+    )
+    session.add(location)
+    await session.flush()
+    if store_id is not None:
+        session.add(
+            StoreLocationAccess(
+                organization_id=organization_id,
+                store_id=store_id,
+                location_id=location.id,
+                can_sell=can_sell,
+                can_receive=can_receive,
+            )
+        )
+        await session.flush()
+    return location.id

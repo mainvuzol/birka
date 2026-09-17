@@ -29,6 +29,7 @@ from app.core.text import CleanText
 from app.modules.authz.permissions import Permission
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.sales.service import FoundInStore, SaleLineInput, correction_ids, create_sale
+from app.modules.tenancy.service import LocationCapability, require_location_access
 
 router = APIRouter(tags=["sales"])
 
@@ -38,6 +39,10 @@ SALES_ENDPOINT = "POST /sales"
 class SaleLinePayload(BaseModel):
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
+    # Explicit per line. The client may prefill it when the store reaches only
+    # one warehouse, but the server never chooses, and never falls back to
+    # another warehouse when this one is short (owner decision, 2026-09-17).
+    source_location_id: uuid.UUID
     quantity: int = Field(gt=0, le=1000)
     unit_price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     discount_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
@@ -63,6 +68,7 @@ class SaleItemResponse(BaseModel):
     id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
+    source_location_id: uuid.UUID
     quantity: int
     unit_price: Decimal
     discount_amount: Decimal
@@ -99,6 +105,7 @@ def _to_response(sale: Sale, items: list[SaleItem], corrections: list[uuid.UUID]
                 id=item.id,
                 product_variant_id=item.product_variant_id,
                 size_id=item.size_id,
+                source_location_id=item.source_location_id,
                 quantity=item.quantity,
                 unit_price=item.unit_price,
                 discount_amount=item.discount_amount,
@@ -126,6 +133,16 @@ async def create(
     scope.require(Permission.SALE_CREATE, payload.store_id)
     if payload.found_in_store:
         scope.require(Permission.INVENTORY_CORRECT_DURING_SALE, payload.store_id)
+    # Invariant I23, and it belongs here rather than only in the service: the
+    # service runs *after* the replay branch below, so a store whose warehouse
+    # access was revoked would keep being handed its cached success.
+    await require_location_access(
+        session,
+        organization_id=scope.organization_id,
+        store_id=payload.store_id,
+        location_ids={line.source_location_id for line in payload.lines},
+        capability=LocationCapability.SELL,
+    )
     outcome = await idempotency.claim(
         session,
         organization_id=scope.organization_id,
@@ -152,6 +169,7 @@ async def create(
             SaleLineInput(
                 product_variant_id=line.product_variant_id,
                 size_id=line.size_id,
+                source_location_id=line.source_location_id,
                 quantity=line.quantity,
                 unit_price=line.unit_price,
                 discount_amount=line.discount_amount,

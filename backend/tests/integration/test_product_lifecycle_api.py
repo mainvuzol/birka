@@ -56,7 +56,7 @@ from app.modules.inventory.models import Inventory, MovementReason, MovementType
 from app.modules.inventory.service import find_divergences
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.tenancy.models import Organization, Store, StoreKind
-from tests.conftest import requires_database
+from tests.conftest import provision_location, requires_database
 
 pytestmark = [pytest.mark.integration, requires_database()]
 
@@ -77,6 +77,9 @@ class Shop:
     organization_id: uuid.UUID
     store_id: uuid.UUID
     user_id: uuid.UUID
+    # The store's own warehouse, with explicit access granted. Nothing here is
+    # inferred from the store's name or kind (owner rule, 2026-09-15).
+    location_id: uuid.UUID
 
     def scope(self, permissions: frozenset[Permission] = SELLER) -> RequestScope:
         return RequestScope(
@@ -107,8 +110,16 @@ async def make_shop(maker: async_sessionmaker[AsyncSession]) -> Shop:
         user = AppUser(telegram_user_id=int(uuid.uuid4().int % 10_000_000), display_name="Оля")
         session.add_all([store, user])
         await session.flush()
+        location_id = await provision_location(
+            session, organization_id=org.id, store_id=store.id, name="Основний склад"
+        )
         await session.commit()
-        return Shop(organization_id=org.id, store_id=store.id, user_id=user.id)
+        return Shop(
+            organization_id=org.id,
+            store_id=store.id,
+            user_id=user.id,
+            location_id=location_id,
+        )
 
 
 @asynccontextmanager
@@ -188,6 +199,7 @@ async def test_create_receive_and_sell_a_product(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -204,8 +216,12 @@ async def test_create_receive_and_sell_a_product(maker):
 
         listed = await client.get("/api/v1/inventory", params={"store_id": str(shop.store_id)})
         assert listed.status_code == 200
+        # The warehouse is named, and the row is reported once per place —
+        # never summed into a per-store total that would show shared coats
+        # under both shops (ADR-0004).
         assert listed.json()["rows"] == [
             {
+                "location_id": str(shop.location_id),
                 "product_variant_id": product["product_variant_id"],
                 "size_id": size_m,
                 "quantity": 3,
@@ -221,6 +237,7 @@ async def test_create_receive_and_sell_a_product(maker):
                     {
                         "product_variant_id": product["product_variant_id"],
                         "size_id": size_m,
+                        "source_location_id": str(shop.location_id),
                         "quantity": 2,
                         "unit_price": "1500.00",
                         "discount_amount": "100.00",
@@ -251,7 +268,7 @@ async def test_create_receive_and_sell_a_product(maker):
         movements = (
             await session.scalars(
                 select(StockMovement)
-                .where(StockMovement.store_id == shop.store_id)
+                .where(StockMovement.location_id == shop.location_id)
                 .order_by(StockMovement.created_at)
             )
         ).all()
@@ -260,7 +277,7 @@ async def test_create_receive_and_sell_a_product(maker):
             (MovementType.SALE, -2),
         ]
         # Invariant I3: the snapshot equals the sum of the ledger.
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_found_during_sale_corrects_exactly_the_shortfall(maker):
@@ -273,6 +290,7 @@ async def test_found_during_sale_corrects_exactly_the_shortfall(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -292,6 +310,7 @@ async def test_found_during_sale_corrects_exactly_the_shortfall(maker):
                     {
                         "product_variant_id": product["product_variant_id"],
                         "size_id": size_m,
+                        "source_location_id": str(shop.location_id),
                         "quantity": 3,
                         "unit_price": "1200.00",
                     }
@@ -332,11 +351,11 @@ async def test_found_during_sale_corrects_exactly_the_shortfall(maker):
         # The rejected attempts wrote nothing: one delivery, one correction, one sale.
         movements = (
             await session.scalars(
-                select(StockMovement).where(StockMovement.store_id == shop.store_id)
+                select(StockMovement).where(StockMovement.location_id == shop.location_id)
             )
         ).all()
         assert sorted(m.quantity_delta for m in movements) == [-3, 1, 2]
-        assert await find_divergences(session, store_id=shop.store_id) == []
+        assert await find_divergences(session, location_id=shop.location_id) == []
         assert (
             await session.scalar(
                 select(func.count())
@@ -572,6 +591,7 @@ async def test_a_retried_sale_sells_once(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -589,6 +609,7 @@ async def test_a_retried_sale_sells_once(maker):
                 {
                     "product_variant_id": product["product_variant_id"],
                     "size_id": size_m,
+                    "source_location_id": str(shop.location_id),
                     "quantity": 2,
                     "unit_price": "1200.00",
                 }
@@ -694,6 +715,7 @@ async def test_stock_and_sales_stay_inside_the_organization(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(theirs.store_id),
+                "location_id": str(theirs.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -714,6 +736,7 @@ async def test_stock_and_sales_stay_inside_the_organization(maker):
                     {
                         "product_variant_id": product["product_variant_id"],
                         "size_id": size_m,
+                        "source_location_id": str(theirs.location_id),
                         "quantity": 1,
                         "unit_price": "1200.00",
                     }
@@ -732,7 +755,7 @@ async def test_stock_and_sales_stay_inside_the_organization(maker):
             await session.scalar(
                 select(func.count())
                 .select_from(Inventory)
-                .where(Inventory.store_id == theirs.store_id)
+                .where(Inventory.location_id == theirs.store_id)
             )
         ) == 0
         assert (
@@ -816,6 +839,7 @@ async def test_a_price_beyond_the_column_is_refused_not_a_crash(maker):
             "/api/v1/inventory/receipts",
             json={
                 "store_id": str(shop.store_id),
+                "location_id": str(shop.location_id),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -835,6 +859,7 @@ async def test_a_price_beyond_the_column_is_refused_not_a_crash(maker):
                     {
                         "product_variant_id": product["product_variant_id"],
                         "size_id": size_m,
+                        "source_location_id": str(shop.location_id),
                         "quantity": 1,
                         "unit_price": "99999999999.99",
                     }

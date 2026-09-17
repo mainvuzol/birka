@@ -52,7 +52,7 @@ async def validate_lot_references(
     }
     for lot_id, key in references:
         lot = lots.get(lot_id)
-        if lot is None or (lot.store_id, lot.product_variant_id, lot.size_id) != key:
+        if lot is None or (lot.location_id, lot.product_variant_id, lot.size_id) != key:
             raise NotFoundError("Unknown stock lot for this stock key")
 
 
@@ -65,23 +65,23 @@ async def ensure_and_lock(
     bookkeeping only: no quantity changes and no movement is required.
     Call in the same sorted order for every key a command will touch.
     """
-    store_id, variant_id, size_id = key
+    location_id, variant_id, size_id = key
     await session.execute(
         pg_insert(Inventory)
         .values(
             id=uuid.uuid4(),
-            store_id=store_id,
+            location_id=location_id,
             product_variant_id=variant_id,
             size_id=size_id,
             quantity=0,
         )
-        .on_conflict_do_nothing(index_elements=["store_id", "product_variant_id", "size_id"])
+        .on_conflict_do_nothing(index_elements=["location_id", "product_variant_id", "size_id"])
     )
     return (
         await session.execute(
             select(Inventory.quantity)
             .where(
-                Inventory.store_id == store_id,
+                Inventory.location_id == location_id,
                 Inventory.product_variant_id == variant_id,
                 Inventory.size_id == size_id,
             )
@@ -93,7 +93,7 @@ async def ensure_and_lock(
 async def decrement(
     session: AsyncSession,
     *,
-    store_id: uuid.UUID,
+    location_id: uuid.UUID,
     product_variant_id: uuid.UUID,
     size_id: uuid.UUID,
     quantity: int,
@@ -109,7 +109,7 @@ async def decrement(
     statement = (
         update(Inventory)
         .where(
-            Inventory.store_id == store_id,
+            Inventory.location_id == location_id,
             Inventory.product_variant_id == product_variant_id,
             Inventory.size_id == size_id,
             Inventory.quantity >= quantity,
@@ -123,7 +123,7 @@ async def decrement(
 async def increment(
     session: AsyncSession,
     *,
-    store_id: uuid.UUID,
+    location_id: uuid.UUID,
     product_variant_id: uuid.UUID,
     size_id: uuid.UUID,
     quantity: int,
@@ -138,13 +138,13 @@ async def increment(
         pg_insert(Inventory)
         .values(
             id=uuid.uuid4(),
-            store_id=store_id,
+            location_id=location_id,
             product_variant_id=product_variant_id,
             size_id=size_id,
             quantity=quantity,
         )
         .on_conflict_do_update(
-            index_elements=["store_id", "product_variant_id", "size_id"],
+            index_elements=["location_id", "product_variant_id", "size_id"],
             set_={"quantity": Inventory.quantity + quantity},
         )
         .returning(Inventory.quantity)
@@ -156,7 +156,8 @@ async def record_movement(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
-    store_id: uuid.UUID,
+    location_id: uuid.UUID,
+    acting_store_id: uuid.UUID | None,
     product_variant_id: uuid.UUID,
     size_id: uuid.UUID,
     movement_type: MovementType,
@@ -171,7 +172,8 @@ async def record_movement(
     """Append the explanation for a quantity change."""
     movement = StockMovement(
         organization_id=organization_id,
-        store_id=store_id,
+        location_id=location_id,
+        acting_store_id=acting_store_id,
         product_variant_id=product_variant_id,
         size_id=size_id,
         movement_type=movement_type,
@@ -191,7 +193,7 @@ async def record_movement(
 async def current_quantity(
     session: AsyncSession,
     *,
-    store_id: uuid.UUID,
+    location_id: uuid.UUID,
     product_variant_id: uuid.UUID,
     size_id: uuid.UUID,
 ) -> int:
@@ -199,7 +201,7 @@ async def current_quantity(
     quantity = (
         await session.execute(
             select(Inventory.quantity).where(
-                Inventory.store_id == store_id,
+                Inventory.location_id == location_id,
                 Inventory.product_variant_id == product_variant_id,
                 Inventory.size_id == size_id,
             )
@@ -212,7 +214,7 @@ async def current_quantity(
 class Divergence:
     """A key where the snapshot and the ledger disagree."""
 
-    store_id: uuid.UUID
+    location_id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     inventory_quantity: int
@@ -226,33 +228,41 @@ class Divergence:
 RECONCILE_SQL = text(
     """
     SELECT
-        COALESCE(i.store_id, m.store_id)                     AS store_id,
+        COALESCE(i.location_id, m.location_id)               AS location_id,
         COALESCE(i.product_variant_id, m.product_variant_id) AS product_variant_id,
         COALESCE(i.size_id, m.size_id)                       AS size_id,
         COALESCE(i.quantity, 0)                              AS inventory_quantity,
         COALESCE(m.ledger_quantity, 0)                       AS ledger_quantity
     FROM inventory i
     FULL OUTER JOIN (
-        SELECT store_id, product_variant_id, size_id, SUM(quantity_delta) AS ledger_quantity
+        SELECT location_id, product_variant_id, size_id, SUM(quantity_delta) AS ledger_quantity
         FROM stock_movement
-        GROUP BY store_id, product_variant_id, size_id
+        GROUP BY location_id, product_variant_id, size_id
     ) m
-      ON  m.store_id = i.store_id
+      ON  m.location_id = i.location_id
       AND m.product_variant_id = i.product_variant_id
       AND m.size_id = i.size_id
+    JOIN stock_location l ON l.id = COALESCE(i.location_id, m.location_id)
     WHERE COALESCE(i.quantity, 0) <> COALESCE(m.ledger_quantity, 0)
       -- Cast explicitly: asyncpg sends an untyped NULL and PostgreSQL
       -- cannot infer the parameter type from `IS NULL` alone.
       AND (
-          CAST(:store_id AS uuid) IS NULL
-          OR COALESCE(i.store_id, m.store_id) = CAST(:store_id AS uuid)
+          CAST(:location_id AS uuid) IS NULL
+          OR COALESCE(i.location_id, m.location_id) = CAST(:location_id AS uuid)
+      )
+      AND (
+          CAST(:organization_id AS uuid) IS NULL
+          OR l.organization_id = CAST(:organization_id AS uuid)
       )
     """
 )
 
 
 async def reconcile(
-    session: AsyncSession, *, store_id: uuid.UUID | None = None
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID | None = None,
+    location_id: uuid.UUID | None = None,
 ) -> list[Divergence]:
     """Every key where `Inventory.quantity` differs from the ledger sum.
 
@@ -261,14 +271,26 @@ async def reconcile(
     result is the evidence. A FULL OUTER JOIN so a quantity with no ledger
     history, and ledger history with no quantity, both surface.
 
-    `store_id` narrows the report to one shop. An owner asking "is the second
-    store consistent?" should not have to read the whole business, and a caller
-    checking its own work should not be answered about someone else's rows.
+    `location_id` narrows the report to one warehouse, and `organization_id`
+    to one tenant — the query had no tenant predicate at all before the
+    re-key, so an unscoped call read every organization's rows.
+
+    The question changed shape with the key: "is store C consistent?" stops
+    being answerable once C's stock lives partly in a shared warehouse, and
+    "is warehouse W-C consistent?" replaces it.
     """
-    rows = (await session.execute(RECONCILE_SQL, {"store_id": store_id})).mappings().all()
+    rows = (
+        (
+            await session.execute(
+                RECONCILE_SQL, {"organization_id": organization_id, "location_id": location_id}
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [
         Divergence(
-            store_id=row["store_id"],
+            location_id=row["location_id"],
             product_variant_id=row["product_variant_id"],
             size_id=row["size_id"],
             inventory_quantity=row["inventory_quantity"],

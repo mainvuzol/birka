@@ -33,8 +33,10 @@ from app.modules.refunds.service import (
     RefundLineInput,
     RefundResult,
     create_refund,
+    refund_destinations,
     sale_store_id,
 )
+from app.modules.tenancy.service import LocationCapability, require_location_access
 
 router = APIRouter(tags=["refunds"])
 
@@ -78,6 +80,8 @@ class RefundItemResponse(BaseModel):
     quantity: int
     amount: Decimal
     restock: bool
+    # Where the units went back. Derived from the sale line, never requested.
+    destination_location_id: uuid.UUID | None = None
     # From the sale line's frozen snapshot, so a refund receipt reads the way
     # the original one did even after the product was renamed.
     display_name: str
@@ -115,6 +119,7 @@ def _to_response(result: RefundResult) -> RefundResponse:
                 quantity=line.refund_item.quantity,
                 amount=line.refund_item.amount,
                 restock=line.refund_item.restock,
+                destination_location_id=line.refund_item.destination_location_id,
                 display_name=line.sale_item.display_name_snapshot,
             )
             for line in result.lines
@@ -144,6 +149,22 @@ async def create(
     # (invariant I13).
     store_id = await sale_store_id(session, organization_id=scope.organization_id, sale_id=sale_id)
     scope.require(Permission.SALE_REFUND, store_id)
+    # Where restocked goods would go is a property of the sale, so it can be
+    # resolved — and its access checked — before the key is claimed, keeping a
+    # revoked grant from replaying a cached success (invariants I13/I23).
+    restock_destinations = await refund_destinations(
+        session,
+        organization_id=scope.organization_id,
+        sale_id=sale_id,
+        sale_item_ids={line.sale_item_id for line in payload.lines if line.restock},
+    )
+    await require_location_access(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        location_ids=restock_destinations,
+        capability=LocationCapability.RECEIVE,
+    )
 
     outcome = await idempotency.claim(
         session,

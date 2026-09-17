@@ -55,7 +55,7 @@ from app.modules.inventory.service import (
 )
 from app.modules.sales.service import FoundInStore, SaleLineInput, create_sale
 from app.modules.tenancy.models import Organization, Store, StoreKind
-from tests.conftest import requires_database
+from tests.conftest import provision_location, requires_database
 
 pytestmark = [pytest.mark.integration, requires_database()]
 
@@ -122,11 +122,15 @@ async def make_shop(session: AsyncSession) -> Shop:
     variant = ProductVariant(product_family_id=family.id, color_term_id=colour.id, length_cm=70)
     session.add(variant)
     await session.flush()
+    location_id = await provision_location(
+        session, organization_id=org.id, store_id=store.id, name="Основний склад"
+    )
     await session.commit()
 
     return Shop(
         organization_id=org.id,
         store_id=store.id,
+        location_id=location_id,
         user_id=user.id,
         size_id=size.id,
         variant_id=variant.id,
@@ -140,7 +144,8 @@ async def give_stock(session: AsyncSession, shop: Shop, quantity: int) -> None:
         organization_id=shop.organization_id,  # type: ignore[arg-type]
         requests=[
             MovementRequest(
-                store_id=shop.store_id,  # type: ignore[arg-type]
+                location_id=shop.location_id,  # type: ignore[arg-type]
+                acting_store_id=shop.store_id,  # type: ignore[arg-type]
                 product_variant_id=shop.variant_id,  # type: ignore[arg-type]
                 size_id=shop.size_id,  # type: ignore[arg-type]
                 quantity_delta=quantity,
@@ -156,6 +161,7 @@ def basket(shop: Shop, quantity: int = 1, price: str = "1200.00", discount: str 
         SaleLineInput(
             product_variant_id=shop.variant_id,  # type: ignore[arg-type]
             size_id=shop.size_id,  # type: ignore[arg-type]
+            source_location_id=shop.location_id,  # type: ignore[arg-type]
             quantity=quantity,
             unit_price=Decimal(price),
             discount_amount=Decimal(discount),
@@ -193,13 +199,13 @@ async def test_a_sale_moves_stock_writes_the_ledger_and_totals_correctly(
     assert (
         await current_quantity(
             session,
-            store_id=shop.store_id,
+            location_id=shop.location_id,
             product_variant_id=shop.variant_id,
             size_id=shop.size_id,
         )
         == 3
     )
-    assert await find_divergences(session, store_id=shop.store_id) == []
+    assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_discounted_line_satisfies_the_database_constraints(
@@ -277,13 +283,13 @@ async def test_a_failed_sale_leaves_neither_a_sale_nor_a_stock_change(
     assert (
         await current_quantity(
             session,
-            store_id=shop.store_id,
+            location_id=shop.location_id,
             product_variant_id=shop.variant_id,
             size_id=shop.size_id,
         )
         == 1
     )
-    assert await find_divergences(session, store_id=shop.store_id) == []
+    assert await find_divergences(session, location_id=shop.location_id) == []
 
 
 async def test_a_seller_cannot_sell_from_a_foreign_store(session: AsyncSession) -> None:
@@ -358,21 +364,21 @@ async def test_the_seller_can_complete_a_sale_against_zero_stock(
     assert (
         await current_quantity(
             session,
-            store_id=shop.store_id,
+            location_id=shop.location_id,
             product_variant_id=shop.variant_id,
             size_id=shop.size_id,
         )
         == 0
     )
-    assert await find_divergences(session, store_id=shop.store_id) == []
+    assert await find_divergences(session, location_id=shop.location_id) == []
 
     movements = (
         await session.execute(
             text(
                 "SELECT movement_type, quantity_delta, reason_code FROM stock_movement"
-                " WHERE store_id = :s ORDER BY created_at, movement_type"
+                " WHERE location_id = :s ORDER BY created_at, movement_type"
             ),
-            {"s": shop.store_id},
+            {"s": shop.location_id},
         )
     ).all()
     assert ("ADJUSTMENT", 2, "FOUND_DURING_SALE") in [tuple(m) for m in movements]
@@ -397,7 +403,7 @@ async def test_a_partial_shortfall_is_corrected_by_exactly_the_missing_amount(
     assert (
         await current_quantity(
             session,
-            store_id=shop.store_id,
+            location_id=shop.location_id,
             product_variant_id=shop.variant_id,
             size_id=shop.size_id,
         )
@@ -520,10 +526,10 @@ async def test_two_sellers_racing_for_the_last_coat(engine: AsyncEngine) -> None
         assert (
             await current_quantity(
                 check,
-                store_id=shop.store_id,
+                location_id=shop.location_id,
                 product_variant_id=shop.variant_id,
                 size_id=shop.size_id,
             )
             == 0
         )
-        assert await find_divergences(check, store_id=shop.store_id) == []
+        assert await find_divergences(check, location_id=shop.location_id) == []

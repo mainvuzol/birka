@@ -20,6 +20,7 @@ from sqlalchemy import (
     CheckConstraint,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -118,9 +119,8 @@ class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("organization.id", ondelete="CASCADE"),
         nullable=False,
     )
-    store_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=False
-    )
+    # Where the goods physically arrived — not who sells them (ADR-0004).
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
     product_variant_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
         ForeignKey("product_variant.id", ondelete="RESTRICT"),
@@ -148,7 +148,14 @@ class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
-        Index("ix_stock_lot_store_variant", "store_id", "product_variant_id", "size_id"),
+        Index("ix_stock_lot_location_variant", "location_id", "product_variant_id", "size_id"),
+        # Composite, so a lot cannot point at another organization's location.
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_stock_lot_org_location",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint("unit_cost IS NULL OR unit_cost >= 0", name="unit_cost_not_negative"),
         CheckConstraint(
             "(unit_cost IS NULL) = (currency_code IS NULL)", name="cost_requires_currency"
@@ -167,8 +174,12 @@ class Inventory(UUIDPrimaryKey, UpdatedAtMixin, Base):
 
     __tablename__ = "inventory"
 
-    store_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=False
+    # The balance belongs to a place, not to a shop. Two stores selling from
+    # one warehouse therefore contend on ONE row (ADR-0004 §2.3).
+    location_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_location.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     product_variant_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -182,7 +193,10 @@ class Inventory(UUIDPrimaryKey, UpdatedAtMixin, Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "store_id", "product_variant_id", "size_id", name="uq_inventory_store_variant_size"
+            "location_id",
+            "product_variant_id",
+            "size_id",
+            name="uq_inventory_location_variant_size",
         ),
         # The hard floor. Service logic keeps stock correct; this keeps it sane
         # even if service logic is wrong (invariant I1).
@@ -205,8 +219,13 @@ class StockMovement(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("organization.id", ondelete="CASCADE"),
         nullable=False,
     )
-    store_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=False
+    # WHERE the quantity changed…
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    # …and WHICH STORE caused it. Different facts, and a shared warehouse is
+    # exactly where they differ. A transfer between two warehouses is the one
+    # movement no single store is responsible for, hence the CHECK below.
+    acting_store_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=True
     )
     product_variant_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -242,10 +261,28 @@ class StockMovement(UUIDPrimaryKey, TimestampMixin, Base):
     __table_args__ = (
         Index(
             "ix_stock_movement_key",
-            "store_id",
+            "location_id",
             "product_variant_id",
             "size_id",
             "created_at",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_stock_movement_org_location",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "acting_store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_stock_movement_org_acting_store",
+            ondelete="RESTRICT",
+        ),
+        # Today's NOT NULL attribution is preserved everywhere a store really
+        # is responsible, and relaxed only for a warehouse-to-warehouse move.
+        CheckConstraint(
+            "movement_type IN ('TRANSFER_IN', 'TRANSFER_OUT') OR acting_store_id IS NOT NULL",
+            name="acting_store_required",
         ),
         Index("ix_stock_movement_reference", "reference_type", "reference_id"),
         CheckConstraint("quantity_delta <> 0", name="delta_not_zero"),
@@ -273,8 +310,9 @@ class InventorySnapshot(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("organization.id", ondelete="CASCADE"),
         nullable=False,
     )
-    store_id: Mapped[uuid.UUID | None] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=True
+    # A legacy availability list describes a place that was counted.
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=True
     )
     source_document_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
     captured_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -285,6 +323,18 @@ class InventorySnapshot(UUIDPrimaryKey, TimestampMixin, Base):
     )
     approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        # Composite like the stock tables, so a count sheet cannot describe
+        # another organization's warehouse. NULL stays legal: a snapshot may
+        # predate knowing where it was counted.
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_inventory_snapshot_org_location",
+            ondelete="RESTRICT",
+        ),
     )
 
 

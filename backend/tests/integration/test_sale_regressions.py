@@ -51,7 +51,7 @@ async def maker():
 async def quantity(session, shop):
     return await current_quantity(
         session,
-        store_id=shop.store_id,
+        location_id=shop.location_id,
         product_variant_id=shop.variant_id,
         size_id=shop.size_id,
     )
@@ -65,6 +65,7 @@ def payload_for(shop, *, found=False):
             {
                 "product_variant_id": shop.variant_id,
                 "size_id": shop.size_id,
+                "source_location_id": shop.location_id,
                 "quantity": 1,
                 "unit_price": "100.00",
             }
@@ -221,7 +222,9 @@ async def test_opposite_correction_subsets_lock_the_entire_basket_without_deadlo
             setup,
             organization_id=shop.organization_id,
             requests=[
-                MovementRequest(shop.store_id, variant, shop.size_id, 1, MovementType.DELIVERY)
+                MovementRequest(
+                    shop.location_id, shop.store_id, variant, shop.size_id, 1, MovementType.DELIVERY
+                )
                 for variant in variants
             ],
         )

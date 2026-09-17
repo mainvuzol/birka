@@ -18,11 +18,13 @@ from app.modules.inventory.service import DIRECTION, MovementRequest, validate_m
 STORE = uuid.uuid4()
 VARIANT = uuid.uuid4()
 SIZE = uuid.uuid4()
+LOCATION = uuid.uuid4()
 
 
 def movement(**kwargs: object) -> MovementRequest:
     defaults: dict[str, object] = {
-        "store_id": STORE,
+        "location_id": LOCATION,
+        "acting_store_id": STORE,
         "product_variant_id": VARIANT,
         "size_id": SIZE,
         "quantity_delta": 1,
@@ -110,7 +112,21 @@ def test_ordering_is_stable_regardless_of_input_order() -> None:
     assert [r.sort_key for r in forwards] == [r.sort_key for r in backwards]
 
 
-def test_ordering_separates_stores_and_sizes() -> None:
+def test_ordering_separates_locations_and_sizes() -> None:
     same_variant_other_size = movement(size_id=uuid.UUID(int=9))
+    same_everything_other_location = movement(location_id=uuid.UUID(int=9))
 
     assert movement().sort_key != same_variant_other_size.sort_key
+    # The location leads the key, so the same coat in two warehouses is two
+    # rows that lock independently — and the global lock order still holds.
+    assert movement().sort_key != same_everything_other_location.sort_key
+    assert movement().sort_key[0] == str(LOCATION)
+
+
+def test_the_acting_store_is_not_part_of_the_lock_order() -> None:
+    """Two stores selling from one warehouse must contend, not pass each other.
+
+    If the acting store were in the sort key, the shared balance would sort
+    into two independent keys and the whole point of ADR-0004 would be lost.
+    """
+    assert movement().sort_key == movement(acting_store_id=uuid.uuid4()).sort_key

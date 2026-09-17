@@ -14,7 +14,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
@@ -24,12 +23,17 @@ from app.modules.audit import service as audit
 from app.modules.authz.permissions import Permission
 from app.modules.inventory.models import (
     AcquisitionType,
-    Inventory,
     MovementReason,
     MovementType,
     StockLot,
 )
-from app.modules.inventory.service import MovementRequest, apply_movements, lock_stock
+from app.modules.inventory.service import (
+    MovementRequest,
+    apply_movements,
+    lock_stock,
+    readable_stock,
+)
+from app.modules.tenancy.service import LocationCapability, require_location_access
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -47,12 +51,16 @@ class ReceiptLine(BaseModel):
 
 
 class ReceiptRequest(BaseModel):
+    # Which store is acting, and which warehouse receives. Two facts, because
+    # a shared warehouse is exactly where they differ (ADR-0004).
     store_id: uuid.UUID
+    location_id: uuid.UUID
     lines: list[ReceiptLine] = Field(min_length=1, max_length=200)
     notes: CleanText | None = Field(default=None, max_length=1000)
 
 
 class ReceiptLineResult(BaseModel):
+    location_id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity_received: int
@@ -67,6 +75,7 @@ class ReceiptResponse(BaseModel):
 
 
 class InventoryRow(BaseModel):
+    location_id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity: int
@@ -82,28 +91,28 @@ async def list_inventory(
     scope: ScopeDep,
     session: SessionDep,
     store_id: Annotated[uuid.UUID, Query()],
+    location_id: Annotated[uuid.UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> InventoryPage:
     # The store id arrives from the client, so it is validated against the
     # caller's memberships before it is used (invariant I12).
     scope.require(Permission.INVENTORY_VIEW, store_id)
 
-    rows = (
-        (
-            await session.execute(
-                select(Inventory)
-                .where(Inventory.store_id == store_id, Inventory.quantity > 0)
-                .order_by(Inventory.product_variant_id, Inventory.size_id)
-                .limit(limit)
-            )
-        )
-        .scalars()
-        .all()
+    # Through the service, not the ORM: the store's access to each warehouse is
+    # checked there, and a row is reported once per place rather than summed
+    # into a per-store total that would show shared coats under both shops.
+    rows = await readable_stock(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        location_id=location_id,
+        limit=limit,
     )
     return InventoryPage(
         store_id=store_id,
         rows=[
             InventoryRow(
+                location_id=row.location_id,
                 product_variant_id=row.product_variant_id,
                 size_id=row.size_id,
                 quantity=row.quantity,
@@ -130,6 +139,16 @@ async def receive_goods(
     together, or nothing does.
     """
     scope.require(Permission.INVENTORY_RECEIVE, payload.store_id)
+    # Invariant I23: the person may receive goods — may this store receive
+    # them *here*? Checked before the idempotency key is claimed, so a revoked
+    # grant cannot keep replaying a stored success (invariant I13).
+    await require_location_access(
+        session,
+        organization_id=scope.organization_id,
+        store_id=payload.store_id,
+        location_ids={payload.location_id},
+        capability=LocationCapability.RECEIVE,
+    )
 
     outcome = await idempotency.claim(
         session,
@@ -151,7 +170,10 @@ async def receive_goods(
     await lock_stock(
         session,
         organization_id=scope.organization_id,
-        keys=[(payload.store_id, line.product_variant_id, line.size_id) for line in payload.lines],
+        keys=[
+            (payload.location_id, line.product_variant_id, line.size_id) for line in payload.lines
+        ],
+        acting_store_ids={payload.store_id},
     )
     correlation_id = get_correlation_id()
     results: list[ReceiptLineResult] = []
@@ -161,7 +183,7 @@ async def receive_goods(
     for line in payload.lines:
         lot = StockLot(
             organization_id=scope.organization_id,
-            store_id=payload.store_id,
+            location_id=payload.location_id,
             product_variant_id=line.product_variant_id,
             size_id=line.size_id,
             acquisition_type=line.acquisition_type,
@@ -176,7 +198,8 @@ async def receive_goods(
     for line, lot in zip(payload.lines, lots, strict=True):
         requests.append(
             MovementRequest(
-                store_id=payload.store_id,
+                location_id=payload.location_id,
+                acting_store_id=payload.store_id,
                 product_variant_id=line.product_variant_id,
                 size_id=line.size_id,
                 quantity_delta=line.quantity,
@@ -200,6 +223,7 @@ async def receive_goods(
         entry = by_lot[lot.id]
         results.append(
             ReceiptLineResult(
+                location_id=entry.request.location_id,
                 product_variant_id=entry.request.product_variant_id,
                 size_id=entry.request.size_id,
                 quantity_received=entry.request.quantity_delta,
@@ -231,6 +255,7 @@ class AdjustmentRequest(BaseModel):
     """
 
     store_id: uuid.UUID
+    location_id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity_delta: int = Field(ge=-10_000, le=10_000)
@@ -269,6 +294,13 @@ async def adjust_inventory(
     reason, always a StockMovement, always an audit record of before and after.
     """
     scope.require(Permission.INVENTORY_ADJUST, payload.store_id)
+    await require_location_access(
+        session,
+        organization_id=scope.organization_id,
+        store_id=payload.store_id,
+        location_ids={payload.location_id},
+        capability=LocationCapability.RECEIVE,
+    )
 
     outcome = await idempotency.claim(
         session,
@@ -290,7 +322,8 @@ async def adjust_inventory(
         organization_id=scope.organization_id,
         requests=[
             MovementRequest(
-                store_id=payload.store_id,
+                location_id=payload.location_id,
+                acting_store_id=payload.store_id,
                 product_variant_id=payload.product_variant_id,
                 size_id=payload.size_id,
                 quantity_delta=payload.quantity_delta,

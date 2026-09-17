@@ -65,7 +65,11 @@ from app.modules.inventory.service import (
 from app.modules.refunds.models import Refund, RefundItem
 from app.modules.sales.models import Sale, SaleItem, SaleStatus
 from app.modules.sales.service import MAX_MONEY, money
-from app.modules.tenancy.service import store_is_active
+from app.modules.tenancy.service import (
+    LocationCapability,
+    require_location_access,
+    store_is_active,
+)
 
 logger = get_logger(__name__)
 
@@ -175,7 +179,12 @@ def _normalize(
 
 
 def _fingerprint(
-    *, scope: RequestScope, sale: Sale, lines: list[RefundLineInput], reason: str | None
+    *,
+    scope: RequestScope,
+    sale: Sale,
+    lines: list[RefundLineInput],
+    reason: str | None,
+    sale_items: dict[uuid.UUID, SaleItem],
 ) -> str:
     """Everything that makes this refund *this* refund.
 
@@ -195,6 +204,15 @@ def _fingerprint(
                 }
                 for line in lines
             ],
+            # The destination is derived from the sale line, never sent by the
+            # client — but it still belongs in the permanent fingerprint, so a
+            # retry cannot silently restock a different warehouse if the sale
+            # line it points at were ever to change.
+            "destinations": sorted(
+                str(sale_items[line.sale_item_id].source_location_id)
+                for line in lines
+                if line.restock and line.sale_item_id in sale_items
+            ),
         },
         actor_user_id=scope.user_id,
         store_id=sale.store_id,
@@ -339,7 +357,19 @@ async def create_refund(
             status=sale.status.value,
         )
 
-    request_fingerprint = _fingerprint(scope=scope, sale=sale, lines=lines, reason=reason)
+    # The sale's lines are read before the fingerprint, because the fingerprint
+    # now includes each refunded line's destination warehouse, and that is a
+    # property of the sale rather than of the request. This read takes no lock;
+    # the authoritative locked read follows below.
+    preview = {
+        item.id: item
+        for item in (
+            await session.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id))
+        ).all()
+    }
+    request_fingerprint = _fingerprint(
+        scope=scope, sale=sale, lines=lines, reason=reason, sale_items=preview
+    )
     existing = await _existing_command(
         session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
     )
@@ -428,6 +458,9 @@ async def create_refund(
             quantity=line.quantity,
             amount=amount,
             restock=line.restock,
+            destination_location_id=(
+                sale_items[line.sale_item_id].source_location_id if line.restock else None
+            ),
         )
         for line, amount in zip(lines, amounts, strict=True)
     ]
@@ -436,6 +469,18 @@ async def create_refund(
 
     movements: list[uuid.UUID] = []
     restocked = [line for line in lines if line.restock]
+    # Owner decision, 2026-09-17: goods go back to the warehouse the sale line
+    # drew them from. Returning them anywhere else is a return plus a transfer,
+    # and must be two explicit operations (invariant I16).
+    destinations = {sale_items[line.sale_item_id].source_location_id for line in restocked}
+    if restocked:
+        await require_location_access(
+            session,
+            organization_id=scope.organization_id,
+            store_id=sale.store_id,
+            location_ids=destinations,
+            capability=LocationCapability.RECEIVE,
+        )
     if restocked and not await store_is_active(
         session, organization_id=scope.organization_id, store_id=sale.store_id
     ):
@@ -460,7 +505,8 @@ async def create_refund(
             organization_id=scope.organization_id,
             requests=[
                 MovementRequest(
-                    store_id=sale.store_id,
+                    location_id=sale_items[line.sale_item_id].source_location_id,
+                    acting_store_id=sale.store_id,
                     product_variant_id=sale_items[line.sale_item_id].product_variant_id,
                     size_id=sale_items[line.sale_item_id].size_id,
                     quantity_delta=line.quantity,
@@ -518,5 +564,40 @@ __all__ = [
     "RefundResult",
     "RefundedLine",
     "create_refund",
+    "refund_destinations",
     "sale_store_id",
 ]
+
+
+async def refund_destinations(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    sale_id: uuid.UUID,
+    sale_item_ids: set[uuid.UUID],
+) -> set[uuid.UUID]:
+    """Where restocking these lines would put the goods.
+
+    Read straight from the sale, because that is where the answer lives — the
+    client never states a destination. Exposed so the router can check the
+    store's access to those warehouses *before* it claims an idempotency key,
+    which is what stops a revoked grant from replaying a cached success.
+
+    Unknown ids are simply absent: the authoritative validation happens in the
+    command, under the sale's own row locks.
+    """
+    if not sale_item_ids:
+        return set()
+    return set(
+        (
+            await session.scalars(
+                select(SaleItem.source_location_id)
+                .join(Sale, Sale.id == SaleItem.sale_id)
+                .where(
+                    SaleItem.sale_id == sale_id,
+                    SaleItem.id.in_(sale_item_ids),
+                    Sale.organization_id == organization_id,
+                )
+            )
+        ).all()
+    )
