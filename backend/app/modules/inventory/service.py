@@ -380,6 +380,7 @@ __all__ = [
     "readable_stock",
     "refund_return_movement_ids",
     "sale_correction_ids",
+    "sale_shortage_ids",
     "validate_movement",
 ]
 
@@ -388,8 +389,23 @@ async def sale_correction_ids(
     session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
 ) -> list[uuid.UUID]:
     """Durable, tenant-scoped correction references for a sale receipt."""
-    return await repository.sale_correction_ids(
-        session, organization_id=organization_id, sale_id=sale_id
+    return await repository.sale_adjustment_ids(
+        session,
+        organization_id=organization_id,
+        sale_id=sale_id,
+        reason=MovementReason.FOUND_DURING_SALE,
+    )
+
+
+async def sale_shortage_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """The same, for goods the seller reported missing while making the sale."""
+    return await repository.sale_adjustment_ids(
+        session,
+        organization_id=organization_id,
+        sale_id=sale_id,
+        reason=MovementReason.MISSING_AT_SALE,
     )
 
 

@@ -54,6 +54,11 @@ EXPECTED_SELLER = {
 }
 EXPECTED_MANAGER = EXPECTED_SELLER | {
     Permission.INVENTORY_ADJUST,
+    # M1-030. Deliberately not in EXPECTED_SELLER: confirming goods are absent
+    # takes stock off a shelf, and the owner's instruction is that no seller
+    # holds arbitrary balance correction by default. A manager already holds
+    # the unbounded INVENTORY_ADJUST, so this adds no authority there.
+    Permission.INVENTORY_REPORT_MISSING_DURING_SALE,
     Permission.TRANSFER_CREATE,
     Permission.TRANSFER_RECEIVE,
     Permission.CATALOG_MERGE,
@@ -91,6 +96,20 @@ def test_seller_cannot_adjust_inventory_arbitrarily() -> None:
 
     assert Permission.INVENTORY_ADJUST not in seller
     assert Permission.INVENTORY_CORRECT_DURING_SALE in seller
+
+
+def test_the_two_in_sale_corrections_are_separate_grants() -> None:
+    """M1-030. Holding one direction must not hand over the other: putting
+    goods on a shelf and taking them off are different authorities, and the
+    seller default carries only the first."""
+    seller = DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
+
+    assert Permission.INVENTORY_CORRECT_DURING_SALE in seller
+    assert Permission.INVENTORY_REPORT_MISSING_DURING_SALE not in seller
+    assert (
+        Permission.INVENTORY_REPORT_MISSING_DURING_SALE
+        in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
+    )
 
 
 def test_seller_cannot_merge_catalog_or_approve_snapshots() -> None:

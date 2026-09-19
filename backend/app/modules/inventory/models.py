@@ -66,9 +66,16 @@ class MovementReason(StrEnum):
     `FOUND_DURING_SALE` is deliberately its own reason: how often the system
     said zero while the coat was on the rack is a data-quality signal the owner
     should be able to measure, not an anonymous adjustment.
+
+    `MISSING_AT_SALE` is its mirror and just as deliberately separate from
+    `LOST` and `DAMAGED`. At the counter nobody knows whether the coat was
+    stolen, misfiled, already sold or standing in the other warehouse — the
+    reason records what was *observed*, never a conclusion about why, and it
+    is not a write-off (owner decision, 2026-09-17).
     """
 
     FOUND_DURING_SALE = "FOUND_DURING_SALE"
+    MISSING_AT_SALE = "MISSING_AT_SALE"
     DAMAGED = "DAMAGED"
     LOST = "LOST"
     STOCKTAKE = "STOCKTAKE"

@@ -25,6 +25,12 @@ class Permission(StrEnum):
     # (business fact F30). It is deliberately separate from INVENTORY_ADJUST,
     # which allows arbitrary stock changes and stays with manager/owner.
     INVENTORY_CORRECT_DURING_SALE = "inventory:correct_during_sale"
+    # The mirror of the above, and separate from it on purpose: confirming
+    # goods are *absent* removes stock, so holding one direction must not
+    # hand over the other. Also separate from INVENTORY_ADJUST, which is
+    # unbounded. Not in the seller default — the owner's instruction is that
+    # no seller gets the run of the balances without being given it.
+    INVENTORY_REPORT_MISSING_DURING_SALE = "inventory:report_missing_during_sale"
 
     TRANSFER_CREATE = "transfer:create"
     TRANSFER_RECEIVE = "transfer:receive"
@@ -75,6 +81,10 @@ _SELLER: frozenset[Permission] = frozenset(
 _MANAGER: frozenset[Permission] = _SELLER | frozenset(
     {
         Permission.INVENTORY_ADJUST,
+        # A manager already holds the unbounded INVENTORY_ADJUST, so the
+        # bounded shortage report adds no authority. Whether a *seller* gets
+        # it is a role edit for the owner, not a default.
+        Permission.INVENTORY_REPORT_MISSING_DURING_SALE,
         Permission.TRANSFER_CREATE,
         Permission.TRANSFER_RECEIVE,
         Permission.CATALOG_MERGE,

@@ -313,10 +313,18 @@ __all__ = [
 ]
 
 
-async def sale_correction_ids(
-    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+async def sale_adjustment_ids(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    sale_id: uuid.UUID,
+    reason: MovementReason,
 ) -> list[uuid.UUID]:
-    """Read correction references without exposing inventory ORM to sales."""
+    """Read a sale's in-sale adjustments without exposing inventory ORM to sales.
+
+    Narrowed by reason, so the two directions stay two answers: goods found on
+    the shelf and goods missing from it are different facts on a receipt.
+    """
     return list(
         (
             await session.scalars(
@@ -326,7 +334,7 @@ async def sale_correction_ids(
                     StockMovement.reference_type == "sale",
                     StockMovement.reference_id == sale_id,
                     StockMovement.movement_type == MovementType.ADJUSTMENT,
-                    StockMovement.reason_code == MovementReason.FOUND_DURING_SALE,
+                    StockMovement.reason_code == reason,
                 )
                 .order_by(StockMovement.product_variant_id, StockMovement.size_id, StockMovement.id)
             )

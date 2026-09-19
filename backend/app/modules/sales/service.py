@@ -12,6 +12,14 @@ reality, so the app will sometimes say zero while the coat is on the rack. The
 seller is not blocked; the shortfall is corrected as an explicit, audited
 `ADJUSTMENT` with reason `FOUND_DURING_SALE`, in the same transaction as the
 sale. Stock never goes negative and both halves are in the ledger.
+
+`missing_in_store` is its mirror (M1-030), and the owner settled its one open
+question on 2026-09-17: **the sale proceeds for the quantity that is actually
+there.** A seller who goes for two coats and finds one sells the one, and the
+unit the system believed in is removed by a negative `ADJUSTMENT` with reason
+`MISSING_AT_SALE`. It is bounded twice over — by the line being sold, and by
+what the ledger already believed — so it can never become a stocktake, and it
+is not a write-off.
 """
 
 from __future__ import annotations
@@ -42,6 +50,7 @@ from app.modules.inventory.service import (
     apply_movements,
     lock_stock,
     sale_correction_ids,
+    sale_shortage_ids,
 )
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.tenancy.service import LocationCapability, require_location_access
@@ -86,10 +95,28 @@ class FoundInStore:
 
 
 @dataclass(frozen=True, slots=True)
+class MissingInStore:
+    """ "The app says two, there is one on the rack." Index into the sale's lines.
+
+    `quantity` is the number of units **present**, never the size of the
+    shortage. A person counting a shelf knows what they can see; asking them
+    to subtract at the counter is how off-by-one errors get into a ledger.
+    """
+
+    line_index: int
+    quantity: int
+
+
+@dataclass(frozen=True, slots=True)
 class SaleResult:
     sale: Sale
     items: list[SaleItem]
     corrections: list[uuid.UUID] = field(default_factory=list)
+    # Kept apart from `corrections` rather than merged into one list of
+    # adjustments: one of them puts goods on a shelf and the other takes them
+    # off, and a receipt that blurs the two is the beginning of a balance
+    # nobody can explain.
+    shortages: list[uuid.UUID] = field(default_factory=list)
 
 
 MAX_MONEY = Decimal("9999999999.99")
@@ -107,6 +134,126 @@ def _amount(value: Decimal) -> Decimal:
     return rounded
 
 
+def _stock_key(line: SaleLineInput) -> StockKey:
+    return (line.source_location_id, line.product_variant_id, line.size_id)
+
+
+def _validate_reports(
+    lines: list[SaleLineInput],
+    found_in_store: list[FoundInStore],
+    missing_in_store: list[MissingInStore],
+) -> None:
+    """Index checks both reports share, plus the one rule that spans them.
+
+    A seller may not say of the same goods that there are more here than the
+    system thinks *and* fewer. The rule is stated per stock key rather than
+    per line: two lines drawing the same variant and size from the same
+    warehouse are two statements about one shelf, and they would contradict
+    each other just as flatly.
+    """
+    for label, reports in (
+        ("found_in_store", found_in_store),
+        ("missing_in_store", missing_in_store),
+    ):
+        seen_indexes: set[int] = set()
+        for report in reports:
+            if type(report.line_index) is not int or not 0 <= report.line_index < len(lines):
+                raise ValidationFailedError(f"{label} refers to a line that does not exist")
+            if report.line_index in seen_indexes:
+                raise ValidationFailedError(f"Duplicate {label} line index")
+            seen_indexes.add(report.line_index)
+
+    contested = {_stock_key(lines[found.line_index]) for found in found_in_store} & {
+        _stock_key(lines[missing.line_index]) for missing in missing_in_store
+    }
+    if contested:
+        raise ValidationFailedError(
+            "The same goods cannot be reported both present and missing in one sale"
+        )
+
+
+def _resolve_shortages(
+    *,
+    store_id: uuid.UUID,
+    lines: list[SaleLineInput],
+    missing_in_store: list[MissingInStore],
+    quantities: dict[StockKey, int],
+) -> tuple[list[SaleLineInput], list[MovementRequest]]:
+    """Reduce the reported lines to what is there, and write off only what the
+    ledger already believed in.
+
+    Two bounds, and the second is the one that keeps this safe. The seller's
+    statement is about the units they went to fetch, so the correction can
+    never exceed the line being sold. And the ledger may only remove stock it
+    thinks exists: it believed in `min(available, demand)` for this basket, the
+    seller found `confirmed`, and the difference is all that may be taken off.
+    Anything beyond that would be a claim about the rest of the shelf — a
+    stocktake, which needs `inventory:adjust` and a manager.
+
+    So when the system already believed in no more than the seller found,
+    nothing is written at all: the sale is still for the confirmed quantity,
+    but there is no discrepancy to record.
+    """
+    if not missing_in_store:
+        return lines, []
+
+    demand: dict[StockKey, int] = {}
+    for line in lines:
+        key = _stock_key(line)
+        demand[key] = demand.get(key, 0) + line.quantity
+
+    present: dict[int, int] = {}
+    for missing in missing_in_store:
+        line = lines[missing.line_index]
+        if type(missing.quantity) is not int or missing.quantity < 0:
+            raise ValidationFailedError(
+                "A shortage report must state how many units are present, as an integer"
+            )
+        if missing.quantity == 0:
+            # Deliberately refused rather than quietly dropping the line: the
+            # basket that comes back would no longer be the basket that was
+            # sent. Recording an empty shelf with nothing to sell is a
+            # stocktake, and `POST /inventory/adjustments` is where it lives.
+            raise ValidationFailedError(
+                "A line with nothing present cannot be sold; remove it from the basket",
+                line_index=missing.line_index,
+            )
+        if missing.quantity >= line.quantity:
+            raise ValidationFailedError(
+                "Nothing is missing on this line: the confirmed count is not "
+                "lower than the quantity being sold",
+                line_index=missing.line_index,
+            )
+        present[missing.line_index] = missing.quantity
+
+    confirmed: dict[StockKey, int] = {}
+    adjusted: list[SaleLineInput] = []
+    for index, line in enumerate(lines):
+        quantity = present.get(index, line.quantity)
+        key = _stock_key(line)
+        confirmed[key] = confirmed.get(key, 0) + quantity
+        adjusted.append(line if quantity == line.quantity else replace(line, quantity=quantity))
+
+    requests: list[MovementRequest] = []
+    for key in sorted({_stock_key(lines[missing.line_index]) for missing in missing_in_store}):
+        believed = min(quantities[key], demand[key])
+        shortfall = believed - confirmed[key]
+        if shortfall <= 0:
+            continue
+        requests.append(
+            MovementRequest(
+                location_id=key[0],
+                acting_store_id=store_id,
+                product_variant_id=key[1],
+                size_id=key[2],
+                quantity_delta=-shortfall,
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=MovementReason.MISSING_AT_SALE,
+            )
+        )
+    return adjusted, requests
+
+
 def _resolve_corrections(
     *,
     store_id: uuid.UUID,
@@ -117,21 +264,15 @@ def _resolve_corrections(
     """Validate the total shortfall of each locked stock key, not isolated lines."""
     demand: dict[StockKey, int] = {}
     for line in lines:
-        key = (line.source_location_id, line.product_variant_id, line.size_id)
+        key = _stock_key(line)
         demand[key] = demand.get(key, 0) + line.quantity
 
     requested: dict[StockKey, int] = {}
-    seen_indexes: set[int] = set()
     for found in found_in_store:
-        if type(found.line_index) is not int or not 0 <= found.line_index < len(lines):
-            raise ValidationFailedError("found_in_store refers to a line that does not exist")
-        if found.line_index in seen_indexes:
-            raise ValidationFailedError("Duplicate found_in_store line index")
-        seen_indexes.add(found.line_index)
         if type(found.quantity) is not int or found.quantity <= 0:
             raise ValidationFailedError("A correction must add a positive integer quantity")
         line = lines[found.line_index]
-        key = (line.source_location_id, line.product_variant_id, line.size_id)
+        key = _stock_key(line)
         requested[key] = requested.get(key, 0) + found.quantity
 
     corrections: list[MovementRequest] = []
@@ -163,6 +304,11 @@ def _resolve_corrections(
 async def correction_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
     """Recover the durable correction references, including receipts made before replay caching."""
     return await sale_correction_ids(session, organization_id=sale.organization_id, sale_id=sale.id)
+
+
+async def shortage_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
+    """The same, for the shortages reported while the sale was made."""
+    return await sale_shortage_ids(session, organization_id=sale.organization_id, sale_id=sale.id)
 
 
 async def _existing_command(
@@ -206,7 +352,10 @@ async def _existing_command(
         (await session.scalars(select(SaleItem).where(SaleItem.sale_id == existing.id))).all()
     )
     return SaleResult(
-        sale=existing, items=items, corrections=await correction_ids(session, existing)
+        sale=existing,
+        items=items,
+        corrections=await correction_ids(session, existing),
+        shortages=await shortage_ids(session, existing),
     )
 
 
@@ -219,6 +368,7 @@ async def create_sale(
     lines: list[SaleLineInput],
     currency_code: str,
     found_in_store: list[FoundInStore] | None = None,
+    missing_in_store: list[MissingInStore] | None = None,
     correlation_id: str | None = None,
 ) -> SaleResult:
     """Sell the basket, or raise and let the transaction roll back."""
@@ -227,9 +377,14 @@ async def create_sale(
 
     scope.require(Permission.SALE_CREATE, store_id)
     corrections_requested = found_in_store or []
+    shortages_requested = missing_in_store or []
     if corrections_requested:
         # A narrow capability a seller may hold, unlike inventory:adjust.
         scope.require(Permission.INVENTORY_CORRECT_DURING_SALE, store_id)
+    if shortages_requested:
+        # Required separately: taking stock off a shelf is not the same
+        # authority as putting it on, and neither implies the other.
+        scope.require(Permission.INVENTORY_REPORT_MISSING_DURING_SALE, store_id)
 
     if currency_code != "UAH":
         raise ValidationFailedError("Only UAH is supported")
@@ -265,6 +420,13 @@ async def create_sale(
             "found_in_store": [
                 {"line_index": found.line_index, "quantity": found.quantity}
                 for found in corrections_requested
+            ],
+            # In the permanent fingerprint for the same reason the warehouse
+            # is: the same command_id retried without the shortage report is a
+            # different business command — it sells two coats, not one.
+            "missing_in_store": [
+                {"line_index": missing.line_index, "quantity": missing.quantity}
+                for missing in shortages_requested
             ],
         },
         actor_user_id=scope.user_id,
@@ -313,6 +475,17 @@ async def create_sale(
                 "Unknown product variant", product_variant_id=str(line.product_variant_id)
             )
 
+    _validate_reports(lines, corrections_requested, shortages_requested)
+    # Shortages first: they reduce the lines, and everything downstream — the
+    # money, the sale movements, the stored items — is about what is actually
+    # being sold. The two reports never touch the same stock key, so the
+    # corrections below still see the demand they were written against.
+    lines, shortages = _resolve_shortages(
+        store_id=store_id,
+        lines=lines,
+        missing_in_store=shortages_requested,
+        quantities=quantities,
+    )
     corrections = _resolve_corrections(
         store_id=store_id, lines=lines, found_in_store=corrections_requested, quantities=quantities
     )
@@ -339,31 +512,42 @@ async def create_sale(
     await session.flush()
 
     correction_ids: list[uuid.UUID] = []
-    if corrections:
-        # Applied before the sale lines: the stock must be on the books before
-        # it can be sold, and the ledger must read in that order too.
+    shortage_ids: list[uuid.UUID] = []
+    if corrections or shortages:
+        # Applied before the sale lines, in one batch. Before, because stock
+        # must be on the books before it can be sold and the ledger has to
+        # read in that order. One batch, because two calls would take locks in
+        # two orders — the deadlock `apply_movements`' global sort prevents.
         applied = await apply_movements(
             session,
             organization_id=scope.organization_id,
             requests=[
-                replace(correction, reference_type="sale", reference_id=sale.id)
-                for correction in corrections
+                replace(adjustment, reference_type="sale", reference_id=sale.id)
+                for adjustment in corrections + shortages
             ],
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
         )
-        correction_ids = [entry.movement_id for entry in applied]
         for entry in applied:
+            found = entry.request.reason_code is MovementReason.FOUND_DURING_SALE
+            if found:
+                correction_ids.append(entry.movement_id)
+            else:
+                shortage_ids.append(entry.movement_id)
             await audit.record(
                 session,
                 organization_id=scope.organization_id,
                 actor_user_id=scope.user_id,
-                action="inventory.found_during_sale",
+                action="inventory.found_during_sale" if found else "inventory.missing_at_sale",
                 entity_type="stock_movement",
                 entity_id=entry.movement_id,
                 before={"quantity": entry.quantity_after - entry.request.quantity_delta},
                 after={"quantity": entry.quantity_after},
-                reason=MovementReason.FOUND_DURING_SALE.value,
+                reason=(
+                    MovementReason.FOUND_DURING_SALE.value
+                    if found
+                    else MovementReason.MISSING_AT_SALE.value
+                ),
             )
 
     await apply_movements(
@@ -418,9 +602,19 @@ async def create_sale(
         store_id=str(store_id),
         lines=len(items),
         corrections=len(correction_ids),
+        shortages=len(shortage_ids),
         total=str(sale.total),
     )
-    return SaleResult(sale=sale, items=items, corrections=correction_ids)
+    return SaleResult(sale=sale, items=items, corrections=correction_ids, shortages=shortage_ids)
 
 
-__all__ = ["FoundInStore", "SaleLineInput", "SaleResult", "correction_ids", "create_sale", "money"]
+__all__ = [
+    "FoundInStore",
+    "MissingInStore",
+    "SaleLineInput",
+    "SaleResult",
+    "correction_ids",
+    "create_sale",
+    "money",
+    "shortage_ids",
+]

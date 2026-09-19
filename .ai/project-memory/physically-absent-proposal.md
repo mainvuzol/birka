@@ -2,7 +2,7 @@
 
 Raised by the owner on 2026-09-17, alongside the confirmation that a child-store seller may perform both **«фізично є»** (physically present) and **«фізично відсутній»** (physically absent) at a warehouse they can reach, with appropriate rights.
 
-Status: **requirement recorded; not implemented; one narrow question open.** The owner's own instruction is that this must not be quietly equated with zeroing a balance or writing stock off, so nothing here has been built. M1-029 ships without it, and §5 explains why that is the safe order.
+Status: **answered and implemented (M1-030, 2026-09-17).** The owner's answer to Q-E is **the sale proceeds for the quantity that is actually there** — §3 records it. What shipped is the scenario proposed below, with one bound added during implementation that the proposal had missed; see §7. The document is kept as the reasoning behind the design, not as a pending proposal.
 
 ## 1. What exists today, and why the mirror image is not symmetric
 
@@ -62,11 +62,7 @@ Everything above follows from the owner's own framing except one point, and it c
 
 > **Q-E — When a seller reports that goods are physically absent, should the sale proceed for the quantity that *is* there, or should the whole sale be refused until someone investigates?**
 >
-> *Proposed:* the sale proceeds for the confirmed quantity. A customer standing at the counter with one coat should be able to buy it, and refusing the sale would push staff back to the notebook — the thing this system exists to beat.
->
-> *The alternative:* refuse the line entirely, so that a discrepancy always stops and is looked at before any money moves. Safer for the books, worse at the counter.
->
-> Either is defensible; they differ in what a seller experiences several times a week, which is the owner's call and not an engineering one.
+> **ANSWERED, 2026-09-17: the sale proceeds for the confirmed quantity.** A customer standing at the counter with one coat can buy it; the unit the system believed in comes off the shelf with its own reason, and nobody is sent back to the notebook.
 
 Two smaller points ride on the answer and are noted rather than asked, because the proposal above settles them conservatively unless the owner says otherwise: the cap (line quantity, §2), and the fact that `MISSING_AT_SALE` records an observation rather than a disposal.
 
@@ -77,17 +73,25 @@ Two smaller points ride on the answer and are noted rather than asked, because t
 - **A standalone "the shelf is wrong" endpoint.** That is a stocktake, needs `inventory:adjust`, and already exists as `POST /inventory/adjustments`.
 - **Any change to how refunds, prices or historical facts work.**
 
-## 5. Why M1-029 ships without it
+## 5. Why M1-029 shipped without it
 
 The re-key had to land first, and it is independent of this: `MISSING_AT_SALE` is a movement at a `(location, variant, size)` key, and that key only exists correctly after M1-029. Building the negative correction on the old store-keyed model would have meant writing it twice.
 
 It is also the honest order. The owner asked for this to be recorded and given a concrete shape rather than assumed, and one question is genuinely open. Implementing it now would mean choosing Q-E silently, which is the one thing the instruction ruled out.
 
-## 6. Implementation sketch, once Q-E is answered
+## 6. What was built
 
-Small, and contained by the work M1-029 already did:
+Exactly the scenario above, plus §7's extra bound:
 
-1. `MovementReason.MISSING_AT_SALE` and `Permission.INVENTORY_REPORT_MISSING_DURING_SALE`; migration for the enum value only.
-2. A `missing_in_store` list on `POST /sales`, shaped exactly like `found_in_store` — a line index and the confirmed quantity — validated in `_resolve_corrections` beside the positive case, capped by the line quantity.
-3. Both directions refused together when a line appears in both lists: a seller cannot say a coat is simultaneously present and absent.
-4. Tests mirroring the `FOUND_DURING_SALE` set: exact cap, over-report refused, permission required, shared-warehouse blast radius bounded, audit entry present, reconciliation clean, and a concurrency case where one seller reports missing while another sells the same shared row.
+- `MovementReason.MISSING_AT_SALE` and `Permission.INVENTORY_REPORT_MISSING_DURING_SALE`; migration `0007_missing_at_sale` adds the enum value and nothing else.
+- `missing_in_store` on `POST /sales`, shaped like `found_in_store`: a line index and **the confirmed present count**. The line is sold for that many; the response carries `shortages` beside `corrections`, kept apart because one puts goods on a shelf and the other takes them off.
+- Resolved in `_resolve_shortages` beside the positive case, inside the sale's transaction, audited as `inventory.missing_at_sale` with before and after.
+- The two reports are refused together when they describe the **same stock key** — not merely the same line. Two lines drawing the same variant and size from the same warehouse are two statements about one shelf, and "there are more here" and "there are fewer here" cannot both stand.
+- Invariant **I25** in the plan, and `missing_in_store` in the permanent command fingerprint: a retry that drops the shortage report is a different business command (it sells two coats, not one) and is refused as a conflict.
+- Tests: `tests/integration/test_missing_at_sale.py` (16) and three shared-warehouse cases, including the blast radius on stock two shops depend on. Five deliberate mutations of the rules above each fail a test.
+
+## 7. What the proposal got wrong, and one thing left open
+
+**The cap in §2 was not enough.** "At most the quantity of the line being sold" bounds the report, but not the ledger: if the system believed in *fewer* units than the seller went to fetch, writing off the full difference drives the balance negative or, worse, mints stock when the seller confirms more present than the ledger holds. The implemented rule is `min(available, demand) − confirmed`, skipped unless positive — the ledger may only remove what it already believed in. When there is nothing to answer for, the sale still goes through for the confirmed quantity and no movement is written.
+
+**Left open, deliberately.** A line where the seller confirms **zero** present is refused, not dropped from the basket: a basket that comes back different from the one that was sent is its own hazard, and an empty shelf with no sale behind it is a stocktake (`POST /inventory/adjustments`, manager). That means the "customer asks for the last coat and the rack is empty" case still records nothing. Relaxing it — drop the line, keep the rest of the sale, refuse only if no line survives — is a small change on top of what shipped, and is the owner's call.
