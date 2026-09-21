@@ -188,6 +188,27 @@ forbidden_modules = ["app.modules.catalog", "app.modules.transfers"]
 # refund reading the catalog for itself.
 allow_indirect_imports = true
 
+# ADR-0001 permits `transfers -> inventory, authz, tenancy, core` (+ audit).
+# A transfer moves goods and nothing else: it has no receipt to read, no money
+# to take back and no product to name, so sales, refunds and catalog are all
+# absent. The one that matters most is catalog — a transfer that "helpfully"
+# resolved a product itself would be deciding stock identity outside the
+# inventory module, which is the single door invariant I3 depends on.
+[[tool.importlinter.contracts]]
+name = "transfers move stock through inventory and read nothing else"
+type = "forbidden"
+source_modules = ["app.modules.transfers"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.catalog",
+    "app.modules.identity",
+]
+# Only DIRECT imports are forbidden. Reaching catalog underneath
+# `inventory.service`, which validates that a stock key exists, is the
+# supported path.
+allow_indirect_imports = true
+
 [[tool.importlinter.contracts]]
 name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"

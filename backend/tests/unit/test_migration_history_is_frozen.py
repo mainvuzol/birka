@@ -59,6 +59,7 @@ FROZEN: dict[str, str] = {
     "0006_stock_location_rekey.py": (
         "0daeb67e082736245bc36c54ff543275a1eba9cded95a0c43e409f6dc12a7722"
     ),
+    "0007_missing_at_sale.py": ("ace1eb1d2de40e4c4ce12a5a64836ac60cdc440b1a6e0ed59461e682bba0b213"),
 }
 
 
