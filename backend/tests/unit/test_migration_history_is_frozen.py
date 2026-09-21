@@ -63,7 +63,16 @@ FROZEN: dict[str, str] = {
 
 
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """The digest of the file as git stores it.
+
+    Line endings are normalized first. A Windows checkout with
+    `core.autocrlf=true` writes every file with CRLF, so hashing the raw bytes
+    made this test fail on the owner's machine for every shipped migration —
+    a permanently red test that says nothing. Git itself stores these files
+    with LF, and CRLF versus LF changes nothing Python or Alembic executes, so
+    ignoring the checkout's translation loses no protection against an edit.
+    """
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 @pytest.mark.parametrize("filename", sorted(FROZEN))
