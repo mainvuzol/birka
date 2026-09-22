@@ -107,7 +107,7 @@ async def make_shop(maker: async_sessionmaker[AsyncSession]) -> Shop:
         session.add(org)
         await session.flush()
         store = Store(organization_id=org.id, name="Основний", code="MAIN", kind=StoreKind.PRIMARY)
-        user = AppUser(telegram_user_id=int(uuid.uuid4().int % 10_000_000), display_name="Оля")
+        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Оля")
         session.add_all([store, user])
         await session.flush()
         location_id = await provision_location(

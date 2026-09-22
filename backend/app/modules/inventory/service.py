@@ -121,6 +121,75 @@ def validate_movement(request: MovementRequest) -> None:
         )
 
 
+# What a transfer's two legs point back at. Defined here rather than in the
+# transfers module because the ledger is the one that has to recognise a pair,
+# and inventory may not import transfers (ADR-0001).
+TRANSFER_REFERENCE = "transfer"
+TRANSFER_TYPES = frozenset({MovementType.TRANSFER_OUT, MovementType.TRANSFER_IN})
+
+
+def validate_location_flows(requests: list[MovementRequest]) -> None:
+    """Invariant I24: a transfer is always a pair.
+
+    Every `TRANSFER_OUT` has exactly one `TRANSFER_IN` of the same variant,
+    size and magnitude, at a *different* location, naming the same transfer —
+    and every `TRANSFER_IN` has its `TRANSFER_OUT`. Half a transfer is stock
+    that vanished or appeared, and this is the one door both halves must pass
+    through together.
+
+    Deliberately **not** checked here: that nothing *else* moves goods between
+    places. A rule of the form "no plus at one location beside a minus at
+    another" looks natural and is wrong at this door, because a door is not a
+    command. The sale writes its in-sale corrections in one call and its lines
+    in another, and a single basket may confirm two coats on one shelf that the
+    app thought empty (`FOUND_DURING_SALE`, +2) while finding one missing from
+    another (`MISSING_AT_SALE`, -1). Those are two bounded observations the
+    owner approved (I18, I25), not a move — and a net-flow check on that call
+    refused a real sale when it was tried. That half of I24 is kept by
+    construction instead: the transfer is the only command that writes a
+    transfer, and every command that exists nets no location upward while
+    netting another downward.
+    """
+    legs: dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], list[MovementRequest]] = {}
+    for request in requests:
+        if request.movement_type not in TRANSFER_TYPES:
+            continue
+        if request.reference_type != TRANSFER_REFERENCE or request.reference_id is None:
+            raise ValidationFailedError(
+                "A transfer movement must name the transfer it belongs to",
+                movement_type=request.movement_type.value,
+            )
+        group = (request.reference_id, request.product_variant_id, request.size_id)
+        legs.setdefault(group, []).append(request)
+
+    for (transfer_id, variant_id, size_id), group_legs in legs.items():
+        outs = [leg for leg in group_legs if leg.movement_type is MovementType.TRANSFER_OUT]
+        ins = [leg for leg in group_legs if leg.movement_type is MovementType.TRANSFER_IN]
+        details = {
+            "transfer_id": str(transfer_id),
+            "product_variant_id": str(variant_id),
+            "size_id": str(size_id),
+        }
+        if len(outs) != 1 or len(ins) != 1:
+            raise ValidationFailedError(
+                "A transfer must take goods out of exactly one location and into exactly one",
+                transfer_out=len(outs),
+                transfer_in=len(ins),
+                **details,
+            )
+        if outs[0].location_id == ins[0].location_id:
+            raise ValidationFailedError(
+                "A transfer must move goods between two different locations", **details
+            )
+        if -outs[0].quantity_delta != ins[0].quantity_delta:
+            raise ValidationFailedError(
+                "A transfer must put in exactly what it takes out",
+                taken_out=-outs[0].quantity_delta,
+                put_in=ins[0].quantity_delta,
+                **details,
+            )
+
+
 async def lock_stock(
     session: AsyncSession,
     *,
@@ -185,6 +254,7 @@ async def apply_movements(
 
     for request in requests:
         validate_movement(request)
+    validate_location_flows(requests)
 
     await repository.validate_lot_references(
         session,
@@ -225,11 +295,16 @@ async def apply_movements(
                     size_id=request.size_id,
                 )
                 raise InsufficientStockError(
+                    location_id=str(request.location_id),
                     product_variant_id=str(request.product_variant_id),
                     size_id=str(request.size_id),
                     requested=magnitude,
                     available=available,
-                    correctable=True,
+                    # Only a sale has a correction to offer (FOUND_DURING_SALE,
+                    # business fact F30). Telling a transfer or an adjustment
+                    # it could "correct" its way past a shortfall would point
+                    # the client at a flow that does not exist for it.
+                    correctable=request.movement_type is MovementType.SALE,
                 )
         else:
             quantity_after = await repository.increment(
@@ -370,6 +445,8 @@ async def find_divergences(
 
 __all__ = [
     "DIRECTION",
+    "TRANSFER_REFERENCE",
+    "TRANSFER_TYPES",
     "AppliedMovement",
     "MovementRequest",
     "StockRow",
@@ -381,6 +458,8 @@ __all__ = [
     "refund_return_movement_ids",
     "sale_correction_ids",
     "sale_shortage_ids",
+    "transfer_movement_ids",
+    "validate_location_flows",
     "validate_movement",
 ]
 
@@ -418,4 +497,17 @@ async def refund_return_movement_ids(
     """
     return await repository.refund_return_movement_ids(
         session, organization_id=organization_id, refund_id=refund_id
+    )
+
+
+async def transfer_movement_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, transfer_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Both legs of a transfer, read back in one stable order.
+
+    Ordered by the stock key, so a durable replay reads them the way the
+    original response listed them.
+    """
+    return await repository.transfer_movement_ids(
+        session, organization_id=organization_id, transfer_id=transfer_id
     )

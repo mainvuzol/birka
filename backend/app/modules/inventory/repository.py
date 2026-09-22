@@ -360,3 +360,34 @@ async def refund_return_movement_ids(
             )
         ).all()
     )
+
+
+async def transfer_movement_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, transfer_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Read a transfer's two legs without exposing inventory ORM to transfers.
+
+    Ordered by where the goods were, then what they were, then the direction:
+    the same order every time the same transfer is read.
+    """
+    return list(
+        (
+            await session.scalars(
+                select(StockMovement.id)
+                .where(
+                    StockMovement.organization_id == organization_id,
+                    StockMovement.reference_type == "transfer",
+                    StockMovement.reference_id == transfer_id,
+                    StockMovement.movement_type.in_(
+                        [MovementType.TRANSFER_OUT, MovementType.TRANSFER_IN]
+                    ),
+                )
+                .order_by(
+                    StockMovement.location_id,
+                    StockMovement.product_variant_id,
+                    StockMovement.size_id,
+                    StockMovement.id,
+                )
+            )
+        ).all()
+    )

@@ -25,6 +25,7 @@ from app.core.errors import (
     IdempotencyConflictError,
     IdempotencyInProgressError,
     InsufficientStockError,
+    ValidationFailedError,
 )
 from app.core.idempotency import Claim, Replay, claim, complete, fingerprint
 from app.modules.catalog.models import (
@@ -549,3 +550,61 @@ async def test_reconciliation_can_be_narrowed_to_one_warehouse(session: AsyncSes
 
     assert len(await find_divergences(session, location_id=broken.location_id)) == 1
     assert await find_divergences(session, location_id=healthy.location_id) == []
+
+
+async def test_only_a_sale_shortfall_offers_a_correction(session: AsyncSession) -> None:
+    """`correctable` tells the client it may offer FOUND_DURING_SALE. Only a
+    sale has that flow; an adjustment that overshoots must not be pointed at
+    it."""
+    world = await make_world(session)
+    await stock(session, world, 2)
+
+    with pytest.raises(InsufficientStockError) as exc:
+        await apply_movements(
+            session,
+            organization_id=world.organization_id,
+            requests=[line(world, -5, MovementType.ADJUSTMENT, reason_code=MovementReason.DAMAGED)],
+        )
+
+    assert exc.value.details["correctable"] is False
+    assert exc.value.details["location_id"] == str(world.location_id)
+
+
+# --- invariant I24, at the one door stock goes through -----------------------
+
+
+async def test_half_a_transfer_is_refused_at_the_door_and_leaves_no_trace(
+    session: AsyncSession,
+) -> None:
+    """The plan's own test for I24: a `TRANSFER_OUT` with no matching
+    `TRANSFER_IN` is refused. The transfer service always sends a pair; this
+    proves the ledger would refuse a caller that did not."""
+    world = await make_world(session)
+    await stock(session, world, 3)
+
+    with pytest.raises(ValidationFailedError, match="exactly one location"):
+        await apply_movements(
+            session,
+            organization_id=world.organization_id,
+            requests=[
+                line(
+                    world,
+                    -1,
+                    MovementType.TRANSFER_OUT,
+                    reference_type="transfer",
+                    reference_id=uuid.uuid4(),
+                )
+            ],
+        )
+    await session.rollback()
+
+    assert (
+        await repository.current_quantity(
+            session,
+            location_id=world.location_id,
+            product_variant_id=world.variant_id,
+            size_id=world.size_id,
+        )
+        == 3
+    )
+    assert await find_divergences(session, location_id=world.location_id) == []

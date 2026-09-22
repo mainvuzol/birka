@@ -103,7 +103,7 @@ async def make_two_shops(
         child = Store(
             organization_id=org.id, name="Дочірній", code="CHILD", kind=StoreKind.SECONDARY
         )
-        user = AppUser(telegram_user_id=int(uuid.uuid4().int % 10_000_000), display_name="Оля")
+        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Оля")
         session.add_all([primary, child, user])
         await session.flush()
 

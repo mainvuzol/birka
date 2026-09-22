@@ -13,7 +13,13 @@ import pytest
 
 from app.core.errors import ValidationFailedError
 from app.modules.inventory.models import MovementReason, MovementType
-from app.modules.inventory.service import DIRECTION, MovementRequest, validate_movement
+from app.modules.inventory.service import (
+    DIRECTION,
+    TRANSFER_REFERENCE,
+    MovementRequest,
+    validate_location_flows,
+    validate_movement,
+)
 
 STORE = uuid.uuid4()
 VARIANT = uuid.uuid4()
@@ -130,3 +136,152 @@ def test_the_acting_store_is_not_part_of_the_lock_order() -> None:
     into two independent keys and the whole point of ADR-0004 would be lost.
     """
     assert movement().sort_key == movement(acting_store_id=uuid.uuid4()).sort_key
+
+
+# ---------------------------------------------------------------------------
+# Invariant I24 — goods leave one place for another only as a transfer
+# ---------------------------------------------------------------------------
+
+WAREHOUSE_A = uuid.UUID(int=0xA)
+WAREHOUSE_B = uuid.UUID(int=0xB)
+TRANSFER = uuid.uuid4()
+
+
+def leg(movement_type: MovementType, location: uuid.UUID, quantity: int, **kwargs: object):
+    """One half of a transfer, pointing back at it the way the ledger requires."""
+    defaults: dict[str, object] = {
+        "location_id": location,
+        "movement_type": movement_type,
+        "quantity_delta": quantity,
+        "reference_type": TRANSFER_REFERENCE,
+        "reference_id": TRANSFER,
+    }
+    defaults.update(kwargs)
+    return movement(**defaults)
+
+
+def test_a_transfer_is_a_matching_pair() -> None:
+    validate_location_flows(
+        [
+            leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -3),
+            leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 3),
+        ]
+    )
+
+
+def test_half_a_transfer_is_refused_in_either_direction() -> None:
+    """A TRANSFER_OUT alone is stock that vanished; a TRANSFER_IN alone is
+    stock that appeared from nowhere. The plan's own test for I24."""
+    with pytest.raises(ValidationFailedError, match="exactly one location"):
+        validate_location_flows([leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1)])
+    with pytest.raises(ValidationFailedError, match="exactly one location"):
+        validate_location_flows([leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 1)])
+
+
+def test_a_transfer_must_put_in_what_it_takes_out() -> None:
+    with pytest.raises(ValidationFailedError, match="exactly what it takes out"):
+        validate_location_flows(
+            [
+                leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -3),
+                leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 2),
+            ]
+        )
+
+
+def test_a_transfer_to_the_same_place_is_refused() -> None:
+    with pytest.raises(ValidationFailedError, match="two different locations"):
+        validate_location_flows(
+            [
+                leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1),
+                leg(MovementType.TRANSFER_IN, WAREHOUSE_A, 1),
+            ]
+        )
+
+
+def test_a_transfer_leg_must_name_its_transfer() -> None:
+    """Without the reference two legs cannot be told apart from two halves of
+    two different moves, and nothing in the ledger could pair them later."""
+    with pytest.raises(ValidationFailedError, match="must name the transfer"):
+        validate_location_flows(
+            [
+                leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1, reference_id=None),
+                leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 1, reference_id=None),
+            ]
+        )
+    with pytest.raises(ValidationFailedError, match="must name the transfer"):
+        validate_location_flows(
+            [
+                leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1, reference_type="sale"),
+                leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 1, reference_type="sale"),
+            ]
+        )
+
+
+def test_legs_of_two_different_transfers_do_not_pair_with_each_other() -> None:
+    """The out of one transfer and the in of another are two halves, not a pair."""
+    with pytest.raises(ValidationFailedError, match="exactly one location"):
+        validate_location_flows(
+            [
+                leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1),
+                leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 1, reference_id=uuid.uuid4()),
+            ]
+        )
+
+
+def test_two_legs_out_for_one_leg_in_are_refused() -> None:
+    with pytest.raises(ValidationFailedError, match="exactly one location"):
+        validate_location_flows(
+            [
+                leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1),
+                leg(MovementType.TRANSFER_OUT, uuid.UUID(int=0xC), -1),
+                leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 2),
+            ]
+        )
+
+
+def test_several_lines_of_one_transfer_each_pair_up() -> None:
+    other_size = uuid.uuid4()
+    validate_location_flows(
+        [
+            leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -2),
+            leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 2),
+            leg(MovementType.TRANSFER_OUT, WAREHOUSE_A, -1, size_id=other_size),
+            leg(MovementType.TRANSFER_IN, WAREHOUSE_B, 1, size_id=other_size),
+        ]
+    )
+
+
+def test_a_basket_drawing_from_two_warehouses_is_not_a_transfer() -> None:
+    """The plan's other test for I24: a multi-location sale is legitimate."""
+    validate_location_flows(
+        [
+            movement(location_id=WAREHOUSE_A, movement_type=MovementType.SALE, quantity_delta=-1),
+            movement(location_id=WAREHOUSE_B, movement_type=MovementType.SALE, quantity_delta=-2),
+        ]
+    )
+
+
+def test_found_on_one_shelf_and_missing_from_another_is_not_a_transfer() -> None:
+    """The exact call the sale makes for M1-030's owner-approved basket.
+
+    +2 confirmed on one shelf, -1 found missing from another, same coat, one
+    call. It looks like a move and is not: they are two bounded observations
+    (I18, I25). An earlier version of the I24 check refused this call and with
+    it a real sale; this test is here so that nobody adds that check back.
+    """
+    validate_location_flows(
+        [
+            movement(
+                location_id=WAREHOUSE_A,
+                movement_type=MovementType.ADJUSTMENT,
+                quantity_delta=2,
+                reason_code=MovementReason.FOUND_DURING_SALE,
+            ),
+            movement(
+                location_id=WAREHOUSE_B,
+                movement_type=MovementType.ADJUSTMENT,
+                quantity_delta=-1,
+                reason_code=MovementReason.MISSING_AT_SALE,
+            ),
+        ]
+    )

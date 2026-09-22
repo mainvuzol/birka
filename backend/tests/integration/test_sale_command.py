@@ -104,7 +104,7 @@ async def make_shop(session: AsyncSession) -> Shop:
     store = Store(organization_id=org.id, name="Основний", code="MAIN", kind=StoreKind.PRIMARY)
     concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
     system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
-    user = AppUser(telegram_user_id=int(uuid.uuid4().int % 10_000_000), display_name="Оля")
+    user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Оля")
     colour = AttributeTerm(
         organization_id=org.id,
         kind=AttributeKind.COLOR,
