@@ -52,11 +52,11 @@ The PostgreSQL floor comes from `UNIQUE NULLS NOT DISTINCT` — see [ADR-0002](d
 
 ### Owner-confirmed scope update (2026-09-15)
 
-The primary warehouse supplies both stores and the child store has a separate warehouse. Add blocked/archived store states, intact/damaged return conditions, negotiated final selling prices (below or above suggested prices), full/installment sale payments and separate purchase-installment tracking. These are requirements, not implemented features. See [owner decisions](project-memory/owner-decisions-2026-09-15.md) before extending transfers, refunds or money handling. The inventory granularity below describes the current implementation pending the warehouse redesign.
+The primary warehouse supplies both stores and the child store has a separate warehouse. Add blocked/archived store states, intact/damaged return conditions, negotiated final selling prices (below or above suggested prices), full/installment sale payments and separate purchase-installment tracking. These are requirements, not implemented features. See [owner decisions](project-memory/owner-decisions-2026-09-15.md) before extending transfers, refunds or money handling. M1-029 implemented the warehouse key; the other requirements remain subject to their individual completion reports. The 2026-09-22 review adds staged transfer receipt and explicit shared/private provisioning requirements.
 
 ### Inventory granularity
 
-- Inventory is tracked by `store + product_variant + size` when size is known.
+- Inventory is tracked by `location + product_variant + size` since M1-029. Selling store attribution is separate.
 - `UNKNOWN_SIZE` is a legitimate domain size for legacy or incomplete data, not a database placeholder.
 - Size distribution is never invented.
 - Reclassifying `UNKNOWN_SIZE` stock into concrete sizes is an **audited reclassification** — two `ADJUSTMENT` movements plus an audit entry — never a silent rewrite.

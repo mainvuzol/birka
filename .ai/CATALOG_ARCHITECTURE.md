@@ -115,7 +115,7 @@ More contextual fields may remain flexible until taxonomy stabilization.
 
 ## Inventory separation
 
-Catalog identity never stores authoritative quantity. Inventory is keyed by store + product variant + size (where size is relevant). Every stock change produces a StockMovement.
+Catalog identity never stores authoritative quantity. Inventory is keyed by physical location + product variant + size since M1-029; the selling store is separate. Every stock change produces a StockMovement.
 
 ## Legacy migration
 
