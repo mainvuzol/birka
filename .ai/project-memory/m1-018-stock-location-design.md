@@ -2,7 +2,7 @@
 
 Companion to [ADR-0004](../decisions/ADR-0004-stock-locations.md), which holds the decision and the four blocking questions. This document holds the working detail: what changes where, how the scenarios run, how existing data moves, and what would have to pass before any of it is called done.
 
-Status: **implemented as M1-029**, in two migrations — `0005_stock_locations` (empty foundation tables) and `0006_stock_rekey` (the re-key, backfill and API change). Stock is keyed by warehouse; Q-A…Q-D are answered in ADR-0004 §6. Two items in §5.5 are **not** done and are named there. Transfers (M1-018) are deliberately *not* implemented: this document designs them, nothing writes them yet. See the [foundation report](m1-029-foundation-report.md) and the [completion report](m1-029-completion-report.md). Neither shipped migration may be expanded; further schema change takes a new revision.
+Status: **implemented as M1-029**, in two migrations — `0005_stock_locations` (empty foundation tables) and `0006_stock_rekey` (the re-key, backfill and API change). Stock is keyed by warehouse; Q-A…Q-D are answered in ADR-0004 §6. Two items in §5.5 are **not** done and are named there. Transfers (M1-018) were deliberately *not* implemented with it; **M1-018 has since built them (2026-09-22)** — see the [M1-018 report](m1-018-transfer-report.md), which names the one place it departs from this design (§1.11). See the [foundation report](m1-029-foundation-report.md) and the [completion report](m1-029-completion-report.md). Neither shipped migration may be expanded; further schema change takes a new revision.
 
 Revision 2, after an independent architecture review; §8 lists what changed and why.
 
@@ -131,6 +131,8 @@ This also requires the query to move out of the router (`api/v1/inventory.py:91-
 - every new location foreign key is `ON DELETE RESTRICT`, matching the store foreign keys it replaces — a location holding stock cannot vanish;
 - `is_active = false` refuses sell and receive, and is checked independently of the access rows;
 - an inactive location remains **readable, reconcilable and transferable-out**, so stock is never stranded somewhere it cannot be counted or moved.
+
+*M1-018 (2026-09-22):* "readable and reconcilable" is built; **"transferable-out" is not.** A transfer refuses a closed warehouse at either end, as every other command does. The owner has not said what closing a warehouse means, and asked that closed stores' operations — transfers included — be defined before they are built (owner decisions 2026-09-15 §2); a transfer-only exception would answer that by default. Nothing in the application closes a warehouse today, so nothing is stranded by it. Open question in the [M1-018 report](m1-018-transfer-report.md).
 
 ## 2. The minimal model
 
