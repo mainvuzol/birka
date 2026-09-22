@@ -127,6 +127,8 @@ async def create(
     # claimed, so a revoked grant — the person's or the store's — cannot keep
     # replaying a success it was once entitled to (invariants I13 and I23).
     scope.require(Permission.TRANSFER_CREATE, payload.store_id)
+    # Single-step: the same person sends and receives (see the service).
+    scope.require(Permission.TRANSFER_RECEIVE, payload.store_id)
     await require_location_access(
         session,
         organization_id=scope.organization_id,

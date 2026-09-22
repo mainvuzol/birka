@@ -209,6 +209,17 @@ forbidden_modules = [
 # supported path.
 allow_indirect_imports = true
 
+# ADR-0001 permits `sales -> inventory, catalog, authz, tenancy, core` (+ audit).
+# `refunds -> sales` is permitted, so the reverse would close a cycle; and a
+# sale that could reach the transfer command could move goods between
+# warehouses under a sale — the disguised transfer invariant I24 rules out.
+# Nothing stopped either import until the M1-018 review found the gap.
+[[tool.importlinter.contracts]]
+name = "a sale neither refunds nor transfers"
+type = "forbidden"
+source_modules = ["app.modules.sales"]
+forbidden_modules = ["app.modules.refunds", "app.modules.transfers"]
+
 [[tool.importlinter.contracts]]
 name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"

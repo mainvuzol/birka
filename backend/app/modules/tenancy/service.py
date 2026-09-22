@@ -71,9 +71,11 @@ async def validate_locations(
     """Every location must belong to this organization, and may have to be open.
 
     Closing a warehouse stops goods moving through it; it does not hide what is
-    standing in it. ADR-0004 §1.11: an inactive location stays *readable*,
-    reconcilable and transferable-out, so stock is never stranded by a flag.
-    `must_be_active` is therefore False for reads and True for commands.
+    standing in it (ADR-0004 §2.2). `must_be_active` is therefore False for
+    reads and True for every command — transfers included. Design §1.11 also
+    proposed that a closed warehouse stay "transferable-out"; that is not
+    built, because the owner has not yet said what closing one means (M1-018
+    report).
     """
     if not location_ids:
         return
@@ -153,7 +155,7 @@ async def require_location_access(
     404 that reveals nothing, while a real one the store simply cannot reach is
     an explicit 403. Activity is required only of a command: a read of a closed
     warehouse still has to work, or its stock becomes invisible as well as
-    frozen (ADR-0004 §1.11).
+    frozen (ADR-0004 §2.2).
     """
     if not location_ids:
         return

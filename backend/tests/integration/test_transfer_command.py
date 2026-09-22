@@ -30,7 +30,7 @@ from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -40,7 +40,11 @@ from sqlalchemy.ext.asyncio import (
 
 from app.api.deps import get_current_scope, session_dependency
 from app.core.config import Settings
-from app.core.errors import LocationAccessDeniedError
+from app.core.errors import (
+    InsufficientStockError,
+    LocationAccessDeniedError,
+    PermissionDeniedError,
+)
 from app.core.idempotency import IdempotencyRecord
 from app.main import create_app
 from app.modules.audit.models import AuditLog
@@ -97,8 +101,15 @@ def maker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 async def make_shops(
     maker: async_sessionmaker[AsyncSession], *, child_may_receive_shared: bool = True
 ) -> Shops:
-    """The confirmed shape. The child store reaches the shared warehouse
-    because of a row written here, never because of its kind."""
+    """The owner's shape (2026-09-15): both stores sell from the shared
+    warehouse, and the child store also has its own. The child store reaches
+    the shared warehouse because of a row written here, never because of its
+    kind.
+
+    By default that row also lets the child store *receive* there, so goods
+    can be moved back in both directions. The owner confirmed selling, not
+    receiving; `child_may_receive_shared=False` is design §3's sell-only row,
+    and the tests that depend on the difference use it."""
     async with maker() as session:
         org = Organization(name=f"org-{uuid.uuid4().hex[:8]}", currency_code="UAH")
         session.add(org)
@@ -109,7 +120,7 @@ async def make_shops(
         child = Store(
             organization_id=org.id, name="Дочірній", code="CHILD", kind=StoreKind.SECONDARY
         )
-        user = AppUser(telegram_user_id=int(uuid.uuid4().int % 10_000_000), display_name="Ірина")
+        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Ірина")
         session.add_all([primary, child, user])
         await session.flush()
 
@@ -167,6 +178,31 @@ async def api(
 
 def key() -> dict[str, str]:
     return {"Idempotency-Key": str(uuid.uuid4())}
+
+
+async def wait_until_blocked_by(engine: AsyncEngine, holder_pid: int) -> None:
+    """Assert that some backend is genuinely waiting on `holder_pid`'s locks.
+
+    Asked of PostgreSQL itself rather than inferred from a task not having
+    finished yet: "not done after a sleep" is also what a slow machine looks
+    like. `pg_locks` is read afresh by every query. `pg_stat_activity` is not:
+    a backend takes it once per transaction, so a session that connects after
+    the first look — the one this is waiting for — would never appear.
+    """
+    async with engine.connect() as observer:
+        for _ in range(1000):
+            blocked = await observer.scalar(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted"
+                    " AND CAST(:holder AS integer) = ANY(pg_blocking_pids(pid)))"
+                ),
+                {"holder": holder_pid},
+            )
+            await observer.rollback()
+            if blocked:
+                return
+            await asyncio.sleep(0.01)
+    pytest.fail("nothing ever waited on the held transaction's locks")
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,7 +506,9 @@ async def test_goods_can_move_back_the_other_way(maker):
 
 async def test_a_shortfall_at_the_source_moves_nothing_at_all(maker):
     """All or nothing. Two lines, the second one short: the first does not move
-    either, and the answer does not offer a correction — only a sale has one."""
+    either, and the answer does not offer a correction — only a sale has one.
+    The whole transfer is decided before any leg is written, so this holds
+    whichever order the legs would have been applied in."""
     shops = await make_shops(maker)
     coat = await stock(
         maker,
@@ -631,7 +669,7 @@ async def test_a_seller_without_the_permission_is_refused_despite_warehouse_acce
 
 async def test_the_store_must_be_allowed_to_take_goods_out_of_the_source(maker):
     """An access row that lets a store *receive* at a warehouse does not let it
-    empty that warehouse. Taking goods out is `can_sell` (ADR-0004 §1.6)."""
+    empty that warehouse. Taking goods out is `can_sell` (design §1.6)."""
     shops = await make_shops(maker)
     coat = await stock(
         maker,
@@ -798,9 +836,11 @@ async def test_another_organizations_product_cannot_be_moved(maker):
 
 @pytest.mark.parametrize("closed", ["source", "destination"])
 async def test_a_closed_warehouse_is_neither_source_nor_destination(maker, closed):
-    """Closing a warehouse freezes it (owner, 2026-09-17). The design had
-    proposed letting goods out of a closed one; the two disagree, and until
-    the owner says otherwise the answer is the one that moves nothing."""
+    """A closed warehouse is refused by every stock command, and a transfer is
+    one of them. Design §1.11 proposed letting goods out of a closed one; that
+    is not built, because the owner has not said what closing a warehouse
+    means (open question in the M1-018 report). If the answer is "let them
+    out", this is the test that changes."""
     shops = await make_shops(maker)
     coat = await stock(
         maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 2}
@@ -925,6 +965,113 @@ async def test_a_retry_after_the_cache_is_gone_returns_the_original_transfer(mak
         assert await quantity_at(session, shops.child_warehouse, coat.variant, coat.size()) == 1
 
 
+async def test_a_transfer_whose_original_request_cannot_be_verified_is_not_guessed(maker):
+    """Revision 0008 is reversible, and a downgrade followed by an upgrade
+    drops `command_fingerprint` and adds it back empty. A retry of such a
+    transfer, with the 7-day cache gone too, has nothing to be compared with:
+    it is refused as a conflict — never taken for a match, never executed a
+    second time. The caller may issue the command, so it learns which
+    transfer holds it.
+    """
+    shops = await make_shops(maker)
+    coat = await stock(
+        maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 4}
+    )
+    body = transfer_body(
+        shops,
+        source=shops.child_warehouse,
+        destination=shops.shared_warehouse,
+        lines=[(coat.variant, coat.size(), 3)],
+    )
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        first = await client.post("/api/v1/transfers", json=body, headers=key())
+        assert first.status_code == 201, first.text
+
+        async with maker() as session:
+            # What 0008's downgrade and re-upgrade leave on an existing row.
+            await session.execute(
+                update(Transfer)
+                .where(Transfer.id == uuid.UUID(first.json()["id"]))
+                .values(command_fingerprint=None, response_snapshot=None)
+            )
+            await session.execute(
+                delete(IdempotencyRecord).where(
+                    IdempotencyRecord.organization_id == shops.organization_id
+                )
+            )
+            await session.commit()
+
+        retried = await client.post("/api/v1/transfers", json=body, headers=key())
+    assert retried.status_code == 409, retried.text
+    error = retried.json()
+    assert error["code"] == "IDEMPOTENCY_CONFLICT"
+    assert "cannot be verified" in error["message"]
+    assert error["details"]["transfer_id"] == first.json()["id"]
+
+    async with maker() as session:
+        assert await count(session, Transfer, shops) == 1
+        assert len(await transfer_movements(session, shops)) == 2
+        assert await quantity_at(session, shops.child_warehouse, coat.variant, coat.size()) == 1
+        assert await quantity_at(session, shops.shared_warehouse, coat.variant, coat.size()) == 3
+
+
+async def test_each_transfer_answers_with_its_own_legs_only(maker):
+    """The answer lists the ledger rows *this* transfer wrote, found by the
+    transfer they name. With one transfer in an organization, a lookup that
+    forgot to filter by it would still look right; with two, it hands each
+    caller the other's legs as well — in the first answer, and again when a
+    durable replay rebuilds the answer from the rows (independent review,
+    2026-09-21).
+    """
+    shops = await make_shops(maker)
+    coat = await stock(
+        maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 4}
+    )
+    bodies = [
+        transfer_body(
+            shops,
+            source=shops.child_warehouse,
+            destination=shops.shared_warehouse,
+            lines=[(coat.variant, coat.size(), quantity)],
+        )
+        for quantity in (1, 2)
+    ]
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        answers = [
+            await client.post("/api/v1/transfers", json=body, headers=key()) for body in bodies
+        ]
+        assert [a.status_code for a in answers] == [201, 201], [a.text for a in answers]
+
+        async with maker() as session:
+            # Make the replay rebuild its answer from the rows instead of
+            # handing back the one it stored.
+            await session.execute(
+                update(Transfer)
+                .where(Transfer.organization_id == shops.organization_id)
+                .values(response_snapshot=None)
+            )
+            await session.execute(
+                delete(IdempotencyRecord).where(
+                    IdempotencyRecord.organization_id == shops.organization_id
+                )
+            )
+            await session.commit()
+
+        replays = [
+            await client.post("/api/v1/transfers", json=body, headers=key()) for body in bodies
+        ]
+
+    async with maker() as session:
+        legs = await transfer_movements(session, shops)
+    assert len(legs) == 4
+    for answer, replay in zip(answers, replays, strict=True):
+        own = sorted(str(leg.id) for leg in legs if str(leg.reference_id) == answer.json()["id"])
+        assert len(own) == 2
+        assert sorted(answer.json()["movements"]) == own
+        assert replay.status_code == 201, replay.text
+        assert replay.json() == answer.json()
+
+
 @pytest.mark.parametrize("changed", ["destination", "source", "quantity"])
 async def test_the_same_command_with_a_different_move_is_a_conflict(maker, changed):
     """Every fact of the move is in the permanent fingerprint. Without the
@@ -1010,8 +1157,10 @@ async def test_revoking_warehouse_access_is_honoured_on_a_replay(maker, end, fla
     assert replay.json()["details"]["capability"] == flag
 
 
-async def test_revoking_the_permission_is_honoured_on_a_replay(maker):
-    """Invariant I13: the decision reads the scope as it is now."""
+@pytest.mark.parametrize("revoked", [Permission.TRANSFER_CREATE, Permission.TRANSFER_RECEIVE])
+async def test_revoking_the_permission_is_honoured_on_a_replay(maker, revoked):
+    """Invariant I13: the decision reads the scope as it is now — for both of
+    the capabilities a single-step transfer needs."""
     shops = await make_shops(maker)
     coat = await stock(
         maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 2}
@@ -1026,9 +1175,7 @@ async def test_revoking_the_permission_is_honoured_on_a_replay(maker):
     async with api(maker, shops.scope(shops.child_store)) as client:
         first = await client.post("/api/v1/transfers", json=body, headers=headers)
     assert first.status_code == 201, first.text
-    async with api(
-        maker, shops.scope(shops.child_store, MANAGER - {Permission.TRANSFER_CREATE})
-    ) as client:
+    async with api(maker, shops.scope(shops.child_store, MANAGER - {revoked})) as client:
         replay = await client.post("/api/v1/transfers", json=body, headers=headers)
     assert replay.status_code == 403, replay.text
     assert replay.json()["code"] == "PERMISSION_DENIED"
@@ -1104,6 +1251,295 @@ async def test_the_service_refuses_a_store_without_access_without_the_router(mak
         assert await count(session, Transfer, shops) == 1
         assert await quantity_at(session, shops.shared_warehouse, coat.variant, coat.size()) == 1
         assert await quantity_at(session, shops.child_warehouse, coat.variant, coat.size()) == 1
+
+
+# ---------------------------------------------------------------------------
+# Found by the independent review (2026-09-21): each either failed before its
+# fix, or pins a guard that no test noticed being removed
+# ---------------------------------------------------------------------------
+
+
+async def test_moving_goods_needs_transfer_receive_as_well(maker):
+    """Single-step: whoever sends the goods also receives them, so a role
+    without `transfer:receive` cannot complete a transfer. Before the review
+    it could, and an owner who removed that capability to stop a role
+    receiving goods would have seen no effect (independent review,
+    2026-09-21)."""
+    shops = await make_shops(maker)
+    coat = await stock(
+        maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 2}
+    )
+    async with api(
+        maker, shops.scope(shops.child_store, MANAGER - {Permission.TRANSFER_RECEIVE})
+    ) as client:
+        response = await client.post(
+            "/api/v1/transfers",
+            json=transfer_body(
+                shops,
+                source=shops.child_warehouse,
+                destination=shops.shared_warehouse,
+                lines=[(coat.variant, coat.size(), 1)],
+            ),
+            headers=key(),
+        )
+    assert response.status_code == 403, response.text
+    assert response.json()["code"] == "PERMISSION_DENIED"
+    await assert_nothing_moved(maker, shops, coat, shared=0, child=2)
+
+
+@pytest.mark.parametrize("unknown", ["product", "size"])
+async def test_an_unknown_product_or_size_is_refused_exactly_like_a_foreign_one(maker, unknown):
+    """`validate_stock_references` promises one answer for an id that does not
+    exist and for one that belongs to another organization. The transfer used
+    to write its lines before asking, so a made-up id hit the database's own
+    foreign key and came back as a 500 while a foreign id was a 404 — which
+    told a caller whether an id exists in someone else's catalog (independent
+    review, 2026-09-21)."""
+    shops = await make_shops(maker)
+    theirs = await make_shops(maker)
+    coat = await stock(
+        maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 2}
+    )
+    their_coat = await stock(
+        maker,
+        theirs,
+        warehouse=theirs.child_warehouse,
+        store=theirs.child_store,
+        quantities={"M": 1},
+    )
+    foreign = their_coat.variant if unknown == "product" else their_coat.size()
+
+    def lines(value: str) -> list[tuple[str, str, int]]:
+        return [(value, coat.size(), 1)] if unknown == "product" else [(coat.variant, value, 1)]
+
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        responses = [
+            await client.post(
+                "/api/v1/transfers",
+                json=transfer_body(
+                    shops,
+                    source=shops.child_warehouse,
+                    destination=shops.shared_warehouse,
+                    lines=lines(value),
+                ),
+                headers=key(),
+            )
+            for value in (str(uuid.uuid4()), foreign)
+        ]
+    assert [r.status_code for r in responses] == [404, 404], [r.text for r in responses]
+    assert responses[0].json() == responses[1].json()
+    await assert_nothing_moved(maker, shops, coat, shared=0, child=2)
+
+
+async def test_a_shortfall_leaves_nothing_even_for_a_caller_that_commits(maker):
+    """All or nothing must not depend on the caller rolling back.
+
+    The destination is chosen to sort before the source, which is the order a
+    leg into it would have been applied first. The transfer used to find the
+    shortfall only after that leg — so a non-HTTP caller that caught the error
+    and committed would have saved a transfer row and a lone `TRANSFER_IN`,
+    stock created from nothing (independent review, 2026-09-21). Now the
+    shortfall is found before anything is written.
+    """
+    from app.modules.transfers.service import TransferLineInput, create_transfer
+
+    shops = await make_shops(maker)
+    third = await _third_warehouse(maker, shops)
+    destination, source = sorted([shops.child_warehouse, third])
+    coat = await stock(maker, shops, warehouse=source, store=shops.child_store, quantities={"M": 1})
+    await stock(
+        maker, shops, warehouse=destination, store=shops.child_store, quantities={"M": 1}, coat=coat
+    )
+
+    async with maker() as session:
+        with pytest.raises(InsufficientStockError):
+            await create_transfer(
+                session,
+                scope=shops.scope(shops.child_store),
+                store_id=shops.child_store,
+                command_id=uuid.uuid4(),
+                from_location_id=source,
+                to_location_id=destination,
+                lines=[TransferLineInput(uuid.UUID(coat.variant), uuid.UUID(coat.size()), 5)],
+            )
+        await session.commit()
+
+    async with maker() as session:
+        assert await count(session, Transfer, shops) == 0
+        assert await transfer_movements(session, shops) == []
+        assert await quantity_at(session, destination, coat.variant, coat.size()) == 1
+        assert await quantity_at(session, source, coat.variant, coat.size()) == 1
+        assert await find_divergences(session, organization_id=shops.organization_id) == []
+
+
+async def test_the_same_command_arriving_twice_at_once_is_serialized(maker, engine):
+    """The advisory lock on `(organization, command_id)` is load-bearing.
+
+    A second request with the same permanent `command_id` but a new cache key
+    reads `transfer WHERE command_id = …` before the first has committed, sees
+    nothing, and would go on to insert — into `uq_transfer_org_command`, an
+    unhandled error and a 500 for an ordinary retry. The advisory lock makes
+    it wait and then answer with the original transfer. Every other test here
+    stays green without the lock, which is why this one exists (independent
+    review, 2026-09-21; the refund suite has its twin).
+    """
+    from app.modules.transfers.service import TransferLineInput, create_transfer
+
+    shops = await make_shops(maker)
+    coat = await stock(
+        maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 3}
+    )
+    command_id = uuid.uuid4()
+
+    def command(session: AsyncSession):
+        return create_transfer(
+            session,
+            scope=shops.scope(shops.child_store),
+            store_id=shops.child_store,
+            command_id=command_id,
+            from_location_id=shops.child_warehouse,
+            to_location_id=shops.shared_warehouse,
+            lines=[TransferLineInput(uuid.UUID(coat.variant), uuid.UUID(coat.size()), 1)],
+        )
+
+    async def retry() -> str:
+        async with maker() as session:
+            result = await command(session)
+            await session.commit()
+            return str(result.transfer.id)
+
+    async with maker() as holder:
+        first = await command(holder)
+        holder_pid = await holder.scalar(text("SELECT pg_backend_pid()"))
+        assert holder_pid is not None
+        task = asyncio.create_task(retry())
+        try:
+            await wait_until_blocked_by(engine, holder_pid)
+            assert not task.done(), "the duplicate command should be waiting"
+        finally:
+            await holder.commit()
+            replayed = await asyncio.wait_for(task, timeout=20)
+
+    # The retry got the original transfer back: not a second one, not a crash.
+    assert replayed == str(first.transfer.id)
+    async with maker() as session:
+        assert await count(session, Transfer, shops) == 1
+        assert len(await transfer_movements(session, shops)) == 2
+        assert await quantity_at(session, shops.child_warehouse, coat.variant, coat.size()) == 2
+        assert await quantity_at(session, shops.shared_warehouse, coat.variant, coat.size()) == 1
+        assert await find_divergences(session, organization_id=shops.organization_id) == []
+
+
+async def test_can_sell_alone_at_the_source_is_enough_to_move_goods_out(maker):
+    """Pins the rule as it stands, so that changing it is a decision, not a drift.
+
+    Design §1.6 proposes `can_sell` at the source. Here the child store may
+    only *sell* from the shared warehouse, and its manager can still move the
+    whole shared pile into the child's own warehouse — after which, with these
+    grants, neither store can move it back. The owner has not decided whether
+    that is right (open question in the M1-018 report). If the source should
+    need more than `can_sell`, this is the test that changes with it.
+    """
+    shops = await make_shops(maker, child_may_receive_shared=False)
+    coat = await stock(
+        maker,
+        shops,
+        warehouse=shops.shared_warehouse,
+        store=shops.primary_store,
+        quantities={"M": 3},
+    )
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        moved = await client.post(
+            "/api/v1/transfers",
+            json=transfer_body(
+                shops,
+                source=shops.shared_warehouse,
+                destination=shops.child_warehouse,
+                lines=[(coat.variant, coat.size(), 3)],
+            ),
+            headers=key(),
+        )
+        back_by_child = await client.post(
+            "/api/v1/transfers",
+            json=transfer_body(
+                shops,
+                source=shops.child_warehouse,
+                destination=shops.shared_warehouse,
+                lines=[(coat.variant, coat.size(), 3)],
+            ),
+            headers=key(),
+        )
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        back_by_primary = await client.post(
+            "/api/v1/transfers",
+            json=transfer_body(
+                shops,
+                store=shops.primary_store,
+                source=shops.child_warehouse,
+                destination=shops.shared_warehouse,
+                lines=[(coat.variant, coat.size(), 3)],
+            ),
+            headers=key(),
+        )
+
+    assert moved.status_code == 201, moved.text
+    assert back_by_child.status_code == 403, back_by_child.text
+    assert back_by_child.json()["details"]["capability"] == "can_receive"
+    assert back_by_primary.status_code == 403, back_by_primary.text
+    assert back_by_primary.json()["details"]["capability"] == "can_sell"
+    async with maker() as session:
+        assert await quantity_at(session, shops.shared_warehouse, coat.variant, coat.size()) == 0
+        assert await quantity_at(session, shops.child_warehouse, coat.variant, coat.size()) == 3
+
+
+@pytest.mark.parametrize("missing", [Permission.TRANSFER_CREATE, Permission.TRANSFER_RECEIVE])
+async def test_the_service_refuses_a_person_without_either_permission_without_the_router(
+    maker, missing
+):
+    """The person's half of the same defence in depth. A caller that is not
+    an HTTP request has no router to refuse it first, so the command itself
+    must ask for both capabilities a single-step transfer needs — for a new
+    command, and for a durable replay of one the person could once issue.
+    """
+    from app.modules.transfers.service import TransferLineInput, create_transfer
+
+    shops = await make_shops(maker)
+    coat = await stock(
+        maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 2}
+    )
+    command_id = uuid.uuid4()
+
+    async def move(session: AsyncSession, permissions: frozenset[Permission]) -> None:
+        await create_transfer(
+            session,
+            scope=shops.scope(shops.child_store, permissions),
+            store_id=shops.child_store,
+            command_id=command_id,
+            from_location_id=shops.child_warehouse,
+            to_location_id=shops.shared_warehouse,
+            lines=[TransferLineInput(uuid.UUID(coat.variant), uuid.UUID(coat.size()), 1)],
+        )
+
+    async with maker() as session:
+        with pytest.raises(PermissionDeniedError) as refused:
+            await move(session, MANAGER - {missing})
+        await session.rollback()
+    assert refused.value.details["permission"] == missing.value
+
+    async with maker() as session:
+        await move(session, MANAGER)
+        await session.commit()
+
+    async with maker() as session:
+        # The same command_id: a durable replay, refused before it is answered.
+        with pytest.raises(PermissionDeniedError):
+            await move(session, MANAGER - {missing})
+        await session.rollback()
+
+    async with maker() as session:
+        assert await count(session, Transfer, shops) == 1
+        assert await quantity_at(session, shops.child_warehouse, coat.variant, coat.size()) == 1
+        assert await quantity_at(session, shops.shared_warehouse, coat.variant, coat.size()) == 1
 
 
 @pytest.mark.parametrize("foreign", ["from_location_id", "to_location_id", "initiating_store_id"])
@@ -1251,7 +1687,9 @@ async def test_opposing_transfers_all_complete_without_deadlock(maker):
         assert await find_divergences(session, organization_id=shops.organization_id) == []
 
 
-async def test_a_transfer_and_a_sale_racing_for_the_last_coat_let_exactly_one_through(maker):
+async def test_a_transfer_and_a_sale_racing_for_the_last_coat_let_exactly_one_through(
+    maker, engine
+):
     """A sale at the shared warehouse while the last coat is being moved out
     of it. The transfer holds its transaction open deliberately — whether two
     racing requests overlap at the critical moment is otherwise a coin flip —
@@ -1297,8 +1735,10 @@ async def test_a_transfer_and_a_sale_racing_for_the_last_coat_let_exactly_one_th
             to_location_id=shops.child_warehouse,
             lines=[TransferLineInput(uuid.UUID(coat.variant), uuid.UUID(coat.size()), 1)],
         )
+        holder_pid = await holder.scalar(text("SELECT pg_backend_pid()"))
+        assert holder_pid is not None
         task = asyncio.create_task(primary_sells())
-        await asyncio.sleep(0.4)
+        await wait_until_blocked_by(engine, holder_pid)
         assert not task.done(), "the sale should be waiting on the shared row"
         await holder.commit()
         sale = await asyncio.wait_for(task, timeout=20)
@@ -1312,7 +1752,7 @@ async def test_a_transfer_and_a_sale_racing_for_the_last_coat_let_exactly_one_th
         assert await find_divergences(session, organization_id=shops.organization_id) == []
 
 
-async def test_a_sale_holding_the_last_coat_leaves_the_transfer_nothing_to_move(maker):
+async def test_a_sale_holding_the_last_coat_leaves_the_transfer_nothing_to_move(maker, engine):
     """The mirror: the sale commits first, the transfer waited behind it and is
     refused whole — with no correction offered, because a transfer has none."""
     from app.modules.sales.service import SaleLineInput, create_sale
@@ -1356,8 +1796,10 @@ async def test_a_sale_holding_the_last_coat_leaves_the_transfer_nothing_to_move(
                 )
             ],
         )
+        holder_pid = await holder.scalar(text("SELECT pg_backend_pid()"))
+        assert holder_pid is not None
         task = asyncio.create_task(child_moves_it())
-        await asyncio.sleep(0.4)
+        await wait_until_blocked_by(engine, holder_pid)
         assert not task.done(), "the transfer should be waiting on the shared row"
         await holder.commit()
         moved = await asyncio.wait_for(task, timeout=20)

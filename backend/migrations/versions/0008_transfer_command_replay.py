@@ -19,21 +19,32 @@ request cannot be proven — and the service answers a retry of it with a
 conflict, never with a second transfer.
 
 **2. References bound through the organization.** `0006` gave `transfer`
-single-column foreign keys to its two locations and its store, while every
-other table that names a location got composite ones through
-`organization_id` (ADR-0004 §2.2). The stock movements a transfer writes are
-already bound that way, so goods could not actually cross a tenant boundary;
-the transfer row itself could still *name* another organization's warehouse if
-a service check were ever missed. The composite keys make that row
+single-column foreign keys to its two locations and its store, although the
+table carries `organization_id` — and the other tables that carry one beside
+a location (`stock_movement`, `stock_lot`, `inventory_snapshot`,
+`store_location_access`) bind it compositely (ADR-0004 §2.2). Tables with no
+`organization_id` of their own (`inventory`, `sale_item`, `refund_item`)
+cannot, and are unchanged. The stock movements a transfer writes are already
+bound that way, so goods could not actually cross a tenant boundary; the
+transfer row itself could still *name* another organization's warehouse if a
+service check were ever missed. The composite keys make that row
 unrepresentable, which is the difference between invariant I12 being
 `DB_ENFORCED` on this table or merely hoped for.
 
-The table is empty when this runs — no code before M1-018 writes it — so the
-new constraints validate nothing and cannot fail on existing data.
+At first deploy the table is empty — no code before M1-018 writes it — so the
+new constraints validate nothing. On a later re-upgrade they validate the
+rows a downgrade left behind, which were written under the same rule.
 
-Rolling back below this revision is bounded by `0006`, not by this file: once
-goods have moved between warehouses, `0006`'s downgrade has no store-keyed
-shape to put them back into, and refuses. See the M1-018 report.
+Rolling back below this revision is bounded by `0006`, not by this file.
+`0006`'s downgrade puts stock back under stores only while every store maps
+to exactly one warehouse. Every transfer needs a store that reaches two, and
+while the access rows still say so, `0006` refuses by name. If they were
+edited back to one-to-one while transfer rows remain, it instead fails
+re-adding `transfer.to_store_id` as `NOT NULL` over those rows — still inside
+its transaction, so nothing is half-applied, but with a database error rather
+than a reason. Prefer rolling back application code and keeping the schema
+(ADR-0003); the M1-018 report (`.ai/project-memory/m1-018-transfer-report.md`)
+has the detail.
 
 Revision ID: 0008_transfer_replay
 Revises: 0007_missing_at_sale

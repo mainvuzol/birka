@@ -3,32 +3,46 @@
 A transfer is the only way stock leaves one place for another. It writes a
 `TRANSFER_OUT` at the source and a matching `TRANSFER_IN` at the destination,
 in one transaction, and nothing else: no `sale` row, no money, no revenue
-(invariant I16). `inventory.apply_movements` refuses half a pair, or a move
-dressed up as anything else (invariant I24), so this module is the only
-writer that can satisfy it.
+(invariant I16). `inventory.apply_movements` refuses half a pair — a leg
+without its partner, two legs at one place, legs of unequal size or legs that
+do not name their transfer (invariant I24) — and this module is the only one
+that writes transfer movements at all. That goods never move between places
+under any *other* movement type is not checked at that door, and cannot be:
+see `inventory.validate_location_flows`. It holds because every command that
+exists is built so, and a new stock command must be reviewed against it.
 
 **Single-step, by default and not by decision.** Sending and receiving happen
 in the same transaction and the transfer is born `RECEIVED` (assumption A8).
 Whether the receiving side should confirm arrival is open question Q5; the
-`DRAFT`/`SENT` states and the `transfer:receive` capability exist so that
-answering it later is a service change, not a migration. Until then
-`transfer:receive` guards nothing.
+`DRAFT`/`SENT` states exist so that answering it later is a service change,
+not a migration. Because one person both sends and receives, they need both
+`transfer:create` and `transfer:receive`: an owner who takes `transfer:receive`
+away from a role must see it take effect. When Q5 brings confirmation,
+`transfer:receive` moves to the receiving side.
 
-**Two independent checks, as for every stock command.** `transfer:create`
-asks whether this *person* may move goods on this store's authority. Access
-rows ask whether the *store* may take goods out of the source (`can_sell`) and
-put them into the destination (`can_receive`) — ADR-0004 §1.6. The store must
-hold both. Whether an organization-wide manager may move goods between
-warehouses none of their stores reaches is a roles question the owner has not
-answered, so it is not assumed: such a transfer is refused.
+**Two independent checks, as for every stock command.** The permissions ask
+whether this *person* may move goods on this store's authority. Access rows
+ask whether the *store* may take goods out of the source (`can_sell`) and put
+them into the destination (`can_receive`) — design §1.6 in
+`m1-018-stock-location-design.md`. The store must hold both. `can_sell` at the
+source is that design's proposal, not an owner decision: it lets a store that
+may only *sell* from a warehouse also move goods out of it, and the owner has
+not yet said whether it should. Whether an organization-wide manager may move
+goods between warehouses none of their stores reaches is likewise unanswered,
+so it is not assumed: such a transfer is refused.
 
 **One call, both legs.** The two legs go to `apply_movements` together, so the
 source and destination keys are locked in one globally sorted batch. Two
 calls would lock the destination after the source — out of global order — and
 two opposing transfers would deadlock (ADR-0004 §2.5).
 
-**All or nothing.** A shortfall at the source refuses the whole transfer. Goods
-are never partially moved, and never made up from another warehouse.
+**All or nothing, decided before anything is written.** Every product, size,
+warehouse and the acting store are validated, and every stock key is locked,
+before the first row is written; the source is then checked under those locks.
+A shortfall refuses the whole transfer with nothing in the transaction to
+undo, so even a caller that caught the error and committed would commit no
+half of a transfer. Goods are never partially moved, and never made up from
+another warehouse.
 
 **The initiating store is recorded as the acting store** on both ledger rows.
 The ledger allows a transfer to have none, for a move no single store is
@@ -36,16 +50,21 @@ responsible for; this one has a store, and the ledger says so. It also keeps
 the rule every stock command already obeys — a store that is not trading does
 not move goods — without inventing a new one for transfers.
 
-**A closed warehouse can be neither source nor destination.** The design
-proposed that an inactive location stay "transferable-out" (ADR-0004 §1.11,
-marked PROPOSED) while the owner's own words are that closing a warehouse
-"freezes it". The two disagree, and this module takes the one that refuses:
-reopening a warehouse is always possible, an unwanted move out of a frozen one
-is not undoable. Recorded as an open question.
+**A closed warehouse can be neither source nor destination** — the rule every
+stock command already follows, not a new one: `lock_stock` refuses an
+inactive location for sales, receipts, adjustments and refunds alike. Design
+§1.11 proposed that an inactive location stay "transferable-out", so its stock
+is never stranded; that proposal is not built here. The owner has not said
+what closing a warehouse means, and asked that what closed *stores* may do —
+transfers included — be defined before it is built (owner decisions
+2026-09-15 §2); a transfer-only exception written now would answer that by
+default. Nothing in the application closes a warehouse today: `is_active`
+changes only by operator action, which reopens one just as easily. Open
+question in the M1-018 report.
 
-Lock order, identical to the sale and refund commands: the router's
-idempotency-row insert, then the advisory lock on the permanent command, then
-the inventory keys in their sorted order.
+Lock order, the same as the sale's: the router's idempotency-row insert, then
+the advisory lock on the permanent command, then the inventory keys in their
+sorted order, and only then the rows this command writes.
 """
 
 from __future__ import annotations
@@ -58,7 +77,11 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
-from app.core.errors import IdempotencyConflictError, ValidationFailedError
+from app.core.errors import (
+    IdempotencyConflictError,
+    InsufficientStockError,
+    ValidationFailedError,
+)
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
 from app.modules.authz.permissions import Permission
@@ -68,6 +91,7 @@ from app.modules.inventory.service import (
     TRANSFER_REFERENCE,
     MovementRequest,
     apply_movements,
+    lock_stock,
     transfer_movement_ids,
 )
 from app.modules.tenancy.service import LocationCapability, require_location_access
@@ -234,9 +258,10 @@ async def _existing_command(
     if existing.command_fingerprint != request_fingerprint:
         # Same permanent command, different request. Never execute: one of the
         # two payloads is a client bug, and guessing which would move goods
-        # nobody asked to move. A NULL fingerprint — a transfer made while
-        # revision 0008 was rolled back — is the same refusal for a different
-        # reason: there is nothing to compare against.
+        # nobody asked to move. A NULL fingerprint is the same refusal for a
+        # different reason: there is nothing to compare against. It exists
+        # only on a transfer made before revision 0008 was rolled back and
+        # re-applied, which drops the column and adds it back empty.
         details = {"command_id": str(command_id)}
         if existing.initiating_store_id in scope.store_ids and scope.can(
             Permission.TRANSFER_CREATE, existing.initiating_store_id
@@ -251,6 +276,7 @@ async def _existing_command(
     # The right to replay is the right to have issued the command: a client
     # that timed out must be able to learn the outcome of its own transfer.
     scope.require(Permission.TRANSFER_CREATE, existing.initiating_store_id)
+    scope.require(Permission.TRANSFER_RECEIVE, existing.initiating_store_id)
     return await _read_transfer(session, existing)
 
 
@@ -275,6 +301,7 @@ async def create_transfer(
     # Re-checked here even though the router already decided: this service is
     # the command boundary for any caller that is not an HTTP request.
     scope.require(Permission.TRANSFER_CREATE, store_id)
+    scope.require(Permission.TRANSFER_RECEIVE, store_id)
     # Invariant I23, twice over, and before the durable replay rather than
     # after it: a store whose access was revoked must not be handed a stored
     # success, whichever door it came in through.
@@ -305,6 +332,39 @@ async def create_transfer(
     )
     if existing is not None:
         return existing
+
+    # Validate every product, size, warehouse and the acting store, and lock
+    # every stock key in the one global order, before anything is written —
+    # the order the sale command uses. Writing the lines first let the
+    # database's own foreign key answer a made-up product with a 500 while
+    # another organization's product got a 404: an answer that told a caller
+    # whether an id exists elsewhere (independent review, 2026-09-21).
+    quantities = await lock_stock(
+        session,
+        organization_id=scope.organization_id,
+        keys=[
+            (location_id, line.product_variant_id, line.size_id)
+            for line in lines
+            for location_id in (from_location_id, to_location_id)
+        ],
+        acting_store_ids={store_id},
+    )
+    # The whole transfer is decided here, under those locks, before a row is
+    # written. Found later — after a destination leg that sorts first had
+    # already been applied — a shortfall would leave half a transfer in the
+    # transaction for any caller that caught the error and committed.
+    for line in lines:
+        available = quantities[(from_location_id, line.product_variant_id, line.size_id)]
+        if available < line.quantity:
+            raise InsufficientStockError(
+                location_id=str(from_location_id),
+                product_variant_id=str(line.product_variant_id),
+                size_id=str(line.size_id),
+                requested=line.quantity,
+                available=available,
+                # A sale can offer "it is physically here"; a transfer cannot.
+                correctable=False,
+            )
 
     # One timestamp for both halves of a single-step transfer, taken from the
     # transaction so it agrees with every other row this command writes.
@@ -354,8 +414,8 @@ async def create_transfer(
             (to_location_id, line.quantity, MovementType.TRANSFER_IN),
         )
     ]
-    # ONE call, both legs: see the module docstring. A shortfall at the source
-    # raises here, before anything is committed, and nothing moves at all.
+    # ONE call, both legs: see the module docstring. The shortfall was ruled
+    # out above under the same locks, so this cannot fail on stock.
     applied = await apply_movements(
         session,
         organization_id=scope.organization_id,
