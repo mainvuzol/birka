@@ -24,6 +24,8 @@ from sqlalchemy import select
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.inventory import router as inventory_router
+from app.api.v1.locations import router as locations_router
+from app.api.v1.orders import router as orders_router
 from app.api.v1.refunds import router as refunds_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.transfers import router as transfers_router
@@ -33,6 +35,8 @@ from app.modules.tenancy.models import Store
 router = APIRouter()
 router.include_router(catalog_router)
 router.include_router(inventory_router)
+router.include_router(locations_router)
+router.include_router(orders_router)
 router.include_router(sales_router)
 router.include_router(refunds_router)
 router.include_router(transfers_router)

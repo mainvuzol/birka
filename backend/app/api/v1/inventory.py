@@ -20,6 +20,7 @@ from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
 from app.modules.audit import service as audit
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.inventory.models import (
     AcquisitionType,
@@ -33,7 +34,7 @@ from app.modules.inventory.service import (
     lock_stock,
     readable_stock,
 )
-from app.modules.tenancy.service import LocationCapability, require_location_access
+from app.modules.tenancy.service import LocationCapability
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -79,6 +80,8 @@ class InventoryRow(BaseModel):
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity: int
+    reserved_quantity: int
+    available_quantity: int
 
 
 class InventoryPage(BaseModel):
@@ -107,6 +110,7 @@ async def list_inventory(
         store_id=store_id,
         location_id=location_id,
         limit=limit,
+        scope=scope,
     )
     return InventoryPage(
         store_id=store_id,
@@ -116,6 +120,8 @@ async def list_inventory(
                 product_variant_id=row.product_variant_id,
                 size_id=row.size_id,
                 quantity=row.quantity,
+                reserved_quantity=row.reserved_quantity,
+                available_quantity=row.available_quantity,
             )
             for row in rows
         ],
@@ -142,9 +148,10 @@ async def receive_goods(
     # Invariant I23: the person may receive goods — may this store receive
     # them *here*? Checked before the idempotency key is claimed, so a revoked
     # grant cannot keep replaying a stored success (invariant I13).
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.INVENTORY_RECEIVE,
         store_id=payload.store_id,
         location_ids={payload.location_id},
         capability=LocationCapability.RECEIVE,
@@ -294,9 +301,10 @@ async def adjust_inventory(
     reason, always a StockMovement, always an audit record of before and after.
     """
     scope.require(Permission.INVENTORY_ADJUST, payload.store_id)
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.INVENTORY_ADJUST,
         store_id=payload.store_id,
         location_ids={payload.location_id},
         capability=LocationCapability.RECEIVE,

@@ -81,10 +81,21 @@ class StockLocation(UUIDPrimaryKey, TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(40), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # Explicit private-location control, not ownership of the goods. NULL
+    # preserves shared/legacy access. Never inferred from store kind or name.
+    managing_store_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("organization_id", "code", name="uq_stock_location_org_code"),
         UniqueConstraint("organization_id", "id", name="uq_stock_location_organization_id_id"),
+        ForeignKeyConstraint(
+            ["organization_id", "managing_store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_stock_location_org_managing_store",
+            ondelete="RESTRICT",
+        ),
     )
 
 

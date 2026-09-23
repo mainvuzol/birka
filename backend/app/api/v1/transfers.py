@@ -27,8 +27,9 @@ from app.api.deps import ScopeDep, SessionDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
-from app.modules.tenancy.service import LocationCapability, require_location_access
+from app.modules.tenancy.service import LocationCapability
 from app.modules.transfers.service import TransferLineInput, TransferResult, create_transfer
 
 router = APIRouter(tags=["transfers"])
@@ -129,16 +130,18 @@ async def create(
     scope.require(Permission.TRANSFER_CREATE, payload.store_id)
     # Single-step: the same person sends and receives (see the service).
     scope.require(Permission.TRANSFER_RECEIVE, payload.store_id)
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.TRANSFER_CREATE,
         store_id=payload.store_id,
         location_ids={payload.from_location_id},
         capability=LocationCapability.SELL,
     )
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.TRANSFER_RECEIVE,
         store_id=payload.store_id,
         location_ids={payload.to_location_id},
         capability=LocationCapability.RECEIVE,

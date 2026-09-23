@@ -36,7 +36,9 @@ from app.modules.inventory.models import (
     InventorySnapshotRow,
     StockLot,
     StockMovement,
+    StockReservation,
 )
+from app.modules.orders.models import CustomerOrder, CustomerOrderItem, OrderCommand
 from app.modules.refunds.models import Refund, RefundItem
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.tenancy.models import Organization, StockLocation, Store, StoreLocationAccess
@@ -50,12 +52,15 @@ __all__ = [
     "BusinessCategory",
     "CanonicalConcept",
     "CatalogMatchDecision",
+    "CustomerOrder",
+    "CustomerOrderItem",
     "GarmentType",
     "IdempotencyRecord",
     "Inventory",
     "InventorySnapshot",
     "InventorySnapshotRow",
     "Membership",
+    "OrderCommand",
     "Organization",
     "ParseResult",
     "ProductAlias",
@@ -76,6 +81,7 @@ __all__ = [
     "StockLocation",
     "StockLot",
     "StockMovement",
+    "StockReservation",
     "Store",
     "StoreLocationAccess",
     "Transfer",

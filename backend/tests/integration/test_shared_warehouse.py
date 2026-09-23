@@ -540,6 +540,8 @@ async def test_the_inventory_report_names_the_warehouse_and_never_sums_across_th
             "product_variant_id": variant,
             "size_id": size,
             "quantity": 6,
+            "reserved_quantity": 0,
+            "available_quantity": 6,
         }
     ]
     # The child store sees the same shared row — the same 6 coats, not another

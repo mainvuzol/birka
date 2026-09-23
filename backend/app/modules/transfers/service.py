@@ -84,6 +84,7 @@ from app.core.errors import (
 )
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.inventory.models import MovementType
@@ -92,9 +93,10 @@ from app.modules.inventory.service import (
     MovementRequest,
     apply_movements,
     lock_stock,
+    reserved_stock,
     transfer_movement_ids,
 )
-from app.modules.tenancy.service import LocationCapability, require_location_access
+from app.modules.tenancy.service import LocationCapability
 from app.modules.transfers.models import Transfer, TransferItem, TransferStatus
 
 logger = get_logger(__name__)
@@ -305,16 +307,18 @@ async def create_transfer(
     # Invariant I23, twice over, and before the durable replay rather than
     # after it: a store whose access was revoked must not be handed a stored
     # success, whichever door it came in through.
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.TRANSFER_CREATE,
         store_id=store_id,
         location_ids={from_location_id},
         capability=LocationCapability.SELL,
     )
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.TRANSFER_RECEIVE,
         store_id=store_id,
         location_ids={to_location_id},
         capability=LocationCapability.RECEIVE,
@@ -349,12 +353,15 @@ async def create_transfer(
         ],
         acting_store_ids={store_id},
     )
+    reserved = await reserved_stock(session, keys=list(quantities))
     # The whole transfer is decided here, under those locks, before a row is
     # written. Found later — after a destination leg that sorts first had
     # already been applied — a shortfall would leave half a transfer in the
     # transaction for any caller that caught the error and committed.
     for line in lines:
-        available = quantities[(from_location_id, line.product_variant_id, line.size_id)]
+        available = quantities[
+            (from_location_id, line.product_variant_id, line.size_id)
+        ] - reserved.get((from_location_id, line.product_variant_id, line.size_id), 0)
         if available < line.quantity:
             raise InsufficientStockError(
                 location_id=str(from_location_id),

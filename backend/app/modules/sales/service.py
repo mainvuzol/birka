@@ -41,6 +41,7 @@ from app.core.errors import (
 )
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import describe_variants, size_label
@@ -49,11 +50,12 @@ from app.modules.inventory.service import (
     MovementRequest,
     apply_movements,
     lock_stock,
+    reserved_stock,
     sale_correction_ids,
     sale_shortage_ids,
 )
 from app.modules.sales.models import Sale, SaleItem
-from app.modules.tenancy.service import LocationCapability, require_location_access
+from app.modules.tenancy.service import LocationCapability
 
 logger = get_logger(__name__)
 
@@ -398,6 +400,7 @@ async def create_sale(
             raise ValidationFailedError("A discount cannot exceed the price")
         normalized.append(replace(line, unit_price=unit_price, discount_amount=discount_amount))
     lines = normalized
+    _validate_reports(lines, corrections_requested, shortages_requested)
     request_fingerprint = idempotency.fingerprint(
         {
             "currency_code": currency_code,
@@ -432,12 +435,6 @@ async def create_sale(
         actor_user_id=scope.user_id,
         store_id=store_id,
     )
-    existing = await _existing_command(
-        session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
-    )
-    if existing is not None:
-        return existing
-
     # Invariant I23: the person may sell, but may this store sell *here*?
     # Checked before any row is locked, and before any stock is read.
     #
@@ -451,13 +448,37 @@ async def create_sale(
     # is `correction - demand`, which is never positive. A store denied
     # `can_receive` here still cannot deliver goods into this warehouse; it can
     # only account for goods it is simultaneously carrying out of it.
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.SALE_CREATE,
         store_id=store_id,
         location_ids={line.source_location_id for line in lines},
         capability=LocationCapability.SELL,
     )
+
+    for reports, permission in (
+        (corrections_requested, Permission.INVENTORY_CORRECT_DURING_SALE),
+        (shortages_requested, Permission.INVENTORY_REPORT_MISSING_DURING_SALE),
+    ):
+        if reports:
+            await require_stock_access(
+                session,
+                scope=scope,
+                store_id=store_id,
+                permission=permission,
+                location_ids={
+                    lines[report.line_index].source_location_id
+                    for report in reports
+                    if 0 <= report.line_index < len(lines)
+                },
+                capability=LocationCapability.SELL,
+            )
+    existing = await _existing_command(
+        session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
+    )
+    if existing is not None:
+        return existing
 
     # Lock every stock key in one global order before reading any shortfall.
     # This also materializes missing rows, closing the first-receipt race.
@@ -467,6 +488,13 @@ async def create_sale(
         keys=[(line.source_location_id, line.product_variant_id, line.size_id) for line in lines],
         acting_store_ids={store_id},
     )
+    reserved = await reserved_stock(session, keys=list(quantities))
+    for report in corrections_requested + shortages_requested:
+        line = lines[report.line_index]
+        key = (line.source_location_id, line.product_variant_id, line.size_id)
+        if reserved.get(key, 0):
+            raise ValidationFailedError("Release reservations before correcting this stock key")
+    quantities = {key: physical - reserved.get(key, 0) for key, physical in quantities.items()}
     described = await describe_variants(session, [line.product_variant_id for line in lines])
     for line in lines:
         description = described.get(line.product_variant_id)
@@ -475,7 +503,6 @@ async def create_sale(
                 "Unknown product variant", product_variant_id=str(line.product_variant_id)
             )
 
-    _validate_reports(lines, corrections_requested, shortages_requested)
     # Shortages first: they reduce the lines, and everything downstream — the
     # money, the sale movements, the stored items — is about what is actually
     # being sold. The two reports never touch the same stock key, so the
