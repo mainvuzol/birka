@@ -225,6 +225,8 @@ async def test_create_receive_and_sell_a_product(maker):
                 "product_variant_id": product["product_variant_id"],
                 "size_id": size_m,
                 "quantity": 3,
+                "reserved_quantity": 0,
+                "available_quantity": 3,
             }
         ]
 

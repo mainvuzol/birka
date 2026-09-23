@@ -28,6 +28,7 @@ from app.api.deps import ScopeDep, SessionDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.refunds.service import (
     RefundLineInput,
@@ -36,7 +37,7 @@ from app.modules.refunds.service import (
     refund_destinations,
     sale_store_id,
 )
-from app.modules.tenancy.service import LocationCapability, require_location_access
+from app.modules.tenancy.service import LocationCapability
 
 router = APIRouter(tags=["refunds"])
 
@@ -158,9 +159,10 @@ async def create(
         sale_id=sale_id,
         sale_item_ids={line.sale_item_id for line in payload.lines if line.restock},
     )
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.SALE_REFUND,
         store_id=store_id,
         location_ids=restock_destinations,
         capability=LocationCapability.RECEIVE,

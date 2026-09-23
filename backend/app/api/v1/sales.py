@@ -26,6 +26,7 @@ from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.errors import NotFoundError
 from app.core.text import CleanText
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.sales.service import (
@@ -36,7 +37,7 @@ from app.modules.sales.service import (
     create_sale,
     shortage_ids,
 )
-from app.modules.tenancy.service import LocationCapability, require_location_access
+from app.modules.tenancy.service import LocationCapability
 
 router = APIRouter(tags=["sales"])
 
@@ -170,13 +171,31 @@ async def create(
     # Invariant I23, and it belongs here rather than only in the service: the
     # service runs *after* the replay branch below, so a store whose warehouse
     # access was revoked would keep being handed its cached success.
-    await require_location_access(
+    await require_stock_access(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        permission=Permission.SALE_CREATE,
         store_id=payload.store_id,
         location_ids={line.source_location_id for line in payload.lines},
         capability=LocationCapability.SELL,
     )
+    for reports, permission in (
+        (payload.found_in_store, Permission.INVENTORY_CORRECT_DURING_SALE),
+        (payload.missing_in_store, Permission.INVENTORY_REPORT_MISSING_DURING_SALE),
+    ):
+        if reports:
+            await require_stock_access(
+                session,
+                scope=scope,
+                store_id=payload.store_id,
+                permission=permission,
+                location_ids={
+                    payload.lines[report.line_index].source_location_id
+                    for report in reports
+                    if 0 <= report.line_index < len(payload.lines)
+                },
+                capability=LocationCapability.SELL,
+            )
     outcome = await idempotency.claim(
         session,
         organization_id=scope.organization_id,

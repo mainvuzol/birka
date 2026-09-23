@@ -157,6 +157,7 @@ forbidden_modules = [
     "app.modules.sales",
     "app.modules.refunds",
     "app.modules.transfers",
+    "app.modules.orders",
 ]
 
 [[tool.importlinter.contracts]]
@@ -169,6 +170,7 @@ forbidden_modules = [
     "app.modules.sales",
     "app.modules.refunds",
     "app.modules.transfers",
+    "app.modules.orders",
     "app.modules.audit",
 ]
 
@@ -218,13 +220,13 @@ allow_indirect_imports = true
 name = "a sale neither refunds nor transfers"
 type = "forbidden"
 source_modules = ["app.modules.sales"]
-forbidden_modules = ["app.modules.refunds", "app.modules.transfers"]
+forbidden_modules = ["app.modules.refunds", "app.modules.transfers", "app.modules.orders"]
 
 [[tool.importlinter.contracts]]
 name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"
 source_modules = ["app.modules.inventory"]
-forbidden_modules = ["app.modules.sales", "app.modules.refunds", "app.modules.transfers"]
+forbidden_modules = ["app.modules.sales", "app.modules.refunds", "app.modules.transfers", "app.modules.orders"]
 
 [[tool.importlinter.contracts]]
 name = "only the inventory module may write stock (invariant I3)"
@@ -233,6 +235,7 @@ source_modules = [
     "app.modules.sales",
     "app.modules.refunds",
     "app.modules.transfers",
+    "app.modules.orders",
     "app.modules.catalog",
     "app.api",
 ]

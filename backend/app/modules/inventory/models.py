@@ -17,6 +17,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Enum,
     ForeignKey,
@@ -50,6 +51,8 @@ class AcquisitionType(StrEnum):
 
 
 class MovementType(StrEnum):
+    ORDER_DISPATCH = "ORDER_DISPATCH"
+    ORDER_RETURN = "ORDER_RETURN"
     SALE = "SALE"
     REFUND_RETURN = "REFUND_RETURN"
     DELIVERY = "DELIVERY"
@@ -197,6 +200,7 @@ class Inventory(UUIDPrimaryKey, UpdatedAtMixin, Base):
         postgresql.UUID(as_uuid=True), ForeignKey("size.id", ondelete="RESTRICT"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    reserved_quantity: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     __table_args__ = (
         UniqueConstraint(
@@ -208,6 +212,59 @@ class Inventory(UUIDPrimaryKey, UpdatedAtMixin, Base):
         # The hard floor. Service logic keeps stock correct; this keeps it sane
         # even if service logic is wrong (invariant I1).
         CheckConstraint("quantity >= 0", name="quantity_not_negative"),
+        CheckConstraint(
+            "reserved_quantity >= 0 AND reserved_quantity <= quantity",
+            name="reservation_within_stock",
+        ),
+    )
+
+
+class StockReservation(UUIDPrimaryKey, TimestampMixin, Base):
+    """A command's hold on physical stock; inactive rows retain its history."""
+
+    __tablename__ = "stock_reservation"
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    store_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    reference_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    product_variant_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("product_variant.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    size_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), ForeignKey("size.id", ondelete="RESTRICT"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_stock_reservation_org_location",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_stock_reservation_org_store",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "reference_id",
+            "location_id",
+            "product_variant_id",
+            "size_id",
+            name="uq_stock_reservation_reference_key",
+        ),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
     )
 
 
@@ -416,4 +473,5 @@ __all__ = [
     "SnapshotStatus",
     "StockLot",
     "StockMovement",
+    "StockReservation",
 ]

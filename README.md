@@ -60,11 +60,64 @@ backend/.venv/Scripts/python.exe -m alembic upgrade head
 backend/.venv/Scripts/python.exe -m uvicorn app.main:app --reload
 ```
 
-Create the first organization, its two stores, the default roles and an owner:
+Create the first organization, its two stores, a shared warehouse with explicit
+access for both stores, the default roles and an owner:
 
 ```bash
 backend/.venv/Scripts/python.exe -m scripts.seed_organization --telegram-user-id 123456789
 ```
+
+Optionally append `--with-child-warehouse` to create a separate warehouse with
+an access row for SECOND only. It can also be added on a later seed invocation.
+On macOS/Linux, use `python -m scripts.seed_organization` from `backend/` with
+the project's virtual environment activated and the database URL configured.
+
+Repeated setup preserves balances, paused locations and revoked warehouse
+grants. Bootstrap audit records retain the created UUID mappings: do not delete
+them or infer authority from a warehouse's name/code. Existing locations without
+this mapping cause setup to refuse; configure those explicitly rather than
+rerunning old migrations or creating duplicate stock. This tool currently
+bootstraps MAIN and SECOND, not arbitrary additional children.
+
+`GET /api/v1/stock-locations?store_id=<uuid>` lists explicitly accessible
+warehouses, including empty and paused ones, with names, activity and store
+capability flags. It requires `inventory:view` in that store. The flags are store
+grants, not permission to bypass the user's role or active-location checks.
+
+The optional child warehouse is private to its managing store (migration 0009).
+An organization-wide manager/owner does not automatically gain private-stock
+rights. Explicit active membership in the child store with the exact operation
+permission is required, including for the initial bootstrap owner. Configure the
+child manager explicitly; bootstrap does not create that membership silently.
+Existing legacy warehouses without an explicit bootstrap mapping are not guessed
+private. Customer order reservations and postal delivery are implemented in the backend.
+
+Apply migrations through 0011 before this version. Downgrade refuses private assignments;
+older application builds that ignore private controls are also unsafe to deploy
+while those assignments exist. See the [private control report](.ai/project-memory/private-location-report.md).
+
+## Customer orders
+
+`POST /api/v1/orders` accepts `store_id`, permanent `command_id`, and price/quantity
+lines with an explicit `source_location_id`. It reserves available goods without
+creating a completed sale. Inventory responses expose `quantity` (physical),
+`reserved_quantity`, and `available_quantity`.
+
+`POST /api/v1/orders/{id}/{dispatch,arrive,collect,cancel}` accepts `command_id`.
+Dispatch removes physical stock once; arrival is postal status only; collection
+creates the sale using frozen order prices without removing stock again. Use
+`GET /api/v1/orders/{id}` for current state; retry responses preserve the original
+command result even after later transitions. The same command UUID must be reused
+for retries. These endpoints use durable commands without the optional HTTP
+idempotency response cache used by older endpoints.
+
+Cancellation is allowed before dispatch and releases the hold, including on a
+paused warehouse. After dispatch, `/orders/{id}/return` requires `command_id`,
+`physically_received: true`, and a nonblank `reason`; it restores goods to their
+original warehouse. After collection use the existing sale refund command.
+Collection does not record payment. Partial shipments, reservation expiry,
+customer/contact tracking, installment accounting and the seller UI remain out
+of scope. Migration rollback refuses existing order/reservation history.
 
 ## Checks
 

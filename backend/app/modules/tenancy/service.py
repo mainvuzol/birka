@@ -3,13 +3,66 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from enum import StrEnum
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import LocationAccessDeniedError, NotFoundError
 from app.modules.tenancy.models import StockLocation, Store, StoreLocationAccess
+
+
+@dataclass(frozen=True, slots=True)
+class AccessibleLocation:
+    id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    can_sell: bool
+    can_receive: bool
+
+
+async def list_store_locations(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    private_store_id: uuid.UUID | None = None,
+) -> list[AccessibleLocation]:
+    """Discover granted places even when empty or paused.
+
+    The API checks the person's inventory:view permission first. These flags
+    describe the store's grants, not the person's authority to execute a
+    command; existing command checks still require both plus active locations.
+    """
+    await validate_active_stores(session, organization_id=organization_id, store_ids={store_id})
+    rows = await session.execute(
+        select(
+            StockLocation.id,
+            StockLocation.code,
+            StockLocation.name,
+            StockLocation.is_active,
+            StoreLocationAccess.can_sell,
+            StoreLocationAccess.can_receive,
+        )
+        .join(
+            StoreLocationAccess,
+            (StoreLocationAccess.location_id == StockLocation.id)
+            & (StoreLocationAccess.organization_id == StockLocation.organization_id),
+        )
+        .where(
+            StockLocation.organization_id == organization_id,
+            or_(
+                StockLocation.managing_store_id.is_(None),
+                StockLocation.managing_store_id == private_store_id,
+            ),
+            StoreLocationAccess.organization_id == organization_id,
+            StoreLocationAccess.store_id == store_id,
+        )
+        .order_by(StockLocation.code, StockLocation.id)
+    )
+    return [AccessibleLocation(*row) for row in rows]
 
 
 async def store_is_active(

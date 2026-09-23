@@ -54,6 +54,7 @@ from app.core.errors import (
 from app.core.logging import get_logger
 from app.core.text import is_storable
 from app.modules.audit import service as audit
+from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.inventory.models import MovementType
@@ -67,7 +68,6 @@ from app.modules.sales.models import Sale, SaleItem, SaleStatus
 from app.modules.sales.service import MAX_MONEY, money
 from app.modules.tenancy.service import (
     LocationCapability,
-    require_location_access,
     store_is_active,
 )
 
@@ -367,6 +367,18 @@ async def create_refund(
             await session.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id))
         ).all()
     }
+    await require_stock_access(
+        session,
+        scope=scope,
+        permission=Permission.SALE_REFUND,
+        store_id=sale.store_id,
+        location_ids={
+            preview[line.sale_item_id].source_location_id
+            for line in lines
+            if line.restock and line.sale_item_id in preview
+        },
+        capability=LocationCapability.RECEIVE,
+    )
     request_fingerprint = _fingerprint(
         scope=scope, sale=sale, lines=lines, reason=reason, sale_items=preview
     )
@@ -472,15 +484,6 @@ async def create_refund(
     # Owner decision, 2026-09-17: goods go back to the warehouse the sale line
     # drew them from. Returning them anywhere else is a return plus a transfer,
     # and must be two explicit operations (invariant I16).
-    destinations = {sale_items[line.sale_item_id].source_location_id for line in restocked}
-    if restocked:
-        await require_location_access(
-            session,
-            organization_id=scope.organization_id,
-            store_id=sale.store_id,
-            location_ids=destinations,
-            capability=LocationCapability.RECEIVE,
-        )
     if restocked and not await store_is_active(
         session, organization_id=scope.organization_id, store_id=sale.store_id
     ):

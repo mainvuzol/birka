@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from app.modules.inventory.models import (
     MovementType,
     StockLot,
     StockMovement,
+    StockReservation,
 )
 
 
@@ -112,7 +113,7 @@ async def decrement(
             Inventory.location_id == location_id,
             Inventory.product_variant_id == product_variant_id,
             Inventory.size_id == size_id,
-            Inventory.quantity >= quantity,
+            Inventory.quantity - Inventory.reserved_quantity >= quantity,
         )
         .values(quantity=Inventory.quantity - quantity)
         .returning(Inventory.quantity)
@@ -391,3 +392,87 @@ async def transfer_movement_ids(
             )
         ).all()
     )
+
+
+async def reservation_rows(
+    session: AsyncSession, *, organization_id: uuid.UUID, reference_id: uuid.UUID
+) -> list[StockReservation]:
+    # Serialize even a first reservation before its rows exist.
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"reservation:{organization_id}:{reference_id}"},
+    )
+    return list(
+        (
+            await session.scalars(
+                select(StockReservation).where(
+                    StockReservation.organization_id == organization_id,
+                    StockReservation.reference_id == reference_id,
+                )
+            )
+        ).all()
+    )
+
+
+async def reserved_quantities(
+    session: AsyncSession, *, keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]
+) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
+    if not keys:
+        return {}
+    rows = (
+        await session.execute(
+            select(
+                Inventory.location_id,
+                Inventory.product_variant_id,
+                Inventory.size_id,
+                Inventory.reserved_quantity,
+            ).where(
+                tuple_(Inventory.location_id, Inventory.product_variant_id, Inventory.size_id).in_(
+                    keys
+                )
+            )
+        )
+    ).all()
+    return {(r[0], r[1], r[2]): r[3] for r in rows}
+
+
+async def change_reserved(
+    session: AsyncSession, *, key: tuple[uuid.UUID, uuid.UUID, uuid.UUID], delta: int
+) -> None:
+    await session.execute(
+        update(Inventory)
+        .where(
+            Inventory.location_id == key[0],
+            Inventory.product_variant_id == key[1],
+            Inventory.size_id == key[2],
+        )
+        .values(reserved_quantity=Inventory.reserved_quantity + delta)
+    )
+
+
+async def add_reservation(session: AsyncSession, **values: object) -> None:
+    session.add(StockReservation(**values))
+    await session.flush()
+
+
+async def deactivate_reservation(session: AsyncSession, row: StockReservation) -> None:
+    row.active = False
+    await session.flush()
+
+
+async def lock_existing_stock(
+    session: AsyncSession, *, keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]
+) -> None:
+    """Lock a cancellation basket without creating stock or testing activity."""
+    for location_id, variant_id, size_id in sorted(set(keys)):
+        found = await session.scalar(
+            select(Inventory.id)
+            .where(
+                Inventory.location_id == location_id,
+                Inventory.product_variant_id == variant_id,
+                Inventory.size_id == size_id,
+            )
+            .with_for_update()
+        )
+        if found is None:
+            raise NotFoundError("Reservation stock row is missing")

@@ -40,6 +40,12 @@ VERSIONS = BACKEND_ROOT / "migrations" / "versions"
 # sha256 of every migration that has shipped. The newest revision is the one
 # under active development and is deliberately absent: it is not history yet.
 FROZEN: dict[str, str] = {
+    "0009_private_location_control.py": (
+        "e7e89fba66797b07af221df688a3bbba81445171b8a57ef723707e115bd79634"
+    ),
+    "0010_stock_reservations.py": (
+        "dce060990668257d4b53f72f51c8922265f063bc2040de39b2fdb1df240b9043"
+    ),
     "0001_m1a_tenancy_identity_authz.py": (
         "46b39759a8ef05197c0fd31496f40e077b655731e86b4398d76d2e0f731daec0"
     ),
@@ -60,6 +66,9 @@ FROZEN: dict[str, str] = {
         "0daeb67e082736245bc36c54ff543275a1eba9cded95a0c43e409f6dc12a7722"
     ),
     "0007_missing_at_sale.py": ("ace1eb1d2de40e4c4ce12a5a64836ac60cdc440b1a6e0ed59461e682bba0b213"),
+    "0008_transfer_command_replay.py": (
+        "b731735a65326e8de2bac8d4b09beb5729234a994f717246b3287a186401d3cf"
+    ),
 }
 
 

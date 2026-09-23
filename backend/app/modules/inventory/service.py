@@ -23,8 +23,11 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import InsufficientStockError, ValidationFailedError
+from app.core.errors import InsufficientStockError, PermissionDeniedError, ValidationFailedError
 from app.core.logging import get_logger
+from app.modules.authz.locations import readable_location_ids, require_stock_access
+from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.catalog.validation import validate_stock_references
 from app.modules.inventory import repository
 from app.modules.inventory.models import Inventory, MovementReason, MovementType
@@ -33,6 +36,7 @@ from app.modules.tenancy.service import (
     require_location_access,
     validate_active_locations,
     validate_active_stores,
+    validate_locations,
 )
 
 logger = get_logger(__name__)
@@ -42,6 +46,8 @@ logger = get_logger(__name__)
 # either way, and the caller must say which.
 DIRECTION: dict[MovementType, int] = {
     MovementType.SALE: -1,
+    MovementType.ORDER_DISPATCH: -1,
+    MovementType.ORDER_RETURN: +1,
     MovementType.TRANSFER_OUT: -1,
     MovementType.DELIVERY: +1,
     MovementType.REFUND_RETURN: +1,
@@ -272,6 +278,16 @@ async def apply_movements(
         acting_store_ids={r.acting_store_id for r in requests if r.acting_store_id is not None},
     )
 
+    reserved = await reserved_stock(
+        session, keys=[(r.location_id, r.product_variant_id, r.size_id) for r in requests]
+    )
+    for request in requests:
+        if request.movement_type in {
+            MovementType.ADJUSTMENT,
+            MovementType.STOCKTAKE_CORRECTION,
+        } and reserved.get((request.location_id, request.product_variant_id, request.size_id), 0):
+            raise ValidationFailedError("Release reservations before correcting this stock key")
+
     applied: list[AppliedMovement] = []
 
     # Sorting is not cosmetic: two concurrent multi-line commands that touch
@@ -288,7 +304,7 @@ async def apply_movements(
                 quantity=magnitude,
             )
             if quantity_after is None:
-                available = await repository.current_quantity(
+                physical = await repository.current_quantity(
                     session,
                     location_id=request.location_id,
                     product_variant_id=request.product_variant_id,
@@ -299,12 +315,20 @@ async def apply_movements(
                     product_variant_id=str(request.product_variant_id),
                     size_id=str(request.size_id),
                     requested=magnitude,
-                    available=available,
+                    available=physical
+                    - reserved.get(
+                        (request.location_id, request.product_variant_id, request.size_id), 0
+                    ),
                     # Only a sale has a correction to offer (FOUND_DURING_SALE,
                     # business fact F30). Telling a transfer or an adjustment
                     # it could "correct" its way past a shortfall would point
                     # the client at a flow that does not exist for it.
-                    correctable=request.movement_type is MovementType.SALE,
+                    correctable=(
+                        request.movement_type is MovementType.SALE
+                        and not reserved.get(
+                            (request.location_id, request.product_variant_id, request.size_id), 0
+                        )
+                    ),
                 )
         else:
             quantity_after = await repository.increment(
@@ -352,6 +376,8 @@ class StockRow:
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity: int
+    reserved_quantity: int
+    available_quantity: int
 
 
 async def readable_stock(
@@ -361,6 +387,7 @@ async def readable_stock(
     store_id: uuid.UUID,
     location_id: uuid.UUID | None = None,
     limit: int = 100,
+    scope: RequestScope | None = None,
 ) -> list[StockRow]:
     """What this store may see, keyed by the place it actually sits.
 
@@ -372,8 +399,19 @@ async def readable_stock(
     The query lives here rather than in the router so invariant I23 has
     somewhere to be enforced for reads at all.
     """
+    if scope is not None:
+        if scope.organization_id != organization_id:
+            raise PermissionDeniedError("Stock scope organization mismatch")
+        scope.require(Permission.INVENTORY_VIEW, store_id)
     granted = set(
         await accessible_locations(session, organization_id=organization_id, store_id=store_id)
+    )
+    granted = await readable_location_ids(
+        session,
+        organization_id=organization_id,
+        store_id=store_id,
+        location_ids=granted,
+        scope=scope,
     )
     if location_id is not None:
         await require_location_access(
@@ -383,6 +421,17 @@ async def readable_stock(
             location_ids={location_id},
             capability=None,
         )
+        if scope is not None:
+            await require_stock_access(
+                session,
+                scope=scope,
+                store_id=store_id,
+                location_ids={location_id},
+                capability=None,
+                permission=Permission.INVENTORY_VIEW,
+            )
+        if location_id not in granted:
+            raise PermissionDeniedError("Private stock requires a direct store permission")
         granted &= {location_id}
     if not granted:
         return []
@@ -400,6 +449,8 @@ async def readable_stock(
             product_variant_id=row.product_variant_id,
             size_id=row.size_id,
             quantity=row.quantity,
+            reserved_quantity=row.reserved_quantity,
+            available_quantity=row.quantity - row.reserved_quantity,
         )
         for row in rows
     ]
@@ -510,4 +561,188 @@ async def transfer_movement_ids(
     """
     return await repository.transfer_movement_ids(
         session, organization_id=organization_id, transfer_id=transfer_id
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ReservationRequest:
+    location_id: uuid.UUID
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    quantity: int
+
+
+async def reserved_stock(
+    session: AsyncSession, *, keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]
+) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
+    """Read reservations after lock_stock has locked the complete command basket."""
+    return await repository.reserved_quantities(session, keys=keys)
+
+
+async def available_stock(
+    session: AsyncSession, *, keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]
+) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
+    reserved = await reserved_stock(session, keys=keys)
+    return {
+        key: await current_quantity(
+            session, location_id=key[0], product_variant_id=key[1], size_id=key[2]
+        )
+        - reserved.get(key, 0)
+        for key in keys
+    }
+
+
+async def reserve_stock(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    reference_id: uuid.UUID,
+    requests: list[ReservationRequest],
+    actor_user_id: uuid.UUID,
+) -> None:
+    demand: dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int] = {}
+    for request in requests:
+        if type(request.quantity) is not int or request.quantity <= 0:
+            raise ValidationFailedError("Reservation quantity must be a positive integer")
+        key = (request.location_id, request.product_variant_id, request.size_id)
+        demand[key] = demand.get(key, 0) + request.quantity
+    if not demand:
+        raise ValidationFailedError("No reservations supplied")
+    existing = await repository.reservation_rows(
+        session, organization_id=organization_id, reference_id=reference_id
+    )
+    physical = await lock_stock(
+        session, organization_id=organization_id, keys=list(demand), acting_store_ids={store_id}
+    )
+    if existing:
+        previous = {(r.location_id, r.product_variant_id, r.size_id): r.quantity for r in existing}
+        if previous != demand or any(r.store_id != store_id for r in existing):
+            raise ValidationFailedError("Reservation reference has different stock or store")
+        # An inactive historical reservation must never be resurrected by retry.
+        return
+    reserved = await reserved_stock(session, keys=list(demand))
+    for key, quantity in demand.items():
+        available = physical[key] - reserved.get(key, 0)
+        if quantity > available:
+            raise InsufficientStockError(
+                location_id=str(key[0]),
+                product_variant_id=str(key[1]),
+                size_id=str(key[2]),
+                requested=quantity,
+                available=available,
+                correctable=False,
+            )
+    for key, quantity in sorted(demand.items()):
+        await repository.change_reserved(session, key=key, delta=quantity)
+        await repository.add_reservation(
+            session,
+            organization_id=organization_id,
+            store_id=store_id,
+            reference_id=reference_id,
+            location_id=key[0],
+            product_variant_id=key[1],
+            size_id=key[2],
+            quantity=quantity,
+            actor_user_id=actor_user_id,
+        )
+
+
+async def _finish_reservations(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    reference_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    dispatch: bool,
+) -> list[AppliedMovement]:
+    rows = await repository.reservation_rows(
+        session, organization_id=organization_id, reference_id=reference_id
+    )
+    if any(row.store_id != store_id for row in rows):
+        raise PermissionDeniedError("Reservation belongs to another store")
+    active = [r for r in rows if r.active]
+    if not active:
+        return []
+    keys = [(r.location_id, r.product_variant_id, r.size_id) for r in active]
+    if dispatch:
+        await lock_stock(
+            session,
+            organization_id=organization_id,
+            keys=keys,
+            acting_store_ids={store_id},
+        )
+    else:
+        # A pause blocks physical movement, not cancellation of an existing
+        # hold. The tenant/store match was established on the reservation
+        # rows above and is backed by their composite foreign keys.
+        await validate_locations(
+            session,
+            organization_id=organization_id,
+            location_ids={key[0] for key in keys},
+            must_be_active=False,
+        )
+        await repository.lock_existing_stock(session, keys=keys)
+    movements = []
+    for row in sorted(active, key=lambda r: (r.location_id, r.product_variant_id, r.size_id)):
+        await repository.change_reserved(
+            session, key=(row.location_id, row.product_variant_id, row.size_id), delta=-row.quantity
+        )
+        await repository.deactivate_reservation(session, row)
+        movements.append(
+            MovementRequest(
+                location_id=row.location_id,
+                acting_store_id=store_id,
+                product_variant_id=row.product_variant_id,
+                size_id=row.size_id,
+                quantity_delta=-row.quantity,
+                movement_type=MovementType.ORDER_DISPATCH,
+                reference_type="customer_order",
+                reference_id=reference_id,
+            )
+        )
+    if dispatch:
+        return await apply_movements(
+            session,
+            organization_id=organization_id,
+            requests=movements,
+            actor_user_id=actor_user_id,
+        )
+    return []
+
+
+async def release_stock(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    reference_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> None:
+    await _finish_reservations(
+        session,
+        organization_id=organization_id,
+        store_id=store_id,
+        reference_id=reference_id,
+        actor_user_id=actor_user_id,
+        dispatch=False,
+    )
+
+
+async def dispatch_reserved_stock(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    reference_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> list[AppliedMovement]:
+    return await _finish_reservations(
+        session,
+        organization_id=organization_id,
+        store_id=store_id,
+        reference_id=reference_id,
+        actor_user_id=actor_user_id,
+        dispatch=True,
     )
