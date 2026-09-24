@@ -1,0 +1,423 @@
+{
+  "corpus_version": "1.0.0",
+  "provenance": "Manually transcribed product-only rows from user-supplied photo_5278543205567767610_y.jpg in this conversation. Original image stays private. Typographical uncertainty is retained (e.g. серный). These are raw evidence, not owner-confirmed product identities. Duplicates intentionally retained.",
+  "rows": [
+    {
+      "id": "photo-row-01",
+      "raw_text": "Молочный пуховик шерсть с капюшоном",
+      "expected_candidates": {
+        "garment_type": [
+          "down_jacket"
+        ],
+        "color": [
+          "milk"
+        ],
+        "material": [
+          "wool"
+        ],
+        "hood": [
+          "present"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-02",
+      "raw_text": "Шоколад бомбер 65 см",
+      "expected_candidates": {
+        "color": [
+          "chocolate"
+        ],
+        "length_cm": [
+          "65"
+        ],
+        "garment_type": [
+          "bomber"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-03",
+      "raw_text": "Бомбер с кулисой внизу",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-04",
+      "raw_text": "Куртка 4 кармана Бордо",
+      "expected_candidates": {
+        "garment_type": [
+          "jacket"
+        ],
+        "color": [
+          "burgundy"
+        ],
+        "concept": [
+          "4 кармана"
+        ]
+      },
+      "absent_fields": [
+        "quantity"
+      ]
+    },
+    {
+      "id": "photo-row-05",
+      "raw_text": "Чёрный бомбер зернистый планка",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-06",
+      "raw_text": "Бомбер шоколад зернистый 55 см",
+      "expected_candidates": {
+        "texture": [
+          "grained"
+        ],
+        "length_cm": [
+          "55"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-07",
+      "raw_text": "Чёрный бомбер мышка М зерн",
+      "expected_candidates": {
+        "size": [
+          "M"
+        ],
+        "concept": [
+          "мышка"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-08",
+      "raw_text": "Пуховик шерсть графит с капюшоном",
+      "expected_candidates": {
+        "color": [
+          "graphite"
+        ],
+        "material": [
+          "wool"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-09",
+      "raw_text": "Бомбер виски зернистый кож кнопки",
+      "expected_candidates": {
+        "color": [
+          "whiskey"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-10",
+      "raw_text": "Пуховик рукавички с лисой",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-11",
+      "raw_text": "Мышка бомбер шоколад зернистая",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-12",
+      "raw_text": "Парка с норкой графит",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-13",
+      "raw_text": "Дубленка стойка шоколад",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-14",
+      "raw_text": "Дубленка парка Черная ХС",
+      "expected_candidates": {
+        "size": [
+          "XS"
+        ],
+        "color": [
+          "black"
+        ],
+        "garment_type": [
+          "shearling_coat",
+          "parka"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-15",
+      "raw_text": "Куртка Прада с капюшоном",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-16",
+      "raw_text": "Бомбер серный зернистый накладной карман",
+      "expected_candidates": {},
+      "must_preserve_unknown": [
+        "серный"
+      ]
+    },
+    {
+      "id": "photo-row-17",
+      "raw_text": "Бомбер шоколад накладной карман",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-18",
+      "raw_text": "Молочный пуховик с капюшоном",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-19",
+      "raw_text": "Бомбер ботега чёрный",
+      "expected_candidates": {
+        "concept": [
+          "ботега"
+        ],
+        "color": [
+          "black"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-20",
+      "raw_text": "Куртка 1636",
+      "expected_candidates": {
+        "garment_type": [
+          "jacket"
+        ]
+      },
+      "absent_fields": [
+        "quantity",
+        "size",
+        "price"
+      ],
+      "must_preserve_unknown": [
+        "1636"
+      ]
+    },
+    {
+      "id": "photo-row-21",
+      "raw_text": "Жакет Л",
+      "expected_candidates": {
+        "size": [
+          "L"
+        ],
+        "garment_type": [
+          "blazer"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-22",
+      "raw_text": "Куртки",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-23",
+      "raw_text": "Замш куртка под пояс",
+      "expected_candidates": {
+        "material": [
+          "suede"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-24",
+      "raw_text": "Молочный пуховик шерсть с капюшоном",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-25",
+      "raw_text": "Мышка бомбер шоколад М зернистая",
+      "expected_candidates": {
+        "size": [
+          "M"
+        ],
+        "texture": [
+          "grained"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-26",
+      "raw_text": "Куртка 4 кармана Л",
+      "expected_candidates": {
+        "size": [
+          "L"
+        ],
+        "concept": [
+          "4 кармана"
+        ]
+      },
+      "absent_fields": [
+        "quantity"
+      ]
+    },
+    {
+      "id": "photo-row-27",
+      "raw_text": "Куртка 4 кармана чёрный цвет под заказ",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-28",
+      "raw_text": "Бордо гладкая мышка",
+      "expected_candidates": {
+        "color": [
+          "burgundy"
+        ],
+        "texture": [
+          "smooth"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-29",
+      "raw_text": "Бомбер шоколад накладной карман",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-30",
+      "raw_text": "Бомбер шоколад накладной карман",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-31",
+      "raw_text": "4 кармана",
+      "expected_candidates": {},
+      "absent_fields": [
+        "quantity"
+      ]
+    },
+    {
+      "id": "photo-row-32",
+      "raw_text": "Бомбер планка шоколад ХС зернистый",
+      "expected_candidates": {
+        "size": [
+          "XS"
+        ],
+        "texture": [
+          "grained"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-33",
+      "raw_text": "Чёрный бомбер зернистый накладной карман",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-34",
+      "raw_text": "Куртка с капюшоном ХЛ",
+      "expected_candidates": {
+        "size": [
+          "XL"
+        ],
+        "hood": [
+          "present"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-35",
+      "raw_text": "3 шт",
+      "expected_candidates": {
+        "quantity": [
+          "3"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-36",
+      "raw_text": "Куртка под пояс зернистая",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-37",
+      "raw_text": "3 куртки",
+      "expected_candidates": {},
+      "absent_fields": [
+        "quantity"
+      ]
+    },
+    {
+      "id": "photo-row-38",
+      "raw_text": "Шуба орех 70 см",
+      "expected_candidates": {
+        "garment_type": [
+          "fur_coat"
+        ],
+        "color": [
+          "walnut"
+        ],
+        "length_cm": [
+          "70"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-39",
+      "raw_text": "Бомбер ботега 45 см шоколад С",
+      "expected_candidates": {
+        "size": [
+          "S"
+        ],
+        "length_cm": [
+          "45"
+        ],
+        "concept": [
+          "ботега"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-40",
+      "raw_text": "Мышка зернистая чёрная ХС",
+      "expected_candidates": {
+        "size": [
+          "XS"
+        ],
+        "color": [
+          "black"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-41",
+      "raw_text": "Куртка замш Л",
+      "expected_candidates": {
+        "size": [
+          "L"
+        ],
+        "material": [
+          "suede"
+        ]
+      }
+    },
+    {
+      "id": "photo-row-42",
+      "raw_text": "Куртка с кулисой с капюшоном",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-43",
+      "raw_text": "Куртка парка с кулисой",
+      "expected_candidates": {}
+    },
+    {
+      "id": "photo-row-44",
+      "raw_text": "Чёрная мышка л зернистая",
+      "expected_candidates": {
+        "size": [
+          "L"
+        ],
+        "color": [
+          "black"
+        ],
+        "texture": [
+          "grained"
+        ]
+      }
+    }
+  ]
+}

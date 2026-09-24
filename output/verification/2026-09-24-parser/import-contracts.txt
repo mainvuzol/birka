@@ -1,0 +1,32 @@
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 65 files, 219 dependencies.
+------------------------------------
+
+Layered architecture: api -> modules -> core KEPT
+core must not depend on any module KEPT
+tenancy is the base module and depends on no sibling KEPT
+module layering: identity -> authz -> tenancy KEPT
+catalog is a leaf: it may not import another business module KEPT
+authz must not depend on business modules KEPT
+refunds read history, not the catalog KEPT
+transfers move stock through inventory and read nothing else KEPT
+a sale neither refunds nor transfers KEPT
+inventory may read catalog but sales may not write stock directly KEPT
+only the inventory module may write stock (invariant I3) KEPT
+catalog parser cannot consult database or mutable catalog knowledge KEPT
+
+Contracts: 12 kept, 0 broken.

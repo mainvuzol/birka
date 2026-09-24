@@ -186,3 +186,12 @@ keys, without auth tokens. Retry keeps the original command and refreshes the
 current order. Do not clear that journal to recover an uncertain operation;
 restore access/connectivity and retry. Payment tracking remains separate.
 See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
+
+
+## Catalog parser preview (M1-020)
+
+From `backend/`, pipe one raw line into `python -m scripts.preview_catalog`.
+Parser v1 returns candidate attributes with exact text evidence and preserves
+unknown descriptors, including rare item codes. It does not create products,
+choose matches or change inventory. Slash lists require review; quantities are
+never divided automatically. See [scope and verification](.ai/project-memory/m1-020-parser-report.md).
