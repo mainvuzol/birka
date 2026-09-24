@@ -78,3 +78,19 @@ in this fixture. Do not point it at a work/production database.
 
 Cleanup: test API stopped, task-specific `birka_orders_ui` database dropped,
 isolated PostgreSQL stopped. No work database, Docker image or other project changed.
+
+## CI type-check correction — 2026-09-24
+
+The first UI verification ran `mypy app`; CI runs `mypy app scripts`.
+`seed_orders_e2e.py` imported untyped test helpers, drawing their test modules
+into mypy and producing 72 errors. The E2E seed now builds typed ORM fixtures
+itself and writes stock through the inventory service, with one transaction;
+it no longer depends on the tests package. No checker exclusions were added.
+
+Verified: exact `mypy app scripts` passes (67 source files), repository-wide
+Ruff lint/format passes (119 formatted files), frontend lint/typecheck/build
+passes, npm audit reports zero vulnerabilities. The corrected seed executed
+against a fresh isolated PostgreSQL16.2 database: one organization, membership,
+stock movement and 30 units. Temporary database dropped and server stopped.
+Remote CI logs were unavailable because GitHub CLI was not authenticated;
+this documents the locally reproduced failure, not a confirmed green remote run.

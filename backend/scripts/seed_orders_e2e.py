@@ -5,15 +5,34 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
+from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import Permission
+from app.modules.catalog.models import (
+    AttributeKind,
+    AttributeTerm,
+    CanonicalConcept,
+    ProductFamily,
+    ProductVariant,
+    Size,
+    SizeSystem,
+    SizeSystemCode,
+)
 from app.modules.identity.models import AppUser
-from tests.integration.test_sale_command import give_stock, make_shop
+from app.modules.inventory.models import MovementType
+from app.modules.inventory.service import MovementRequest, apply_movements
+from app.modules.tenancy.models import (
+    Organization,
+    StockLocation,
+    Store,
+    StoreKind,
+    StoreLocationAccess,
+)
 
 
 async def main() -> None:
@@ -25,10 +44,57 @@ async def main() -> None:
         raise RuntimeError("This fixture only accepts the isolated birka_orders_ui database")
     engine = create_async_engine(url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        shop = await make_shop(session)
-        await give_stock(session, shop, 30)
-        role = Role(organization_id=shop.organization_id, code="E2E", name="Тестовий продавець")
+    async with maker.begin() as session:
+        org = Organization(name=f"e2e-{uuid.uuid4().hex}", currency_code="UAH")
+        session.add(org)
+        await session.flush()
+        store = Store(organization_id=org.id, name="Основний", code="MAIN", kind=StoreKind.PRIMARY)
+        location = StockLocation(organization_id=org.id, name="Основний склад", code="E2E")
+        concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
+        system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
+        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
+        colour = AttributeTerm(
+            organization_id=org.id,
+            kind=AttributeKind.COLOR,
+            name="шоколад",
+            normalized_name="шоколад",
+        )
+        session.add_all([store, location, concept, system, user, colour])
+        await session.flush()
+        size = Size(size_system_id=system.id, code="M")
+        family = ProductFamily(organization_id=org.id, canonical_concept_id=concept.id)
+        session.add_all([size, family])
+        await session.flush()
+        variant = ProductVariant(
+            product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
+        )
+        session.add(variant)
+        session.add(
+            StoreLocationAccess(
+                organization_id=org.id,
+                store_id=store.id,
+                location_id=location.id,
+                can_sell=True,
+                can_receive=True,
+            )
+        )
+        await session.flush()
+        await apply_movements(
+            session,
+            organization_id=org.id,
+            actor_user_id=user.id,
+            requests=[
+                MovementRequest(
+                    location_id=location.id,
+                    acting_store_id=store.id,
+                    product_variant_id=variant.id,
+                    size_id=size.id,
+                    quantity_delta=30,
+                    movement_type=MovementType.DELIVERY,
+                )
+            ],
+        )
+        role = Role(organization_id=org.id, code="E2E", name="Тестовий продавець")
         session.add(role)
         await session.flush()
         session.add_all(
@@ -36,22 +102,19 @@ async def main() -> None:
         )
         session.add(
             Membership(
-                user_id=shop.user_id,
-                organization_id=shop.organization_id,
-                store_id=shop.store_id,
+                user_id=user.id,
+                organization_id=org.id,
+                store_id=store.id,
                 role_id=role.id,
             )
         )
-        user = await session.scalar(select(AppUser).where(AppUser.id == shop.user_id))
-        assert user is not None
         data = {
             "telegram_user_id": str(user.telegram_user_id),
-            "store_id": str(shop.store_id),
-            "location_id": str(shop.location_id),
-            "variant_id": str(shop.variant_id),
-            "size_id": str(shop.size_id),
+            "store_id": str(store.id),
+            "location_id": str(location.id),
+            "variant_id": str(variant.id),
+            "size_id": str(size.id),
         }
-        await session.commit()
     await engine.dispose()
     Path(os.environ["BIRKA_E2E_FIXTURE"]).write_text(json.dumps(data))
 
