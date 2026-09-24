@@ -1,0 +1,14 @@
+2026-09-24, baseline d66afed (PR #21)
+Backend pytest: 535 passed, 2 dependency deprecation warnings, no skips, 41.92s.
+Frontend Playwright: 7 passed, 4.2s, mobile Chromium with real localhost API/PG.
+Ruff lint: passed.
+Ruff format check: 105 files formatted (app/tests/E2E seed scope).
+Mypy: 64 source files passed.
+Import linter: 11 contracts kept, zero broken.
+Frontend ESLint: passed.
+Frontend TypeScript: passed.
+Frontend production build: passed; JS227.34kB, gzip73.24kB.
+Git diff whitespace check: passed.
+Database schema unchanged; no migration required.
+Screenshot visually inspected; no mobile horizontal overflow.
+Real Telegram Android/iOS and PostgreSQL17 not rerun; see report for limits.

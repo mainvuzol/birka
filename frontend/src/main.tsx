@@ -1,12 +1,18 @@
 /**
  * Mini App entry point.
  *
- * Gate M1A provides the scaffold only: the real seller flows are gate M1D.
+ * Seller order flows share one in-memory server-state cache.
  * Telegram bindings stay behind `shared/telegram` so the rest of the app never
  * imports the SDK directly.
  */
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false, refetchOnWindowFocus: true } },
+});
 
 import { App } from "@/App";
 
@@ -17,6 +23,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
   </StrictMode>,
 );

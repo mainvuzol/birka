@@ -1,0 +1,265 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: var(--tg-theme-text-color, #233a37);
+  background: var(--tg-theme-bg-color, #f4f5f0);
+  font-synthesis: none;
+  font-size: 16px;
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 780px;
+  margin: auto;
+  padding: calc(24px + env(safe-area-inset-top)) 18px
+    calc(40px + env(safe-area-inset-bottom));
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid #d7ddd6;
+}
+h1 {
+  font-size: 32px;
+  letter-spacing: -1px;
+  margin: 6px 0;
+}
+h1 span {
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+h2 {
+  font-size: 23px;
+  margin: 6px 0 18px;
+}
+h3 {
+  margin-top: 0;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.7px;
+  font-weight: 700;
+}
+section {
+  background: var(--tg-theme-secondary-bg-color, #fff);
+  border: 1px solid #dce1da;
+  border-radius: 18px;
+  padding: 22px;
+  margin: 18px 0;
+}
+p {
+  line-height: 1.55;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 13px 17px;
+  min-height: 48px;
+  background: var(--tg-theme-button-color, #245d4e);
+  color: var(--tg-theme-button-text-color, #fff);
+  font-weight: 650;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #d89137;
+  outline-offset: 3px;
+}
+.quiet {
+  background: transparent;
+  color: var(--tg-theme-text-color, #245d4e);
+  border-color: #d0dad2;
+}
+.store,
+.order-card {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  flex-direction: column;
+  gap: 9px;
+  margin: 12px 0;
+}
+.store {
+  background: #e8f0e7;
+  color: #234638;
+  align-items: flex-start;
+}
+.order-card {
+  background: transparent;
+  color: inherit;
+  border-color: #dce1da;
+  padding: 18px;
+}
+.order-card:hover {
+  border-color: #245d4e;
+}
+.badge {
+  font-size: 12px;
+  background: #edf0d9;
+  color: #435238;
+  border-radius: 20px;
+  padding: 6px 11px;
+  align-self: flex-start;
+  width: fit-content;
+  display: inline-block;
+}
+small,
+.hint {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #60716a);
+}
+.toolbar,
+nav,
+.actions,
+.fields {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.toolbar {
+  margin: 18px 0;
+}
+.toolbar h2 {
+  margin: 0;
+}
+nav {
+  justify-content: flex-start;
+  margin-top: 20px;
+}
+.actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 18px 0 0;
+  min-width: 0;
+}
+legend {
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+  margin: 16px 0;
+  flex: 1;
+  min-width: 0;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #b9c8bf;
+  border-radius: 9px;
+  background: var(--tg-theme-bg-color, #fff);
+  color: inherit;
+  padding: 13px;
+  min-height: 48px;
+}
+textarea {
+  min-height: 90px;
+}
+.fields {
+  align-items: stretch;
+}
+.fields label:first-child {
+  flex: 0.5;
+}
+.line {
+  border-bottom: 1px solid #e0e5df;
+  padding: 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.line button {
+  align-self: flex-start;
+}
+.total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  font-size: 20px;
+}
+.notice {
+  background: #fff3d6;
+  border-color: #e5c36b;
+}
+.check {
+  flex-direction: row;
+  align-items: center;
+}
+.check input {
+  width: 23px;
+  min-height: 23px;
+  flex-shrink: 0;
+}
+[role="alert"] {
+  background: #fff0ec;
+  color: #943b27;
+  padding: 15px;
+  border-radius: 10px;
+}
+button.active {
+  box-shadow: 0 2px 4px #245d4e18;
+}
+@media (max-width: 480px) {
+  main {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  header {
+    align-items: flex-start;
+  }
+  header > span {
+    font-size: 12px;
+  }
+  h1 span {
+    font-size: 14px;
+  }
+  section {
+    padding: 17px;
+  }
+  .toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .fields {
+    gap: 10px;
+  }
+  nav button {
+    flex: 1;
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+  .actions button {
+    width: 100%;
+  }
+}

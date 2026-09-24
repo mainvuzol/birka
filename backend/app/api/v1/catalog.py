@@ -22,7 +22,7 @@ import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Response, status
+from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -37,12 +37,14 @@ from app.core import idempotency
 from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import SizeSystemCode
+from app.modules.catalog.read import describe_variants, size_labels
 from app.modules.catalog.service import (
     ProductDraft,
     SizeDraft,
     VariantDraft,
     create_product,
 )
+from app.modules.inventory.service import readable_stock
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -258,6 +260,59 @@ async def create(
     )
     await session.commit()
     return body
+
+
+class StockOption(BaseModel):
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    display_name: str
+    size_label: str
+    quantity: int
+    reserved_quantity: int
+    available_quantity: int
+
+
+class StockOptionsResponse(BaseModel):
+    items: list[StockOption]
+    has_more: bool
+
+
+@router.get("/stock-options", response_model=StockOptionsResponse)
+async def stock_options(
+    store_id: uuid.UUID,
+    location_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> StockOptionsResponse:
+    rows = await readable_stock(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        location_id=location_id,
+        scope=scope,
+        limit=limit + 1,
+        offset=offset,
+    )
+    page = rows[:limit]
+    descriptions = await describe_variants(session, [row.product_variant_id for row in page])
+    labels = await size_labels(session, [row.size_id for row in page])
+    return StockOptionsResponse(
+        items=[
+            StockOption(
+                product_variant_id=row.product_variant_id,
+                size_id=row.size_id,
+                display_name=descriptions[row.product_variant_id].display_name,
+                size_label=labels[row.size_id],
+                quantity=row.quantity,
+                reserved_quantity=row.reserved_quantity,
+                available_quantity=row.available_quantity,
+            )
+            for row in page
+        ],
+        has_more=len(rows) > limit,
+    )
 
 
 __all__ = ["router"]

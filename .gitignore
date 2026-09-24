@@ -45,3 +45,7 @@ Thumbs.db
 # ---- local infra -----------------------------------------------------------
 infra/data/
 *.log
+
+# Browser test artifacts
+frontend/test-results/
+frontend/playwright-report/
