@@ -1,0 +1,12 @@
+M1-020 parser verification, 2026-09-24
+Baseline: 0ca537b
+pytest tests/unit -q: 290 passed, no skips, 2 dependency deprecation warnings.
+Parser/CLI cases: 125 tests collected and included in the passing suite.
+ruff check .: passed.
+ruff format --check .: 122 files formatted.
+mypy app scripts: passed, 69 source files.
+lint-imports: 12 contracts kept, zero broken (see import-contracts.txt).
+44 product-only source rows processed; outputs in store-row-previews.json.
+Independent adversarial review: no remaining blocker in the documented scope.
+No migration, database/network call, catalog merge, or inventory write added.
+Integration and browser suites not rerun for this isolated pure-function addition.

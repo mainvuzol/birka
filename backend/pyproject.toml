@@ -243,3 +243,23 @@ forbidden_modules = ["app.modules.inventory.repository"]
 # Only DIRECT imports are forbidden: going through inventory.service is the
 # supported path and necessarily reaches the repository underneath it.
 allow_indirect_imports = true
+
+# M1-020: parser output depends only on the input and its version.
+[[tool.importlinter.contracts]]
+name = "catalog parser cannot consult database or mutable catalog knowledge"
+type = "forbidden"
+source_modules = ["app.modules.catalog.parser"]
+forbidden_modules = [
+    "app.core.db",
+    "app.modules.catalog.models",
+    "app.modules.catalog.evidence",
+    "app.modules.catalog.read",
+    "app.modules.catalog.service",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.authz",
+    "app.modules.tenancy",
+]

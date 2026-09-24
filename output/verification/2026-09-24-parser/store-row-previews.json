@@ -1,0 +1,2492 @@
+[
+  {
+    "id": "photo-row-01",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 8,
+                "start": 0,
+                "text": "Молочный"
+              }
+            ],
+            "value": "milk"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 16,
+                "start": 9,
+                "text": "пуховик"
+              }
+            ],
+            "value": "down_jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 35,
+                "start": 24,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ],
+        "material": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 17,
+                "text": "шерсть"
+              }
+            ],
+            "value": "wool"
+          }
+        ]
+      },
+      "normalized_text": "молочный пуховик шерсть с капюшоном",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Молочный пуховик шерсть с капюшоном",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-02",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 7,
+                "start": 0,
+                "text": "Шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 8,
+                "text": "бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "length_cm": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 20,
+                "start": 15,
+                "text": "65 см"
+              }
+            ],
+            "value": "65"
+          }
+        ]
+      },
+      "normalized_text": "шоколад бомбер 65 см",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Шоколад бомбер 65 см",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-03",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ]
+      },
+      "normalized_text": "бомбер с кулисой внизу",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер с кулисой внизу",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 8,
+          "kind": "unknown",
+          "start": 7,
+          "text": "с"
+        },
+        {
+          "end": 16,
+          "kind": "unknown",
+          "start": 9,
+          "text": "кулисой"
+        },
+        {
+          "end": 22,
+          "kind": "unknown",
+          "start": 17,
+          "text": "внизу"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-04",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 22,
+                "start": 17,
+                "text": "Бордо"
+              }
+            ],
+            "value": "burgundy"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 16,
+                "start": 7,
+                "text": "4 кармана"
+              }
+            ],
+            "value": "4 кармана"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ]
+      },
+      "normalized_text": "куртка 4 кармана бордо",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка 4 кармана Бордо",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-05",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Чёрный"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 7,
+                "text": "бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 14,
+                "text": "зернистый"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "чёрный бомбер зернистый планка",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Чёрный бомбер зернистый планка",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 30,
+          "kind": "unknown",
+          "start": 24,
+          "text": "планка"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-06",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 7,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "length_cm": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 30,
+                "start": 25,
+                "text": "55 см"
+              }
+            ],
+            "value": "55"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 24,
+                "start": 15,
+                "text": "зернистый"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "бомбер шоколад зернистый 55 см",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер шоколад зернистый 55 см",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-07",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Чёрный"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 19,
+                "start": 14,
+                "text": "мышка"
+              }
+            ],
+            "value": "мышка"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 7,
+                "text": "бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 21,
+                "start": 20,
+                "text": "М"
+              }
+            ],
+            "value": "M"
+          }
+        ]
+      },
+      "normalized_text": "чёрный бомбер мышка м зерн",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Чёрный бомбер мышка М зерн",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW",
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 26,
+          "kind": "unknown",
+          "start": 22,
+          "text": "зерн"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-08",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 21,
+                "start": 15,
+                "text": "графит"
+              }
+            ],
+            "value": "graphite"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 7,
+                "start": 0,
+                "text": "Пуховик"
+              }
+            ],
+            "value": "down_jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 33,
+                "start": 22,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ],
+        "material": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 8,
+                "text": "шерсть"
+              }
+            ],
+            "value": "wool"
+          }
+        ]
+      },
+      "normalized_text": "пуховик шерсть графит с капюшоном",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Пуховик шерсть графит с капюшоном",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-09",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 12,
+                "start": 7,
+                "text": "виски"
+              }
+            ],
+            "value": "whiskey"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 22,
+                "start": 13,
+                "text": "зернистый"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "бомбер виски зернистый кож кнопки",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер виски зернистый кож кнопки",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 26,
+          "kind": "unknown",
+          "start": 23,
+          "text": "кож"
+        },
+        {
+          "end": 33,
+          "kind": "unknown",
+          "start": 27,
+          "text": "кнопки"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-10",
+    "preview": {
+      "fields": {
+        "fur": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 25,
+                "start": 18,
+                "text": "с лисой"
+              }
+            ],
+            "value": "fox"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 7,
+                "start": 0,
+                "text": "Пуховик"
+              }
+            ],
+            "value": "down_jacket"
+          }
+        ]
+      },
+      "normalized_text": "пуховик рукавички с лисой",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Пуховик рукавички с лисой",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 17,
+          "kind": "unknown",
+          "start": 8,
+          "text": "рукавички"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-11",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 20,
+                "start": 13,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 5,
+                "start": 0,
+                "text": "Мышка"
+              }
+            ],
+            "value": "мышка"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 12,
+                "start": 6,
+                "text": "бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 30,
+                "start": 21,
+                "text": "зернистая"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "мышка бомбер шоколад зернистая",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Мышка бомбер шоколад зернистая",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-12",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 21,
+                "start": 15,
+                "text": "графит"
+              }
+            ],
+            "value": "graphite"
+          }
+        ],
+        "fur": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 6,
+                "text": "с норкой"
+              }
+            ],
+            "value": "mink"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 5,
+                "start": 0,
+                "text": "Парка"
+              }
+            ],
+            "value": "parka"
+          }
+        ]
+      },
+      "normalized_text": "парка с норкой графит",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Парка с норкой графит",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-13",
+    "preview": {
+      "fields": {
+        "collar": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 15,
+                "start": 9,
+                "text": "стойка"
+              }
+            ],
+            "value": "stand"
+          }
+        ],
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 16,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 8,
+                "start": 0,
+                "text": "Дубленка"
+              }
+            ],
+            "value": "shearling_coat"
+          }
+        ]
+      },
+      "normalized_text": "дубленка стойка шоколад",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Дубленка стойка шоколад",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-14",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 21,
+                "start": 15,
+                "text": "Черная"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 8,
+                "start": 0,
+                "text": "Дубленка"
+              }
+            ],
+            "value": "shearling_coat"
+          },
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 9,
+                "text": "парка"
+              }
+            ],
+            "value": "parka"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 24,
+                "start": 22,
+                "text": "ХС"
+              }
+            ],
+            "value": "XS"
+          }
+        ]
+      },
+      "normalized_text": "дубленка парка черная хс",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Дубленка парка Черная ХС",
+      "review_reasons": [
+        "CONFLICTING_GARMENT_TYPE"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-15",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 24,
+                "start": 13,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ]
+      },
+      "normalized_text": "куртка прада с капюшоном",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка Прада с капюшоном",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 12,
+          "kind": "unknown",
+          "start": 7,
+          "text": "Прада"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-16",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "pockets": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 40,
+                "start": 24,
+                "text": "накладной карман"
+              }
+            ],
+            "value": "patch"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 14,
+                "text": "зернистый"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "бомбер серный зернистый накладной карман",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер серный зернистый накладной карман",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 13,
+          "kind": "unknown",
+          "start": 7,
+          "text": "серный"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-17",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 7,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "pockets": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 31,
+                "start": 15,
+                "text": "накладной карман"
+              }
+            ],
+            "value": "patch"
+          }
+        ]
+      },
+      "normalized_text": "бомбер шоколад накладной карман",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер шоколад накладной карман",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-18",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 8,
+                "start": 0,
+                "text": "Молочный"
+              }
+            ],
+            "value": "milk"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 16,
+                "start": 9,
+                "text": "пуховик"
+              }
+            ],
+            "value": "down_jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 28,
+                "start": 17,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ]
+      },
+      "normalized_text": "молочный пуховик с капюшоном",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Молочный пуховик с капюшоном",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-19",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 20,
+                "start": 14,
+                "text": "чёрный"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 7,
+                "text": "ботега"
+              }
+            ],
+            "value": "ботега"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ]
+      },
+      "normalized_text": "бомбер ботега чёрный",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер ботега чёрный",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-20",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ]
+      },
+      "normalized_text": "куртка 1636",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка 1636",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 11,
+          "kind": "possible_item_code",
+          "start": 7,
+          "text": "1636"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-21",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 5,
+                "start": 0,
+                "text": "Жакет"
+              }
+            ],
+            "value": "blazer"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 7,
+                "start": 6,
+                "text": "Л"
+              }
+            ],
+            "value": "L"
+          }
+        ]
+      },
+      "normalized_text": "жакет л",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Жакет Л",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-22",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртки"
+              }
+            ],
+            "value": "jacket"
+          }
+        ]
+      },
+      "normalized_text": "куртки",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртки",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-23",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 11,
+                "start": 5,
+                "text": "куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "material": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 4,
+                "start": 0,
+                "text": "Замш"
+              }
+            ],
+            "value": "suede"
+          }
+        ]
+      },
+      "normalized_text": "замш куртка под пояс",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Замш куртка под пояс",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 15,
+          "kind": "unknown",
+          "start": 12,
+          "text": "под"
+        },
+        {
+          "end": 20,
+          "kind": "unknown",
+          "start": 16,
+          "text": "пояс"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-24",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 8,
+                "start": 0,
+                "text": "Молочный"
+              }
+            ],
+            "value": "milk"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 16,
+                "start": 9,
+                "text": "пуховик"
+              }
+            ],
+            "value": "down_jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 35,
+                "start": 24,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ],
+        "material": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 17,
+                "text": "шерсть"
+              }
+            ],
+            "value": "wool"
+          }
+        ]
+      },
+      "normalized_text": "молочный пуховик шерсть с капюшоном",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Молочный пуховик шерсть с капюшоном",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-25",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 20,
+                "start": 13,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 5,
+                "start": 0,
+                "text": "Мышка"
+              }
+            ],
+            "value": "мышка"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 12,
+                "start": 6,
+                "text": "бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 22,
+                "start": 21,
+                "text": "М"
+              }
+            ],
+            "value": "M"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 32,
+                "start": 23,
+                "text": "зернистая"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "мышка бомбер шоколад м зернистая",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Мышка бомбер шоколад М зернистая",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-26",
+    "preview": {
+      "fields": {
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 16,
+                "start": 7,
+                "text": "4 кармана"
+              }
+            ],
+            "value": "4 кармана"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 18,
+                "start": 17,
+                "text": "Л"
+              }
+            ],
+            "value": "L"
+          }
+        ]
+      },
+      "normalized_text": "куртка 4 кармана л",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка 4 кармана Л",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-27",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 17,
+                "text": "чёрный"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 16,
+                "start": 7,
+                "text": "4 кармана"
+              }
+            ],
+            "value": "4 кармана"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ]
+      },
+      "normalized_text": "куртка 4 кармана чёрный цвет под заказ",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка 4 кармана чёрный цвет под заказ",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW",
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 28,
+          "kind": "unknown",
+          "start": 24,
+          "text": "цвет"
+        },
+        {
+          "end": 32,
+          "kind": "unknown",
+          "start": 29,
+          "text": "под"
+        },
+        {
+          "end": 38,
+          "kind": "unknown",
+          "start": 33,
+          "text": "заказ"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-28",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 5,
+                "start": 0,
+                "text": "Бордо"
+              }
+            ],
+            "value": "burgundy"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 19,
+                "start": 14,
+                "text": "мышка"
+              }
+            ],
+            "value": "мышка"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 6,
+                "text": "гладкая"
+              }
+            ],
+            "value": "smooth"
+          }
+        ]
+      },
+      "normalized_text": "бордо гладкая мышка",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бордо гладкая мышка",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-29",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 7,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "pockets": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 31,
+                "start": 15,
+                "text": "накладной карман"
+              }
+            ],
+            "value": "patch"
+          }
+        ]
+      },
+      "normalized_text": "бомбер шоколад накладной карман",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер шоколад накладной карман",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-30",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 7,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "pockets": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 31,
+                "start": 15,
+                "text": "накладной карман"
+              }
+            ],
+            "value": "patch"
+          }
+        ]
+      },
+      "normalized_text": "бомбер шоколад накладной карман",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер шоколад накладной карман",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-31",
+    "preview": {
+      "fields": {
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 9,
+                "start": 0,
+                "text": "4 кармана"
+              }
+            ],
+            "value": "4 кармана"
+          }
+        ]
+      },
+      "normalized_text": "4 кармана",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "4 кармана",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-32",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 21,
+                "start": 14,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 24,
+                "start": 22,
+                "text": "ХС"
+              }
+            ],
+            "value": "XS"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 34,
+                "start": 25,
+                "text": "зернистый"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "бомбер планка шоколад хс зернистый",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер планка шоколад ХС зернистый",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 13,
+          "kind": "unknown",
+          "start": 7,
+          "text": "планка"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-33",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Чёрный"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 7,
+                "text": "бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "pockets": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 40,
+                "start": 24,
+                "text": "накладной карман"
+              }
+            ],
+            "value": "patch"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 23,
+                "start": 14,
+                "text": "зернистый"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "чёрный бомбер зернистый накладной карман",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Чёрный бомбер зернистый накладной карман",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-34",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 18,
+                "start": 7,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 21,
+                "start": 19,
+                "text": "ХЛ"
+              }
+            ],
+            "value": "XL"
+          }
+        ]
+      },
+      "normalized_text": "куртка с капюшоном хл",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка с капюшоном ХЛ",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-35",
+    "preview": {
+      "fields": {
+        "quantity": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 4,
+                "start": 0,
+                "text": "3 шт"
+              }
+            ],
+            "value": "3"
+          }
+        ]
+      },
+      "normalized_text": "3 шт",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "3 шт",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-36",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 25,
+                "start": 16,
+                "text": "зернистая"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "куртка под пояс зернистая",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка под пояс зернистая",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 10,
+          "kind": "unknown",
+          "start": 7,
+          "text": "под"
+        },
+        {
+          "end": 15,
+          "kind": "unknown",
+          "start": 11,
+          "text": "пояс"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-37",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 8,
+                "start": 2,
+                "text": "куртки"
+              }
+            ],
+            "value": "jacket"
+          }
+        ]
+      },
+      "normalized_text": "3 куртки",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "3 куртки",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 1,
+          "kind": "possible_item_code",
+          "start": 0,
+          "text": "3"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-38",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 9,
+                "start": 5,
+                "text": "орех"
+              }
+            ],
+            "value": "walnut"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 4,
+                "start": 0,
+                "text": "Шуба"
+              }
+            ],
+            "value": "fur_coat"
+          }
+        ],
+        "length_cm": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 15,
+                "start": 10,
+                "text": "70 см"
+              }
+            ],
+            "value": "70"
+          }
+        ]
+      },
+      "normalized_text": "шуба орех 70 см",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Шуба орех 70 см",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-39",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 27,
+                "start": 20,
+                "text": "шоколад"
+              }
+            ],
+            "value": "chocolate"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 7,
+                "text": "ботега"
+              }
+            ],
+            "value": "ботега"
+          }
+        ],
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Бомбер"
+              }
+            ],
+            "value": "bomber"
+          }
+        ],
+        "length_cm": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 19,
+                "start": 14,
+                "text": "45 см"
+              }
+            ],
+            "value": "45"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 29,
+                "start": 28,
+                "text": "С"
+              }
+            ],
+            "value": "S"
+          }
+        ]
+      },
+      "normalized_text": "бомбер ботега 45 см шоколад с",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Бомбер ботега 45 см шоколад С",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-40",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 22,
+                "start": 16,
+                "text": "чёрная"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 5,
+                "start": 0,
+                "text": "Мышка"
+              }
+            ],
+            "value": "мышка"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 25,
+                "start": 23,
+                "text": "ХС"
+              }
+            ],
+            "value": "XS"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 15,
+                "start": 6,
+                "text": "зернистая"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "мышка зернистая чёрная хс",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Мышка зернистая чёрная ХС",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-41",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "material": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 11,
+                "start": 7,
+                "text": "замш"
+              }
+            ],
+            "value": "suede"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 13,
+                "start": 12,
+                "text": "Л"
+              }
+            ],
+            "value": "L"
+          }
+        ]
+      },
+      "normalized_text": "куртка замш л",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка замш Л",
+      "review_reasons": [],
+      "unclassified_descriptors": []
+    }
+  },
+  {
+    "id": "photo-row-42",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          }
+        ],
+        "hood": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 28,
+                "start": 17,
+                "text": "с капюшоном"
+              }
+            ],
+            "value": "present"
+          }
+        ]
+      },
+      "normalized_text": "куртка с кулисой с капюшоном",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка с кулисой с капюшоном",
+      "review_reasons": [
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 8,
+          "kind": "unknown",
+          "start": 7,
+          "text": "с"
+        },
+        {
+          "end": 16,
+          "kind": "unknown",
+          "start": 9,
+          "text": "кулисой"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-43",
+    "preview": {
+      "fields": {
+        "garment_type": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Куртка"
+              }
+            ],
+            "value": "jacket"
+          },
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 12,
+                "start": 7,
+                "text": "парка"
+              }
+            ],
+            "value": "parka"
+          }
+        ]
+      },
+      "normalized_text": "куртка парка с кулисой",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Куртка парка с кулисой",
+      "review_reasons": [
+        "CONFLICTING_GARMENT_TYPE",
+        "UNCLASSIFIED_DESCRIPTORS"
+      ],
+      "unclassified_descriptors": [
+        {
+          "end": 14,
+          "kind": "unknown",
+          "start": 13,
+          "text": "с"
+        },
+        {
+          "end": 22,
+          "kind": "unknown",
+          "start": 15,
+          "text": "кулисой"
+        }
+      ]
+    }
+  },
+  {
+    "id": "photo-row-44",
+    "preview": {
+      "fields": {
+        "color": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 6,
+                "start": 0,
+                "text": "Чёрная"
+              }
+            ],
+            "value": "black"
+          }
+        ],
+        "concept": [
+          {
+            "confidence": "AMBIGUOUS",
+            "evidence": [
+              {
+                "end": 12,
+                "start": 7,
+                "text": "мышка"
+              }
+            ],
+            "value": "мышка"
+          }
+        ],
+        "size": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 14,
+                "start": 13,
+                "text": "л"
+              }
+            ],
+            "value": "L"
+          }
+        ],
+        "texture": [
+          {
+            "confidence": "EXPLICIT",
+            "evidence": [
+              {
+                "end": 24,
+                "start": 15,
+                "text": "зернистая"
+              }
+            ],
+            "value": "grained"
+          }
+        ]
+      },
+      "normalized_text": "чёрная мышка л зернистая",
+      "option_groups": [],
+      "parser_version": "1.0.0",
+      "quantity_distribution": "NOT_APPLICABLE",
+      "raw_text": "Чёрная мышка л зернистая",
+      "review_reasons": [
+        "CONCEPT_REQUIRES_REVIEW"
+      ],
+      "unclassified_descriptors": []
+    }
+  }
+]
