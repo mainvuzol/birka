@@ -97,7 +97,7 @@ The primary warehouse supplies both stores and the child store has a separate wa
 
 Run frontend commands from `frontend/`, backend commands from `backend/` with its Python environment active.
 
-- Frontend: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build`; no test script yet.
+- Frontend: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build`; `npm run test:e2e` (isolated real API fixture; see order UI report).
 - Backend: `pip install -e ".[dev]"`, `ruff check .`, `ruff format --check .`, `mypy app`, `lint-imports`, `pytest -q`.
 - Real DB tests require `BIRKA_TEST_DATABASE_URL`; without it they explicitly skip.
 - E2E: `<unknown>`

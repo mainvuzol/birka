@@ -387,6 +387,7 @@ async def readable_stock(
     store_id: uuid.UUID,
     location_id: uuid.UUID | None = None,
     limit: int = 100,
+    offset: int = 0,
     scope: RequestScope | None = None,
 ) -> list[StockRow]:
     """What this store may see, keyed by the place it actually sits.
@@ -441,6 +442,7 @@ async def readable_stock(
             .where(Inventory.location_id.in_(granted), Inventory.quantity > 0)
             .order_by(Inventory.location_id, Inventory.product_variant_id, Inventory.size_id)
             .limit(limit)
+            .offset(offset)
         )
     ).all()
     return [

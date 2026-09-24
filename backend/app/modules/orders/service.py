@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import IdempotencyConflictError, NotFoundError, ValidationFailedError
@@ -34,6 +34,7 @@ from app.modules.inventory.service import (
 )
 from app.modules.orders.models import CustomerOrder, CustomerOrderItem, OrderCommand, OrderStatus
 from app.modules.sales.order_collection import CollectedSaleLine, record_collected_sale
+from app.modules.tenancy.models import StockLocation, StoreLocationAccess
 from app.modules.tenancy.service import LocationCapability
 
 MAX_MONEY = Decimal("9999999999.99")
@@ -145,6 +146,7 @@ def _response(order: CustomerOrder, items: list[CustomerOrderItem]) -> dict[str,
         "id": str(order.id),
         "store_id": str(order.store_id),
         "status": order.status,
+        "created_at": order.created_at.isoformat(),
         "sale_id": str(order.sale_id) if order.sale_id else None,
         "currency_code": order.currency_code,
         "total": str(
@@ -162,6 +164,7 @@ def _response(order: CustomerOrder, items: list[CustomerOrderItem]) -> dict[str,
                 "unit_price": str(i.unit_price.quantize(Decimal("0.01"))),
                 "discount_amount": str(i.discount_amount.quantize(Decimal("0.01"))),
                 "display_name": i.display_name_snapshot,
+                "size_label": i.variant_snapshot.get("size"),
             }
             for i in sorted(items, key=lambda item: str(item.id))
         ],
@@ -319,6 +322,70 @@ async def read_order(
     order, items = await _load(session, scope, order_id)
     await _authorize(session, scope, order.store_id, items, "read")
     return _response(order, items)
+
+
+async def list_orders(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    store_id: uuid.UUID,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Filter every source's current permission before ordering and pagination."""
+    scope.require(Permission.SALE_VIEW, store_id)
+    private_store = (
+        store_id
+        if Permission.SALE_VIEW in scope.store_permissions.get(store_id, frozenset())
+        else None
+    )
+    accessible = (
+        select(StockLocation.id)
+        .join(StoreLocationAccess, StoreLocationAccess.location_id == StockLocation.id)
+        .where(
+            StockLocation.organization_id == scope.organization_id,
+            StoreLocationAccess.organization_id == scope.organization_id,
+            StoreLocationAccess.store_id == store_id,
+            or_(
+                StockLocation.managing_store_id.is_(None),
+                StockLocation.managing_store_id == private_store,
+            ),
+        )
+    )
+    inaccessible_item = (
+        select(CustomerOrderItem.id)
+        .where(
+            CustomerOrderItem.order_id == CustomerOrder.id,
+            CustomerOrderItem.source_location_id.not_in(accessible),
+        )
+        .exists()
+    )
+    orders = list(
+        (
+            await session.scalars(
+                select(CustomerOrder)
+                .where(
+                    CustomerOrder.organization_id == scope.organization_id,
+                    CustomerOrder.store_id == store_id,
+                    ~inaccessible_item,
+                )
+                .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
+                .limit(limit + 1)
+                .offset(offset)
+            )
+        ).all()
+    )
+    page = orders[:limit]
+    grouped: dict[uuid.UUID, list[CustomerOrderItem]] = {order.id: [] for order in page}
+    if page:
+        for item in await session.scalars(
+            select(CustomerOrderItem).where(CustomerOrderItem.order_id.in_(grouped))
+        ):
+            grouped[item.order_id].append(item)
+    return {
+        "orders": [_response(order, grouped[order.id]) for order in page],
+        "has_more": len(orders) > limit,
+    }
 
 
 async def transition_order(

@@ -2,10 +2,10 @@
 
 **Milestone 1: Production Foundation Without Irreversible Catalog Assumptions**
 
-Status: **M1A/M1B implemented. M1C: M1-017, M1-029, M1-030 and original M1-018 merged through PR #19 (`8481348`).** Local bootstrap/discovery and private warehouse control implemented and verified on 2026-09-23: 511 tests; see [private control report](private-location-report.md). See [delivery report and latest owner decisions](bootstrap-and-order-next-steps.md). Customer orders/reservations/postal delivery are not implemented. Explicit private warehouses now require direct managing-store permissions. Postal statuses apply to customer delivery, not warehouse receipt; normal warehouse transfers retain their current behavior.
+Status: **M1A/M1B implemented. M1C: M1-017, M1-029, M1-030 and original M1-018 merged through PR #19 (`8481348`).** Local bootstrap/discovery and private warehouse control implemented and verified on 2026-09-23: 511 tests; see [private control report](private-location-report.md). See [delivery report and latest owner decisions](bootstrap-and-order-next-steps.md). Customer orders/reservations/postal delivery backend is implemented (PR #21, `d66afed`). Seller order UI is implemented locally on 2026-09-24; see [UI verification report](order-ui-report.md). Explicit private warehouses now require direct managing-store permissions. Postal statuses apply to customer delivery, not warehouse receipt; normal warehouse transfers retain their current behavior.
 
 Plan: [`milestone-1-plan.md`](milestone-1-plan.md) · 30 numbered tasks · 38 physical tables · 25 invariants · 4 gates. New owner scope is sequenced in the linked report and is not marked complete.
-Branch: `main` at `8481348`, with uncommitted bootstrap/discovery changes. No push or merge performed by this task.
+Baseline for the current UI work: `d66afed` (PR #21). UI/read API changes remain local; no push or merge performed by this task.
 
 Evidence: [M1B gate assessment](m1b-completion-report.md) · [M1B review fixes](m1b-review-fixes.md) · [M1-017 refund report](m1-017-refund-report.md) · [Docker/PostgreSQL 17 verification](docker-postgresql17-verification.md).
 [ADR-0004 stock locations](../decisions/ADR-0004-stock-locations.md) · [design and migration plan](m1-018-stock-location-design.md) · [M1-029 foundation report](m1-029-foundation-report.md) · [M1-029 completion report](m1-029-completion-report.md) · [M1-030 report](m1-030-missing-at-sale-report.md) · [M1-018 transfer report](m1-018-transfer-report.md).

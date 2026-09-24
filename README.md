@@ -116,8 +116,7 @@ paused warehouse. After dispatch, `/orders/{id}/return` requires `command_id`,
 `physically_received: true`, and a nonblank `reason`; it restores goods to their
 original warehouse. After collection use the existing sale refund command.
 Collection does not record payment. Partial shipments, reservation expiry,
-customer/contact tracking, installment accounting and the seller UI remain out
-of scope. Migration rollback refuses existing order/reservation history.
+customer/contact tracking and installment accounting remain out of scope. Migration rollback refuses existing order/reservation history.
 
 ## Checks
 
@@ -162,3 +161,28 @@ databases `birka` and `birka_test`).
 - Raw human catalog input is immutable evidence; interpretation is stored beside it.
 - An uncertain catalog match asks a human. It never silently merges two products.
 - Authorization is server-side; a client-supplied store id is data to validate, not proof.
+
+
+## Seller order interface
+
+The frontend now supports Telegram login, explicit store and warehouse selection,
+stock selection by name/size, negotiated unit prices, order lists and the full
+reserve → dispatch → postal arrival → collection workflow. It also supports
+pre-dispatch cancellation and confirmed physical return before collection.
+
+`GET /api/v1/orders?store_id=...&limit=50&offset=0` returns `orders` and `has_more`;
+access filtering happens before pagination. `GET /api/v1/catalog/stock-options`
+accepts `store_id`, `location_id`, `limit` and `offset`, returning named stock
+options and `has_more`. Order responses now document frozen size labels and
+creation dates in OpenAPI; old command snapshots remain compatible.
+
+Run `npm run dev` in `frontend/`; `/api` proxies to `http://127.0.0.1:8000` by
+default. Set `BIRKA_DEV_API_URL` for a different local API. Production still uses
+same-origin `/api` through Caddy. Opening outside Telegram shows entry guidance;
+there is no production test-login bypass.
+
+Pending commands are retained in browser local storage under organization/user/store
+keys, without auth tokens. Retry keeps the original command and refreshes the
+current order. Do not clear that journal to recover an uncertain operation;
+restore access/connectivity and retry. Payment tracking remains separate.
+See [verification and E2E setup](.ai/project-memory/order-ui-report.md).

@@ -138,4 +138,14 @@ async def size_label(session: AsyncSession, size_id: uuid.UUID) -> str | None:
     return (await session.execute(select(Size.code).where(Size.id == size_id))).scalar_one_or_none()
 
 
-__all__ = ["VariantDescription", "describe_variants", "size_label"]
+async def size_labels(session: AsyncSession, size_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Batch size labels for bounded stock pages."""
+    return {
+        row[0]: row[1]
+        for row in (
+            await session.execute(select(Size.id, Size.code).where(Size.id.in_(size_ids)))
+        ).all()
+    }
+
+
+__all__ = ["VariantDescription", "describe_variants", "size_label", "size_labels"]
