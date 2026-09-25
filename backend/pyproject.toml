@@ -253,6 +253,7 @@ forbidden_modules = [
     "app.core.db",
     "app.modules.catalog.models",
     "app.modules.catalog.evidence",
+    "app.modules.catalog.matching",
     "app.modules.catalog.read",
     "app.modules.catalog.service",
     "app.modules.inventory",
