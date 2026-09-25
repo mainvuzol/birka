@@ -78,3 +78,20 @@ exist, the response is explicitly ambiguous. Database scan cost is not bounded
 by that response limit; large-catalog performance/index design and calibration
 on human-confirmed matches remain unmeasured. PostgreSQL 17 and UI/E2E were not
 rerun for this backend-only preview change; CI still needs to verify it there.
+
+## CI dependency correction — 2026-09-25
+
+Fresh CI resolved SQLAlchemy 2.1.1 through the unbounded `>=2.0.31`
+requirement, whereas local verification used 2.0.54. Installing 2.1.1 in an
+isolated `/tmp` target reproduced all nine reported mypy errors exactly:
+`Select[tuple[UUID]]` no longer matches the newer `Select[UUID]` typing.
+`backend/pyproject.toml` now pins the previously verified SQLAlchemy 2.0.54;
+2.1 adoption needs a separate compatibility change. No type-check suppression
+or business-code/schema change was introduced.
+
+Reverification on 2.0.54: `mypy --no-incremental app scripts` passed (71 files),
+`ruff check .` passed, `ruff format --check .` passed (126 files), and unit tests
+passed (291, two dependency deprecation warnings). Integration tests were not
+rerun for this dependency pin; the 673-test evidence above already used 2.0.54.
+Hosted CI has not yet rerun with this correction. Other backend dependencies
+remain ranged; a complete dependency lock is still a separate improvement.
