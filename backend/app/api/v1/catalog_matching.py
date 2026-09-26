@@ -45,6 +45,7 @@ class MatchPreviewResponse(BaseModel):
     resolved_variant_id: None
     decision_type: Literal["SAME_VARIANT", "NEW_VARIANT", "NEW_MODEL", "NEW_CATEGORY", "AMBIGUOUS"]
     knowledge_fingerprint: str
+    knowledge_revision: int
     parser_preview: dict[str, Any]
     candidates: list[CandidateResponse]
     margin: str | None
