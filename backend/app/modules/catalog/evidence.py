@@ -31,6 +31,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -278,7 +279,16 @@ class AliasEvidence(UUIDPrimaryKey, TimestampMixin, Base):
         postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True
     )
 
-    __table_args__ = (Index("ix_alias_evidence_alias", "alias_id"),)
+    __table_args__ = (
+        Index("ix_alias_evidence_alias", "alias_id"),
+        Index(
+            "uq_alias_evidence_decision_alias",
+            "alias_id",
+            "decision_id",
+            unique=True,
+            postgresql_where=text("decision_id IS NOT NULL"),
+        ),
+    )
 
 
 class CatalogMatchDecision(UUIDPrimaryKey, TimestampMixin, Base):
