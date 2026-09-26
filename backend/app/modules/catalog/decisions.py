@@ -64,8 +64,10 @@ def _response(decision: CatalogMatchDecision, raw: RawInput) -> dict[str, Any]:
         "resolved_variant_id": (
             str(decision.resolved_variant_id) if decision.resolved_variant_id else None
         ),
-        "requires_confirmation": decision.status != MatchDecisionStatus.APPLIED,
+        "requires_confirmation": decision.status
+        in (MatchDecisionStatus.PENDING, MatchDecisionStatus.NEEDS_REVIEW),
         "preview": decision.field_scores["preview"],
+        "rejection": decision.field_scores.get("rejection"),
     }
 
 
