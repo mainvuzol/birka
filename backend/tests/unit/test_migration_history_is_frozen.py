@@ -40,6 +40,9 @@ VERSIONS = BACKEND_ROOT / "migrations" / "versions"
 # sha256 of every migration that has shipped. The newest revision is the one
 # under active development and is deliberately absent: it is not history yet.
 FROZEN: dict[str, str] = {
+    "0013_catalog_knowledge.py": (
+        "15cd588a95d565203e3d6bfd30fbfa8ff9bffd5bdec1cdd5f897c3319da8bec1"
+    ),
     "0012_catalog_trigram.py": ("b7abb69dd5b2d9da7b070b903692dd351bf96f4f25e32656477b392a9859514a"),
     "0011_customer_orders.py": ("d0390e7579127564463b1bc4d0e8e6138e60e76f1c344379fa266ae7a828fc41"),
     "0009_private_location_control.py": (

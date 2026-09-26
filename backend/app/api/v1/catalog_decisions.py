@@ -11,7 +11,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.deps import ScopeDep, SessionDep
 from app.core.text import CleanText
 from app.modules.catalog.decisions import confirm_decision, create_decision, get_decision
-from app.modules.catalog.evidence import MatchDecisionStatus, MatchDecisionType, MatchMode
+from app.modules.catalog.evidence import (
+    AliasEvidenceEvent,
+    AliasStatus,
+    MatchDecisionStatus,
+    MatchDecisionType,
+    MatchMode,
+)
+from app.modules.catalog.feedback import record_alias_feedback
 from app.modules.catalog.review import list_decisions, reject_decision
 
 router = APIRouter(prefix="/catalog/match-decisions", tags=["catalog"])
@@ -124,6 +131,44 @@ async def reject(
         scope=scope,
         decision_id=decision_id,
         reason=payload.reason,
+    )
+    await session.commit()
+    return result
+
+
+class AliasFeedbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    feedback_id: uuid.UUID
+    variant_id: uuid.UUID
+    event: AliasEvidenceEvent
+
+
+class AliasFeedbackResponse(BaseModel):
+    feedback_id: uuid.UUID
+    decision_id: uuid.UUID
+    alias_id: uuid.UUID
+    variant_id: uuid.UUID
+    event: AliasEvidenceEvent
+    normalized_phrase: str
+    status: AliasStatus
+    confirm_count: int
+    reject_count: int
+
+
+@router.post("/{decision_id}/alias-feedback", response_model=AliasFeedbackResponse)
+async def alias_feedback(
+    decision_id: uuid.UUID,
+    payload: AliasFeedbackRequest,
+    scope: ScopeDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    result = await record_alias_feedback(
+        session,
+        scope=scope,
+        decision_id=decision_id,
+        feedback_id=payload.feedback_id,
+        variant_id=payload.variant_id,
+        event=payload.event,
     )
     await session.commit()
     return result
