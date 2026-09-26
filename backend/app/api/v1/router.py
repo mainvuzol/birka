@@ -23,6 +23,7 @@ from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.api.v1.catalog import router as catalog_router
+from app.api.v1.catalog_decisions import router as catalog_decisions_router
 from app.api.v1.catalog_matching import router as catalog_matching_router
 from app.api.v1.inventory import router as inventory_router
 from app.api.v1.locations import router as locations_router
@@ -36,6 +37,7 @@ from app.modules.tenancy.models import Store
 router = APIRouter()
 router.include_router(catalog_router)
 router.include_router(catalog_matching_router)
+router.include_router(catalog_decisions_router)
 router.include_router(inventory_router)
 router.include_router(locations_router)
 router.include_router(orders_router)

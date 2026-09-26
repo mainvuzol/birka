@@ -24,6 +24,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Enum,
@@ -40,6 +41,25 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 from app.core.orm import TimestampMixin, UpdatedAtMixin, UUIDPrimaryKey
+
+
+class CatalogKnowledgeRevision(Base):
+    """Transactional invalidation counter for one organization's matching inputs.
+
+    Database triggers maintain this row, including direct SQL catalog changes.
+    It deliberately excludes prices and sizes, which matching does not read.
+    """
+
+    __tablename__ = "catalog_knowledge_revision"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+
+    __table_args__ = (CheckConstraint("revision >= 0", name="revision_nonnegative"),)
 
 
 class EntityStatus(StrEnum):
@@ -500,6 +520,7 @@ __all__ = [
     "AttributeTerm",
     "BusinessCategory",
     "CanonicalConcept",
+    "CatalogKnowledgeRevision",
     "EntityStatus",
     "GarmentType",
     "ProductFamily",

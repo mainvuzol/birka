@@ -1,7 +1,8 @@
 """Bounded advisory matching. Never persists decisions or resolves product identity.
 
-The fingerprint identifies the read snapshot used by this preview, not a durable
-knowledge revision. Scores are lexical similarities, not calibrated probabilities.
+The fingerprint identifies preview evidence; the durable knowledge revision
+invalidates it when organization catalog inputs change. Scores are lexical
+similarities, not calibrated probabilities.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ class MatchPreview:
     parser_preview: dict[str, object]
     candidates: list[dict[str, Any]]
     knowledge_fingerprint: str
+    knowledge_revision: int
     margin: str | None
     review_reasons: list[str]
     truncated: bool
@@ -46,6 +48,7 @@ class MatchPreview:
             "raw_text": self.parser_preview["raw_text"],
             "candidates": self.candidates,
             "knowledge_fingerprint": self.knowledge_fingerprint,
+            "knowledge_revision": self.knowledge_revision,
             "margin": self.margin,
             "review_reasons": self.review_reasons,
             "truncated": self.truncated,
@@ -128,7 +131,9 @@ SELECT coalesce((SELECT jsonb_agg(to_jsonb(pool) ORDER BY verified_alias DESC,
  EXISTS(SELECT 1 FROM canonical_concept WHERE organization_id = :org
         AND normalized_name = :concept) AS concept_exists,
  EXISTS(SELECT 1 FROM business_category WHERE organization_id = :org
-        AND normalized_name = :category) AS category_exists
+        AND normalized_name = :category) AS category_exists,
+ (SELECT revision FROM catalog_knowledge_revision WHERE organization_id = :org)
+        AS knowledge_revision
 """)  # noqa: S608 — fixed internal column names; all input values are bound.
 
 
@@ -262,6 +267,8 @@ async def preview_match(
         .mappings()
         .one()
     )
+    if snapshot["knowledge_revision"] is None:
+        raise NotFoundError("Catalog knowledge revision not found")
     if family_id is not None and not snapshot["family_exists"]:
         raise NotFoundError("Unknown product family")
     rows = snapshot["rows"]
@@ -344,6 +351,7 @@ async def preview_match(
         parsed.to_dict(),
         candidates[:limit],
         fingerprint,
+        int(snapshot["knowledge_revision"]),
         margin,
         sorted(set(reasons)),
         truncated,
