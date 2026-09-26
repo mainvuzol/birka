@@ -1,0 +1,473 @@
+import { useState } from "react";
+import type { JSX } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, ApiError, errorText } from "@/shared/api";
+import type { Store } from "@/orders/types";
+import { submitCatalogCommand, useCatalogCommand } from "./commands";
+import type { Command } from "./commands";
+import { fieldLabels, reviewText, statusLabels } from "./types";
+import type { Decision } from "./types";
+const base = "/catalog/match-decisions";
+function message(error: unknown): string {
+  if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
+    return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; повторно зараховувати свідчення не потрібно.";
+  if (error instanceof ApiError && error.status === 409)
+    return "Каталог або рішення змінилися. Оновіть перегляд. Для застарілої підказки створіть нову пропозицію та перевірте товар заново.";
+  if (error instanceof ApiError && error.status === 422)
+    return "Перевірте введені дані та стан пропозиції.";
+  return errorText(error);
+}
+export function Catalog({
+  store,
+  token,
+  journalKey,
+  storageError,
+}: {
+  store: Store;
+  token: string;
+  journalKey: string;
+  storageError: boolean;
+}): JSX.Element {
+  const cache = useQueryClient();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [raw, setRaw] = useState("");
+  const [filter, setFilter] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [success, setSuccess] = useState("");
+  const { pending, busy, error } = useCatalogCommand();
+  const blocked = storageError || busy || pending !== null;
+  const list = useQuery({
+    queryKey: ["catalog-decisions", journalKey, filter, offset],
+    queryFn: () =>
+      api<{ items: Decision[]; has_more: boolean }>(
+        `${base}?store_id=${store.id}&limit=20&offset=${String(offset)}${filter ? `&status=${filter}` : ""}`,
+        token,
+      ),
+  });
+  const detail = useQuery({
+    queryKey: ["catalog-decision", journalKey, selected],
+    queryFn: () => api<Decision>(`${base}/${selected ?? ""}`, token),
+    enabled: selected !== null,
+  });
+  async function run(command: Command): Promise<void> {
+    setSuccess("");
+    const result = await submitCatalogCommand(journalKey, token, command);
+    if (result) {
+      cache.setQueryData(
+        ["catalog-decision", journalKey, result.decision_id],
+        result,
+      );
+      setSelected(result.decision_id);
+      setCreating(false);
+      setRaw("");
+      setSuccess(
+        command.path.endsWith("/alias-feedback")
+          ? "Свідчення про назву збережено. Автоматичне підтвердження назв вимкнене."
+          : "Рішення збережено.",
+      );
+      await cache.invalidateQueries({
+        queryKey: ["catalog-decisions", journalKey],
+      });
+    }
+  }
+  return (
+    <>
+      {pending && (
+        <section className="notice">
+          <h3>Незавершена операція каталогу</h3>
+          <p>
+            Результат ще не підтверджено. Повторна спроба використовує ту саму
+            операцію.
+          </p>
+          <button
+            disabled={busy}
+            onClick={() => {
+              void run(pending);
+            }}
+          >
+            Повторити ту саму операцію
+          </button>
+        </section>
+      )}
+      {error !== null && <p role="alert">{message(error)}</p>}
+      {success && <p role="status">{success}</p>}
+      <div className="toolbar">
+        <h2>Перевірка каталогу</h2>
+        <button
+          disabled={blocked}
+          onClick={() => {
+            setCreating(true);
+            setSelected(null);
+            setSuccess("");
+          }}
+        >
+          + Нова пропозиція
+        </button>
+      </div>
+      <p className="hint">
+        Підказки допомагають знайти товар. Перевірка не змінює залишки та не
+        об’єднує товари.
+      </p>
+      {(creating || selected) && (
+        <button
+          className="quiet"
+          disabled={blocked}
+          onClick={() => {
+            setCreating(false);
+            setSelected(null);
+            setSuccess("");
+          }}
+        >
+          ← До черги перевірки
+        </button>
+      )}
+      {creating ? (
+        <section>
+          <h3>Нова пропозиція</h3>
+          <fieldset disabled={blocked}>
+            <label>
+              Початковий опис товару
+              <textarea
+                maxLength={2000}
+                value={raw}
+                onChange={(e) => {
+                  setRaw(e.target.value);
+                }}
+              />
+            </label>
+            <p className="hint">Зберігаємо текст без змін. До 2000 символів.</p>
+            <button
+              disabled={!raw.trim()}
+              onClick={() => {
+                const id = crypto.randomUUID();
+                void run({
+                  path: base,
+                  decisionId: id,
+                  body: { decision_id: id, store_id: store.id, raw_text: raw },
+                });
+              }}
+            >
+              Зберегти пропозицію
+            </button>
+          </fieldset>
+        </section>
+      ) : selected ? (
+        detail.isPending ? (
+          <p role="status">Завантажуємо пропозицію…</p>
+        ) : detail.error ? (
+          <Failure
+            error={detail.error}
+            retry={() => {
+              void detail.refetch();
+            }}
+          />
+        ) : (
+          <Detail
+            key={detail.data.decision_id + detail.data.status}
+            decision={detail.data}
+            blocked={blocked}
+            run={run}
+            refresh={() => {
+              void detail.refetch();
+            }}
+          />
+        )
+      ) : (
+        <section>
+          <label>
+            Стан пропозицій
+            <select
+              disabled={blocked}
+              value={filter}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setOffset(0);
+              }}
+            >
+              <option value="">Очікують перевірки</option>
+              <option value="APPLIED">Підтверджені</option>
+              <option value="REJECTED">Відхилені</option>
+            </select>
+          </label>
+          <button
+            className="quiet"
+            disabled={blocked}
+            onClick={() => {
+              void list.refetch();
+            }}
+          >
+            Оновити чергу
+          </button>
+          {list.isPending ? (
+            <p role="status">Завантажуємо чергу…</p>
+          ) : list.error ? (
+            <Failure
+              error={list.error}
+              retry={() => {
+                void list.refetch();
+              }}
+            />
+          ) : (
+            <>
+              {list.data.items.length === 0 && (
+                <p>У цій черзі поки немає пропозицій.</p>
+              )}
+              {list.data.items.map((d) => (
+                <button
+                  className="order-card catalog-card"
+                  key={d.decision_id}
+                  disabled={blocked}
+                  onClick={() => {
+                    setSelected(d.decision_id);
+                    setSuccess("");
+                  }}
+                >
+                  <span className="badge">{statusLabels[d.status]}</span>
+                  <strong>{d.preview.raw_text}</strong>
+                </button>
+              ))}
+              <div className="toolbar">
+                <button
+                  className="quiet"
+                  disabled={blocked || offset === 0}
+                  onClick={() => {
+                    setOffset(Math.max(0, offset - 20));
+                  }}
+                >
+                  Попередні пропозиції
+                </button>
+                <button
+                  className="quiet"
+                  disabled={blocked || !list.data.has_more || offset >= 10000}
+                  onClick={() => {
+                    setOffset(offset + 20);
+                  }}
+                >
+                  Наступні пропозиції
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+function Failure({
+  error,
+  retry,
+}: {
+  error: unknown;
+  retry: () => void;
+}): JSX.Element {
+  return (
+    <div role="alert">
+      <p>{message(error)}</p>
+      <button onClick={retry}>Повторити завантаження</button>
+    </div>
+  );
+}
+function Detail({
+  decision,
+  blocked,
+  run,
+  refresh,
+}: {
+  decision: Decision;
+  blocked: boolean;
+  run: (c: Command) => Promise<void>;
+  refresh: () => void;
+}): JSX.Element {
+  const [variant, setVariant] = useState("");
+  const [reason, setReason] = useState("");
+  const [feedback, setFeedback] = useState(false);
+  const [rejectedVariant, setRejectedVariant] = useState("");
+  const open = ["PENDING", "NEEDS_REVIEW"].includes(decision.status);
+  const candidates = decision.preview.candidates;
+  const aliasTooLong =
+    decision.preview.raw_text.trim().replace(/\s+/g, " ").length > 200;
+  function action(suffix: string, body: Record<string, unknown>): void {
+    void run({
+      path: `${base}/${decision.decision_id}/${suffix}`,
+      decisionId: decision.decision_id,
+      body,
+    });
+  }
+  return (
+    <section>
+      <div className="toolbar">
+        <h3>Пропозиція каталогу</h3>
+        <button className="quiet" disabled={blocked} onClick={refresh}>
+          Оновити пропозицію
+        </button>
+      </div>
+      <span className="badge">{statusLabels[decision.status]}</span>
+      <h4>Оригінальний опис</h4>
+      <p className="catalog-raw">{decision.preview.raw_text}</p>
+      {decision.rejection && (
+        <p>Причина відхилення: {decision.rejection.reason}</p>
+      )}
+      <ul>
+        {[...new Set(decision.preview.review_reasons.map(reviewText))].map(
+          (text) => (
+            <li key={text}>{text}</li>
+          ),
+        )}
+      </ul>
+      {decision.preview.truncated && (
+        <p className="notice">
+          Список кандидатів обмежено. Не обирайте товар лише через схожість
+          назви.
+        </p>
+      )}
+      {open ? (
+        <fieldset disabled={blocked}>
+          <legend>Оберіть товар після перевірки</legend>
+          {candidates.length === 0 && (
+            <p>
+              Кандидатів немає. Можна відхилити пропозицію з поясненням;
+              створення нового товару тут ще недоступне.
+            </p>
+          )}
+          {candidates.map((c) => (
+            <label className="catalog-candidate" key={c.variant_id}>
+              <span className="check">
+                <input
+                  type="radio"
+                  name="catalog-variant"
+                  value={c.variant_id}
+                  checked={variant === c.variant_id}
+                  onChange={() => {
+                    setVariant(c.variant_id);
+                  }}
+                />
+                <strong>{c.display_name}</strong>
+              </span>
+              {c.distinction_note && (
+                <span>Відмінність моделі: {c.distinction_note}</span>
+              )}
+              {c.conflicts.length > 0 && (
+                <span>
+                  Не збігається:{" "}
+                  {c.conflicts
+                    .map((f) => fieldLabels[f] ?? "ознака потребує перевірки")
+                    .join(", ")}
+                </span>
+              )}
+            </label>
+          ))}
+          <button
+            disabled={!variant}
+            onClick={() => {
+              action("confirm", {
+                variant_id: variant,
+                expected_knowledge_revision: decision.knowledge_revision,
+              });
+            }}
+          >
+            Підтвердити обраний товар
+          </button>
+          <label>
+            Причина відхилення
+            <textarea
+              maxLength={1000}
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+              }}
+            />
+          </label>
+          <button
+            className="quiet"
+            disabled={!reason.trim()}
+            onClick={() => {
+              action("reject", { reason: reason.trim() });
+            }}
+          >
+            Відхилити пропозицію
+          </button>
+        </fieldset>
+      ) : (
+        <fieldset disabled={blocked || aliasTooLong}>
+          <legend>Свідчення про назву — за бажанням</legend>
+          {aliasTooLong && (
+            <p>
+              Опис задовгий для назви: свідчення підтримують до 200 символів.
+            </p>
+          )}
+          <p>
+            Зберігайте зв’язок лише коли весь початковий опис справді є назвою
+            цього товару. Це не робить назву автоматично перевіреною.
+          </p>
+          {decision.status === "APPLIED" && decision.resolved_variant_id && (
+            <>
+              <p>
+                Обраний товар:{" "}
+                {candidates.find(
+                  (c) => c.variant_id === decision.resolved_variant_id,
+                )?.display_name ?? "Підтверджений товар"}
+              </p>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={feedback}
+                  onChange={(e) => {
+                    setFeedback(e.target.checked);
+                  }}
+                />
+                Зберегти підтвердження назви
+              </label>
+              <button
+                disabled={!feedback}
+                onClick={() => {
+                  action("alias-feedback", {
+                    feedback_id: crypto.randomUUID(),
+                    variant_id: decision.resolved_variant_id,
+                    event: "CONFIRM",
+                  });
+                  setFeedback(false);
+                }}
+              >
+                Підтвердити зв’язок назви
+              </button>
+            </>
+          )}
+          <label>
+            Товар, якому ця назва не відповідає
+            <select
+              value={rejectedVariant}
+              onChange={(e) => {
+                setRejectedVariant(e.target.value);
+              }}
+            >
+              <option value="">Оберіть явно</option>
+              {candidates
+                .filter((c) => c.variant_id !== decision.resolved_variant_id)
+                .map((c) => (
+                  <option key={c.variant_id} value={c.variant_id}>
+                    {c.display_name}
+                    {c.distinction_note ? ` — ${c.distinction_note}` : ""}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button
+            className="quiet"
+            disabled={!rejectedVariant}
+            onClick={() => {
+              action("alias-feedback", {
+                feedback_id: crypto.randomUUID(),
+                variant_id: rejectedVariant,
+                event: "REJECT",
+              });
+              setRejectedVariant("");
+            }}
+          >
+            Заперечити зв’язок назви
+          </button>
+        </fieldset>
+      )}
+    </section>
+  );
+}

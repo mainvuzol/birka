@@ -14,6 +14,8 @@ import type {
   Line,
   Order,
 } from "@/orders/types";
+import { Catalog } from "@/catalog/Catalog";
+import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import "./styles.css";
 
 async function authenticate(): Promise<{ token: string; me: Me }> {
@@ -72,7 +74,7 @@ export function App(): JSX.Element {
         <div>
           <span className="eyebrow">РОБОЧЕ МІСЦЕ ПРОДАВЦЯ</span>
           <h1>
-            birka <span> / замовлення</span>
+            birka <span> / магазин</span>
           </h1>
         </div>
         <span>{auth.data.me.display_name}</span>
@@ -124,11 +126,23 @@ function Workspace({
   changeStore: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
-  const [tab, setTab] = useState<"list" | "new">("list");
+  const [tab, setTab] = useState<"list" | "new" | "catalog">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [storageError, setStorageError] = useState(false);
   const key = `birka:pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const catalogKey = `birka:catalog-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [catalogStorageError, setCatalogStorageError] = useState(false);
+  const catalogCommand = useCatalogCommand();
+  useEffect(() => {
+    try {
+      const saved = loadCatalogCommand(catalogKey);
+      useCatalogCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("catalog");
+    } catch {
+      setCatalogStorageError(true);
+    }
+  }, [catalogKey]);
   const { pending, busy, error } = useCommand();
   useEffect(() => {
     try {
@@ -163,7 +177,13 @@ function Workspace({
       ]);
     }
   }
-  const blocked = busy || pending !== null || storageError;
+  const blocked =
+    busy ||
+    pending !== null ||
+    storageError ||
+    catalogStorageError ||
+    catalogCommand.busy ||
+    catalogCommand.pending !== null;
   return (
     <>
       <div className="toolbar">
@@ -195,7 +215,24 @@ function Workspace({
             + Нове замовлення
           </button>
         )}
+        {store.permissions.includes("catalog:confirm") && (
+          <button
+            className={tab === "catalog" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("catalog");
+            }}
+          >
+            Каталог
+          </button>
+        )}
       </nav>
+      {catalogStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
+          застосунку; зверніться до менеджера.
+        </p>
+      )}
       {storageError && (
         <p role="alert">
           Не вдалося прочитати збережену команду. Створення операцій зупинено.
@@ -222,7 +259,22 @@ function Workspace({
         </section>
       )}
       {error !== null && <p role="alert">{errorText(error)}</p>}
-      {tab === "new" ? (
+      {tab === "catalog" ? (
+        store.permissions.includes("catalog:confirm") ? (
+          <Catalog
+            store={store}
+            token={token}
+            journalKey={catalogKey}
+            storageError={
+              catalogStorageError || storageError || busy || pending !== null
+            }
+          />
+        ) : (
+          <p role="alert">
+            Немає доступу до перевірки каталогу. Зверніться до менеджера.
+          </p>
+        )
+      ) : tab === "new" ? (
         <NewOrder
           store={store}
           token={token}

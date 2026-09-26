@@ -263,3 +263,23 @@ button.active {
     width: 100%;
   }
 }
+nav {
+  flex-wrap: wrap;
+}
+.catalog-raw {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.catalog-card {
+  overflow-wrap: anywhere;
+}
+.catalog-candidate {
+  border: 1px solid #dce1da;
+  padding: 14px;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.catalog-candidate .check {
+  display: flex;
+  gap: 12px;
+}
