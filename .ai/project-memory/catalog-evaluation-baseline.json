@@ -1,0 +1,243 @@
+{
+  "report_version": "1.0.0",
+  "database": {
+    "postgres_version": "16.2",
+    "collation": "C.UTF-8",
+    "character_classification": "C.UTF-8",
+    "encoding": "UTF8"
+  },
+  "dataset_version": "1.0.0",
+  "dataset_sha256": "b60461a8e7fb68601d50ebd078e9b0cbd2930511b494bffe6e4849f0aecc6cd3",
+  "provenance": "Synthetic engineering regression scenarios authored from documented catalog invariants. Expected identities exist only in this seeded catalog. Not owner-confirmed store identities, not a held-out production evaluation, not evidence authorizing VERIFIED promotion or automatic matching.",
+  "matcher_version": "1.0.0-preview",
+  "parser_version": "1.0.0",
+  "synthetic_identity": {
+    "cases": 15,
+    "target_cases": 3,
+    "retrieved_targets_at_10": 3,
+    "retrieval_recall_at_10": "1.000000",
+    "correct_decisions": 15,
+    "decision_accuracy": "1.000000",
+    "same_variant_suggestions": 2,
+    "unsafe_same_variant_suggestions": 0,
+    "unsafe_same_suggestion_rate": "0.000000",
+    "human_review_cases": 15,
+    "human_review_rate": "1.000000",
+    "by_expected_decision": {
+      "SAME_VARIANT": {
+        "expected_count": 2,
+        "correct_count": 2,
+        "accuracy": "1.000000"
+      },
+      "NEW_VARIANT": {
+        "expected_count": 1,
+        "correct_count": 1,
+        "accuracy": "1.000000"
+      },
+      "NEW_MODEL": {
+        "expected_count": 1,
+        "correct_count": 1,
+        "accuracy": "1.000000"
+      },
+      "NEW_CATEGORY": {
+        "expected_count": 1,
+        "correct_count": 1,
+        "accuracy": "1.000000"
+      },
+      "AMBIGUOUS": {
+        "expected_count": 10,
+        "correct_count": 10,
+        "accuracy": "1.000000"
+      }
+    },
+    "cases_results": [
+      {
+        "id": "verified-unique",
+        "expected_decision": "SAME_VARIANT",
+        "actual_decision": "SAME_VARIANT",
+        "candidate_keys": [
+          "laurent",
+          "laurent_other",
+          "nora"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "verified-alias-with-ambiguous-concept",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "laurent_other",
+          "nora"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "exact-unique",
+        "expected_decision": "SAME_VARIANT",
+        "actual_decision": "SAME_VARIANT",
+        "candidate_keys": [
+          "nora",
+          "laurent",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "same-name-independent-families",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "laurent_other",
+          "nora"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "competing-verified-aliases",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "laurent_other",
+          "nora"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "color-conflict",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "nora",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "length-conflict",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "laurent_other",
+          "nora"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "material-conflict",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "nora",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "learning-not-authority",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "nora",
+          "laurent",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "explicit-family-new-variant",
+        "expected_decision": "NEW_VARIANT",
+        "actual_decision": "NEW_VARIANT",
+        "candidate_keys": [
+          "laurent"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "explicit-new-model",
+        "expected_decision": "NEW_MODEL",
+        "actual_decision": "NEW_MODEL",
+        "candidate_keys": [
+          "nora",
+          "laurent",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "explicit-new-category",
+        "expected_decision": "NEW_CATEGORY",
+        "actual_decision": "NEW_CATEGORY",
+        "candidate_keys": [
+          "nora",
+          "laurent",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "rare-code-not-identity",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "nora",
+          "laurent",
+          "laurent_other"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "slash-is-not-alias",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent",
+          "laurent_other",
+          "nora"
+        ],
+        "requires_confirmation": true
+      },
+      {
+        "id": "family-context-conflict",
+        "expected_decision": "AMBIGUOUS",
+        "actual_decision": "AMBIGUOUS",
+        "candidate_keys": [
+          "laurent"
+        ],
+        "requires_confirmation": true
+      }
+    ],
+    "failures": []
+  },
+  "real_store_extraction": {
+    "corpus_version": "1.0.0",
+    "dataset_sha256": "10751ec3c165ffcee1c5a58a76c0121d602bdeeeb5fc666820401a3e16ef90d4",
+    "provenance": "Manually transcribed product-only rows from user-supplied photo_5278543205567767610_y.jpg in this conversation. Original image stays private. Typographical uncertainty is retained (e.g. серный). These are raw evidence, not owner-confirmed product identities. Duplicates intentionally retained.",
+    "rows": 44,
+    "identity_labeled_rows": 0,
+    "excluded_from_identity_metrics": 44,
+    "annotated_rows": 26,
+    "unannotated_rows": 18,
+    "assertions": 59,
+    "passed_assertions": 59,
+    "assertion_accuracy": "1.000000",
+    "raw_preserved_rows": 44,
+    "failures": [],
+    "limitation": "Partial extraction expectations only; no reviewed product identity labels."
+  },
+  "gates_passed": true,
+  "promotion_ready": false,
+  "owner_reviewed_heldout_identity_samples": 0,
+  "owner_reviewed_heldout_identity_precision": null,
+  "limitations": [
+    "Synthetic identities are not owner-reviewed held-out production identities.",
+    "Unsafe SAME suggestions are not actual merges; human confirmation remains required.",
+    "Scores are not calibrated probabilities; thresholds and promotion policies remain unchanged."
+  ]
+}
