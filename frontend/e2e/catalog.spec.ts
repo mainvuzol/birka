@@ -315,3 +315,232 @@ test("uncertain catalog operation remains recoverable after access denial", asyn
     page.getByRole("button", { name: "Підтвердити обраний товар" }),
   ).toBeVisible();
 });
+
+test("create a reviewed product and recover a lost response without duplication", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  const name = `Модель ${randomUUID().slice(0, 8)}`;
+  const raw = `  ${name} невідомий опис\n`;
+  await create(page, raw);
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await expect(
+    page.getByRole("button", { name: "Створити та пов’язати товар" }),
+  ).toBeDisabled();
+  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await page.getByLabel("Колір", { exact: true }).fill("синій");
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("L");
+  const commands: string[] = [];
+  const results: {
+    resolved_variant_id: string;
+    preview: { raw_text: string };
+  }[] = [];
+  await context.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      commands.push(route.request().postData() ?? "");
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      results.push((await response.json()) as (typeof results)[number]);
+      if (commands.length === 1) await route.abort("failed");
+      else await route.fulfill({ response });
+    },
+  );
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Повторити ту саму операцію" }),
+  ).toBeEnabled();
+  await page.close();
+  const reopened = await context.newPage();
+  await reopened.goto(launch());
+  await reopened.getByRole("button", { name: "Основний MAIN" }).click();
+  await reopened
+    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .click();
+  await expect(
+    reopened.getByText(`Збережений товар: ${name} синій. Розміри: L (ALPHA)`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(commands).toHaveLength(2);
+  expect(commands[0]).toBe(commands[1]);
+  expect(results[0]?.resolved_variant_id).toBe(results[1]?.resolved_variant_id);
+  expect(results[1]?.preview.raw_text).toBe(raw);
+  expect(
+    await reopened.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  await reopened.screenshot({
+    path: "test-results/catalog-created-mobile.png",
+    fullPage: true,
+  });
+});
+
+test("ambiguous named model retains explicit form then allows a distinct model", async ({
+  page,
+}) => {
+  await enter(page);
+  await create(page, "Лоран інша модель");
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill("Лоран");
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("XL");
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith("/create-product") && r.status() === 409,
+  );
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await response;
+  await expect(page.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    "Лоран",
+  );
+  await page.getByLabel("Окрема модель зі схожою назвою").check();
+  await page
+    .getByLabel("Чим відрізняється модель")
+    .fill("Інший крій для тесту");
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await expect(
+    page.getByText("Збережений товар: Лоран. Розміри: XL (ALPHA)", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test("review-only users cannot open product creation", async ({ page }) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (p) => p !== "catalog:create",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await enter(page);
+  await create(page, "Опис для перевірки прав");
+  await expect(
+    page.getByRole("button", { name: "Створити товар з опису" }),
+  ).toHaveCount(0);
+});
+
+test("lost product rejection can be explicitly cancelled without leaving blocked navigation", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  await create(page, "Лоран помилкова нова модель");
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill("Лоран");
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("M");
+  await context.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      const response = await route.fetch();
+      expect(response.status()).toBe(409);
+      await route.abort("failed");
+    },
+  );
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await page
+    .getByRole("button", { name: "Скасувати незавершене створення" })
+    .click();
+  await expect(
+    page.getByText("Причина відхилення:", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "+ Нова пропозиція" }),
+  ).toBeEnabled();
+});
+
+test("cancelling a lost committed creation shows its saved product", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  const name = `Збережена ${randomUUID().slice(0, 8)}`;
+  await create(page, name);
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("M");
+  await context.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      expect((await route.fetch()).status()).toBe(200);
+      await route.abort("failed");
+    },
+  );
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await page
+    .getByRole("button", { name: "Скасувати незавершене створення" })
+    .click();
+  await expect(
+    page.getByText(`Збережений товар: ${name}. Розміри: M (ALPHA)`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "+ Нова пропозиція" }),
+  ).toBeEnabled();
+});
+
+test("creation cancellation accepts another reviewer's terminal rejection", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  await create(page, "Лоран переглядають одночасно");
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill("Лоран");
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("M");
+  await context.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      expect((await route.fetch()).status()).toBe(409);
+      const rejected = await page.request.post(
+        route
+          .request()
+          .url()
+          .replace(/create-product$/, "reject"),
+        {
+          headers: {
+            Authorization: route.request().headers()["authorization"] ?? "",
+          },
+          data: { reason: "Інший менеджер уже відхилив" },
+        },
+      );
+      expect(rejected.status()).toBe(200);
+      await route.abort("failed");
+    },
+  );
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await page
+    .getByRole("button", { name: "Скасувати незавершене створення" })
+    .click();
+  await expect(
+    page.getByText("Причина відхилення: Інший менеджер уже відхилив", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "+ Нова пропозиція" }),
+  ).toBeEnabled();
+});

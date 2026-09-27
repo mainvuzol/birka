@@ -1,4 +1,5 @@
 export interface Candidate {
+  family_id: string;
   variant_id: string;
   display_name: string;
   distinction_note: string | null;
@@ -17,6 +18,10 @@ export interface Decision {
     truncated: boolean;
   };
   rejection: { reason: string } | null;
+  creation: {
+    display_name: string;
+    sizes: { system: string; code: string }[];
+  } | null;
 }
 export const statusLabels: Record<Decision["status"], string> = {
   PENDING: "Очікує перевірки",

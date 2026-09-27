@@ -3,14 +3,21 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
 import type { Store } from "@/orders/types";
-import { submitCatalogCommand, useCatalogCommand } from "./commands";
+import {
+  CANCEL_CREATION_REASON,
+  submitCatalogCommand,
+  useCatalogCommand,
+} from "./commands";
 import type { Command } from "./commands";
 import { fieldLabels, reviewText, statusLabels } from "./types";
 import type { Decision } from "./types";
+import { CreateProduct } from "./CreateProduct";
 const base = "/catalog/match-decisions";
 function message(error: unknown): string {
   if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
     return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; повторно зараховувати свідчення не потрібно.";
+  if (error instanceof ApiError && error.code === "CATALOG_AMBIGUOUS")
+    return "Модель неоднозначна або стан каталогу змінився. Перевірте обрану модель. Для окремої моделі зі схожою назвою вкажіть її відмінність; за тимчасового конфлікту повторіть спробу.";
   if (error instanceof ApiError && error.status === 409)
     return "Каталог або рішення змінилися. Оновіть перегляд. Для застарілої підказки створіть нову пропозицію та перевірте товар заново.";
   if (error instanceof ApiError && error.status === 422)
@@ -88,6 +95,28 @@ export function Catalog({
           >
             Повторити ту саму операцію
           </button>
+          {pending.path.endsWith("/create-product") && (
+            <>
+              <p>
+                Якщо створення не вдається, можна скасувати пропозицію. Якщо
+                товар уже збережено, покажемо результат.
+              </p>
+              <button
+                className="quiet"
+                disabled={busy}
+                onClick={() => {
+                  void run({
+                    path: `${base}/${pending.decisionId}/reject`,
+                    decisionId: pending.decisionId,
+                    body: { reason: CANCEL_CREATION_REASON },
+                    ambiguous: true,
+                  });
+                }}
+              >
+                Скасувати незавершене створення
+              </button>
+            </>
+          )}
         </section>
       )}
       {error !== null && <p role="alert">{message(error)}</p>}
@@ -166,6 +195,7 @@ export function Catalog({
           <Detail
             key={detail.data.decision_id + detail.data.status}
             decision={detail.data}
+            canCreate={store.permissions.includes("catalog:create")}
             blocked={blocked}
             run={run}
             refresh={() => {
@@ -270,11 +300,13 @@ function Failure({
 }
 function Detail({
   decision,
+  canCreate,
   blocked,
   run,
   refresh,
 }: {
   decision: Decision;
+  canCreate: boolean;
   blocked: boolean;
   run: (c: Command) => Promise<void>;
   refresh: () => void;
@@ -321,13 +353,30 @@ function Detail({
           назви.
         </p>
       )}
+      {open && canCreate && (
+        <CreateProduct
+          decision={decision}
+          blocked={blocked}
+          submit={(body) => {
+            action("create-product", body);
+          }}
+        />
+      )}
+      {decision.creation && (
+        <p>
+          Збережений товар: {decision.creation.display_name}. Розміри:{" "}
+          {decision.creation.sizes
+            .map((s) => `${s.code} (${s.system})`)
+            .join(", ")}
+        </p>
+      )}
       {open ? (
         <fieldset disabled={blocked}>
           <legend>Оберіть товар після перевірки</legend>
           {candidates.length === 0 && (
             <p>
-              Кандидатів немає. Можна відхилити пропозицію з поясненням;
-              створення нового товару тут ще недоступне.
+              Кандидатів немає. Перевірте опис і створіть товар, якщо маєте
+              право, або відхиліть пропозицію з поясненням.
             </p>
           )}
           {candidates.map((c) => (
@@ -404,9 +453,11 @@ function Detail({
             <>
               <p>
                 Обраний товар:{" "}
-                {candidates.find(
-                  (c) => c.variant_id === decision.resolved_variant_id,
-                )?.display_name ?? "Підтверджений товар"}
+                {decision.creation?.display_name ??
+                  candidates.find(
+                    (c) => c.variant_id === decision.resolved_variant_id,
+                  )?.display_name ??
+                  "Підтверджений товар"}
               </p>
               <label className="check">
                 <input
