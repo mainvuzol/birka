@@ -38,6 +38,7 @@ from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import SizeSystemCode
 from app.modules.catalog.read import describe_variants, size_labels
+from app.modules.catalog.search import search_families
 from app.modules.catalog.service import (
     ProductDraft,
     SizeDraft,
@@ -312,6 +313,36 @@ async def stock_options(
             for row in page
         ],
         has_more=len(rows) > limit,
+    )
+
+
+class FamilyOption(BaseModel):
+    family_id: uuid.UUID
+    concept_name: str
+    source_name: str | None
+    business_category_name: str | None
+    garment_type_name: str | None
+    distinction_note: str | None
+
+
+class FamilyOptionsResponse(BaseModel):
+    items: list[FamilyOption]
+    has_more: bool
+
+
+@router.get("/families", response_model=FamilyOptionsResponse)
+async def family_options(
+    store_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    query: Annotated[CleanText, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+) -> FamilyOptionsResponse:
+    return FamilyOptionsResponse.model_validate(
+        await search_families(
+            session, scope=scope, store_id=store_id, query=query, limit=limit, offset=offset
+        )
     )
 
 

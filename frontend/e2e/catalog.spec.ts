@@ -544,3 +544,98 @@ test("creation cancellation accepts another reviewer's terminal rejection", asyn
     page.getByRole("button", { name: "+ Нова пропозиція" }),
   ).toBeEnabled();
 });
+
+test("search selects an existing family outside preview without creating another family", async ({
+  page,
+}) => {
+  let authorization = "";
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/v1/me"))
+      authorization = r.headers()["authorization"] ?? "";
+  });
+  await enter(page);
+  await create(page, "Невідомий початковий опис");
+  const name = `Віддалена модель ${randomUUID().slice(0, 8)}`;
+  const product = await page.request.post("/api/v1/catalog/products", {
+    headers: { Authorization: authorization, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: fixture.store_id,
+      concept: name,
+      source: "Постачальник тестовий",
+      sizes: [{ system: "ALPHA", code: "M" }],
+    },
+  });
+  expect(product.status()).toBe(201);
+  const existing = (await product.json()) as { product_family_id: string };
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Пошук моделі в каталозі").fill(name);
+  await page.getByLabel("Пошук моделі в каталозі").press("Enter");
+  const choice = page.getByRole("button", {
+    name: `Обрати модель: ${name} — Постачальник тестовий`,
+    exact: true,
+  });
+  await expect(choice).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Модель товару", exact: true }),
+  ).toHaveValue("");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  await page.screenshot({
+    path: "test-results/catalog-family-search-mobile.png",
+    fullPage: true,
+  });
+  await choice.click();
+  await expect(
+    page.getByRole("combobox", { name: "Модель товару", exact: true }),
+  ).toHaveValue(existing.product_family_id);
+  await page.getByLabel("Колір", { exact: true }).fill("зелений");
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("L");
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith("/create-product") && r.status() === 200,
+  );
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  const result = (await (await response).json()) as {
+    creation: {
+      product_family_id: string;
+      family_created: boolean;
+      variant_created: boolean;
+    };
+  };
+  expect(result.creation.product_family_id).toBe(existing.product_family_id);
+  expect(result.creation.family_created).toBe(false);
+  expect(result.creation.variant_created).toBe(true);
+});
+
+test("family search empty and failure states keep the manual draft", async ({
+  page,
+}) => {
+  await enter(page);
+  await create(page, "Пошук без збігів");
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill("Ручна назва");
+  await page.getByLabel("Пошук моделі в каталозі").fill(randomUUID());
+  await page
+    .getByRole("button", { name: "Знайти модель", exact: true })
+    .click();
+  await expect(page.getByText(/Моделей не знайдено/)).toBeVisible();
+  await page.route("**/api/v1/catalog/families?**", async (route) => {
+    await route.fulfill({ status: 403, json: { code: "PERMISSION_DENIED" } });
+  });
+  await page.getByLabel("Пошук моделі в каталозі").fill("інший пошук");
+  await page
+    .getByRole("button", { name: "Знайти модель", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("Немає доступу");
+  await expect(page.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    "Ручна назва",
+  );
+  await expect(
+    page.getByRole("combobox", { name: "Модель товару", exact: true }),
+  ).toHaveValue("");
+});
