@@ -68,6 +68,7 @@ def _response(decision: CatalogMatchDecision, raw: RawInput) -> dict[str, Any]:
         in (MatchDecisionStatus.PENDING, MatchDecisionStatus.NEEDS_REVIEW),
         "preview": decision.field_scores["preview"],
         "rejection": decision.field_scores.get("rejection"),
+        "creation": decision.field_scores.get("creation", {}).get("result"),
     }
 
 
@@ -263,6 +264,7 @@ async def _validate_variant(
     row = (
         await session.execute(
             select(ProductVariant, ProductFamily, CanonicalConcept)
+            .execution_options(populate_existing=True)
             .join(ProductFamily, ProductFamily.id == ProductVariant.product_family_id)
             .join(CanonicalConcept, CanonicalConcept.id == ProductFamily.canonical_concept_id)
             .where(
@@ -338,7 +340,8 @@ async def confirm_decision(
     )
     if decision.status == MatchDecisionStatus.APPLIED:
         if (
-            decision.resolved_variant_id != variant_id
+            "creation" in decision.field_scores
+            or decision.resolved_variant_id != variant_id
             or expected_knowledge_revision != decision.knowledge_revision
         ):
             raise IdempotencyConflictError("This decision already has a different resolution")

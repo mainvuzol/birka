@@ -7,8 +7,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.exc import DBAPIError
 
 from app.api.deps import ScopeDep, SessionDep
+from app.api.v1.catalog import ProductRequest, ProductResponse
+from app.core.errors import CatalogAmbiguousError
 from app.core.text import CleanText
 from app.modules.catalog.decisions import confirm_decision, create_decision, get_decision
 from app.modules.catalog.evidence import (
@@ -19,7 +22,9 @@ from app.modules.catalog.evidence import (
     MatchMode,
 )
 from app.modules.catalog.feedback import record_alias_feedback
+from app.modules.catalog.intake import create_product_from_decision
 from app.modules.catalog.review import list_decisions, reject_decision
+from app.modules.catalog.service import ProductDraft, SizeDraft, VariantDraft
 
 router = APIRouter(prefix="/catalog/match-decisions", tags=["catalog"])
 
@@ -63,6 +68,7 @@ class DecisionResponse(BaseModel):
     requires_confirmation: bool
     preview: dict[str, Any]
     rejection: RejectionFeedback | None = None
+    creation: ProductResponse | None = None
 
 
 @router.post("", response_model=DecisionResponse)
@@ -172,3 +178,49 @@ async def alias_feedback(
     )
     await session.commit()
     return result
+
+
+@router.post("/{decision_id}/create-product", response_model=DecisionResponse)
+async def create_reviewed_product(
+    decision_id: uuid.UUID,
+    payload: ProductRequest,
+    scope: ScopeDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    # Retry the whole command, including commit. A database-selected deadlock
+    # victim has no durable effects, so the permanent decision identity remains
+    # safe. Other DB failures must not be disguised as a transient conflict.
+    for attempt in range(3):
+        try:
+            result = await create_product_from_decision(
+                session,
+                scope=scope,
+                decision_id=decision_id,
+                store_id=payload.store_id,
+                draft=ProductDraft(
+                    concept=payload.concept,
+                    source=payload.source,
+                    business_category=payload.business_category,
+                    garment_type=payload.garment_type,
+                    product_family_id=payload.product_family_id,
+                    new_model=payload.new_model,
+                    distinction_note=payload.distinction_note,
+                    variant=VariantDraft(**payload.variant.model_dump()),
+                    sizes=tuple(
+                        SizeDraft(system=size.system, code=size.code) for size in payload.sizes
+                    ),
+                ),
+            )
+            await session.commit()
+            return result
+        except DBAPIError as exc:
+            code = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+            if code not in {"40P01", "40001"}:
+                raise
+            await session.rollback()
+            if attempt == 2:
+                raise CatalogAmbiguousError(
+                    "Catalog changed concurrently; retry this same product request",
+                    retryable=True,
+                ) from exc
+    raise AssertionError("Unreachable retry state")
