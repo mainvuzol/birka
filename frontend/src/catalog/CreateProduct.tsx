@@ -1,18 +1,25 @@
 import { useState } from "react";
 import type { JSX } from "react";
+import { FamilySearch, familyLabel } from "./FamilySearch";
+import type { Family } from "./FamilySearch";
 import type { Decision } from "./types";
 
 export function CreateProduct({
   decision,
+  token,
+  scopeKey,
   blocked,
   submit,
 }: {
   decision: Decision;
+  token: string;
+  scopeKey: string;
   blocked: boolean;
   submit: (body: Record<string, unknown>) => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [family, setFamily] = useState("");
+  const [searchedFamily, setSearchedFamily] = useState<Family | null>(null);
   const [concept, setConcept] = useState("");
   const [source, setSource] = useState("");
   const [category, setCategory] = useState("");
@@ -93,14 +100,38 @@ export function CreateProduct({
                 }}
               >
                 <option value="">Нова модель за назвою</option>
-                {families.map((c) => (
-                  <option key={c.family_id} value={c.family_id}>
-                    {c.display_name}
-                    {c.distinction_note ? ` — ${c.distinction_note}` : ""}
+                {searchedFamily && (
+                  <option value={searchedFamily.family_id}>
+                    {familyLabel(searchedFamily)}
                   </option>
-                ))}
+                )}
+                {families
+                  .filter((c) => c.family_id !== searchedFamily?.family_id)
+                  .map((c) => (
+                    <option key={c.family_id} value={c.family_id}>
+                      {c.display_name}
+                      {c.distinction_note ? ` — ${c.distinction_note}` : ""}
+                    </option>
+                  ))}
               </select>
             </label>
+            <FamilySearch
+              storeId={decision.store_id}
+              decisionId={decision.decision_id}
+              token={token}
+              scopeKey={scopeKey}
+              blocked={blocked}
+              choose={(selected) => {
+                setSearchedFamily(selected);
+                setFamily(selected.family_id);
+              }}
+            />
+            {family && (
+              <p role="status">
+                Обрано наявну модель. Вкажіть ознаки та розмір варіанта; дані
+                моделі не змінюються.
+              </p>
+            )}
             {!family && (
               <>
                 <label>

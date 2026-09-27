@@ -195,6 +195,8 @@ export function Catalog({
           <Detail
             key={detail.data.decision_id + detail.data.status}
             decision={detail.data}
+            token={token}
+            scopeKey={journalKey}
             canCreate={store.permissions.includes("catalog:create")}
             blocked={blocked}
             run={run}
@@ -300,12 +302,16 @@ function Failure({
 }
 function Detail({
   decision,
+  token,
+  scopeKey,
   canCreate,
   blocked,
   run,
   refresh,
 }: {
   decision: Decision;
+  token: string;
+  scopeKey: string;
   canCreate: boolean;
   blocked: boolean;
   run: (c: Command) => Promise<void>;
@@ -356,6 +362,8 @@ function Detail({
       {open && canCreate && (
         <CreateProduct
           decision={decision}
+          token={token}
+          scopeKey={scopeKey}
           blocked={blocked}
           submit={(body) => {
             action("create-product", body);
