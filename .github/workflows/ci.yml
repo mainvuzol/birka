@@ -22,6 +22,7 @@ jobs:
           POSTGRES_USER: birka
           POSTGRES_PASSWORD: birka
           POSTGRES_DB: birka_test
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8"
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U birka -d birka_test"
@@ -75,6 +76,17 @@ jobs:
         run: |
           alembic downgrade base
           alembic upgrade head
+
+      - name: Catalog evaluation regression gate
+        run: python -m scripts.evaluate_catalog --output /tmp/catalog-evaluation.json
+
+      - name: Preserve catalog evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-evaluation
+          path: /tmp/catalog-evaluation.json
+          if-no-files-found: ignore
 
       - name: Tests
         run: pytest -q

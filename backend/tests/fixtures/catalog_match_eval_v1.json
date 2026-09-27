@@ -1,0 +1,176 @@
+{
+  "version": "1.0.0",
+  "provenance": "Synthetic engineering regression scenarios authored from documented catalog invariants. Expected identities exist only in this seeded catalog. Not owner-confirmed store identities, not a held-out production evaluation, not evidence authorizing VERIFIED promotion or automatic matching.",
+  "products": [
+    {
+      "key": "laurent",
+      "concept": "Лоран",
+      "color": "шоколад",
+      "material": "вовна",
+      "length_cm": "70"
+    },
+    {
+      "key": "nora",
+      "concept": "Нора",
+      "color": "чорний",
+      "material": "замша",
+      "length_cm": "55"
+    },
+    {
+      "key": "laurent_other",
+      "concept": "Лоран",
+      "color": "шоколад",
+      "material": "вовна",
+      "length_cm": "70",
+      "new_model": true,
+      "distinction_note": "Інший крій: окрема модель із тією самою назвою"
+    }
+  ],
+  "aliases": [
+    {
+      "phrase": "мій лоран",
+      "target": "laurent",
+      "status": "VERIFIED"
+    },
+    {
+      "phrase": "лоран чорний",
+      "target": "laurent",
+      "status": "VERIFIED"
+    },
+    {
+      "phrase": "лоран 55 см",
+      "target": "laurent",
+      "status": "VERIFIED"
+    },
+    {
+      "phrase": "лоран замша",
+      "target": "laurent",
+      "status": "VERIFIED"
+    },
+    {
+      "phrase": "спільна назва",
+      "target": "laurent",
+      "status": "VERIFIED"
+    },
+    {
+      "phrase": "спільна назва",
+      "target": "laurent_other",
+      "status": "VERIFIED"
+    },
+    {
+      "phrase": "навчальна назва",
+      "target": "nora",
+      "status": "LEARNING"
+    },
+    {
+      "phrase": "мій виріб",
+      "target": "laurent",
+      "status": "VERIFIED"
+    }
+  ],
+  "cases": [
+    {
+      "id": "verified-unique",
+      "raw_text": "мій виріб",
+      "expected_decision": "SAME_VARIANT",
+      "target": "laurent"
+    },
+    {
+      "id": "verified-alias-with-ambiguous-concept",
+      "raw_text": "мій лоран",
+      "expected_decision": "AMBIGUOUS",
+      "target": "laurent"
+    },
+    {
+      "id": "exact-unique",
+      "raw_text": "Нора чорний замша 55 см",
+      "expected_decision": "SAME_VARIANT",
+      "target": "nora"
+    },
+    {
+      "id": "same-name-independent-families",
+      "raw_text": "Лоран шоколад вовна 70 см",
+      "expected_decision": "AMBIGUOUS"
+    },
+    {
+      "id": "competing-verified-aliases",
+      "raw_text": "спільна назва",
+      "expected_decision": "AMBIGUOUS"
+    },
+    {
+      "id": "color-conflict",
+      "raw_text": "лоран чорний",
+      "expected_decision": "AMBIGUOUS",
+      "expected_conflicts": {
+        "laurent": [
+          "color"
+        ]
+      }
+    },
+    {
+      "id": "length-conflict",
+      "raw_text": "лоран 55 см",
+      "expected_decision": "AMBIGUOUS",
+      "expected_conflicts": {
+        "laurent": [
+          "length_cm"
+        ]
+      }
+    },
+    {
+      "id": "material-conflict",
+      "raw_text": "лоран замша",
+      "expected_decision": "AMBIGUOUS",
+      "expected_conflicts": {
+        "laurent": [
+          "material"
+        ]
+      }
+    },
+    {
+      "id": "learning-not-authority",
+      "raw_text": "навчальна назва",
+      "expected_decision": "AMBIGUOUS"
+    },
+    {
+      "id": "explicit-family-new-variant",
+      "raw_text": "чорний",
+      "family": "laurent",
+      "expected_decision": "NEW_VARIANT"
+    },
+    {
+      "id": "explicit-new-model",
+      "raw_text": "новий виріб",
+      "concept_name": "Нова назва моделі",
+      "expected_decision": "NEW_MODEL"
+    },
+    {
+      "id": "explicit-new-category",
+      "raw_text": "новий виріб",
+      "business_category_name": "Новий розділ",
+      "expected_decision": "NEW_CATEGORY"
+    },
+    {
+      "id": "rare-code-not-identity",
+      "raw_text": "Куртка 1636",
+      "expected_decision": "AMBIGUOUS"
+    },
+    {
+      "id": "slash-is-not-alias",
+      "raw_text": "Лоран чорний/шоколад",
+      "expected_decision": "AMBIGUOUS"
+    },
+    {
+      "id": "family-context-conflict",
+      "raw_text": "чорний",
+      "family": "laurent",
+      "concept_name": "Інша модель",
+      "expected_decision": "AMBIGUOUS",
+      "expected_conflicts": {
+        "laurent": [
+          "concept_context"
+        ]
+      }
+    }
+  ]
+}
