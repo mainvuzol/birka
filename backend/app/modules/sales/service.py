@@ -37,6 +37,7 @@ from app.core.errors import (
     CorrectionExceedsShortfallError,
     IdempotencyConflictError,
     NotFoundError,
+    UnknownSizeStockError,
     ValidationFailedError,
 )
 from app.core.logging import get_logger
@@ -44,11 +45,12 @@ from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
-from app.modules.catalog.read import describe_variants, size_label
+from app.modules.catalog.read import describe_variants, size_label, unknown_size_ids
 from app.modules.inventory.models import MovementReason, MovementType
 from app.modules.inventory.service import (
     MovementRequest,
     apply_movements,
+    available_stock,
     lock_stock,
     reserved_stock,
     sale_correction_ids,
@@ -303,6 +305,60 @@ def _resolve_corrections(
     return corrections
 
 
+async def _refuse_a_second_count_of_unknown_size_stock(
+    session: AsyncSession, *, organization_id: uuid.UUID, corrections: list[MovementRequest]
+) -> None:
+    """«Фізично є» may not count a coat that a legacy list may already count.
+
+    A legacy list loads goods nobody recorded a size for as "size not known"
+    (F34, M1-023). Both directions of a correction could then count one coat
+    twice, with nothing to ever notice, so both are refused with their own
+    code:
+
+    * A sized unit while the same variant is available here with size not
+      known. A seller selling one of those coats as, say, M finds the system
+      at zero for M; correcting M upward would leave the size-unknown balance
+      still counting it. The seller sells it as size not known, or someone
+      reclassifies it first.
+    * A size-not-known unit, ever. "Size not known" enters only from a list,
+      where its evidence exists (ADR-0005 §3); at the counter the coat is in
+      hand and its size can be read. Added here, it could be the very M the
+      ledger already holds.
+
+    Read without locking the size-unknown keys, deliberately: a concurrent sale
+    of the last such unit can only make this refuse once more than it had to,
+    never let a second count through. An opening balance cannot land in
+    between — it waits for this command's warehouse lock (`lock_stock`).
+    Whether a seller may instead reclassify at the counter is the owner's
+    decision (M1-023 report).
+    """
+    unknown = await unknown_size_ids(session, organization_id=organization_id)
+    for correction in corrections:
+        if correction.size_id in unknown:
+            raise UnknownSizeStockError(
+                "«Фізично є» never adds stock with its size not known; sell it by its size",
+                location_id=str(correction.location_id),
+                product_variant_id=str(correction.product_variant_id),
+                unknown_size_id=str(correction.size_id),
+                reason="FOUND_AS_SIZE_NOT_KNOWN",
+            )
+    keys = [
+        (correction.location_id, correction.product_variant_id, size_id)
+        for correction in corrections
+        for size_id in sorted(unknown)
+    ]
+    if not keys:
+        return
+    for key, quantity in (await available_stock(session, keys=keys)).items():
+        if quantity > 0:
+            raise UnknownSizeStockError(
+                location_id=str(key[0]),
+                product_variant_id=str(key[1]),
+                unknown_size_id=str(key[2]),
+                available=quantity,
+            )
+
+
 async def correction_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
     """Recover the durable correction references, including receipts made before replay caching."""
     return await sale_correction_ids(session, organization_id=sale.organization_id, sale_id=sale.id)
@@ -516,6 +572,10 @@ async def create_sale(
     corrections = _resolve_corrections(
         store_id=store_id, lines=lines, found_in_store=corrections_requested, quantities=quantities
     )
+    if corrections:
+        await _refuse_a_second_count_of_unknown_size_stock(
+            session, organization_id=scope.organization_id, corrections=corrections
+        )
     subtotal = _amount(sum((line.unit_price * line.quantity for line in lines), Decimal("0")))
     discount_total = _amount(
         sum((line.discount_amount * line.quantity for line in lines), Decimal("0"))

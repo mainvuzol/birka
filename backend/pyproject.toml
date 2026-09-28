@@ -160,6 +160,7 @@ forbidden_modules = [
     "app.modules.refunds",
     "app.modules.transfers",
     "app.modules.orders",
+    "app.modules.snapshots",
 ]
 
 [[tool.importlinter.contracts]]
@@ -173,6 +174,7 @@ forbidden_modules = [
     "app.modules.refunds",
     "app.modules.transfers",
     "app.modules.orders",
+    "app.modules.snapshots",
     "app.modules.audit",
 ]
 
@@ -185,7 +187,7 @@ forbidden_modules = [
 name = "refunds read history, not the catalog"
 type = "forbidden"
 source_modules = ["app.modules.refunds"]
-forbidden_modules = ["app.modules.catalog", "app.modules.transfers"]
+forbidden_modules = ["app.modules.catalog", "app.modules.transfers", "app.modules.snapshots"]
 # Only DIRECT imports are forbidden. Reaching catalog underneath
 # `sales.service` (which freezes the receipt) or `inventory.service` (which
 # validates stock references) is the supported path; what must not exist is a
@@ -207,6 +209,7 @@ forbidden_modules = [
     "app.modules.refunds",
     "app.modules.catalog",
     "app.modules.identity",
+    "app.modules.snapshots",
 ]
 # Only DIRECT imports are forbidden. Reaching catalog underneath
 # `inventory.service`, which validates that a stock key exists, is the
@@ -222,13 +225,24 @@ allow_indirect_imports = true
 name = "a sale neither refunds nor transfers"
 type = "forbidden"
 source_modules = ["app.modules.sales"]
-forbidden_modules = ["app.modules.refunds", "app.modules.transfers", "app.modules.orders"]
+forbidden_modules = [
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+]
 
 [[tool.importlinter.contracts]]
 name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"
 source_modules = ["app.modules.inventory"]
-forbidden_modules = ["app.modules.sales", "app.modules.refunds", "app.modules.transfers", "app.modules.orders"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+]
 
 [[tool.importlinter.contracts]]
 name = "only the inventory module may write stock (invariant I3)"
@@ -238,6 +252,7 @@ source_modules = [
     "app.modules.refunds",
     "app.modules.transfers",
     "app.modules.orders",
+    "app.modules.snapshots",
     "app.modules.catalog",
     "app.api",
 ]
@@ -263,6 +278,49 @@ forbidden_modules = [
     "app.modules.sales",
     "app.modules.refunds",
     "app.modules.transfers",
+    "app.modules.snapshots",
     "app.modules.authz",
     "app.modules.tenancy",
 ]
+
+# ADR-0005 permits `snapshots -> inventory, catalog, authz, tenancy, core`
+# (+ audit). A legacy stock list writes its lines as catalog evidence and its
+# approved answers as opening stock, and it does nothing else: it sells
+# nothing, returns nothing, moves nothing between warehouses and takes no
+# orders. Anything more would be a second, unreviewed way into the ledger.
+[[tool.importlinter.contracts]]
+name = "a legacy stock list opens a ledger and does nothing else"
+type = "forbidden"
+source_modules = ["app.modules.snapshots"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.identity",
+]
+# Only DIRECT imports are forbidden: `inventory.service` and `catalog.read`
+# reach other modules underneath, which is the supported path.
+allow_indirect_imports = true
+
+# ADR-0001 (2026-09-28 amendment) and ADR-0005: no module imports the legacy
+# list workflow, directly or not. It consumes the ledger and the catalog; a
+# module that reached into it could apply or read a list outside its checks.
+# Only the API and the model registry may name it.
+[[tool.importlinter.contracts]]
+name = "nothing depends on the legacy list workflow"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.catalog",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.snapshots"]

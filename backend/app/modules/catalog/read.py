@@ -22,6 +22,7 @@ from app.modules.catalog.models import (
     ProductFamily,
     ProductVariant,
     Size,
+    SizeSystem,
     SourceIdentity,
 )
 
@@ -148,4 +149,23 @@ async def size_labels(session: AsyncSession, size_ids: list[uuid.UUID]) -> dict[
     }
 
 
-__all__ = ["VariantDescription", "describe_variants", "size_label", "size_labels"]
+async def unknown_size_ids(session: AsyncSession, *, organization_id: uuid.UUID) -> set[uuid.UUID]:
+    """This organization's "size not known" sizes (F34). Normally one, or none yet."""
+    return set(
+        (
+            await session.scalars(
+                select(Size.id)
+                .join(SizeSystem, SizeSystem.id == Size.size_system_id)
+                .where(SizeSystem.organization_id == organization_id, Size.is_unknown.is_(True))
+            )
+        ).all()
+    )
+
+
+__all__ = [
+    "VariantDescription",
+    "describe_variants",
+    "size_label",
+    "size_labels",
+    "unknown_size_ids",
+]

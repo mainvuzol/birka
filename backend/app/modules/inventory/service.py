@@ -17,20 +17,33 @@ work (`.ai/conventions.md`).
 
 from __future__ import annotations
 
+import hashlib
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import InsufficientStockError, PermissionDeniedError, ValidationFailedError
+from app.core.errors import (
+    InsufficientStockError,
+    OpeningBalanceConflictError,
+    PermissionDeniedError,
+    ValidationFailedError,
+)
 from app.core.logging import get_logger
 from app.modules.authz.locations import readable_location_ids, require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.validation import validate_stock_references
 from app.modules.inventory import repository
-from app.modules.inventory.models import Inventory, MovementReason, MovementType
+from app.modules.inventory.models import (
+    AcquisitionType,
+    Inventory,
+    MovementReason,
+    MovementType,
+    StockLot,
+)
 from app.modules.tenancy.service import (
     accessible_locations,
     require_location_access,
@@ -126,6 +139,29 @@ def validate_movement(request: MovementRequest) -> None:
             movement_type=request.movement_type.value,
         )
 
+    if request.movement_type is MovementType.OPENING_BALANCE and (
+        request.reference_type != OPENING_BALANCE_REFERENCE
+        or request.reference_id is None
+        or request.stock_lot_id is None
+    ):
+        # Invariant I17's other half: an opening balance is only ever the
+        # approved answer to a legacy list, with the lot that traces it there.
+        # `apply_opening_balance` is the one caller that writes it, and the
+        # database refuses any other shape, or a lot of another list (`0015`).
+        raise ValidationFailedError(
+            "An opening balance must name the stock list and lot it comes from",
+            movement_type=request.movement_type.value,
+        )
+
+
+def _warehouse_lock_key(location_id: uuid.UUID) -> int:
+    """One advisory-lock key per warehouse, in a namespace of its own."""
+    digest = hashlib.sha256(b"warehouse-ledger:" + location_id.bytes).digest()
+    return int.from_bytes(digest[:8], "big", signed=True)
+
+
+# What an opening balance's movements point back at: the legacy list itself.
+OPENING_BALANCE_REFERENCE = "inventory_snapshot"
 
 # What a transfer's two legs point back at. Defined here rather than in the
 # transfers module because the ledger is the one that has to recognise a pair,
@@ -235,6 +271,17 @@ async def lock_stock(
         variant_ids={key[1] for key in ordered},
         size_ids={key[2] for key in ordered},
     )
+    # An opening balance must see a ledger nobody else is writing (ADR-0005
+    # §5). So every command that moves or reserves stock comes through here
+    # and holds a *shared* lock on each warehouse it touches until it commits;
+    # the opening balance takes the same lock exclusively, first, and waits for
+    # all of them. Shared locks never wait for each other, and they are taken
+    # in location order before any row lock, so no two stock commands can
+    # deadlock on them.
+    for location_id in sorted({key[0] for key in ordered}):
+        await session.execute(
+            select(func.pg_advisory_xact_lock_shared(_warehouse_lock_key(location_id)))
+        )
     quantities = {}
     for key in ordered:
         quantities[key] = await repository.ensure_and_lock(session, key=key)
@@ -254,7 +301,34 @@ async def apply_movements(
     Raises `InsufficientStockError` naming the first line that cannot be
     satisfied, so the caller can offer the correction flow (business fact F30)
     instead of a dead end.
+
+    Never an opening balance. Only `apply_opening_balance` writes one, after
+    holding the warehouse exclusively and proving it has no stock history
+    (ADR-0005 §5); a caller that could write one here would skip both.
     """
+    if any(request.movement_type is MovementType.OPENING_BALANCE for request in requests):
+        raise ValidationFailedError(
+            "An opening balance is written only by approving a stock list",
+            movement_type=MovementType.OPENING_BALANCE.value,
+        )
+    return await _apply_movements(
+        session,
+        organization_id=organization_id,
+        requests=requests,
+        actor_user_id=actor_user_id,
+        correlation_id=correlation_id,
+    )
+
+
+async def _apply_movements(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    requests: list[MovementRequest],
+    actor_user_id: uuid.UUID | None,
+    correlation_id: str | None,
+) -> list[AppliedMovement]:
+    """The ledger door itself, shared by `apply_movements` and `apply_opening_balance`."""
     if not requests:
         raise ValidationFailedError("No movements supplied")
 
@@ -498,15 +572,20 @@ async def find_divergences(
 
 __all__ = [
     "DIRECTION",
+    "OPENING_BALANCE_REFERENCE",
     "TRANSFER_REFERENCE",
     "TRANSFER_TYPES",
     "AppliedMovement",
     "MovementRequest",
+    "OpenedLine",
+    "OpeningBalanceLine",
     "StockRow",
     "apply_movements",
+    "apply_opening_balance",
     "current_quantity",
     "find_divergences",
     "lock_stock",
+    "opening_balance_movement_ids",
     "readable_stock",
     "refund_return_movement_ids",
     "sale_correction_ids",
@@ -584,14 +663,8 @@ async def reserved_stock(
 async def available_stock(
     session: AsyncSession, *, keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]
 ) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
-    reserved = await reserved_stock(session, keys=keys)
-    return {
-        key: await current_quantity(
-            session, location_id=key[0], product_variant_id=key[1], size_id=key[2]
-        )
-        - reserved.get(key, 0)
-        for key in keys
-    }
+    """On hand less reserved, as of one committed state (see the repository)."""
+    return await repository.available_quantities(session, keys=keys)
 
 
 async def reserve_stock(
@@ -747,4 +820,146 @@ async def dispatch_reserved_stock(
         reference_id=reference_id,
         actor_user_id=actor_user_id,
         dispatch=True,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class OpeningBalanceLine:
+    """One quantity a person stated was on hand.
+
+    `reference_id` is the caller's own row for it (a snapshot allocation),
+    echoed back so the caller can link each line to the lot it became.
+    """
+
+    reference_id: uuid.UUID
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    quantity: int
+
+
+@dataclass(frozen=True, slots=True)
+class OpenedLine:
+    line: OpeningBalanceLine
+    stock_lot_id: uuid.UUID
+    movement_id: uuid.UUID
+
+
+async def apply_opening_balance(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    location_id: uuid.UUID,
+    acting_store_id: uuid.UUID,
+    snapshot_id: uuid.UUID,
+    lines: list[OpeningBalanceLine],
+    actor_user_id: uuid.UUID,
+    correlation_id: str | None = None,
+) -> list[OpenedLine]:
+    """Open a warehouse's ledger from a legacy list: all of it, or none.
+
+    Invariant I17: the only movement written is `OPENING_BALANCE`, one per
+    line, each with its own `StockLot` (`acquisition_type = OPENING_BALANCE`,
+    linked to the snapshot), so every unit traces back to the line of the list
+    it came from. Nothing here can write a delivery, a sale or an adjustment.
+
+    **Only into a warehouse with no stock history** (ADR-0005 §5). A balance
+    counted on paper cannot be added to a warehouse the app already tracks
+    without counting twice what it already knows; bringing a tracked
+    warehouse to a count is a stocktake, which can go down as well as up.
+
+    Lock order: the warehouse's advisory lock, **exclusively**. Every command
+    that moves or reserves stock holds it shared while it writes there
+    (`lock_stock`), so this waits for all of them and admits none until it
+    commits: a receipt, a sale, a reservation or a transfer at this warehouse
+    — on any key, not only the list's — lands wholly before the history check
+    below (and is seen) or wholly after the opening balance. Then every stock
+    key in the global order, then the check. (Cancelling an order's
+    reservation only lowers `reserved_quantity` under row locks, without this
+    lock; a live reservation already means history here, so it cannot turn a
+    tracked warehouse into an empty-looking one.)
+
+    This is the only function that writes `OPENING_BALANCE`: `apply_movements`
+    refuses it, and the database refuses one that does not trace to an
+    opening lot of its list (`0015`).
+    """
+    if not lines:
+        raise ValidationFailedError("An opening balance needs at least one line")
+    for line in lines:
+        if type(line.quantity) is not int or line.quantity <= 0:
+            raise ValidationFailedError("An opening balance quantity must be a positive integer")
+
+    await session.execute(select(func.pg_advisory_xact_lock(_warehouse_lock_key(location_id))))
+    keys = [(location_id, line.product_variant_id, line.size_id) for line in lines]
+    await lock_stock(
+        session, organization_id=organization_id, keys=keys, acting_store_ids={acting_store_id}
+    )
+    if await repository.location_has_stock_history(
+        session, organization_id=organization_id, location_id=location_id
+    ):
+        raise OpeningBalanceConflictError(location_id=str(location_id))
+
+    lots = [
+        StockLot(
+            id=uuid.uuid4(),
+            organization_id=organization_id,
+            location_id=location_id,
+            product_variant_id=line.product_variant_id,
+            size_id=line.size_id,
+            acquisition_type=AcquisitionType.OPENING_BALANCE,
+            inventory_snapshot_id=snapshot_id,
+        )
+        for line in lines
+    ]
+    session.add_all(lots)
+    await session.flush()
+
+    applied = await _apply_movements(
+        session,
+        organization_id=organization_id,
+        requests=[
+            MovementRequest(
+                location_id=location_id,
+                acting_store_id=acting_store_id,
+                product_variant_id=line.product_variant_id,
+                size_id=line.size_id,
+                quantity_delta=line.quantity,
+                movement_type=MovementType.OPENING_BALANCE,
+                stock_lot_id=lot.id,
+                reference_type=OPENING_BALANCE_REFERENCE,
+                reference_id=snapshot_id,
+            )
+            for line, lot in zip(lines, lots, strict=True)
+        ],
+        actor_user_id=actor_user_id,
+        correlation_id=correlation_id,
+    )
+
+    # Workflow step 8: the warehouse now holds exactly what the list was
+    # approved with. It held nothing before, so each key's balance must equal
+    # the sum of its lines; anything else is a defect, and nothing commits.
+    expected: Counter[tuple[uuid.UUID, uuid.UUID, uuid.UUID]] = Counter()
+    for key, line in zip(keys, lines, strict=True):
+        expected[key] += line.quantity
+    for key, quantity in expected.items():
+        actual = await repository.current_quantity(
+            session, location_id=key[0], product_variant_id=key[1], size_id=key[2]
+        )
+        if actual != quantity:
+            raise RuntimeError(
+                f"Opening balance does not reconcile at {key}: expected {quantity}, got {actual}"
+            )
+
+    by_lot = {entry.request.stock_lot_id: entry.movement_id for entry in applied}
+    return [
+        OpenedLine(line=line, stock_lot_id=lot.id, movement_id=by_lot[lot.id])
+        for line, lot in zip(lines, lots, strict=True)
+    ]
+
+
+async def opening_balance_movement_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, snapshot_id: uuid.UUID
+) -> dict[uuid.UUID, uuid.UUID]:
+    """For a replayed approval: each opening lot and the movement that brought it in."""
+    return await repository.opening_balance_movements(
+        session, organization_id=organization_id, snapshot_id=snapshot_id
     )

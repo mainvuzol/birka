@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app import models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.api.v1.router import router as v1_router
 from app.core.config import Settings, get_settings
 from app.core.correlation import CorrelationIdMiddleware

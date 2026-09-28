@@ -1,8 +1,12 @@
-"""Inventory, the stock ledger, lots and legacy snapshots.
+"""Inventory, the stock ledger and lots.
 
 `Inventory.quantity` is the fast current answer; `StockMovement` is the
 immutable explanation of how it got there (inventory-ledger-specialist). The
 two must always agree, which is what the reconciliation query checks.
+
+Legacy availability lists (`inventory_snapshot*`) belong to the `snapshots`
+module since M1-023 (ADR-0005). They become stock only through this module's
+`apply_opening_balance`, so the ledger's single door still holds.
 
 Invariants enforced here at the database level:
   I1  quantity never negative            CHECK (quantity >= 0)
@@ -88,32 +92,6 @@ class MovementReason(StrEnum):
     OTHER = "OTHER"
 
 
-class SnapshotStatus(StrEnum):
-    DRAFT = "DRAFT"
-    PARSED = "PARSED"
-    IN_REVIEW = "IN_REVIEW"
-    APPROVED = "APPROVED"
-    APPLIED = "APPLIED"
-    REJECTED = "REJECTED"
-
-
-class SnapshotQuantityState(StrEnum):
-    """`UNKNOWN_DISTRIBUTION` is the `Лама бежевая/персик/butter 3 шт` case:
-    the total is known, the split across colours is not, and inventing
-    1+1+1 is forbidden."""
-
-    KNOWN = "KNOWN"
-    UNKNOWN_DISTRIBUTION = "UNKNOWN_DISTRIBUTION"
-    UNKNOWN_QUANTITY = "UNKNOWN_QUANTITY"
-
-
-class SnapshotRowStatus(StrEnum):
-    PENDING = "PENDING"
-    RESOLVED = "RESOLVED"
-    NEEDS_REVIEW = "NEEDS_REVIEW"
-    SKIPPED = "SKIPPED"
-
-
 class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
     """Provenance of one receipt of goods.
 
@@ -150,9 +128,11 @@ class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
     # Acquisition cost lives here, never on catalog identity (business fact F33).
     unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # RESTRICT since `0015`: a list whose goods became stock can never be
+    # deleted out from under them (ADR-0005).
     inventory_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True),
-        ForeignKey("inventory_snapshot.id", ondelete="SET NULL"),
+        ForeignKey("inventory_snapshot.id", ondelete="RESTRICT"),
         nullable=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -169,6 +149,11 @@ class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint("unit_cost IS NULL OR unit_cost >= 0", name="unit_cost_not_negative"),
         CheckConstraint(
             "(unit_cost IS NULL) = (currency_code IS NULL)", name="cost_requires_currency"
+        ),
+        # An opening lot always names the legacy list it came from (I17).
+        CheckConstraint(
+            "acquisition_type <> 'OPENING_BALANCE' OR inventory_snapshot_id IS NOT NULL",
+            name="opening_lot_names_its_list",
         ),
     )
 
@@ -357,106 +342,13 @@ class StockMovement(UUIDPrimaryKey, TimestampMixin, Base):
             "movement_type <> 'ADJUSTMENT' OR reason_code IS NOT NULL",
             name="adjustment_requires_reason",
         ),
-    )
-
-
-class InventorySnapshot(UUIDPrimaryKey, TimestampMixin, Base):
-    """A legacy availability list: a notebook page, a PDF, a stock sheet.
-
-    Evidence of what was on hand at a moment — never reconstructed purchase or
-    sale history (invariant I17).
-    """
-
-    __tablename__ = "inventory_snapshot"
-
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True),
-        ForeignKey("organization.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    # A legacy availability list describes a place that was counted.
-    location_id: Mapped[uuid.UUID | None] = mapped_column(
-        postgresql.UUID(as_uuid=True), nullable=True
-    )
-    source_document_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    captured_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    status: Mapped[SnapshotStatus] = mapped_column(
-        Enum(SnapshotStatus, name="snapshot_status", native_enum=True),
-        nullable=False,
-        server_default=SnapshotStatus.DRAFT.value,
-    )
-    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True
-    )
-
-    __table_args__ = (
-        # Composite like the stock tables, so a count sheet cannot describe
-        # another organization's warehouse. NULL stays legal: a snapshot may
-        # predate knowing where it was counted.
-        ForeignKeyConstraint(
-            ["organization_id", "location_id"],
-            ["stock_location.organization_id", "stock_location.id"],
-            name="fk_inventory_snapshot_org_location",
-            ondelete="RESTRICT",
-        ),
-    )
-
-
-class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
-    """One source line, kept verbatim even when it cannot be parsed."""
-
-    __tablename__ = "inventory_snapshot_row"
-
-    inventory_snapshot_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True),
-        ForeignKey("inventory_snapshot.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    line_no: Mapped[int] = mapped_column(Integer, nullable=False)
-    raw_input_id: Mapped[uuid.UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True),
-        ForeignKey("raw_input.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    parse_result_id: Mapped[uuid.UUID | None] = mapped_column(
-        postgresql.UUID(as_uuid=True),
-        ForeignKey("parse_result.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    quantity_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    quantity_state: Mapped[SnapshotQuantityState] = mapped_column(
-        Enum(SnapshotQuantityState, name="snapshot_quantity_state", native_enum=True),
-        nullable=False,
-        server_default=SnapshotQuantityState.KNOWN.value,
-    )
-    resolved_variant_id: Mapped[uuid.UUID | None] = mapped_column(
-        postgresql.UUID(as_uuid=True),
-        ForeignKey("product_variant.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
-    resolved_size_id: Mapped[uuid.UUID | None] = mapped_column(
-        postgresql.UUID(as_uuid=True), ForeignKey("size.id", ondelete="RESTRICT"), nullable=True
-    )
-    status: Mapped[SnapshotRowStatus] = mapped_column(
-        Enum(SnapshotRowStatus, name="snapshot_row_status", native_enum=True),
-        nullable=False,
-        server_default=SnapshotRowStatus.PENDING.value,
-    )
-
-    __table_args__ = (
-        UniqueConstraint("inventory_snapshot_id", "line_no", name="uq_snapshot_row_line"),
+        # Invariant I17, held by the database: an opening balance is only ever
+        # the approved answer to a legacy list, through the lot that traces it.
         CheckConstraint(
-            "quantity_total IS NULL OR quantity_total >= 0", name="quantity_not_negative"
-        ),
-        # A row can only become an opening balance once it resolved to a
-        # concrete variant and size with a known quantity.
-        CheckConstraint(
-            "status <> 'RESOLVED' OR ("
-            " resolved_variant_id IS NOT NULL"
-            " AND resolved_size_id IS NOT NULL"
-            " AND quantity_total IS NOT NULL"
-            " AND quantity_state = 'KNOWN')",
-            name="resolved_requires_complete_row",
+            "movement_type <> 'OPENING_BALANCE' OR ("
+            "reference_type = 'inventory_snapshot'"
+            " AND reference_id IS NOT NULL AND stock_lot_id IS NOT NULL)",
+            name="opening_balance_names_its_list",
         ),
     )
 
@@ -464,13 +356,8 @@ class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
 __all__ = [
     "AcquisitionType",
     "Inventory",
-    "InventorySnapshot",
-    "InventorySnapshotRow",
     "MovementReason",
     "MovementType",
-    "SnapshotQuantityState",
-    "SnapshotRowStatus",
-    "SnapshotStatus",
     "StockLot",
     "StockMovement",
     "StockReservation",

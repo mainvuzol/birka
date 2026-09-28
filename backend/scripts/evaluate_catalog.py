@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.modules.catalog.evidence import AliasStatus, AliasTargetType, ProductAlias
 from app.modules.catalog.matching import MATCHER_VERSION, preview_match
 from app.modules.catalog.models import (

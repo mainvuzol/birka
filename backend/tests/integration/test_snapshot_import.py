@@ -1,0 +1,2016 @@
+"""A legacy stock list becomes stock only through a person's review and an approval.
+
+M1-023, ADR-0005. These tests run the whole workflow over HTTP against real
+PostgreSQL. Each name states the property it pins:
+
+- **Evidence.** Every line is kept verbatim. Import writes no identity, no match
+  decision and no stock.
+- **Answers.** A person says what a line means, and where its numbers came
+  from. Nothing is inferred.
+- **Approval.** It writes `OPENING_BALANCE` and nothing else (invariant I17).
+  It opens a warehouse's ledger once, and never beside history. It is all or
+  nothing, and replays exactly.
+- **Guards added with it.** An opening balance cannot be written outside a
+  list. A decided list is frozen. «Фізично є» cannot count "size not known"
+  stock a second time.
+- **Races.** The ones the design review raised, proven with `pg_locks` rather
+  than timing.
+- **Access.** Who may import, review, approve and read, at shared and private
+  warehouses, and across tenants.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import uuid
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from decimal import Decimal
+
+import httpx
+import pytest
+from scripts.seed_organization import seed_in_session
+from sqlalchemy import delete, func, select, text, update
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+
+from app.api.deps import get_current_scope, session_dependency
+from app.core.config import Settings
+from app.core.errors import ValidationFailedError
+from app.main import create_app
+from app.modules.audit.models import AuditLog
+from app.modules.authz.models import Membership, Role
+from app.modules.authz.service import resolve_scope
+from app.modules.catalog.evidence import (
+    CatalogMatchDecision,
+    ParseResult,
+    ProcessingStatus,
+    RawInput,
+    RawInputProcessing,
+    RawInputSource,
+)
+from app.modules.catalog.models import (
+    EntityStatus,
+    ProductVariant,
+    Size,
+    SizeSystem,
+    SizeSystemCode,
+)
+from app.modules.identity.models import AppUser
+from app.modules.inventory.models import (
+    AcquisitionType,
+    Inventory,
+    MovementType,
+    StockLot,
+    StockMovement,
+)
+from app.modules.inventory.service import (
+    OPENING_BALANCE_REFERENCE,
+    MovementRequest,
+    apply_movements,
+    find_divergences,
+    validate_movement,
+)
+from app.modules.snapshots import service as snapshot_service
+from app.modules.snapshots.models import (
+    InventorySnapshot,
+    InventorySnapshotAllocation,
+    InventorySnapshotRow,
+    SnapshotQuantityState,
+    SnapshotRowStatus,
+    SnapshotStatus,
+)
+from app.modules.snapshots.service import approve_snapshot
+from app.modules.tenancy.models import StockLocation, Store, StoreLocationAccess
+from tests.conftest import requires_database
+
+pytestmark = [pytest.mark.integration, requires_database()]
+
+# The list most tests start from, and how a person answers it.
+LIST = [
+    "Лоран шоколад S M L",  # sizes listed, no count: a split somebody has to know
+    "Мышка чорний М 2 шт",  # a stated count, taken as it is
+    "Куртки",  # a heading, not stock
+]
+
+
+@asynccontextmanager
+async def client_for(maker: async_sessionmaker, user_id: uuid.UUID):
+    app = create_app(
+        Settings(app_env="local", session_secret="snapshot-test-secret-at-least-32-bytes")
+    )
+
+    async def sessions():
+        async with maker() as session:
+            yield session
+
+    async def scope():
+        async with maker() as session:
+            return await resolve_scope(session, user_id)
+
+    app.dependency_overrides[get_current_scope] = scope
+    app.dependency_overrides[session_dependency] = sessions
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        yield client
+
+
+@dataclass
+class World:
+    engine: AsyncEngine
+    maker: async_sessionmaker
+    org: uuid.UUID
+    main: uuid.UUID
+    second: uuid.UUID
+    shared: uuid.UUID
+    private: uuid.UUID
+    users: dict[str, uuid.UUID]
+    coat: uuid.UUID
+    bomber: uuid.UUID
+    bottega: uuid.UUID
+    sizes: dict[str, uuid.UUID]
+
+    def client(self, user: str = "owner"):
+        return client_for(self.maker, self.users[user])
+
+
+def idempotent() -> dict[str, str]:
+    return {"Idempotency-Key": str(uuid.uuid4())}
+
+
+async def create_product(client, store_id, concept, color, sizes):
+    response = await client.post(
+        "/api/v1/catalog/products",
+        headers=idempotent(),
+        json={
+            "store_id": str(store_id),
+            "concept": concept,
+            "variant": {"color": color},
+            "sizes": [{"system": "ALPHA", "code": code} for code in sizes],
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    return uuid.UUID(body["product_variant_id"]), {
+        size["code"]: uuid.UUID(size["size_id"]) for size in body["sizes"]
+    }
+
+
+async def seed_world(maker: async_sessionmaker) -> dict:
+    async with maker.begin() as session:
+        telegram_id = uuid.uuid4().int % 2**62
+        org = await seed_in_session(
+            session,
+            telegram_user_id=telegram_id,
+            owner_name="Owner",
+            org_name=f"snapshot-{uuid.uuid4()}",
+            with_child_warehouse=True,
+        )
+        stores = {
+            store.code: store.id
+            for store in await session.scalars(select(Store).where(Store.organization_id == org))
+        }
+        roles = {
+            role.code: role.id
+            for role in await session.scalars(select(Role).where(Role.organization_id == org))
+        }
+        owner = await session.scalar(
+            select(AppUser.id).where(AppUser.telegram_user_id == telegram_id)
+        )
+        locations = list(
+            await session.scalars(select(StockLocation).where(StockLocation.organization_id == org))
+        )
+        users = {"owner": owner}
+        for name, store, role in (
+            ("manager", "MAIN", "MANAGER"),
+            ("seller", "MAIN", "SELLER"),
+            ("child_manager", "SECOND", "MANAGER"),
+        ):
+            user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name=name)
+            session.add(user)
+            await session.flush()
+            users[name] = user.id
+            session.add(
+                Membership(
+                    user_id=user.id,
+                    organization_id=org,
+                    store_id=stores[store],
+                    role_id=roles[role],
+                )
+            )
+    return {
+        "org": org,
+        "main": stores["MAIN"],
+        "second": stores["SECOND"],
+        "shared": next(loc.id for loc in locations if loc.managing_store_id is None),
+        "private": next(loc.id for loc in locations if loc.managing_store_id is not None),
+        "users": users,
+    }
+
+
+@pytest.fixture
+async def world():
+    engine = create_async_engine(os.environ["BIRKA_TEST_DATABASE_URL"])
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    seeded = await seed_world(maker)
+    async with client_for(maker, seeded["users"]["owner"]) as client:
+        coat, coat_sizes = await create_product(
+            client, seeded["main"], "Лоран", "шоколад", ["S", "M", "L"]
+        )
+        bomber, _ = await create_product(client, seeded["main"], "Мышка", "чорний", ["M"])
+        bottega, _ = await create_product(client, seeded["main"], "Ботега", "бежевий", ["M"])
+    yield World(
+        engine=engine,
+        maker=maker,
+        coat=coat,
+        bomber=bomber,
+        bottega=bottega,
+        sizes=coat_sizes,
+        **seeded,
+    )
+    await engine.dispose()
+
+
+def import_body(w: World, lines, *, command_id=None, store=None, location=None, **extra):
+    return {
+        "command_id": str(command_id or uuid.uuid4()),
+        "store_id": str(store or w.main),
+        "location_id": str(location or w.shared),
+        "lines": lines,
+        **extra,
+    }
+
+
+async def imported(client, w: World, lines=LIST, **kwargs) -> dict:
+    response = await client.post("/api/v1/snapshots", json=import_body(w, lines, **kwargs))
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def allocation(variant, size=None, quantity=1) -> dict:
+    body = {"product_variant_id": str(variant), "quantity": quantity}
+    if size is None:
+        body["size_unknown"] = True
+    else:
+        body["size_id"] = str(size)
+    return body
+
+
+async def resolve(client, snapshot_id, line_no, **body) -> httpx.Response:
+    return await client.put(f"/api/v1/snapshots/{snapshot_id}/lines/{line_no}", json=body)
+
+
+async def approve(client, snapshot_id, revision) -> httpx.Response:
+    return await client.post(
+        f"/api/v1/snapshots/{snapshot_id}/approve", json={"expected_review_revision": revision}
+    )
+
+
+async def answer_list(client, w: World, snapshot_id) -> dict:
+    """The standard answers to `LIST`. Returns the list as it then stands."""
+    first = await resolve(
+        client,
+        snapshot_id,
+        1,
+        allocations=[
+            allocation(w.coat, w.sizes["S"]),
+            allocation(w.coat, w.sizes["M"]),
+            allocation(w.coat, w.sizes["L"]),
+        ],
+        quantity_basis="OWNER_KNOWLEDGE",
+        note="у списку — по одній кожного розміру",
+    )
+    assert first.status_code == 200, first.text
+    second = await resolve(
+        client,
+        snapshot_id,
+        2,
+        allocations=[allocation(w.bomber, w.sizes["M"], 2)],
+        quantity_basis="STATED",
+    )
+    assert second.status_code == 200, second.text
+    third = await resolve(client, snapshot_id, 3, skip_reason="заголовок розділу")
+    assert third.status_code == 200, third.text
+    return third.json()["snapshot"]
+
+
+async def prepared(client, w: World, **kwargs) -> dict:
+    """`LIST`, imported and fully answered: ready to approve at revision 3."""
+    snapshot = await imported(client, w, **kwargs)
+    view = await answer_list(client, w, snapshot["snapshot_id"])
+    assert view["ready_to_approve"] is True
+    assert view["review_revision"] == 3
+    return view
+
+
+async def stock(w: World, location=None) -> dict[tuple[uuid.UUID, uuid.UUID], int]:
+    async with w.maker() as session:
+        rows = await session.execute(
+            select(Inventory.product_variant_id, Inventory.size_id, Inventory.quantity).where(
+                Inventory.location_id == (location or w.shared), Inventory.quantity > 0
+            )
+        )
+        return {(variant, size): quantity for variant, size, quantity in rows}
+
+
+async def movements(w: World) -> list[StockMovement]:
+    async with w.maker() as session:
+        return list(
+            await session.scalars(
+                select(StockMovement).where(StockMovement.organization_id == w.org)
+            )
+        )
+
+
+async def wait_until_blocked_by(engine: AsyncEngine, holder_pid: int) -> None:
+    """Some backend is genuinely waiting on `holder_pid`'s locks — asked of
+    `pg_locks`, which is read afresh by every query (see M1-018's tests)."""
+    async with engine.connect() as observer:
+        for _ in range(1000):
+            blocked = await observer.scalar(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted"
+                    " AND CAST(:holder AS integer) = ANY(pg_blocking_pids(pid)))"
+                ),
+                {"holder": holder_pid},
+            )
+            await observer.rollback()
+            if blocked:
+                return
+            await asyncio.sleep(0.01)
+    pytest.fail("nothing ever waited on the held transaction's locks")
+
+
+def delivery(w: World, variant, size, quantity=1) -> MovementRequest:
+    return MovementRequest(
+        location_id=w.shared,
+        acting_store_id=w.main,
+        product_variant_id=variant,
+        size_id=size,
+        quantity_delta=quantity,
+        movement_type=MovementType.DELIVERY,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import: evidence, and nothing else
+# ---------------------------------------------------------------------------
+
+
+async def test_a_list_is_kept_line_by_line_and_nothing_becomes_stock(world):
+    w = world
+    lines = [
+        "  Бомбер шоколад 3 шт",
+        "Лама бежевая/персик/butter 3 шт",
+        "Куртка 1636",
+        "Куртки",
+    ]
+    async with w.client() as client:
+        view = await imported(
+            client,
+            w,
+            lines,
+            source_document_ref="зошит, сторінка 4",
+            captured_at="осінь 2025",
+        )
+        page = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}/lines")
+
+    assert view["status"] == "IN_REVIEW"
+    assert view["review_revision"] == 0
+    assert view["store_id"] == str(w.main)
+    assert view["location_id"] == str(w.shared)
+    assert view["captured_at"] == "осінь 2025"
+    assert view["summary"]["lines"] == 4
+    assert view["ready_to_approve"] is False
+
+    items = page.json()["items"]
+    # Verbatim — leading spaces and all — beside what the parser read of it.
+    assert [item["raw_text"] for item in items] == lines
+    assert [(item["quantity_state"], item["quantity_total"]) for item in items] == [
+        ("KNOWN", 3),
+        ("UNKNOWN_DISTRIBUTION", 3),
+        ("UNKNOWN_QUANTITY", None),
+        ("UNKNOWN_QUANTITY", None),
+    ]
+    assert [item["status"] for item in items] == [
+        "PENDING",
+        "NEEDS_REVIEW",
+        "NEEDS_REVIEW",
+        "PENDING",
+    ]
+    assert "UNKNOWN_DISTRIBUTION" in items[1]["review_reasons"]
+    # The rare item code stays an unclassified descriptor, never a quantity.
+    assert "1636" in items[2]["unclassified"]
+
+    snapshot_id = uuid.UUID(view["snapshot_id"])
+    async with w.maker() as session:
+        raws = list(
+            await session.scalars(
+                select(RawInput)
+                .where(RawInput.organization_id == w.org, RawInput.store_id == w.main)
+                .where(RawInput.source_kind == RawInputSource.SNAPSHOT_IMPORT)
+            )
+        )
+        assert sorted(raw.raw_text for raw in raws) == sorted(lines)
+        assert {raw.source_ref for raw in raws} == {
+            f"inventory_snapshot:{snapshot_id}:{n}" for n in range(1, 5)
+        }
+        assert {raw.created_by_user_id for raw in raws} == {w.users["owner"]}
+        processing = await session.scalars(
+            select(RawInputProcessing.status).where(
+                RawInputProcessing.raw_input_id.in_([raw.id for raw in raws])
+            )
+        )
+        assert set(processing) == {ProcessingStatus.PARSED}
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ParseResult)
+                .where(ParseResult.raw_input_id.in_([raw.id for raw in raws]))
+            )
+            == 4
+        )
+        # No matching, no decision, no identity, no stock.
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(CatalogMatchDecision)
+            .where(CatalogMatchDecision.organization_id == w.org)
+        )
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(StockLot)
+            .where(StockLot.inventory_snapshot_id == snapshot_id)
+        )
+        audit = list(
+            await session.scalars(
+                select(AuditLog).where(
+                    AuditLog.organization_id == w.org, AuditLog.action == "snapshot.imported"
+                )
+            )
+        )
+        assert len(audit) == 1 and audit[0].entity_id == snapshot_id
+    assert not await movements(w)
+
+
+async def test_the_same_import_twice_is_one_list(world):
+    w = world
+    body = import_body(w, LIST)
+    async with w.client() as client:
+        first = await client.post("/api/v1/snapshots", json=body)
+        again = await client.post("/api/v1/snapshots", json=body)
+
+    assert first.status_code == 201, first.text
+    assert again.status_code == 200, again.text
+    assert again.json()["snapshot_id"] == first.json()["snapshot_id"]
+    assert first.json()["command_id"] == body["command_id"]
+    async with w.maker() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(RawInput)
+                .where(
+                    RawInput.organization_id == w.org,
+                    RawInput.source_kind == RawInputSource.SNAPSHOT_IMPORT,
+                )
+            )
+            == 3
+        )
+
+
+async def test_the_same_command_for_another_list_is_a_conflict(world):
+    w = world
+    body = import_body(w, LIST)
+    other = await seed_world(w.maker)
+    async with w.client() as client:
+        first = await client.post("/api/v1/snapshots", json=body)
+        changed = await client.post(
+            "/api/v1/snapshots", json={**body, "lines": [*LIST, "Шуба орех 70 см"]}
+        )
+    # Another organization's command ids are its own: the same one is simply
+    # another list there, and says nothing about this one.
+    async with client_for(w.maker, other["users"]["owner"]) as client:
+        foreign = await client.post(
+            "/api/v1/snapshots",
+            json={
+                **body,
+                "store_id": str(other["main"]),
+                "location_id": str(other["shared"]),
+            },
+        )
+
+    assert first.status_code == 201, first.text
+    assert (changed.status_code, changed.json()["code"]) == (409, "IDEMPOTENCY_CONFLICT")
+    assert foreign.status_code == 201, foreign.text
+    assert foreign.json()["command_id"] == first.json()["command_id"]
+    assert foreign.json()["snapshot_id"] != first.json()["snapshot_id"]
+
+
+async def test_two_organizations_importing_one_command_at_once_never_collide(world):
+    """Two organizations, one command id, at the same moment: two lists. The
+    retry lock is scoped like the unique key, so neither waits on the other
+    and neither loses to a unique violation."""
+    w = world
+    other = await seed_world(w.maker)
+    body = import_body(w, LIST)
+    theirs = {**body, "store_id": str(other["main"]), "location_id": str(other["shared"])}
+    async with w.client() as mine, client_for(w.maker, other["users"]["owner"]) as foreign:
+        results = await asyncio.gather(
+            mine.post("/api/v1/snapshots", json=body),
+            foreign.post("/api/v1/snapshots", json=theirs),
+        )
+
+    assert [result.status_code for result in results] == [201, 201], [r.text for r in results]
+    assert results[0].json()["snapshot_id"] != results[1].json()["snapshot_id"]
+
+
+async def test_two_deliveries_of_one_import_at_once_make_one_list(world):
+    w = world
+    body = import_body(w, LIST)
+    async with w.client() as first, w.client() as second:
+        results = await asyncio.gather(
+            first.post("/api/v1/snapshots", json=body),
+            second.post("/api/v1/snapshots", json=body),
+        )
+
+    assert sorted(result.status_code for result in results) == [200, 201]
+    assert results[0].json()["snapshot_id"] == results[1].json()["snapshot_id"]
+    snapshot_id = uuid.UUID(results[0].json()["snapshot_id"])
+    async with w.maker() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(InventorySnapshotRow)
+                .where(InventorySnapshotRow.inventory_snapshot_id == snapshot_id)
+            )
+            == 3
+        )
+
+
+async def test_a_blank_line_is_refused_with_its_number_and_nothing_is_kept(world):
+    w = world
+    async with w.client() as client:
+        response = await client.post(
+            "/api/v1/snapshots", json=import_body(w, ["Куртка 1636", "   \t"])
+        )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["details"]["line_no"] == 2
+    async with w.maker() as session:
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(InventorySnapshot)
+            .where(InventorySnapshot.organization_id == w.org)
+        )
+
+
+async def test_only_someone_allowed_to_import_here_can(world):
+    w = world
+    other = await seed_world(w.maker)
+    async with w.client("seller") as client:
+        seller = await client.post("/api/v1/snapshots", json=import_body(w, LIST))
+    async with w.client() as client:
+        foreign = await client.post(
+            "/api/v1/snapshots", json=import_body(w, LIST, location=other["shared"])
+        )
+    async with w.maker.begin() as session:
+        await session.execute(
+            update(StoreLocationAccess)
+            .where(
+                StoreLocationAccess.store_id == w.main,
+                StoreLocationAccess.location_id == w.shared,
+            )
+            .values(can_receive=False)
+        )
+    async with w.client("manager") as client:
+        no_receiving = await client.post("/api/v1/snapshots", json=import_body(w, LIST))
+    async with w.maker.begin() as session:
+        await session.execute(
+            update(StockLocation).where(StockLocation.id == w.shared).values(is_active=False)
+        )
+    async with w.client() as client:
+        paused = await client.post("/api/v1/snapshots", json=import_body(w, LIST, store=w.second))
+
+    assert (seller.status_code, seller.json()["code"]) == (403, "PERMISSION_DENIED")
+    # Another organization's warehouse is exactly as unknown as no warehouse.
+    assert (foreign.status_code, foreign.json()["code"]) == (404, "NOT_FOUND")
+    assert (no_receiving.status_code, no_receiving.json()["code"]) == (
+        403,
+        "LOCATION_ACCESS_DENIED",
+    )
+    # A paused warehouse takes no list: pausing stops everything that leads
+    # to stock (owner decision, 2026-09-22).
+    assert (paused.status_code, paused.json()["code"]) == (404, "NOT_FOUND")
+
+
+async def test_a_private_warehouse_takes_a_list_only_from_its_own_store(world):
+    """And, by default, nobody can approve it. Owner question (M1-023 report).
+
+    The private rule wants every operation granted directly in the managing
+    store. The owner's grant is organization-wide, and the child store's
+    manager does not hold `snapshot:approve`.
+    """
+    w = world
+    async with w.client() as client:
+        by_owner = await client.post(
+            "/api/v1/snapshots", json=import_body(w, LIST, store=w.second, location=w.private)
+        )
+    async with w.client("child_manager") as client:
+        by_child = await client.post(
+            "/api/v1/snapshots", json=import_body(w, LIST, store=w.second, location=w.private)
+        )
+        assert by_child.status_code == 201, by_child.text
+        snapshot_id = by_child.json()["snapshot_id"]
+        view = await answer_list(client, w, snapshot_id)
+        child_approves = await approve(client, snapshot_id, view["review_revision"])
+    async with w.client() as client:
+        owner_approves = await approve(client, snapshot_id, view["review_revision"])
+
+    assert (by_owner.status_code, by_owner.json()["code"]) == (403, "PERMISSION_DENIED")
+    assert (child_approves.status_code, child_approves.json()["code"]) == (
+        403,
+        "PERMISSION_DENIED",
+    )
+    assert (owner_approves.status_code, owner_approves.json()["code"]) == (
+        403,
+        "PERMISSION_DENIED",
+    )
+    assert not await stock(w, w.private)
+
+
+# ---------------------------------------------------------------------------
+# Review: a person's answer, and where its numbers came from
+# ---------------------------------------------------------------------------
+
+
+async def test_a_line_resolves_to_several_sizes_when_someone_says_how_they_know(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        response = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[
+                allocation(w.coat, w.sizes["S"]),
+                allocation(w.coat, w.sizes["M"]),
+                allocation(w.coat, w.sizes["L"]),
+            ],
+            quantity_basis="OWNER_KNOWLEDGE",
+            note="у списку — по одній кожного розміру",
+        )
+
+    assert response.status_code == 200, response.text
+    line = response.json()["line"]
+    assert line["status"] == "RESOLVED"
+    assert line["quantity_basis"] == "OWNER_KNOWLEDGE"
+    assert [(item["size_code"], item["quantity"]) for item in line["allocations"]] == sorted(
+        [("S", 1), ("M", 1), ("L", 1)],
+        key=lambda pair: str(w.sizes[pair[0]]),
+    )
+    assert all(item["display_name"] for item in line["allocations"])
+    summary = response.json()["snapshot"]["summary"]
+    assert response.json()["snapshot"]["review_revision"] == 1
+    assert summary["lines_by_basis"]["OWNER_KNOWLEDGE"] == 1
+    assert summary["units_by_basis"]["OWNER_KNOWLEDGE"] == 3
+    async with w.maker() as session:
+        processing = await session.scalar(
+            select(RawInputProcessing.status).where(
+                RawInputProcessing.raw_input_id == uuid.UUID(line["raw_input_id"])
+            )
+        )
+        assert processing is ProcessingStatus.RESOLVED
+        entry = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.organization_id == w.org, AuditLog.action == "snapshot.line_resolved"
+            )
+        )
+        # The parser flagged the line (a tentative concept, several sizes).
+        assert entry.before["status"] == "NEEDS_REVIEW"
+        assert entry.after["quantity_basis"] == "OWNER_KNOWLEDGE"
+        assert len(entry.after["allocations"]) == 3
+        assert entry.reason == "у списку — по одній кожного розміру"
+
+
+async def test_numbers_must_say_where_they_came_from(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(
+            client,
+            w,
+            [
+                "Лама бежевая/персик/butter 3 шт",
+                "Бомбер шоколад 3 шт",
+                "Куртка",
+                "Лоран шоколад S M L 3 шт",
+                "Куртка 2 шт 3 шт",
+            ],
+        )
+        snapshot_id = snapshot["snapshot_id"]
+        # 1+1+1 typed for a slash line cannot pass as what the line says.
+        invented_split = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=[
+                allocation(w.coat, w.sizes["S"]),
+                allocation(w.coat, w.sizes["M"]),
+                allocation(w.coat, w.sizes["L"]),
+            ],
+            quantity_basis="STATED",
+        )
+        # Nor can a number the line does not state.
+        other_count = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(w.bomber, None, 2)],
+            quantity_basis="STATED",
+        )
+        # Nor "one piece" for a line that states a count.
+        not_one = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(w.bomber, None, 1)],
+            quantity_basis="LINE_IMPLIES_ONE",
+        )
+        # Counted, but nobody said who or when.
+        unexplained = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=[allocation(w.coat, None, 3)],
+            quantity_basis="RECOUNTED",
+        )
+        # A line naming three sizes states no split either, slash or not: its
+        # 3 cannot all go to S as what the line says.
+        one_size_for_three = await resolve(
+            client,
+            snapshot_id,
+            4,
+            allocations=[allocation(w.coat, w.sizes["S"], 3)],
+            quantity_basis="STATED",
+        )
+        # And a line with two counts is not a countless one, to be taken as one.
+        two_counts_as_one = await resolve(
+            client,
+            snapshot_id,
+            5,
+            allocations=[allocation(w.coat, None, 1)],
+            quantity_basis="LINE_IMPLIES_ONE",
+        )
+        # A countless line may be taken as one piece, as the convention it is.
+        one = await resolve(
+            client,
+            snapshot_id,
+            3,
+            allocations=[allocation(w.coat, None, 1)],
+            quantity_basis="LINE_IMPLIES_ONE",
+        )
+        # And a recount may say something else entirely, with a note.
+        recounted = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=[allocation(w.coat, w.sizes["S"], 2)],
+            quantity_basis="RECOUNTED",
+            note="перелічили на складі 27.09",
+        )
+
+    for refused in (
+        invented_split,
+        other_count,
+        not_one,
+        unexplained,
+        one_size_for_three,
+        two_counts_as_one,
+    ):
+        assert refused.status_code == 422, refused.text
+    assert one.status_code == 200, one.text
+    assert recounted.status_code == 200, recounted.text
+    summary = recounted.json()["snapshot"]["summary"]
+    # The recount of 2 differs from the 3 the line states, and it shows.
+    assert summary["lines_differing_from_source"] == 1
+    assert summary["lines_by_basis"] == {
+        "STATED": 0,
+        "LINE_IMPLIES_ONE": 1,
+        "RECOUNTED": 1,
+        "OWNER_KNOWLEDGE": 0,
+    }
+
+
+async def test_size_not_known_is_one_row_that_only_this_path_creates(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, ["Лоран шоколад 2 шт", "Мышка чорний"])
+        first = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, None, 2)],
+            quantity_basis="STATED",
+        )
+        second = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            2,
+            allocations=[allocation(w.bomber, None, 1)],
+            quantity_basis="LINE_IMPLIES_ONE",
+        )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    unknown = {first.json()["line"]["allocations"][0]["size_id"]} | {
+        second.json()["line"]["allocations"][0]["size_id"]
+    }
+    assert len(unknown) == 1
+    async with w.maker() as session:
+        size, system = (
+            await session.execute(
+                select(Size, SizeSystem)
+                .join(SizeSystem, SizeSystem.id == Size.size_system_id)
+                .where(Size.id == uuid.UUID(unknown.pop()))
+            )
+        ).one()
+        assert size.is_unknown is True
+        assert (system.code.value, size.code) == ("UNSPECIFIED", "UNKNOWN")
+        assert system.organization_id == w.org
+
+
+async def test_a_regular_size_named_unknown_is_never_relabelled(world):
+    """The code is reserved: the catalog refuses it, in any case. A size made
+    before it was reserved may still hold it, and "size not known" is then
+    refused rather than taken over."""
+    w = world
+    async with w.client() as client:
+        reserved = await client.post(
+            "/api/v1/catalog/products",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "concept": "Парка",
+                "sizes": [{"system": "UNSPECIFIED", "code": "unknown"}],
+            },
+        )
+    async with w.maker.begin() as session:
+        system = SizeSystem(
+            organization_id=w.org, code=SizeSystemCode.UNSPECIFIED, name="Unspecified"
+        )
+        session.add(system)
+        await session.flush()
+        session.add(Size(size_system_id=system.id, code="UNKNOWN", sort_order=0, is_unknown=False))
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        refused = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            3,
+            allocations=[allocation(w.coat, None, 1)],
+            quantity_basis="LINE_IMPLIES_ONE",
+        )
+
+    assert (reserved.status_code, reserved.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert (refused.status_code, refused.json()["code"]) == (409, "CATALOG_AMBIGUOUS")
+
+
+async def test_a_line_is_read_conservatively(world):
+    """A count no stock could be is kept as evidence and never taken as stated;
+    a line naming several sizes states no split, slash or not."""
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, ["Куртка 3000000000 шт", "Лоран шоколад S M L 3 шт"])
+        page = await client.get(f"/api/v1/snapshots/{snapshot['snapshot_id']}/lines")
+
+    assert [(item["quantity_state"], item["quantity_total"]) for item in page.json()["items"]] == [
+        ("UNKNOWN_QUANTITY", None),
+        ("UNKNOWN_DISTRIBUTION", 3),
+    ]
+    assert page.json()["items"][0]["raw_text"] == "Куртка 3000000000 шт"
+
+
+async def test_an_import_is_bounded_in_characters(world):
+    w = world
+    async with w.client() as client:
+        long_line = await client.post(
+            "/api/v1/snapshots", json=import_body(w, ["Куртка " + "M " * 250])
+        )
+        long_list = await client.post("/api/v1/snapshots", json=import_body(w, ["M " * 200] * 300))
+
+    assert long_line.status_code == 422, long_line.text
+    assert long_list.status_code == 422, long_list.text
+    async with w.maker() as session:
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(InventorySnapshot)
+            .where(InventorySnapshot.organization_id == w.org)
+        )
+
+
+async def test_a_list_opens_a_warehouse_with_a_bounded_number_of_allocations(world, monkeypatch):
+    monkeypatch.setattr(snapshot_service, "MAX_LIST_ALLOCATIONS", 3)
+    w = world
+    three_sizes = [
+        allocation(w.coat, w.sizes["S"]),
+        allocation(w.coat, w.sizes["M"]),
+        allocation(w.coat, w.sizes["L"]),
+    ]
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        snapshot_id = snapshot["snapshot_id"]
+        full = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=three_sizes,
+            quantity_basis="OWNER_KNOWLEDGE",
+            note="по одній",
+        )
+        over = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(w.bomber, w.sizes["M"], 2)],
+            quantity_basis="STATED",
+        )
+        # A line's own earlier answer does not count against its new one.
+        fewer = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=three_sizes[:2],
+            quantity_basis="OWNER_KNOWLEDGE",
+            note="L продана",
+        )
+        fits = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(w.bomber, w.sizes["M"], 2)],
+            quantity_basis="STATED",
+        )
+
+    assert full.status_code == 200, full.text
+    assert over.status_code == 422, over.text
+    assert fewer.status_code == 200, fewer.text
+    assert fits.status_code == 200, fits.text
+    assert fits.json()["snapshot"]["summary"]["allocations"] == 3
+
+
+async def test_repeating_an_answer_changes_nothing(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        body = {
+            "allocations": [allocation(w.bomber, w.sizes["M"], 2)],
+            "quantity_basis": "STATED",
+        }
+        first = await resolve(client, snapshot["snapshot_id"], 2, **body)
+        again = await resolve(client, snapshot["snapshot_id"], 2, **body)
+
+    assert first.json()["snapshot"]["review_revision"] == 1
+    assert again.status_code == 200
+    assert again.json()["snapshot"]["review_revision"] == 1
+    assert again.json()["line"]["allocations"] == first.json()["line"]["allocations"]
+    async with w.maker() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuditLog)
+                .where(
+                    AuditLog.organization_id == w.org, AuditLog.action == "snapshot.line_resolved"
+                )
+            )
+            == 1
+        )
+
+
+async def test_a_new_answer_replaces_the_old_one_and_a_skip_withdraws_it(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        snapshot_id = snapshot["snapshot_id"]
+        await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(w.bomber, w.sizes["M"], 2)],
+            quantity_basis="STATED",
+        )
+        replaced = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(w.bomber, None, 2)],
+            quantity_basis="STATED",
+        )
+        skipped = await resolve(client, snapshot_id, 2, skip_reason="продано до обліку")
+
+    assert replaced.json()["snapshot"]["review_revision"] == 2
+    assert [item["size_code"] for item in replaced.json()["line"]["allocations"]] == ["UNKNOWN"]
+    line = skipped.json()["line"]
+    assert skipped.json()["snapshot"]["review_revision"] == 3
+    assert (line["status"], line["allocations"], line["quantity_basis"]) == ("SKIPPED", [], None)
+    assert line["resolution_note"] == "продано до обліку"
+    async with w.maker() as session:
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(InventorySnapshotAllocation)
+            .join(
+                InventorySnapshotRow,
+                InventorySnapshotRow.id == InventorySnapshotAllocation.snapshot_row_id,
+            )
+            .where(InventorySnapshotRow.inventory_snapshot_id == uuid.UUID(snapshot_id))
+        )
+        processing = await session.scalar(
+            select(RawInputProcessing.status).where(
+                RawInputProcessing.raw_input_id == uuid.UUID(line["raw_input_id"])
+            )
+        )
+        assert processing is ProcessingStatus.PARSED
+
+
+async def test_the_same_product_and_size_twice_in_one_line_is_refused(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        response = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, w.sizes["M"]), allocation(w.coat, w.sizes["M"])],
+            quantity_basis="RECOUNTED",
+            note="двічі",
+        )
+    assert response.status_code == 422, response.text
+
+
+async def test_a_foreign_or_retired_product_is_unknown(world):
+    w = world
+    other = await seed_world(w.maker)
+    async with client_for(w.maker, other["users"]["owner"]) as client:
+        foreign, foreign_sizes = await create_product(
+            client, other["main"], "Лоран", "шоколад", ["M"]
+        )
+    async with w.maker.begin() as session:
+        await session.execute(
+            update(ProductVariant)
+            .where(ProductVariant.id == w.bottega)
+            .values(status=EntityStatus.NEEDS_REVIEW)
+        )
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        responses = [
+            await resolve(
+                client,
+                snapshot["snapshot_id"],
+                3,
+                allocations=[allocation(variant, size, 1)],
+                quantity_basis="LINE_IMPLIES_ONE",
+            )
+            for variant, size in (
+                (foreign, foreign_sizes["M"]),  # another shop's product
+                (w.coat, foreign_sizes["M"]),  # another shop's size
+                (w.bottega, None),  # a product parked for review
+                (uuid.uuid4(), None),  # nothing at all
+            )
+        ]
+
+    for response in responses:
+        assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND"), response.text
+
+
+async def test_a_line_that_does_not_exist_is_not_found(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        response = await resolve(client, snapshot["snapshot_id"], 4, skip_reason="немає")
+    assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+
+
+async def test_only_importers_review(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+    async with w.client("seller") as client:
+        response = await resolve(client, snapshot["snapshot_id"], 3, skip_reason="заголовок")
+        read = await client.get(f"/api/v1/snapshots/{snapshot['snapshot_id']}")
+    assert (response.status_code, response.json()["code"]) == (403, "PERMISSION_DENIED")
+    assert (read.status_code, read.json()["code"]) == (403, "PERMISSION_DENIED")
+
+
+async def test_repeated_lines_are_shown_as_repeats(world):
+    w = world
+    lines = ["Бомбер шоколад накладной карман", "Куртки", "Бомбер шоколад накладной карман"]
+    async with w.client() as client:
+        snapshot = await imported(client, w, lines)
+        page = await client.get(
+            f"/api/v1/snapshots/{snapshot['snapshot_id']}/lines", params={"limit": 1, "offset": 2}
+        )
+    item = page.json()["items"][0]
+    # Counted across the whole list, not just the page it appears on.
+    assert (item["line_no"], item["same_text_lines"]) == (3, 2)
+    assert page.json()["has_more"] is False
+
+
+# ---------------------------------------------------------------------------
+# Approval: opening stock, once, all or nothing
+# ---------------------------------------------------------------------------
+
+
+async def test_approval_turns_the_list_into_opening_stock_and_nothing_else(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w, captured_at="2025-10-01")
+        response = await approve(client, view["snapshot_id"], view["review_revision"])
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    snapshot_id = uuid.UUID(body["snapshot_id"])
+    assert body["status"] == "APPLIED"
+    assert body["approved_by_user_id"] == str(w.users["owner"])
+    assert body["decided_at"] is not None
+    assert body["application"]["units"] == 5
+    assert [line["line_no"] for line in body["application"]["lines"]] == [1, 1, 1, 2]
+    assert await stock(w) == {
+        (w.coat, w.sizes["S"]): 1,
+        (w.coat, w.sizes["M"]): 1,
+        (w.coat, w.sizes["L"]): 1,
+        (w.bomber, w.sizes["M"]): 2,
+    }
+
+    ledger = await movements(w)
+    # Invariant I17: an opening balance and nothing else — no delivery, no
+    # sale, no adjustment — one movement per allocation, each with its lot.
+    assert {movement.movement_type for movement in ledger} == {MovementType.OPENING_BALANCE}
+    assert len(ledger) == 4
+    assert {(m.reference_type, m.reference_id) for m in ledger} == {
+        ("inventory_snapshot", snapshot_id)
+    }
+    assert {m.acting_store_id for m in ledger} == {w.main}
+    assert {m.actor_user_id for m in ledger} == {w.users["owner"]}
+    assert {line["movement_id"] for line in body["application"]["lines"]} == {
+        str(m.id) for m in ledger
+    }
+    async with w.maker() as session:
+        lots = list(
+            await session.scalars(
+                select(StockLot).where(StockLot.inventory_snapshot_id == snapshot_id)
+            )
+        )
+        assert {lot.acquisition_type for lot in lots} == {AcquisitionType.OPENING_BALANCE}
+        assert {str(lot.id) for lot in lots} == {
+            line["stock_lot_id"] for line in body["application"]["lines"]
+        }
+        # Every quantity is explained by the ledger (invariant I3).
+        assert await find_divergences(session, organization_id=w.org) == []
+        entry = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.organization_id == w.org, AuditLog.action == "snapshot.applied"
+            )
+        )
+        assert entry.after["units"] == 5
+        assert entry.after["captured_at"] == "2025-10-01"
+        assert entry.after["lines_by_basis"]["OWNER_KNOWLEDGE"] == 1
+        assert entry.after["lines_by_basis"]["STATED"] == 1
+
+
+async def test_a_manager_cannot_approve(world):
+    w = world
+    async with w.client("manager") as client:
+        view = await prepared(client, w)
+        response = await approve(client, view["snapshot_id"], view["review_revision"])
+    assert (response.status_code, response.json()["code"]) == (403, "PERMISSION_DENIED")
+    assert not await movements(w)
+
+
+async def test_lines_still_waiting_block_approval(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, [*LIST, "Лама бежевая/персик/butter 3 шт"])
+        view = await answer_list(client, w, snapshot["snapshot_id"])
+        response = await approve(client, snapshot["snapshot_id"], view["review_revision"])
+
+    assert response.status_code == 409, response.text
+    details = response.json()["details"]
+    assert response.json()["code"] == "SNAPSHOT_CONFLICT"
+    # The unknown split blocks approval until a person answers it (I15, I17).
+    assert (details["reason"], details["line_nos"], details["count"]) == (
+        "ROWS_NEED_REVIEW",
+        [4],
+        1,
+    )
+    assert not await movements(w)
+
+
+async def test_a_list_that_changed_after_it_was_checked_is_not_approved(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        checked = view["review_revision"]
+        await resolve(client, view["snapshot_id"], 3, skip_reason="заголовок, не товар")
+        response = await approve(client, view["snapshot_id"], checked)
+
+    assert response.status_code == 409, response.text
+    assert response.json()["details"]["reason"] == "REVISION_CHANGED"
+    assert response.json()["details"]["review_revision"] == checked + 1
+    assert not await movements(w)
+
+
+async def test_approving_again_returns_exactly_what_was_done(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        first = await approve(client, view["snapshot_id"], view["review_revision"])
+        again = await approve(client, view["snapshot_id"], view["review_revision"])
+        other = await approve(client, view["snapshot_id"], view["review_revision"] - 1)
+        read = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}")
+
+    assert again.status_code == 200, again.text
+    assert again.json()["application"] == first.json()["application"]
+    assert read.json()["application"] == first.json()["application"]
+    assert len(await movements(w)) == 4
+    assert (other.status_code, other.json()["details"]["reason"]) == (409, "ALREADY_DECIDED")
+
+
+async def test_a_replay_is_refused_once_the_grant_is_gone(world):
+    """Invariant I13: authority is checked before an answer is replayed."""
+    w = world
+    async with w.maker.begin() as session:
+        approver = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="approver")
+        session.add(approver)
+        await session.flush()
+        owner_role = await session.scalar(
+            select(Role.id).where(Role.organization_id == w.org, Role.code == "OWNER")
+        )
+        membership = Membership(
+            user_id=approver.id, organization_id=w.org, store_id=w.main, role_id=owner_role
+        )
+        session.add(membership)
+    async with client_for(w.maker, approver.id) as client:
+        view = await prepared(client, w)
+        assert (await approve(client, view["snapshot_id"], 3)).status_code == 200
+        async with w.maker.begin() as session:
+            await session.execute(delete(Membership).where(Membership.user_id == approver.id))
+            session.add(
+                Membership(
+                    user_id=approver.id,
+                    organization_id=w.org,
+                    store_id=w.second,
+                    role_id=owner_role,
+                )
+            )
+        replay = await approve(client, view["snapshot_id"], 3)
+    assert (replay.status_code, replay.json()["code"]) == (403, "FORBIDDEN_STORE")
+
+
+async def test_a_list_of_nothing_but_skips_has_nothing_to_apply(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, ["Куртки", "Шуби"])
+        for line_no in (1, 2):
+            await resolve(client, snapshot["snapshot_id"], line_no, skip_reason="заголовок")
+        response = await approve(client, snapshot["snapshot_id"], 2)
+    assert (response.status_code, response.json()["details"]["reason"]) == (
+        409,
+        "NOTHING_TO_APPLY",
+    )
+
+
+async def test_a_warehouse_with_stock_history_is_not_opened(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        receipt = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.bottega),
+                        "size_id": str(w.sizes["M"]),
+                        "quantity": 1,
+                    }
+                ],
+            },
+        )
+        assert receipt.status_code == 201, receipt.text
+        response = await approve(client, view["snapshot_id"], view["review_revision"])
+        after = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}")
+
+    assert (response.status_code, response.json()["code"]) == (409, "OPENING_BALANCE_CONFLICT")
+    assert after.json()["status"] == "IN_REVIEW"
+    assert await stock(w) == {(w.bottega, w.sizes["M"]): 1}
+    async with w.maker() as session:
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(StockLot)
+            .where(StockLot.inventory_snapshot_id == uuid.UUID(view["snapshot_id"]))
+        )
+
+
+async def test_a_warehouse_sold_back_to_empty_still_has_history(world):
+    """An empty shelf is not an empty ledger: a coat received and sold again
+    leaves nothing to count, yet the warehouse already has a story the list
+    knows nothing about."""
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        receipt = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.bottega),
+                        "size_id": str(w.sizes["M"]),
+                        "quantity": 1,
+                    }
+                ],
+            },
+        )
+        assert receipt.status_code == 201, receipt.text
+    async with w.client("seller") as client:
+        sale = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "command_id": str(uuid.uuid4()),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.bottega),
+                        "size_id": str(w.sizes["M"]),
+                        "source_location_id": str(w.shared),
+                        "quantity": 1,
+                        "unit_price": "3900.00",
+                    }
+                ],
+            },
+        )
+        assert sale.status_code == 201, sale.text
+    assert await stock(w) == {}
+    async with w.client() as client:
+        response = await approve(client, view["snapshot_id"], view["review_revision"])
+    assert (response.status_code, response.json()["code"]) == (409, "OPENING_BALANCE_CONFLICT")
+    assert len(await movements(w)) == 2
+
+
+async def test_a_warehouse_is_opened_once(world):
+    w = world
+    async with w.client() as client:
+        first = await prepared(client, w)
+        second = await prepared(client, w)
+        assert (await approve(client, first["snapshot_id"], 3)).status_code == 200
+        response = await approve(client, second["snapshot_id"], 3)
+    assert (response.status_code, response.json()["code"]) == (409, "OPENING_BALANCE_CONFLICT")
+    assert len(await movements(w)) == 4
+
+
+async def test_two_lists_for_one_warehouse_approved_at_once_open_it_once(world):
+    w = world
+    async with w.client() as client:
+        first = await prepared(client, w)
+        second = await prepared(client, w)
+    async with w.client() as one, w.client() as two:
+        results = await asyncio.gather(
+            approve(one, first["snapshot_id"], 3), approve(two, second["snapshot_id"], 3)
+        )
+
+    assert sorted(result.status_code for result in results) == [200, 409]
+    assert {result.json().get("code") for result in results if result.status_code == 409} == {
+        "OPENING_BALANCE_CONFLICT"
+    }
+    assert len(await movements(w)) == 4
+    assert sum((await stock(w)).values()) == 5
+
+
+async def test_stock_written_on_another_key_is_either_before_the_opening_or_after_it(world):
+    """The design review's race (ADR-0005 §5): a receipt at the same warehouse
+    on a key the list does not name. Every stock command holds the warehouse's
+    shared lock while it writes; the opening balance takes it exclusively."""
+    w = world
+    async with w.client() as client:
+        before = await prepared(client, w)
+
+    # 1. The receipt is in flight first: the approval waits, then sees it.
+    async with w.maker() as receipt_session:
+        await apply_movements(
+            receipt_session,
+            organization_id=w.org,
+            requests=[delivery(w, w.bottega, w.sizes["M"])],
+        )
+        holder = await receipt_session.scalar(text("SELECT pg_backend_pid()"))
+        async with w.client() as client:
+            approval = asyncio.create_task(approve(client, before["snapshot_id"], 3))
+            await wait_until_blocked_by(w.engine, holder)
+            await receipt_session.commit()
+            refused = await approval
+    assert (refused.status_code, refused.json()["code"]) == (409, "OPENING_BALANCE_CONFLICT")
+
+    # 2. The opening is in flight first: the receipt waits, then lands after it.
+    fresh = await seed_world(w.maker)
+    other = World(
+        engine=w.engine,
+        maker=w.maker,
+        coat=w.coat,
+        bomber=w.bomber,
+        bottega=w.bottega,
+        sizes=w.sizes,
+        **fresh,
+    )
+    async with other.client() as client:
+        coat, sizes = await create_product(client, other.main, "Лоран", "шоколад", ["S", "M", "L"])
+        bomber, _ = await create_product(client, other.main, "Мышка", "чорний", ["M"])
+        bottega, _ = await create_product(client, other.main, "Ботега", "бежевий", ["M"])
+    other = World(
+        engine=w.engine,
+        maker=w.maker,
+        coat=coat,
+        bomber=bomber,
+        bottega=bottega,
+        sizes=sizes,
+        **fresh,
+    )
+    async with other.client() as client:
+        view = await prepared(client, other)
+    async with other.maker() as approval_session:
+        scope = await resolve_scope(approval_session, other.users["owner"])
+        await approve_snapshot(
+            approval_session,
+            scope=scope,
+            snapshot_id=uuid.UUID(view["snapshot_id"]),
+            expected_revision=3,
+        )
+        holder = await approval_session.scalar(text("SELECT pg_backend_pid()"))
+        async with other.client() as client:
+            receipt = asyncio.create_task(
+                client.post(
+                    "/api/v1/inventory/receipts",
+                    headers=idempotent(),
+                    json={
+                        "store_id": str(other.main),
+                        "location_id": str(other.shared),
+                        "lines": [
+                            {
+                                "product_variant_id": str(other.bottega),
+                                "size_id": str(other.sizes["M"]),
+                                "quantity": 1,
+                            }
+                        ],
+                    },
+                )
+            )
+            await wait_until_blocked_by(w.engine, holder)
+            await approval_session.commit()
+            landed = await receipt
+    assert landed.status_code == 201, landed.text
+    assert (await stock(other))[(other.bottega, other.sizes["M"])] == 1
+    assert sum((await stock(other)).values()) == 6
+
+
+async def test_a_paused_warehouse_is_not_opened(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        async with w.maker.begin() as session:
+            await session.execute(
+                update(StockLocation).where(StockLocation.id == w.shared).values(is_active=False)
+            )
+        response = await approve(client, view["snapshot_id"], 3)
+        rejected = await client.post(
+            f"/api/v1/snapshots/{view['snapshot_id']}/reject", json={"reason": "склад закрито"}
+        )
+    assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+    # A list for a paused warehouse can still be abandoned.
+    assert rejected.status_code == 200, rejected.text
+    assert not await movements(w)
+
+
+async def test_approval_needs_the_store_to_still_receive_here(world):
+    """The grant is checked at approval, not only at import: a store that lost
+    `can_receive` at the warehouse while the list was reviewed cannot open it."""
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        async with w.maker.begin() as session:
+            await session.execute(
+                update(StoreLocationAccess)
+                .where(
+                    StoreLocationAccess.store_id == w.main,
+                    StoreLocationAccess.location_id == w.shared,
+                )
+                .values(can_receive=False)
+            )
+        response = await approve(client, view["snapshot_id"], 3)
+        review = await resolve(client, view["snapshot_id"], 3, skip_reason="інша причина")
+        read = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}")
+    assert (response.status_code, response.json()["code"]) == (403, "LOCATION_ACCESS_DENIED")
+    assert (review.status_code, review.json()["code"]) == (403, "LOCATION_ACCESS_DENIED")
+    # Reading needs only reach, which the store still has.
+    assert read.status_code == 200, read.text
+    assert not await movements(w)
+
+
+async def test_a_product_retired_after_review_blocks_approval(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        async with w.maker.begin() as session:
+            await session.execute(
+                update(ProductVariant)
+                .where(ProductVariant.id == w.bomber)
+                .values(status=EntityStatus.NEEDS_REVIEW)
+            )
+        response = await approve(client, view["snapshot_id"], 3)
+    assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+    assert not await movements(w)
+
+
+async def test_opening_stock_is_sold_like_any_other(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        assert (await approve(client, view["snapshot_id"], 3)).status_code == 200
+    async with w.client("seller") as client:
+        sale = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "command_id": str(uuid.uuid4()),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.bomber),
+                        "size_id": str(w.sizes["M"]),
+                        "source_location_id": str(w.shared),
+                        "quantity": 1,
+                        "unit_price": "4200.00",
+                    }
+                ],
+            },
+        )
+    assert sale.status_code == 201, sale.text
+    assert Decimal(sale.json()["total"]) == Decimal("4200.00")
+    assert (await stock(w))[(w.bomber, w.sizes["M"])] == 1
+
+
+# ---------------------------------------------------------------------------
+# Guards that ship with the opening balance
+# ---------------------------------------------------------------------------
+
+
+async def test_found_during_sale_cannot_count_size_unknown_stock_twice(world):
+    """The design review's third finding: a seller sells a coat held as "size
+    not known" as an M, and «фізично є» would add an M the list already
+    counted. Refused with its own code; selling it as size not known works,
+    and once none is left the correction works again. The other direction —
+    «фізично є» adding a coat with its size not known — is refused always:
+    only a list states that size (the code review's sixth finding)."""
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, ["Лоран шоколад 2 шт", "Куртки"])
+        line = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, None, 2)],
+            quantity_basis="STATED",
+        )
+        unknown = uuid.UUID(line.json()["line"]["allocations"][0]["size_id"])
+        await resolve(client, snapshot["snapshot_id"], 2, skip_reason="заголовок")
+        assert (await approve(client, snapshot["snapshot_id"], 2)).status_code == 200
+
+    def sale(size, *, found: bool) -> dict:
+        body = {
+            "store_id": str(w.main),
+            "command_id": str(uuid.uuid4()),
+            "lines": [
+                {
+                    "product_variant_id": str(w.coat),
+                    "size_id": str(size),
+                    "source_location_id": str(w.shared),
+                    "quantity": 1,
+                    "unit_price": "9000.00",
+                }
+            ],
+        }
+        if found:
+            body["found_in_store"] = [{"line_index": 0, "quantity": 1}]
+        return body
+
+    async with w.client("seller") as client:
+        twice = await client.post(
+            "/api/v1/sales", headers=idempotent(), json=sale(w.sizes["M"], found=True)
+        )
+        as_unknown = [
+            await client.post(
+                "/api/v1/sales", headers=idempotent(), json=sale(unknown, found=False)
+            )
+            for _ in range(2)
+        ]
+        found_as_unknown = await client.post(
+            "/api/v1/sales", headers=idempotent(), json=sale(unknown, found=True)
+        )
+        once_none_left = await client.post(
+            "/api/v1/sales", headers=idempotent(), json=sale(w.sizes["M"], found=True)
+        )
+
+    assert (twice.status_code, twice.json()["code"]) == (409, "UNKNOWN_SIZE_STOCK")
+    assert twice.json()["details"]["available"] == 2
+    assert [response.status_code for response in as_unknown] == [201, 201]
+    assert (found_as_unknown.status_code, found_as_unknown.json()["code"]) == (
+        409,
+        "UNKNOWN_SIZE_STOCK",
+    )
+    assert found_as_unknown.json()["details"]["reason"] == "FOUND_AS_SIZE_NOT_KNOWN"
+    assert once_none_left.status_code == 201, once_none_left.text
+    assert await stock(w) == {}
+    async with w.maker() as session:
+        assert await find_divergences(session, organization_id=w.org) == []
+
+
+async def test_goods_with_their_size_not_known_enter_only_from_a_list(world):
+    """Received or found, goods have a size. Stock a list loaded as "size not
+    known" can still be written off, like any other."""
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, ["Лоран шоколад 2 шт"])
+        line = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, None, 2)],
+            quantity_basis="STATED",
+        )
+        unknown = line.json()["line"]["allocations"][0]["size_id"]
+        assert (await approve(client, snapshot["snapshot_id"], 1)).status_code == 200
+
+        def adjustment(delta: int, reason: str) -> dict:
+            return {
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "product_variant_id": str(w.coat),
+                "size_id": unknown,
+                "quantity_delta": delta,
+                "reason_code": reason,
+            }
+
+        received = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [{"product_variant_id": str(w.coat), "size_id": unknown, "quantity": 1}],
+            },
+        )
+        found = await client.post(
+            "/api/v1/inventory/adjustments",
+            headers=idempotent(),
+            json=adjustment(1, "CORRECTION"),
+        )
+        written_off = await client.post(
+            "/api/v1/inventory/adjustments",
+            headers=idempotent(),
+            json=adjustment(-1, "DAMAGED"),
+        )
+
+    assert (received.status_code, received.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert (found.status_code, found.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert written_off.status_code == 201, written_off.text
+    assert await stock(w) == {(w.coat, uuid.UUID(unknown)): 1}
+
+
+async def test_an_opening_balance_cannot_be_written_outside_a_list(world):
+    w = world
+    async with w.client() as client:
+        receipt = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.coat),
+                        "size_id": str(w.sizes["M"]),
+                        "quantity": 1,
+                        "acquisition_type": "OPENING_BALANCE",
+                    }
+                ],
+            },
+        )
+    assert receipt.status_code == 422, receipt.text
+
+    # The ledger's shape check refuses one that names no list and lot...
+    with pytest.raises(ValidationFailedError, match="must name the stock list"):
+        validate_movement(
+            MovementRequest(
+                location_id=w.shared,
+                acting_store_id=w.main,
+                product_variant_id=w.coat,
+                size_id=w.sizes["M"],
+                quantity_delta=1,
+                movement_type=MovementType.OPENING_BALANCE,
+            )
+        )
+    # ...and the ledger's public door refuses even one that does: only the
+    # approval, which holds the warehouse and checks its history, writes it.
+    async with w.maker() as session:
+        with pytest.raises(ValidationFailedError, match="only by approving a stock list"):
+            await apply_movements(
+                session,
+                organization_id=w.org,
+                requests=[
+                    MovementRequest(
+                        location_id=w.shared,
+                        acting_store_id=w.main,
+                        product_variant_id=w.coat,
+                        size_id=w.sizes["M"],
+                        quantity_delta=1,
+                        movement_type=MovementType.OPENING_BALANCE,
+                        stock_lot_id=uuid.uuid4(),
+                        reference_type=OPENING_BALANCE_REFERENCE,
+                        reference_id=uuid.uuid4(),
+                    )
+                ],
+            )
+
+    # And past the service, straight at the database: refused there too. The
+    # trace trigger runs first (a BEFORE trigger precedes the CHECKs)...
+    shapeless = text(
+        "INSERT INTO stock_movement (id, organization_id, location_id, acting_store_id,"
+        " product_variant_id, size_id, movement_type, quantity_delta, created_at)"
+        " VALUES (gen_random_uuid(), :org, :loc, :store, :variant, :size,"
+        " 'OPENING_BALANCE', 1, now())"
+    )
+    key = {"org": w.org, "loc": w.shared, "store": w.main, "variant": w.coat, "size": w.sizes["M"]}
+    async with w.maker() as session:
+        with pytest.raises(DBAPIError, match="must come from an opening lot"):
+            await session.execute(shapeless, key)
+    # ...and behind it the CHECK states the shape on its own. The trigger is
+    # set aside only inside this transaction, which is rolled back.
+    async with w.maker() as session:
+        await session.execute(
+            text("ALTER TABLE stock_movement DISABLE TRIGGER opening_balance_traces_to_its_list")
+        )
+        with pytest.raises(DBAPIError, match="opening_balance_names_its_list"):
+            await session.execute(shapeless, key)
+    async with w.maker() as session:
+        with pytest.raises(DBAPIError, match="opening_lot_names_its_list"):
+            session.add(
+                StockLot(
+                    organization_id=w.org,
+                    location_id=w.shared,
+                    product_variant_id=w.coat,
+                    size_id=w.sizes["M"],
+                    acquisition_type=AcquisitionType.OPENING_BALANCE,
+                )
+            )
+            await session.flush()
+
+    # A well-formed one that names a list but rides on a purchased lot: the
+    # database traces the lot, not just the shape (the reviews' I17 finding).
+    async with w.client() as client:
+        bought = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.bottega),
+                        "size_id": str(w.sizes["M"]),
+                        "quantity": 1,
+                    }
+                ],
+            },
+        )
+        assert bought.status_code == 201, bought.text
+    async with w.maker() as session:
+        with pytest.raises(DBAPIError, match="must come from an opening lot"):
+            await session.execute(
+                text(
+                    "INSERT INTO stock_movement (id, organization_id, location_id, acting_store_id,"
+                    " product_variant_id, size_id, movement_type, quantity_delta, stock_lot_id,"
+                    " reference_type, reference_id, created_at)"
+                    " VALUES (gen_random_uuid(), :org, :loc, :store, :variant, :size,"
+                    " 'OPENING_BALANCE', 1, :lot, 'inventory_snapshot', gen_random_uuid(), now())"
+                ),
+                {
+                    "org": w.org,
+                    "loc": w.shared,
+                    "store": w.main,
+                    "variant": w.bottega,
+                    "size": w.sizes["M"],
+                    "lot": uuid.UUID(bought.json()["lines"][0]["stock_lot_id"]),
+                },
+            )
+
+
+async def test_a_decided_list_is_frozen_by_the_database(world):
+    w = world
+    async with w.client() as client:
+        applied = await prepared(client, w)
+        assert (await approve(client, applied["snapshot_id"], 3)).status_code == 200
+        rejected = await imported(client, w)
+        response = await client.post(
+            f"/api/v1/snapshots/{rejected['snapshot_id']}/reject", json={"reason": "не той склад"}
+        )
+        assert response.status_code == 200
+        waiting = await prepared(client, w)
+
+    statements = [
+        ("UPDATE inventory_snapshot SET captured_at = 'інший день' WHERE id = :id", applied),
+        ("DELETE FROM inventory_snapshot WHERE id = :id", applied),
+        (
+            "UPDATE inventory_snapshot_row SET resolution_note = 'x' "
+            "WHERE inventory_snapshot_id = :id",
+            applied,
+        ),
+        (
+            "UPDATE inventory_snapshot_allocation SET quantity = quantity + 1 "
+            "WHERE snapshot_row_id IN "
+            "(SELECT id FROM inventory_snapshot_row WHERE inventory_snapshot_id = :id)",
+            applied,
+        ),
+        ("UPDATE inventory_snapshot SET rejection_reason = 'y' WHERE id = :id", rejected),
+        (
+            "DELETE FROM inventory_snapshot_row WHERE inventory_snapshot_id = :id",
+            rejected,
+        ),
+    ]
+    for statement, snapshot in statements:
+        async with w.maker() as session:
+            with pytest.raises(DBAPIError, match="can no longer change"):
+                await session.execute(text(statement), {"id": uuid.UUID(snapshot["snapshot_id"])})
+
+    # Moving a waiting list's answer into an applied one changes the applied
+    # list, even though the answer came from a list still under review.
+    async with w.maker() as session:
+        with pytest.raises(DBAPIError, match="APPLIED and can no longer change"):
+            await session.execute(
+                text(
+                    "UPDATE inventory_snapshot_allocation SET snapshot_row_id = ("
+                    " SELECT id FROM inventory_snapshot_row"
+                    " WHERE inventory_snapshot_id = :applied AND line_no = 3)"
+                    " WHERE id = (SELECT a.id FROM inventory_snapshot_allocation a"
+                    " JOIN inventory_snapshot_row r ON r.id = a.snapshot_row_id"
+                    " WHERE r.inventory_snapshot_id = :waiting ORDER BY a.id LIMIT 1)"
+                ),
+                {
+                    "applied": uuid.UUID(applied["snapshot_id"]),
+                    "waiting": uuid.UUID(waiting["snapshot_id"]),
+                },
+            )
+
+
+# ---------------------------------------------------------------------------
+# Rejection
+# ---------------------------------------------------------------------------
+
+
+async def test_a_rejected_list_keeps_its_evidence_and_becomes_no_stock(world):
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        snapshot_id = view["snapshot_id"]
+        rejected = await client.post(
+            f"/api/v1/snapshots/{snapshot_id}/reject", json={"reason": "не той склад"}
+        )
+        again = await client.post(
+            f"/api/v1/snapshots/{snapshot_id}/reject", json={"reason": "не той склад"}
+        )
+        changed = await client.post(
+            f"/api/v1/snapshots/{snapshot_id}/reject", json={"reason": "інша причина"}
+        )
+        approval = await approve(client, snapshot_id, 3)
+        review = await resolve(client, snapshot_id, 3, skip_reason="пізно")
+        lines = await client.get(f"/api/v1/snapshots/{snapshot_id}/lines")
+
+    body = rejected.json()
+    assert rejected.status_code == 200, rejected.text
+    assert (body["status"], body["rejection_reason"]) == ("REJECTED", "не той склад")
+    assert body["rejected_by_user_id"] == str(w.users["owner"])
+    assert again.status_code == 200
+    assert (changed.status_code, changed.json()["code"]) == (409, "IDEMPOTENCY_CONFLICT")
+    assert (approval.status_code, approval.json()["details"]["reason"]) == (409, "ALREADY_DECIDED")
+    assert (review.status_code, review.json()["details"]["reason"]) == (409, "ALREADY_DECIDED")
+    # The evidence and the answers stay readable.
+    assert [item["raw_text"] for item in lines.json()["items"]] == LIST
+    assert [item["status"] for item in lines.json()["items"]] == [
+        "RESOLVED",
+        "RESOLVED",
+        "SKIPPED",
+    ]
+    assert not await movements(w)
+
+
+# ---------------------------------------------------------------------------
+# Reads and tenancy
+# ---------------------------------------------------------------------------
+
+
+async def test_another_organization_cannot_see_or_touch_a_list(world):
+    w = world
+    other = await seed_world(w.maker)
+    async with w.client() as client:
+        view = await prepared(client, w)
+    snapshot_id = view["snapshot_id"]
+    async with client_for(w.maker, other["users"]["owner"]) as client:
+        responses = [
+            await client.get(f"/api/v1/snapshots/{snapshot_id}"),
+            await client.get(f"/api/v1/snapshots/{snapshot_id}/lines"),
+            await resolve(client, snapshot_id, 3, skip_reason="чуже"),
+            await approve(client, snapshot_id, 3),
+            await client.post(f"/api/v1/snapshots/{snapshot_id}/reject", json={"reason": "чуже"}),
+        ]
+        listing = await client.get("/api/v1/snapshots", params={"store_id": str(other["main"])})
+
+    for response in responses:
+        assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+    assert listing.json()["items"] == []
+    assert not await movements(w)
+
+
+async def test_the_list_of_lists_leaves_out_what_a_person_may_not_see(world):
+    w = world
+    async with w.client("child_manager") as client:
+        private = await imported(client, w, store=w.second, location=w.private)
+    async with w.client() as client:
+        shared = await imported(client, w, store=w.second)
+        owner_view = await client.get("/api/v1/snapshots", params={"store_id": str(w.second)})
+        filtered = await client.get(
+            "/api/v1/snapshots", params={"store_id": str(w.second), "status": "APPLIED"}
+        )
+        first_page = await client.get(
+            "/api/v1/snapshots", params={"store_id": str(w.second), "limit": 1}
+        )
+    async with w.client("child_manager") as client:
+        child_view = await client.get("/api/v1/snapshots", params={"store_id": str(w.second)})
+
+    assert [item["snapshot_id"] for item in owner_view.json()["items"]] == [shared["snapshot_id"]]
+    assert filtered.json()["items"] == []
+    # Left out in the query itself: a page does not even say more exist.
+    assert [item["snapshot_id"] for item in first_page.json()["items"]] == [shared["snapshot_id"]]
+    assert first_page.json()["has_more"] is False
+    assert {item["snapshot_id"] for item in child_view.json()["items"]} == {
+        private["snapshot_id"],
+        shared["snapshot_id"],
+    }
+
+
+async def test_a_page_of_lines_can_be_filtered_by_status(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w)
+        await resolve(client, snapshot["snapshot_id"], 3, skip_reason="заголовок")
+        skipped = await client.get(
+            f"/api/v1/snapshots/{snapshot['snapshot_id']}/lines", params={"status": "SKIPPED"}
+        )
+        waiting = await client.get(
+            f"/api/v1/snapshots/{snapshot['snapshot_id']}/lines",
+            params={"status": "NEEDS_REVIEW", "limit": 1},
+        )
+
+    assert [item["line_no"] for item in skipped.json()["items"]] == [3]
+    assert len(waiting.json()["items"]) == 1
+    assert waiting.json()["has_more"] is True
+
+
+async def test_a_list_row_keeps_the_quantity_its_line_stated(world):
+    """The parser's reading of the line is evidence: a person's different
+    answer sits beside it and never overwrites it."""
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(client, w, ["Бомбер шоколад 3 шт"])
+        await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, None, 2)],
+            quantity_basis="RECOUNTED",
+            note="одна продана до обліку",
+        )
+    async with w.maker() as session:
+        row = await session.scalar(
+            select(InventorySnapshotRow).where(
+                InventorySnapshotRow.inventory_snapshot_id == uuid.UUID(snapshot["snapshot_id"])
+            )
+        )
+        assert (row.quantity_state, row.quantity_total) == (SnapshotQuantityState.KNOWN, 3)
+        assert row.status is SnapshotRowStatus.RESOLVED
+    async with w.maker() as session:
+        status = await session.scalar(
+            select(InventorySnapshot.status).where(
+                InventorySnapshot.id == uuid.UUID(snapshot["snapshot_id"])
+            )
+        )
+        assert status is SnapshotStatus.IN_REVIEW

@@ -587,7 +587,10 @@ async def _resolve_sizes(
 
     `is_unknown` is not settable through this path. The "size not known" state
     is real (business fact F34) but it belongs to the legacy snapshot import
-    (M1-023), where the evidence for it exists.
+    (M1-023), where the evidence for it exists. So its code is reserved here
+    too: naming it would either hand out the "size not known" row as an
+    ordinary size or, before that row exists, take its name for good and
+    leave `ensure_unknown_size` refusing for the whole organization.
 
     Sizes are *inserted* in a total order rather than the order they were
     listed. Two requests naming the same two new sizes in opposite orders would
@@ -603,6 +606,15 @@ async def _resolve_sizes(
             # A size code is stored verbatim by design (invariant I15), so it
             # never passes through `normalize_label` and needs its own check.
             raise ValidationFailedError("A size code contains characters that cannot be stored")
+        if (
+            draft.system is SizeSystemCode.UNSPECIFIED
+            and draft.code.casefold() == UNKNOWN_SIZE_CODE.casefold()
+        ):
+            raise ValidationFailedError(
+                "UNKNOWN is reserved for a size nobody knows; only a legacy stock list states it",
+                system=draft.system.value,
+                code=draft.code,
+            )
         key = (draft.system, draft.code)
         if key in seen:
             # The same size twice in one request is a slip, not two sizes.
@@ -795,12 +807,72 @@ async def create_product(
     )
 
 
+# ADR-0002 names the "size not known" row: code UNKNOWN in the UNSPECIFIED
+# system, flagged `is_unknown`.
+UNKNOWN_SIZE_CODE = "UNKNOWN"
+
+
+async def ensure_unknown_size(session: AsyncSession, *, organization_id: uuid.UUID) -> uuid.UUID:
+    """This organization's "size not known" row, created the first time it is needed.
+
+    Business fact F34: legacy stock genuinely exists without a known size, and
+    must still be countable, sellable and reconcilable. The state belongs to
+    the legacy snapshot import, where the evidence for it exists (M1-023), so
+    this is the only path that can create it — `_resolve_sizes` cannot.
+
+    A *regular* size that already uses the code is refused, never converted:
+    somebody created it through the structured path and meant something by
+    it, and turning it into "unknown" would re-label stock already held
+    against it.
+    """
+    system_id, _ = await _insert_or_select(
+        session,
+        insert=pg_insert(SizeSystem)
+        .values(
+            id=uuid.uuid4(),
+            organization_id=organization_id,
+            code=SizeSystemCode.UNSPECIFIED,
+            name=SIZE_SYSTEM_NAMES[SizeSystemCode.UNSPECIFIED],
+        )
+        .on_conflict_do_nothing(constraint="uq_size_system_org_code")
+        .returning(SizeSystem.id),
+        existing=select(SizeSystem.id).where(
+            SizeSystem.organization_id == organization_id,
+            SizeSystem.code == SizeSystemCode.UNSPECIFIED,
+        ),
+    )
+    size_id, created = await _insert_or_select(
+        session,
+        insert=pg_insert(Size)
+        .values(
+            id=uuid.uuid4(),
+            size_system_id=system_id,
+            code=UNKNOWN_SIZE_CODE,
+            sort_order=0,
+            is_unknown=True,
+        )
+        .on_conflict_do_nothing(constraint="uq_size_system_code")
+        .returning(Size.id),
+        existing=select(Size.id).where(
+            Size.size_system_id == system_id, Size.code == UNKNOWN_SIZE_CODE
+        ),
+    )
+    if not created and not await session.scalar(select(Size.is_unknown).where(Size.id == size_id)):
+        raise CatalogAmbiguousError(
+            "A regular size is already named UNKNOWN; it cannot stand for a size nobody knows",
+            size_id=str(size_id),
+        )
+    return size_id
+
+
 __all__ = [
+    "UNKNOWN_SIZE_CODE",
     "ProductDraft",
     "ProductResult",
     "SizeDraft",
     "SizeResult",
     "VariantDraft",
     "create_product",
+    "ensure_unknown_size",
     "normalize_label",
 ]

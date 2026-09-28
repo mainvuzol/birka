@@ -32,8 +32,6 @@ from app.modules.catalog.models import (
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import (
     Inventory,
-    InventorySnapshot,
-    InventorySnapshotRow,
     StockLot,
     StockMovement,
     StockReservation,
@@ -41,6 +39,11 @@ from app.modules.inventory.models import (
 from app.modules.orders.models import CustomerOrder, CustomerOrderItem, OrderCommand
 from app.modules.refunds.models import Refund, RefundItem
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.snapshots.models import (
+    InventorySnapshot,
+    InventorySnapshotAllocation,
+    InventorySnapshotRow,
+)
 from app.modules.tenancy.models import Organization, StockLocation, Store, StoreLocationAccess
 from app.modules.transfers.models import Transfer, TransferItem
 
@@ -58,6 +61,7 @@ __all__ = [
     "IdempotencyRecord",
     "Inventory",
     "InventorySnapshot",
+    "InventorySnapshotAllocation",
     "InventorySnapshotRow",
     "Membership",
     "OrderCommand",
