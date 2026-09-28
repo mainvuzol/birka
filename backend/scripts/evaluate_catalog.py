@@ -495,7 +495,9 @@ async def _run(output: Path) -> int:
         async with async_sessionmaker(engine)() as session:
             report = await evaluate_catalog(session)
             await session.rollback()
-        output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+        # UTF-8 on every platform: Windows would otherwise write the ANSI code
+        # page, and any character outside it would fail the whole report.
+        output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return 0 if report["gates_passed"] else 1
     finally:
         await engine.dispose()

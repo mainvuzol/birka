@@ -97,7 +97,7 @@ async def test_exception_rolls_back_all_evaluation_writes(maker, monkeypatch):
 
 async def test_empty_identity_denominators_are_unavailable_and_gate_fails(maker, tmp_path):
     path = tmp_path / "empty.json"
-    data = json.loads(evaluation.DEFAULT_DATASET.read_text())
+    data = json.loads(evaluation.DEFAULT_DATASET.read_text(encoding="utf-8"))
     data["cases"] = []
     path.write_text(json.dumps(data))
     async with maker() as session:
@@ -111,7 +111,7 @@ async def test_empty_identity_denominators_are_unavailable_and_gate_fails(maker,
 
 @pytest.mark.parametrize("fault", ["duplicate", "unknown_target", "missing_same_target"])
 async def test_invalid_dataset_fails_before_seeding(maker, tmp_path, fault):
-    data = json.loads(evaluation.DEFAULT_DATASET.read_text())
+    data = json.loads(evaluation.DEFAULT_DATASET.read_text(encoding="utf-8"))
     if fault == "duplicate":
         data["cases"].append(data["cases"][0])
     elif fault == "unknown_target":
