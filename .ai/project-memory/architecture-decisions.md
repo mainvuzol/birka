@@ -5,6 +5,7 @@
 | [ADR-0001](../decisions/ADR-0001-module-boundaries.md) | Modular monolith with CI-enforced module boundaries | Accepted | planning run 2 |
 | [ADR-0002](../decisions/ADR-0002-catalog-identity-and-nullable-uniqueness.md) | Catalog identity and nullable uniqueness | Accepted | planning run 2 |
 | [ADR-0004](../decisions/ADR-0004-stock-locations.md) | Stock locations, and separating where goods are from who sells them | **Full design Proposed — 4 open questions; foundation implemented** | 2026-09-17: empty-table 0005; no runtime stock re-key |
+| [ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md) | Legacy snapshot import and opening balances | Accepted | 2026-09-28 (M1-023): module `snapshots`, allocations with a quantity basis, opening balance only into an empty ledger under a warehouse lock, I17 held by the database |
 
 ADR files live in `.ai/decisions/` and follow `.ai/templates/adr.md`.
 

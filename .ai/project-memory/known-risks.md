@@ -40,3 +40,27 @@ Goods now move between warehouses (`POST /api/v1/transfers`, [report](m1-018-tra
 ## Business review — 2026-09-22
 
 See [review evidence and priorities](business-model-review-2026-09-22.md). Fresh migrate→seed reproduced two stores but zero warehouses/access (setup blocker). Existing single-step transfers immediately credit destination stock and do not implement the newly requested in-transit/arrival process. Shared/private topology needs explicit provisioning/policy; current generic grants only represent it when correctly configured. Postal arrival versus acceptance and organization-manager authority remain unanswered. 475 tests passed locally on PostgreSQL 16.2; this does not cover the missing setup or new staged behavior.
+
+## M1-023 legacy stock lists — 2026-09-28
+
+See the [report](m1-023-snapshot-import-report.md) and [ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md).
+
+- **An opening balance is a one-way door per warehouse.** Any stock movement at a warehouse before its list is approved closes that door for good, because the ledger is append-only. The seed grants `can_sell` from day one, so a single «фізично є» is enough. Warehouses holding test data can never take one. Owner question 1.
+- **"Size not known" stock can only be sold as such** until the audited size reclassification (F34) gets a command. «Фізично є» on a sized key beside it is refused, and «фізично є» never adds such stock; receipts and positive adjustments refuse it too. Safe, but it adds friction at the counter.
+- **Some plainly single-piece lines need a note.** A line with a bare number (`Куртка 1636`, `Куртка 46`) or two counts cannot be taken as one piece without saying how that is known, because the number may be a count, a size or an item code.
+- **Every stock command takes one more lock**: a shared advisory lock per warehouse. Cheap, but on the `POST /sales` hot path, whose p95 is still unmeasured.
+- **No review screen.** Answering hundreds of lines through the API is not practical for staff. A UI is the next increment if the owner decides to import.
+- **Transcription is manual.** Photos and PDFs are typed into lines by a person; there is no OCR and no LLM (M1 decision).
+- **Receipts are narrower.** They no longer accept `TRANSFER`, `RETURN`, `ADJUSTMENT` or `OPENING_BALANCE` lots. No client sent them; a script that did now gets 422.
+- **Migration `0015` scans `stock_movement` and `stock_lot` under an exclusive lock** to add its CHECKs. Run it in a maintenance window, **with no older instance of the app running**: code before `0015` takes no warehouse lock, so an old instance writing stock during an approval would reopen the design review's first finding.
+- **Duplicated validation.** `catalog.validation.require_active_variants` and `catalog.decisions._validate_variant` enforce the same tenant-chain rule. They should be consolidated.
+
+Found by the independent code reviews (2026-09-28). The fixes are in the report; these remain.
+
+- **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a list) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
+- **No request-size limit or rate limit in front of the API.** `infra/Caddyfile` sets no body limit, and nothing limits requests per user. This predates M1-023 and applies to every endpoint.
+- **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
+- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`, and it is not measured. By definition nothing else has written to that warehouse yet.
+- **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval.
+- **Lines are stored verbatim, including bidirectional and zero-width characters.** Nothing renders them today. A future review screen must neutralise them.
+- **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.

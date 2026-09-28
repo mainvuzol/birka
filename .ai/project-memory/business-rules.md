@@ -63,3 +63,22 @@ Customer postal delivery is separate from warehouse receipt/transfer. Goods at �
 ### Private control implementation — 2026-09-23
 
 An explicitly private location now requires an exact permission granted directly in its managing store, plus the existing store ACL. Organization-wide permissions do not substitute, and sibling/main store grants cannot bypass private control. Explicit child sellers retain their authorized operations. Migration 0009 classifies only known bootstrap child locations; unclassified legacy locations must be reviewed explicitly. Financial sale-history permissions are separate. See [evidence and rollout limits](private-location-report.md).
+
+## Legacy stock lists (M1-023) — 2026-09-28
+
+Implemented behavior. The defaults marked *default* are engineering choices, **not owner decisions**; each is an open question in the [M1-023 report](m1-023-snapshot-import-report.md). See [ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md).
+
+- A legacy list is kept line by line, verbatim. For each line a person with `snapshot:import` states:
+  - the product;
+  - the size, or "size not known";
+  - the quantity;
+  - where the numbers came from: the line's own count, a countless line taken as one piece, a recount, or other knowledge with a note.
+
+  Nothing is inferred: not a size split, not a colour split, not a count. A line naming several sizes or colours never states its split, slash or not: its count cannot all go into one size as "the line's own count". A line that is not stock is skipped with a reason.
+- Someone with `snapshot:approve` (the owner by default) approves the whole list at once. It becomes `OPENING_BALANCE` stock at its warehouse, never deliveries or sales. An opening balance is only ever the answer to a list; the database refuses any other.
+- *Default:* an opening balance only **opens** a warehouse's ledger. A warehouse that has recorded any stock — a receipt, a sale, a «фізично є», an earlier list — cannot take one.
+- *Default:* a countless line is taken as one piece only when the reviewer says so, and the approver sees how many lines rest on that. It must have nothing in it that could be a count: no count the parser found, however unsure, and no bare number, which may be a count, a size or an item code. Such lines need a note.
+- *Default:* «фізично є» is refused while the same model is held at that warehouse with size not known. The seller sells it as size not known.
+- *Default:* "size not known" stock enters only from a legacy list. «Фізично є» never adds it, receipts and positive adjustments refuse it, and the catalog reserves its code. Stock already held that way can still be sold, moved or written off.
+- *Default:* nobody can approve a list for a child store's private warehouse. The owner's grant is organization-wide, which the private rule does not accept, and the child manager lacks `snapshot:approve`.
+- Receipts record only purchased, consigned or borrowed goods. Opening balances, transfers, returns and adjustments each have their own command.
