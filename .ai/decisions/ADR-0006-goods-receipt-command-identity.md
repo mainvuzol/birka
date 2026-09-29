@@ -1,6 +1,7 @@
 # ADR-0006 — A goods receipt is a business operation
 
 Status: accepted (2026-09-29), implemented in `0016_goods_receipt`.
+The adjustment defect recorded below is closed by [ADR-0007](ADR-0007-stock-adjustment-command-identity.md) (2026-09-30).
 Extends [ADR-0003](ADR-0003-sale-command-replay.md). Invariant I20.
 
 ## Context

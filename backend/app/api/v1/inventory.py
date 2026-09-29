@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Callable
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
@@ -33,6 +34,7 @@ from app.modules.inventory.models import (
     GoodsReceipt,
     MovementReason,
     MovementType,
+    StockAdjustment,
     StockLot,
 )
 from app.modules.inventory.service import (
@@ -208,18 +210,26 @@ def _receipt_fingerprint(
     )
 
 
-async def _existing_receipt(
+# Constrained to the commands whose permanent identity lives on a row of
+# their own here.
+async def _permanent_answer[Command: (GoodsReceipt, StockAdjustment)](
     session: AsyncSession,
     *,
     scope: RequestScope,
+    model: type[Command],
+    store_of: Callable[[Command], uuid.UUID],
+    permission: Permission,
     command_id: uuid.UUID,
     request_fingerprint: str,
-) -> ReceiptResponse | None:
-    """Durable replay: has this permanent command already received goods?
+) -> dict[str, Any] | None:
+    """Durable replay: has this permanent command already changed stock?
 
-    Taken before any stock lock, and only ever serializes two requests
-    carrying the same `command_id` — which are by definition the same
-    business operation. Mirrors `transfers.service._existing_command`.
+    Shared by receipts (ADR-0006) and adjustments (ADR-0007), and a mirror of
+    `transfers.service._existing_command`. Taken before any stock lock, and
+    only ever serializes two requests carrying the same `command_id` — which
+    are by definition the same business operation.
+
+    Returns the original answer, `None` if the command is new, or refuses.
     """
     lock_key = int.from_bytes(
         hashlib.sha256(scope.organization_id.bytes + command_id.bytes).digest()[:8],
@@ -228,26 +238,25 @@ async def _existing_receipt(
     )
     await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
     existing = await session.scalar(
-        select(GoodsReceipt).where(
-            GoodsReceipt.organization_id == scope.organization_id,
-            GoodsReceipt.command_id == command_id,
+        select(model).where(
+            model.organization_id == scope.organization_id,
+            model.command_id == command_id,
         )
     )
     if existing is None:
         return None
     if existing.command_fingerprint != request_fingerprint or existing.response_snapshot is None:
         # Same permanent command, different request. Never execute: one of the
-        # two payloads is a client bug, and guessing which would receive a
-        # delivery nobody sent. A NULL fingerprint is the same refusal for a
+        # two payloads is a client bug, and guessing which would change stock
+        # nobody asked to change. A NULL fingerprint is the same refusal for a
         # different reason — there is nothing to compare against — and exists
-        # only on a receipt made before `0016` was rolled back and re-applied.
+        # only on a row made before its revision was rolled back and re-applied.
         details = {"command_id": str(command_id)}
-        if existing.receiving_store_id in scope.store_ids and scope.can(
-            Permission.INVENTORY_RECEIVE, existing.receiving_store_id
-        ):
-            details["goods_receipt_id"] = str(existing.id)
+        store_id = store_of(existing)
+        if store_id in scope.store_ids and scope.can(permission, store_id):
+            details[f"{model.__tablename__}_id"] = str(existing.id)
         raise IdempotencyConflictError(
-            "The original request for this existing receipt cannot be verified"
+            "The original request for this existing command cannot be verified"
             if existing.command_fingerprint is None
             else "This command_id was already used with a different request",
             **details,
@@ -255,10 +264,10 @@ async def _existing_receipt(
     # No permission recheck here, deliberately. The permanent fingerprint
     # binds the actor and the acting store, so reaching this line means the
     # request matches one this same person made from this same store — and
-    # the handler already required `inventory:receive` there and access to
-    # this warehouse, before the claim. A recheck would be unreachable: it
-    # was written, mutated, and no test could tell the difference.
-    return ReceiptResponse.model_validate(existing.response_snapshot)
+    # the handler already required the permission there, and access to this
+    # warehouse, before the claim. A recheck would be unreachable: it was
+    # written, mutated, and no test could tell the difference (ADR-0006).
+    return existing.response_snapshot
 
 
 @router.post("/receipts", response_model=ReceiptResponse, status_code=status.HTTP_201_CREATED)
@@ -318,13 +327,17 @@ async def receive_goods(
     permanent_fingerprint = _receipt_fingerprint(
         scope=scope, store_id=payload.store_id, payload=payload
     )
-    replayed = await _existing_receipt(
+    original = await _permanent_answer(
         session,
         scope=scope,
+        model=GoodsReceipt,
+        store_of=lambda row: row.receiving_store_id,
+        permission=Permission.INVENTORY_RECEIVE,
         command_id=payload.command_id,
         request_fingerprint=permanent_fingerprint,
     )
-    if replayed is not None:
+    if original is not None:
+        replayed = ReceiptResponse.model_validate(original)
         await idempotency.complete(
             session,
             outcome.record_id,
@@ -439,6 +452,10 @@ class AdjustmentRequest(BaseModel):
 
     store_id: uuid.UUID
     location_id: uuid.UUID
+    # Client-generated and permanent, required since `0017` (ADR-0007).
+    # Without it a correction is idempotent only for as long as its response
+    # cache, and an identical request arriving later applies it again.
+    command_id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity_delta: int = Field(ge=-10_000, le=10_000)
@@ -456,9 +473,31 @@ class AdjustmentRequest(BaseModel):
 
 
 class AdjustmentResponse(BaseModel):
+    id: uuid.UUID
     movement_id: uuid.UUID
     quantity_before: int
     quantity_after: int
+
+
+def _adjustment_fingerprint(*, scope: RequestScope, payload: AdjustmentRequest) -> str:
+    """Everything that makes this correction *this* correction.
+
+    The stock facts only — warehouse, stock key, delta and reason — for the
+    reason the receipt's fingerprint leaves its notes out: a note is commentary,
+    and the same `command_id` aimed at a different key or a different amount is
+    a client bug, whereas the same change with a reworded note is not.
+    """
+    return idempotency.fingerprint(
+        {
+            "location_id": str(payload.location_id),
+            "product_variant_id": str(payload.product_variant_id),
+            "size_id": str(payload.size_id),
+            "quantity_delta": payload.quantity_delta,
+            "reason_code": str(payload.reason_code),
+        },
+        actor_user_id=scope.user_id,
+        store_id=payload.store_id,
+    )
 
 
 @router.post("/adjustments", response_model=AdjustmentResponse, status_code=status.HTTP_201_CREATED)
@@ -505,6 +544,43 @@ async def adjust_inventory(
         response.status_code = outcome.http_status
         return AdjustmentResponse.model_validate(outcome.response)
 
+    # The permanent record, which is still there after the cache has gone.
+    permanent_fingerprint = _adjustment_fingerprint(scope=scope, payload=payload)
+    original = await _permanent_answer(
+        session,
+        scope=scope,
+        model=StockAdjustment,
+        store_of=lambda row: row.acting_store_id,
+        permission=Permission.INVENTORY_ADJUST,
+        command_id=payload.command_id,
+        request_fingerprint=permanent_fingerprint,
+    )
+    if original is not None:
+        replayed = AdjustmentResponse.model_validate(original)
+        await idempotency.complete(
+            session,
+            outcome.record_id,
+            response=replayed.model_dump(mode="json"),
+            http_status=status.HTTP_201_CREATED,
+        )
+        await session.commit()
+        response.status_code = status.HTTP_201_CREATED
+        return replayed
+
+    correlation_id = get_correlation_id()
+    adjustment = StockAdjustment(
+        organization_id=scope.organization_id,
+        location_id=payload.location_id,
+        acting_store_id=payload.store_id,
+        created_by_user_id=scope.user_id,
+        command_id=payload.command_id,
+        note=payload.note,
+        correlation_id=correlation_id,
+        command_fingerprint=permanent_fingerprint,
+    )
+    session.add(adjustment)
+    await session.flush()
+
     applied = await apply_movements(
         session,
         organization_id=scope.organization_id,
@@ -517,10 +593,14 @@ async def adjust_inventory(
                 quantity_delta=payload.quantity_delta,
                 movement_type=MovementType.ADJUSTMENT,
                 reason_code=payload.reason_code,
+                # The ledger row names the adjustment that caused it; before
+                # `0017` a manual correction named nothing at all.
+                reference_type="stock_adjustment",
+                reference_id=adjustment.id,
             )
         ],
         actor_user_id=scope.user_id,
-        correlation_id=get_correlation_id(),
+        correlation_id=correlation_id,
     )
     entry = applied[0]
     before = entry.quantity_after - entry.request.quantity_delta
@@ -538,10 +618,12 @@ async def adjust_inventory(
     )
 
     body = AdjustmentResponse(
+        id=adjustment.id,
         movement_id=entry.movement_id,
         quantity_before=before,
         quantity_after=entry.quantity_after,
     )
+    adjustment.response_snapshot = body.model_dump(mode="json")
     await idempotency.complete(
         session,
         outcome.record_id,

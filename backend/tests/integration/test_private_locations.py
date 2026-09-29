@@ -215,6 +215,7 @@ async def test_org_owner_cannot_promote_direct_child_view_to_write(world, operat
         payload = {
             "store_id": payload["store_id"],
             "location_id": payload["location_id"],
+            "command_id": str(uuid.uuid4()),
             "product_variant_id": w["variant"],
             "size_id": w["size"],
             "quantity_delta": -1,

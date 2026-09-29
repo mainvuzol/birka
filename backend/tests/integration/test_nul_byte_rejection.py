@@ -197,6 +197,7 @@ async def test_a_nul_in_an_adjustment_note_is_refused(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "product_variant_id": variant_id,
                 "size_id": size_id,
                 "quantity_delta": 1,

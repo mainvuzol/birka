@@ -1170,6 +1170,7 @@ async def test_a_correction_needs_can_sell_only_and_can_never_leave_the_shelf_fu
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.shared_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "product_variant_id": variant,
                 "size_id": size,
                 "quantity_delta": 2,

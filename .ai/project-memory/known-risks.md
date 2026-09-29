@@ -118,13 +118,11 @@ Live risks and properties, in order:
 See [ADR-0006](../decisions/ADR-0006-goods-receipt-command-identity.md) and the
 [report](receipt-command-identity-report.md).
 
-- **`POST /inventory/adjustments` can apply twice.** Reproduced: a `STOCKTAKE`
-  of +7, replayed with its original Idempotency-Key after the 7-day record is
-  gone, leaves 14. It is the last stock-writing command outside invariant I20.
-  Manager-only and rarer than receiving, but it is a silent stock change. The
-  fix needs a decision, not just work: an adjustment has no aggregate row and
-  its before/after quantities are computed rather than stored, so there is
-  nothing to replay a response from. Options are in ADR-0006.
+- **`POST /inventory/adjustments` could apply twice** — a `STOCKTAKE` of +7
+  replayed after its 7-day record was gone left 14. **Closed by `0017`**
+  (ADR-0007, 2026-09-30): an adjustment now carries a permanent `command_id`
+  and a late retry receives the original answer. Kept here so nobody reopens
+  it. Manual adjustments made before `0017` name no command.
 - **Receiving goods had the same defect until `0016`** and no longer does.
   Kept here so nobody reopens it: a receipt now carries a permanent
   `command_id`, and a retry at any distance in time returns the original

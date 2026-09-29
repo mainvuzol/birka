@@ -159,6 +159,64 @@ class GoodsReceipt(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
 
+class StockAdjustment(UUIDPrimaryKey, TimestampMixin, Base):
+    """One deliberate change to a balance outside a sale: a stocktake, a
+    write-off, a correction — as a fact with a permanent name.
+
+    The same reason `goods_receipt` exists (ADR-0006), applied to the last
+    stock-writing command outside invariant I20. Before `0017`,
+    `POST /inventory/adjustments` was idempotent only for as long as its 7-day
+    response cache: a `STOCKTAKE` of +7 replayed after that left 14. The owner
+    chose this shape over the alternatives on 2026-09-30 (ADR-0007).
+
+    The change itself — the stock key, the delta, the reason — lives on the
+    one `stock_movement` this row causes, which names it through
+    `reference_type = 'stock_adjustment'`. Nothing here repeats a ledger fact;
+    this row adds only what the ledger could not say: who asked, under which
+    permanent command, with what note, and what they were told.
+    """
+
+    __tablename__ = "stock_adjustment"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    acting_store_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    command_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    response_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        postgresql.JSONB, nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "command_id", name="uq_stock_adjustment_org_command"),
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_stock_adjustment_org_location",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "acting_store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_stock_adjustment_org_store",
+            ondelete="RESTRICT",
+        ),
+    )
+
+
 class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
     """Provenance of one receipt of goods.
 

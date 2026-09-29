@@ -33,6 +33,7 @@ from app.modules.identity.models import AppUser
 from app.modules.inventory.models import (
     GoodsReceipt,
     Inventory,
+    StockAdjustment,
     StockLot,
     StockMovement,
     StockReservation,
@@ -84,6 +85,7 @@ __all__ = [
     "SizeAlias",
     "SizeSystem",
     "SourceIdentity",
+    "StockAdjustment",
     "StockLocation",
     "StockLot",
     "StockMovement",

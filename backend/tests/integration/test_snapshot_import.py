@@ -1704,6 +1704,7 @@ async def test_goods_with_their_size_not_known_enter_only_from_a_list(world):
             return {
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "product_variant_id": str(w.coat),
                 "size_id": unknown,
                 "quantity_delta": delta,
@@ -2467,6 +2468,7 @@ async def test_a_reclassification_is_never_written_by_halves(world):
         return {
             "store_id": str(w.main),
             "location_id": str(w.shared),
+            "command_id": str(uuid.uuid4()),
             "product_variant_id": str(w.coat),
             "size_id": str(size),
             "quantity_delta": delta,

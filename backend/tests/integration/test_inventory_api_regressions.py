@@ -107,6 +107,7 @@ async def test_adjustment_audit_uses_quantity_at_locked_write(engine, monkeypatc
             api.AdjustmentRequest(
                 store_id=shop.store_id,
                 location_id=shop.location_id,
+                command_id=uuid.uuid4(),
                 product_variant_id=shop.variant_id,
                 size_id=shop.size_id,
                 quantity_delta=1,
