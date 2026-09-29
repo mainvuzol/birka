@@ -1334,6 +1334,7 @@ async def test_a_warehouse_with_stock_history_is_not_opened(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": str(w.bottega),
@@ -1371,6 +1372,7 @@ async def test_a_warehouse_sold_back_to_empty_still_has_history(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": str(w.bottega),
@@ -1502,6 +1504,7 @@ async def test_stock_written_on_another_key_is_either_before_the_opening_or_afte
                     json={
                         "store_id": str(other.main),
                         "location_id": str(other.shared),
+                        "command_id": str(uuid.uuid4()),
                         "lines": [
                             {
                                 "product_variant_id": str(other.bottega),
@@ -1713,6 +1716,7 @@ async def test_goods_with_their_size_not_known_enter_only_from_a_list(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": str(w.coat), "size_id": unknown, "quantity": 1}],
             },
         )
@@ -1856,6 +1860,7 @@ async def test_a_clarification_covers_exactly_what_the_sale_is_short(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {"product_variant_id": str(w.coat), "size_id": str(w.sizes["M"]), "quantity": 1}
                 ],
@@ -2143,6 +2148,7 @@ async def test_reserved_goods_are_not_reclassified(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {"product_variant_id": str(w.coat), "size_id": str(w.sizes["M"]), "quantity": 1}
                 ],
@@ -2247,6 +2253,7 @@ async def test_one_basket_clarifies_several_sizes_beside_the_rest_of_it(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {"product_variant_id": str(w.coat), "size_id": str(w.sizes["S"]), "quantity": 2}
                 ],
@@ -2520,6 +2527,7 @@ async def test_an_opening_balance_cannot_be_written_outside_a_list(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": str(w.coat),
@@ -2608,6 +2616,7 @@ async def test_an_opening_balance_cannot_be_written_outside_a_list(world):
             json={
                 "store_id": str(w.main),
                 "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": str(w.bottega),

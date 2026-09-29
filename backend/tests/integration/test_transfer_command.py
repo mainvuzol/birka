@@ -248,6 +248,7 @@ async def stock(
             json={
                 "store_id": str(store),
                 "location_id": str(warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": coat.variant,

@@ -84,6 +84,7 @@ async def test_seed_discover_receive_and_sell_shared_stock(setup):
             json={
                 "store_id": str(stores["MAIN"]),
                 "location_id": location_id,
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant_id, "size_id": size_id, "quantity": 2}],
             },
         )

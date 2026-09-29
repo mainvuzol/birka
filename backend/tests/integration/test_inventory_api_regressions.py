@@ -36,10 +36,11 @@ SETTINGS = Settings(app_env="local", session_secret="inventory-regression-secret
 PERMISSIONS = frozenset({Permission.INVENTORY_RECEIVE, Permission.INVENTORY_ADJUST})
 
 
-def receipt(shop, *, quantity=1):
+def receipt(shop, *, quantity=1, command_id=None):
     return api.ReceiptRequest(
         store_id=shop.store_id,
         location_id=shop.location_id,
+        command_id=command_id or uuid.uuid4(),
         lines=[
             api.ReceiptLine(
                 product_variant_id=shop.variant_id, size_id=shop.size_id, quantity=quantity

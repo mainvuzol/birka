@@ -200,6 +200,7 @@ async def test_create_receive_and_sell_a_product(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -293,6 +294,7 @@ async def test_found_during_sale_corrects_exactly_the_shortfall(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -594,6 +596,7 @@ async def test_a_retried_sale_sells_once(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -718,6 +721,7 @@ async def test_stock_and_sales_stay_inside_the_organization(maker):
             json={
                 "store_id": str(theirs.store_id),
                 "location_id": str(theirs.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -842,6 +846,7 @@ async def test_a_price_beyond_the_column_is_refused_not_a_crash(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],

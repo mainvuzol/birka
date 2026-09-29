@@ -194,6 +194,7 @@ async def stock_a_coat(
         json={
             "store_id": str(store),
             "location_id": str(warehouse),
+            "command_id": str(uuid.uuid4()),
             "lines": [
                 {
                     "product_variant_id": product["product_variant_id"],
@@ -449,6 +450,7 @@ async def test_the_child_warehouse_and_the_shared_warehouse_never_mix(maker):
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.shared_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 5}],
             },
             headers=key(),
@@ -483,6 +485,7 @@ async def test_a_shortfall_never_falls_back_to_the_other_warehouse(maker):
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.shared_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 9}],
             },
             headers=key(),
@@ -518,6 +521,7 @@ async def test_the_inventory_report_names_the_warehouse_and_never_sums_across_th
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.child_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 2}],
             },
             headers=key(),
@@ -684,6 +688,7 @@ async def test_one_refund_returns_each_line_to_the_warehouse_it_came_from(maker)
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.child_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 2}],
             },
             headers=key(),
@@ -824,6 +829,7 @@ async def test_the_same_command_against_a_different_warehouse_is_a_conflict(make
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.shared_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 3}],
             },
             headers=key(),
@@ -997,6 +1003,7 @@ async def test_an_inactive_warehouse_refuses_sales_and_receipts(maker):
             json={
                 "store_id": str(shops.primary_store),
                 "location_id": str(shops.shared_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 1}],
             },
             headers=key(),
@@ -1148,6 +1155,7 @@ async def test_a_correction_needs_can_sell_only_and_can_never_leave_the_shelf_fu
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.shared_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 2}],
             },
             headers=key(),
@@ -1283,6 +1291,7 @@ async def test_found_and_missing_can_stand_together_on_different_shelves(maker):
             json={
                 "store_id": str(shops.child_store),
                 "location_id": str(shops.child_warehouse),
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant, "size_id": size, "quantity": 3}],
             },
             headers=key(),
