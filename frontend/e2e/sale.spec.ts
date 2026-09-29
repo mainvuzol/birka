@@ -416,3 +416,33 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toBeEnabled();
 });
+
+test("a store that reaches one sellable warehouse does not ask which", async ({
+  page,
+}) => {
+  // Permitted by the sale API itself: the client may prefill when there is
+  // exactly one reachable warehouse, and the server still never chooses.
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    const response = await route.fetch();
+    const rows = (await response.json()) as { id: string }[];
+    await route.fulfill({
+      response,
+      json: rows.filter((row) => row.id === fixture.till_location_id),
+    });
+  });
+  await stubStock(page, 4);
+  await enter(page);
+  const warehouse = page.getByRole("combobox", { name: "Склад", exact: true });
+  await expect(warehouse).toHaveValue(fixture.till_location_id);
+  // No empty choice is offered, because there is no choice to make.
+  await expect(warehouse.locator("option")).toHaveCount(1);
+  await expect(page.getByRole("combobox", { name: "Товар і розмір" })).toBeVisible();
+});
+
+test("two sellable warehouses are still chosen explicitly", async ({ page }) => {
+  await stubStock(page, 4);
+  await enter(page);
+  const warehouse = page.getByRole("combobox", { name: "Склад", exact: true });
+  await expect(warehouse).toHaveValue("");
+  await expect(warehouse.locator("option")).toHaveCount(3);
+});

@@ -1,0 +1,24 @@
+===== run 1 =====
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=    5.4  p95=    6.3  p99=   21.0  max=   21.3  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   19.3  p95=   38.0  p99=   40.9  max=   41.4  pass
+POST /sales · 1 line                     n=200  p50=    9.6  p95=   11.9  p99=   16.4  max=   53.2  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   38.1  p95=   95.2  p99=  113.2  max=  115.1  pass
+POST /sales · 4 lines (6 sellers)        n=200  p50=   50.9  p95=   68.7  p99=  108.7  max=  159.3  pass
+POST /sales · same coat, 6 sellers       n=120  p50=   35.5  p95=   49.4  p99=   54.7  max=   64.9  pass
+===== run 2 =====
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=    5.7  p95=    6.4  p99=    7.0  max=   23.1  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   19.8  p95=   36.4  p99=   39.0  max=   43.8  pass
+POST /sales · 1 line                     n=200  p50=    8.7  p95=   10.2  p99=   12.4  max=   27.8  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   32.0  p95=   48.6  p99=   50.2  max=   74.6  pass
+POST /sales · 4 lines (6 sellers)        n=200  p50=   47.3  p95=   63.4  p99=   86.1  max=   88.3  pass
+POST /sales · same coat, 6 sellers       n=120  p50=   34.3  p95=   50.6  p99=   51.1  max=   64.5  pass
+===== run 3 =====
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=    5.6  p95=    6.6  p99=   26.0  max=   27.3  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   19.8  p95=   38.2  p99=   46.5  max=   49.1  pass
+POST /sales · 1 line                     n=200  p50=    8.6  p95=   10.0  p99=   10.7  max=   25.7  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   32.5  p95=   48.4  p99=   49.4  max=   90.3  pass
+POST /sales · 4 lines (6 sellers)        n=200  p50=   48.6  p95=   63.9  p99=   66.2  max=   90.4  pass
+POST /sales · same coat, 6 sellers       n=120  p50=   34.3  p95=   43.0  p99=   46.2  max=   63.6  pass

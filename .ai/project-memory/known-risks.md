@@ -100,6 +100,15 @@ Live risks and properties, in order:
 - **Confirming zero present is refused**, and the till's honest answer is to
   remove the line by hand. One extra tap while a customer waits (owner
   question Q-G, carried over from M1-030).
-- **`POST /sales` p95 is still unmeasured**, now with a client capable of
-  generating real load against it, and with the shared warehouse lock M1-023
-  added to the hot path.
+- **`POST /sales` p95 is measured and passes** (2026-09-29, worst p95 95 ms
+  against a 500 ms budget with six concurrent sellers; the catalogue read is
+  38 ms against 300 ms). The warehouse lock M1-023 put on the hot path costs
+  nothing measurable — six sellers contending for one coat were *faster* at
+  p95 than six selling different ones. See the [report](hot-path-budget-report.md).
+  This was a laptop on PostgreSQL **16.2**, not the pinned 17, and no phone or
+  mobile network was involved: it proves nothing is an order of magnitude
+  wrong, not that a seller in a shop feels it.
+- **`taps-to-sale` is over budget: 6 against 5**, measured on the built
+  screen. Prefilling the single sellable warehouse removed two taps; the
+  remainder is typing a price on every sale, because `variant_price` is
+  scaffolding nothing writes. Owner question Q-F now blocks a measured budget.

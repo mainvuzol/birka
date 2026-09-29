@@ -105,6 +105,19 @@ export function Sale({
     }
   }, [locationId, locations.isSuccess, locations.data]);
 
+  const sellable = (locations.data ?? []).filter(
+    (location) => location.is_active && location.can_sell,
+  );
+  const onlyWarehouse = sellable.length === 1 ? sellable[0] : undefined;
+
+  useEffect(() => {
+    // Explicitly permitted: "the client may prefill it when the store reaches
+    // only one warehouse, but the server never chooses" (sale API, owner
+    // decision 2026-09-17). Two taps out of a measured eight, and the seller
+    // is choosing nothing they had an alternative to.
+    if (!locationId && onlyWarehouse) setLocationId(onlyWarehouse.id);
+  }, [locationId, onlyWarehouse]);
+
   function add(): void {
     const cents = kopecks(price);
     const count = Number(quantity);
@@ -243,7 +256,7 @@ export function Sale({
                 setOption("");
               }}
             >
-              <option value="">Оберіть склад явно</option>
+              {!onlyWarehouse && <option value="">Оберіть склад явно</option>}
               {locations.data.map((location) => (
                 <option
                   key={location.id}
