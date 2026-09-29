@@ -343,6 +343,37 @@ async def sale_adjustment_ids(
     )
 
 
+async def sale_reclassification_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Both halves of a sale's size reclassifications, in the stock key's order."""
+    return list(
+        (
+            await session.scalars(
+                select(StockMovement.id)
+                .where(
+                    StockMovement.organization_id == organization_id,
+                    StockMovement.reference_type == "sale",
+                    StockMovement.reference_id == sale_id,
+                    StockMovement.movement_type == MovementType.ADJUSTMENT,
+                    StockMovement.reason_code.in_(
+                        [
+                            MovementReason.SIZE_RECLASSIFICATION_OUT,
+                            MovementReason.SIZE_RECLASSIFICATION_IN,
+                        ]
+                    ),
+                )
+                .order_by(
+                    StockMovement.location_id,
+                    StockMovement.product_variant_id,
+                    StockMovement.size_id,
+                    StockMovement.id,
+                )
+            )
+        ).all()
+    )
+
+
 async def refund_return_movement_ids(
     session: AsyncSession, *, organization_id: uuid.UUID, refund_id: uuid.UUID
 ) -> list[uuid.UUID]:
@@ -394,6 +425,54 @@ async def transfer_movement_ids(
     )
 
 
+async def location_has_stock_history(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_id: uuid.UUID
+) -> bool:
+    """Has this warehouse ever recorded stock? The opening-balance guard (ADR-0005 §5).
+
+    A movement of any type is history. A non-zero balance or reservation with
+    no movement behind it is impossible while invariant I3 holds, and is
+    counted anyway: the guard must not depend on the invariant it sits beside.
+    Zero-quantity rows are not history — `ensure_and_lock` creates them.
+    """
+    movement = await session.scalar(
+        select(StockMovement.id)
+        .where(
+            StockMovement.organization_id == organization_id,
+            StockMovement.location_id == location_id,
+        )
+        .limit(1)
+    )
+    if movement is not None:
+        return True
+    balance = await session.scalar(
+        select(Inventory.id)
+        .where(
+            Inventory.location_id == location_id,
+            (Inventory.quantity > 0) | (Inventory.reserved_quantity > 0),
+        )
+        .limit(1)
+    )
+    return balance is not None
+
+
+async def opening_balance_movements(
+    session: AsyncSession, *, organization_id: uuid.UUID, snapshot_id: uuid.UUID
+) -> dict[uuid.UUID, uuid.UUID]:
+    """Each opening lot of a snapshot and the one movement that brought it in."""
+    rows = (
+        await session.execute(
+            select(StockMovement.stock_lot_id, StockMovement.id).where(
+                StockMovement.organization_id == organization_id,
+                StockMovement.reference_type == "inventory_snapshot",
+                StockMovement.reference_id == snapshot_id,
+                StockMovement.movement_type == MovementType.OPENING_BALANCE,
+            )
+        )
+    ).all()
+    return {lot_id: movement_id for lot_id, movement_id in rows if lot_id is not None}
+
+
 async def reservation_rows(
     session: AsyncSession, *, organization_id: uuid.UUID, reference_id: uuid.UUID
 ) -> list[StockReservation]:
@@ -434,6 +513,36 @@ async def reserved_quantities(
         )
     ).all()
     return {(r[0], r[1], r[2]): r[3] for r in rows}
+
+
+async def available_quantities(
+    session: AsyncSession, *, keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]
+) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
+    """On hand less reserved, per key, read in one statement.
+
+    One statement sees one committed state. Reading the two columns in
+    separate statements could pair a reservation from before a dispatch with
+    a quantity from after it, and report less than any real state held.
+    A key never stocked here has nothing available.
+    """
+    if not keys:
+        return {}
+    rows = (
+        await session.execute(
+            select(
+                Inventory.location_id,
+                Inventory.product_variant_id,
+                Inventory.size_id,
+                Inventory.quantity - Inventory.reserved_quantity,
+            ).where(
+                tuple_(Inventory.location_id, Inventory.product_variant_id, Inventory.size_id).in_(
+                    keys
+                )
+            )
+        )
+    ).all()
+    found = {(r[0], r[1], r[2]): r[3] for r in rows}
+    return {key: found.get(key, 0) for key in keys}
 
 
 async def change_reserved(

@@ -195,3 +195,67 @@ Parser v1 returns candidate attributes with exact text evidence and preserves
 unknown descriptors, including rare item codes. It does not create products,
 choose matches or change inventory. Slash lists require review; quantities are
 never divided automatically. See [scope and verification](.ai/project-memory/m1-020-parser-report.md).
+
+## Legacy stock lists → opening balances (M1-023)
+
+A paper or PDF availability list becomes stock in three steps, never one
+([ADR-0005](.ai/decisions/ADR-0005-legacy-snapshot-import.md)):
+
+1. `POST /api/v1/snapshots` with a client `command_id` (unique within the
+   organization; a retry repeats it), `store_id`, `location_id` and up to 1000
+   `lines` of at most 500 characters (100 000 in all), kept verbatim and
+   parsed. Nothing is matched, created or counted. The response's
+   `snapshot_id` names the list from then on. `snapshot:import` (manager,
+   owner).
+2. `PUT /api/v1/snapshots/{id}/lines/{line_no}`: say what the line is. That is
+   either `allocations` (`product_variant_id`, `size_id` or
+   `size_unknown: true`, `quantity`) with a `quantity_basis`, or a
+   `skip_reason`:
+   - `STATED` — exactly the line's own count, in one allocation; never for a
+     line naming several sizes or colours;
+   - `LINE_IMPLIES_ONE` — a line with no number that could be a count, taken
+     as one piece;
+   - `RECOUNTED` or `OWNER_KNOWLEDGE` — with a `note`.
+
+   A list takes at most 5 000 allocations in all.
+3. `POST /api/v1/snapshots/{id}/approve` with `expected_review_revision`.
+   This writes `OPENING_BALANCE` lots and movements, only into a warehouse
+   with **no stock history**. `snapshot:approve` (owner). For a child store's
+   private warehouse, the approver must hold the owner's role in the child
+   store itself. Alternatively, `POST .../reject` with a `reason` keeps
+   everything as evidence.
+
+Approve a warehouse's list before anything else is recorded there. Paper sales
+made between the count and the approval are entered afterwards, as ordinary
+sales (owner decision, 2026-09-29). Entering one first closes the warehouse to
+its list for good.
+
+`GET /api/v1/snapshots?store_id=`, `GET /api/v1/snapshots/{id}` and
+`GET .../lines` read lists, their summary by basis, and each line's evidence and
+answer. A decided list is frozen by the database.
+
+Apply migration `0015` in a maintenance window, with no older instance of the
+app running. It adds CHECKs to `stock_movement` and `stock_lot` under an
+exclusive lock, and code before it takes no warehouse lock.
+
+Related changes elsewhere:
+
+- Receipts now accept only `PURCHASE`, `CONSIGNMENT` or `BORROWED` lots.
+- "Size not known" stock enters only from a list:
+  - receipts and positive adjustments refuse that size;
+  - the catalog reserves its code (`UNSPECIFIED` / `UNKNOWN`);
+  - a «фізично є» correction is refused (`UNKNOWN_SIZE_STOCK`) when it would
+    add such a unit, or a sized unit of a model held at that warehouse with
+    size not known.
+- A seller gives such a coat its size at the counter: `POST /api/v1/sales`
+  takes `size_clarified: [{line_index, quantity}]`. The line is sold as the
+  size the seller read, and `quantity` of its units first move out of the same
+  model's size-not-known balance at that warehouse. `quantity` must be exactly
+  the line's shortfall at that size. It needs `inventory:correct_during_sale`
+  (sellers have it) and is audited. The response lists both movements in
+  `size_reclassifications`.
+- `POST /inventory/adjustments` no longer accepts the two
+  `SIZE_RECLASSIFICATION_*` reasons (422): each is half of a pair only a sale
+  writes.
+
+See the [M1-023 report](.ai/project-memory/m1-023-snapshot-import-report.md).

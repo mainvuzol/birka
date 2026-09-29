@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import (

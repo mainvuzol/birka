@@ -368,6 +368,8 @@ COMMIT
 
 Total quantity is unchanged, both halves are in the ledger, and the reclassification is reversible by the same mechanism. Nothing is rewritten.
 
+**As built (2026-09-29, owner decision, [ADR-0005 §11](../decisions/ADR-0005-legacy-snapshot-import.md)):** at the counter first, inside `POST /sales` (`size_clarified`). A seller with `inventory:correct_during_sale` reclassifies exactly the units the sale is short of at the size being sold; the sale then takes them. The ledger door refuses half a pair, a pair out of a known size, and a pair into "size not known". So "reversible by the same mechanism" no longer holds for the size-not-known side: that size enters only from a list (ADR-0005 §3), and a misread size is corrected like any wrong sale. The stand-alone manager command above is not built yet.
+
 ---
 
 ## 5. M1 Physical Schema
@@ -436,10 +438,10 @@ Per correction 6, each invariant names **what actually enforces it**. Service-la
 | I14 | Uncertain interpretation never merges products | `SERVICE_ENFORCED` + `RECONCILIATION_DETECTED` | matcher returns `AMBIGUOUS`; merge is explicit and permissioned; duplicate-signature report lists families sharing a triple | Лоран/Belardi vs Лоран/Ponte golden case |
 | I15 | Slash is not an alias; splits are never invented | `SERVICE_ENFORCED` + `CI_ENFORCED` | parser emits variant enumeration + `UNKNOWN_DISTRIBUTION` | golden test on `Лама бежевая/персик/butter 3 шт` |
 | I16 | Transfers are movements, never sales | `SERVICE_ENFORCED` + `CI_ENFORCED` | transfer service writes only `TRANSFER_OUT`/`TRANSFER_IN` | no `sale` row, no revenue effect |
-| I17 | Legacy import fabricates nothing | `SERVICE_ENFORCED` + `CI_ENFORCED` | approved rows emit only `OPENING_BALANCE` | no `DELIVERY`/`SALE` movement produced |
+| I17 | Legacy import fabricates nothing | `SERVICE_ENFORCED` + `DB_ENFORCED` (since M1-023) + `CI_ENFORCED` | approval writes only `OPENING_BALANCE`, and only `inventory.apply_opening_balance` writes it (the public ledger door refuses it); CHECKs `opening_balance_names_its_list` / `opening_lot_names_its_list` and trigger `opening_balance_traces_to_its_list` refuse an opening balance that does not come from an opening lot of the list it names; receipts cannot label a lot `OPENING_BALANCE`; a decided list is frozen by trigger. Opening only an empty warehouse is service-enforced under the warehouse lock (ADR-0005) | `test_approval_turns_the_list_into_opening_stock_and_nothing_else`, `test_an_opening_balance_cannot_be_written_outside_a_list`, `test_a_decided_list_is_frozen_by_the_database` |
 | I18 | Stock correction during a sale is exactly the shortfall | `SERVICE_ENFORCED` | assertion in the sale service; `CORRECTION_EXCEEDS_SHORTFALL` otherwise | over-correction rejected; audit entry present |
 | I19 | Module boundaries hold | `CI_ENFORCED` (partial) | import-linter contracts. **Only the relationships already encoded** — a contract can name only modules that exist, so each ships with its module (ADR-0001 rule 5) | a deliberate illegal import fails the build |
-| I20 | A critical command can never create a second business operation, at any distance in time | `DB_ENFORCED` | permanent `UNIQUE (organization_id, command_id)` on `sale`, `refund`, `transfer` — independent of idempotency-record retention | replay after the idempotency record is deleted still returns the original operation |
+| I20 | A critical command can never create a second business operation, at any distance in time | `DB_ENFORCED` | permanent `UNIQUE (organization_id, command_id)` on `sale`, `refund`, `transfer` and, since M1-023, `inventory_snapshot` — independent of idempotency-record retention | replay after the idempotency record is deleted still returns the original operation |
 | I21 | A parse is reproducible forever | `DB_ENFORCED` + `CI_ENFORCED` | `UNIQUE (raw_input_id, parser_version)`; the parser performs no catalog or database reads | same input + same parser version yields byte-identical output; an import-linter rule forbids `catalog.matching`/repository imports inside the parser package |
 | I22 | Money arithmetic on a sale line is internally consistent | `DB_ENFORCED` | `CHECK (final_unit_price = unit_price - discount_amount)` and `CHECK (line_total = final_unit_price * quantity)` | an inconsistent line cannot be inserted |
 | I23 | A store may only read or change stock at a location it holds explicit access to | `SERVICE_ENFORCED` + `CI_ENFORCED` | `store_location_access` row required; a name or a `StoreKind` never grants reach | a store with no access row is refused before any row is read or written, and leaves no idempotency claim |
@@ -497,7 +499,7 @@ TX2  parse → ParseResult → candidates → decision
      COMMIT
 ```
 
-**`POST /snapshots/{id}/approve`** — permission `snapshot:approve` → assert no row is `PENDING`/`NEEDS_REVIEW` → `OPENING_BALANCE` movements + inventory upsert → snapshot `APPLIED` → audit → commit. Idempotent by snapshot status.
+**`POST /snapshots/{id}/approve`** — permission `snapshot:approve` → assert no row is `PENDING`/`NEEDS_REVIEW` → `OPENING_BALANCE` movements + inventory upsert → snapshot `APPLIED` → audit → commit. Idempotent by snapshot status. **As built (M1-023, ADR-0005):** also requires the `review_revision` the approver saw and an empty warehouse ledger; takes the warehouse's advisory lock exclusively (every stock command holds it shared) before the stock keys; one `StockLot` + one movement per stated allocation; verifies every key's resulting quantity.
 
 ---
 
@@ -510,7 +512,8 @@ backend/app/
 │   ├── identity/  tenancy/  authz/
 │   ├── catalog/   terms · concepts · families · variants · sizes
 │   │              raw_input · parsing · matching · aliases
-│   ├── inventory/ inventory · movements · lots · snapshots · reconciliation
+│   ├── inventory/ inventory · movements · lots · opening balances · reconciliation
+│   ├── snapshots/ legacy stock lists (M1-023, ADR-0005 — originally planned inside inventory)
 │   ├── sales/  refunds/  transfers/  audit/  telegram/
 ├── api/v1/          thin routers
 └── migrations/
@@ -521,7 +524,7 @@ frontend/src/
 infra/                 docker-compose.yml · Caddyfile · .env.example
 ```
 
-Permitted dependency edges: `sales → inventory, catalog, authz, tenancy`; `refunds → sales, inventory`; `transfers → inventory`; `inventory → catalog` (read-only); `catalog` is a leaf. Enforced by an import-linter contract in CI (I19), recorded in ADR-0001.
+Permitted dependency edges: `sales → inventory, catalog, authz, tenancy`; `refunds → sales, inventory`; `transfers → inventory`; `snapshots → inventory, catalog, authz, tenancy` (M1-023); `inventory → catalog` (read-only); `catalog` is a leaf. Enforced by an import-linter contract in CI (I19), recorded in ADR-0001.
 
 ---
 
@@ -546,7 +549,7 @@ Base `/api/v1`. `Idempotency-Key` required on every mutating endpoint. `X-Reques
 | GET | `/sales`, `/sales/{id}` | `sale:view` |
 | POST | `/sales/{id}/refunds` | `sale:refund` |
 | POST | `/transfers` | `transfer:create` |
-| POST | `/snapshots` … `/approve` | `snapshot:import` / `snapshot:approve` |
+| POST | `/snapshots` · `PUT /snapshots/{id}/lines/{n}` · `/snapshots/{id}/approve` · `/reject` | `snapshot:import` / `snapshot:approve` (built in M1-023; reads and rejection take either) |
 
 Permission codes (in application code, not a table): `sale:create`, `sale:refund`, `sale:view`, `inventory:view`, `inventory:receive`, `inventory:adjust`, `inventory:correct_during_sale`, `transfer:create`, `transfer:receive`, `catalog:create`, `catalog:confirm`, `catalog:merge`, `snapshot:import`, `snapshot:approve`, `report:view_financial`, `user:manage`.
 
@@ -614,7 +617,7 @@ Revision 1 said "24 tasks" while listing M1-001…M1-028. The correct count is *
 | M1-020 | ✅ Local implementation verified 2026-09-24: normalization + deterministic parser v1; slash rule, per-field evidence and unclassified descriptors ([report](m1-020-parser-report.md)) | `catalog-normalization-parser` | M1-012 |
 | M1-021 | Matcher v1: alias → `pg_trgm` → attribute compatibility → 5 decision types + margin policy + **duplicate-signature report** | `catalog-matcher`, `catalog-confidence-policy` | M1-020, M1-010 |
 | M1-022 | Alias/feedback evidence, `NEW→LEARNING→VERIFIED` promotion, review-queue API | `catalog-feedback-learning` | M1-021 |
-| M1-023 | Snapshot import: raw rows, parse, review, approve → opening balances | `legacy-inventory-import` | M1-021, M1-013 |
+| **M1-023** ✅ | Snapshot import: raw rows, parse, review, approve → opening balances — module `snapshots`, allocations with a quantity basis, opening balance only into an empty warehouse ledger, migration `0015` ([ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md)) | `legacy-inventory-import` | M1-021, M1-013 — **done 2026-09-28** on `feat/m1-023-snapshot-import`, awaiting the owner's review and merge ([report](m1-023-snapshot-import-report.md)) |
 
 ### Gate M1D — Client, E2E, Release (5 tasks)
 
@@ -666,6 +669,7 @@ Per `.ai/OPERATING_MANUAL.md` §6, the implementer of M1-014, M1-015, M1-016, M1
 | Python 3.14 toolchain viability | VERIFIED — fastapi, pydantic v2, sqlalchemy, alembic, asyncpg, pytest, httpx, ruff, mypy, structlog, import-linter all install |
 | Gate M1A | see the M1A completion report for evidence |
 | `NULLS NOT DISTINCT` behaviour on PostgreSQL 17 | `VERIFIED` 2026-09-15 on PostgreSQL **17.9**: all three migrations apply to an empty cluster, `pg_index` reports 4 indexes with `indnullsnotdistinct`, and the behaviour tests in `test_schema_behaviour.py` and `test_m1b_schema_behaviour.py` pass against it |
+| M1-023 snapshot import on PostgreSQL 17 | `VERIFIED` 2026-09-28 in a disposable Docker container, `postgres:17-alpine` **17.11** with the CI/Compose locale (ICU `uk-UA`, `C.UTF-8`): 15 revisions base → head → base → head, `alembic check` clean; full suite and mutation results in the [report](m1-023-snapshot-import-report.md) |
 | M1-018 transfers on PostgreSQL 17 | `VERIFIED` 2026-09-22 on a portable **17.11** cluster (ICU `uk-UA`, `--locale=C`): 8 revisions base → head → base → head with `alembic check` clean at both heads; full suite **475 passed, 0 skipped**; 22 of 22 deliberate defects caught; three independent reviews, no blocking finding — [report](m1-018-transfer-report.md) §6–7 |
 | ICU locale choice in `infra/docker-compose.yml` | `VERIFIED` 2026-09-15 on the same cluster (`--locale-provider=icu --icu-locale=uk-UA`): `lower('ОЛЯ')` returns `оля`, which is what catalog matching depends on and what the C locale would not have done |
 

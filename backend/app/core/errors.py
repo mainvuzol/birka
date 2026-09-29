@@ -117,6 +117,56 @@ class CatalogAmbiguousError(DomainError):
     message = "Catalog interpretation is ambiguous and needs review"
 
 
+# --- legacy snapshot import (M1-023, ADR-0005) --------------------------------
+
+
+class SnapshotConflictError(DomainError):
+    """The list is not in a state where this can happen.
+
+    `details.reason` says which: `ROWS_NEED_REVIEW`, `NOTHING_TO_APPLY`,
+    `REVISION_CHANGED` or `ALREADY_DECIDED`. One code with a reason rather than
+    four codes, because a client does the same thing for all of them — show
+    the list again.
+    """
+
+    code = "SNAPSHOT_CONFLICT"
+    http_status = 409
+    message = "This stock list cannot do that in its current state"
+
+
+class OpeningBalanceConflictError(DomainError):
+    """An opening balance opens a warehouse's ledger — once (ADR-0005 §5).
+
+    Distinct from `SNAPSHOT_CONFLICT` because nothing about the list can fix
+    it: the warehouse itself already records stock, and correcting that to a
+    count is a stocktake, not an opening balance.
+    """
+
+    code = "OPENING_BALANCE_CONFLICT"
+    http_status = 409
+    message = "This warehouse already has stock history; an opening balance cannot be added to it"
+
+
+class UnknownSizeStockError(DomainError):
+    """«Фізично є» would count a coat twice (M1-023, ADR-0005).
+
+    Either the same model is held at this warehouse with its size not known —
+    a legacy list loaded it that way — and adding a sized unit would leave the
+    size-unknown balance counting the same coat a second time; say instead
+    that it is one of those coats (`size_clarified` on the sale), or sell it
+    as size not known. Or the correction would add a unit with its size not
+    known (`details.reason = FOUND_AS_SIZE_NOT_KNOWN`), which only a list may
+    state; sell it by its size.
+    """
+
+    code = "UNKNOWN_SIZE_STOCK"
+    http_status = 409
+    message = (
+        "This product is held here with its size not known; clarify its size, "
+        "or sell it as size not known"
+    )
+
+
 # --- idempotency / command identity ----------------------------------------
 
 
@@ -144,8 +194,11 @@ __all__ = [
     "InvalidInitDataError",
     "LocationAccessDeniedError",
     "NotFoundError",
+    "OpeningBalanceConflictError",
     "PermissionDeniedError",
     "RefundExceedsSoldError",
     "SessionExpiredError",
+    "SnapshotConflictError",
+    "UnknownSizeStockError",
     "ValidationFailedError",
 ]

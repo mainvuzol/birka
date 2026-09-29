@@ -19,6 +19,7 @@ import uuid
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.core.config import get_settings
 from app.core.db import create_engine
 from app.modules.audit import service as audit

@@ -44,7 +44,7 @@ def test_unannotated_rows_are_excluded_from_extraction_accuracy(tmp_path):
 
 @pytest.mark.parametrize("fault", ["classification", "family", "new_model"])
 def test_inconsistent_catalog_declarations_are_rejected(fault):
-    data = json.loads(DEFAULT_DATASET.read_text())
+    data = json.loads(DEFAULT_DATASET.read_text(encoding="utf-8"))
     if fault == "classification":
         data["products"][2]["business_category"] = "Different"
     elif fault == "family":

@@ -13,6 +13,8 @@ from urllib.parse import urlencode
 
 import pytest
 
+import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 

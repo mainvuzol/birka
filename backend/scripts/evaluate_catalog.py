@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.modules.catalog.evidence import AliasStatus, AliasTargetType, ProductAlias
 from app.modules.catalog.matching import MATCHER_VERSION, preview_match
 from app.modules.catalog.models import (
@@ -495,7 +496,9 @@ async def _run(output: Path) -> int:
         async with async_sessionmaker(engine)() as session:
             report = await evaluate_catalog(session)
             await session.rollback()
-        output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+        # UTF-8 on every platform: Windows would otherwise write the ANSI code
+        # page, and any character outside it would fail the whole report.
+        output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return 0 if report["gates_passed"] else 1
     finally:
         await engine.dispose()

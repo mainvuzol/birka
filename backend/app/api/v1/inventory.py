@@ -10,18 +10,21 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
+from app.core.errors import ValidationFailedError
 from app.core.text import CleanText
 from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
+from app.modules.catalog.read import unknown_size_ids
 from app.modules.inventory.models import (
     AcquisitionType,
     MovementReason,
@@ -42,11 +45,48 @@ RECEIPTS_ENDPOINT = "POST /inventory/receipts"
 ADJUSTMENTS_ENDPOINT = "POST /inventory/adjustments"
 
 
+# What a receipt can say about goods arriving. The other acquisition types
+# each belong to a command of their own — a transfer, a return, an adjustment,
+# an opening balance — and a receipt labelled as one of them would put a lot
+# in the books that no such command ever produced (ADR-0005).
+ReceiptAcquisition = Literal[
+    AcquisitionType.PURCHASE, AcquisitionType.CONSIGNMENT, AcquisitionType.BORROWED
+]
+
+# What an adjustment can say about why. The two size-reclassification reasons
+# are absent: each is one half of a pair a sale writes when a seller gives a
+# "size not known" coat its size (ADR-0005 §11), and a lone half written here
+# would be stock that changed size with no trace of where it came from.
+AdjustmentReason = Literal[
+    MovementReason.FOUND_DURING_SALE,
+    MovementReason.MISSING_AT_SALE,
+    MovementReason.DAMAGED,
+    MovementReason.LOST,
+    MovementReason.STOCKTAKE,
+    MovementReason.CORRECTION,
+    MovementReason.OTHER,
+]
+
+
+async def _refuse_size_not_known(
+    session: AsyncSession, *, organization_id: uuid.UUID, size_ids: set[uuid.UUID]
+) -> None:
+    """Goods arrive with a size. "Size not known" is a legal size only in a
+    legacy stock list, the one place its evidence exists (ADR-0005 §3);
+    stock already held that way can still be sold, moved or written off."""
+    unknown = size_ids & await unknown_size_ids(session, organization_id=organization_id)
+    if unknown:
+        raise ValidationFailedError(
+            "Goods with their size not known enter only from a legacy stock list; say the size",
+            size_id=str(min(unknown)),
+        )
+
+
 class ReceiptLine(BaseModel):
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity: int = Field(gt=0, le=10_000)
-    acquisition_type: AcquisitionType = AcquisitionType.PURCHASE
+    acquisition_type: ReceiptAcquisition = AcquisitionType.PURCHASE
     # Acquisition cost belongs to the lot, never to catalog identity (F33).
     unit_cost: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
 
@@ -155,6 +195,11 @@ async def receive_goods(
         store_id=payload.store_id,
         location_ids={payload.location_id},
         capability=LocationCapability.RECEIVE,
+    )
+    await _refuse_size_not_known(
+        session,
+        organization_id=scope.organization_id,
+        size_ids={line.size_id for line in payload.lines},
     )
 
     outcome = await idempotency.claim(
@@ -266,7 +311,7 @@ class AdjustmentRequest(BaseModel):
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity_delta: int = Field(ge=-10_000, le=10_000)
-    reason_code: MovementReason
+    reason_code: AdjustmentReason
     note: CleanText | None = Field(default=None, max_length=500)
 
     @field_validator("quantity_delta")
@@ -309,6 +354,10 @@ async def adjust_inventory(
         location_ids={payload.location_id},
         capability=LocationCapability.RECEIVE,
     )
+    if payload.quantity_delta > 0:
+        await _refuse_size_not_known(
+            session, organization_id=scope.organization_id, size_ids={payload.size_id}
+        )
 
     outcome = await idempotency.claim(
         session,

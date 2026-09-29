@@ -12,7 +12,11 @@ import pytest
 
 from app.modules.catalog.parser import PARSER_VERSION, parse_catalog_line
 
-CORPUS = json.loads((Path(__file__).parents[1] / "fixtures/catalog_store_rows_v1.json").read_text())
+# Explicit UTF-8: on Windows the default is the ANSI code page, which turns every
+# Cyrillic row into mojibake and fails 24 of these cases on the owner's machine.
+CORPUS = json.loads(
+    (Path(__file__).parents[1] / "fixtures/catalog_store_rows_v1.json").read_text(encoding="utf-8")
+)
 
 
 def values(raw: str, field: str) -> list[str]:
@@ -206,6 +210,9 @@ def test_preview_cli_preserves_input_and_needs_no_database() -> None:
         [sys.executable, "-m", "scripts.preview_catalog"],
         input=raw,
         text=True,
+        # Both ends in UTF-8, whatever the platform's default code page is.
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         capture_output=True,
         check=True,
     )

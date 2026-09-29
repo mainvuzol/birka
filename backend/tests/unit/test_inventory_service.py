@@ -19,6 +19,7 @@ from app.modules.inventory.service import (
     MovementRequest,
     validate_location_flows,
     validate_movement,
+    validate_size_reclassifications,
 )
 
 STORE = uuid.uuid4()
@@ -282,6 +283,130 @@ def test_found_on_one_shelf_and_missing_from_another_is_not_a_transfer() -> None
                 movement_type=MovementType.ADJUSTMENT,
                 quantity_delta=-1,
                 reason_code=MovementReason.MISSING_AT_SALE,
+            ),
+        ]
+    )
+
+
+# ---------------------------------------------------------------------------
+# F34 — a size reclassification is always whole (milestone plan §4.9)
+# ---------------------------------------------------------------------------
+
+SALE = uuid.uuid4()
+SIZE_NOT_KNOWN = uuid.UUID(int=0x0)
+SIZE_M = uuid.UUID(int=0x4D)
+SIZE_L = uuid.UUID(int=0x4C)
+
+
+def half(reason: MovementReason, size: uuid.UUID, quantity: int, **kwargs: object):
+    """One half of a reclassification, made during a sale the way the sale makes it."""
+    defaults: dict[str, object] = {
+        "size_id": size,
+        "movement_type": MovementType.ADJUSTMENT,
+        "quantity_delta": quantity,
+        "reason_code": reason,
+        "reference_type": "sale",
+        "reference_id": SALE,
+    }
+    defaults.update(kwargs)
+    return movement(**defaults)
+
+
+OUT = MovementReason.SIZE_RECLASSIFICATION_OUT
+IN = MovementReason.SIZE_RECLASSIFICATION_IN
+
+
+def test_a_reclassification_is_a_matching_pair() -> None:
+    validate_size_reclassifications([half(OUT, SIZE_NOT_KNOWN, -2), half(IN, SIZE_M, 2)])
+
+
+def test_one_reclassification_may_give_several_sizes() -> None:
+    """Two coats of one model, read at the counter as an M and an L."""
+    validate_size_reclassifications(
+        [half(OUT, SIZE_NOT_KNOWN, -2), half(IN, SIZE_M, 1), half(IN, SIZE_L, 1)]
+    )
+
+
+def test_half_a_reclassification_is_refused_in_either_direction() -> None:
+    """Out alone is a coat that vanished; in alone is an M from nowhere — what
+    `POST /inventory/adjustments` could write before this rule."""
+    with pytest.raises(ValidationFailedError, match="exactly one size"):
+        validate_size_reclassifications([half(OUT, SIZE_NOT_KNOWN, -1)])
+    with pytest.raises(ValidationFailedError, match="exactly one size"):
+        validate_size_reclassifications([half(IN, SIZE_M, 1)])
+
+
+def test_two_halves_out_for_one_in_are_refused() -> None:
+    """A unit taken out twice and put in once would simply disappear."""
+    with pytest.raises(ValidationFailedError, match="exactly one size"):
+        validate_size_reclassifications(
+            [half(OUT, SIZE_NOT_KNOWN, -1), half(OUT, SIZE_NOT_KNOWN, -1), half(IN, SIZE_M, 1)]
+        )
+
+
+def test_a_reclassification_must_put_in_what_it_takes_out() -> None:
+    with pytest.raises(ValidationFailedError, match="exactly what it takes out"):
+        validate_size_reclassifications([half(OUT, SIZE_NOT_KNOWN, -2), half(IN, SIZE_M, 1)])
+
+
+def test_each_half_goes_its_own_way() -> None:
+    with pytest.raises(ValidationFailedError, match="out of one size and into another"):
+        validate_size_reclassifications([half(OUT, SIZE_NOT_KNOWN, 1), half(IN, SIZE_M, -1)])
+    with pytest.raises(ValidationFailedError, match="out of one size and into another"):
+        validate_size_reclassifications(
+            [
+                half(OUT, SIZE_NOT_KNOWN, -1, movement_type=MovementType.STOCKTAKE_CORRECTION),
+                half(IN, SIZE_M, 1, movement_type=MovementType.STOCKTAKE_CORRECTION),
+            ]
+        )
+
+
+def test_a_reclassification_changes_the_size() -> None:
+    with pytest.raises(ValidationFailedError, match="other than the one they left"):
+        validate_size_reclassifications([half(OUT, SIZE_M, -1), half(IN, SIZE_M, 1)])
+    with pytest.raises(ValidationFailedError, match="other than the one they left"):
+        validate_size_reclassifications(
+            [half(OUT, SIZE_NOT_KNOWN, -2), half(IN, SIZE_M, 1), half(IN, SIZE_M, 1)]
+        )
+
+
+def test_a_reclassification_must_name_its_command() -> None:
+    with pytest.raises(ValidationFailedError, match="must name the command"):
+        validate_size_reclassifications(
+            [
+                half(OUT, SIZE_NOT_KNOWN, -1, reference_id=None),
+                half(IN, SIZE_M, 1, reference_id=None),
+            ]
+        )
+
+
+def test_halves_of_two_commands_or_two_places_do_not_pair() -> None:
+    with pytest.raises(ValidationFailedError, match="exactly one size"):
+        validate_size_reclassifications(
+            [half(OUT, SIZE_NOT_KNOWN, -1), half(IN, SIZE_M, 1, reference_id=uuid.uuid4())]
+        )
+    with pytest.raises(ValidationFailedError, match="exactly one size"):
+        validate_size_reclassifications(
+            [half(OUT, SIZE_NOT_KNOWN, -1), half(IN, SIZE_M, 1, location_id=WAREHOUSE_B)]
+        )
+    with pytest.raises(ValidationFailedError, match="exactly one size"):
+        validate_size_reclassifications(
+            [half(OUT, SIZE_NOT_KNOWN, -1), half(IN, SIZE_M, 1, product_variant_id=uuid.uuid4())]
+        )
+
+
+def test_other_adjustments_are_not_reclassifications() -> None:
+    validate_size_reclassifications(
+        [
+            movement(
+                movement_type=MovementType.ADJUSTMENT,
+                quantity_delta=1,
+                reason_code=MovementReason.FOUND_DURING_SALE,
+            ),
+            movement(
+                movement_type=MovementType.ADJUSTMENT,
+                quantity_delta=-1,
+                reason_code=MovementReason.CORRECTION,
             ),
         ]
     )

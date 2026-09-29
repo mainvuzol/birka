@@ -2,8 +2,9 @@
 
 Authentication and the store directory land in gate M1A; the catalog,
 inventory and sale endpoints that make up the first vertical slice land in
-gate M1B; the refund that makes a mistake recoverable opens gate M1C, and the
-transfer that moves goods between warehouses follows it.
+gate M1B; the refund that makes a mistake recoverable opens gate M1C, the
+transfer that moves goods between warehouses follows it, and the legacy stock
+list that opens a warehouse's ledger closes it (M1-023).
 
 Routers parse the request, call one service and shape the response. They hold
 no business rules of their own (`.ai/conventions.md`). The one thing they do
@@ -30,6 +31,7 @@ from app.api.v1.locations import router as locations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.refunds import router as refunds_router
 from app.api.v1.sales import router as sales_router
+from app.api.v1.snapshots import router as snapshots_router
 from app.api.v1.transfers import router as transfers_router
 from app.modules.identity.service import authenticate_with_init_data
 from app.modules.tenancy.models import Store
@@ -44,6 +46,7 @@ router.include_router(orders_router)
 router.include_router(sales_router)
 router.include_router(refunds_router)
 router.include_router(transfers_router)
+router.include_router(snapshots_router)
 
 
 # --- schemas ---------------------------------------------------------------
