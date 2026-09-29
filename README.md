@@ -220,8 +220,15 @@ A paper or PDF availability list becomes stock in three steps, never one
    A list takes at most 5 000 allocations in all.
 3. `POST /api/v1/snapshots/{id}/approve` with `expected_review_revision`.
    This writes `OPENING_BALANCE` lots and movements, only into a warehouse
-   with **no stock history**. `snapshot:approve` (owner). Alternatively,
-   `POST .../reject` with a `reason` keeps everything as evidence.
+   with **no stock history**. `snapshot:approve` (owner). For a child store's
+   private warehouse, the approver must hold the owner's role in the child
+   store itself. Alternatively, `POST .../reject` with a `reason` keeps
+   everything as evidence.
+
+Approve a warehouse's list before anything else is recorded there. Paper sales
+made between the count and the approval are entered afterwards, as ordinary
+sales (owner decision, 2026-09-29). Entering one first closes the warehouse to
+its list for good.
 
 `GET /api/v1/snapshots?store_id=`, `GET /api/v1/snapshots/{id}` and
 `GET .../lines` read lists, their summary by basis, and each line's evidence and
@@ -240,5 +247,15 @@ Related changes elsewhere:
   - a «фізично є» correction is refused (`UNKNOWN_SIZE_STOCK`) when it would
     add such a unit, or a sized unit of a model held at that warehouse with
     size not known.
+- A seller gives such a coat its size at the counter: `POST /api/v1/sales`
+  takes `size_clarified: [{line_index, quantity}]`. The line is sold as the
+  size the seller read, and `quantity` of its units first move out of the same
+  model's size-not-known balance at that warehouse. `quantity` must be exactly
+  the line's shortfall at that size. It needs `inventory:correct_during_sale`
+  (sellers have it) and is audited. The response lists both movements in
+  `size_reclassifications`.
+- `POST /inventory/adjustments` no longer accepts the two
+  `SIZE_RECLASSIFICATION_*` reasons (422): each is half of a pair only a sale
+  writes.
 
 See the [M1-023 report](.ai/project-memory/m1-023-snapshot-import-report.md).

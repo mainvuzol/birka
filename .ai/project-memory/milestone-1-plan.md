@@ -368,6 +368,8 @@ COMMIT
 
 Total quantity is unchanged, both halves are in the ledger, and the reclassification is reversible by the same mechanism. Nothing is rewritten.
 
+**As built (2026-09-29, owner decision, [ADR-0005 §11](../decisions/ADR-0005-legacy-snapshot-import.md)):** at the counter first, inside `POST /sales` (`size_clarified`). A seller with `inventory:correct_during_sale` reclassifies exactly the units the sale is short of at the size being sold; the sale then takes them. The ledger door refuses half a pair, a pair out of a known size, and a pair into "size not known". So "reversible by the same mechanism" no longer holds for the size-not-known side: that size enters only from a list (ADR-0005 §3), and a misread size is corrected like any wrong sale. The stand-alone manager command above is not built yet.
+
 ---
 
 ## 5. M1 Physical Schema

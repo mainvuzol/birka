@@ -2,6 +2,8 @@
 
 Status: **implemented and verified on PostgreSQL 17.11; independently reviewed** (design review before implementation, three code reviews after). Local branch `feat/m1-023-snapshot-import` over `main` at `0ca93d8` (PR #31). **Not pushed, not merged** — the owner does both.
 
+**2026-09-29:** the owner answered the five questions (§9). One of the answers needed code: a seller gives a "size not known" coat its size at the counter (§10).
+
 Whether the shops' real balances are imported at all is still the owner's decision (owner decisions 2026-09-17). This builds the capability and changes no data.
 
 Design: [ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md).
@@ -264,18 +266,102 @@ The reviewers ran nothing against a database. The implementer ran everything abo
 - **Real legacy lists** — `data/legacy/raw/` is empty on this machine. The real-row corpus in the fixtures has 44 product-only lines; no real list was imported.
 - **Telegram devices, production deployment, restore drill** — gate M1D.
 
-## 9. Questions for the owner
+## 9. Questions for the owner — answered 2026-09-29
 
-None blocks. The defaults in force are conservative and pinned by tests.
+The owner answered all five. What follows each question is the answer, then what it means for the code; §10 covers the change it needed.
 
-1. **Opening a warehouse.** An opening balance is accepted only into a warehouse with no stock history. Any receipt, sale, «фізично є» or transfer before approval closes the door for good, because the ledger is append-only. Is that right? The alternatives:
-   - allow the approval only while the warehouse is paused (which contradicts "paused = no stock operations");
-   - grant `can_sell` only after the list is approved (an operational rule);
-   - treat the list as a stocktake that corrects a tracked warehouse to the count (a different command, which can reduce stock).
-2. **The list's date.** Sales on paper between the date of the count and the approval are not in the opening balance. Should the list be recounted just before approval, or should those sales be entered first some other way?
-3. **Lines without a count.** Does a line with no count mean exactly one piece? Today a reviewer must say so per line (`LINE_IMPLIES_ONE`), and the approver sees how many lines rest on it. Only a line with no number that could be a count qualifies; `Куртка 1636` or `Куртка 46` needs a note.
-4. **Selling "size not known" stock.** Today «фізично є» on a sized unit is refused while the same model is held with size not known, and the seller sells it as size not known. «Фізично є» never adds size-not-known stock, and receipts refuse it. Should the seller instead be allowed to reclassify one unit to the size at the counter — an audited pair of movements, bounded to that unit?
-5. **Private warehouses.** Who approves a list for a child store's own warehouse? By default nobody can: the owner's grant is organization-wide, which the private rule does not accept, and the child manager lacks `snapshot:approve`. Options:
-   - give the owner a direct membership in the child store;
-   - give the child manager `snapshot:approve`;
-   - let organization-wide approval reach private warehouses for this one command.
+1. **Opening a warehouse.** An opening balance is accepted only into a warehouse with no stock history; any receipt, sale, «фізично є» or transfer before approval closes the door for good. Is that right?
+   **Answer: yes.** Nothing changes; the default is now the owner's rule.
+2. **The list's date.** Sales on paper between the count and the approval are not in the opening balance. What happens to them?
+   **Answer: they are entered into the app later anyway.** So the list is approved first, and the paper sales are entered afterwards as ordinary sales. Each is dated when it is entered, because a sale has no separate "sold on" date. Entering one before the approval closes the warehouse to its list, and nothing prevents that yet (see known risks).
+3. **Lines without a count.** Does a line with no count mean exactly one piece?
+   **Answer: "do what a correct system does."** A count is never assumed, so the conservative default stands. A reviewer states one piece per line (`LINE_IMPLIES_ONE`), only a line with no number that could be a count qualifies, and the approver sees how many lines rest on it.
+4. **Selling "size not known" stock.** Should the seller be allowed to give such a coat its size at the counter, as an audited pair of movements?
+   **Answer: yes, it can be allowed.** Built: `size_clarified` on `POST /sales` (§10, ADR-0005 §11).
+5. **Private warehouses.** Who approves a list for a child store's own warehouse?
+   **Answer: a user with admin rights to the child store.** Asked which role that is, the owner chose the owner's role granted in the child store itself. The code already allowed it; a test now pins it (§10). The organization-wide owner and the child manager still cannot.
+
+## 10. The owner's answers, built (2026-09-29)
+
+### What changed
+
+- **`POST /api/v1/sales` takes `size_clarified: [{line_index, quantity}]`** (question 4). The line is sold as the size the seller read. First, `quantity` of its units move out of the same model's size-not-known balance at that warehouse and into the size: `ADJUSTMENT` −n (`SIZE_RECLASSIFICATION_OUT`) and +n (`SIZE_RECLASSIFICATION_IN`), both referencing the sale, in the sale's transaction.
+  - It is bounded like «фізично є»: `quantity` must be exactly the basket's shortfall at that size. The size-not-known balance must hold it beside whatever the basket sells from it directly.
+  - It needs `inventory:correct_during_sale`, with the private-warehouse rule, before any replay.
+  - It writes one audit entry per model and warehouse (`inventory.size_reclassified_during_sale`).
+  - The response lists both movements in `size_reclassifications`, and a durable replay rebuilds them in the same order.
+- **The ledger door refuses half a reclassification** (`validate_size_reclassifications`), as well as one out of a known size or into "size not known". `POST /inventory/adjustments`, which could write a lone half before, no longer accepts either reason (422).
+- **«Фізично є» beside "size not known" stock** is now judged on what the balance will hold once the basket has taken its share. A basket that clarifies the last such coat may find another size.
+- **`UNKNOWN_SIZE_STOCK`** now tells the seller to clarify the size, or sell the coat as size not known.
+- **Every refusal names what it concerns:** a `reason`, and the line, warehouse and size. That includes the existing "Release reservations before correcting this stock key", which «фізично є» and «фізично відсутній» share.
+- **Question 5** needed no code. A test pins that someone holding the owner's role in the child store itself approves its private warehouse's list, and that the grant reaches no other store.
+- No migration: both reasons have existed since `0002`.
+
+### New refusals on `POST /sales`
+
+| Situation | Answer |
+|---|---|
+| No `inventory:correct_during_sale`, or at a private warehouse without it granted directly in the managing store | 403 `PERMISSION_DENIED` |
+| `quantity` is not exactly the line's shortfall at that size, more or less | 422 `CORRECTION_EXCEEDS_SHORTFALL`, `reason: SIZE_CLARIFIED` |
+| Nothing of that model held there with size not known, or not enough beside the basket's own demand | 409 `INSUFFICIENT_STOCK`, `reason: SIZE_NOT_KNOWN_SHORT`, `correctable: false` |
+| A reserved balance on either side | 422 `VALIDATION_ERROR`, `reason: RESERVED` |
+| A line sold as size not known (`SOLD_AS_SIZE_NOT_KNOWN`); more units than the line sells (`MORE_THAN_THE_LINE`); the size-not-known balance reported found or missing (`SIZE_NOT_KNOWN_REPORTED`); more than one size-not-known balance (`SIZE_NOT_KNOWN_AMBIGUOUS`); the same goods also reported found or missing; a line index that does not exist or repeats | 422 `VALIDATION_ERROR` |
+
+### Changed files
+
+| Area | Files |
+|---|---|
+| Sale | `app/api/v1/sales.py`, `app/modules/sales/service.py` |
+| Ledger | `app/modules/inventory/service.py`, `app/modules/inventory/repository.py` |
+| Errors | `app/core/errors.py` (message only; the code is unchanged) |
+| Adjustments | `app/api/v1/inventory.py` (the two reasons leave the accepted list) |
+| Tests | `tests/unit/test_inventory_service.py`, `tests/integration/test_snapshot_import.py`, `tests/integration/test_private_locations.py` |
+| Docs | ADR-0005 (§11 and amendments), this report, business rules, known risks, milestone plan §4.9, current milestone, README |
+
+### Independent review
+
+One reviewer, in a fresh context, read the change and ran its own probes against its own PostgreSQL database: ten scenarios, a lock-order probe, and eleven mutants. **It found no blocker and no major defect.** It confirmed by running:
+- a basket clarifying two sizes of one model;
+- baskets that also report a shortage, or also sell the size-not-known coat as it is;
+- the refusal of too few clarified units;
+- a replay after revocation, under the same and a new idempotency key;
+- that a clarifying sale waits without holding any key above the one it waits for.
+
+| # | Severity | Finding | What was done |
+|---|---|---|---|
+| 1 | MINOR | A reservation on the size-not-known balance refuses every clarification of that model there, with a bare message a seller cannot act on. | Kept conservative, as for «фізично є». The refusal now carries `reason: RESERVED`, the stock key and the reserved count, so a client can offer selling the coat as it is. Recorded as a risk. Whether unreserved units may be clarified is a question for the owner if it comes up. |
+| 2 | MINOR | «Фізично є» on another size is refused even when the basket itself clarifies the last size-not-known coat. | Fixed: judged on what the balance holds after the basket's own share. Test. |
+| 3 | MINOR | The clarification refusals carry inconsistent details. | Fixed: each has a `reason`, the line, the warehouse and the size. Tests assert them. |
+| 4 | NIT | A line could claim more clarified units than it sells, when another line shares its size. | Fixed: bounded per line as well. Test. |
+| 5 | NIT | Nothing reverses a clarification back into "size not known", and the adjustment command still listed the two reasons. | The reversal is refused by design, because that size enters only from a list; ADR-0005 §11 and the plan now say so. The adjustment command no longer accepts the reasons. |
+| T1–T7 | tests | Seven behaviour changes the suite did not catch: the shortage half of the overlap rule, several sizes in one basket, the lock order, two halves out, the up-front reservation check, the private rule on replay, and the order of a rebuilt answer. | Each now has a test, and every mutant from these gaps is caught (below). The rebuilt order is asserted explicitly over three movements. Movement ids are random, so a wrong order still escapes about one run in twelve. |
+
+### Verification (PostgreSQL 17.11, ICU uk-UA, a throwaway container)
+
+| Check | Result |
+|---|---|
+| Full suite | **901 passed, 0 skipped**, 2 third-party warnings: 875 before, plus 26 new (10 unit, 15 integration, 1 private-warehouse case) |
+| ruff format, ruff check | 137 files formatted, clean |
+| mypy strict | no issues in 84 files |
+| Import contracts | 14 kept, 0 broken |
+| Migrations | no new revision; head `0015_snapshot_import`; `alembic check` finds no drift |
+
+**Mutation testing: 23 of 26 caught.** Each mutant broke one guard in a separate copy of the code, against its own database.
+
+- **Caught (23):**
+  - the exact shortfall, both ways;
+  - the balance check, with and without the basket's own demand, and when nothing is held;
+  - every refusal;
+  - the lock basket, and locking it in two batches;
+  - both fingerprints and the durable replay;
+  - the audit entry;
+  - the router's private-warehouse check on replay;
+  - both door rules, and two halves out;
+  - the per-line bound;
+  - «фізично є» beside the basket's own last coat;
+  - the refusals' reasons;
+  - the rebuilt order (caught this run; it is probabilistic, as above).
+- **Survived (3), each a duplicate check:**
+  - The router's explicit permission check. Its private-warehouse loop checks the same permission first, before any replay.
+  - The service's explicit permission check. The service's own loop checks it too.
+  - The service's private-warehouse check. The router makes it for every HTTP request, first or replayed. Only a caller that skips the router would rely on it, and none exists. «Фізично є» and «фізично відсутній» are in the same position.

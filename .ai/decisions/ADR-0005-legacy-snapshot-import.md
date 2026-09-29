@@ -1,6 +1,6 @@
 # ADR-0005 — Legacy snapshot import and opening balances
 
-Status: **Accepted, 2026-09-28 (M1-023).** Implemented and verified. See the [M1-023 report](../project-memory/m1-023-snapshot-import-report.md).
+Status: **Accepted, 2026-09-28 (M1-023).** Implemented and verified. See the [M1-023 report](../project-memory/m1-023-snapshot-import-report.md). **Amended 2026-09-29** with the owner's answers to the five open questions (§11).
 
 An independent design review found two major defects in the first draft, and three consequences that needed a guard or an owner decision. All five are resolved below; the review is summarised in the report.
 
@@ -50,7 +50,7 @@ A row is resolved in one of two ways.
 **Allocations.** One or more `(variant, size, quantity)` stated explicitly (`inventory_snapshot_allocation`), with a **quantity basis**:
 
 - `STATED`: exactly the one count the line states, in one allocation. A split across sizes or colours is never "stated", because the parser reads no per-size counts.
-- `LINE_IMPLIES_ONE`: a line with no number that could be a count, taken as one piece. This is a convention, recorded as one, pending the owner (question 3). It excludes:
+- `LINE_IMPLIES_ONE`: a line with no number that could be a count, taken as one piece. A count is never assumed: a person states it, and this basis records only that the line itself reads as one piece. The owner left this to what a correct system does (question 3, §11), and this is it. It excludes:
   - a line in which the parser found any quantity, however unsure — two counts, or a negated one;
   - a line with a number the parser could not classify (`3 куртки`, `Куртка 1636`). Such a number may be a count, a size or an item code, so it needs a note *(code review)*.
 - `RECOUNTED` or `OWNER_KNOWLEDGE`: anything, with a note saying who counted or how it is known. This is also the only way to answer an `UNKNOWN_DISTRIBUTION` line, or to differ from what a line states.
@@ -108,7 +108,7 @@ This fixes the review's second finding.
 
 This addresses the review's third finding. Take a coat held as "size not known" that a seller sells as an M. The system shows zero for M, so a `FOUND_DURING_SALE` correction would add an M the list already counted. The size-unknown balance would then stay one too high, with nothing to ever notice.
 
-The sale refuses that correction with `UNKNOWN_SIZE_STOCK` (409) while the same variant is available at that warehouse with size not known. The seller sells it as size not known, or someone reclassifies it first. Whether a seller may instead reclassify at the counter is owner question 4.
+The sale refuses that correction with `UNKNOWN_SIZE_STOCK` (409) while the same variant is available at that warehouse with size not known — counted after what the basket itself takes from that balance, so a basket that takes the last such coat may find another size *(2026-09-29 review)*. The seller says instead which size the coat is (§11), or sells it as size not known.
 
 **The other direction** *(code review)*. «Фізично є» never adds a unit with size not known (`details.reason = FOUND_AS_SIZE_NOT_KNOWN`). Only a list states that size, and at the counter the coat is in hand, so its size can be read. A size-unknown unit added there could be the very M the ledger already counts.
 
@@ -150,7 +150,7 @@ The acting store is stored as `acting_store_id`: ADR-0004 retired `store_id` on 
 
 The list of a store's lists leaves out a list at a warehouse the person may not see. It does so in the query itself, so neither the page nor `has_more` reveals it *(security review)*.
 
-By default **nobody can approve a list for a child store's private warehouse**. The private rule wants the permission granted directly in the child store; the owner's grant is organization-wide, and the child manager lacks `snapshot:approve`. This is recorded as owner question 5, not changed silently.
+**A list for a child store's private warehouse is approved by someone holding the owner's role in the child store itself** (owner decision 2026-09-29, question 5, §11). The private rule wants the permission granted directly in the child store, and that grant is one. The organization-wide owner cannot, and nor can the child manager, who lacks `snapshot:approve`. No role changed for this.
 
 ### 10. Lock order
 
@@ -162,13 +162,47 @@ By default **nobody can approve a list for a child store's private warehouse**. 
 | Rejection | list `FOR UPDATE` |
 | Every command that moves or reserves stock | shared warehouse advisory locks in location order, then inventory keys |
 
+### 11. The owner's answers (2026-09-29)
+
+| # | Question | Answer | What it means here |
+|---|---|---|---|
+| 1 | An opening balance only into a warehouse with no history? | Yes | §5 is the owner's rule now, not a default. |
+| 2 | Paper sales between the count and the approval? | They are entered into the app later anyway | Approve the list first, then enter those sales as ordinary sales. Entering any of them before approval closes the warehouse to its list for good (§5). Each is dated when it is entered: a sale has no separate "sold on" date. |
+| 3 | Does a line without a count mean one piece? | "Do what a correct system does" | A count is never assumed. §3 stands: the reviewer states it, `LINE_IMPLIES_ONE` records that the line reads as one piece, and the approver sees how many lines rest on that. |
+| 4 | May a seller give a "size not known" coat its size at the counter? | Yes, with an audit record | `size_clarified` on `POST /sales`, below. |
+| 5 | Who approves a list for a child store's private warehouse? | A user with admin rights to the child store | The owner's role granted in the child store itself, as the owner confirmed when asked (§9). |
+
+**Size clarified at the counter.** The seller sells the coat as the size they read, say M. Per line, they say how many of its units come out of the same model's size-not-known balance at that warehouse: `size_clarified: [{line_index, quantity}]`. In the sale's own transaction:
+
+- **Movements.** An `ADJUSTMENT` of −n at the size-not-known key (`SIZE_RECLASSIFICATION_OUT`) and one of +n at the size (`SIZE_RECLASSIFICATION_IN`), both referencing the sale (milestone plan §4.9). Then the sale takes the coat from the size.
+- **Bounded like «фізично є».** n is exactly the shortfall this basket consumes at that size. The M the ledger already holds are sold first, and nothing is reclassified that is not leaving in this basket. The size-not-known balance must hold n beside whatever the basket sells from it directly.
+- **Permission.** `inventory:correct_during_sale`, which the default seller holds, with the private-warehouse rule, checked before any replay. It is the same bounded authority as «фізично є», and it changes no total. The warehouse ends exactly where selling the coat as size not known would have left it; only the size on the receipt and in the ledger differs.
+- **Refused**, each with a `reason` and the line, warehouse and size it concerns, so a client can offer what is still possible *(2026-09-29 review)*:
+  - a line already sold as size not known;
+  - more units than the line sells, even when another line sells the same size;
+  - goods also reported found or missing, or whose size-not-known balance is;
+  - a reserved balance on either side, as for «фізично є» — the seller can still sell the coat as it is;
+  - a model held under more than one size not known, which never happens while an organization has one.
+- **Locks.** The size-not-known keys join the basket's keys in `lock_stock`, in the one global order, before anything is read. Two sellers clarifying the last such coat sell it once.
+- **Trail.** One audit entry per model and warehouse (`inventory.size_reclassified_during_sale`): both balances before and after, the movements and the sale. The response lists both halves in `size_reclassifications`, and a durable replay rebuilds them in the same order.
+- **Ledger door.** `validate_size_reclassifications` requires every such adjustment to be whole:
+  - one half out and one or more halves in;
+  - the same command, warehouse and model;
+  - as many units in as out, into other sizes.
+
+  `_apply_movements` also requires the half out to leave a size-not-known size, and the halves in to enter real sizes. `POST /inventory/adjustments`, which could write a lone half before, no longer accepts either reason.
+
+  There is deliberately no pair back into "size not known": that size enters only from a list (§3). A size misread at the counter is corrected like any other wrong sale — a return and a new sale, or an adjustment.
+
+No migration: both reasons have existed since `0002`.
+
 ## Alternatives considered
 
 - **One `(variant, size)` per row.** Rejected. A line listing three sizes could then only become "size unknown × 3", or be split by hand into three lines, which rewrites the evidence.
 - **Additive opening balance.** Rejected: it double counts whatever the app already tracked.
 - **Per-key history check.** Rejected: legacy "size not known" stock beside app-tracked sized stock would still double count.
 - **Stocktake semantics.** A different operation that can remove stock; it is not an opening balance, and the owner has not decided on it.
-- **Opening balance on a paused warehouse.** Pausing would guarantee an empty ledger during review. But the owner defined pausing as "no stock operations", so this is owner question 1 rather than a default.
+- **Opening balance on a paused warehouse.** Pausing would guarantee an empty ledger during review. But the owner defined pausing as "no stock operations", and confirmed on 2026-09-29 that an opening balance only opens an empty ledger (question 1).
 - **One `CatalogMatchDecision` per line.** Rejected, because of the staleness described in §3.
 
 ## Consequences
@@ -181,9 +215,9 @@ Positive:
 
 Negative:
 
-- **One-way opening.** A warehouse that has recorded anything cannot take an opening balance. With the seed granting `can_sell` from day one, a single «фізично є», receipt or transfer before approval closes that door for good, since the ledger is append-only. Warehouses holding test data can never take one. Several documents for one warehouse must go into one import. Paper sales between the count date and approval are not accounted for. (Owner question 1.)
+- **One-way opening** (confirmed by the owner, 2026-09-29). A warehouse that has recorded anything cannot take an opening balance. With the seed granting `can_sell` from day one, a single «фізично є», receipt or transfer before approval closes that door for good, since the ledger is append-only. Warehouses holding test data can never take one. Several documents for one warehouse must go into one import. Paper sales made between the count and the approval are entered afterwards, as sales, and are dated when they are entered (§11).
 - **Manual work.** Resolving a legacy list is manual, and this increment has no UI. Some lines that plainly mean one piece still need a note: a bare number or two counts may mean anything.
-- **Sizes not known.** Goods loaded that way must be sold that way until the audited size reclassification (F34) gets a command.
+- **Sizes not known.** A seller gives such a coat its size while selling it (§11). Outside a sale, reclassification still has no command.
 - **Every stock command takes one more lock.** It is a shared advisory lock per warehouse — cheap, but on the hot path. It has not been measured against the `POST /sales` p95 budget, which was itself never measured.
 
 ## Operational impact
@@ -207,3 +241,10 @@ Adding CHECKs to `stock_lot` and `stock_movement` scans both under an exclusive 
 **Deploy it with no older instance running.** Code before this revision takes no shared warehouse lock. An old instance writing stock while a new one approves a list would reopen the design review's first finding. The migration's maintenance window covers this *(concurrency review)*.
 
 No new infrastructure.
+
+**The 2026-09-29 amendment** needs no migration.
+
+- `POST /sales` gains an optional `size_clarified`, and its response `size_reclassifications`. A client that sends neither sees no change.
+- `POST /inventory/adjustments` no longer accepts the two `SIZE_RECLASSIFICATION_*` reasons (`422`).
+- The refusal "Release reservations before correcting this stock key" now names the balance (`reason: RESERVED`, the stock key, the reserved count), for «фізично є» and «фізично відсутній» too.
+- Both fingerprints of a sale now include `size_clarified`. A retry of a sale made before the deploy that arrives after it gets `409 IDEMPOTENCY_CONFLICT` instead of a replay. Nothing is sold twice, and there is no production data yet.
