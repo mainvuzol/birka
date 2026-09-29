@@ -12,6 +12,8 @@ export interface ReceiptLine {
   size_id: string;
   quantity: number;
   acquisition_type: Acquisition;
+  /** What the shop paid for one unit, `"1850.50"`, or null when not stated. */
+  unit_cost: string | null;
 }
 
 export interface ReceiptBody {
@@ -30,6 +32,9 @@ export interface ReceivedLine {
   quantity_after: number;
   stock_lot_id: string;
   movement_id: string;
+  /** As stored on the lot, which is what the screen shows back. */
+  unit_cost: string | null;
+  currency_code: string | null;
 }
 
 export interface Receipt {

@@ -268,3 +268,63 @@ async def test_a_replay_is_refused_once_the_right_to_receive_is_gone(maker):
         )
     assert refused.status_code == 403
     assert await held(maker, shop) == (10, 1)
+
+
+async def test_the_purchase_cost_comes_back_as_it_was_stored(maker):
+    """A seller may enter and see what the shop paid (owner, 2026-09-30).
+
+    The receipt answers with the cost stored on each lot, so the screen shows
+    what was recorded rather than what it typed — and a late replay, answered
+    from the permanent record, says the same.
+    """
+    async with maker() as session:
+        shop = await make_shop(session)
+    command_id = uuid.uuid4()
+    body = delivery(shop, command_id, quantity=3)
+    body["lines"][0]["unit_cost"] = "1850.50"
+    body["lines"].append(
+        {"product_variant_id": str(shop.variant_id), "size_id": str(shop.size_id), "quantity": 1}
+    )
+    async with client_for(maker, shop) as client:
+        first = await client.post(
+            "/api/v1/inventory/receipts",
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+            json=body,
+        )
+        assert first.status_code == 201, first.text
+        await forget_the_cache(maker)
+        late = await client.post(
+            "/api/v1/inventory/receipts",
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+            json=body,
+        )
+    costed, uncosted = first.json()["lines"]
+    assert (costed["unit_cost"], costed["currency_code"]) == ("1850.50", "UAH")
+    assert (uncosted["unit_cost"], uncosted["currency_code"]) == (None, None)
+    assert late.json() == first.json()
+
+
+async def test_the_same_command_at_another_price_is_another_delivery(maker):
+    """The cost is in the permanent fingerprint: a changed price is refused."""
+    async with maker() as session:
+        shop = await make_shop(session)
+    command_id = uuid.uuid4()
+    body = delivery(shop, command_id)
+    body["lines"][0]["unit_cost"] = "1000.00"
+    async with client_for(maker, shop) as client:
+        first = await client.post(
+            "/api/v1/inventory/receipts",
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+            json=body,
+        )
+        assert first.status_code == 201, first.text
+        await forget_the_cache(maker)
+        body["lines"][0]["unit_cost"] = "1100.00"
+        repriced = await client.post(
+            "/api/v1/inventory/receipts",
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+            json=body,
+        )
+    assert repriced.status_code == 409
+    assert repriced.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    assert await held(maker, shop) == (10, 1)

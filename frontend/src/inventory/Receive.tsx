@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
 import { submitReceipt, useReceiptCommand } from "./receiptCommands";
 import { acquisitionLabels } from "./receiptTypes";
@@ -31,9 +32,10 @@ interface Draft {
  * "Size not known" is never among them — goods arrive with a size, and that
  * one enters only from a legacy stock list (ADR-0005 §3).
  *
- * Purchase cost is deliberately not asked for. The API accepts it, but whether
- * a seller should enter or see what the shop paid is a question for the owner,
- * and financial views are a manager's permission today.
+ * Purchase cost is optional and a seller may enter and see it (owner decision,
+ * 2026-09-30). The screen shows back the cost the server stored on each lot,
+ * not what it typed; the cost is part of the delivery's permanent identity,
+ * so the same command at another price is refused as another delivery.
  */
 export function Receive({
   store,
@@ -53,6 +55,7 @@ export function Receive({
   const [variant, setVariant] = useState<ReceivableVariant | null>(null);
   const [sizeId, setSizeId] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [cost, setCost] = useState("");
   const [acquisition, setAcquisition] = useState<Acquisition>("PURCHASE");
   const [notes, setNotes] = useState("");
   const [draft, setDraft] = useState<Draft[]>([]);
@@ -119,6 +122,14 @@ export function Receive({
   function add(): void {
     const count = Number(quantity);
     const size = sizes.data?.find((option) => option.size_id === sizeId);
+    const stated = cost.trim();
+    const cents = stated ? kopecks(stated) : null;
+    if (stated && cents === null) {
+      setValidation(
+        "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
+      );
+      return;
+    }
     if (
       !variant ||
       !size ||
@@ -134,17 +145,19 @@ export function Receive({
       size_id: size.size_id,
       quantity: count,
       acquisition_type: acquisition,
+      unit_cost: cents === null ? null : decimal(cents),
     };
     if (
       draft.some(
         (d) =>
           d.line.product_variant_id === line.product_variant_id &&
           d.line.size_id === line.size_id &&
-          d.line.acquisition_type === line.acquisition_type,
+          d.line.acquisition_type === line.acquisition_type &&
+          d.line.unit_cost === line.unit_cost,
       )
     ) {
       setValidation(
-        "Цей товар і розмір уже в списку. Приберіть рядок, щоб змінити кількість.",
+        "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
       );
       return;
     }
@@ -187,6 +200,9 @@ export function Receive({
 
   const working = busy || pending !== null;
   const units = draft.reduce((sum, d) => sum + d.line.quantity, 0);
+  const costed = draft
+    .map((d) => ({ quantity: d.line.quantity, unit_cost: d.line.unit_cost }))
+    .filter((line) => line.unit_cost !== null);
 
   if (received)
     return (
@@ -205,9 +221,27 @@ export function Receive({
             </strong>
             <span>
               +{line.quantity_received} · тепер на складі {line.quantity_after}
+              {line.unit_cost !== null && ` · ${money(line.unit_cost)} за од.`}
             </span>
           </div>
         ))}
+        {received.receipt.lines.some((line) => line.unit_cost !== null) && (
+          <p className="total">
+            Закупівельна вартість{" "}
+            <strong>
+              {money(
+                decimal(
+                  purchaseValue(
+                    received.receipt.lines.map((line) => ({
+                      quantity: line.quantity_received,
+                      unit_cost: line.unit_cost,
+                    })),
+                  ),
+                ),
+              )}
+            </strong>
+          </p>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -327,6 +361,8 @@ export function Receive({
                     }
                     onClick={() => {
                       setVariant(item);
+                      // A new model starts without the previous one's price.
+                      setCost("");
                     }}
                   >
                     {item.display_name}
@@ -386,21 +422,32 @@ export function Receive({
             />
           </label>
           <label>
-            Як надійшов
-            <select
-              value={acquisition}
+            Закупівельна ціна за од., грн
+            <input
+              inputMode="decimal"
+              placeholder="не обов’язково"
+              value={cost}
               onChange={(event) => {
-                setAcquisition(event.target.value as Acquisition);
+                setCost(event.target.value);
               }}
-            >
-              {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
-                <option key={key} value={key}>
-                  {acquisitionLabels[key]}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         </div>
+        <label>
+          Як надійшов
+          <select
+            value={acquisition}
+            onChange={(event) => {
+              setAcquisition(event.target.value as Acquisition);
+            }}
+          >
+            {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
+              <option key={key} value={key}>
+                {acquisitionLabels[key]}
+              </option>
+            ))}
+          </select>
+        </label>
         {sizes.error && (
           <Failure
             error={sizes.error}
@@ -421,13 +468,16 @@ export function Receive({
         {draft.map((d, index) => (
           <div
             className="line"
-            key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}`}
+            key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
           >
             <strong>
               {d.name} · {d.size}
             </strong>
             <span>
-              {d.line.quantity} од. · {acquisitionLabels[d.line.acquisition_type]}
+              {d.line.quantity} од. ·{" "}
+              {acquisitionLabels[d.line.acquisition_type]}
+              {d.line.unit_cost !== null &&
+                ` · ${money(d.line.unit_cost)} за од.`}
             </span>
             <button
               type="button"
@@ -453,6 +503,18 @@ export function Receive({
         <p className="total">
           Разом <strong>{units} од.</strong>
         </p>
+        {costed.length > 0 && (
+          <p className="total">
+            Закупівельна вартість{" "}
+            <strong>{money(decimal(purchaseValue(costed)))}</strong>
+          </p>
+        )}
+        {costed.length > 0 && costed.length < draft.length && (
+          <p className="hint">
+            Рядків без ціни: {draft.length - costed.length}. Їх вартість не
+            враховано.
+          </p>
+        )}
         <button
           type="button"
           disabled={draft.length === 0 || !locationId}
@@ -469,6 +531,19 @@ export function Receive({
         </p>
       )}
     </section>
+  );
+}
+
+/** Quantity × unit cost over the lines that state a cost, in kopecks. */
+function purchaseValue(
+  lines: { quantity: number; unit_cost: string | null }[],
+): bigint {
+  return lines.reduce(
+    (sum, line) =>
+      line.unit_cost === null
+        ? sum
+        : sum + (kopecks(line.unit_cost) ?? 0n) * BigInt(line.quantity),
+    0n,
   );
 }
 

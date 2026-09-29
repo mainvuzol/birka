@@ -43,6 +43,7 @@ const scopeKey = new RegExp(
   `^birka:receipt-pending:(${uuid}):(${uuid}):(${uuid})$`,
 );
 const acquisitions = new Set(["PURCHASE", "CONSIGNMENT", "BORROWED"]);
+const money = /^\d{1,10}\.\d{2}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -61,7 +62,9 @@ function isLine(value: unknown): boolean {
     Number.isInteger(value.quantity) &&
     value.quantity > 0 &&
     typeof value.acquisition_type === "string" &&
-    acquisitions.has(value.acquisition_type)
+    acquisitions.has(value.acquisition_type) &&
+    (value.unit_cost === null ||
+      (typeof value.unit_cost === "string" && money.test(value.unit_cost)))
   );
 }
 
