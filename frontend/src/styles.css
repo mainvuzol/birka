@@ -283,3 +283,19 @@ nav {
   display: flex;
   gap: 12px;
 }
+
+/* A search box and its button: the input takes the row, the button keeps its
+   natural height and sits on the input's baseline. */
+.search {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.search label {
+  flex: 1;
+}
+/* Labels carry a 16px bottom margin; match it so the button lines up with the
+   input rather than with the label's margin box. */
+.search button {
+  margin-bottom: 16px;
+}

@@ -23,6 +23,7 @@ from app.modules.catalog.models import (
     ProductVariant,
     Size,
     SizeSystem,
+    SizeSystemCode,
     SourceIdentity,
 )
 
@@ -169,3 +170,48 @@ __all__ = [
     "size_labels",
     "unknown_size_ids",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class SizeOption:
+    """A size goods can arrive in. Never the "not known" one (ADR-0005 §3)."""
+
+    size_id: uuid.UUID
+    code: str
+    system: SizeSystemCode
+    sort_order: int
+
+
+# The order a seller reads alpha sizes in. Presentation only — nothing stored
+# changes — and `sort_order`, which nothing sets today, still wins if an owner
+# ever sets it. Without this the list reads L, M, S, XL, XS.
+_ALPHA_SEQUENCE = ("XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL")
+
+
+def _reading_order(option: SizeOption) -> tuple[str, int, int, int, str]:
+    code = option.code.strip().upper()
+    if option.system is SizeSystemCode.ALPHA and code in _ALPHA_SEQUENCE:
+        return (option.system.value, option.sort_order, 0, _ALPHA_SEQUENCE.index(code), code)
+    if code.isdigit():
+        return (option.system.value, option.sort_order, 0, int(code), code)
+    # "46-48" and "L/XL" are single sizes stored verbatim; they follow the
+    # sizes that have a natural place, in the order they are written.
+    return (option.system.value, option.sort_order, 1, 0, code)
+
+
+async def real_sizes(session: AsyncSession, *, organization_id: uuid.UUID) -> list[SizeOption]:
+    """Every size this organization has, except "size not known", in reading order.
+
+    A variant does not declare the sizes it comes in; sizes belong to the
+    organization's size systems. So this is the honest list to receive into.
+    """
+    rows = await session.execute(
+        select(Size.id, Size.code, SizeSystem.code, Size.sort_order)
+        .join(SizeSystem, SizeSystem.id == Size.size_system_id)
+        .where(SizeSystem.organization_id == organization_id, Size.is_unknown.is_(False))
+    )
+    options = [
+        SizeOption(size_id=size_id, code=code, system=system, sort_order=sort_order)
+        for size_id, code, system, sort_order in rows.all()
+    ]
+    return sorted(options, key=_reading_order)
