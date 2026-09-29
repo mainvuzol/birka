@@ -617,7 +617,7 @@ Revision 1 said "24 tasks" while listing M1-001…M1-028. The correct count is *
 | M1-020 | ✅ Local implementation verified 2026-09-24: normalization + deterministic parser v1; slash rule, per-field evidence and unclassified descriptors ([report](m1-020-parser-report.md)) | `catalog-normalization-parser` | M1-012 |
 | M1-021 | Matcher v1: alias → `pg_trgm` → attribute compatibility → 5 decision types + margin policy + **duplicate-signature report** | `catalog-matcher`, `catalog-confidence-policy` | M1-020, M1-010 |
 | M1-022 | Alias/feedback evidence, `NEW→LEARNING→VERIFIED` promotion, review-queue API | `catalog-feedback-learning` | M1-021 |
-| **M1-023** ✅ | Snapshot import: raw rows, parse, review, approve → opening balances — module `snapshots`, allocations with a quantity basis, opening balance only into an empty warehouse ledger, migration `0015` ([ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md)) | `legacy-inventory-import` | M1-021, M1-013 — **done 2026-09-28** on `feat/m1-023-snapshot-import`, awaiting the owner's review and merge ([report](m1-023-snapshot-import-report.md)) |
+| **M1-023** ✅ | Snapshot import: raw rows, parse, review, approve → opening balances — module `snapshots`, allocations with a quantity basis, opening balance only into an empty warehouse ledger, migration `0015` ([ADR-0005](../decisions/ADR-0005-legacy-snapshot-import.md)) | `legacy-inventory-import` | M1-021, M1-013 — **merged in PR #32 (`3a66449`)**, implemented 2026-09-28 ([report](m1-023-snapshot-import-report.md)) |
 
 ### Gate M1D — Client, E2E, Release (5 tasks)
 

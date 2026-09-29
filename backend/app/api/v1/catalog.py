@@ -37,7 +37,7 @@ from app.core import idempotency
 from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import SizeSystemCode
-from app.modules.catalog.read import describe_variants, size_labels
+from app.modules.catalog.read import describe_variants, size_labels, unknown_size_ids
 from app.modules.catalog.search import search_families
 from app.modules.catalog.service import (
     ProductDraft,
@@ -268,6 +268,7 @@ class StockOption(BaseModel):
     size_id: uuid.UUID
     display_name: str
     size_label: str
+    size_is_unknown: bool
     quantity: int
     reserved_quantity: int
     available_quantity: int
@@ -299,6 +300,7 @@ async def stock_options(
     page = rows[:limit]
     descriptions = await describe_variants(session, [row.product_variant_id for row in page])
     labels = await size_labels(session, [row.size_id for row in page])
+    unknown = await unknown_size_ids(session, organization_id=scope.organization_id)
     return StockOptionsResponse(
         items=[
             StockOption(
@@ -306,6 +308,7 @@ async def stock_options(
                 size_id=row.size_id,
                 display_name=descriptions[row.product_variant_id].display_name,
                 size_label=labels[row.size_id],
+                size_is_unknown=row.size_id in unknown,
                 quantity=row.quantity,
                 reserved_quantity=row.reserved_quantity,
                 available_quantity=row.available_quantity,

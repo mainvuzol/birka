@@ -14,6 +14,7 @@ import type {
   Line,
   Order,
 } from "@/orders/types";
+import { Stock } from "@/inventory/Stock";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import "./styles.css";
@@ -126,7 +127,7 @@ function Workspace({
   changeStore: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
-  const [tab, setTab] = useState<"list" | "new" | "catalog">("list");
+  const [tab, setTab] = useState<"list" | "new" | "catalog" | "stock">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [storageError, setStorageError] = useState(false);
@@ -226,6 +227,17 @@ function Workspace({
             Каталог
           </button>
         )}
+        {store.permissions.includes("inventory:view") && (
+          <button
+            className={tab === "stock" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("stock");
+            }}
+          >
+            Залишки
+          </button>
+        )}
       </nav>
       {catalogStorageError && (
         <p role="alert">
@@ -259,7 +271,13 @@ function Workspace({
         </section>
       )}
       {error !== null && <p role="alert">{errorText(error)}</p>}
-      {tab === "catalog" ? (
+      {tab === "stock" ? (
+        store.permissions.includes("inventory:view") ? (
+          <Stock store={store} token={token} scopeKey={key} />
+        ) : (
+          <p role="alert">Немає доступу до залишків.</p>
+        )
+      ) : tab === "catalog" ? (
         store.permissions.includes("catalog:confirm") ? (
           <Catalog
             store={store}
