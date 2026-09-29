@@ -35,6 +35,7 @@ from app.core.logging import get_logger
 from app.modules.authz.locations import readable_location_ids, require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.catalog.read import unknown_size_ids
 from app.modules.catalog.validation import validate_stock_references
 from app.modules.inventory import repository
 from app.modules.inventory.models import (
@@ -169,6 +170,11 @@ OPENING_BALANCE_REFERENCE = "inventory_snapshot"
 TRANSFER_REFERENCE = "transfer"
 TRANSFER_TYPES = frozenset({MovementType.TRANSFER_OUT, MovementType.TRANSFER_IN})
 
+# The two halves of giving goods held with their size not known a size (F34).
+SIZE_RECLASSIFICATION_REASONS = frozenset(
+    {MovementReason.SIZE_RECLASSIFICATION_OUT, MovementReason.SIZE_RECLASSIFICATION_IN}
+)
+
 
 def validate_location_flows(requests: list[MovementRequest]) -> None:
     """Invariant I24: a transfer is always a pair.
@@ -228,6 +234,83 @@ def validate_location_flows(requests: list[MovementRequest]) -> None:
                 "A transfer must put in exactly what it takes out",
                 taken_out=-outs[0].quantity_delta,
                 put_in=ins[0].quantity_delta,
+                **details,
+            )
+
+
+def validate_size_reclassifications(requests: list[MovementRequest]) -> None:
+    """F34: goods get their size in one piece, never half of one.
+
+    Milestone plan §4.9. One negative `ADJUSTMENT` takes the units out of the
+    size-not-known balance (`SIZE_RECLASSIFICATION_OUT`), and positive ones put
+    them into the sizes they turned out to be (`SIZE_RECLASSIFICATION_IN`).
+    Both halves share one warehouse, one model and one command, and exactly as
+    many units go in as come out. Anything less is stock that changed size
+    with no trace of where it came from.
+
+    Which sizes may stand on each side needs the catalog, and
+    `_apply_movements` checks it: out of "size not known" only, into a real
+    size only.
+    """
+    groups: dict[
+        tuple[str | None, uuid.UUID | None, uuid.UUID, uuid.UUID], list[MovementRequest]
+    ] = {}
+    for request in requests:
+        if request.reason_code not in SIZE_RECLASSIFICATION_REASONS:
+            continue
+        details = {
+            "reason_code": request.reason_code.value,
+            "product_variant_id": str(request.product_variant_id),
+            "size_id": str(request.size_id),
+        }
+        outgoing = request.reason_code is MovementReason.SIZE_RECLASSIFICATION_OUT
+        if request.movement_type is not MovementType.ADJUSTMENT or (
+            (request.quantity_delta < 0) != outgoing
+        ):
+            raise ValidationFailedError(
+                "A size reclassification is an adjustment out of one size and into another",
+                movement_type=request.movement_type.value,
+                quantity_delta=request.quantity_delta,
+                **details,
+            )
+        if request.reference_type is None or request.reference_id is None:
+            raise ValidationFailedError(
+                "A size reclassification must name the command it belongs to", **details
+            )
+        group = (
+            request.reference_type,
+            request.reference_id,
+            request.location_id,
+            request.product_variant_id,
+        )
+        groups.setdefault(group, []).append(request)
+
+    for (_, reference_id, location_id, variant_id), legs in groups.items():
+        outs = [leg for leg in legs if leg.reason_code is MovementReason.SIZE_RECLASSIFICATION_OUT]
+        ins = [leg for leg in legs if leg.reason_code is MovementReason.SIZE_RECLASSIFICATION_IN]
+        details = {
+            "reference_id": str(reference_id),
+            "location_id": str(location_id),
+            "product_variant_id": str(variant_id),
+        }
+        if len(outs) != 1 or not ins:
+            raise ValidationFailedError(
+                "A size reclassification takes goods out of exactly one size and into others",
+                taken_out=len(outs),
+                put_in=len(ins),
+                **details,
+            )
+        sizes = [leg.size_id for leg in ins]
+        if len(set(sizes)) != len(sizes) or outs[0].size_id in sizes:
+            raise ValidationFailedError(
+                "A size reclassification puts goods into sizes other than the one they left",
+                **details,
+            )
+        if -outs[0].quantity_delta != sum(leg.quantity_delta for leg in ins):
+            raise ValidationFailedError(
+                "A size reclassification must put in exactly what it takes out",
+                taken_out=-outs[0].quantity_delta,
+                put_in=sum(leg.quantity_delta for leg in ins),
                 **details,
             )
 
@@ -335,6 +418,20 @@ async def _apply_movements(
     for request in requests:
         validate_movement(request)
     validate_location_flows(requests)
+    validate_size_reclassifications(requests)
+    reclassified = [r for r in requests if r.reason_code in SIZE_RECLASSIFICATION_REASONS]
+    if reclassified:
+        unknown = await unknown_size_ids(session, organization_id=organization_id)
+        for request in reclassified:
+            if (request.reason_code is MovementReason.SIZE_RECLASSIFICATION_OUT) != (
+                request.size_id in unknown
+            ):
+                raise ValidationFailedError(
+                    "Only goods held with their size not known are reclassified, "
+                    "and only into a size",
+                    reason_code=request.reason_code.value if request.reason_code else None,
+                    size_id=str(request.size_id),
+                )
 
     await repository.validate_lot_references(
         session,
@@ -573,6 +670,7 @@ async def find_divergences(
 __all__ = [
     "DIRECTION",
     "OPENING_BALANCE_REFERENCE",
+    "SIZE_RECLASSIFICATION_REASONS",
     "TRANSFER_REFERENCE",
     "TRANSFER_TYPES",
     "AppliedMovement",
@@ -589,10 +687,12 @@ __all__ = [
     "readable_stock",
     "refund_return_movement_ids",
     "sale_correction_ids",
+    "sale_reclassification_ids",
     "sale_shortage_ids",
     "transfer_movement_ids",
     "validate_location_flows",
     "validate_movement",
+    "validate_size_reclassifications",
 ]
 
 
@@ -617,6 +717,19 @@ async def sale_shortage_ids(
         organization_id=organization_id,
         sale_id=sale_id,
         reason=MovementReason.MISSING_AT_SALE,
+    )
+
+
+async def sale_reclassification_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Both halves of every size the seller read off a coat while making the sale.
+
+    Ordered by the stock key, then the movement, so a durable replay lists
+    them the way the original response did.
+    """
+    return await repository.sale_reclassification_ids(
+        session, organization_id=organization_id, sale_id=sale_id
     )
 
 

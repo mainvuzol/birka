@@ -53,6 +53,20 @@ ReceiptAcquisition = Literal[
     AcquisitionType.PURCHASE, AcquisitionType.CONSIGNMENT, AcquisitionType.BORROWED
 ]
 
+# What an adjustment can say about why. The two size-reclassification reasons
+# are absent: each is one half of a pair a sale writes when a seller gives a
+# "size not known" coat its size (ADR-0005 §11), and a lone half written here
+# would be stock that changed size with no trace of where it came from.
+AdjustmentReason = Literal[
+    MovementReason.FOUND_DURING_SALE,
+    MovementReason.MISSING_AT_SALE,
+    MovementReason.DAMAGED,
+    MovementReason.LOST,
+    MovementReason.STOCKTAKE,
+    MovementReason.CORRECTION,
+    MovementReason.OTHER,
+]
+
 
 async def _refuse_size_not_known(
     session: AsyncSession, *, organization_id: uuid.UUID, size_ids: set[uuid.UUID]
@@ -297,7 +311,7 @@ class AdjustmentRequest(BaseModel):
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity_delta: int = Field(ge=-10_000, le=10_000)
-    reason_code: MovementReason
+    reason_code: AdjustmentReason
     note: CleanText | None = Field(default=None, max_length=500)
 
     @field_validator("quantity_delta")

@@ -343,6 +343,37 @@ async def sale_adjustment_ids(
     )
 
 
+async def sale_reclassification_ids(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Both halves of a sale's size reclassifications, in the stock key's order."""
+    return list(
+        (
+            await session.scalars(
+                select(StockMovement.id)
+                .where(
+                    StockMovement.organization_id == organization_id,
+                    StockMovement.reference_type == "sale",
+                    StockMovement.reference_id == sale_id,
+                    StockMovement.movement_type == MovementType.ADJUSTMENT,
+                    StockMovement.reason_code.in_(
+                        [
+                            MovementReason.SIZE_RECLASSIFICATION_OUT,
+                            MovementReason.SIZE_RECLASSIFICATION_IN,
+                        ]
+                    ),
+                )
+                .order_by(
+                    StockMovement.location_id,
+                    StockMovement.product_variant_id,
+                    StockMovement.size_id,
+                    StockMovement.id,
+                )
+            )
+        ).all()
+    )
+
+
 async def refund_return_movement_ids(
     session: AsyncSession, *, organization_id: uuid.UUID, refund_id: uuid.UUID
 ) -> list[uuid.UUID]:

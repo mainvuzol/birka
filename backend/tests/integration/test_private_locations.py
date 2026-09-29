@@ -380,6 +380,7 @@ async def test_permanent_and_cached_replay_require_direct_private_rights(world, 
     [
         ("found_in_store", "inventory:correct_during_sale"),
         ("missing_in_store", "inventory:report_missing_during_sale"),
+        ("size_clarified", "inventory:correct_during_sale"),
     ],
 )
 async def test_private_sale_cannot_borrow_global_correction_permission(world, report, permission):

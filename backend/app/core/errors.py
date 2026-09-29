@@ -152,17 +152,18 @@ class UnknownSizeStockError(DomainError):
 
     Either the same model is held at this warehouse with its size not known —
     a legacy list loaded it that way — and adding a sized unit would leave the
-    size-unknown balance counting the same coat a second time; sell it as size
-    not known, or have it reclassified first. Or the correction would add a
-    unit with its size not known (`details.reason = FOUND_AS_SIZE_NOT_KNOWN`),
-    which only a list may state; sell it by its size.
+    size-unknown balance counting the same coat a second time; say instead
+    that it is one of those coats (`size_clarified` on the sale), or sell it
+    as size not known. Or the correction would add a unit with its size not
+    known (`details.reason = FOUND_AS_SIZE_NOT_KNOWN`), which only a list may
+    state; sell it by its size.
     """
 
     code = "UNKNOWN_SIZE_STOCK"
     http_status = 409
     message = (
-        "This product is held here with its size not known; sell it as size not known, "
-        "or have it reclassified first"
+        "This product is held here with its size not known; clarify its size, "
+        "or sell it as size not known"
     )
 
 

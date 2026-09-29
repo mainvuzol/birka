@@ -20,14 +20,24 @@ unit the system believed in is removed by a negative `ADJUSTMENT` with reason
 `MISSING_AT_SALE`. It is bounded twice over — by the line being sold, and by
 what the ledger already believed — so it can never become a stocktake, and it
 is not a write-off.
+
+`size_clarified` is the owner's answer of 2026-09-29 to M1-023's fourth
+question: a legacy list may load a coat as "size not known" (F34), and the
+seller, holding it, can read its size. The units the line sells then move out
+of the size-not-known balance and into the size — an audited pair of
+`ADJUSTMENT`s, `SIZE_RECLASSIFICATION_OUT` and `_IN` — and are sold as that
+size. It is bounded like «фізично є»: exactly the shortfall this sale consumes
+at that size, so nothing is reclassified that is not leaving in the basket.
 """
 
 from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Protocol
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +46,7 @@ from app.core import idempotency
 from app.core.errors import (
     CorrectionExceedsShortfallError,
     IdempotencyConflictError,
+    InsufficientStockError,
     NotFoundError,
     UnknownSizeStockError,
     ValidationFailedError,
@@ -48,12 +59,15 @@ from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import describe_variants, size_label, unknown_size_ids
 from app.modules.inventory.models import MovementReason, MovementType
 from app.modules.inventory.service import (
+    SIZE_RECLASSIFICATION_REASONS,
+    AppliedMovement,
     MovementRequest,
     apply_movements,
     available_stock,
     lock_stock,
     reserved_stock,
     sale_correction_ids,
+    sale_reclassification_ids,
     sale_shortage_ids,
 )
 from app.modules.sales.models import Sale, SaleItem
@@ -112,6 +126,19 @@ class MissingInStore:
 
 
 @dataclass(frozen=True, slots=True)
+class SizeClarified:
+    """ "The app has this coat as size not known; it is an M." Index into the sale's lines.
+
+    `quantity` is how many of the units the line sells come out of the
+    size-not-known balance of the same model at the line's warehouse. The
+    line's own size is the one the seller read.
+    """
+
+    line_index: int
+    quantity: int
+
+
+@dataclass(frozen=True, slots=True)
 class SaleResult:
     sale: Sale
     items: list[SaleItem]
@@ -121,6 +148,9 @@ class SaleResult:
     # off, and a receipt that blurs the two is the beginning of a balance
     # nobody can explain.
     shortages: list[uuid.UUID] = field(default_factory=list)
+    # Apart again: a reclassification neither adds nor removes a coat, it says
+    # what size one already counted is. Both halves are listed.
+    reclassifications: list[uuid.UUID] = field(default_factory=list)
 
 
 MAX_MONEY = Decimal("9999999999.99")
@@ -142,22 +172,37 @@ def _stock_key(line: SaleLineInput) -> StockKey:
     return (line.source_location_id, line.product_variant_id, line.size_id)
 
 
+class _LineReport(Protocol):
+    """What every report a seller makes about a line has in common."""
+
+    @property
+    def line_index(self) -> int: ...
+
+
+def _reported_keys(lines: list[SaleLineInput], *reports: Sequence[_LineReport]) -> set[StockKey]:
+    """The stock keys the given reports speak about. Indexes are validated first."""
+    return {_stock_key(lines[report.line_index]) for group in reports for report in group}
+
+
 def _validate_reports(
     lines: list[SaleLineInput],
     found_in_store: list[FoundInStore],
     missing_in_store: list[MissingInStore],
+    size_clarified: list[SizeClarified],
 ) -> None:
-    """Index checks both reports share, plus the one rule that spans them.
+    """Index checks the reports share, plus the rules that span them.
 
     A seller may not say of the same goods that there are more here than the
-    system thinks *and* fewer. The rule is stated per stock key rather than
-    per line: two lines drawing the same variant and size from the same
-    warehouse are two statements about one shelf, and they would contradict
-    each other just as flatly.
+    system thinks *and* fewer. Nor that goods are missing, or found from
+    nowhere, while also saying they came out of the size-not-known balance.
+    The rules are stated per stock key rather than per line: two lines drawing
+    the same variant and size from the same warehouse are two statements about
+    one shelf, and they would contradict each other just as flatly.
     """
     for label, reports in (
         ("found_in_store", found_in_store),
         ("missing_in_store", missing_in_store),
+        ("size_clarified", size_clarified),
     ):
         seen_indexes: set[int] = set()
         for report in reports:
@@ -167,12 +212,16 @@ def _validate_reports(
                 raise ValidationFailedError(f"Duplicate {label} line index")
             seen_indexes.add(report.line_index)
 
-    contested = {_stock_key(lines[found.line_index]) for found in found_in_store} & {
-        _stock_key(lines[missing.line_index]) for missing in missing_in_store
-    }
-    if contested:
+    found = {_stock_key(lines[report.line_index]) for report in found_in_store}
+    missing = {_stock_key(lines[report.line_index]) for report in missing_in_store}
+    clarified = {_stock_key(lines[report.line_index]) for report in size_clarified}
+    if found & missing:
         raise ValidationFailedError(
             "The same goods cannot be reported both present and missing in one sale"
+        )
+    if clarified & (found | missing):
+        raise ValidationFailedError(
+            "Goods whose size is clarified cannot also be reported found or missing in one sale"
         )
 
 
@@ -305,8 +354,206 @@ def _resolve_corrections(
     return corrections
 
 
+def _clarification_candidates(
+    lines: list[SaleLineInput], size_clarified: list[SizeClarified], unknown: set[uuid.UUID]
+) -> list[StockKey]:
+    """Every size-not-known key a clarified line could draw on, to lock with the basket.
+
+    A line already sold as size not known has no size to clarify, and is refused here.
+    """
+    candidates: list[StockKey] = []
+    for report in size_clarified:
+        line = lines[report.line_index]
+        if line.size_id in unknown:
+            raise ValidationFailedError(
+                "A line sold with its size not known has no size to clarify",
+                reason="SOLD_AS_SIZE_NOT_KNOWN",
+                line_index=report.line_index,
+            )
+        candidates.extend(
+            (line.source_location_id, line.product_variant_id, size_id)
+            for size_id in sorted(unknown)
+        )
+    return candidates
+
+
+def _clarification_sources(
+    *,
+    lines: list[SaleLineInput],
+    size_clarified: list[SizeClarified],
+    unknown: set[uuid.UUID],
+    quantities: dict[StockKey, int],
+    reported: set[StockKey],
+) -> dict[StockKey, StockKey]:
+    """Which size-not-known balance each clarified line draws on.
+
+    A lookup, never a guess. An organization normally has one "size not
+    known" (`ensure_unknown_size`), so there is one balance per model and
+    warehouse to draw on. If a model were held under two of them, nobody at
+    the counter could say which, and it is refused.
+
+    The balance may not itself be reported found or missing in the same
+    basket: each bound below reads it as the ledger holds it.
+    """
+    sources: dict[StockKey, StockKey] = {}
+    for report in size_clarified:
+        line = lines[report.line_index]
+        held = [
+            key
+            for key in (
+                (line.source_location_id, line.product_variant_id, size_id)
+                for size_id in sorted(unknown)
+            )
+            if quantities.get(key, 0) > 0
+        ]
+        details = {
+            "line_index": report.line_index,
+            "location_id": str(line.source_location_id),
+            "product_variant_id": str(line.product_variant_id),
+            "size_id": str(line.size_id),
+        }
+        if not held:
+            raise InsufficientStockError(
+                "Nothing of this model is held here with its size not known",
+                reason="SIZE_NOT_KNOWN_SHORT",
+                requested=report.quantity,
+                available=0,
+                correctable=False,
+                **details,
+            )
+        if len(held) > 1:
+            raise ValidationFailedError(
+                "This model is held here under more than one size nobody knows",
+                reason="SIZE_NOT_KNOWN_AMBIGUOUS",
+                **details,
+            )
+        if held[0] in reported:
+            raise ValidationFailedError(
+                "Goods held with their size not known cannot have a size clarified "
+                "and be reported found or missing in one sale",
+                reason="SIZE_NOT_KNOWN_REPORTED",
+                **details,
+            )
+        sources[_stock_key(line)] = held[0]
+    return sources
+
+
+def _resolve_clarifications(
+    *,
+    store_id: uuid.UUID,
+    lines: list[SaleLineInput],
+    size_clarified: list[SizeClarified],
+    quantities: dict[StockKey, int],
+    sources: dict[StockKey, StockKey],
+) -> list[MovementRequest]:
+    """Move the units a line sells out of "size not known" and into its size.
+
+    Three bounds. A line clarifies no more units than it sells. At the size
+    being sold, the clarified units must be exactly the shortfall this basket
+    consumes there, as with «фізично є»: the ledger's own M go first, and
+    nothing is reclassified that is not leaving in this sale. And the
+    size-not-known balance must hold them, beside whatever the basket sells
+    from it as it is. The pair itself changes no total (milestone plan §4.9);
+    the sale that follows is what takes the coat away.
+    """
+    demand: dict[StockKey, int] = {}
+    for line in lines:
+        key = _stock_key(line)
+        demand[key] = demand.get(key, 0) + line.quantity
+
+    requested: dict[StockKey, int] = {}
+    # The first line naming each key, so a refusal can point at a line.
+    first_line: dict[StockKey, int] = {}
+    for report in size_clarified:
+        line = lines[report.line_index]
+        if type(report.quantity) is not int or report.quantity <= 0:
+            raise ValidationFailedError(
+                "A size clarification must name a positive integer quantity"
+            )
+        if report.quantity > line.quantity:
+            # Per line as well as per key: the statement is about the units
+            # this line sells, and it is stored and fingerprinted as such.
+            raise ValidationFailedError(
+                "A line cannot have more units clarified than it sells",
+                reason="MORE_THAN_THE_LINE",
+                line_index=report.line_index,
+                quantity=line.quantity,
+                clarified=report.quantity,
+            )
+        key = _stock_key(line)
+        requested[key] = requested.get(key, 0) + report.quantity
+        first_line.setdefault(key, report.line_index)
+
+    taken: dict[StockKey, int] = {}
+    drawn_by: dict[StockKey, StockKey] = {}
+    into_sizes: list[MovementRequest] = []
+    for key, quantity in sorted(requested.items()):
+        available = quantities[key]
+        shortfall = max(demand[key] - available, 0)
+        if quantity != shortfall:
+            raise CorrectionExceedsShortfallError(
+                "A size clarification may only cover the exact shortfall of the size being sold",
+                reason="SIZE_CLARIFIED",
+                line_index=first_line[key],
+                location_id=str(key[0]),
+                product_variant_id=str(key[1]),
+                size_id=str(key[2]),
+                requested=quantity,
+                shortfall=shortfall,
+                available=available,
+            )
+        taken[sources[key]] = taken.get(sources[key], 0) + quantity
+        drawn_by.setdefault(sources[key], key)
+        into_sizes.append(
+            MovementRequest(
+                location_id=key[0],
+                acting_store_id=store_id,
+                product_variant_id=key[1],
+                size_id=key[2],
+                quantity_delta=quantity,
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=MovementReason.SIZE_RECLASSIFICATION_IN,
+            )
+        )
+
+    out_of_unknown: list[MovementRequest] = []
+    for source, quantity in sorted(taken.items()):
+        wanted = quantity + demand.get(source, 0)
+        if wanted > quantities[source]:
+            # Shaped like the refusal when nothing is held at all: the line
+            # and size being clarified, and the balance that fell short.
+            raise InsufficientStockError(
+                "Not that many of this model are held here with their size not known",
+                reason="SIZE_NOT_KNOWN_SHORT",
+                line_index=first_line[drawn_by[source]],
+                location_id=str(source[0]),
+                product_variant_id=str(source[1]),
+                size_id=str(drawn_by[source][2]),
+                size_not_known_id=str(source[2]),
+                requested=wanted,
+                available=quantities[source],
+                correctable=False,
+            )
+        out_of_unknown.append(
+            MovementRequest(
+                location_id=source[0],
+                acting_store_id=store_id,
+                product_variant_id=source[1],
+                size_id=source[2],
+                quantity_delta=-quantity,
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=MovementReason.SIZE_RECLASSIFICATION_OUT,
+            )
+        )
+    return out_of_unknown + into_sizes
+
+
 async def _refuse_a_second_count_of_unknown_size_stock(
-    session: AsyncSession, *, organization_id: uuid.UUID, corrections: list[MovementRequest]
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    corrections: list[MovementRequest],
+    leaving: dict[StockKey, int],
 ) -> None:
     """«Фізично є» may not count a coat that a legacy list may already count.
 
@@ -315,22 +562,26 @@ async def _refuse_a_second_count_of_unknown_size_stock(
     twice, with nothing to ever notice, so both are refused with their own
     code:
 
-    * A sized unit while the same variant is available here with size not
-      known. A seller selling one of those coats as, say, M finds the system
-      at zero for M; correcting M upward would leave the size-unknown balance
-      still counting it. The seller sells it as size not known, or someone
-      reclassifies it first.
+    * A sized unit while the same variant will still be available here with
+      size not known once this basket has taken what it takes from that
+      balance (`leaving`: sold as it is, written off, or clarified). A seller
+      selling one of those coats as, say, M finds the system at zero for M;
+      correcting M upward would leave the size-unknown balance still counting
+      it. The seller says instead that it is one of those coats
+      (`size_clarified`, owner decision 2026-09-29), or sells it as size not
+      known. A basket that takes the last of them has accounted for every
+      such coat, so the one found cannot be among them.
     * A size-not-known unit, ever. "Size not known" enters only from a list,
       where its evidence exists (ADR-0005 §3); at the counter the coat is in
       hand and its size can be read. Added here, it could be the very M the
       ledger already holds.
 
-    Read without locking the size-unknown keys, deliberately: a concurrent sale
-    of the last such unit can only make this refuse once more than it had to,
-    never let a second count through. An opening balance cannot land in
+    A size-unknown key this basket does not touch is read without its lock,
+    deliberately: a concurrent sale of the last such unit can only make this
+    refuse once more than it had to, never let a second count through. One
+    the basket does touch is among its locked keys, so what it takes is
+    subtracted from an exact figure. An opening balance cannot land in
     between — it waits for this command's warehouse lock (`lock_stock`).
-    Whether a seller may instead reclassify at the counter is the owner's
-    decision (M1-023 report).
     """
     unknown = await unknown_size_ids(session, organization_id=organization_id)
     for correction in corrections:
@@ -350,12 +601,13 @@ async def _refuse_a_second_count_of_unknown_size_stock(
     if not keys:
         return
     for key, quantity in (await available_stock(session, keys=keys)).items():
-        if quantity > 0:
+        still_held = quantity - leaving.get(key, 0)
+        if still_held > 0:
             raise UnknownSizeStockError(
                 location_id=str(key[0]),
                 product_variant_id=str(key[1]),
                 unknown_size_id=str(key[2]),
-                available=quantity,
+                available=still_held,
             )
 
 
@@ -367,6 +619,13 @@ async def correction_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
 async def shortage_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
     """The same, for the shortages reported while the sale was made."""
     return await sale_shortage_ids(session, organization_id=sale.organization_id, sale_id=sale.id)
+
+
+async def reclassification_ids(session: AsyncSession, sale: Sale) -> list[uuid.UUID]:
+    """The same, for both halves of every size clarified while the sale was made."""
+    return await sale_reclassification_ids(
+        session, organization_id=sale.organization_id, sale_id=sale.id
+    )
 
 
 async def _existing_command(
@@ -414,6 +673,7 @@ async def _existing_command(
         items=items,
         corrections=await correction_ids(session, existing),
         shortages=await shortage_ids(session, existing),
+        reclassifications=await reclassification_ids(session, existing),
     )
 
 
@@ -427,6 +687,7 @@ async def create_sale(
     currency_code: str,
     found_in_store: list[FoundInStore] | None = None,
     missing_in_store: list[MissingInStore] | None = None,
+    size_clarified: list[SizeClarified] | None = None,
     correlation_id: str | None = None,
 ) -> SaleResult:
     """Sell the basket, or raise and let the transaction roll back."""
@@ -436,8 +697,11 @@ async def create_sale(
     scope.require(Permission.SALE_CREATE, store_id)
     corrections_requested = found_in_store or []
     shortages_requested = missing_in_store or []
-    if corrections_requested:
-        # A narrow capability a seller may hold, unlike inventory:adjust.
+    clarifications_requested = size_clarified or []
+    if corrections_requested or clarifications_requested:
+        # A narrow capability a seller may hold, unlike inventory:adjust. It
+        # covers a size clarified at the counter too: bounded the same way,
+        # and it changes no total, where «фізично є» adds a coat.
         scope.require(Permission.INVENTORY_CORRECT_DURING_SALE, store_id)
     if shortages_requested:
         # Required separately: taking stock off a shelf is not the same
@@ -456,7 +720,7 @@ async def create_sale(
             raise ValidationFailedError("A discount cannot exceed the price")
         normalized.append(replace(line, unit_price=unit_price, discount_amount=discount_amount))
     lines = normalized
-    _validate_reports(lines, corrections_requested, shortages_requested)
+    _validate_reports(lines, corrections_requested, shortages_requested, clarifications_requested)
     request_fingerprint = idempotency.fingerprint(
         {
             "currency_code": currency_code,
@@ -487,6 +751,12 @@ async def create_sale(
                 {"line_index": missing.line_index, "quantity": missing.quantity}
                 for missing in shortages_requested
             ],
+            # And again: without the clarification the same command sells a
+            # coat the ledger holds as M, or none at all.
+            "size_clarified": [
+                {"line_index": clarified.line_index, "quantity": clarified.quantity}
+                for clarified in clarifications_requested
+            ],
         },
         actor_user_id=scope.user_id,
         store_id=store_id,
@@ -516,6 +786,7 @@ async def create_sale(
     for reports, permission in (
         (corrections_requested, Permission.INVENTORY_CORRECT_DURING_SALE),
         (shortages_requested, Permission.INVENTORY_REPORT_MISSING_DURING_SALE),
+        (clarifications_requested, Permission.INVENTORY_CORRECT_DURING_SALE),
     ):
         if reports:
             await require_stock_access(
@@ -536,20 +807,39 @@ async def create_sale(
     if existing is not None:
         return existing
 
+    # The size-not-known balances a clarification may draw on are part of the
+    # basket, so they are locked with it, in the same one global order.
+    unknown = (
+        await unknown_size_ids(session, organization_id=scope.organization_id)
+        if clarifications_requested
+        else set()
+    )
+    candidates = _clarification_candidates(lines, clarifications_requested, unknown)
+
     # Lock every stock key in one global order before reading any shortfall.
     # This also materializes missing rows, closing the first-receipt race.
     quantities = await lock_stock(
         session,
         organization_id=scope.organization_id,
-        keys=[(line.source_location_id, line.product_variant_id, line.size_id) for line in lines],
+        keys=[_stock_key(line) for line in lines] + candidates,
         acting_store_ids={store_id},
     )
     reserved = await reserved_stock(session, keys=list(quantities))
-    for report in corrections_requested + shortages_requested:
-        line = lines[report.line_index]
-        key = (line.source_location_id, line.product_variant_id, line.size_id)
+    corrected_keys = _reported_keys(
+        lines, corrections_requested, shortages_requested, clarifications_requested
+    )
+    for key in sorted(corrected_keys | set(candidates)):
         if reserved.get(key, 0):
-            raise ValidationFailedError("Release reservations before correcting this stock key")
+            # Which balance, so a client can offer what is still possible —
+            # selling the coat as it is — rather than only this sentence.
+            raise ValidationFailedError(
+                "Release reservations before correcting this stock key",
+                reason="RESERVED",
+                location_id=str(key[0]),
+                product_variant_id=str(key[1]),
+                size_id=str(key[2]),
+                reserved=reserved[key],
+            )
     quantities = {key: physical - reserved.get(key, 0) for key, physical in quantities.items()}
     described = await describe_variants(session, [line.product_variant_id for line in lines])
     for line in lines:
@@ -561,8 +851,8 @@ async def create_sale(
 
     # Shortages first: they reduce the lines, and everything downstream — the
     # money, the sale movements, the stored items — is about what is actually
-    # being sold. The two reports never touch the same stock key, so the
-    # corrections below still see the demand they were written against.
+    # being sold. No two reports touch the same stock key, so the corrections
+    # and clarifications below still see the demand they were written against.
     lines, shortages = _resolve_shortages(
         store_id=store_id,
         lines=lines,
@@ -572,9 +862,32 @@ async def create_sale(
     corrections = _resolve_corrections(
         store_id=store_id, lines=lines, found_in_store=corrections_requested, quantities=quantities
     )
+    reclassifications = _resolve_clarifications(
+        store_id=store_id,
+        lines=lines,
+        size_clarified=clarifications_requested,
+        quantities=quantities,
+        sources=_clarification_sources(
+            lines=lines,
+            size_clarified=clarifications_requested,
+            unknown=unknown,
+            quantities=quantities,
+            reported=_reported_keys(lines, corrections_requested, shortages_requested),
+        ),
+    )
     if corrections:
+        leaving: dict[StockKey, int] = {}
+        for line in lines:
+            leaving[_stock_key(line)] = leaving.get(_stock_key(line), 0) + line.quantity
+        for request in shortages + reclassifications:
+            if request.quantity_delta < 0:
+                key = (request.location_id, request.product_variant_id, request.size_id)
+                leaving[key] = leaving.get(key, 0) - request.quantity_delta
         await _refuse_a_second_count_of_unknown_size_stock(
-            session, organization_id=scope.organization_id, corrections=corrections
+            session,
+            organization_id=scope.organization_id,
+            corrections=corrections,
+            leaving=leaving,
         )
     subtotal = _amount(sum((line.unit_price * line.quantity for line in lines), Decimal("0")))
     discount_total = _amount(
@@ -600,7 +913,8 @@ async def create_sale(
 
     correction_ids: list[uuid.UUID] = []
     shortage_ids: list[uuid.UUID] = []
-    if corrections or shortages:
+    reclassification_ids: list[uuid.UUID] = []
+    if corrections or shortages or reclassifications:
         # Applied before the sale lines, in one batch. Before, because stock
         # must be on the books before it can be sold and the ledger has to
         # read in that order. One batch, because two calls would take locks in
@@ -610,12 +924,21 @@ async def create_sale(
             organization_id=scope.organization_id,
             requests=[
                 replace(adjustment, reference_type="sale", reference_id=sale.id)
-                for adjustment in corrections + shortages
+                for adjustment in corrections + shortages + reclassifications
             ],
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
         )
+        reclassified = [
+            entry for entry in applied if entry.request.reason_code in SIZE_RECLASSIFICATION_REASONS
+        ]
+        if reclassified:
+            reclassification_ids = await _audit_reclassifications(
+                session, scope=scope, sale=sale, applied=reclassified
+            )
         for entry in applied:
+            if entry.request.reason_code in SIZE_RECLASSIFICATION_REASONS:
+                continue
             found = entry.request.reason_code is MovementReason.FOUND_DURING_SALE
             if found:
                 correction_ids.append(entry.movement_id)
@@ -690,9 +1013,72 @@ async def create_sale(
         lines=len(items),
         corrections=len(correction_ids),
         shortages=len(shortage_ids),
+        reclassifications=len(reclassification_ids),
         total=str(sale.total),
     )
-    return SaleResult(sale=sale, items=items, corrections=correction_ids, shortages=shortage_ids)
+    return SaleResult(
+        sale=sale,
+        items=items,
+        corrections=correction_ids,
+        shortages=shortage_ids,
+        reclassifications=reclassification_ids,
+    )
+
+
+async def _audit_reclassifications(
+    session: AsyncSession, *, scope: RequestScope, sale: Sale, applied: list[AppliedMovement]
+) -> list[uuid.UUID]:
+    """One audit entry per model and warehouse whose size a seller clarified.
+
+    The entry is the reclassification's, not each leg's: what the balances
+    were and became on both sides, and which movements did it (milestone plan
+    §4.9). Returns every leg's movement, in the order a durable replay reads
+    them back (`sale_reclassification_ids`).
+    """
+    ordered = sorted(
+        applied,
+        key=lambda entry: (
+            entry.request.location_id,
+            entry.request.product_variant_id,
+            entry.request.size_id,
+            entry.movement_id,
+        ),
+    )
+    groups: dict[tuple[uuid.UUID, uuid.UUID], list[AppliedMovement]] = {}
+    for entry in ordered:
+        groups.setdefault((entry.request.location_id, entry.request.product_variant_id), []).append(
+            entry
+        )
+    for (location_id, variant_id), legs in groups.items():
+        out = next(
+            leg
+            for leg in legs
+            if leg.request.reason_code is MovementReason.SIZE_RECLASSIFICATION_OUT
+        )
+        await audit.record(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            action="inventory.size_reclassified_during_sale",
+            entity_type="stock_movement",
+            entity_id=out.movement_id,
+            before={
+                "location_id": str(location_id),
+                "product_variant_id": str(variant_id),
+                "size_not_known_id": str(out.request.size_id),
+                "quantities": {
+                    str(leg.request.size_id): leg.quantity_after - leg.request.quantity_delta
+                    for leg in legs
+                },
+            },
+            after={
+                "quantities": {str(leg.request.size_id): leg.quantity_after for leg in legs},
+                "movement_ids": [str(leg.movement_id) for leg in legs],
+                "sale_id": str(sale.id),
+            },
+            reason="SIZE_RECLASSIFICATION",
+        )
+    return [entry.movement_id for entry in ordered]
 
 
 __all__ = [
@@ -700,8 +1086,10 @@ __all__ = [
     "MissingInStore",
     "SaleLineInput",
     "SaleResult",
+    "SizeClarified",
     "correction_ids",
     "create_sale",
     "money",
+    "reclassification_ids",
     "shortage_ids",
 ]

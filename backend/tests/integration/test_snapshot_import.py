@@ -13,6 +13,9 @@ PostgreSQL. Each name states the property it pins:
 - **Guards added with it.** An opening balance cannot be written outside a
   list. A decided list is frozen. «Фізично є» cannot count "size not known"
   stock a second time.
+- **Size clarified at the counter.** A seller holding a coat a list loaded as
+  "size not known" says which size it is, and it is sold as that size: an
+  audited, bounded pair of movements (owner decision, 2026-09-29).
 - **Races.** The ones the design review raised, proven with `pg_locks` rather
   than timing.
 - **Access.** Who may import, review, approve and read, at shared and private
@@ -40,7 +43,7 @@ from app.core.config import Settings
 from app.core.errors import ValidationFailedError
 from app.main import create_app
 from app.modules.audit.models import AuditLog
-from app.modules.authz.models import Membership, Role
+from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.service import resolve_scope
 from app.modules.catalog.evidence import (
     CatalogMatchDecision,
@@ -61,6 +64,7 @@ from app.modules.identity.models import AppUser
 from app.modules.inventory.models import (
     AcquisitionType,
     Inventory,
+    MovementReason,
     MovementType,
     StockLot,
     StockMovement,
@@ -68,10 +72,14 @@ from app.modules.inventory.models import (
 from app.modules.inventory.service import (
     OPENING_BALANCE_REFERENCE,
     MovementRequest,
+    ReservationRequest,
     apply_movements,
     find_divergences,
+    release_stock,
+    reserve_stock,
     validate_movement,
 )
+from app.modules.sales.models import Sale
 from app.modules.snapshots import service as snapshot_service
 from app.modules.snapshots.models import (
     InventorySnapshot,
@@ -605,11 +613,12 @@ async def test_only_someone_allowed_to_import_here_can(world):
 
 
 async def test_a_private_warehouse_takes_a_list_only_from_its_own_store(world):
-    """And, by default, nobody can approve it. Owner question (M1-023 report).
+    """And only the child store's own owner approves it (owner decision, 2026-09-29).
 
     The private rule wants every operation granted directly in the managing
-    store. The owner's grant is organization-wide, and the child store's
-    manager does not hold `snapshot:approve`.
+    store. The organization-wide owner's grant is not that, and the child
+    store's manager does not hold `snapshot:approve`. Who does is in
+    `test_the_child_store_s_own_owner_approves_its_private_warehouse`.
     """
     w = world
     async with w.client() as client:
@@ -637,6 +646,43 @@ async def test_a_private_warehouse_takes_a_list_only_from_its_own_store(world):
         "PERMISSION_DENIED",
     )
     assert not await stock(w, w.private)
+
+
+async def test_the_child_store_s_own_owner_approves_its_private_warehouse(world):
+    """Owner decision, 2026-09-29: "a user with admin rights to the child store".
+
+    That is the owner's role, granted in the child store itself. No role
+    changes for it: the private rule already accepts a grant made there.
+    """
+    w = world
+    async with w.maker.begin() as session:
+        owner_role = await session.scalar(
+            select(Role.id).where(Role.organization_id == w.org, Role.code == "OWNER")
+        )
+        admin = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="child admin")
+        session.add(admin)
+        await session.flush()
+        session.add(
+            Membership(
+                user_id=admin.id, organization_id=w.org, store_id=w.second, role_id=owner_role
+            )
+        )
+    async with client_for(w.maker, admin.id) as client:
+        view = await prepared(client, w, store=w.second, location=w.private)
+        approved = await approve(client, view["snapshot_id"], view["review_revision"])
+        elsewhere = await client.post(
+            "/api/v1/snapshots", json=import_body(w, LIST, store=w.main, location=w.shared)
+        )
+
+    assert approved.status_code == 200, approved.text
+    assert await stock(w, w.private) == {
+        (w.coat, w.sizes["S"]): 1,
+        (w.coat, w.sizes["M"]): 1,
+        (w.coat, w.sizes["L"]): 1,
+        (w.bomber, w.sizes["M"]): 2,
+    }
+    # The grant is the child store's, and reaches nowhere else.
+    assert (elsewhere.status_code, elsewhere.json()["code"]) == (403, "FORBIDDEN_STORE")
 
 
 # ---------------------------------------------------------------------------
@@ -1685,6 +1731,784 @@ async def test_goods_with_their_size_not_known_enter_only_from_a_list(world):
     assert (found.status_code, found.json()["code"]) == (422, "VALIDATION_ERROR")
     assert written_off.status_code == 201, written_off.text
     assert await stock(w) == {(w.coat, uuid.UUID(unknown)): 1}
+
+
+# ---------------------------------------------------------------------------
+# Size clarified at the counter (owner decision, 2026-09-29)
+# ---------------------------------------------------------------------------
+
+
+async def held_as_size_not_known(w: World, quantity: int = 2) -> uuid.UUID:
+    """The coat, opened at the shared warehouse with its size not known."""
+    async with w.client() as client:
+        snapshot = await imported(client, w, [f"Лоран шоколад {quantity} шт"])
+        line = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, None, quantity)],
+            quantity_basis="STATED",
+        )
+        assert line.status_code == 200, line.text
+        assert (await approve(client, snapshot["snapshot_id"], 1)).status_code == 200
+    return uuid.UUID(line.json()["line"]["allocations"][0]["size_id"])
+
+
+def coat_sale(w: World, *lines, command_id=None, **reports) -> dict:
+    """A sale of the coat at the shared warehouse; each line is `(size, quantity)`."""
+    return {
+        "store_id": str(w.main),
+        "command_id": str(command_id or uuid.uuid4()),
+        "lines": [
+            {
+                "product_variant_id": str(w.coat),
+                "size_id": str(size),
+                "source_location_id": str(w.shared),
+                "quantity": quantity,
+                "unit_price": "9000.00",
+            }
+            for size, quantity in lines
+        ],
+        **reports,
+    }
+
+
+def clarified(*reports: tuple[int, int]) -> list[dict]:
+    return [{"line_index": index, "quantity": quantity} for index, quantity in reports]
+
+
+async def test_a_seller_says_which_size_a_coat_held_as_size_not_known_is(world):
+    """The answer to M1-023's fourth question. The coat leaves "size not known"
+    for M, is sold as M, and the trail says who did it and what it was."""
+    w = world
+    unknown = await held_as_size_not_known(w)
+    async with w.client("seller") as client:
+        sold = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+        )
+        assert sold.status_code == 201, sold.text
+        body = sold.json()
+        read_back = await client.get(f"/api/v1/sales/{body['id']}")
+        async with w.maker.begin() as session:
+            await session.execute(
+                update(Sale).where(Sale.id == uuid.UUID(body["id"])).values(response_snapshot=None)
+            )
+        rebuilt = await client.get(f"/api/v1/sales/{body['id']}")
+
+    assert [item["size_id"] for item in body["items"]] == [str(w.sizes["M"])]
+    assert (body["corrections"], body["shortages"]) == ([], [])
+    assert len(body["size_reclassifications"]) == 2
+    # Read back as it was answered, from the stored answer and from the ledger.
+    assert read_back.json()["size_reclassifications"] == body["size_reclassifications"]
+    assert rebuilt.json()["size_reclassifications"] == body["size_reclassifications"]
+    assert await stock(w) == {(w.coat, unknown): 1}
+    async with w.maker() as session:
+        legs = (
+            await session.execute(
+                select(
+                    StockMovement.id,
+                    StockMovement.size_id,
+                    StockMovement.movement_type,
+                    StockMovement.quantity_delta,
+                    StockMovement.reason_code,
+                ).where(StockMovement.reference_id == uuid.UUID(body["id"]))
+            )
+        ).all()
+        entry = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.organization_id == w.org,
+                AuditLog.action == "inventory.size_reclassified_during_sale",
+            )
+        )
+        assert await find_divergences(session, organization_id=w.org) == []
+
+    assert {tuple(leg[1:]) for leg in legs} == {
+        (unknown, MovementType.ADJUSTMENT, -1, MovementReason.SIZE_RECLASSIFICATION_OUT),
+        (w.sizes["M"], MovementType.ADJUSTMENT, 1, MovementReason.SIZE_RECLASSIFICATION_IN),
+        (w.sizes["M"], MovementType.SALE, -1, None),
+    }
+    assert {str(leg.id) for leg in legs if leg.reason_code} == set(body["size_reclassifications"])
+    assert entry is not None
+    out = next(leg for leg in legs if leg.reason_code is MovementReason.SIZE_RECLASSIFICATION_OUT)
+    assert (entry.entity_type, entry.entity_id) == ("stock_movement", out.id)
+    assert entry.actor_user_id == w.users["seller"]
+    assert entry.before["location_id"] == str(w.shared)
+    assert entry.before["product_variant_id"] == str(w.coat)
+    assert entry.before["size_not_known_id"] == str(unknown)
+    assert entry.reason == "SIZE_RECLASSIFICATION"
+    assert entry.before["quantities"] == {str(unknown): 2, str(w.sizes["M"]): 0}
+    assert entry.after["quantities"] == {str(unknown): 1, str(w.sizes["M"]): 1}
+    assert sorted(entry.after["movement_ids"]) == sorted(body["size_reclassifications"])
+    assert entry.after["sale_id"] == body["id"]
+
+
+async def test_a_clarification_covers_exactly_what_the_sale_is_short(world):
+    """Like «фізично є»: the M the ledger already holds is sold first, and
+    nothing is reclassified that is not leaving in this basket."""
+    w = world
+    unknown = await held_as_size_not_known(w, 3)
+    async with w.client() as client:
+        received = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {"product_variant_id": str(w.coat), "size_id": str(w.sizes["M"]), "quantity": 1}
+                ],
+            },
+        )
+        assert received.status_code == 201, received.text
+    async with w.client("seller") as client:
+        attempts = [
+            await client.post("/api/v1/sales", headers=idempotent(), json=body)
+            for body in (
+                coat_sale(w, (w.sizes["M"], 2), size_clarified=clarified((0, 2))),
+                coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+                # Too few is refused too, not left for the sale to trip over.
+                coat_sale(w, (w.sizes["M"], 3), size_clarified=clarified((0, 1))),
+            )
+        ]
+        exact = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(w, (w.sizes["M"], 2), size_clarified=clarified((0, 1))),
+        )
+
+    for attempt, shortfall in zip(attempts, (1, 0, 2), strict=True):
+        assert (attempt.status_code, attempt.json()["code"]) == (
+            422,
+            "CORRECTION_EXCEEDS_SHORTFALL",
+        )
+        details = attempt.json()["details"]
+        assert details["shortfall"] == shortfall
+        assert (details["reason"], details["line_index"]) == ("SIZE_CLARIFIED", 0)
+        assert (details["location_id"], details["size_id"]) == (str(w.shared), str(w.sizes["M"]))
+    assert exact.status_code == 201, exact.text
+    assert await stock(w) == {(w.coat, unknown): 2}
+
+
+async def test_a_clarification_takes_only_what_is_held_with_size_not_known(world):
+    """Beside whatever the basket sells from that balance as it is, and only
+    for a model that has one here."""
+    w = world
+    unknown = await held_as_size_not_known(w)
+    async with w.client("seller") as client:
+        too_many = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(w, (w.sizes["M"], 3), size_clarified=clarified((0, 3))),
+        )
+        with_the_rest = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(w, (w.sizes["M"], 2), (unknown, 1), size_clarified=clarified((0, 2))),
+        )
+        none_held = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json={
+                **coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+                "lines": [
+                    {
+                        "product_variant_id": str(w.bomber),
+                        "size_id": str(w.sizes["M"]),
+                        "source_location_id": str(w.shared),
+                        "quantity": 1,
+                        "unit_price": "4200.00",
+                    }
+                ],
+            },
+        )
+
+    for refused, requested in ((too_many, 3), (with_the_rest, 3), (none_held, 1)):
+        assert (refused.status_code, refused.json()["code"]) == (409, "INSUFFICIENT_STOCK")
+        details = refused.json()["details"]
+        assert (details["reason"], details["line_index"]) == ("SIZE_NOT_KNOWN_SHORT", 0)
+        assert (details["size_id"], details["correctable"]) == (str(w.sizes["M"]), False)
+        assert details["requested"] == requested
+    assert with_the_rest.json()["details"]["size_not_known_id"] == str(unknown)
+    assert await stock(w) == {(w.coat, unknown): 2}
+
+
+async def test_only_a_sized_line_nothing_else_is_said_about_is_clarified(world):
+    """The manager, who may report goods missing too, so every refusal is the
+    rule's own and none is a missing permission. Each case is told apart by
+    what it says, so none passes on another rule's refusal."""
+    w = world
+    unknown = await held_as_size_not_known(w)
+    found = [{"line_index": 0, "quantity": 1}]
+    missing = [{"line_index": 1, "quantity": 1}]
+    cases = [
+        # Sold as size not known: there is no size to clarify.
+        (coat_sale(w, (unknown, 1), size_clarified=clarified((0, 1))), "SOLD_AS_SIZE_NOT_KNOWN"),
+        # Found from nowhere and taken from "size not known" at once.
+        (
+            coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1)), found_in_store=found),
+            "also be reported found or missing",
+        ),
+        # Two lines on one shelf are one statement about it, though the
+        # shortage on the second line would stand on its own.
+        (
+            coat_sale(
+                w,
+                (w.sizes["M"], 1),
+                (w.sizes["M"], 2),
+                size_clarified=clarified((0, 1)),
+                missing_in_store=missing,
+            ),
+            "also be reported found or missing",
+        ),
+        # The balance drawn on is itself reported missing.
+        (
+            coat_sale(
+                w,
+                (w.sizes["M"], 1),
+                (unknown, 2),
+                size_clarified=clarified((0, 1)),
+                missing_in_store=missing,
+            ),
+            "SIZE_NOT_KNOWN_REPORTED",
+        ),
+        # More than the line sells, though another line sells the same size.
+        (
+            coat_sale(w, (w.sizes["M"], 1), (w.sizes["M"], 1), size_clarified=clarified((0, 2))),
+            "MORE_THAN_THE_LINE",
+        ),
+        (coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((1, 1))), "does not exist"),
+        (
+            coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1), (0, 1))),
+            "Duplicate size_clarified",
+        ),
+    ]
+    async with w.client("manager") as client:
+        refused = [
+            await client.post("/api/v1/sales", headers=idempotent(), json=body) for body, _ in cases
+        ]
+
+    for response, (_, expected) in zip(refused, cases, strict=True):
+        assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+        said = f"{response.json()['message']} {response.json().get('details', {}).get('reason')}"
+        assert expected in said, said
+    assert await stock(w) == {(w.coat, unknown): 2}
+
+
+async def test_clarifying_a_size_needs_the_correction_permission(world):
+    """The same narrow capability as «фізично є», which the default seller
+    holds. Once it is taken away, not even the stored answer to an earlier
+    clarification is handed back (I13), and the seller still sells the coat
+    as size not known."""
+    w = world
+    unknown = await held_as_size_not_known(w)
+    earlier = coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1)))
+    earlier_key = idempotent()
+    async with w.client("seller") as client:
+        granted = await client.post("/api/v1/sales", headers=earlier_key, json=earlier)
+        assert granted.status_code == 201, granted.text
+    async with w.maker.begin() as session:
+        seller_role = select(Role.id).where(Role.organization_id == w.org, Role.code == "SELLER")
+        await session.execute(
+            delete(RolePermission).where(
+                RolePermission.role_id == seller_role.scalar_subquery(),
+                RolePermission.permission_code == "inventory:correct_during_sale",
+            )
+        )
+    async with w.client("seller") as client:
+        replayed = await client.post("/api/v1/sales", headers=earlier_key, json=earlier)
+        clarifying = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+        )
+        as_it_is = await client.post(
+            "/api/v1/sales", headers=idempotent(), json=coat_sale(w, (unknown, 1))
+        )
+
+    for refused in (replayed, clarifying):
+        assert (refused.status_code, refused.json()["code"]) == (403, "PERMISSION_DENIED")
+        assert refused.json()["details"]["permission"] == "inventory:correct_during_sale"
+    assert as_it_is.status_code == 201, as_it_is.text
+    assert await stock(w) == {}
+
+
+async def test_the_same_command_without_its_clarification_is_a_conflict(world):
+    """Invariant I20: without it the command is a different sale. With it, a
+    retry after the cache is gone replays the same movements, written once —
+    rebuilt from the ledger when no answer was stored."""
+    w = world
+    unknown = await held_as_size_not_known(w)
+    command_id = uuid.uuid4()
+    body = coat_sale(w, (w.sizes["M"], 1), command_id=command_id, size_clarified=clarified((0, 1)))
+    async with w.client("seller") as client:
+        first = await client.post("/api/v1/sales", headers=idempotent(), json=body)
+        assert first.status_code == 201, first.text
+        without = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json={key: value for key, value in body.items() if key != "size_clarified"},
+        )
+        retry = await client.post("/api/v1/sales", headers=idempotent(), json=body)
+        async with w.maker.begin() as session:
+            await session.execute(
+                update(Sale).where(Sale.command_id == command_id).values(response_snapshot=None)
+            )
+        rebuilt = await client.post("/api/v1/sales", headers=idempotent(), json=body)
+
+    assert (without.status_code, without.json()["code"]) == (409, "IDEMPOTENCY_CONFLICT")
+    assert retry.status_code == 201, retry.text
+    assert retry.json() == first.json()
+    assert rebuilt.status_code == 201, rebuilt.text
+    assert rebuilt.json() == first.json()
+    assert await stock(w) == {(w.coat, unknown): 1}
+
+
+async def test_two_sellers_clarifying_the_last_coat_sell_it_once(world):
+    """The size-not-known balance is locked with the basket: the second sale
+    finds it empty, rather than both reading one and each taking it."""
+    w = world
+    unknown = await held_as_size_not_known(w, 1)
+    body = coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1)))
+    async with w.client("seller") as seller, w.client("manager") as manager:
+        responses = await asyncio.gather(
+            seller.post("/api/v1/sales", headers=idempotent(), json=body),
+            manager.post(
+                "/api/v1/sales",
+                headers=idempotent(),
+                json={**body, "command_id": str(uuid.uuid4())},
+            ),
+        )
+
+    assert sorted(response.status_code for response in responses) == [201, 409]
+    lost = next(response for response in responses if response.status_code == 409)
+    assert lost.json()["code"] == "INSUFFICIENT_STOCK"
+    assert await stock(w) == {}
+    async with w.maker() as session:
+        assert await find_divergences(session, organization_id=w.org) == []
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(StockMovement)
+                .where(
+                    StockMovement.organization_id == w.org,
+                    StockMovement.size_id == unknown,
+                    StockMovement.reason_code == MovementReason.SIZE_RECLASSIFICATION_OUT,
+                )
+            )
+            == 1
+        )
+
+
+async def test_reserved_goods_are_not_reclassified(world):
+    """A reservation holds units of a balance, and this path corrects no
+    reserved balance on either side, like «фізично є» and «фізично
+    відсутній». The refusal names the balance, so a client can offer what is
+    still possible: selling the coat as it is."""
+    w = world
+    unknown = await held_as_size_not_known(w)
+
+    async def clarify() -> httpx.Response:
+        async with w.client("seller") as client:
+            return await client.post(
+                "/api/v1/sales",
+                headers=idempotent(),
+                json=coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+            )
+
+    order = uuid.uuid4()
+    async with w.maker.begin() as session:
+        await reserve_stock(
+            session,
+            organization_id=w.org,
+            store_id=w.main,
+            reference_id=order,
+            requests=[ReservationRequest(w.shared, w.coat, unknown, 1)],
+            actor_user_id=w.users["owner"],
+        )
+    source_reserved = await clarify()
+    async with w.maker.begin() as session:
+        await release_stock(
+            session,
+            organization_id=w.org,
+            store_id=w.main,
+            reference_id=order,
+            actor_user_id=w.users["owner"],
+        )
+    async with w.client() as client:
+        received = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {"product_variant_id": str(w.coat), "size_id": str(w.sizes["M"]), "quantity": 1}
+                ],
+            },
+        )
+        assert received.status_code == 201, received.text
+    async with w.maker.begin() as session:
+        await reserve_stock(
+            session,
+            organization_id=w.org,
+            store_id=w.main,
+            reference_id=uuid.uuid4(),
+            requests=[ReservationRequest(w.shared, w.coat, w.sizes["M"], 1)],
+            actor_user_id=w.users["owner"],
+        )
+    size_reserved = await clarify()
+
+    for refused, size in ((source_reserved, unknown), (size_reserved, w.sizes["M"])):
+        assert (refused.status_code, refused.json()["code"]) == (422, "VALIDATION_ERROR")
+        details = refused.json()["details"]
+        assert (details["reason"], details["size_id"]) == ("RESERVED", str(size))
+        assert (details["location_id"], details["reserved"]) == (str(w.shared), 1)
+    assert await stock(w) == {(w.coat, unknown): 2, (w.coat, w.sizes["M"]): 1}
+
+
+async def test_a_clarification_is_not_replayed_once_its_private_grant_is_gone(world):
+    """I13 at a private warehouse. The seller's own grant in the child store is
+    what let them clarify there; once it is gone, an organization-wide grant
+    of the same permission does not bring the stored answer back."""
+    w = world
+    async with w.maker.begin() as session:
+        roles = {
+            role.code: role.id
+            for role in await session.scalars(select(Role).where(Role.organization_id == w.org))
+        }
+        counter = Role(organization_id=w.org, code="CHILD_COUNTER", name="Counter", is_system=False)
+        session.add(counter)
+        await session.flush()
+        for permission in ("sale:create", "sale:view", "inventory:correct_during_sale"):
+            session.add(RolePermission(role_id=counter.id, permission_code=permission))
+        users = {}
+        for name in ("admin", "seller"):
+            user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name=name)
+            session.add(user)
+            await session.flush()
+            users[name] = user.id
+        for user, store, role in (
+            (users["admin"], w.second, roles["OWNER"]),
+            (users["seller"], w.second, counter.id),
+            (users["seller"], None, roles["OWNER"]),
+        ):
+            session.add(
+                Membership(user_id=user, organization_id=w.org, store_id=store, role_id=role)
+            )
+    async with client_for(w.maker, users["admin"]) as client:
+        snapshot = await imported(
+            client, w, ["Лоран шоколад 2 шт"], store=w.second, location=w.private
+        )
+        line = await resolve(
+            client,
+            snapshot["snapshot_id"],
+            1,
+            allocations=[allocation(w.coat, None, 2)],
+            quantity_basis="STATED",
+        )
+        assert (await approve(client, snapshot["snapshot_id"], 1)).status_code == 200
+    unknown = uuid.UUID(line.json()["line"]["allocations"][0]["size_id"])
+    body = {
+        **coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+        "store_id": str(w.second),
+    }
+    body["lines"][0]["source_location_id"] = str(w.private)
+    key = idempotent()
+    async with client_for(w.maker, users["seller"]) as client:
+        original = await client.post("/api/v1/sales", headers=key, json=body)
+        assert original.status_code == 201, original.text
+        async with w.maker.begin() as session:
+            await session.execute(
+                delete(RolePermission).where(
+                    RolePermission.role_id == counter.id,
+                    RolePermission.permission_code == "inventory:correct_during_sale",
+                )
+            )
+        replayed = await client.post("/api/v1/sales", headers=key, json=body)
+
+    assert (replayed.status_code, replayed.json()["code"]) == (403, "PERMISSION_DENIED")
+    assert replayed.json()["details"]["permission"] == "inventory:correct_during_sale"
+    assert await stock(w, w.private) == {(w.coat, unknown): 1}
+
+
+async def test_one_basket_clarifies_several_sizes_beside_the_rest_of_it(world):
+    """Two sizes read off two coats, a third coat sold as it is, and a
+    shortage elsewhere on the rack. One reclassification out of "size not
+    known" into both sizes, one audit entry, and the movements listed in the
+    stock key's order however the answer is read back."""
+    w = world
+    unknown = await held_as_size_not_known(w, 4)
+    async with w.client() as client:
+        received = await client.post(
+            "/api/v1/inventory/receipts",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "lines": [
+                    {"product_variant_id": str(w.coat), "size_id": str(w.sizes["S"]), "quantity": 2}
+                ],
+            },
+        )
+        assert received.status_code == 201, received.text
+    async with w.client("manager") as client:
+        sold = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(
+                w,
+                (w.sizes["M"], 1),
+                (w.sizes["L"], 1),
+                (unknown, 1),
+                (w.sizes["S"], 2),
+                size_clarified=clarified((0, 1), (1, 1)),
+                missing_in_store=[{"line_index": 3, "quantity": 1}],
+            ),
+        )
+        assert sold.status_code == 201, sold.text
+        body = sold.json()
+        async with w.maker.begin() as session:
+            await session.execute(
+                update(Sale).where(Sale.id == uuid.UUID(body["id"])).values(response_snapshot=None)
+            )
+        rebuilt = await client.get(f"/api/v1/sales/{body['id']}")
+
+    assert await stock(w) == {(w.coat, unknown): 1}
+    async with w.maker() as session:
+        legs = (
+            await session.execute(
+                select(StockMovement.id, StockMovement.size_id, StockMovement.quantity_delta).where(
+                    StockMovement.reference_id == uuid.UUID(body["id"]),
+                    StockMovement.reason_code.in_(
+                        [
+                            MovementReason.SIZE_RECLASSIFICATION_OUT,
+                            MovementReason.SIZE_RECLASSIFICATION_IN,
+                        ]
+                    ),
+                )
+            )
+        ).all()
+        entries = list(
+            await session.scalars(
+                select(AuditLog).where(
+                    AuditLog.organization_id == w.org,
+                    AuditLog.action == "inventory.size_reclassified_during_sale",
+                )
+            )
+        )
+        assert await find_divergences(session, organization_id=w.org) == []
+
+    assert sorted((leg.size_id, leg.quantity_delta) for leg in legs) == sorted(
+        [(unknown, -2), (w.sizes["M"], 1), (w.sizes["L"], 1)]
+    )
+    in_key_order = [str(leg.id) for leg in sorted(legs, key=lambda leg: (leg.size_id, leg.id))]
+    assert body["size_reclassifications"] == in_key_order
+    assert rebuilt.json()["size_reclassifications"] == in_key_order
+    assert len(body["shortages"]) == 1
+    assert len(entries) == 1
+    assert entries[0].before["quantities"] == {
+        str(unknown): 4,
+        str(w.sizes["M"]): 0,
+        str(w.sizes["L"]): 0,
+    }
+    assert entries[0].after["quantities"] == {
+        str(unknown): 2,
+        str(w.sizes["M"]): 1,
+        str(w.sizes["L"]): 1,
+    }
+
+
+async def test_a_basket_that_clarifies_the_last_such_coat_may_find_another_size(world):
+    """«Фізично є» beside "size not known" stock waits until no such coat can
+    be the one found. Once the basket itself takes the last of them, none can
+    (the review's second finding)."""
+    w = world
+    unknown = await held_as_size_not_known(w, 2)
+    basket = coat_sale(
+        w,
+        (w.sizes["M"], 1),
+        (w.sizes["S"], 1),
+        size_clarified=clarified((0, 1)),
+        found_in_store=[{"line_index": 1, "quantity": 1}],
+    )
+    async with w.client("seller") as client:
+        one_still_held = await client.post("/api/v1/sales", headers=idempotent(), json=basket)
+        as_it_is = await client.post(
+            "/api/v1/sales", headers=idempotent(), json=coat_sale(w, (unknown, 1))
+        )
+        assert as_it_is.status_code == 201, as_it_is.text
+        the_last = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json={**basket, "command_id": str(uuid.uuid4())},
+        )
+
+    assert (one_still_held.status_code, one_still_held.json()["code"]) == (
+        409,
+        "UNKNOWN_SIZE_STOCK",
+    )
+    assert one_still_held.json()["details"]["available"] == 1
+    assert the_last.status_code == 201, the_last.text
+    assert len(the_last.json()["corrections"]) == 1
+    assert len(the_last.json()["size_reclassifications"]) == 2
+    assert await stock(w) == {}
+    async with w.maker() as session:
+        assert await find_divergences(session, organization_id=w.org) == []
+
+
+async def test_a_model_held_under_two_sizes_nobody_knows_is_not_guessed(world):
+    """Never the case while an organization has one "size not known". If it
+    ever held two, the seller could not say which balance the coat is from."""
+    w = world
+    unknown = await held_as_size_not_known(w, 1)
+    async with w.maker.begin() as session:
+        system = await session.scalar(select(Size.size_system_id).where(Size.id == unknown))
+        second = Size(
+            size_system_id=system, code=f"UNKNOWN-{uuid.uuid4().hex[:8]}", is_unknown=True
+        )
+        session.add(second)
+        await session.flush()
+        other = second.id
+        await apply_movements(
+            session,
+            organization_id=w.org,
+            requests=[
+                MovementRequest(
+                    location_id=w.shared,
+                    acting_store_id=w.main,
+                    product_variant_id=w.coat,
+                    size_id=other,
+                    quantity_delta=1,
+                    movement_type=MovementType.ADJUSTMENT,
+                    reason_code=MovementReason.CORRECTION,
+                )
+            ],
+        )
+    async with w.client("seller") as client:
+        refused = await client.post(
+            "/api/v1/sales",
+            headers=idempotent(),
+            json=coat_sale(w, (w.sizes["M"], 1), size_clarified=clarified((0, 1))),
+        )
+
+    assert (refused.status_code, refused.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert refused.json()["details"]["reason"] == "SIZE_NOT_KNOWN_AMBIGUOUS"
+    assert await stock(w) == {(w.coat, unknown): 1, (w.coat, other): 1}
+
+
+async def test_the_size_not_known_balance_is_locked_in_the_basket_s_own_order(world):
+    """Locked from the start with the basket's other keys, in the one global
+    order, never after them (the review's third test gap). Here "size not
+    known" sorts first. So a clarifying sale that finds it taken waits
+    holding nothing above it, and a plain sale of both keys, taking them in
+    the same order, can never deadlock with it. Proven with `pg_locks`, not
+    timing."""
+    w = world
+    unknown = await held_as_size_not_known(w, 1)
+    # All ones in the high half: after any size the server ever generated.
+    last = uuid.UUID(int=(2**128 - 2**64) | uuid.uuid4().int % 2**64)
+    assert unknown < last
+    async with w.maker.begin() as session:
+        system = await session.scalar(select(Size.size_system_id).where(Size.id == w.sizes["M"]))
+        session.add(Size(id=last, size_system_id=system, code=f"Z{last.hex[-8:]}"))
+        await session.flush()
+        session.add(
+            Inventory(location_id=w.shared, product_variant_id=w.coat, size_id=last, quantity=0)
+        )
+
+    lock_row = text(
+        "SELECT id FROM inventory WHERE location_id = :location"
+        " AND product_variant_id = :variant AND size_id = :size FOR UPDATE NOWAIT"
+    )
+    async with w.maker() as holder_session:
+        await holder_session.execute(
+            lock_row, {"location": w.shared, "variant": w.coat, "size": unknown}
+        )
+        holder = await holder_session.scalar(text("SELECT pg_backend_pid()"))
+        async with w.client("seller") as client:
+            sale = asyncio.create_task(
+                client.post(
+                    "/api/v1/sales",
+                    headers=idempotent(),
+                    json=coat_sale(w, (last, 1), size_clarified=clarified((0, 1))),
+                )
+            )
+            await wait_until_blocked_by(w.engine, holder)
+            # The key above the one it waits for is free: NOWAIT would raise.
+            async with w.maker() as probe:
+                await probe.execute(
+                    lock_row, {"location": w.shared, "variant": w.coat, "size": last}
+                )
+                await probe.rollback()
+            await holder_session.rollback()
+            sold = await sale
+
+    assert sold.status_code == 201, sold.text
+    assert await stock(w) == {}
+
+
+async def test_a_reclassification_is_never_written_by_halves(world):
+    """Nor out of a size anybody knows, nor into "size not known". The
+    adjustment command no longer takes either reason, and the ledger's door
+    refuses half of one from any caller."""
+    w = world
+    unknown = await held_as_size_not_known(w, 1)
+
+    def adjustment(size, delta: int, reason: str) -> dict:
+        return {
+            "store_id": str(w.main),
+            "location_id": str(w.shared),
+            "product_variant_id": str(w.coat),
+            "size_id": str(size),
+            "quantity_delta": delta,
+            "reason_code": reason,
+        }
+
+    async with w.client() as client:
+        halves = [
+            await client.post("/api/v1/inventory/adjustments", headers=idempotent(), json=body)
+            for body in (
+                adjustment(w.sizes["M"], 1, "SIZE_RECLASSIFICATION_IN"),
+                adjustment(unknown, -1, "SIZE_RECLASSIFICATION_OUT"),
+            )
+        ]
+    # Refused by the request's own shape, so FastAPI's `detail` names the field.
+    assert [
+        (response.status_code, response.json()["detail"][0]["loc"][-1]) for response in halves
+    ] == [(422, "reason_code")] * 2
+
+    def pair(source, target) -> list[MovementRequest]:
+        reference = uuid.uuid4()
+        return [
+            MovementRequest(
+                location_id=w.shared,
+                acting_store_id=w.main,
+                product_variant_id=w.coat,
+                size_id=size,
+                quantity_delta=delta,
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=reason,
+                reference_type="sale",
+                reference_id=reference,
+            )
+            for size, delta, reason in (
+                (source, -1, MovementReason.SIZE_RECLASSIFICATION_OUT),
+                (target, 1, MovementReason.SIZE_RECLASSIFICATION_IN),
+            )
+        ]
+
+    async with w.maker() as session:
+        with pytest.raises(ValidationFailedError, match="exactly one size"):
+            await apply_movements(
+                session, organization_id=w.org, requests=pair(unknown, w.sizes["M"])[:1]
+            )
+    for source, target in ((w.sizes["S"], w.sizes["M"]), (w.sizes["M"], unknown)):
+        async with w.maker() as session:
+            with pytest.raises(ValidationFailedError, match="size not known are reclassified"):
+                await apply_movements(session, organization_id=w.org, requests=pair(source, target))
+    assert await stock(w) == {(w.coat, unknown): 1}
 
 
 async def test_an_opening_balance_cannot_be_written_outside_a_list(world):
