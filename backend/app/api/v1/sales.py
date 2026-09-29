@@ -7,9 +7,16 @@ shift. It carries two identifiers with different jobs:
 * `command_id` (body) — "this is the same business operation", forever.
 
 A corrected sale (`found_in_store`, `missing_in_store`, `size_clarified`) is a
-*different* payload from the rejected one, so the client must send it with a
-**new** Idempotency-Key. Reusing the original key correctly returns
-`IDEMPOTENCY_CONFLICT`.
+*different* payload from the rejected one, and should carry a **new**
+Idempotency-Key, so that one key always answers one payload and a later replay
+of it is unambiguous.
+
+Reusing the rejected key is not itself an error, though: the refusal rolled its
+claim back with the rest of the transaction, so the key is free again. Nothing
+is sold twice either way — `command_id` is permanent (I20), so the corrected
+attempt is recognised as the same sale and replayed rather than repeated. Only
+a key whose attempt *succeeded* returns `IDEMPOTENCY_CONFLICT` when a different
+payload arrives under it. See `tests/integration/test_sale_retry_contract.py`.
 """
 
 from __future__ import annotations

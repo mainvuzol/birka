@@ -51,6 +51,11 @@ async def main() -> None:
         await session.flush()
         store = Store(organization_id=org.id, name="Основний", code="MAIN", kind=StoreKind.PRIMARY)
         location = StockLocation(organization_id=org.id, name="Основний склад", code="E2E")
+        # A second warehouse for the till's own flows. The order specs reserve
+        # stock on the first one, and a reservation makes a shortfall
+        # uncorrectable by design — so a sale test sharing that shelf could
+        # never reach «фізично є».
+        till = StockLocation(organization_id=org.id, name="Каса-склад", code="E2E-TILL")
         concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
@@ -60,7 +65,7 @@ async def main() -> None:
             name="шоколад",
             normalized_name="шоколад",
         )
-        session.add_all([store, location, concept, system, user, colour])
+        session.add_all([store, location, till, concept, system, user, colour])
         await session.flush()
         size = Size(size_system_id=system.id, code="M")
         family = ProductFamily(organization_id=org.id, canonical_concept_id=concept.id)
@@ -70,15 +75,16 @@ async def main() -> None:
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        session.add(
-            StoreLocationAccess(
-                organization_id=org.id,
-                store_id=store.id,
-                location_id=location.id,
-                can_sell=True,
-                can_receive=True,
+        for reachable in (location, till):
+            session.add(
+                StoreLocationAccess(
+                    organization_id=org.id,
+                    store_id=store.id,
+                    location_id=reachable.id,
+                    can_sell=True,
+                    can_receive=True,
+                )
             )
-        )
         await session.flush()
         await apply_movements(
             session,
@@ -86,13 +92,14 @@ async def main() -> None:
             actor_user_id=user.id,
             requests=[
                 MovementRequest(
-                    location_id=location.id,
+                    location_id=stocked.id,
                     acting_store_id=store.id,
                     product_variant_id=variant.id,
                     size_id=size.id,
                     quantity_delta=30,
                     movement_type=MovementType.DELIVERY,
                 )
+                for stocked in (location, till)
             ],
         )
         role = Role(organization_id=org.id, code="E2E", name="Тестовий продавець")
@@ -113,6 +120,7 @@ async def main() -> None:
             "telegram_user_id": str(user.telegram_user_id),
             "store_id": str(store.id),
             "location_id": str(location.id),
+            "till_location_id": str(till.id),
             "variant_id": str(variant.id),
             "size_id": str(size.id),
         }
