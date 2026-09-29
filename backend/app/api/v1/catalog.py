@@ -37,8 +37,8 @@ from app.core import idempotency
 from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import SizeSystemCode
-from app.modules.catalog.read import describe_variants, size_labels, unknown_size_ids
-from app.modules.catalog.search import search_families
+from app.modules.catalog.read import describe_variants, real_sizes, size_labels, unknown_size_ids
+from app.modules.catalog.search import search_families, search_receivable_variants
 from app.modules.catalog.service import (
     ProductDraft,
     SizeDraft,
@@ -46,6 +46,7 @@ from app.modules.catalog.service import (
     create_product,
 )
 from app.modules.inventory.service import readable_stock
+from app.modules.tenancy.service import validate_active_stores
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -347,6 +348,62 @@ async def family_options(
             session, scope=scope, store_id=store_id, query=query, limit=limit, offset=offset
         )
     )
+
+
+class ReceivableVariant(BaseModel):
+    product_variant_id: uuid.UUID
+    display_name: str
+
+
+class ReceivableVariantsResponse(BaseModel):
+    items: list[ReceivableVariant]
+    has_more: bool
+
+
+@router.get("/receivable-variants", response_model=ReceivableVariantsResponse)
+async def receivable_variants(
+    store_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    query: Annotated[CleanText, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+) -> ReceivableVariantsResponse:
+    """What a store may take delivery of, including models it holds none of.
+
+    `stock-options` answers "what can I sell here", which is the wrong question
+    at the back door: a delivery is usually of something the shop ran out of.
+    """
+    return ReceivableVariantsResponse.model_validate(
+        await search_receivable_variants(
+            session, scope=scope, store_id=store_id, query=query, limit=limit, offset=offset
+        )
+    )
+
+
+class SizeOptionResponse(BaseModel):
+    size_id: uuid.UUID
+    code: str
+    system: SizeSystemCode
+
+
+@router.get("/sizes", response_model=list[SizeOptionResponse])
+async def sizes(
+    store_id: uuid.UUID, scope: ScopeDep, session: SessionDep
+) -> list[SizeOptionResponse]:
+    """The sizes goods can arrive in, in the order a seller reads them.
+
+    Never "size not known": that size enters only from a legacy stock list,
+    where its evidence exists, and a receipt refuses it (ADR-0005 §3).
+    """
+    scope.require(Permission.INVENTORY_RECEIVE, store_id)
+    await validate_active_stores(
+        session, organization_id=scope.organization_id, store_ids={store_id}
+    )
+    return [
+        SizeOptionResponse(size_id=option.size_id, code=option.code, system=option.system)
+        for option in await real_sizes(session, organization_id=scope.organization_id)
+    ]
 
 
 __all__ = ["router"]

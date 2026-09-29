@@ -19,6 +19,12 @@ import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
 import { loadSale, resolve, useSaleCommand } from "@/sales/commands";
+import { Receive } from "@/inventory/Receive";
+import {
+  loadReceipt,
+  resolveReceipt,
+  useReceiptCommand,
+} from "@/inventory/receiptCommands";
 import type { Sale as SaleReceipt } from "@/sales/types";
 import "./styles.css";
 
@@ -131,7 +137,7 @@ function Workspace({
 }): JSX.Element {
   const cache = useQueryClient();
   const [tab, setTab] = useState<
-    "list" | "new" | "catalog" | "stock" | "sale"
+    "list" | "new" | "catalog" | "stock" | "sale" | "receive"
   >("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
@@ -141,6 +147,18 @@ function Workspace({
   const saleKey = `birka:sale-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [catalogStorageError, setCatalogStorageError] = useState(false);
   const [saleStorageError, setSaleStorageError] = useState(false);
+  const receiptKey = `birka:receipt-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [receiptStorageError, setReceiptStorageError] = useState(false);
+  const receiptCommand = useReceiptCommand();
+  useEffect(() => {
+    try {
+      const saved = loadReceipt(receiptKey);
+      useReceiptCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("receive");
+    } catch {
+      setReceiptStorageError(true);
+    }
+  }, [receiptKey]);
   const catalogCommand = useCatalogCommand();
   const saleCommand = useSaleCommand();
   const [settled, setSettled] = useState<SaleReceipt | null>(null);
@@ -208,7 +226,10 @@ function Workspace({
     catalogCommand.busy ||
     catalogCommand.pending !== null ||
     saleCommand.busy ||
-    saleCommand.pending !== null;
+    saleCommand.pending !== null ||
+    receiptStorageError ||
+    receiptCommand.busy ||
+    receiptCommand.pending !== null;
   return (
     <>
       <div className="toolbar">
@@ -261,6 +282,17 @@ function Workspace({
             }}
           >
             Каталог
+          </button>
+        )}
+        {store.permissions.includes("inventory:receive") && (
+          <button
+            className={tab === "receive" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("receive");
+            }}
+          >
+            Приймання
           </button>
         )}
         {store.permissions.includes("inventory:view") && (
@@ -339,6 +371,37 @@ function Workspace({
       {saleCommand.error !== null && (
         <p role="alert">{errorText(saleCommand.error)}</p>
       )}
+      {receiptStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережене приймання. Не очищайте дані
+          застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {receiptCommand.pending && (
+        <section className="notice">
+          <h3>
+            {receiptCommand.busy
+              ? "Перевіряємо приймання…"
+              : "Незавершене приймання"}
+          </h3>
+          <p>
+            Невідомо, чи записано попередню поставку. Перевірте результат — та
+            сама поставка не буде прийнята двічі. Нові операції заблоковано.
+          </p>
+          <button
+            disabled={receiptCommand.busy}
+            onClick={() => {
+              const attempt = receiptCommand.pending;
+              if (attempt) void resolveReceipt(receiptKey, token, attempt);
+            }}
+          >
+            Перевірити результат приймання
+          </button>
+        </section>
+      )}
+      {receiptCommand.error !== null && (
+        <p role="alert">{errorText(receiptCommand.error)}</p>
+      )}
       {pending && (
         <section className="notice">
           <h3>{busy ? "Перевіряємо результат…" : "Незавершена операція"}</h3>
@@ -370,14 +433,39 @@ function Workspace({
               storageError ||
               catalogStorageError ||
               saleStorageError ||
+              receiptStorageError ||
               busy ||
               pending !== null ||
               catalogCommand.busy ||
-              catalogCommand.pending !== null
+              catalogCommand.pending !== null ||
+              receiptCommand.busy ||
+              receiptCommand.pending !== null
             }
           />
         ) : (
           <p role="alert">Немає права оформлювати продаж.</p>
+        )
+      ) : tab === "receive" ? (
+        store.permissions.includes("inventory:receive") ? (
+          <Receive
+            store={store}
+            token={token}
+            journalKey={receiptKey}
+            blocked={
+              storageError ||
+              catalogStorageError ||
+              saleStorageError ||
+              receiptStorageError ||
+              busy ||
+              pending !== null ||
+              catalogCommand.busy ||
+              catalogCommand.pending !== null ||
+              saleCommand.busy ||
+              saleCommand.pending !== null
+            }
+          />
+        ) : (
+          <p role="alert">Немає права приймати товар.</p>
         )
       ) : tab === "stock" ? (
         store.permissions.includes("inventory:view") ? (
