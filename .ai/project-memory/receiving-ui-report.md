@@ -59,9 +59,8 @@ till. Search the catalogue, pick the model, size, quantity and how it arrived
 (delivery note, supplier), receive. The result shows what arrived and what
 each balance is now.
 
-**Purchase cost is deliberately not asked for.** The API accepts `unit_cost`,
-but whether a seller should enter or see what the shop paid is an owner
-decision, and financial views are a manager's permission today.
+**Purchase cost** was left out at first, as an owner question; the owner
+answered on 2026-09-30 and it is now on the screen — see the section below.
 
 **The journal** follows the till's protocol — the attempt and its key are
 written down before sending; a definite refusal clears them and keeps the
@@ -118,10 +117,39 @@ No migration, no change to any stock or money rule.
   its 7-day cache (ADR-0006). That blocks the last M1-025 seller flow — quick
   correction — from getting a durable journal, and needs a design choice
   among the three options recorded there.
-- **No purchase cost** on this screen (owner question, above).
 - **A product that does not exist yet** must be created in «Каталог» first;
   the screen says so when a search finds nothing.
 - **Two journals now share one protocol**, written twice (`@/sales/commands`,
   `./receiptCommands`). Extract it when a third appears, not before.
 - PostgreSQL 17 not re-run for this change set; no migration, no
   version-sensitive SQL.
+
+## Purchase cost — 2026-09-30
+
+The owner answered: **a seller may enter and see what the shop paid.**
+
+- **Entered per line, optional.** Quantity and cost share the till's
+  two-field row; «Як надійшов» moved to its own line so nothing is squeezed
+  again. Money is typed as a person writes it («1850,50») and refused when it
+  is not money; it travels as `"1850.50"`, never as a float.
+- **A line is a lot**, so the same model and size may appear twice in one
+  delivery at two prices. Choosing another model clears the previous price.
+- **The delivery shows its value** — quantity × cost over the priced lines —
+  and says how many lines carry no price rather than counting them as zero.
+- **Shown back as stored.** Each receipt line now carries the lot's
+  `unit_cost` and `currency_code`, so the result screen shows what was
+  recorded, not what was typed — and a late replay, answered from the
+  permanent record, says the same. Both fields default to null, so an answer
+  frozen before they existed still reads.
+- **The cost is part of the delivery's identity.** It was already in the
+  permanent fingerprint; a test now pins that the same `command_id` at another
+  price is refused as another delivery.
+- **Not built:** cost is visible at receipt only, not in the stock view —
+  lots of one model can carry different costs, and which one a balance
+  "costs" is a reporting question. Purchase installments remain unbuilt.
+
+**Verification:** 928 backend tests (+2), 42 E2E (+1, against the real API:
+invalid money refused, a priced and an unpriced line, the exact payload, the
+stored cost shown back, the delivery's value). **Five mutations, five
+caught**: the cost not echoed, the cost out of the fingerprint, the result not
+showing it, the cost sent as typed, an unpriced line not pointed out.

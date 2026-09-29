@@ -122,6 +122,71 @@ test("a delivery of a known model is received into an explicitly chosen warehous
   });
 });
 
+test("a delivery carries what the shop paid, and shows back what was stored", async ({
+  page,
+}) => {
+  // The owner's answer of 2026-09-30: a seller may enter and see the cost.
+  await enter(page);
+  await page
+    .getByRole("combobox", { name: "Склад", exact: true })
+    .selectOption(fixture.till_location_id);
+  await find(page, "лоран шоколад");
+  await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
+  await page
+    .getByRole("combobox", { name: "Розмір" })
+    .selectOption({ label: "M" });
+  await page.getByLabel("Кількість").fill("5");
+
+  // Money is typed as a person writes it, and refused when it is not money.
+  await page.getByLabel("Закупівельна ціна за од., грн").fill("12,345");
+  await page.getByRole("button", { name: "Додати до поставки" }).click();
+  await expect(page.getByText(/до копійок, наприклад 1850,50/)).toBeVisible();
+  await page.getByLabel("Закупівельна ціна за од., грн").fill("1850,50");
+  await page.getByRole("button", { name: "Додати до поставки" }).click();
+  await expect(
+    page.getByText("5 од. · Закупівля · 1850,50 грн за од."),
+  ).toBeVisible();
+
+  // A second line with no price: counted in units, left out of the value.
+  await page
+    .getByRole("combobox", { name: "Розмір" })
+    .selectOption({ label: "M" });
+  await page.getByLabel("Кількість").fill("2");
+  await page.getByLabel("Закупівельна ціна за од., грн").fill("");
+  await page.getByRole("button", { name: "Додати до поставки" }).click();
+  await expect(page.getByText("Разом 7 од.")).toBeVisible();
+  await expect(
+    page.getByText("Закупівельна вартість 9252,50 грн"),
+  ).toBeVisible();
+  await expect(page.getByText(/Рядків без ціни: 1/)).toBeVisible();
+
+  const posted = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/inventory/receipts") &&
+      r.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  const response = await posted;
+  expect(response.status()).toBe(201);
+  const sent = response.request().postDataJSON() as {
+    lines: { quantity: number; unit_cost: string | null }[];
+  };
+  expect(sent.lines.map((line) => [line.quantity, line.unit_cost])).toEqual([
+    [5, "1850.50"],
+    [2, null],
+  ]);
+  // What is shown back is what the server stored, not what was typed.
+  await expect(
+    page.getByRole("heading", { name: "Товар прийнято" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/\+5 · тепер на складі \d+ · 1850,50 грн за од\./),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Закупівельна вартість 9252,50 грн"),
+  ).toBeVisible();
+});
+
 test("a brand-new model nobody holds any of can be received", async ({
   page,
 }) => {

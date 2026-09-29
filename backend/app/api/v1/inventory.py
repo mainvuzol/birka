@@ -119,6 +119,12 @@ class ReceiptLineResult(BaseModel):
     quantity_after: int
     stock_lot_id: uuid.UUID
     movement_id: uuid.UUID
+    # What the shop paid for one unit, as stored on the lot — so the receiving
+    # screen shows what was recorded, not what it typed. A seller may enter
+    # and see it (owner decision, 2026-09-30). Defaults keep an answer frozen
+    # before these fields existed readable on a late replay.
+    unit_cost: Decimal | None = None
+    currency_code: str | None = None
 
 
 class ReceiptResponse(BaseModel):
@@ -425,6 +431,8 @@ async def receive_goods(
                 quantity_after=entry.quantity_after,
                 stock_lot_id=lot.id,
                 movement_id=entry.movement_id,
+                unit_cost=lot.unit_cost,
+                currency_code=lot.currency_code,
             )
         )
 
