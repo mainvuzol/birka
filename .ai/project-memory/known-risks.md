@@ -71,3 +71,35 @@ Found by the independent code reviews (2026-09-28). The fixes are in the report;
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval.
 - **Lines are stored verbatim, including bidirectional and zero-width characters.** Nothing renders them today. A future review screen must neutralise them.
 - **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
+
+## The till — 2026-09-29
+
+A seller can take money over the counter ([report](m1-025-sale-ui-report.md)).
+Live risks and properties, in order:
+
+- **An outstanding customer reservation on a stock key disables «фізично є»
+  for that key**, for every seller, until the order is dispatched or released.
+  This is the designed behaviour of `correctable`, not a defect, but it is the
+  first time it is reachable from a screen: a seller holding a coat the ledger
+  does not know about, of a model another customer has reserved, simply cannot
+  sell it. The till says why. Found when a browser test sharing a warehouse
+  with the order specs could never reach the correction.
+- **`VariantPrice` is dead scaffolding.** The column, the uniqueness and the
+  docstring promising the seller "does not retype it" all exist; nothing writes
+  it, nothing reads it, no endpoint exposes it. Every price is typed at the
+  counter. Who may set a suggested price is unanswered (owner question Q-F), so
+  it was not invented.
+- **The sale journal lives in `localStorage`.** Clearing the app's data while a
+  sale's outcome is unknown loses the record of which key to replay. The sale
+  itself is still safe — `command_id` is permanent and the server holds the
+  cached response for 7 days — but the seller loses the in-app path to it and
+  needs a manager to look the sale up.
+- **`size_clarified` has no screen.** A "size not known" coat can be given its
+  size only through the API, so in practice it is still sold as size not known
+  until that increment lands.
+- **Confirming zero present is refused**, and the till's honest answer is to
+  remove the line by hand. One extra tap while a customer waits (owner
+  question Q-G, carried over from M1-030).
+- **`POST /sales` p95 is still unmeasured**, now with a client capable of
+  generating real load against it, and with the shared warehouse lock M1-023
+  added to the hot path.

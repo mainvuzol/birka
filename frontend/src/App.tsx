@@ -17,6 +17,9 @@ import type {
 import { Stock } from "@/inventory/Stock";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
+import { Sale } from "@/sales/Sale";
+import { loadSale, resolve, useSaleCommand } from "@/sales/commands";
+import type { Sale as SaleReceipt } from "@/sales/types";
 import "./styles.css";
 
 async function authenticate(): Promise<{ token: string; me: Me }> {
@@ -127,14 +130,32 @@ function Workspace({
   changeStore: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
-  const [tab, setTab] = useState<"list" | "new" | "catalog" | "stock">("list");
+  const [tab, setTab] = useState<
+    "list" | "new" | "catalog" | "stock" | "sale"
+  >("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [storageError, setStorageError] = useState(false);
   const key = `birka:pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const catalogKey = `birka:catalog-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const saleKey = `birka:sale-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [catalogStorageError, setCatalogStorageError] = useState(false);
+  const [saleStorageError, setSaleStorageError] = useState(false);
   const catalogCommand = useCatalogCommand();
+  const saleCommand = useSaleCommand();
+  const [settled, setSettled] = useState<SaleReceipt | null>(null);
+  // Bumped to remount the till after a settled sale, so its basket and its
+  // `command_id` do not survive an operation that turned out to be complete.
+  const [saleEpoch, setSaleEpoch] = useState(0);
+  useEffect(() => {
+    try {
+      const saved = loadSale(saleKey);
+      useSaleCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("sale");
+    } catch {
+      setSaleStorageError(true);
+    }
+  }, [saleKey]);
   useEffect(() => {
     try {
       const saved = loadCatalogCommand(catalogKey);
@@ -183,8 +204,11 @@ function Workspace({
     pending !== null ||
     storageError ||
     catalogStorageError ||
+    saleStorageError ||
     catalogCommand.busy ||
-    catalogCommand.pending !== null;
+    catalogCommand.pending !== null ||
+    saleCommand.busy ||
+    saleCommand.pending !== null;
   return (
     <>
       <div className="toolbar">
@@ -204,6 +228,18 @@ function Workspace({
         >
           Замовлення
         </button>
+        {store.permissions.includes("sale:create") && (
+          <button
+            className={tab === "sale" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("sale");
+              setSelectedId(null);
+            }}
+          >
+            Продаж
+          </button>
+        )}
         {store.permissions.includes("sale:create") && (
           <button
             className={tab === "new" ? "active" : "quiet"}
@@ -251,6 +287,58 @@ function Workspace({
           Зверніться до менеджера, не очищайте дані застосунку.
         </p>
       )}
+      {saleStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережений продаж. Не очищайте дані застосунку;
+          зверніться до менеджера.
+        </p>
+      )}
+      {saleCommand.pending && (
+        <section className="notice">
+          <h3>
+            {saleCommand.busy ? "Перевіряємо продаж…" : "Незавершений продаж"}
+          </h3>
+          <p>
+            Невідомо, чи записано попередній продаж. Перевірте результат — та
+            сама операція не продасться двічі. Нові операції заблоковано.
+          </p>
+          <button
+            disabled={saleCommand.busy}
+            onClick={() => {
+              const attempt = saleCommand.pending;
+              if (!attempt) return;
+              void resolve(saleKey, token, attempt).then((outcome) => {
+                if (outcome.kind === "sold") {
+                  setSettled(outcome.sale);
+                  setSaleEpoch((epoch) => epoch + 1);
+                  setTab("sale");
+                }
+              });
+            }}
+          >
+            Перевірити результат продажу
+          </button>
+        </section>
+      )}
+      {settled && (
+        <section className="notice" role="status">
+          <h3>Продаж підтверджено</h3>
+          <p>
+            Операцію було записано. Разом {money(settled.total)}. Повторно вона
+            не пройде.
+          </p>
+          <button
+            onClick={() => {
+              setSettled(null);
+            }}
+          >
+            Зрозуміло
+          </button>
+        </section>
+      )}
+      {saleCommand.error !== null && (
+        <p role="alert">{errorText(saleCommand.error)}</p>
+      )}
       {pending && (
         <section className="notice">
           <h3>{busy ? "Перевіряємо результат…" : "Незавершена операція"}</h3>
@@ -271,7 +359,27 @@ function Workspace({
         </section>
       )}
       {error !== null && <p role="alert">{errorText(error)}</p>}
-      {tab === "stock" ? (
+      {tab === "sale" ? (
+        store.permissions.includes("sale:create") ? (
+          <Sale
+            key={saleEpoch}
+            store={store}
+            token={token}
+            journalKey={saleKey}
+            blocked={
+              storageError ||
+              catalogStorageError ||
+              saleStorageError ||
+              busy ||
+              pending !== null ||
+              catalogCommand.busy ||
+              catalogCommand.pending !== null
+            }
+          />
+        ) : (
+          <p role="alert">Немає права оформлювати продаж.</p>
+        )
+      ) : tab === "stock" ? (
         store.permissions.includes("inventory:view") ? (
           <Stock store={store} token={token} scopeKey={key} />
         ) : (
