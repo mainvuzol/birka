@@ -193,3 +193,26 @@ async def test_stock_options_pagination_reservations_labels_and_access(maker):
         await session.commit()
     async with api(maker, shop.scope()) as client:
         assert (await client.get("/api/v1/catalog/stock-options", params=params)).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "unknown,code", [(False, "UNKNOWN"), (True, "UNKNOWN"), (True, "невідомий")]
+)
+async def test_stock_options_expose_unknown_size_state_not_code_guess(maker, unknown, code):
+    shop, _ = await setup(maker)
+    async with maker() as session:
+        # Seed differing metadata explicitly: the read response must use the flag,
+        # including legacy/custom labels, not infer a state from the spelling.
+        await session.execute(
+            update(Size).where(Size.id == shop.size_id).values(code=code, is_unknown=unknown)
+        )
+        await session.commit()
+    async with api(maker, shop.scope()) as client:
+        result = await client.get(
+            "/api/v1/catalog/stock-options",
+            params={"store_id": str(shop.store_id), "location_id": str(shop.location_id)},
+        )
+        assert result.status_code == 200
+        item = result.json()["items"][0]
+        assert item["size_label"] == code
+        assert item["size_is_unknown"] is unknown

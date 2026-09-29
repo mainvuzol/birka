@@ -23,6 +23,7 @@ export interface StockOption {
   size_id: string;
   display_name: string;
   size_label: string;
+  size_is_unknown: boolean;
   quantity: number;
   reserved_quantity: number;
   available_quantity: number;
