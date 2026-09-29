@@ -65,3 +65,17 @@ The durable-replay logic for receipts and adjustments is one function
 - Rolling back `0017` keeps every stock and ledger row but loses each
   adjustment's permanent identity. Prefer rolling back code and keeping the
   schema, as ADR-0003 already prefers.
+
+## Addendum — 2026-09-30: a count carries its balance
+
+The stock correction screen states a stocktake as a count, and the command
+takes a change. So the request gained an optional `expected_quantity`: given,
+the correction applies only while the warehouse still holds exactly that
+many, compared under the stock lock, and is otherwise refused as
+`STOCK_CHANGED` with nothing written.
+
+It is a precondition and **not** part of the permanent fingerprint, which
+keeps to the stock facts above. A retry is answered from the permanent record
+before any balance is compared, so a correction that did apply is never
+refused for a balance that has since moved on. See the
+[stock correction report](../project-memory/stock-correction-ui-report.md).

@@ -22,7 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
-from app.core.errors import IdempotencyConflictError, ValidationFailedError
+from app.core.errors import (
+    IdempotencyConflictError,
+    StockChangedError,
+    ValidationFailedError,
+)
 from app.core.text import CleanText
 from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
@@ -469,6 +473,13 @@ class AdjustmentRequest(BaseModel):
     quantity_delta: int = Field(ge=-10_000, le=10_000)
     reason_code: AdjustmentReason
     note: CleanText | None = Field(default=None, max_length=500)
+    # The balance the correction was worked out against, when the person
+    # stated a count ("the shelf holds 3") rather than a change. Given, the
+    # correction applies only while the warehouse still holds exactly this
+    # many; otherwise it is refused as STOCK_CHANGED and nothing is written.
+    # Omitted, the delta applies to whatever is there — right for "one coat
+    # is damaged", which is true whatever the balance.
+    expected_quantity: int | None = Field(default=None, ge=0)
 
     @field_validator("quantity_delta")
     @classmethod
@@ -494,6 +505,10 @@ def _adjustment_fingerprint(*, scope: RequestScope, payload: AdjustmentRequest) 
     reason the receipt's fingerprint leaves its notes out: a note is commentary,
     and the same `command_id` aimed at a different key or a different amount is
     a client bug, whereas the same change with a reworded note is not.
+
+    `expected_quantity` is out too. It is a precondition, checked once when
+    the correction first applies; a late retry is answered from the permanent
+    record before any balance is compared, since the balance has moved on.
     """
     return idempotency.fingerprint(
         {
@@ -574,6 +589,19 @@ async def adjust_inventory(
         await session.commit()
         response.status_code = status.HTTP_201_CREATED
         return replayed
+
+    if payload.expected_quantity is not None:
+        # Locked here and held to commit, so nothing can move the balance
+        # between this comparison and the movement below.
+        key = (payload.location_id, payload.product_variant_id, payload.size_id)
+        held = await lock_stock(
+            session,
+            organization_id=scope.organization_id,
+            keys=[key],
+            acting_store_ids={payload.store_id},
+        )
+        if held[key] != payload.expected_quantity:
+            raise StockChangedError(expected=payload.expected_quantity, actual=held[key])
 
     correlation_id = get_correlation_id()
     adjustment = StockAdjustment(

@@ -299,3 +299,12 @@ nav {
 .search button {
   margin-bottom: 16px;
 }
+
+/* A correction's reasons sit two to a row, so all five fit in one glance on a
+   phone. */
+.choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}

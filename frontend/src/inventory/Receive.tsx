@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
+import { CatalogPicker } from "./CatalogPicker";
 import { submitReceipt, useReceiptCommand } from "./receiptCommands";
 import { acquisitionLabels } from "./receiptTypes";
 import type {
@@ -13,8 +14,6 @@ import type {
   ReceivableVariant,
   SizeOption,
 } from "./receiptTypes";
-
-const pageSize = 20;
 
 interface Draft {
   line: ReceiptLine;
@@ -28,7 +27,7 @@ interface Draft {
  * Differs from the till in what it searches. The till offers what a warehouse
  * holds, because it can only sell that; a delivery is usually of something the
  * shop has run out of, so this screen searches the catalogue instead
- * (`/catalog/receivable-variants`) and offers the organization's sizes.
+ * (`CatalogPicker`) and offers the organization's sizes.
  * "Size not known" is never among them — goods arrive with a size, and that
  * one enters only from a legacy stock list (ADR-0005 §3).
  *
@@ -49,9 +48,6 @@ export function Receive({
   blocked: boolean;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
-  const [search, setSearch] = useState("");
-  const [asked, setAsked] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
   const [variant, setVariant] = useState<ReceivableVariant | null>(null);
   const [sizeId, setSizeId] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -79,16 +75,6 @@ export function Receive({
     queryKey: ["receive-sizes", journalKey, store.id],
     queryFn: () =>
       api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
-    retry: false,
-  });
-  const variants = useQuery({
-    queryKey: ["receive-variants", journalKey, store.id, asked, offset],
-    queryFn: () =>
-      api<{ items: ReceivableVariant[]; has_more: boolean }>(
-        `/catalog/receivable-variants?store_id=${store.id}&query=${encodeURIComponent(asked ?? "")}&limit=${String(pageSize)}&offset=${String(offset)}`,
-        token,
-      ),
-    enabled: asked !== null,
     retry: false,
   });
 
@@ -188,8 +174,8 @@ export function Receive({
         notes: trimmed ? trimmed : null,
       },
     });
-    if (outcome.kind === "received") {
-      setReceived({ receipt: outcome.receipt, names: draft, warehouse });
+    if (outcome.kind === "done") {
+      setReceived({ receipt: outcome.result, names: draft, warehouse });
       setDraft([]);
       setNotes("");
       setCommandId(crypto.randomUUID());
@@ -304,96 +290,17 @@ export function Receive({
             )}
           </label>
         )}
-        <form
-          className="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setOffset(0);
-            setVariant(null);
-            setAsked(search.trim());
+        <CatalogPicker
+          store={store}
+          token={token}
+          scopeKey={journalKey}
+          variant={variant}
+          onVariant={(picked) => {
+            setVariant(picked);
+            // A new model starts without the previous one's price.
+            setCost("");
           }}
-        >
-          <label>
-            Пошук у каталозі
-            <input
-              value={search}
-              placeholder="Модель, джерело або колір"
-              onChange={(event) => {
-                setSearch(event.target.value);
-              }}
-            />
-          </label>
-          <button type="submit" className="quiet">
-            Знайти
-          </button>
-        </form>
-        {asked !== null &&
-          (variants.isPending ? (
-            <p role="status">Шукаємо…</p>
-          ) : variants.error ? (
-            <Failure
-              error={variants.error}
-              retry={() => {
-                void variants.refetch();
-              }}
-            />
-          ) : (
-            <>
-              {variants.data.items.length === 0 && (
-                <p>
-                  Нічого не знайдено. Якщо це новий товар, спершу створіть його
-                  в каталозі.
-                </p>
-              )}
-              <div role="radiogroup" aria-label="Знайдені товари">
-                {variants.data.items.map((item) => (
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={
-                      variant?.product_variant_id === item.product_variant_id
-                    }
-                    key={item.product_variant_id}
-                    className={
-                      variant?.product_variant_id === item.product_variant_id
-                        ? "active"
-                        : "quiet"
-                    }
-                    onClick={() => {
-                      setVariant(item);
-                      // A new model starts without the previous one's price.
-                      setCost("");
-                    }}
-                  >
-                    {item.display_name}
-                  </button>
-                ))}
-              </div>
-              <div className="toolbar">
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={offset === 0}
-                  onClick={() => {
-                    setOffset(Math.max(0, offset - pageSize));
-                  }}
-                >
-                  Попередні
-                </button>
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={!variants.data.has_more}
-                  onClick={() => {
-                    setOffset(offset + pageSize);
-                  }}
-                >
-                  Ще товари
-                </button>
-              </div>
-            </>
-          ))}
-        {variant && <p className="hint">Обрано: {variant.display_name}</p>}
+        />
         <label>
           Розмір
           <select

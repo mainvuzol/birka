@@ -133,3 +133,22 @@ See [ADR-0006](../decisions/ADR-0006-goods-receipt-command-identity.md) and the
 - **Lots created before `0016` name no delivery.** `goods_receipt_id` is NULL
   for all of them, deliberately: their original request cannot be
   reconstructed, and inventing a receipt would record a fact nobody stated.
+
+## Stock correction screen — 2026-09-30
+
+See the [report](stock-correction-ui-report.md).
+
+- **Only a stocktake is guarded against a balance that moved.** It carries
+  `expected_quantity` and is refused as `STOCK_CHANGED`. A write-off of
+  damaged or lost goods sends only the change, deliberately: one damaged coat
+  is one coat whatever the balance. A script calling the API without
+  `expected_quantity` gets the old delta behaviour for any reason.
+- **The API still lets `DAMAGED` or `LOST` add stock**, and still accepts the
+  two at-the-counter reasons from a manager. The screen offers neither; the
+  API was not narrowed, because no rule says it must be and a caller may rely
+  on it.
+- **Goods the system holds none of need `inventory:receive` as well**, for
+  the catalogue search. The default manager holds it; an owner who
+  recomposes a role without it loses that half of the screen, not the
+  correction of listed balances.
+- **One balance at a time.** There is no bulk stocktake of a whole warehouse.

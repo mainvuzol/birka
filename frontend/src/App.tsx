@@ -25,6 +25,12 @@ import {
   resolveReceipt,
   useReceiptCommand,
 } from "@/inventory/receiptCommands";
+import {
+  loadAdjustment,
+  resolveAdjustment,
+  useAdjustmentCommand,
+} from "@/inventory/adjustmentCommands";
+import type { Adjustment } from "@/inventory/adjustmentTypes";
 import type { Sale as SaleReceipt } from "@/sales/types";
 import "./styles.css";
 
@@ -159,6 +165,21 @@ function Workspace({
       setReceiptStorageError(true);
     }
   }, [receiptKey]);
+  const adjustmentKey = `birka:adjustment-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [adjustmentStorageError, setAdjustmentStorageError] = useState(false);
+  const [adjustmentSettled, setAdjustmentSettled] = useState<Adjustment | null>(
+    null,
+  );
+  const adjustmentCommand = useAdjustmentCommand();
+  useEffect(() => {
+    try {
+      const saved = loadAdjustment(adjustmentKey);
+      useAdjustmentCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("stock");
+    } catch {
+      setAdjustmentStorageError(true);
+    }
+  }, [adjustmentKey]);
   const catalogCommand = useCatalogCommand();
   const saleCommand = useSaleCommand();
   const [settled, setSettled] = useState<SaleReceipt | null>(null);
@@ -217,7 +238,8 @@ function Workspace({
       ]);
     }
   }
-  const blocked =
+  // Every journal but the stock correction's own, which its form reads itself.
+  const otherThanAdjustment =
     busy ||
     pending !== null ||
     storageError ||
@@ -230,6 +252,11 @@ function Workspace({
     receiptStorageError ||
     receiptCommand.busy ||
     receiptCommand.pending !== null;
+  const adjustmentUnsettled =
+    adjustmentStorageError ||
+    adjustmentCommand.busy ||
+    adjustmentCommand.pending !== null;
+  const blocked = otherThanAdjustment || adjustmentUnsettled;
   return (
     <>
       <div className="toolbar">
@@ -402,6 +429,65 @@ function Workspace({
       {receiptCommand.error !== null && (
         <p role="alert">{errorText(receiptCommand.error)}</p>
       )}
+      {adjustmentStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережене коригування. Не очищайте дані
+          застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {adjustmentCommand.pending && (
+        <section className="notice">
+          <h3>
+            {adjustmentCommand.busy
+              ? "Перевіряємо коригування…"
+              : "Незавершене коригування"}
+          </h3>
+          <p>
+            Невідомо, чи записано попереднє коригування залишку. Перевірте
+            результат — те саме коригування не застосується двічі. Нові операції
+            заблоковано.
+          </p>
+          <button
+            disabled={adjustmentCommand.busy}
+            onClick={() => {
+              const attempt = adjustmentCommand.pending;
+              if (!attempt) return;
+              void resolveAdjustment(adjustmentKey, token, attempt).then(
+                (outcome) => {
+                  if (outcome.kind === "done") {
+                    setAdjustmentSettled(outcome.result);
+                    void cache.invalidateQueries({
+                      queryKey: ["inventory-stock"],
+                    });
+                  }
+                },
+              );
+            }}
+          >
+            Перевірити результат коригування
+          </button>
+        </section>
+      )}
+      {adjustmentSettled && (
+        <section className="notice" role="status">
+          <h3>Коригування підтверджено</h3>
+          <p>
+            Його було записано один раз: облік{" "}
+            {adjustmentSettled.quantity_before} →{" "}
+            {adjustmentSettled.quantity_after}.
+          </p>
+          <button
+            onClick={() => {
+              setAdjustmentSettled(null);
+            }}
+          >
+            Зрозуміло
+          </button>
+        </section>
+      )}
+      {adjustmentCommand.error !== null && (
+        <p role="alert">{errorText(adjustmentCommand.error)}</p>
+      )}
       {pending && (
         <section className="notice">
           <h3>{busy ? "Перевіряємо результат…" : "Незавершена операція"}</h3>
@@ -439,7 +525,8 @@ function Workspace({
               catalogCommand.busy ||
               catalogCommand.pending !== null ||
               receiptCommand.busy ||
-              receiptCommand.pending !== null
+              receiptCommand.pending !== null ||
+              adjustmentUnsettled
             }
           />
         ) : (
@@ -461,7 +548,8 @@ function Workspace({
               catalogCommand.busy ||
               catalogCommand.pending !== null ||
               saleCommand.busy ||
-              saleCommand.pending !== null
+              saleCommand.pending !== null ||
+              adjustmentUnsettled
             }
           />
         ) : (
@@ -469,7 +557,13 @@ function Workspace({
         )
       ) : tab === "stock" ? (
         store.permissions.includes("inventory:view") ? (
-          <Stock store={store} token={token} scopeKey={key} />
+          <Stock
+            store={store}
+            token={token}
+            scopeKey={key}
+            journalKey={adjustmentKey}
+            blocked={otherThanAdjustment || adjustmentStorageError}
+          />
         ) : (
           <p role="alert">Немає доступу до залишків.</p>
         )

@@ -56,6 +56,9 @@ async def main() -> None:
         # uncorrectable by design — so a sale test sharing that shelf could
         # never reach «фізично є».
         till = StockLocation(organization_id=org.id, name="Каса-склад", code="E2E-TILL")
+        # A third for stock corrections, which change balances the till and
+        # receiving specs would otherwise have to guess at.
+        counted = StockLocation(organization_id=org.id, name="Склад перерахунку", code="E2E-COUNT")
         concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
@@ -65,17 +68,19 @@ async def main() -> None:
             name="шоколад",
             normalized_name="шоколад",
         )
-        session.add_all([store, location, till, concept, system, user, colour])
+        session.add_all([store, location, till, counted, concept, system, user, colour])
         await session.flush()
         size = Size(size_system_id=system.id, code="M")
+        # Held nowhere: what a stocktake finds on a shelf the system says is empty.
+        unheld = Size(size_system_id=system.id, code="L")
         family = ProductFamily(organization_id=org.id, canonical_concept_id=concept.id)
-        session.add_all([size, family])
+        session.add_all([size, unheld, family])
         await session.flush()
         variant = ProductVariant(
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        for reachable in (location, till):
+        for reachable in (location, till, counted):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -96,10 +101,10 @@ async def main() -> None:
                     acting_store_id=store.id,
                     product_variant_id=variant.id,
                     size_id=size.id,
-                    quantity_delta=30,
+                    quantity_delta=30 if stocked is not counted else 10,
                     movement_type=MovementType.DELIVERY,
                 )
-                for stocked in (location, till)
+                for stocked in (location, till, counted)
             ],
         )
         role = Role(organization_id=org.id, code="E2E", name="Тестовий продавець")
@@ -121,6 +126,7 @@ async def main() -> None:
             "store_id": str(store.id),
             "location_id": str(location.id),
             "till_location_id": str(till.id),
+            "count_location_id": str(counted.id),
             "variant_id": str(variant.id),
             "size_id": str(size.id),
         }
