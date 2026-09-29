@@ -87,6 +87,7 @@ async def stocked_variant(client: httpx.AsyncClient, shop: Shop) -> tuple[str, s
         json={
             "store_id": str(shop.store_id),
             "location_id": str(shop.location_id),
+            "command_id": str(uuid.uuid4()),
             "lines": [
                 {
                     "product_variant_id": product["product_variant_id"],
@@ -121,6 +122,7 @@ async def test_a_nul_in_the_idempotency_key_is_refused_by_every_command(maker):
                 {
                     "store_id": str(shop.store_id),
                     "location_id": str(shop.location_id),
+                    "command_id": str(uuid.uuid4()),
                     "lines": [
                         {"product_variant_id": variant_id, "size_id": size_id, "quantity": 1}
                     ],
@@ -175,6 +177,7 @@ async def test_a_nul_in_receipt_notes_is_refused(maker):
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
                 "notes": POISON,
+                "command_id": str(uuid.uuid4()),
                 "lines": [{"product_variant_id": variant_id, "size_id": size_id, "quantity": 1}],
             },
             headers=key(),

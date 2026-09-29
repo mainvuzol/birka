@@ -157,6 +157,7 @@ def receipt_payload(w):
     return {
         "store_id": str(w["stores"]["SECOND"]),
         "location_id": str(w["private"]),
+        "command_id": str(uuid.uuid4()),
         "lines": [{"product_variant_id": w["variant"], "size_id": w["size"], "quantity": 4}],
     }
 

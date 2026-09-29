@@ -126,6 +126,7 @@ async def sell(
         json={
             "store_id": str(shop.store_id),
             "location_id": str(shop.location_id),
+            "command_id": str(uuid.uuid4()),
             "lines": [
                 {
                     "product_variant_id": product["product_variant_id"],
@@ -615,6 +616,7 @@ async def test_one_refund_may_mix_restocked_and_written_off_lines(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -866,6 +868,7 @@ async def test_a_refund_that_fails_halfway_leaves_nothing_behind(maker):
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -1305,6 +1308,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],
@@ -1473,6 +1477,7 @@ async def test_a_rebuilt_multi_line_replay_matches_the_original_exactly(
             json={
                 "store_id": str(shop.store_id),
                 "location_id": str(shop.location_id),
+                "command_id": str(uuid.uuid4()),
                 "lines": [
                     {
                         "product_variant_id": product["product_variant_id"],

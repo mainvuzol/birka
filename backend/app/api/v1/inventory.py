@@ -8,25 +8,29 @@ inventory service, so there stays exactly one way stock can change.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
-from app.core.errors import ValidationFailedError
+from app.core.errors import IdempotencyConflictError, ValidationFailedError
 from app.core.text import CleanText
 from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import unknown_size_ids
 from app.modules.inventory.models import (
     AcquisitionType,
+    GoodsReceipt,
     MovementReason,
     MovementType,
     StockLot,
@@ -96,6 +100,11 @@ class ReceiptRequest(BaseModel):
     # a shared warehouse is exactly where they differ (ADR-0004).
     store_id: uuid.UUID
     location_id: uuid.UUID
+    # Client-generated and permanent, as for a sale, a refund or a transfer.
+    # Required since `0016`: without it a receipt is idempotent only for as
+    # long as its response cache, and an identical request arriving after
+    # that receives the delivery a second time (invariant I20).
+    command_id: uuid.UUID
     lines: list[ReceiptLine] = Field(min_length=1, max_length=200)
     notes: CleanText | None = Field(default=None, max_length=1000)
 
@@ -111,6 +120,7 @@ class ReceiptLineResult(BaseModel):
 
 
 class ReceiptResponse(BaseModel):
+    id: uuid.UUID
     store_id: uuid.UUID
     lines: list[ReceiptLineResult]
 
@@ -168,6 +178,89 @@ async def list_inventory(
     )
 
 
+def _receipt_fingerprint(
+    *, scope: RequestScope, store_id: uuid.UUID, payload: ReceiptRequest
+) -> str:
+    """Everything that makes this delivery *this* delivery.
+
+    The warehouse is in it deliberately. The 7-day cache picks every payload
+    field up by itself; this permanent fingerprint is built by hand, and
+    without the warehouse the same `command_id` retried against a different
+    one would be judged a retry and answered "received" about goods that
+    never arrived there.
+    """
+    return idempotency.fingerprint(
+        {
+            "location_id": str(payload.location_id),
+            "lines": [
+                {
+                    "product_variant_id": str(line.product_variant_id),
+                    "size_id": str(line.size_id),
+                    "quantity": line.quantity,
+                    "acquisition_type": str(line.acquisition_type),
+                    "unit_cost": None if line.unit_cost is None else str(line.unit_cost),
+                }
+                for line in payload.lines
+            ],
+        },
+        actor_user_id=scope.user_id,
+        store_id=store_id,
+    )
+
+
+async def _existing_receipt(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    command_id: uuid.UUID,
+    request_fingerprint: str,
+) -> ReceiptResponse | None:
+    """Durable replay: has this permanent command already received goods?
+
+    Taken before any stock lock, and only ever serializes two requests
+    carrying the same `command_id` — which are by definition the same
+    business operation. Mirrors `transfers.service._existing_command`.
+    """
+    lock_key = int.from_bytes(
+        hashlib.sha256(scope.organization_id.bytes + command_id.bytes).digest()[:8],
+        byteorder="big",
+        signed=True,
+    )
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    existing = await session.scalar(
+        select(GoodsReceipt).where(
+            GoodsReceipt.organization_id == scope.organization_id,
+            GoodsReceipt.command_id == command_id,
+        )
+    )
+    if existing is None:
+        return None
+    if existing.command_fingerprint != request_fingerprint or existing.response_snapshot is None:
+        # Same permanent command, different request. Never execute: one of the
+        # two payloads is a client bug, and guessing which would receive a
+        # delivery nobody sent. A NULL fingerprint is the same refusal for a
+        # different reason — there is nothing to compare against — and exists
+        # only on a receipt made before `0016` was rolled back and re-applied.
+        details = {"command_id": str(command_id)}
+        if existing.receiving_store_id in scope.store_ids and scope.can(
+            Permission.INVENTORY_RECEIVE, existing.receiving_store_id
+        ):
+            details["goods_receipt_id"] = str(existing.id)
+        raise IdempotencyConflictError(
+            "The original request for this existing receipt cannot be verified"
+            if existing.command_fingerprint is None
+            else "This command_id was already used with a different request",
+            **details,
+        )
+    # No permission recheck here, deliberately. The permanent fingerprint
+    # binds the actor and the acting store, so reaching this line means the
+    # request matches one this same person made from this same store — and
+    # the handler already required `inventory:receive` there and access to
+    # this warehouse, before the claim. A recheck would be unreachable: it
+    # was written, mutated, and no test could tell the difference.
+    return ReceiptResponse.model_validate(existing.response_snapshot)
+
+
 @router.post("/receipts", response_model=ReceiptResponse, status_code=status.HTTP_201_CREATED)
 async def receive_goods(
     payload: ReceiptRequest,
@@ -214,10 +307,33 @@ async def receive_goods(
         ),
     )
     if isinstance(outcome, idempotency.Replay):
-        # Identical request, already executed. Return the original answer
-        # rather than receiving the same delivery twice.
+        # Identical request, already executed, and answered from the 7-day
+        # cache. Return the original answer rather than receiving the same
+        # delivery twice.
         response.status_code = outcome.http_status
         return ReceiptResponse.model_validate(outcome.response)
+
+    # The same question the cache just answered, asked of the permanent
+    # record instead — the one that is still there in a year (invariant I20).
+    permanent_fingerprint = _receipt_fingerprint(
+        scope=scope, store_id=payload.store_id, payload=payload
+    )
+    replayed = await _existing_receipt(
+        session,
+        scope=scope,
+        command_id=payload.command_id,
+        request_fingerprint=permanent_fingerprint,
+    )
+    if replayed is not None:
+        await idempotency.complete(
+            session,
+            outcome.record_id,
+            response=replayed.model_dump(mode="json"),
+            http_status=status.HTTP_201_CREATED,
+        )
+        await session.commit()
+        response.status_code = status.HTTP_201_CREATED
+        return replayed
 
     await lock_stock(
         session,
@@ -232,6 +348,19 @@ async def receive_goods(
     requests: list[MovementRequest] = []
     lots: list[StockLot] = []
 
+    receipt = GoodsReceipt(
+        organization_id=scope.organization_id,
+        location_id=payload.location_id,
+        receiving_store_id=payload.store_id,
+        created_by_user_id=scope.user_id,
+        command_id=payload.command_id,
+        notes=payload.notes,
+        correlation_id=correlation_id,
+        command_fingerprint=permanent_fingerprint,
+    )
+    session.add(receipt)
+    await session.flush()
+
     for line in payload.lines:
         lot = StockLot(
             organization_id=scope.organization_id,
@@ -241,6 +370,7 @@ async def receive_goods(
             acquisition_type=line.acquisition_type,
             unit_cost=line.unit_cost,
             currency_code=settings.default_currency_code if line.unit_cost is not None else None,
+            goods_receipt_id=receipt.id,
             notes=payload.notes,
         )
         session.add(lot)
@@ -285,7 +415,8 @@ async def receive_goods(
             )
         )
 
-    body = ReceiptResponse(store_id=payload.store_id, lines=results)
+    body = ReceiptResponse(id=receipt.id, store_id=payload.store_id, lines=results)
+    receipt.response_snapshot = body.model_dump(mode="json")
     await idempotency.complete(
         session,
         outcome.record_id,

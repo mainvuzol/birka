@@ -19,6 +19,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -92,6 +93,72 @@ class MovementReason(StrEnum):
     OTHER = "OTHER"
 
 
+class GoodsReceipt(UUIDPrimaryKey, TimestampMixin, Base):
+    """One delivery arriving at one warehouse: the lots it created, as a fact.
+
+    It exists for the same reason `transfer` does. Every other command that
+    writes stock — a sale, a refund, a transfer, an approved legacy list —
+    carries a permanent `command_id` under `UNIQUE (organization_id,
+    command_id)`, which is invariant I20: *a critical command can never create
+    a second business operation, at any distance in time.* Receiving goods was
+    the one that did not, and nothing recorded a decision to exempt it.
+
+    What that cost, before `0016`: a receipt was idempotent for exactly as
+    long as its 7-day response cache. An identical request arriving after the
+    record was pruned created a second set of lots and doubled the delivered
+    quantity, silently. The client pattern that reaches it is the ordinary
+    one — a command written to durable storage before it is sent, replayed
+    when the app is opened again.
+
+    Following ADR-0003, as transfers do: `command_fingerprint` decides whether
+    a request carrying a known `command_id` is the same business operation,
+    and `response_snapshot` lets a retry arriving after the cache expires
+    receive the original receipt rather than a unique violation.
+    """
+
+    __tablename__ = "goods_receipt"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    # Where the goods arrived, and on whose authority — two facts, because a
+    # shared warehouse is exactly where they differ (ADR-0004).
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    receiving_store_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    command_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    response_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        postgresql.JSONB, nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "command_id", name="uq_goods_receipt_org_command"),
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_goods_receipt_org_location",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "receiving_store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_goods_receipt_org_store",
+            ondelete="RESTRICT",
+        ),
+    )
+
+
 class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
     """Provenance of one receipt of goods.
 
@@ -133,6 +200,14 @@ class StockLot(UUIDPrimaryKey, TimestampMixin, Base):
     inventory_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True),
         ForeignKey("inventory_snapshot.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    # The delivery that created this lot, where one did. Nullable because most
+    # lots have no receipt at all: an opening balance comes from a legacy list,
+    # and a restocking refund makes a lot out of goods that were already here.
+    goods_receipt_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("goods_receipt.id", ondelete="RESTRICT"),
         nullable=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

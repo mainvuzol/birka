@@ -31,6 +31,7 @@ from app.modules.catalog.models import (
 )
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import (
+    GoodsReceipt,
     Inventory,
     StockLot,
     StockMovement,
@@ -58,6 +59,7 @@ __all__ = [
     "CustomerOrder",
     "CustomerOrderItem",
     "GarmentType",
+    "GoodsReceipt",
     "IdempotencyRecord",
     "Inventory",
     "InventorySnapshot",
