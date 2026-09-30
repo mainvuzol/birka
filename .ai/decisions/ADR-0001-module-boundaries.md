@@ -87,3 +87,17 @@ Negative:
 2026-09-14 clarification: inventory validates catalog and active store ownership through public service functions before stock materialization. Sales reads correction references through inventory.service; it does not query inventory ORM tables.
 
 2026-09-28 amendment (M1-023, [ADR-0005](ADR-0005-legacy-snapshot-import.md)): module `snapshots` owns the legacy stock lists (`inventory_snapshot`, `inventory_snapshot_row`, `inventory_snapshot_allocation`), which plan §8 had placed inside `inventory`. Permitted edges: `snapshots → inventory, catalog, authz, tenancy, core` (+ audit). It writes raw evidence through `catalog.raw_lines` and opening stock through `inventory.service.apply_opening_balance`; lots, movements and the history check stay in `inventory`. No other module may import it, and it may import neither `sales`, `refunds`, `transfers`, `orders` nor `identity`. Contracts in `backend/pyproject.toml`. (Module `orders`, added on 2026-09-23, has its contracts there too.)
+
+2026-09-30 amendment (M1-028, the owner hears about the backups): two modules.
+- `telegram` sends one message from the shop's bot to one person, and nothing
+  else. ADR-0001 named `telegram → identity, core`; it needs neither today, and
+  a contract keeps it out of every other module.
+- `backups` owns `backup_run` and `backup_alert`, which describe the server
+  and carry no `organization_id`. Permitted edges: `backups → authz, identity,
+  telegram, core`. It asks authz who holds `backup:view` organization-wide
+  (`organization_wide_holders`), identity for their Telegram chats
+  (`telegram_chats`), and sends through telegram. It reads no shop's
+  business, and no module imports it: only the API and the scripts that run
+  the nights and the watcher.
+
+Contracts in `backend/pyproject.toml`.

@@ -1,9 +1,8 @@
 # A nightly backup, and a restore that proves it (M1-028) — 2026-09-30
 
 Baseline: `614ba35` (PR #42).
-Status: implemented and verified locally on PostgreSQL 16.2. Encryption and
-PostgreSQL 17 are verified by CI on every push. No migration, no API change.
-Branch: `feat/m1-028-backup-restore-drill`.
+Status: merged in PR #43 (`8d59454`). Verified locally on PostgreSQL 16.2;
+encryption and PostgreSQL 17 by CI on every push. No migration, no API change.
 
 ## Why this was next
 
@@ -25,7 +24,7 @@ Asked, not guessed; recorded in business-rules.md, "backups".
 - **Copies leave the server encrypted** to the owner's age key, and the
   owner's own computer or NAS collects them.
 - **Alerting.** A «Резервні копії» section for the owner, plus a Telegram
-  message. The next change.
+  message. Built next: the [alerts report](m1-028-backup-alerts-report.md).
 
 ## What exists now
 
@@ -149,9 +148,9 @@ copy too. The drill now fails on any disabled trigger.
 
   The real restore uses the drill's `pg_restore` flags but has not been
   rehearsed end to end.
-- **The owner does not yet hear about a failed night.** The section and the
-  Telegram message are the next change. Until then, `last-run.json` and the
-  cron log are the only record.
+- **The owner did not yet hear about a failed night.** The section and the
+  Telegram message followed the same day, in the
+  [alerts report](m1-028-backup-alerts-report.md).
 
 ## Changed files
 

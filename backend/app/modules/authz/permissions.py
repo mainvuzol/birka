@@ -45,6 +45,12 @@ class Permission(StrEnum):
     REPORT_VIEW_FINANCIAL = "report:view_financial"
     USER_MANAGE = "user:manage"
 
+    # The server's backups: whether last night's copy was made and proven,
+    # and the Telegram message when it was not (owner decision, 2026-09-30:
+    # "a section only the owner sees"). Honoured organization-wide only — a
+    # backup is of the whole server, not of one store.
+    BACKUP_VIEW = "backup:view"
+
 
 class RoleCode(StrEnum):
     OWNER = "OWNER"
@@ -97,6 +103,7 @@ _OWNER: frozenset[Permission] = _MANAGER | frozenset(
     {
         Permission.SNAPSHOT_APPROVE,
         Permission.USER_MANAGE,
+        Permission.BACKUP_VIEW,
     }
 )
 

@@ -49,7 +49,9 @@ services:
   #   docker compose --profile ops run --rm ops          # what cron runs daily
   #   docker compose --profile ops run --rm ops python -m scripts.restore_drill /backups/<file>.dump
   # It needs the database and the owner's age public key, nothing else: no
-  # bot token, no session secret, and never the owner's private key.
+  # bot token, no session secret, and never the owner's private key. Each
+  # night it writes one row, its own record, to `backup_run`, which is all
+  # `backup-watch` and the owner's section read.
   # The drill restores into a new scratch database on the same server and
   # drops it afterwards; it writes to no other database.
   ops:
@@ -71,6 +73,27 @@ services:
       # Owned by uid 10001, the image's user. The owner's computer collects
       # the encrypted copies from here (infra/pull-backups.sh).
       - ${BIRKA_BACKUP_DIR:-./backups}:/backups
+
+  # Tells the owner when a nightly backup fails, or stops happening
+  # (owner decision, 2026-09-30): the «Резервні копії» section reads the same
+  # record. It runs all the time, restarted by Docker, and not from cron: a
+  # schedule that stopped is exactly what it has to notice. It needs the
+  # database and the bot token, and nothing else.
+  backup-watch:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "scripts.backup_watch"]
+    environment:
+      BIRKA_APP_ENV: ${BIRKA_APP_ENV:-local}
+      BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
+      BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN:?bot token is required}
+      BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
+      BIRKA_LOG_JSON: "true"
 
   # Builds the Mini App and hands the static bundle to Caddy through a shared
   # volume. It exits once the build is copied; it is not a long-running service.

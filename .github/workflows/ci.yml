@@ -169,6 +169,27 @@ jobs:
           ops
           cat backups/last-run.json
 
+      - name: The owner's section sees the night, and the watcher starts and stops cleanly
+        # What the `backup-watch` service runs, from the API image. The night
+        # above must read as OK. Then the watcher runs a few looks — nothing
+        # is news, so nothing goes to Telegram — and is stopped as Docker
+        # stops it: SIGTERM to PID 1, which it must honour, not wait out.
+        run: |
+          DB=postgresql+asyncpg://birka:birka@localhost:5432/birka
+          docker run --rm --network host -e BIRKA_DATABASE_URL=$DB birka-api \
+            python -m scripts.backup_watch --status
+          docker run -d --name watch --network host -e BIRKA_DATABASE_URL=$DB \
+            -e BIRKA_TELEGRAM_BOT_TOKEN=123456:ci-not-a-real-token birka-api \
+            python -m scripts.backup_watch --every 2
+          sleep 6
+          docker stop --time 5 watch
+          logs=$(docker logs watch 2>&1)
+          echo "$logs"
+          echo "$logs" | grep -q backup_watch.started
+          echo "$logs" | grep -q backup_watch.stopped
+          ! echo "$logs" | grep -q backup_watch.failed
+          test "$(docker inspect -f '{{.State.ExitCode}}' watch)" = 0
+
       - name: Only the owner's key opens the copy, and it is the archive that was drilled
         run: |
           test ! -e backups/birka-*[0-9]Z.dump

@@ -116,6 +116,38 @@ async def resolve_scope(session: AsyncSession, user_id: uuid.UUID) -> RequestSco
     )
 
 
+async def organization_wide_holders(
+    session: AsyncSession, permission: Permission
+) -> list[uuid.UUID]:
+    """Every user holding `permission` through an active organization-wide
+    membership, in any organization.
+
+    For news about the server itself, such as its backups, which belong to
+    no single store: a grant for one store does not count.
+    """
+    stmt = (
+        select(Membership.user_id)
+        .join(
+            Role,
+            and_(
+                Role.id == Membership.role_id,
+                or_(
+                    Role.organization_id.is_(None),
+                    Role.organization_id == Membership.organization_id,
+                ),
+            ),
+        )
+        .join(RolePermission, RolePermission.role_id == Role.id)
+        .where(
+            Membership.is_active.is_(True),
+            Membership.store_id.is_(None),
+            RolePermission.permission_code == permission.value,
+        )
+        .distinct()
+    )
+    return sorted((await session.execute(stmt)).scalars())
+
+
 async def seed_default_roles(session: AsyncSession, organization_id: uuid.UUID) -> dict[str, Role]:
     """Create OWNER/MANAGER/SELLER for an organization if they do not exist.
 
@@ -150,4 +182,4 @@ async def seed_default_roles(session: AsyncSession, organization_id: uuid.UUID) 
     return created
 
 
-__all__ = ["RoleCode", "resolve_scope", "seed_default_roles"]
+__all__ = ["RoleCode", "organization_wide_holders", "resolve_scope", "seed_default_roles"]

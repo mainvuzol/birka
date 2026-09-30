@@ -118,3 +118,12 @@ Asked as the runbook's five questions. See the
 - **A failed backup or drill is shown to the owner in the app**, in a
   «Резервні копії» section only the owner sees, **and sent by the bot in
   Telegram**, so it is not missed when nobody opens the section.
+
+## Owner decision — 2026-10-01 (backup messages are silent)
+
+Asked because the nightly job runs at 03:15, so a failed night's message
+would arrive at night with a sound. The owner chose **silent**: every backup
+message arrives without a sound or a vibration, whatever the hour, and the
+owner looks at the «Резервні копії» section to see what went wrong. The
+message is still delivered and stays in the bot's chat; it is not held
+until morning.

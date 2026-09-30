@@ -290,5 +290,14 @@ It writes to no database but its own scratch copy, which it drops. The
 `ops` image carries the PostgreSQL 17 client tools and `age`. Elsewhere, set
 `BIRKA_PG_BIN`.
 
+Each night also leaves one row in `backup_run`. From it the owner sees the
+«Резервні копії» section in the app, and the `backup-watch` service sends the
+owner a Telegram message when a night fails, when none has run for 26 hours,
+or when backups were never set up:
+
+```sh
+docker compose run --rm backup-watch python -m scripts.backup_watch --status   # exit 0 only if OK
+```
+
 Setup, key custody and restoring for real are in the
 [runbook](.ai/project-memory/backup-restore-runbook.md).

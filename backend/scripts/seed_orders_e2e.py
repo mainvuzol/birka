@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import uuid
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import app.models_registry  # noqa: F401  - every table on the metadata, like mi
 from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.backups.models import AlertKind, AlertStatus, BackupAlert, BackupRun
 from app.modules.catalog.models import (
     AttributeKind,
     AttributeTerm,
@@ -133,8 +135,10 @@ async def main() -> None:
                 role_id=role.id,
             )
         )
+        owner = await seed_backups(session, organization_id=org.id, role_id=role.id)
         data = {
             "telegram_user_id": str(user.telegram_user_id),
+            "owner_telegram_user_id": str(owner.telegram_user_id),
             "store_id": str(store.id),
             "location_id": str(location.id),
             "till_location_id": str(till.id),
@@ -157,6 +161,53 @@ async def main() -> None:
     )
     await engine.dispose()
     Path(os.environ["BIRKA_E2E_FIXTURE"]).write_text(json.dumps(data))
+
+
+async def seed_backups(
+    session: AsyncSession, *, organization_id: uuid.UUID, role_id: uuid.UUID
+) -> AppUser:
+    """The owner, and what their «Резервні копії» section shows: two good
+    nights, then last night's drill failing on the ledger, and Telegram
+    refusing to deliver the warning because the owner never started the bot.
+
+    The owner holds the E2E role organization-wide; «Оля» holds it for one
+    store, which is not enough to see the server's backups."""
+    owner = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Власниця")
+    session.add(owner)
+    await session.flush()
+    session.add(Membership(user_id=owner.id, organization_id=organization_id, role_id=role_id))
+    now = datetime.now(UTC)
+    for days, problems in [
+        (3, []),
+        (2, []),
+        (1, [{"step": "drill", "checks": ["ledger"], "detail": "ledger: 1 balance"}]),
+    ]:
+        finished = now - timedelta(days=days) + timedelta(hours=12)
+        session.add(
+            BackupRun(
+                started_at=finished - timedelta(minutes=3),
+                finished_at=finished,
+                ok=not problems,
+                archive=f"birka-{finished:%Y%m%dT%H%M%SZ}.dump.age",
+                archive_bytes=2_500_000,
+                drill_ok=not problems,
+                restore_seconds=0.42,
+                problems=problems,
+            )
+        )
+    session.add(
+        BackupAlert(
+            key=f"e2e:{uuid.uuid4()}",
+            kind=AlertKind.FAILED.value,
+            user_id=owner.id,
+            text="⚠️ Нічна резервна копія не вдалася.",
+            status=AlertStatus.REFUSED.value,
+            attempts=1,
+            last_error="Forbidden: bot can't initiate conversation with a user",
+        )
+    )
+    await session.flush()
+    return owner
 
 
 async def open_from_a_legacy_list(

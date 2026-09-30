@@ -31,6 +31,7 @@ import {
   useAdjustmentCommand,
 } from "@/inventory/adjustmentCommands";
 import type { Adjustment } from "@/inventory/adjustmentTypes";
+import { Backups, useBackups } from "@/backups/Backups";
 import type { Sale as SaleReceipt } from "@/sales/types";
 import "./styles.css";
 
@@ -143,8 +144,15 @@ function Workspace({
 }): JSX.Element {
   const cache = useQueryClient();
   const [tab, setTab] = useState<
-    "list" | "new" | "catalog" | "stock" | "sale" | "receive"
+    "list" | "new" | "catalog" | "stock" | "sale" | "receive" | "backups"
   >("list");
+  // The owner's section. A backup is of the whole server, so only a grant
+  // held organization-wide opens it, never one for a store.
+  const canSeeBackups = me.organization_permissions.includes("backup:view");
+  const backupsKey = `${me.organization_id}:${me.user_id}`;
+  const backups = useBackups(token, backupsKey, canSeeBackups);
+  const backupsNeedYou =
+    backups.data !== undefined && backups.data.state !== "OK";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [storageError, setStorageError] = useState(false);
@@ -331,6 +339,17 @@ function Workspace({
             }}
           >
             Залишки
+          </button>
+        )}
+        {canSeeBackups && (
+          <button
+            className={tab === "backups" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("backups");
+            }}
+          >
+            Резервні копії{backupsNeedYou ? " ⚠" : ""}
           </button>
         )}
       </nav>
@@ -566,6 +585,12 @@ function Workspace({
           />
         ) : (
           <p role="alert">Немає доступу до залишків.</p>
+        )
+      ) : tab === "backups" ? (
+        canSeeBackups ? (
+          <Backups token={token} scopeKey={backupsKey} />
+        ) : (
+          <p role="alert">Цей розділ бачить лише власник.</p>
         )
       ) : tab === "catalog" ? (
         store.permissions.includes("catalog:confirm") ? (

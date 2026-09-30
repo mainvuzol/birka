@@ -185,10 +185,24 @@ daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
   - cron;
   - the read-only SSH user;
   - the owner's collection schedule.
-- **A failed night is silent until the owner's section and the Telegram
-  message exist** (the next change). `last-run.json` and the cron log are the
-  only record meanwhile. A night that never ran at all — cron broken — leaves
-  no record, so the section must also say when a backup is overdue.
+- **The owner now hears of a failed or missing night** — in the
+  «Резервні копії» section and from the bot
+  ([alerts report](m1-028-backup-alerts-report.md)). What is still not
+  covered:
+  - **The watcher lives on the same server.** If the whole server or its
+    database is down, nobody sends anything. The shop sees the app down, and
+    the owner's collection script finds nothing new, but no message says why.
+  - **The bot reaches only an owner who pressed «Start» in its chat.**
+    Until then Telegram refuses; the section shows that, but only to an
+    owner who opens it.
+  - **A message may arrive twice** if the watcher dies between sending it and
+    recording it. Chosen over the opposite risk: a warning that never comes.
+  - **Messages are silent** (owner decision, 2026-10-01): nothing wakes
+    anyone at 03:15, and a warning is seen only when the owner looks at the
+    bot's chat or the section. The tab's «⚠» is there for that.
+  - **Not run in production and not sent to a real Telegram.** The Telegram
+    client is tested against Telegram's own answers played back, not the
+    network.
 - **A restore loses up to a day.** No WAL archiving exists; the owner chose a
   daily backup knowing this.
 - **The owner's private key is the only way to read any backup.** Lose every
