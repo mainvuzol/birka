@@ -5,6 +5,10 @@
 *.pem
 *.key
 
+# Database backups hold every sale and every customer order. Never committed.
+infra/backups/
+*.dump
+
 # Real legacy shop documents are private source material (see .ai/project.md).
 # Originals live here and are NEVER committed; only the sanitized golden corpus
 # under backend/tests/fixtures/ is versioned.

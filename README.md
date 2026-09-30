@@ -259,3 +259,36 @@ Related changes elsewhere:
   writes.
 
 See the [M1-023 report](.ai/project-memory/m1-023-snapshot-import-report.md).
+
+## Backups and the restore drill (M1-028)
+
+Every night the server:
+
+1. backs up the database;
+2. restores the copy into a scratch database and proves it is the same data;
+3. encrypts it to the owner's age public key;
+4. keeps every daily copy 7 days and each month's first copy 3 months.
+
+The owner's own computer collects the encrypted copies with
+`infra/pull-backups.sh`. Only the owner holds the private key.
+
+```sh
+docker compose --profile ops run --rm ops         # the nightly run, as cron runs it
+python -m scripts.restore_drill /backups/birka-<time>.dump \
+    --scratch-url postgresql+asyncpg://…/postgres  # a drill on its own
+```
+
+The restore drill passes only when:
+
+- the archive matches its checksum;
+- every table has the same row count;
+- every trigger is present and enabled;
+- the locale still lowercases Cyrillic;
+- the stock ledger reconciles.
+
+It writes to no database but its own scratch copy, which it drops. The
+`ops` image carries the PostgreSQL 17 client tools and `age`. Elsewhere, set
+`BIRKA_PG_BIN`.
+
+Setup, key custody and restoring for real are in the
+[runbook](.ai/project-memory/backup-restore-runbook.md).

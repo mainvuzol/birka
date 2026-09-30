@@ -88,6 +88,18 @@ jobs:
           path: /tmp/catalog-evaluation.json
           if-no-files-found: ignore
 
+      - name: PostgreSQL 17 client tools and age, for the backup tests
+        # pg_dump refuses a newer server, and the runner's own client is older.
+        # From the PostgreSQL project's apt repository, set up by the script
+        # postgresql-common ships. age encrypts each copy to the owner's key.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends postgresql-common age
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q --no-install-recommends postgresql-client-17
+          echo "BIRKA_PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
       - name: Tests
         run: pytest -q
 
@@ -106,6 +118,77 @@ jobs:
             echo "::error::integration tests were skipped in CI (database unreachable?)"
             exit 1
           fi
+
+  restore-drill:
+    # The production path end to end: the `ops` image backs up a database on
+    # PostgreSQL 17 with the production locale, restores it into a scratch
+    # database, and proves the copy (.ai/project-memory/backup-restore-runbook.md).
+    name: backup and restore drill (ops image, PostgreSQL 17)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: birka
+          POSTGRES_PASSWORD: birka
+          POSTGRES_DB: birka
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U birka -d birka"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the ops image, and the API image beside it
+        run: |
+          docker build --target ops -t birka-ops backend
+          docker build -t birka-api backend
+
+      - name: The API image is still the default target
+        run: docker run --rm birka-api sh -c 'test -z "${BIRKA_PG_BIN:-}" && python -c "import app.main"'
+
+      - name: Migrate, seed, and run the nightly backup as the schedule would
+        run: |
+          mkdir -p backups keys && chmod 777 backups keys
+          ops() {
+            docker run --rm --network host -v "$PWD/backups:/backups" -v "$PWD/keys:/keys" \
+              -e BIRKA_DATABASE_URL=postgresql+asyncpg://birka:birka@localhost:5432/birka \
+              -e BIRKA_RESTORE_SCRATCH_URL=postgresql+asyncpg://birka:birka@localhost:5432/postgres \
+              -e BIRKA_BACKUP_AGE_RECIPIENTS="${RECIPIENT:-}" \
+              birka-ops "$@"
+          }
+          ops alembic upgrade head
+          ops python -m scripts.seed_organization --telegram-user-id 1000001
+          # The owner's key pair: made here only because CI plays the owner.
+          # age-keygen prints the public key on stderr; the key file is 0600.
+          RECIPIENT=$(ops sh -c 'age-keygen -o /keys/owner.txt 2>&1 >/dev/null | sed -n "s/^Public key: //p"')
+          test -n "$RECIPIENT"
+          ops
+          cat backups/last-run.json
+
+      - name: Only the owner's key opens the copy, and it is the archive that was drilled
+        run: |
+          test ! -e backups/birka-*[0-9]Z.dump
+          docker run --rm -v "$PWD/backups:/backups" -v "$PWD/keys:/keys" birka-ops sh -c '
+            set -e
+            sealed=$(ls /backups/birka-*.dump.age)
+            age --decrypt -i /keys/owner.txt -o /tmp/opened.dump "$sealed"
+            expected=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))[\"archive_sha256\"])" "${sealed%.dump.age}.json")
+            test "$(sha256sum /tmp/opened.dump | cut -d" " -f1)" = "$expected"
+            echo "decrypted archive matches the drilled one: $expected"'
+
+      - name: Preserve the drill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restore-drill-report
+          path: |
+            backups/last-run.json
+            backups/*.drill.json
+          if-no-files-found: ignore
 
   frontend:
     name: frontend (lint, types, build)

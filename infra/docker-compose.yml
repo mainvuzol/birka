@@ -45,6 +45,33 @@ services:
     expose:
       - "8000"
 
+  # The nightly backup, and restore drills (backup-restore-runbook.md):
+  #   docker compose --profile ops run --rm ops          # what cron runs daily
+  #   docker compose --profile ops run --rm ops python -m scripts.restore_drill /backups/<file>.dump
+  # It needs the database and the owner's age public key, nothing else: no
+  # bot token, no session secret, and never the owner's private key.
+  # The drill restores into a new scratch database on the same server and
+  # drops it afterwards; it writes to no other database.
+  ops:
+    profiles: ["ops"]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: ops
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
+      BIRKA_RESTORE_SCRATCH_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/postgres
+      # Unset, the nightly run fails: copies leave the server only encrypted.
+      BIRKA_BACKUP_AGE_RECIPIENTS: ${BIRKA_BACKUP_AGE_RECIPIENTS:-}
+      BIRKA_LOG_JSON: "true"
+    volumes:
+      # Owned by uid 10001, the image's user. The owner's computer collects
+      # the encrypted copies from here (infra/pull-backups.sh).
+      - ${BIRKA_BACKUP_DIR:-./backups}:/backups
+
   # Builds the Mini App and hands the static bundle to Caddy through a shared
   # volume. It exits once the build is copied; it is not a long-running service.
   web:

@@ -171,3 +171,30 @@ See the [report](size-clarified-ui-report.md).
   That costs one extra tap, and nothing is recorded wrongly.
 - **One unit asked for no longer offers «на місці лише стільки»**: fewer
   than one present is none, and the answer is to remove the line (Q-G).
+
+## Backups — 2026-09-30
+
+See the [report](m1-028-backup-restore-report.md) and the
+[runbook](backup-restore-runbook.md). The owner set the policy the same day:
+daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
+
+- **None of it runs on the server yet.** Until someone does the setup, one
+  disk failure can take the database and every backup with it:
+  - the key;
+  - the `.env` line;
+  - cron;
+  - the read-only SSH user;
+  - the owner's collection schedule.
+- **A failed night is silent until the owner's section and the Telegram
+  message exist** (the next change). `last-run.json` and the cron log are the
+  only record meanwhile. A night that never ran at all — cron broken — leaves
+  no record, so the section must also say when a backup is overdue.
+- **A restore loses up to a day.** No WAL archiving exists; the owner chose a
+  daily backup knowing this.
+- **The owner's private key is the only way to read any backup.** Lose every
+  copy of it and every backup is unreadable. This is why it lives in the
+  password manager and on paper or a USB stick.
+- **A real restore has not been rehearsed on a server.** The drill uses the
+  same `pg_restore` flags; the runbook's full sequence has not run in
+  production.
+- **`.env` is not in the backup.** Keep it in the password manager too.
