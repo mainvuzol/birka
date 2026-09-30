@@ -143,7 +143,9 @@ On the frontend:
 ## Not verified here
 
 - **Repaired goods cannot leave «Брак» yet.** Transfers need `can_sell` at
-  the source. Writing off works. This is in the risk register.
+  the source. Writing off works. The owner decided the inspection flow the
+  same day — back on sale, or «брак підтверджений» — and it is the next
+  change (business-rules.md, "what happens in «Брак»").
 - **Nothing has run in production.** The E2E job's own first run on GitHub,
   on PostgreSQL 17, is this PR's CI.
 

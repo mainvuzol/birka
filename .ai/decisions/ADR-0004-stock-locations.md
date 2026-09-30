@@ -263,4 +263,6 @@ name.
 
 Still open: taking goods *out* of «Брак» after repair. A transfer requires
 `can_sell` at its source (§3), so repaired goods cannot yet be moved back to
-sale. Writing them off works today, as a correction.
+sale. Writing them off works today, as a correction. The owner decided the
+flow the same day (inspection, then back on sale or «брак підтверджений»;
+business-rules.md); it is not built.

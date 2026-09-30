@@ -151,3 +151,24 @@ happens to a damaged unit to be designed.
   §1).
 - **The seller finds the sale in the store's list of sales**, newest first,
   searchable by the goods' name.
+
+## Owner decision — 2026-10-01 (what happens in «Брак»)
+
+Asked after the returns were built, because repaired goods had no way back
+to sale.
+
+- **Anyone who takes returns** — a seller, a manager or the owner — puts a
+  unit returned damaged into their store's «Брак», marked damaged. (Built:
+  the return at the till.)
+- **From «Брак», any of them may pick a unit and take it for inspection.**
+  Depending on what they find, they either:
+  - **put it back among the goods on sale**; or
+  - **keep it in «Брак» marked «брак підтверджений»** (damage confirmed).
+
+Not built yet. To settle with the owner when it is:
+- which warehouse an inspected unit goes back to — the one it was sold from,
+  or one the person chooses;
+- whether «на перевірці» is a state others see, so two people do not inspect
+  the same unit;
+- what later happens to a unit whose damage is confirmed: kept, written off,
+  or sent back to the supplier.

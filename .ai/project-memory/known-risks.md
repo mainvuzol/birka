@@ -220,9 +220,10 @@ same day: intact back where it was sold, damaged to the store's own «Брак»
 
 - **Repaired goods cannot leave «Брак» yet.** A transfer needs `can_sell` at
   its source, and nothing sells from «Брак». Writing a unit off works today
-  (a stock correction with reason «Пошкоджено»). Moving a repaired unit back
-  to sale needs its own rule; returning it to a supplier is a write-off with
-  a note until then.
+  (a stock correction with reason «Пошкоджено»). The owner decided the flow
+  on 2026-10-01: anyone who takes returns may inspect a unit, then put it
+  back on sale or keep it as «брак підтверджений» (business-rules.md). Not
+  built.
 - **Only the refund checks that nobody sells from a «Брак».** The database
   holds it for the store the «Брак» belongs to. If an operator later lets
   another store sell there, goods already in it become sellable by that
