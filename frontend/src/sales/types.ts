@@ -4,12 +4,14 @@ import type { Line } from "@/orders/types";
 export type SaleLine = Line;
 
 /**
- * One of the two in-sale corrections, both `{line_index, quantity}` on the wire.
+ * One of the three in-sale corrections, all `{line_index, quantity}` on the wire.
  *
- * Their `quantity` means opposite things and neither is a shortage:
- * `found_in_store` carries how many units to add to the shelf, bounded by the
- * line's shortfall; `missing_in_store` carries how many units are **present**,
- * and the server takes the difference it believed in off the shelf.
+ * Their `quantity` means different things: `found_in_store` carries how many
+ * units to add to the shelf, bounded by the line's shortfall;
+ * `missing_in_store` carries how many units are **present**, and the server
+ * takes the difference it believed in off the shelf; `size_clarified` carries
+ * how many units move out of "size not known" into the line's size, which
+ * must be exactly the line's shortfall at that size.
  */
 export interface Report {
   line_index: number;

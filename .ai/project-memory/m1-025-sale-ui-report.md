@@ -158,6 +158,7 @@ that key**, for every seller, until the order is dispatched or released.
   implemented in the backend and not offered by this screen. It needs the
   seller to see the size-not-known balance of the same model, and it is
   refused outright when either balance is reserved. Its own increment.
+  *Done 2026-09-30:* see the [size at the till report](size-clarified-ui-report.md).
 - **No suggested price.** `VariantPrice` exists in the schema with a
   `suggested_price` column and a docstring saying it is there "so the seller
   does not retype it (F33)" — but **nothing writes it, nothing reads it, and no

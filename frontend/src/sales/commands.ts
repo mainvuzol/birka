@@ -9,6 +9,12 @@ export interface SaleBody {
   lines: SaleLine[];
   found_in_store: Report[];
   missing_in_store: Report[];
+  /**
+   * Absent from an attempt written down before the till could clarify a
+   * size. Such an attempt is resent exactly as stored, so it stays absent:
+   * the server reads a missing list as an empty one.
+   */
+  size_clarified?: Report[];
 }
 
 /**
@@ -95,6 +101,8 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
     lines.length === 0 ||
     !isReports((body as SaleBody).found_in_store, lines.length) ||
     !isReports((body as SaleBody).missing_in_store, lines.length) ||
+    ((body as SaleBody).size_clarified !== undefined &&
+      !isReports((body as SaleBody).size_clarified, lines.length)) ||
     (attempt.acknowledged !== undefined &&
       typeof attempt.acknowledged !== "boolean") ||
     (attempt.ambiguous !== undefined &&

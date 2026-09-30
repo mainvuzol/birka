@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import type { ApiError } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
+import type { SizeOption } from "@/inventory/receiptTypes";
 import { submitSale, useSaleCommand } from "./commands";
 import type { SaleLine, Sale as SaleReceipt, Shortfall } from "./types";
 import { stockKey } from "./types";
@@ -14,6 +16,10 @@ interface Draft {
   line: SaleLine;
   name: string;
   size: string;
+  /** Sold as "size not known": there is no size to clarify, nothing to find. */
+  unknownSize: boolean;
+  /** Its size was read off a coat held with its size not known. */
+  fromUnknown: boolean;
 }
 
 /**
@@ -26,6 +32,14 @@ interface Draft {
  * designed around, so a quantity above the recorded balance is offered to the
  * server rather than blocked here. The server refuses, names the shortfall,
  * and the seller answers it — «товар на місці» or «на місці лише стільько».
+ *
+ * A third answer exists where a legacy list left the same model here with its
+ * size not known (ADR-0005 §11): the coat in hand is one of those, and its
+ * label says M. The seller clarifies its size and it is sold as M, as an
+ * audited pair of movements. «Товар на місці» is then not offered — the server
+ * refuses it, because the coat could be counted twice. A coat held that way
+ * whose size is on its label can also be sold with that size from the start,
+ * which is how an M the system holds none of is sold at all.
  */
 export function Sale({
   store,
@@ -47,6 +61,13 @@ export function Sale({
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [found, setFound] = useState<Record<number, number>>({});
   const [missing, setMissing] = useState<Record<number, number>>({});
+  const [clarified, setClarified] = useState<Record<number, number>>({});
+  // `location:variant` keys this till has learned hold the model with its
+  // size not known — from the server refusing «товар на місці» because of it.
+  const [heldUnknown, setHeldUnknown] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [labelSize, setLabelSize] = useState("");
   const [shortfall, setShortfall] = useState<Shortfall | null>(null);
   const [refusal, setRefusal] = useState<unknown>(null);
   const [present, setPresent] = useState("");
@@ -60,6 +81,10 @@ export function Sale({
   const mayReportMissing = store.permissions.includes(
     "inventory:report_missing_during_sale",
   );
+  // The organization's sizes come from the receiving endpoint, which asks
+  // for `inventory:receive`; the default seller holds both.
+  const mayReadLabel =
+    mayCorrect && store.permissions.includes("inventory:receive");
 
   const locations = useQuery({
     queryKey: ["sale-locations", journalKey, store.id],
@@ -80,6 +105,13 @@ export function Sale({
   const selected = stock.data?.items.find(
     (item) => `${item.product_variant_id}:${item.size_id}` === option,
   );
+  const sizes = useQuery({
+    queryKey: ["sale-sizes", journalKey, store.id],
+    queryFn: () =>
+      api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
+    enabled: mayReadLabel && !!selected?.size_is_unknown,
+    retry: false,
+  });
 
   // A basket that changed is a different business operation, and any answer
   // given about the old one no longer applies to it.
@@ -88,6 +120,7 @@ export function Sale({
     setCommandId(crypto.randomUUID());
     setFound({});
     setMissing({});
+    setClarified({});
     setShortfall(null);
     setPresent("");
   }
@@ -133,9 +166,12 @@ export function Sale({
       );
       return;
     }
+    const label = selected.size_is_unknown
+      ? sizes.data?.find((size) => size.size_id === labelSize)
+      : undefined;
     const line: SaleLine = {
       product_variant_id: selected.product_variant_id,
-      size_id: selected.size_id,
+      size_id: label ? label.size_id : selected.size_id,
       source_location_id: locationId,
       quantity: count,
       unit_price: decimal(cents),
@@ -149,18 +185,31 @@ export function Sale({
     }
     replaceDraft([
       ...draft,
-      { line, name: selected.display_name, size: selected.size_label },
+      {
+        line,
+        name: selected.display_name,
+        size: label
+          ? label.code
+          : selected.size_is_unknown
+            ? "розмір невідомий"
+            : selected.size_label,
+        unknownSize: selected.size_is_unknown && !label,
+        fromUnknown: label !== undefined,
+      },
     ]);
     setPrice("");
     setQuantity("1");
     setOption("");
+    setLabelSize("");
     setValidation("");
   }
 
   async function send(
     nextFound: Record<number, number>,
     nextMissing: Record<number, number>,
+    nextClarified: Record<number, number>,
   ): Promise<void> {
+    const asked = shortfall;
     setShortfall(null);
     setRefusal(null);
     setValidation("");
@@ -181,6 +230,10 @@ export function Sale({
           line_index: Number(index),
           quantity: value,
         })),
+        size_clarified: Object.entries(nextClarified).map(([index, value]) => ({
+          line_index: Number(index),
+          quantity: value,
+        })),
       },
     });
     if (outcome.kind === "sold") {
@@ -188,14 +241,58 @@ export function Sale({
       setDraft([]);
       setFound({});
       setMissing({});
+      setClarified({});
       setCommandId(crypto.randomUUID());
       setPresent("");
       await stock.refetch();
     } else if (outcome.kind === "refused") {
-      if (outcome.shortfall) setShortfall(outcome.shortfall);
-      else setRefusal(outcome.error);
+      const { error, shortfall: short } = outcome;
+      const { details } = error;
+      if (
+        error.code === "UNKNOWN_SIZE_STOCK" &&
+        asked !== null &&
+        details.product_variant_id === asked.product_variant_id &&
+        details.location_id === asked.location_id
+      ) {
+        // «Товар на місці» was refused because this model is held here with
+        // its size not known. Nothing was sold, the same shortfall stands,
+        // and now the till knows which answer fits it.
+        setHeldUnknown(
+          (known) =>
+            new Set([
+              ...known,
+              `${asked.location_id}:${asked.product_variant_id}`,
+            ]),
+        );
+        const index = indexOf(asked);
+        setFound(
+          Object.fromEntries(
+            Object.entries(nextFound).filter(([key]) => Number(key) !== index),
+          ),
+        );
+        setShortfall(asked);
+      } else if (short && details.reason === undefined) {
+        setShortfall(short);
+      } else {
+        // A clarification refused for its own reason is withdrawn, so the
+        // seller answers afresh rather than resending what cannot pass.
+        setClarified({});
+        setRefusal(error);
+      }
       setPresent("");
     }
+  }
+
+  function indexOf(short: Shortfall): number {
+    return draft.findIndex(
+      (d) =>
+        stockKey(d.line) ===
+        stockKey({
+          source_location_id: short.location_id,
+          product_variant_id: short.product_variant_id,
+          size_id: short.size_id,
+        }),
+    );
   }
 
   const total = draft.reduce(
@@ -203,18 +300,24 @@ export function Sale({
       sum + (kopecks(d.line.unit_price) ?? 0n) * BigInt(d.line.quantity),
     0n,
   );
-  const shortIndex = shortfall
-    ? draft.findIndex(
-        (d) =>
-          stockKey(d.line) ===
-          stockKey({
-            source_location_id: shortfall.location_id,
-            product_variant_id: shortfall.product_variant_id,
-            size_id: shortfall.size_id,
-          }),
-      )
-    : -1;
+  const shortIndex = shortfall ? indexOf(shortfall) : -1;
   const shortDraft = shortIndex >= 0 ? draft[shortIndex] : undefined;
+  // Whether the short line's model is held at its warehouse with its size not
+  // known — and so whether the coat in hand may be one of those.
+  const unknownHere =
+    shortDraft !== undefined &&
+    !shortDraft.unknownSize &&
+    (shortDraft.fromUnknown ||
+      heldUnknown.has(
+        `${shortDraft.line.source_location_id}:${shortDraft.line.product_variant_id}`,
+      ) ||
+      (shortDraft.line.source_location_id === locationId &&
+        (stock.data?.items ?? []).some(
+          (item) =>
+            item.product_variant_id === shortDraft.line.product_variant_id &&
+            item.size_is_unknown &&
+            item.available_quantity > 0,
+        )));
   const working = busy || pending !== null;
 
   if (receipt)
@@ -295,6 +398,7 @@ export function Sale({
                   value={option}
                   onChange={(event) => {
                     setOption(event.target.value);
+                    setLabelSize("");
                   }}
                 >
                   <option value="">Оберіть товар</option>
@@ -323,6 +427,36 @@ export function Sale({
                   {selected.size_is_unknown &&
                     " · розмір невідомий: продається як є"}
                 </p>
+              )}
+              {selected?.size_is_unknown && mayReadLabel && (
+                <label>
+                  Розмір з етикетки
+                  <select
+                    value={labelSize}
+                    onChange={(event) => {
+                      setLabelSize(event.target.value);
+                    }}
+                  >
+                    <option value="">Не читали — продати без розміру</option>
+                    {(sizes.data ?? []).map((size) => (
+                      <option key={size.size_id} value={size.size_id}>
+                        {size.code}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="hint">
+                    Прочитали розмір на етикетці — оберіть його, і товар
+                    продасться з цим розміром.
+                  </span>
+                </label>
+              )}
+              {sizes.error && (
+                <Failure
+                  error={sizes.error}
+                  retry={() => {
+                    void sizes.refetch();
+                  }}
+                />
               )}
               <div className="toolbar">
                 <button
@@ -396,6 +530,14 @@ export function Sale({
             {missing[index] !== undefined && (
               <span>На місці лише {missing[index]}</span>
             )}
+            {d.fromUnknown && (
+              <span className="hint">Розмір з етикетки товару без розміру</span>
+            )}
+            {clarified[index] !== undefined && (
+              <span>
+                Розмір уточнено: {clarified[index]} од. з «розмір невідомий»
+              </span>
+            )}
             <button
               type="button"
               className="quiet"
@@ -414,7 +556,7 @@ export function Sale({
           type="button"
           disabled={draft.length === 0}
           onClick={() => {
-            void send(found, missing);
+            void send(found, missing, clarified);
           }}
         >
           Продати
@@ -422,7 +564,7 @@ export function Sale({
       </fieldset>
       {refusal !== null && (
         <p role="alert">
-          {errorText(refusal)} Кошик збережено — нічого не продано.
+          {refusalText(refusal)} Кошик збережено — нічого не продано.
         </p>
       )}
       {shortfall && (
@@ -447,7 +589,31 @@ export function Sale({
                 </p>
               ) : (
                 <>
-                  {mayCorrect && (
+                  {mayCorrect && unknownHere && (
+                    <>
+                      <p>
+                        Ця модель є на складі з невідомим розміром. Якщо у вас
+                        одна з тих одиниць, уточніть її розмір — вона продасться
+                        як {shortDraft.size}.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={working}
+                        onClick={() => {
+                          const next = {
+                            ...clarified,
+                            [shortIndex]:
+                              shortfall.requested - shortfall.available,
+                          };
+                          setClarified(next);
+                          void send(found, missing, next);
+                        }}
+                      >
+                        Це товар без розміру — продати як {shortDraft.size}
+                      </button>
+                    </>
+                  )}
+                  {mayCorrect && !unknownHere && !shortDraft.unknownSize && (
                     <button
                       type="button"
                       disabled={working}
@@ -458,13 +624,14 @@ export function Sale({
                             shortfall.requested - shortfall.available,
                         };
                         setFound(next);
-                        void send(next, missing);
+                        void send(next, missing, clarified);
                       }}
                     >
                       Товар на місці — продати {shortfall.requested}
                     </button>
                   )}
-                  {mayReportMissing && (
+                  {/* With one unit asked for, fewer present is none: remove the line. */}
+                  {mayReportMissing && shortfall.requested > 1 && (
                     <>
                       <label>
                         На місці фактично є, одиниць
@@ -493,7 +660,7 @@ export function Sale({
                           }
                           const next = { ...missing, [shortIndex]: count };
                           setMissing(next);
-                          void send(found, next);
+                          void send(found, next, clarified);
                         }}
                       >
                         Продати стільки, скільки є
@@ -570,6 +737,23 @@ function Receipt({
       </button>
     </section>
   );
+}
+
+/** What the till can say about a refusal it knows the cause of. */
+function refusalText(error: unknown): string {
+  const details = (error as Partial<ApiError> | null)?.details ?? {};
+  switch (details.reason) {
+    case "SIZE_NOT_KNOWN_SHORT":
+      return `Одиниць цієї моделі без розміру на складі менше, ніж треба уточнити (є ${String(details.available)}). Зменшіть кількість або продайте товар без розміру.`;
+    case "SIZE_CLARIFIED":
+      return "Облік змінився, поки ви відповідали. Натисніть «Продати» ще раз, щоб побачити, чого бракує тепер.";
+    case "SIZE_NOT_KNOWN_AMBIGUOUS":
+      return "Ця модель записана на складі під кількома невідомими розмірами, тож уточнити розмір не можна. Зверніться до менеджера.";
+    case "RESERVED":
+      return "Частина цих одиниць у резерві замовлення, тому під час продажу облік не виправити. Зменшіть кількість або продайте інший товар.";
+    default:
+      return errorText(error);
+  }
 }
 
 function Failure({

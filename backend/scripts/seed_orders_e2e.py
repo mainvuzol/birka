@@ -9,11 +9,12 @@ import uuid
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import (
     AttributeKind,
     AttributeTerm,
@@ -27,6 +28,13 @@ from app.modules.catalog.models import (
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import MovementRequest, apply_movements
+from app.modules.snapshots.models import SnapshotQuantityBasis
+from app.modules.snapshots.service import (
+    AllocationInput,
+    approve_snapshot,
+    import_snapshot,
+    resolve_row,
+)
 from app.modules.tenancy.models import (
     Organization,
     StockLocation,
@@ -59,6 +67,10 @@ async def main() -> None:
         # A third for stock corrections, which change balances the till and
         # receiving specs would otherwise have to guess at.
         counted = StockLocation(organization_id=org.id, name="Склад перерахунку", code="E2E-COUNT")
+        # A fourth opened from a legacy list, the one way stock is ever held
+        # with its size not known (ADR-0005 §3): what a seller gives a size to
+        # at the counter.
+        legacy = StockLocation(organization_id=org.id, name="Старі залишки", code="E2E-LEGACY")
         concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
@@ -68,7 +80,7 @@ async def main() -> None:
             name="шоколад",
             normalized_name="шоколад",
         )
-        session.add_all([store, location, till, counted, concept, system, user, colour])
+        session.add_all([store, location, till, counted, legacy, concept, system, user, colour])
         await session.flush()
         size = Size(size_system_id=system.id, code="M")
         # Held nowhere: what a stocktake finds on a shelf the system says is empty.
@@ -80,7 +92,7 @@ async def main() -> None:
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        for reachable in (location, till, counted):
+        for reachable in (location, till, counted, legacy):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -127,11 +139,80 @@ async def main() -> None:
             "location_id": str(location.id),
             "till_location_id": str(till.id),
             "count_location_id": str(counted.id),
+            "legacy_location_id": str(legacy.id),
             "variant_id": str(variant.id),
             "size_id": str(size.id),
         }
+    await open_from_a_legacy_list(
+        maker,
+        scope=RequestScope(
+            user_id=user.id,
+            organization_id=org.id,
+            store_permissions={store.id: frozenset(Permission)},
+        ),
+        store_id=store.id,
+        location_id=legacy.id,
+        variant_id=variant.id,
+        size_id=size.id,
+    )
     await engine.dispose()
     Path(os.environ["BIRKA_E2E_FIXTURE"]).write_text(json.dumps(data))
+
+
+async def open_from_a_legacy_list(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    scope: RequestScope,
+    store_id: uuid.UUID,
+    location_id: uuid.UUID,
+    variant_id: uuid.UUID,
+    size_id: uuid.UUID,
+) -> None:
+    """Three coats with their size not known, then one M delivered after them.
+
+    Through the list's own commands — import, resolve, approve — rather than a
+    ledger row written by hand, so the stock traces back to a list line as it
+    would in a shop.
+    """
+    async with maker.begin() as session:
+        view, _ = await import_snapshot(
+            session,
+            scope=scope,
+            command_id=uuid.uuid4(),
+            store_id=store_id,
+            location_id=location_id,
+            lines=["Лоран шоколад 3 шт"],
+        )
+    snapshot_id = uuid.UUID(str(view["snapshot_id"]))
+    async with maker.begin() as session:
+        await resolve_row(
+            session,
+            scope=scope,
+            snapshot_id=snapshot_id,
+            line_no=1,
+            allocations=[
+                AllocationInput(product_variant_id=variant_id, quantity=3, size_unknown=True)
+            ],
+            quantity_basis=SnapshotQuantityBasis.STATED,
+        )
+    async with maker.begin() as session:
+        await approve_snapshot(session, scope=scope, snapshot_id=snapshot_id, expected_revision=1)
+    async with maker.begin() as session:
+        await apply_movements(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            requests=[
+                MovementRequest(
+                    location_id=location_id,
+                    acting_store_id=store_id,
+                    product_variant_id=variant_id,
+                    size_id=size_id,
+                    quantity_delta=1,
+                    movement_type=MovementType.DELIVERY,
+                )
+            ],
+        )
 
 
 if __name__ == "__main__":

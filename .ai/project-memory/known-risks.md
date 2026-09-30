@@ -152,3 +152,22 @@ See the [report](stock-correction-ui-report.md).
   recomposes a role without it loses that half of the screen, not the
   correction of listed balances.
 - **One balance at a time.** There is no bulk stocktake of a whole warehouse.
+
+## A size read at the till — 2026-09-30
+
+See the [report](size-clarified-ui-report.md).
+
+- **Selling a coat by the size on its label needs `inventory:receive` too.**
+  The organization's sizes come from the receiving endpoint. The default
+  seller holds it. A role recomposed without it can still clarify a size as
+  the answer to a shortfall on a line whose size is already listed.
+- **The till learns that a model is held with its size not known from
+  three places:**
+  - the page of the list it has loaded;
+  - a line built from such a row;
+  - the server refusing «товар на місці» because of it.
+
+  When none of these applies, the seller answers the shortfall once more.
+  That costs one extra tap, and nothing is recorded wrongly.
+- **One unit asked for no longer offers «на місці лише стільки»**: fewer
+  than one present is none, and the answer is to remove the line (Q-G).

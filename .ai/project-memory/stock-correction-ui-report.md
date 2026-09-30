@@ -130,7 +130,8 @@ extraction safe, and one mutation below is caught by both.
 
 - **M1-025 is not complete.** Its flows all exist now, but the till still
   does not offer `size_clarified` — a "size not known" coat given its size at
-  the counter, implemented in the backend since M1-023.
+  the counter, implemented in the backend since M1-023. *Done 2026-09-30:*
+  see the [size at the till report](size-clarified-ui-report.md).
 - One balance at a time; no bulk stocktake of a warehouse.
 - Finding goods the system holds none of needs `inventory:receive` too.
 - PostgreSQL 17 not re-run: no migration, and the one new SQL path is the
