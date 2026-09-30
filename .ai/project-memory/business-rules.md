@@ -88,3 +88,33 @@ Implemented behavior. The owner answered all five open questions on 2026-09-29; 
 ## Owner decision — 2026-09-30 (stock corrections)
 
 - **A manual stock adjustment is a business operation with a permanent identity**, like a receipt or a transfer: a correction retried at any distance in time is applied once. The owner chose the most consistent of the three options in ADR-0006 ("keep it the way that is most logical and correct"). See [ADR-0007](../decisions/ADR-0007-stock-adjustment-command-identity.md).
+
+## Owner decision — 2026-09-30 (backups)
+
+Asked as the runbook's five questions. See the
+[runbook](backup-restore-runbook.md).
+
+- **How often, and how much may be lost: a backup every day.** The owner
+  first said once in two weeks, "or longer". Told that the shop will use the
+  app every day, so a server failure could lose up to two weeks of sales,
+  receipts and orders, the owner chose daily. A restore then loses at most
+  one day.
+- **Retention.**
+  - Every daily backup is kept 7 days.
+  - The first backup of each calendar month is kept 3 months.
+
+  Roughly ten copies at a time. Nothing else is ever deleted, and nothing is
+  deleted on a night whose run failed.
+- **How long the shop may be without the app: no fixed target.** A new
+  store opens when the owner decides, and the shop means to use the app
+  every day. A restore the same day is enough; the restore itself takes
+  seconds.
+- **Copies leave the server encrypted, and the owner's own computer or NAS
+  collects them.**
+  - The server encrypts each copy with the owner's age public key.
+  - Only the owner holds the private key, in a password manager plus on
+    paper or a USB stick. The server never has it.
+  - A server that is broken into cannot read the copies it already made.
+- **A failed backup or drill is shown to the owner in the app**, in a
+  «Резервні копії» section only the owner sees, **and sent by the bot in
+  Telegram**, so it is not missed when nobody opens the section.

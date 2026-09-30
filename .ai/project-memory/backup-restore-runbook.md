@@ -1,122 +1,158 @@
 # Backup and restore — runbook
 
 Status: tooling built and verified on 2026-09-30 (M1-028), see the
-[report](m1-028-backup-restore-report.md). **Not yet scheduled on a
-production server, and no copy leaves the server**: both wait on the owner's
-answers at the end of this page.
+[report](m1-028-backup-restore-report.md). The owner decided the schedule,
+retention, off-server copies and alerting the same day (business-rules.md,
+"backups").
 
-## What a backup is here
+**Not done yet:**
+- the steps below have not been carried out on a production server;
+- backup status does not yet reach the owner in the app or in Telegram (the
+  next change).
 
-`python -m scripts.backup_database --out <dir>` writes two files:
+## The policy
 
-- `birka-<UTC time>.dump` — the whole database, `pg_dump --format=custom`.
-- `birka-<UTC time>.json` — its manifest:
-  - the archive's SHA-256;
-  - the migration revision;
-  - the database's locale;
-  - every trigger and its state;
-  - the row count of every table, read in the same snapshot `pg_dump`
-    copies.
+| | |
+|---|---|
+| How often | every day, at night |
+| Kept on the server | every daily backup for 7 days; the first backup of each month for 3 months (about ten files) |
+| Leaves the server | encrypted to the owner's age public key; the owner's own computer or NAS collects it |
+| Private key | only the owner: password manager plus paper or a USB stick; never on the server or the NAS |
+| At most lost in a restore | one day |
+| Restore time | no fixed target; the same day. The restore itself takes seconds |
 
-It only reads the database, and it never deletes or overwrites a file.
+## What a night does
 
-**Not in the backup:**
+`docker compose --profile ops run --rm ops` runs `scripts.nightly_backup`:
 
-- `.env`: `POSTGRES_PASSWORD`, the bot token, the session secret. Keep them
-  in a password manager. A lost session secret only signs everybody out; a
-  lost bot token is reissued by @BotFather.
-- Caddy's certificates. Caddy reissues them.
-
-## Running it on the server
-
-The `ops` service in `infra/docker-compose.yml` is the API's image plus the
-PostgreSQL 17 client tools. It receives the database URL and nothing else.
-
-```sh
-cd infra
-mkdir -p backups && sudo chown 10001 backups        # once; the image's user
-docker compose --profile ops build ops              # after each deploy
-docker compose --profile ops run --rm ops           # take a backup
-```
-
-`BIRKA_BACKUP_DIR` moves the directory, for example onto another disk.
-
-## The restore drill
-
-A backup that has never been restored is not a backup. Run a drill on a
-new backup at least once, and after every deploy that adds a migration.
-
-```sh
-docker compose --profile ops run --rm ops \
-  python -m scripts.restore_drill /backups/birka-<time>.dump --report /backups/drill-<time>.json
-```
-
-What the drill does:
-
-1. Checks the archive's SHA-256 before anything else.
-2. Creates `birka_restore_drill_<time>_<random>` on the same server, with the
-   source's locale.
-3. Restores into it in one transaction, stopping at the first error.
-4. Compares the copy with the manifest:
-   - the migration;
-   - every table and its row count;
+1. **Back up.** `pg_dump` archive plus a manifest: SHA-256, migration,
+   locale, triggers, and every table's row count, read in the snapshot
+   `pg_dump` copies.
+2. **Drill.** Restore the fresh archive into a scratch database with the
+   source's locale, then check it:
+   - every table's row count;
    - the triggers, which must all be enabled;
-   - the locale, and whether `lower('ОЛЯ')` gives `'оля'`.
-5. Reconciles the stock ledger for every organization (invariant I3).
-6. Drops the scratch database.
+   - the locale, including `lower('ОЛЯ') = 'оля'`;
+   - that the stock ledger reconciles in every organization.
 
-It writes to no other database. Exit status 0 means every check passed. The
-report's `restore_seconds` is the evidence for how long a real restore takes.
+   Then drop the scratch database. The result is written to
+   `birka-<time>.drill.json`.
+3. **Encrypt** the archive to the owner's key as `birka-<time>.dump.age`, and
+   delete the plaintext. The server can make a copy it can never read back.
+4. **Keep what the policy keeps**, and delete the rest. Only files this
+   script named; never the newest; **never on a night that failed**.
+5. **Write `last-run.json`.** Exit 0 only if every step held.
+
+A night fails without the owner's public key. A night whose drill fails still
+keeps its backup: a drill that fails on the data has found a problem in the
+data, and the copy is still the best one there is.
+
+**Not in any backup:**
+- `.env` (`POSTGRES_PASSWORD`, the bot token, the session secret). Keep it in
+  the password manager too. A lost session secret only signs everybody out; a
+  lost bot token is reissued by @BotFather.
+- Caddy's certificates, which it reissues.
+
+## Setting it up
+
+### 1. The owner's key, on the owner's computer
+
+```sh
+brew install age            # macOS; on Linux: apt install age
+age-keygen -o birka-backup-key.txt
+```
+
+- Keep the key file in the password manager, and print it or copy it to a
+  USB stick kept somewhere else. Without it no backup can ever be read.
+- Delete it from the disk afterwards.
+- The public key (`age1…`, printed by `age-keygen`) is not secret.
+
+### 2. The server
+
+In `infra/.env`:
+
+```
+BIRKA_BACKUP_AGE_RECIPIENTS=age1…the owner's public key…
+```
+
+Then:
+
+```sh
+cd /srv/birka/infra
+mkdir -p backups && sudo chown 10001 backups       # the image's user
+docker compose --profile ops build ops             # again after every deploy
+docker compose --profile ops run --rm ops          # the first night, by hand
+cat backups/last-run.json                          # "ok": true
+```
+
+Schedule it, in root's crontab:
+
+```
+15 3 * * * cd /srv/birka/infra && docker compose --profile ops run --rm ops >> /var/log/birka-backup.log 2>&1
+```
+
+### 3. Read-only access for the owner's computer
+
+On the server, a user that can do nothing but read the backup directory.
+`rrsync` ships with rsync 3.2.4 and later:
+
+```sh
+sudo adduser --disabled-password --gecos "" birka-backup
+sudo -u birka-backup mkdir -p ~birka-backup/.ssh
+# One line in ~birka-backup/.ssh/authorized_keys, with the owner machine's public key:
+command="rrsync -ro /srv/birka/infra/backups",restrict ssh-ed25519 AAAA… owner-nas
+```
+
+The files are world-readable (0644) inside a 0755 directory, so
+`birka-backup` can read them without owning them.
+
+### 4. The owner's computer or NAS collects them
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/birka_backup -N ""      # its public half goes in step 3
+BIRKA_BACKUP_SOURCE=birka-backup@shop.example.com: \
+BIRKA_BACKUP_DEST="$HOME/birka-backups" \
+sh infra/pull-backups.sh
+```
+
+It collects only encrypted archives with their manifests and drill reports,
+never a plaintext archive. It deletes nothing, so this copy outlives the
+server's retention. It checks every archive against the checksum the server
+recorded, and fails if one arrived damaged.
+
+Run it daily, some hours after the server's night:
+- on macOS, a launchd job or the Shortcuts app;
+- on a NAS, its task scheduler;
+- on Linux, cron.
 
 ## Restoring for real
 
-Not rehearsed on a production server yet. The drill uses the same
-`pg_restore` flags, so a file that passes a drill restores with them.
+Not yet rehearsed on a production server. The nightly drill uses the same
+`pg_restore` flags, so a copy whose drill passed restores with them.
 
-1. Pick the newest backup whose drill passed. If none has been drilled, drill
-   it first.
-2. On the new server, bring up `db` only:
+1. Pick the newest night whose `birka-<time>.drill.json` says `"ok": true`.
+2. On the owner's computer, open it with the key and check it is the archive
+   that was drilled:
+   ```sh
+   age --decrypt -i birka-backup-key.txt -o birka.dump birka-<time>.dump.age
+   shasum -a 256 birka.dump        # equals "archive_sha256" in birka-<time>.json
+   ```
+3. Copy `birka.dump` to the new server's `infra/backups/`, then bring up `db`
+   only:
    ```sh
    docker compose up -d --wait db
    ```
-   The image creates an empty `POSTGRES_DB`, with the production locale from
-   `POSTGRES_INITDB_ARGS`.
-3. Restore into it:
+4. Restore into the empty database:
    ```sh
    docker compose --profile ops run --rm \
      -e PGHOST=db -e PGUSER="$POSTGRES_USER" -e PGPASSWORD="$POSTGRES_PASSWORD" -e PGDATABASE="$POSTGRES_DB" \
-     ops sh -c '"$BIRKA_PG_BIN/pg_restore" --exit-on-error --single-transaction --no-owner --no-privileges --dbname="$PGDATABASE" /backups/birka-<time>.dump'
+     ops sh -c '"$BIRKA_PG_BIN/pg_restore" --exit-on-error --single-transaction --no-owner --no-privileges --dbname="$PGDATABASE" /backups/birka.dump'
    ```
-4. If the code is newer than the backup (the drill report's `note` says so),
-   run:
+5. If the code is newer than the backup:
    ```sh
    docker compose run --rm --no-deps api alembic upgrade head
    ```
-5. `docker compose up -d`, then sign in and open a stock view.
+6. `docker compose up -d`, then sign in and open a stock view. Delete the
+   plaintext `birka.dump` once the shop is running.
 
-Anything written after the backup was taken is lost. That window is the RPO
-below.
-
-## Owner decisions this waits on
-
-None of these is guessed in code. Until they are answered, backups are taken
-by hand and stay on the server that holds the database — the one place a
-disk failure takes both.
-
-1. **RPO — how much can be lost?** That is, how many hours of sales may a
-   restore lose? This sets how often a backup runs. For example, every 6
-   hours:
-   ```
-   0 */6 * * * cd /srv/birka/infra && docker compose --profile ops run --rm ops
-   ```
-   A window of minutes needs continuous WAL archiving, which is not built.
-2. **RTO — how long may the shop be without the app?** The drill measures
-   the restore time; the answer says whether that is fast enough.
-3. **Retention — how many backups, for how long?** Nothing deletes a backup
-   today.
-4. **Where copies go off the server, and who holds the key.** For example,
-   an encrypted copy to a cloud bucket or to a second machine. A backup on
-   the same disk as the database protects against mistakes, not against
-   losing the server.
-5. **Who is told when a backup or a drill fails, and how often a drill
-   runs.**
+Anything written after that night is lost: at most one day, by the policy.

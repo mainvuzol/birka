@@ -175,16 +175,26 @@ See the [report](size-clarified-ui-report.md).
 ## Backups — 2026-09-30
 
 See the [report](m1-028-backup-restore-report.md) and the
-[runbook](backup-restore-runbook.md).
+[runbook](backup-restore-runbook.md). The owner set the policy the same day:
+daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
 
-- **No backup is taken automatically, and none leaves the server.** The tools
-  exist and are drilled, but how often, how long to keep, and where copies
-  go wait on the owner. Until then, one disk failure can take the database
-  and every backup with it.
-- **The RPO is the time since the last backup.** No WAL archiving exists, so
-  sales since the last backup are lost in a restore.
+- **None of it runs on the server yet.** Until someone does the setup, one
+  disk failure can take the database and every backup with it:
+  - the key;
+  - the `.env` line;
+  - cron;
+  - the read-only SSH user;
+  - the owner's collection schedule.
+- **A failed night is silent until the owner's section and the Telegram
+  message exist** (the next change). `last-run.json` and the cron log are the
+  only record meanwhile. A night that never ran at all — cron broken — leaves
+  no record, so the section must also say when a backup is overdue.
+- **A restore loses up to a day.** No WAL archiving exists; the owner chose a
+  daily backup knowing this.
+- **The owner's private key is the only way to read any backup.** Lose every
+  copy of it and every backup is unreadable. This is why it lives in the
+  password manager and on paper or a USB stick.
 - **A real restore has not been rehearsed on a server.** The drill uses the
-  same `pg_restore` flags. The runbook's steps — `db` only, restore, migrate,
-  start — have not run end to end in production.
-- **`.env` is not in the backup.** Without `POSTGRES_PASSWORD` a new server
-  is configured afresh; the bot token and session secret can be reissued.
+  same `pg_restore` flags; the runbook's full sequence has not run in
+  production.
+- **`.env` is not in the backup.** Keep it in the password manager too.

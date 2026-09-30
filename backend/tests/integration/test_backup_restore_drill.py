@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -23,8 +24,10 @@ from pathlib import Path
 
 import pytest
 import scripts.backup_database as backup_module
-from scripts.backup_database import back_up
-from scripts.postgres_tools import Database, ToolError, tool
+import scripts.nightly_backup as nightly_module
+from scripts.backup_database import back_up, sha256
+from scripts.nightly_backup import nightly
+from scripts.postgres_tools import Database, ToolError, run, tool
 from scripts.restore_drill import SCRATCH_PREFIX, drill
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -271,3 +274,119 @@ async def test_a_ledger_left_unprotected_fails_the_drill(source, tmp_path):
 
     assert set(failed(report)) == {"triggers"}
     assert f"disabled: ['stock_movement.{guard}']" in failed(report)["triggers"]
+
+
+# --- the nightly run ----------------------------------------------------------
+
+
+def _old_night(out: Path) -> Path:
+    """A proven backup from long ago, which retention removes on a good night."""
+    stem = "birka-20250105T030000Z"
+    (out / f"{stem}.dump.age").write_bytes(b"sealed")
+    (out / f"{stem}.json").write_text("{}")
+    (out / f"{stem}.drill.json").write_text(json.dumps({"ok": True}))
+    return out / f"{stem}.dump.age"
+
+
+def _age_or_skip() -> Path:
+    try:
+        return nightly_module.tool_age()
+    except ToolError as error:
+        pytest.skip(f"age unavailable: {error}")
+
+
+async def test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps(source, tmp_path):
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    old = _old_night(tmp_path)
+
+    result = await nightly(database, server, tmp_path, recipients=[], allow_plaintext=True)
+
+    assert result["ok"], result["problems"]
+    assert result["drill"]["ok"]
+    stem = result["archive"].removesuffix(".dump")
+    for suffix in (".dump", ".json", ".drill.json"):
+        assert (tmp_path / f"{stem}{suffix}").exists()
+    assert not old.exists(), "retention removed the old night"
+    assert "birka-20250105T030000Z.dump.age" in result["pruned"]
+    assert json.loads((tmp_path / "last-run.json").read_text()) == result
+
+
+async def test_a_night_without_the_owners_key_fails_and_deletes_nothing(source, tmp_path):
+    """Copies leave the server only encrypted (owner decision, 2026-09-30)."""
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    old = _old_night(tmp_path)
+
+    result = await nightly(database, server, tmp_path, recipients=[])
+
+    assert not result["ok"]
+    assert any("not encrypted" in problem for problem in result["problems"])
+    assert result["pruned"] == []
+    assert old.exists()
+    assert (tmp_path / result["archive"]).exists(), "the night's backup is still kept"
+
+
+async def test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing(source, tmp_path):
+    """A drill failing on the data has found a problem in the data; the copy is
+    still the best there is, and the copies before it must survive."""
+    database, shop = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    engine = create_async_engine(database.url, poolclass=NullPool)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("UPDATE inventory SET quantity = quantity + 1 WHERE location_id = :l"),
+            {"l": shop.location_id},
+        )
+    await engine.dispose()
+    old = _old_night(tmp_path)
+
+    result = await nightly(database, server, tmp_path, recipients=[], allow_plaintext=True)
+
+    assert not result["ok"]
+    assert result["drill"]["failed"] == ["ledger"]
+    assert result["pruned"] == []
+    assert old.exists()
+    assert (tmp_path / result["archive"]).exists()
+
+
+async def test_a_night_that_cannot_back_up_says_so(tmp_path):
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    _tools_or_skip()
+    missing = server.on(f"birka_backup_missing_{uuid.uuid4().hex[:8]}")
+
+    result = await nightly(missing, server, tmp_path, recipients=[], allow_plaintext=True)
+
+    assert not result["ok"]
+    assert result["problems"][0].startswith("backup failed:")
+    assert json.loads((tmp_path / "last-run.json").read_text())["ok"] is False
+
+
+async def test_an_encrypted_night_can_only_be_read_with_the_owners_key(source, tmp_path):
+    """The whole promise: the server writes a copy it cannot read, and the
+    owner's key turns it back into exactly the archive that was drilled."""
+    age = _age_or_skip()
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    identity = tmp_path / "owner-key.txt"
+    await run(age.with_name("age-keygen"), "-o", str(identity))
+    # age-keygen writes "# public key: age1…" into the key file it creates.
+    recipient = re.search(r"age1[0-9a-z]{58}", identity.read_text())
+    assert recipient
+    out = tmp_path / "backups"
+    out.mkdir()
+
+    result = await nightly(database, server, out, recipients=[recipient.group(0)])
+
+    assert result["ok"], result["problems"]
+    stem = result["archive"].removesuffix(".dump.age")
+    assert result["archive"].endswith(".dump.age")
+    assert not (out / f"{stem}.dump").exists(), "no plaintext is left on the server"
+    manifest = json.loads((out / f"{stem}.json").read_text())
+    sealed = out / result["archive"]
+    assert manifest["encrypted_sha256"] == sha256(sealed)
+    assert manifest["recipients"] == [recipient.group(0)]
+
+    opened = tmp_path / "opened.dump"
+    await run(age, "--decrypt", "-i", str(identity), "-o", str(opened), str(sealed))
+    assert sha256(opened) == manifest["archive_sha256"]

@@ -30,17 +30,19 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # The same code, plus the PostgreSQL client tools of the server's major
 # version: pg_dump refuses a newer server, and the distribution's own client
 # may be older than 17. From the PostgreSQL project's apt repository, set up
-# by the script and key that postgresql-common itself ships.
+# by the script and key that postgresql-common itself ships. And `age`, which
+# encrypts each copy to the owner's public key (owner decision, 2026-09-30).
 FROM base AS ops
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates postgresql-common \
  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
- && apt-get install -y --no-install-recommends postgresql-client-17 \
+ && apt-get install -y --no-install-recommends postgresql-client-17 age \
  && rm -rf /var/lib/apt/lists/*
 ENV BIRKA_PG_BIN=/usr/lib/postgresql/17/bin
 USER birka
-CMD ["python", "-m", "scripts.backup_database", "--out", "/backups"]
+# What the schedule runs: back up, drill, encrypt, keep what the owner keeps.
+CMD ["python", "-m", "scripts.nightly_backup", "--out", "/backups"]
 
 # The API. Last, so it stays the target a plain `docker build` produces.
 FROM base AS api
