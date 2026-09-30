@@ -261,8 +261,15 @@ adds stock to one location. The bootstrap gives every store its «Брак» and
 records it; which warehouse is a store's «Брак» is never inferred from its
 name.
 
-Still open: taking goods *out* of «Брак» after repair. A transfer requires
-`can_sell` at its source (§3), so repaired goods cannot yet be moved back to
-sale. Writing them off works today, as a correction. The owner decided the
-flow the same day (inspection, then back on sale or «брак підтверджений»;
-business-rules.md); it is not built.
+Taking goods out of «Брак» was built the same day, as the owner decided
+(business-rules.md, "what happens in «Брак»"):
+- **Back on sale.** After inspection a unit goes back on sale, only to the
+  warehouse it was sold from. This is a transfer: the transfer command's own
+  core, authorised by `damaged:handle` rather than by `transfer:create` and
+  `can_sell` at the source.
+- **Written off.** A confirmed unit may be written off, as a stock
+  adjustment.
+- **The only doors.** `inventory.apply_movements` refuses any movement at a
+  store's «Брак» unless the caller is one of these two, or a return taken
+  damaged (`DAMAGED_STOCK_CLOSED`). That holds for a delivery, a transfer, a
+  correction and a stock list alike.

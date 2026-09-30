@@ -27,6 +27,7 @@ from app.api.v1.backups import router as backups_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.catalog_decisions import router as catalog_decisions_router
 from app.api.v1.catalog_matching import router as catalog_matching_router
+from app.api.v1.damaged import router as damaged_router
 from app.api.v1.inventory import router as inventory_router
 from app.api.v1.locations import router as locations_router
 from app.api.v1.orders import router as orders_router
@@ -49,6 +50,7 @@ router.include_router(refunds_router)
 router.include_router(transfers_router)
 router.include_router(snapshots_router)
 router.include_router(backups_router)
+router.include_router(damaged_router)
 
 
 # --- schemas ---------------------------------------------------------------

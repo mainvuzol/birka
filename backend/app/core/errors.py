@@ -141,6 +141,34 @@ class DamagedReturnsUnavailableError(DomainError):
     message = "The store has no «Брак» warehouse to take damaged goods"
 
 
+class DamagedStockClosedError(DomainError):
+    """Stock in a store's «Брак» changes only one way.
+
+    The owner decided on 2026-10-01 that what is in «Брак» changes only
+    through a return taken damaged and through the «Брак» section — its
+    inspection, its return to sale and its write-off — never through a
+    delivery, a transfer, a stock correction or a stock list. That is what
+    keeps the list of damaged units equal to the stock that is there.
+    """
+
+    code = "DAMAGED_STOCK_CLOSED"
+    http_status = 409
+    message = "Stock in «Брак» changes only through returns and the «Брак» section"
+
+
+class DamagedUnitChangedError(DomainError):
+    """The damaged unit is no longer where the person saw it.
+
+    `details` carry `expected` and `actual` status: someone else took it for
+    inspection, or decided its fate, in between. Nothing is written; look at
+    the unit again.
+    """
+
+    code = "DAMAGED_UNIT_CHANGED"
+    http_status = 409
+    message = "The damaged unit changed since it was shown; look at it again"
+
+
 class CatalogAmbiguousError(DomainError):
     code = "CATALOG_AMBIGUOUS"
     http_status = 409
@@ -217,6 +245,8 @@ __all__ = [
     "CatalogAmbiguousError",
     "CorrectionExceedsShortfallError",
     "DamagedReturnsUnavailableError",
+    "DamagedStockClosedError",
+    "DamagedUnitChangedError",
     "DomainError",
     "ForbiddenStoreError",
     "IdempotencyConflictError",

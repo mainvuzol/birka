@@ -314,6 +314,7 @@ source_modules = [
     "app.core",
     "app.modules.audit",
     "app.modules.authz",
+    "app.modules.damaged",
     "app.modules.catalog",
     "app.modules.identity",
     "app.modules.inventory",
@@ -355,6 +356,7 @@ source_modules = [
     "app.core",
     "app.modules.audit",
     "app.modules.authz",
+    "app.modules.damaged",
     "app.modules.catalog",
     "app.modules.identity",
     "app.modules.inventory",
@@ -387,3 +389,44 @@ forbidden_modules = [
     "app.modules.tenancy",
     "app.modules.transfers",
 ]
+
+# 2026-10-01 (ADR-0001 amendment): module `damaged` owns `damaged_unit`, the
+# units a return put in a store's «Брак». `damaged → transfers, inventory,
+# authz, tenancy, core` (+ audit): a unit goes back on sale as a transfer and
+# is written off as a stock adjustment, through those modules' own services.
+# Only `refunds` (which registers the units) and the API may import it.
+[[tool.importlinter.contracts]]
+name = "damaged goods move only through the ledger's own commands"
+type = "forbidden"
+source_modules = ["app.modules.damaged"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.catalog",
+    "app.modules.orders",
+    "app.modules.snapshots",
+    "app.modules.identity",
+    "app.modules.backups",
+    "app.modules.inventory.repository",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "only a return puts units in «Брак»"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.damaged"]

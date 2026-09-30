@@ -218,19 +218,21 @@ daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
 See the [report](till-returns-report.md). The owner decided the rules the
 same day: intact back where it was sold, damaged to the store's own «Брак».
 
-- **Repaired goods cannot leave «Брак» yet.** A transfer needs `can_sell` at
-  its source, and nothing sells from «Брак». Writing a unit off works today
-  (a stock correction with reason «Пошкоджено»). The owner decided the flow
-  on 2026-10-01: anyone who takes returns may inspect a unit, then put it
-  back on sale or keep it as «брак підтверджений» (business-rules.md). Not
-  built.
+- **«Брак» has its own section since the same day**
+  ([report](damaged-inspection-report.md)). Stock there changes only
+  through returns and that section; the server refuses every other way.
+  - **A return to the supplier has no step of its own.** Until it does, a
+    confirmed unit sent back is written off with a note.
+  - **«На перевірці» is information, not a lock.** Anyone may finish a
+    unit someone else took. Only taking it again is refused, so that two
+    people do not start on one.
 - **Only the refund checks that nobody sells from a «Брак».** The database
   holds it for the store the «Брак» belongs to. If an operator later lets
   another store sell there, goods already in it become sellable by that
   store. No screen can grant access today; setup is by script.
-- **The API still lets a delivery be received into «Брак».** The app no
-  longer offers it; the server does not refuse it, because no rule says a
-  supplier's damaged delivery cannot go there.
+- **A delivery into «Брак» is refused by the server** too, since the
+  owner's rule of the same day that «Брак» changes only through returns and
+  its own section.
 - **Returns taken before 2026-10-01 have no condition.** It was never asked,
   and is not guessed. There are none in production.
 - **An organization set up before «Брак» existed gets it on the next run of

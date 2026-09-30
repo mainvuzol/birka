@@ -165,10 +165,18 @@ to sale.
   - **put it back among the goods on sale**; or
   - **keep it in «Брак» marked «брак підтверджений»** (damage confirmed).
 
-Not built yet. To settle with the owner when it is:
-- which warehouse an inspected unit goes back to — the one it was sold from,
-  or one the person chooses;
-- whether «на перевірці» is a state others see, so two people do not inspect
-  the same unit;
-- what later happens to a unit whose damage is confirmed: kept, written off,
-  or sent back to the supplier.
+The owner then answered the open questions the same day:
+- **An inspected unit goes back to the warehouse it was sold from.** The
+  person is shown it and confirms it.
+- **«На перевірці» is a status the others see**, as long as it does not
+  clutter the app. It says who is looking; it does not stop anyone else from
+  finishing.
+- **A confirmed unit stays in «Брак», no longer for sale.** People look
+  through «Брак» from time to time and decide each unit's fate.
+- **Anyone who takes returns may write a confirmed unit off.**
+- **Stock in «Брак» changes only through returns and the «Брак» section.**
+  It is never changed by a delivery, a transfer, a stock correction or a
+  stock list, so the list of units always matches the stock.
+
+Built on 2026-10-01; see the
+[«Брак» report](damaged-inspection-report.md).

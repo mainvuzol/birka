@@ -84,6 +84,39 @@ async def damaged_returns_location(
     ).first()
 
 
+async def location_names(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    if not location_ids:
+        return {}
+    rows = await session.execute(
+        select(StockLocation.id, StockLocation.name).where(
+            StockLocation.organization_id == organization_id,
+            StockLocation.id.in_(location_ids),
+        )
+    )
+    return {row.id: row.name for row in rows}
+
+
+async def damaged_returns_locations(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Which of these warehouses are some store's «Брак»."""
+    if not location_ids:
+        return set()
+    return set(
+        (
+            await session.scalars(
+                select(StoreLocationAccess.location_id).where(
+                    StoreLocationAccess.organization_id == organization_id,
+                    StoreLocationAccess.location_id.in_(location_ids),
+                    StoreLocationAccess.damaged_returns.is_(True),
+                )
+            )
+        ).all()
+    )
+
+
 async def sold_from(
     session: AsyncSession, *, organization_id: uuid.UUID, location_id: uuid.UUID
 ) -> bool:

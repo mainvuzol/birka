@@ -65,6 +65,7 @@ from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.damaged.service import DamagedPart, register
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import (
     MovementRequest,
@@ -618,9 +619,35 @@ async def create_refund(
             ],
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
+            # A damaged part goes into the store's «Брак», which only a
+            # return taken damaged and the «Брак» section may fill.
+            damaged_stock=damaged is not None,
         )
         movements = await refund_return_movement_ids(
             session, organization_id=scope.organization_id, refund_id=refund.id
+        )
+
+    if damaged is not None:
+        # Each unit returned damaged is one row in «Брак», to be inspected
+        # (owner decision, 2026-10-01).
+        await register(
+            session,
+            organization_id=scope.organization_id,
+            store_id=sale.store_id,
+            location_id=damaged,
+            parts=[
+                DamagedPart(
+                    refund_item_id=item.id,
+                    product_variant_id=sale_items[item.sale_item_id].product_variant_id,
+                    size_id=sale_items[item.sale_item_id].size_id,
+                    sold_from_location_id=sale_items[item.sale_item_id].source_location_id,
+                    display_name=sale_items[item.sale_item_id].display_name_snapshot,
+                    size_label=sale_items[item.sale_item_id].variant_snapshot.get("size"),
+                    quantity=item.quantity,
+                )
+                for item in refund_items
+                if item.condition == ReturnCondition.DAMAGED.value
+            ],
         )
 
     await audit.record(

@@ -28,7 +28,6 @@ from app.core.errors import (
     ValidationFailedError,
 )
 from app.core.text import CleanText
-from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
@@ -46,6 +45,7 @@ from app.modules.inventory.service import (
     apply_movements,
     lock_stock,
     readable_stock,
+    record_adjustment,
 )
 from app.modules.tenancy.service import LocationCapability
 
@@ -603,63 +603,28 @@ async def adjust_inventory(
         if held[key] != payload.expected_quantity:
             raise StockChangedError(expected=payload.expected_quantity, actual=held[key])
 
-    correlation_id = get_correlation_id()
-    adjustment = StockAdjustment(
+    recorded = await record_adjustment(
+        session,
         organization_id=scope.organization_id,
-        location_id=payload.location_id,
-        acting_store_id=payload.store_id,
-        created_by_user_id=scope.user_id,
+        store_id=payload.store_id,
+        actor_user_id=scope.user_id,
         command_id=payload.command_id,
-        note=payload.note,
-        correlation_id=correlation_id,
         command_fingerprint=permanent_fingerprint,
+        location_id=payload.location_id,
+        product_variant_id=payload.product_variant_id,
+        size_id=payload.size_id,
+        quantity_delta=payload.quantity_delta,
+        reason_code=payload.reason_code,
+        note=payload.note,
+        correlation_id=get_correlation_id(),
     )
-    session.add(adjustment)
-    await session.flush()
-
-    applied = await apply_movements(
-        session,
-        organization_id=scope.organization_id,
-        requests=[
-            MovementRequest(
-                location_id=payload.location_id,
-                acting_store_id=payload.store_id,
-                product_variant_id=payload.product_variant_id,
-                size_id=payload.size_id,
-                quantity_delta=payload.quantity_delta,
-                movement_type=MovementType.ADJUSTMENT,
-                reason_code=payload.reason_code,
-                # The ledger row names the adjustment that caused it; before
-                # `0017` a manual correction named nothing at all.
-                reference_type="stock_adjustment",
-                reference_id=adjustment.id,
-            )
-        ],
-        actor_user_id=scope.user_id,
-        correlation_id=correlation_id,
-    )
-    entry = applied[0]
-    before = entry.quantity_after - entry.request.quantity_delta
-
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="inventory.adjusted",
-        entity_type="stock_movement",
-        entity_id=entry.movement_id,
-        before={"quantity": before},
-        after={"quantity": entry.quantity_after},
-        reason=payload.note or payload.reason_code.value,
-    )
-
     body = AdjustmentResponse(
-        id=adjustment.id,
-        movement_id=entry.movement_id,
-        quantity_before=before,
-        quantity_after=entry.quantity_after,
+        id=recorded.adjustment.id,
+        movement_id=recorded.movement.movement_id,
+        quantity_before=recorded.quantity_before,
+        quantity_after=recorded.movement.quantity_after,
     )
-    adjustment.response_snapshot = body.model_dump(mode="json")
+    recorded.adjustment.response_snapshot = body.model_dump(mode="json")
     await idempotency.complete(
         session,
         outcome.record_id,

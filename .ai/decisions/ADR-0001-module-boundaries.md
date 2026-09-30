@@ -101,3 +101,13 @@ Negative:
   the nights and the watcher.
 
 Contracts in `backend/pyproject.toml`.
+
+2026-10-01 amendment («Брак»): module `damaged` owns `damaged_unit`, one row
+per unit a return put in a store's «Брак». Permitted edges: `damaged →
+transfers, inventory, authz, tenancy, core` (+ audit).
+- A unit goes back on sale through `transfers.move_goods`, the transfer
+  command's own core, so it is a transfer in the ledger (I24).
+- It is written off through `inventory.record_adjustment`, the stock
+  correction's own core (ADR-0007).
+- Only `refunds`, which registers the units, and the API import it. Contracts
+  are in `backend/pyproject.toml`.

@@ -1,0 +1,285 @@
+import { useState } from "react";
+import type { JSX } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError, api, errorText } from "@/shared/api";
+import type { Store } from "@/orders/types";
+import { sizeLabel } from "@/returns/types";
+import type { DamagedUnit } from "./types";
+
+/**
+ * The store's «Брак» (owner decisions, 2026-10-01).
+ *
+ * Every unit a return put here, and what anyone who takes returns may do with
+ * it: take it for inspection — the others see who is looking — then put it
+ * back on sale in the warehouse it was sold from, or confirm it damaged; a
+ * confirmed unit may be looked at again, or written off.
+ *
+ * Every step is safe to press twice: the server answers a step already done
+ * with the unit as it is. So no journal is kept here — if an answer is lost,
+ * the list is read again and the step pressed again.
+ */
+export function Damaged({
+  store,
+  token,
+  blocked,
+}: {
+  store: Store;
+  token: string;
+  /** Another command's outcome is unknown: nothing new until it is settled. */
+  blocked: boolean;
+}): JSX.Element {
+  const cache = useQueryClient();
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const units = useQuery({
+    queryKey: ["damaged-units", store.id],
+    queryFn: () =>
+      api<{ units: DamagedUnit[] }>(
+        `/damaged-units?store_id=${store.id}`,
+        token,
+      ),
+    retry: false,
+  });
+
+  async function act(
+    unit: DamagedUnit,
+    action: "take" | "return-to-sale" | "confirm" | "write-off",
+    body: Record<string, unknown> = {},
+  ): Promise<void> {
+    setBusy(unit.id);
+    setProblem(null);
+    try {
+      await api<DamagedUnit>(
+        `/damaged-units/${unit.id}/${action}`,
+        token,
+        body,
+      );
+    } catch (error) {
+      setProblem(
+        error instanceof ApiError && error.code === "DAMAGED_UNIT_CHANGED"
+          ? "Цю одиницю щойно змінив хтось інший. Список оновлено — подивіться ще раз."
+          : error instanceof ApiError
+            ? errorText(error)
+            : "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
+      );
+    } finally {
+      setBusy(null);
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["damaged-units", store.id] }),
+        cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
+      ]);
+    }
+  }
+
+  const groups: { status: DamagedUnit["status"]; title: string }[] = [
+    { status: "AWAITING", title: "Очікують перевірки" },
+    { status: "INSPECTING", title: "На перевірці" },
+    { status: "CONFIRMED", title: "Брак підтверджений — не продається" },
+  ];
+
+  return (
+    <section>
+      <div className="toolbar">
+        <h2>Брак</h2>
+        <button
+          className="quiet"
+          disabled={units.isFetching}
+          onClick={() => {
+            void units.refetch();
+          }}
+        >
+          Оновити
+        </button>
+      </div>
+      <p className="hint">
+        Пошкоджений товар із повернень. Візьміть одиницю на перевірку, а потім
+        поверніть її в продаж або підтвердьте брак.
+      </p>
+      {problem && <p role="alert">{problem}</p>}
+      {units.isPending ? (
+        <p role="status">Завантажуємо «Брак»…</p>
+      ) : units.error ? (
+        <p role="alert">{errorText(units.error)}</p>
+      ) : units.data.units.length === 0 ? (
+        <p>У «Брак» зараз нічого немає.</p>
+      ) : (
+        groups.map(({ status, title }) => {
+          const here = units.data.units.filter((u) => u.status === status);
+          if (here.length === 0) return null;
+          return (
+            <div className="section-block" key={status} data-status={status}>
+              <h3>
+                {title} · {here.length}
+              </h3>
+              {here.map((unit) => (
+                <Unit
+                  key={unit.id}
+                  unit={unit}
+                  busy={blocked || busy !== null}
+                  act={(action, body) => {
+                    void act(unit, action, body);
+                  }}
+                />
+              ))}
+            </div>
+          );
+        })
+      )}
+    </section>
+  );
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString("uk-UA", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function Unit({
+  unit,
+  busy,
+  act,
+}: {
+  unit: DamagedUnit;
+  busy: boolean;
+  act: (
+    action: "take" | "return-to-sale" | "confirm" | "write-off",
+    body?: Record<string, unknown>,
+  ) => void;
+}): JSX.Element {
+  const [asking, setAsking] = useState<
+    "return" | "confirm" | "write-off" | null
+  >(null);
+  const [note, setNote] = useState("");
+  const trimmed = note.trim();
+  return (
+    <article className="damaged-unit" aria-label={unit.display_name}>
+      <strong>
+        {unit.display_name}, {sizeLabel(unit.size)}
+      </strong>
+      <small>
+        Повернули {when(unit.returned_at)} · продано зі складу «
+        {unit.sold_from_location_name}»
+      </small>
+      {unit.status === "INSPECTING" && unit.status_by && unit.status_at && (
+        <small>
+          На перевірці: {unit.status_by}, з {when(unit.status_at)}
+        </small>
+      )}
+      {unit.note && <small>Примітка: {unit.note}</small>}
+      {asking === "return" ? (
+        <div className="actions">
+          <p>
+            Повернути в продаж на склад «{unit.sold_from_location_name}», звідки
+            його продали?
+          </p>
+          <button
+            disabled={busy}
+            onClick={() => {
+              act("return-to-sale", {
+                destination_location_id: unit.sold_from_location_id,
+              });
+            }}
+          >
+            Так, повернути на «{unit.sold_from_location_name}»
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setAsking(null);
+            }}
+          >
+            Скасувати
+          </button>
+        </div>
+      ) : asking === "confirm" || asking === "write-off" ? (
+        <div className="actions">
+          <label>
+            {asking === "confirm"
+              ? "Що з товаром (необов’язково)"
+              : "Чому списуємо (необов’язково)"}
+            <textarea
+              value={note}
+              maxLength={1000}
+              onChange={(event) => {
+                setNote(event.target.value);
+              }}
+            />
+          </label>
+          <button
+            disabled={busy}
+            onClick={() => {
+              act(asking, { note: trimmed ? trimmed : null });
+            }}
+          >
+            {asking === "confirm" ? "Так, брак підтверджений" : "Так, списати"}
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setAsking(null);
+            }}
+          >
+            Скасувати
+          </button>
+        </div>
+      ) : (
+        <div className="actions">
+          {unit.status === "AWAITING" && (
+            <button
+              disabled={busy}
+              onClick={() => {
+                act("take");
+              }}
+            >
+              Взяти на перевірку
+            </button>
+          )}
+          {unit.status === "INSPECTING" && (
+            <>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setAsking("return");
+                }}
+              >
+                Повернути в продаж
+              </button>
+              <button
+                className="quiet"
+                disabled={busy}
+                onClick={() => {
+                  setAsking("confirm");
+                }}
+              >
+                Брак підтверджений
+              </button>
+            </>
+          )}
+          {unit.status === "CONFIRMED" && (
+            <>
+              <button
+                className="quiet"
+                disabled={busy}
+                onClick={() => {
+                  act("take");
+                }}
+              >
+                Перевірити ще раз
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setAsking("write-off");
+                }}
+              >
+                Списати
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}

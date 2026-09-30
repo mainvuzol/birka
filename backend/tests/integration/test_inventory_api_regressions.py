@@ -93,7 +93,11 @@ async def test_adjustment_audit_uses_quantity_at_locked_write(engine, monkeypatc
     async with maker() as session:
         shop = await make_shop(session)
         await give_stock(session, shop, 10)
-        original_apply = api.apply_movements
+        # The correction writes through `inventory.record_adjustment`, which
+        # calls the ledger door in its own module.
+        from app.modules.inventory import service as inventory_service
+
+        original_apply = inventory_service.apply_movements
 
         async def interleaved_apply(*args, **kwargs):
             # A delivery commits after the route has started but before its
@@ -102,7 +106,7 @@ async def test_adjustment_audit_uses_quantity_at_locked_write(engine, monkeypatc
                 await give_stock(concurrent, shop, 1)
             return await original_apply(*args, **kwargs)
 
-        monkeypatch.setattr(api, "apply_movements", interleaved_apply)
+        monkeypatch.setattr(inventory_service, "apply_movements", interleaved_apply)
         result = await api.adjust_inventory(
             api.AdjustmentRequest(
                 store_id=shop.store_id,

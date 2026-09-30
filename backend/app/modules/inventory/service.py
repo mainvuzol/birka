@@ -26,12 +26,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import (
+    DamagedStockClosedError,
     InsufficientStockError,
     OpeningBalanceConflictError,
     PermissionDeniedError,
     ValidationFailedError,
 )
 from app.core.logging import get_logger
+from app.modules.audit import service as audit
 from app.modules.authz.locations import readable_location_ids, require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
@@ -43,10 +45,12 @@ from app.modules.inventory.models import (
     Inventory,
     MovementReason,
     MovementType,
+    StockAdjustment,
     StockLot,
 )
 from app.modules.tenancy.service import (
     accessible_locations,
+    damaged_returns_locations,
     require_location_access,
     validate_active_locations,
     validate_active_stores,
@@ -378,8 +382,14 @@ async def apply_movements(
     requests: list[MovementRequest],
     actor_user_id: uuid.UUID | None = None,
     correlation_id: str | None = None,
+    damaged_stock: bool = False,
 ) -> list[AppliedMovement]:
     """Apply every movement, or raise and leave the transaction to roll back.
+
+    `damaged_stock` is the caller vouching that it is one of the two ways
+    stock in a store's «Брак» may change: a return taken damaged, or the
+    «Брак» section (owner decision, 2026-10-01). Without it, any movement at
+    a «Брак» is refused with `DamagedStockClosedError`.
 
     Raises `InsufficientStockError` naming the first line that cannot be
     satisfied, so the caller can offer the correction flow (business fact F30)
@@ -400,6 +410,7 @@ async def apply_movements(
         requests=requests,
         actor_user_id=actor_user_id,
         correlation_id=correlation_id,
+        damaged_stock=damaged_stock,
     )
 
 
@@ -410,6 +421,7 @@ async def _apply_movements(
     requests: list[MovementRequest],
     actor_user_id: uuid.UUID | None,
     correlation_id: str | None,
+    damaged_stock: bool = False,
 ) -> list[AppliedMovement]:
     """The ledger door itself, shared by `apply_movements` and `apply_opening_balance`."""
     if not requests:
@@ -432,6 +444,18 @@ async def _apply_movements(
                     reason_code=request.reason_code.value if request.reason_code else None,
                     size_id=str(request.size_id),
                 )
+
+    if not damaged_stock:
+        # One door for every stock command, so no command can forget: a
+        # delivery, a transfer, a correction or a stock list into «Брак» would
+        # leave its units out of the list of damaged units.
+        closed = await damaged_returns_locations(
+            session,
+            organization_id=organization_id,
+            location_ids={request.location_id for request in requests},
+        )
+        if closed:
+            raise DamagedStockClosedError(location_ids=sorted(str(i) for i in closed))
 
     await repository.validate_lot_references(
         session,
@@ -547,6 +571,88 @@ async def _apply_movements(
         types=sorted({a.request.movement_type.value for a in applied}),
     )
     return applied
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedAdjustment:
+    adjustment: StockAdjustment
+    movement: AppliedMovement
+    quantity_before: int
+
+
+async def record_adjustment(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    command_id: uuid.UUID,
+    command_fingerprint: str | None,
+    location_id: uuid.UUID,
+    product_variant_id: uuid.UUID,
+    size_id: uuid.UUID,
+    quantity_delta: int,
+    reason_code: MovementReason,
+    note: str | None,
+    correlation_id: str | None,
+    damaged_stock: bool = False,
+) -> RecordedAdjustment:
+    """Write one stock adjustment: its permanent row, its one ledger movement
+    naming it, and the audit entry of before and after (ADR-0007).
+
+    The person's authority is the caller's to decide: the stock correction for
+    a manager, the «Брак» section's write-off for anyone who takes returns
+    (owner decision, 2026-10-01).
+    """
+    adjustment = StockAdjustment(
+        organization_id=organization_id,
+        location_id=location_id,
+        acting_store_id=store_id,
+        created_by_user_id=actor_user_id,
+        command_id=command_id,
+        note=note,
+        correlation_id=correlation_id,
+        command_fingerprint=command_fingerprint,
+    )
+    session.add(adjustment)
+    await session.flush()
+
+    applied = await apply_movements(
+        session,
+        organization_id=organization_id,
+        requests=[
+            MovementRequest(
+                location_id=location_id,
+                acting_store_id=store_id,
+                product_variant_id=product_variant_id,
+                size_id=size_id,
+                quantity_delta=quantity_delta,
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=reason_code,
+                # The ledger row names the adjustment that caused it; before
+                # `0017` a manual correction named nothing at all.
+                reference_type="stock_adjustment",
+                reference_id=adjustment.id,
+            )
+        ],
+        actor_user_id=actor_user_id,
+        correlation_id=correlation_id,
+        damaged_stock=damaged_stock,
+    )
+    entry = applied[0]
+    before = entry.quantity_after - entry.request.quantity_delta
+    await audit.record(
+        session,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        action="inventory.adjusted",
+        entity_type="stock_movement",
+        entity_id=entry.movement_id,
+        before={"quantity": before},
+        after={"quantity": entry.quantity_after},
+        reason=note or reason_code.value,
+    )
+    return RecordedAdjustment(adjustment=adjustment, movement=entry, quantity_before=before)
 
 
 @dataclass(frozen=True, slots=True)
