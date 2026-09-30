@@ -171,3 +171,20 @@ See the [report](size-clarified-ui-report.md).
   That costs one extra tap, and nothing is recorded wrongly.
 - **One unit asked for no longer offers «на місці лише стільки»**: fewer
   than one present is none, and the answer is to remove the line (Q-G).
+
+## Backups — 2026-09-30
+
+See the [report](m1-028-backup-restore-report.md) and the
+[runbook](backup-restore-runbook.md).
+
+- **No backup is taken automatically, and none leaves the server.** The tools
+  exist and are drilled, but how often, how long to keep, and where copies
+  go wait on the owner. Until then, one disk failure can take the database
+  and every backup with it.
+- **The RPO is the time since the last backup.** No WAL archiving exists, so
+  sales since the last backup are lost in a restore.
+- **A real restore has not been rehearsed on a server.** The drill uses the
+  same `pg_restore` flags. The runbook's steps — `db` only, restore, migrate,
+  start — have not run end to end in production.
+- **`.env` is not in the backup.** Without `POSTGRES_PASSWORD` a new server
+  is configured afresh; the bot token and session secret can be reissued.

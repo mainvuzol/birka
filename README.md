@@ -259,3 +259,27 @@ Related changes elsewhere:
   writes.
 
 See the [M1-023 report](.ai/project-memory/m1-023-snapshot-import-report.md).
+
+## Backups and the restore drill (M1-028)
+
+```sh
+python -m scripts.backup_database --out /backups                   # archive + manifest
+python -m scripts.restore_drill /backups/birka-<time>.dump \
+    --scratch-url postgresql+asyncpg://…/postgres                  # restore and prove it
+```
+
+Both need the PostgreSQL client tools of the server's major version: set
+`BIRKA_PG_BIN`, or use the `ops` image, which has those of 17. On the server,
+run them as `docker compose --profile ops run --rm ops …`.
+
+The drill restores into a new scratch database and drops it afterwards; it
+writes to no other database. It passes only when:
+
+- the archive matches its checksum;
+- every table has the same row count;
+- every trigger is present and enabled;
+- the locale still lowercases Cyrillic;
+- the stock ledger reconciles.
+
+Scheduling, retention and copies off the server are the owner's decisions.
+See the [runbook](.ai/project-memory/backup-restore-runbook.md).
