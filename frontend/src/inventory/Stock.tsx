@@ -154,6 +154,7 @@ export function Stock({
               {locations.data.map((location) => (
                 <option key={location.id} value={location.id}>
                   {location.name}
+                  {location.damaged_returns ? " — брак, не продається" : ""}
                   {!location.is_active ? " — на паузі" : ""}
                 </option>
               ))}

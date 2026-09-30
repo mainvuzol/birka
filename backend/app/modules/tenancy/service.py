@@ -21,6 +21,8 @@ class AccessibleLocation:
     is_active: bool
     can_sell: bool
     can_receive: bool
+    # The store's «Брак», where units returned damaged go.
+    damaged_returns: bool
 
 
 async def list_store_locations(
@@ -45,6 +47,7 @@ async def list_store_locations(
             StockLocation.is_active,
             StoreLocationAccess.can_sell,
             StoreLocationAccess.can_receive,
+            StoreLocationAccess.damaged_returns,
         )
         .join(
             StoreLocationAccess,
@@ -63,6 +66,41 @@ async def list_store_locations(
         .order_by(StockLocation.code, StockLocation.id)
     )
     return [AccessibleLocation(*row) for row in rows]
+
+
+async def damaged_returns_location(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_id: uuid.UUID
+) -> uuid.UUID | None:
+    """The store's «Брак», where units returned damaged at it go, if one has
+    been set up (owner decision, 2026-10-01). Never guessed from a name."""
+    return (
+        await session.scalars(
+            select(StoreLocationAccess.location_id).where(
+                StoreLocationAccess.organization_id == organization_id,
+                StoreLocationAccess.store_id == store_id,
+                StoreLocationAccess.damaged_returns.is_(True),
+            )
+        )
+    ).first()
+
+
+async def sold_from(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_id: uuid.UUID
+) -> bool:
+    """Does any store sell from this warehouse? Damaged goods must not land
+    where anyone can sell them, and the database holds that only for the
+    store whose «Брак» it is."""
+    return (
+        await session.scalar(
+            select(StoreLocationAccess.id)
+            .where(
+                StoreLocationAccess.organization_id == organization_id,
+                StoreLocationAccess.location_id == location_id,
+                StoreLocationAccess.can_sell.is_(True),
+            )
+            .limit(1)
+        )
+    ) is not None
 
 
 async def store_is_active(

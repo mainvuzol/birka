@@ -212,3 +212,28 @@ daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
   same `pg_restore` flags; the runbook's full sequence has not run in
   production.
 - **`.env` is not in the backup.** Keep it in the password manager too.
+
+## Returns at the till — 2026-10-01
+
+See the [report](till-returns-report.md). The owner decided the rules the
+same day: intact back where it was sold, damaged to the store's own «Брак».
+
+- **Repaired goods cannot leave «Брак» yet.** A transfer needs `can_sell` at
+  its source, and nothing sells from «Брак». Writing a unit off works today
+  (a stock correction with reason «Пошкоджено»). Moving a repaired unit back
+  to sale needs its own rule; returning it to a supplier is a write-off with
+  a note until then.
+- **Only the refund checks that nobody sells from a «Брак».** The database
+  holds it for the store the «Брак» belongs to. If an operator later lets
+  another store sell there, goods already in it become sellable by that
+  store. No screen can grant access today; setup is by script.
+- **The API still lets a delivery be received into «Брак».** The app no
+  longer offers it; the server does not refuse it, because no rule says a
+  supplier's damaged delivery cannot go there.
+- **Returns taken before 2026-10-01 have no condition.** It was never asked,
+  and is not guessed. There are none in production.
+- **An organization set up before «Брак» existed gets it on the next run of
+  `seed_organization`**, as a new, recorded warehouse. Until then a damaged
+  return is refused there with `DAMAGED_RETURNS_UNAVAILABLE`, and says so.
+- **A return goes only through the store that sold.** Returns from another
+  store remain an open owner question.

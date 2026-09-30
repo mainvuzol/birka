@@ -187,6 +187,13 @@ current order. Do not clear that journal to recover an uncertain operation;
 restore access/connectivity and retry. Payment tracking remains separate.
 See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
 
+**Returns at the till** («Повернення»): the seller finds the sale in the
+store's list (`GET /sales?store_id=…&q=…`) and states, for each unit, whether
+it came back intact or damaged. Intact goes back to the warehouse it was sold
+from; damaged goes to the store's own «Брак», which `seed_organization`
+creates for every store and nothing sells from. See the
+[returns report](.ai/project-memory/till-returns-report.md).
+
 Every Playwright journey also runs in CI (job `e2e`) on every push and pull
 request. It uses the real API and PostgreSQL 17 with the production locale,
 on a Pixel 7 profile. The job's steps are the recipe for a local run; see the

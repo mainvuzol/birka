@@ -22,10 +22,11 @@ payload arrives under it. See `tests/integration/test_sale_retry_contract.py`.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Response, status
+from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -36,7 +37,9 @@ from app.core.errors import NotFoundError
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
+from app.modules.refunds.service import refunded_quantities
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.read import MAX_QUERY, list_sales
 from app.modules.sales.service import (
     FoundInStore,
     MissingInStore,
@@ -298,6 +301,83 @@ async def create(
     )
     await session.commit()
     return body
+
+
+class SaleLineSummary(BaseModel):
+    id: uuid.UUID
+    display_name: str
+    # The size as the receipt recorded it; "UNKNOWN" for goods sold with
+    # their size not known.
+    size: str | None
+    source_location_id: uuid.UUID
+    quantity: int
+    final_unit_price: Decimal
+    line_total: Decimal
+    # Already come back, in every part and condition.
+    refunded: int
+
+
+class SaleSummary(BaseModel):
+    id: uuid.UUID
+    sold_at: datetime
+    currency_code: str
+    total: Decimal
+    items: list[SaleLineSummary]
+
+
+class SaleListResponse(BaseModel):
+    sales: list[SaleSummary]
+    has_more: bool
+
+
+@router.get("/sales", response_model=SaleListResponse)
+async def list_store_sales(
+    scope: ScopeDep,
+    session: SessionDep,
+    store_id: Annotated[uuid.UUID, Query()],
+    q: Annotated[CleanText | None, Query(max_length=MAX_QUERY)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+) -> SaleListResponse:
+    """The store's sales, newest first — where a seller finds the sale a
+    customer is returning (owner decision, 2026-10-01)."""
+    scope.require(Permission.SALE_VIEW, store_id)
+    page = await list_sales(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        query=q,
+        limit=limit,
+        offset=offset,
+    )
+    refunded = await refunded_quantities(
+        session, sale_item_ids=[item.id for items in page.items.values() for item in items]
+    )
+    return SaleListResponse(
+        has_more=page.has_more,
+        sales=[
+            SaleSummary(
+                id=sale.id,
+                sold_at=sale.sold_at,
+                currency_code=sale.currency_code,
+                total=sale.total,
+                items=[
+                    SaleLineSummary(
+                        id=item.id,
+                        display_name=item.display_name_snapshot,
+                        size=item.variant_snapshot.get("size"),
+                        source_location_id=item.source_location_id,
+                        quantity=item.quantity,
+                        final_unit_price=item.final_unit_price,
+                        line_total=item.line_total,
+                        refunded=refunded.get(item.id, 0),
+                    )
+                    for item in page.items[sale.id]
+                ],
+            )
+            for sale in page.sales
+        ],
+    )
 
 
 @router.get("/sales/{sale_id}", response_model=SaleResponse)

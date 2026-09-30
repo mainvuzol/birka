@@ -13,16 +13,20 @@ be an explicit one (invariant I16).
 
 The money is not in the request either. How many units come back is the
 client's to say; what they are worth was decided when they were sold.
+
+Nor is where the goods go. The client says whether each unit came back intact
+or damaged; intact goes back where it was sold from, and damaged to the
+store's own «Брак» (owner decision, 2026-10-01).
 """
 
 from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.deps import ScopeDep, SessionDep
 from app.core import idempotency
@@ -30,6 +34,7 @@ from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
+from app.modules.refunds.models import ReturnCondition
 from app.modules.refunds.service import (
     RefundLineInput,
     RefundResult,
@@ -61,6 +66,18 @@ class RefundLinePayload(BaseModel):
     # not — so lax coercion turning `"yes"` or `1` into True would be the
     # schema deciding what the docstring says a person must state.
     restock: bool = Field(strict=True)
+    # Stated for goods that came back, and only for them (owner decisions,
+    # 2026-09-15 §3 and 2026-10-01). A line coming back partly intact and
+    # partly damaged is sent as two lines for the same `sale_item_id`.
+    condition: Literal["INTACT", "DAMAGED"] | None = None
+
+    @model_validator(mode="after")
+    def _condition_goes_with_the_goods(self) -> RefundLinePayload:
+        if self.restock and self.condition is None:
+            raise ValueError("say whether the goods that came back are INTACT or DAMAGED")
+        if not self.restock and self.condition is not None:
+            raise ValueError("goods that did not come back have no condition")
+        return self
 
 
 class RefundRequest(BaseModel):
@@ -81,6 +98,9 @@ class RefundItemResponse(BaseModel):
     quantity: int
     amount: Decimal
     restock: bool
+    # NULL for goods that did not come back, and for returns taken before the
+    # condition was asked.
+    condition: str | None = None
     # Where the units went back. Derived from the sale line, never requested.
     destination_location_id: uuid.UUID | None = None
     # From the sale line's frozen snapshot, so a refund receipt reads the way
@@ -120,6 +140,7 @@ def _to_response(result: RefundResult) -> RefundResponse:
                 quantity=line.refund_item.quantity,
                 amount=line.refund_item.amount,
                 restock=line.refund_item.restock,
+                condition=line.refund_item.condition,
                 destination_location_id=line.refund_item.destination_location_id,
                 display_name=line.sale_item.display_name_snapshot,
             )
@@ -153,11 +174,21 @@ async def create(
     # Where restocked goods would go is a property of the sale, so it can be
     # resolved — and its access checked — before the key is claimed, keeping a
     # revoked grant from replaying a cached success (invariants I13/I23).
+    lines = [
+        RefundLineInput(
+            sale_item_id=line.sale_item_id,
+            quantity=line.quantity,
+            restock=line.restock,
+            condition=ReturnCondition(line.condition) if line.condition else None,
+        )
+        for line in payload.lines
+    ]
     restock_destinations = await refund_destinations(
         session,
         organization_id=scope.organization_id,
         sale_id=sale_id,
-        sale_item_ids={line.sale_item_id for line in payload.lines if line.restock},
+        store_id=store_id,
+        lines=lines,
     )
     await require_stock_access(
         session,
@@ -196,14 +227,7 @@ async def create(
         scope=scope,
         sale_id=sale_id,
         command_id=payload.command_id,
-        lines=[
-            RefundLineInput(
-                sale_item_id=line.sale_item_id,
-                quantity=line.quantity,
-                restock=line.restock,
-            )
-            for line in payload.lines
-        ],
+        lines=lines,
         reason=payload.reason,
         correlation_id=get_correlation_id(),
     )

@@ -358,7 +358,12 @@ async def test_permanent_and_cached_replay_require_direct_private_rights(world, 
                 "command_id": str(uuid.uuid4()),
                 "reason": "Private return",
                 "lines": [
-                    {"sale_item_id": sale.json()["items"][0]["id"], "quantity": 1, "restock": True}
+                    {
+                        "sale_item_id": sale.json()["items"][0]["id"],
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
                 ],
             }
         original = await client.post(path, headers=headers, json=payload)
@@ -475,7 +480,12 @@ async def test_direct_child_seller_can_sell_and_restock_refund(world):
                 "command_id": str(uuid.uuid4()),
                 "reason": "Returned",
                 "lines": [
-                    {"sale_item_id": sale.json()["items"][0]["id"], "quantity": 1, "restock": True}
+                    {
+                        "sale_item_id": sale.json()["items"][0]["id"],
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
                 ],
             },
         )

@@ -36,14 +36,12 @@ A CI job, `e2e`, runs on every push and pull request:
 | Find a product | `sale.spec`, `catalog.spec`, `receive.spec` |
 | Make a sale | `sale.spec`, `size.spec` |
 | See the stock it moved | `sale.spec` («a seller sells stock the ledger agrees with…»), `stock.spec`, `correct.spec` |
-| Refund or return | **a customer order's return only** (`orders.spec`). **A till sale cannot be returned from the app yet.** |
+| Refund or return | a customer order's return (`orders.spec`), and a till sale's return, intact and damaged (`returns.spec`, added the same day — see the [returns report](till-returns-report.md)) |
 
-The last row is open. `POST /sales/{sale_id}/refunds` exists (M1-017), but no
-screen calls it, and it cannot be built without the owner. On 2026-09-15 the
-owner asked that returned units be marked intact or damaged, and that
-"damaged" not silently go back on sale. What happens to a damaged unit was
-left "to be designed" (owner-decisions-2026-09-15.md §3). The refund command
-still takes a single `restock` yes/no.
+When this job was written, the last row was open: `POST /sales/{sale_id}/refunds`
+existed (M1-017), but no screen called it, and what happens to a damaged unit
+was left "to be designed" (owner-decisions-2026-09-15.md §3). The owner
+decided it the same day, and the returns screen followed.
 
 ## Evidence
 

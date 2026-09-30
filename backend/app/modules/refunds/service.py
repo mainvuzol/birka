@@ -27,6 +27,13 @@ each read a stale total. The sale's own `sale_item` rows are taken
 blocks until the first commits, then sees it. The sale line is the natural
 serialization point because it is exactly what the invariant is about.
 
+**Every unit that comes back is stated intact or damaged** (owner decisions,
+2026-09-15 §3 and 2026-10-01). Intact goes back to the warehouse the line was
+sold from; damaged goes to the store's own «Брак», where nothing sells. One
+sale line may come back in parts, one per condition, and every part counts
+towards what is still returnable. The destination is derived — from the
+sale line, or from the store's setup — and never accepted from the client.
+
 Lock order is fixed and identical in every path — the router's idempotency-row
 insert first (it blocks a concurrent inserter of the same key), then the
 advisory lock on the permanent command, then `sale_item` rows in id order,
@@ -46,6 +53,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
 from app.core.errors import (
+    DamagedReturnsUnavailableError,
     IdempotencyConflictError,
     NotFoundError,
     RefundExceedsSoldError,
@@ -63,11 +71,13 @@ from app.modules.inventory.service import (
     apply_movements,
     refund_return_movement_ids,
 )
-from app.modules.refunds.models import Refund, RefundItem
+from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
 from app.modules.sales.models import Sale, SaleItem, SaleStatus
 from app.modules.sales.service import MAX_MONEY, money
 from app.modules.tenancy.service import (
     LocationCapability,
+    damaged_returns_location,
+    sold_from,
     store_is_active,
 )
 
@@ -83,14 +93,16 @@ class RefundLineInput:
     """One sold line coming back.
 
     `restock` is deliberately not defaulted anywhere in this stack. "The coat
-    came back and goes on the rack" and "we refunded the customer and binned
-    it" are both ordinary, and guessing between them silently invents or
-    destroys stock.
+    came back" and "we gave the money back for a coat that did not" are
+    different facts, and guessing between them silently invents or destroys
+    stock. Nor is `condition`: every unit that came back is stated intact or
+    damaged, and a unit that did not come back has no condition to state.
     """
 
     sale_item_id: uuid.UUID
     quantity: int
     restock: bool
+    condition: ReturnCondition | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,20 +160,31 @@ def _normalize(
     if len(lines) > MAX_LINES:
         raise ValidationFailedError(f"A refund may not contain more than {MAX_LINES} lines")
 
-    seen: set[uuid.UUID] = set()
+    seen: set[tuple[uuid.UUID, ReturnCondition | None]] = set()
+    normalized: list[RefundLineInput] = []
     for line in lines:
         if type(line.quantity) is not int or not 0 < line.quantity <= 1000:
             raise ValidationFailedError("Quantity must be an integer between 1 and 1000")
         if type(line.restock) is not bool:
             raise ValidationFailedError("restock must be stated explicitly as true or false")
-        if line.sale_item_id in seen:
-            # Two entries for one line would make the refundable-quantity check
-            # read an aggregate that does not account for its own sibling.
+        condition = _condition(line)
+        part = (line.sale_item_id, condition)
+        if part in seen:
+            # A line comes back in parts, one per condition. Two parts in the
+            # same condition are one part written twice.
             raise ValidationFailedError(
-                "A sale line may appear only once in a refund",
+                "A sale line may appear only once per condition in a refund",
                 sale_item_id=str(line.sale_item_id),
             )
-        seen.add(line.sale_item_id)
+        seen.add(part)
+        normalized.append(
+            RefundLineInput(
+                sale_item_id=line.sale_item_id,
+                quantity=line.quantity,
+                restock=line.restock,
+                condition=condition,
+            )
+        )
 
     note = reason.strip() if reason is not None else None
     if note is not None:
@@ -175,7 +198,56 @@ def _normalize(
             raise ValidationFailedError(
                 f"A refund reason may not exceed {MAX_REASON_LENGTH} characters"
             )
-    return lines, note
+    return normalized, note
+
+
+def _condition(line: RefundLineInput) -> ReturnCondition | None:
+    """The stated condition, which goods that came back must have and goods
+    that did not must not."""
+    if not line.restock:
+        if line.condition is not None:
+            raise ValidationFailedError(
+                "Goods that did not come back have no condition to state",
+                sale_item_id=str(line.sale_item_id),
+            )
+        return None
+    try:
+        if line.condition is None:
+            raise ValueError
+        return ReturnCondition(line.condition)
+    except ValueError:
+        raise ValidationFailedError(
+            "Say whether each unit that came back is INTACT or DAMAGED",
+            sale_item_id=str(line.sale_item_id),
+        ) from None
+
+
+async def damaged_destination(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_id: uuid.UUID
+) -> uuid.UUID:
+    """The store's «Брак», or a refusal: damaged goods never go anywhere that
+    sells (owner decision, 2026-10-01)."""
+    location = await damaged_returns_location(
+        session, organization_id=organization_id, store_id=store_id
+    )
+    if location is None:
+        raise DamagedReturnsUnavailableError(reason="NOT_SET_UP", store_id=str(store_id))
+    if await sold_from(session, organization_id=organization_id, location_id=location):
+        raise DamagedReturnsUnavailableError(
+            reason="SOLD_FROM", store_id=str(store_id), location_id=str(location)
+        )
+    return location
+
+
+def _destination(
+    line: RefundLineInput, sale_item: SaleItem, damaged: uuid.UUID | None
+) -> uuid.UUID | None:
+    """Where this part goes: nowhere, back where it was sold from, or «Брак»."""
+    if not line.restock:
+        return None
+    if line.condition is ReturnCondition.DAMAGED:
+        return damaged
+    return sale_item.source_location_id
 
 
 def _fingerprint(
@@ -185,6 +257,7 @@ def _fingerprint(
     lines: list[RefundLineInput],
     reason: str | None,
     sale_items: dict[uuid.UUID, SaleItem],
+    damaged: uuid.UUID | None,
 ) -> str:
     """Everything that makes this refund *this* refund.
 
@@ -201,17 +274,22 @@ def _fingerprint(
                     "sale_item_id": str(line.sale_item_id),
                     "quantity": line.quantity,
                     "restock": line.restock,
+                    # Only when stated, so a refund of goods that did not come
+                    # back still has the fingerprint it had before conditions.
+                    **({"condition": line.condition.value} if line.condition else {}),
                 }
                 for line in lines
             ],
-            # The destination is derived from the sale line, never sent by the
-            # client — but it still belongs in the permanent fingerprint, so a
-            # retry cannot silently restock a different warehouse if the sale
-            # line it points at were ever to change.
+            # The destination is derived — from the sale line, or from the
+            # store's «Брак» — never sent by the client. It still belongs in
+            # the permanent fingerprint, so a retry cannot silently restock a
+            # different warehouse if either were ever to change.
             "destinations": sorted(
-                str(sale_items[line.sale_item_id].source_location_id)
+                str(destination)
                 for line in lines
-                if line.restock and line.sale_item_id in sale_items
+                if line.sale_item_id in sale_items
+                and (destination := _destination(line, sale_items[line.sale_item_id], damaged))
+                is not None
             ),
         },
         actor_user_id=scope.user_id,
@@ -367,20 +445,28 @@ async def create_refund(
             await session.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id))
         ).all()
     }
+    damaged = (
+        await damaged_destination(
+            session, organization_id=scope.organization_id, store_id=sale.store_id
+        )
+        if any(line.condition is ReturnCondition.DAMAGED for line in lines)
+        else None
+    )
     await require_stock_access(
         session,
         scope=scope,
         permission=Permission.SALE_REFUND,
         store_id=sale.store_id,
         location_ids={
-            preview[line.sale_item_id].source_location_id
+            destination
             for line in lines
-            if line.restock and line.sale_item_id in preview
+            if line.sale_item_id in preview
+            and (destination := _destination(line, preview[line.sale_item_id], damaged)) is not None
         },
         capability=LocationCapability.RECEIVE,
     )
     request_fingerprint = _fingerprint(
-        scope=scope, sale=sale, lines=lines, reason=reason, sale_items=preview
+        scope=scope, sale=sale, lines=lines, reason=reason, sale_items=preview, damaged=damaged
     )
     existing = await _existing_command(
         session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
@@ -423,20 +509,27 @@ async def create_refund(
         ).all()
     }
 
-    total = Decimal("0")
-    amounts: list[Decimal] = []
+    # Every part of a line counts: two intact and one damaged is three back.
+    requested: dict[uuid.UUID, int] = {}
     for line in lines:
-        sale_item = sale_items[line.sale_item_id]
-        refunded = already_refunded.get(line.sale_item_id, 0)
+        requested[line.sale_item_id] = requested.get(line.sale_item_id, 0) + line.quantity
+    for sale_item_id, quantity in requested.items():
+        sale_item = sale_items[sale_item_id]
+        refunded = already_refunded.get(sale_item_id, 0)
         refundable = sale_item.quantity - refunded
-        if line.quantity > refundable:
+        if quantity > refundable:
             raise RefundExceedsSoldError(
-                sale_item_id=str(line.sale_item_id),
-                requested=line.quantity,
+                sale_item_id=str(sale_item_id),
+                requested=quantity,
                 sold=sale_item.quantity,
                 already_refunded=refunded,
                 refundable=refundable,
             )
+
+    total = Decimal("0")
+    amounts: list[Decimal] = []
+    for line in lines:
+        sale_item = sale_items[line.sale_item_id]
         # The only arithmetic in a refund. Both operands are exact, so this is
         # the amount actually charged for those units, to the kopeck.
         amount = money(sale_item.final_unit_price * line.quantity)
@@ -470,9 +563,8 @@ async def create_refund(
             quantity=line.quantity,
             amount=amount,
             restock=line.restock,
-            destination_location_id=(
-                sale_items[line.sale_item_id].source_location_id if line.restock else None
-            ),
+            condition=line.condition.value if line.condition else None,
+            destination_location_id=_destination(line, sale_items[line.sale_item_id], damaged),
         )
         for line, amount in zip(lines, amounts, strict=True)
     ]
@@ -480,10 +572,14 @@ async def create_refund(
     await session.flush()
 
     movements: list[uuid.UUID] = []
-    restocked = [line for line in lines if line.restock]
+    restocked = [
+        (line, item) for line, item in zip(lines, refund_items, strict=True) if line.restock
+    ]
     # Owner decision, 2026-09-17: goods go back to the warehouse the sale line
     # drew them from. Returning them anywhere else is a return plus a transfer,
-    # and must be two explicit operations (invariant I16).
+    # and must be two explicit operations (invariant I16) — with the one
+    # exception the owner made on 2026-10-01: a damaged unit goes to the
+    # store's «Брак», so it is never back on sale.
     if restocked and not await store_is_active(
         session, organization_id=scope.organization_id, store_id=sale.store_id
     ):
@@ -508,7 +604,7 @@ async def create_refund(
             organization_id=scope.organization_id,
             requests=[
                 MovementRequest(
-                    location_id=sale_items[line.sale_item_id].source_location_id,
+                    location_id=item.destination_location_id,
                     acting_store_id=sale.store_id,
                     product_variant_id=sale_items[line.sale_item_id].product_variant_id,
                     size_id=sale_items[line.sale_item_id].size_id,
@@ -517,7 +613,8 @@ async def create_refund(
                     reference_type=REFUND_REFERENCE,
                     reference_id=refund.id,
                 )
-                for line in restocked
+                for line, item in restocked
+                if item.destination_location_id is not None
             ],
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
@@ -543,8 +640,15 @@ async def create_refund(
             "refund_id": str(refund.id),
             "total_amount": str(refund.total_amount),
             "currency_code": refund.currency_code,
-            "refunded_now": {str(line.sale_item_id): line.quantity for line in lines},
-            "restocked": sorted(str(line.sale_item_id) for line in restocked),
+            "refunded_now": {
+                str(sale_item_id): quantity for sale_item_id, quantity in requested.items()
+            },
+            "restocked": sorted({str(line.sale_item_id) for line, _ in restocked}),
+            "damaged": {
+                str(line.sale_item_id): line.quantity
+                for line in lines
+                if line.condition is ReturnCondition.DAMAGED
+            },
         },
         reason=reason,
     )
@@ -562,12 +666,33 @@ async def create_refund(
     return _result(refund, refund_items, sale_items, movements)
 
 
+async def refunded_quantities(
+    session: AsyncSession, *, sale_item_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """How much of each sale line has already come back, in every part and
+    condition — what a seller must see before taking another return."""
+    if not sale_item_ids:
+        return {}
+    return {
+        sale_item_id: int(quantity)
+        for sale_item_id, quantity in (
+            await session.execute(
+                select(RefundItem.sale_item_id, func.sum(RefundItem.quantity))
+                .where(RefundItem.sale_item_id.in_(sale_item_ids))
+                .group_by(RefundItem.sale_item_id)
+            )
+        ).all()
+    }
+
+
 __all__ = [
     "RefundLineInput",
     "RefundResult",
     "RefundedLine",
     "create_refund",
+    "damaged_destination",
     "refund_destinations",
+    "refunded_quantities",
     "sale_store_id",
 ]
 
@@ -577,30 +702,43 @@ async def refund_destinations(
     *,
     organization_id: uuid.UUID,
     sale_id: uuid.UUID,
-    sale_item_ids: set[uuid.UUID],
+    store_id: uuid.UUID,
+    lines: list[RefundLineInput],
 ) -> set[uuid.UUID]:
-    """Where restocking these lines would put the goods.
+    """Where the goods coming back would go: the warehouse each intact part
+    was sold from, and the store's «Брак» for damaged parts.
 
-    Read straight from the sale, because that is where the answer lives — the
-    client never states a destination. Exposed so the router can check the
-    store's access to those warehouses *before* it claims an idempotency key,
-    which is what stops a revoked grant from replaying a cached success.
+    Read from the sale and the store's setup, because that is where the
+    answer lives — the client never states a destination. Exposed so the
+    router can check the store's access to those warehouses *before* it
+    claims an idempotency key, which is what stops a revoked grant from
+    replaying a cached success.
 
     Unknown ids are simply absent: the authoritative validation happens in the
     command, under the sale's own row locks.
     """
-    if not sale_item_ids:
-        return set()
-    return set(
-        (
-            await session.scalars(
-                select(SaleItem.source_location_id)
-                .join(Sale, Sale.id == SaleItem.sale_id)
-                .where(
-                    SaleItem.sale_id == sale_id,
-                    SaleItem.id.in_(sale_item_ids),
-                    Sale.organization_id == organization_id,
+    intact = {
+        line.sale_item_id
+        for line in lines
+        if line.restock and line.condition is not ReturnCondition.DAMAGED
+    }
+    destinations: set[uuid.UUID] = set()
+    if intact:
+        destinations |= set(
+            (
+                await session.scalars(
+                    select(SaleItem.source_location_id)
+                    .join(Sale, Sale.id == SaleItem.sale_id)
+                    .where(
+                        SaleItem.sale_id == sale_id,
+                        SaleItem.id.in_(intact),
+                        Sale.organization_id == organization_id,
+                    )
                 )
-            )
-        ).all()
-    )
+            ).all()
+        )
+    if any(line.restock and line.condition is ReturnCondition.DAMAGED for line in lines):
+        destinations.add(
+            await damaged_destination(session, organization_id=organization_id, store_id=store_id)
+        )
+    return destinations

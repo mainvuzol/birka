@@ -32,6 +32,12 @@ import {
 } from "@/inventory/adjustmentCommands";
 import type { Adjustment } from "@/inventory/adjustmentTypes";
 import { Backups, useBackups } from "@/backups/Backups";
+import { Returns } from "@/returns/Returns";
+import {
+  loadReturn,
+  resolveReturn,
+  useReturnCommand,
+} from "@/returns/commands";
 import type { Sale as SaleReceipt } from "@/sales/types";
 import "./styles.css";
 
@@ -144,7 +150,14 @@ function Workspace({
 }): JSX.Element {
   const cache = useQueryClient();
   const [tab, setTab] = useState<
-    "list" | "new" | "catalog" | "stock" | "sale" | "receive" | "backups"
+    | "list"
+    | "new"
+    | "catalog"
+    | "stock"
+    | "sale"
+    | "receive"
+    | "returns"
+    | "backups"
   >("list");
   // The owner's section. A backup is of the whole server, so only a grant
   // held organization-wide opens it, never one for a store.
@@ -188,6 +201,22 @@ function Workspace({
       setAdjustmentStorageError(true);
     }
   }, [adjustmentKey]);
+  const returnKey = `birka:return-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [returnStorageError, setReturnStorageError] = useState(false);
+  const returnCommand = useReturnCommand();
+  useEffect(() => {
+    try {
+      const saved = loadReturn(returnKey);
+      useReturnCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("returns");
+    } catch {
+      setReturnStorageError(true);
+    }
+  }, [returnKey]);
+  // A return is looked up in the store's sales, so it needs both.
+  const canReturn =
+    store.permissions.includes("sale:refund") &&
+    store.permissions.includes("sale:view");
   const catalogCommand = useCatalogCommand();
   const saleCommand = useSaleCommand();
   const [settled, setSettled] = useState<SaleReceipt | null>(null);
@@ -246,6 +275,8 @@ function Workspace({
       ]);
     }
   }
+  const returnUnsettled =
+    returnStorageError || returnCommand.busy || returnCommand.pending !== null;
   // Every journal but the stock correction's own, which its form reads itself.
   const otherThanAdjustment =
     busy ||
@@ -259,7 +290,8 @@ function Workspace({
     saleCommand.pending !== null ||
     receiptStorageError ||
     receiptCommand.busy ||
-    receiptCommand.pending !== null;
+    receiptCommand.pending !== null ||
+    returnUnsettled;
   const adjustmentUnsettled =
     adjustmentStorageError ||
     adjustmentCommand.busy ||
@@ -339,6 +371,17 @@ function Workspace({
             }}
           >
             Залишки
+          </button>
+        )}
+        {canReturn && (
+          <button
+            className={tab === "returns" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("returns");
+            }}
+          >
+            Повернення
           </button>
         )}
         {canSeeBackups && (
@@ -448,6 +491,38 @@ function Workspace({
       {receiptCommand.error !== null && (
         <p role="alert">{errorText(receiptCommand.error)}</p>
       )}
+      {returnStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережене повернення. Не очищайте дані
+          застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {returnCommand.pending && (
+        <section className="notice">
+          <h3>
+            {returnCommand.busy
+              ? "Перевіряємо повернення…"
+              : "Незавершене повернення"}
+          </h3>
+          <p>
+            Невідомо, чи записано попереднє повернення. Перевірте результат — те
+            саме повернення не буде оформлено двічі, і гроші не повернуться
+            двічі. Нові операції заблоковано.
+          </p>
+          <button
+            disabled={returnCommand.busy}
+            onClick={() => {
+              const attempt = returnCommand.pending;
+              if (attempt) void resolveReturn(returnKey, token, attempt);
+            }}
+          >
+            Перевірити результат повернення
+          </button>
+        </section>
+      )}
+      {returnCommand.error !== null && (
+        <p role="alert">{errorText(returnCommand.error)}</p>
+      )}
       {adjustmentStorageError && (
         <p role="alert">
           Не вдалося прочитати збережене коригування. Не очищайте дані
@@ -545,7 +620,8 @@ function Workspace({
               catalogCommand.pending !== null ||
               receiptCommand.busy ||
               receiptCommand.pending !== null ||
-              adjustmentUnsettled
+              adjustmentUnsettled ||
+              returnUnsettled
             }
           />
         ) : (
@@ -568,7 +644,8 @@ function Workspace({
               catalogCommand.pending !== null ||
               saleCommand.busy ||
               saleCommand.pending !== null ||
-              adjustmentUnsettled
+              adjustmentUnsettled ||
+              returnUnsettled
             }
           />
         ) : (
@@ -585,6 +662,31 @@ function Workspace({
           />
         ) : (
           <p role="alert">Немає доступу до залишків.</p>
+        )
+      ) : tab === "returns" ? (
+        canReturn ? (
+          <Returns
+            store={store}
+            token={token}
+            journalKey={returnKey}
+            blocked={
+              storageError ||
+              catalogStorageError ||
+              saleStorageError ||
+              receiptStorageError ||
+              busy ||
+              pending !== null ||
+              catalogCommand.busy ||
+              catalogCommand.pending !== null ||
+              saleCommand.busy ||
+              saleCommand.pending !== null ||
+              receiptCommand.busy ||
+              receiptCommand.pending !== null ||
+              adjustmentUnsettled
+            }
+          />
+        ) : (
+          <p role="alert">Немає права приймати повернення.</p>
         )
       ) : tab === "backups" ? (
         canSeeBackups ? (

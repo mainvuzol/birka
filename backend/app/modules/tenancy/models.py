@@ -16,8 +16,10 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -115,9 +117,25 @@ class StoreLocationAccess(UUIDPrimaryKey, TimestampMixin, Base):
     location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
     can_sell: Mapped[bool] = mapped_column(Boolean, nullable=False)
     can_receive: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # This is the store's «Брак»: where a unit returned damaged at this store
+    # goes (owner decision, 2026-10-01). Every store has its own, because a
+    # damaged coat stays where it was handed back. Nothing sells from it, so
+    # the store may receive there and never sell.
+    damaged_returns: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
     __table_args__ = (
         UniqueConstraint("store_id", "location_id", name="uq_store_location_access_store_location"),
+        CheckConstraint(
+            "NOT damaged_returns OR (can_receive AND NOT can_sell)",
+            name="damaged_returns_are_not_sold",
+        ),
+        # One «Брак» per store: a return must never have to choose.
+        Index(
+            "uq_store_location_access_damaged_returns",
+            "store_id",
+            unique=True,
+            postgresql_where=text("damaged_returns"),
+        ),
         ForeignKeyConstraint(
             ["organization_id", "store_id"],
             ["store.organization_id", "store.id"],

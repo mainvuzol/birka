@@ -127,3 +127,27 @@ message arrives without a sound or a vibration, whatever the hour, and the
 owner looks at the «Резервні копії» section to see what went wrong. The
 message is still delivered and stays in the bot's chat; it is not held
 until morning.
+
+## Owner decision — 2026-10-01 (returns at the till)
+
+Asked because a till sale could not yet be returned from the app, and the
+owner's rule of 2026-09-15 (owner-decisions-2026-09-15.md §3) left what
+happens to a damaged unit to be designed.
+
+- **Each returned unit is stated intact or damaged.** One sale line may come
+  back partly intact and partly damaged in the same return. Every part counts
+  towards what is still returnable.
+- **An intact unit goes back to the warehouse it was sold from**, as before
+  (2026-09-17).
+- **A damaged unit goes to the store's own «Брак» warehouse.** It stays in
+  the stock records, but nothing sells from there. A manager later decides
+  its fate: repair it and put it back on sale, return it to the supplier, or
+  write it off.
+- **Every store has its own «Брак»**, because a warehouse in the app is a
+  physical place, and a damaged coat stays where it was handed back.
+  Gathering it elsewhere is an ordinary move.
+- **A return is taken only in the store that made the sale.** Returns from
+  another store remain a separate question (owner-decisions-2026-09-15.md
+  §1).
+- **The seller finds the sale in the store's list of sales**, newest first,
+  searchable by the goods' name.

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
@@ -34,6 +35,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 from app.core.orm import TimestampMixin, UUIDPrimaryKey
+
+
+class ReturnCondition(StrEnum):
+    """What a returned unit is like, as the person taking it back states it
+    (owner decision, 2026-09-15 §3, and 2026-10-01)."""
+
+    INTACT = "INTACT"
+    DAMAGED = "DAMAGED"
 
 
 class Refund(UUIDPrimaryKey, TimestampMixin, Base):
@@ -92,11 +101,18 @@ class RefundItem(UUIDPrimaryKey, Base):
     # recomputed from the catalog and never supplied by the client
     # (invariant I8, `.ai/skills/financial-integrity.md`).
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    # Goods physically came back, so stock returns. A refund without restock is
-    # a legitimate case (damaged item kept by the shop) and must be explicit.
+    # Goods physically came back, so stock returns. A refund without restock
+    # returns money for goods that did not come back, and must be explicit.
     restock: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    # Where the units went back — the warehouse the sale line drew them from
-    # (owner decision, 2026-09-17). Nullable on purpose: a line that was not
+    # Intact or damaged, stated for every unit that came back (owner
+    # decisions, 2026-09-15 §3 and 2026-10-01). Intact goes back where it was
+    # sold from; damaged goes to the store's «Брак». NULL for goods that did
+    # not come back, and for returns taken before the condition was asked —
+    # guessing theirs would record a fact nobody stated.
+    condition: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Where the units went back: the warehouse the sale line drew them from
+    # (owner decision, 2026-09-17), or the store's «Брак» for damaged ones
+    # (2026-10-01). Nullable on purpose: a line that was not
     # restocked writes no movement, and asserting a shelf for goods that went
     # in the bin would invent history. The CHECK makes the two agree in both
     # directions, which is stronger than NOT NULL would be.
@@ -115,7 +131,20 @@ class RefundItem(UUIDPrimaryKey, Base):
         ),
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("amount >= 0", name="amount_not_negative"),
+        CheckConstraint(
+            "condition IS NULL OR (restock AND condition IN ('INTACT', 'DAMAGED'))",
+            name="condition_only_for_goods_back",
+        ),
+        # A sale line may come back in parts, one per condition, and each part
+        # is one row: the returnable check sums them all.
+        UniqueConstraint(
+            "refund_id",
+            "sale_item_id",
+            "condition",
+            name="uq_refund_item_refund_sale_item_condition",
+            postgresql_nulls_not_distinct=True,
+        ),
     )
 
 
-__all__ = ["Refund", "RefundItem"]
+__all__ = ["Refund", "RefundItem", "ReturnCondition"]

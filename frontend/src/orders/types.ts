@@ -19,6 +19,8 @@ export interface Location {
   is_active: boolean;
   can_sell: boolean;
   can_receive: boolean;
+  /** The store's «Брак»: damaged returns go here, and nothing sells from it. */
+  damaged_returns: boolean;
 }
 export interface StockOption {
   product_variant_id: string;

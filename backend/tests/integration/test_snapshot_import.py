@@ -212,7 +212,7 @@ async def seed_world(maker: async_sessionmaker) -> dict:
         "org": org,
         "main": stores["MAIN"],
         "second": stores["SECOND"],
-        "shared": next(loc.id for loc in locations if loc.managing_store_id is None),
+        "shared": next(loc.id for loc in locations if loc.code == "BOOTSTRAP-SHARED"),
         "private": next(loc.id for loc in locations if loc.managing_store_id is not None),
         "users": users,
     }
