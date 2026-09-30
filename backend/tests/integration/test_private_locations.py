@@ -81,7 +81,8 @@ async def world():
         private = next(
             location.id for location in locations if location.managing_store_id is not None
         )
-        shared = next(location.id for location in locations if location.managing_store_id is None)
+        # By its code: each store's «Брак» is unmanaged too (2026-10-01).
+        shared = next(location.id for location in locations if location.code == "BOOTSTRAP-SHARED")
         sibling = Store(organization_id=org, code="THIRD", name="Sibling", kind=StoreKind.SECONDARY)
         session.add(sibling)
         viewer_role = Role(organization_id=org, code="VIEWER", name="Viewer", is_system=False)
