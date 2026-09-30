@@ -239,3 +239,30 @@ Named so nothing here is read as covering them. Each is a confirmed owner requir
 - **Ownership of goods**, including in the child warehouse. See §2.1.
 - **Who may accept a return from the other store, and which store handles the money.** The owner listed both as open. Today the code permits no cross-store return at all — a refund requires `sale:refund` in the sale's own store — so nothing is broken, and §2.4's "`refund.store_id` unchanged" describes current behaviour rather than settling the question.
 - **Negotiated final prices, installment sales, purchase obligations.** No interaction with locations: a price is a store's offer and settlement is a customer relationship. Recorded to show the absence of interaction was checked, not overlooked.
+
+## 2026-10-01 amendment — damaged returns go to the store's «Брак»
+
+§7 left "damaged versus intact returned units" to its own task. The owner
+settled it on 2026-10-01 (business-rules.md, "returns at the till"):
+
+- **Every unit that comes back is stated intact or damaged**
+  (`refund_item.condition`). One sale line may come back in parts, one per
+  condition, and the returnable check (invariant I9) sums every part.
+- **Intact goes back where it was sold from**, as Q-B answered.
+- **Damaged goes to the store's own «Брак»**: the one warehouse per store
+  whose access row has `damaged_returns`, which the database holds to
+  `can_receive AND NOT can_sell`. The refund also refuses a «Брак» that any
+  store sells from.
+
+This is the one place a return lands anywhere other than the line's source.
+It is not a disguised transfer (§5, I24): the destination is derived from the
+stated condition and the store's setup, never requested, and the movement only
+adds stock to one location. The bootstrap gives every store its «Брак» and
+records it; which warehouse is a store's «Брак» is never inferred from its
+name.
+
+Still open: taking goods *out* of «Брак» after repair. A transfer requires
+`can_sell` at its source (§3), so repaired goods cannot yet be moved back to
+sale. Writing them off works today, as a correction. The owner decided the
+flow the same day (inspection, then back on sale or «брак підтверджений»;
+business-rules.md); it is not built.

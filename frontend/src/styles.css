@@ -336,3 +336,20 @@ nav {
 .nights > li:first-child {
   border-top: 0;
 }
+
+/* A return: one block per sale line, the two counts side by side. */
+.line-return {
+  border-top: 1px solid #edf0ea;
+  padding-top: 12px;
+  margin-bottom: 12px;
+}
+.line-return:first-of-type {
+  border-top: 0;
+}
+.line-return h3 {
+  margin: 0 0 4px;
+}
+.line-return .fields label,
+.line-return .fields label:first-child {
+  flex: 1;
+}

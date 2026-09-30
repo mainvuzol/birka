@@ -57,10 +57,20 @@ async def test_seed_discover_receive_and_sell_shared_stock(setup):
             "/api/v1/stock-locations", params={"store_id": str(stores["SECOND"])}
         )
         assert main.status_code == child.status_code == 200
-        assert len(main.json()) == 1
+        # The shared warehouse, and the store's own «Брак» (owner decision,
+        # 2026-10-01), which the store receives into and never sells from.
+        assert sorted(loc["code"] for loc in main.json()) == [
+            "BOOTSTRAP-DAMAGED-MAIN",
+            "BOOTSTRAP-SHARED",
+        ]
         # Organization-wide OWNER alone does not see the private child location.
-        assert len(child.json()) == 1
-        location_id = main.json()[0]["id"]
+        assert sorted(loc["code"] for loc in child.json()) == [
+            "BOOTSTRAP-DAMAGED-SECOND",
+            "BOOTSTRAP-SHARED",
+        ]
+        bins = [loc for loc in main.json() + child.json() if loc["damaged_returns"]]
+        assert all(loc["can_receive"] and not loc["can_sell"] for loc in bins)
+        location_id = next(loc["id"] for loc in main.json() if loc["code"] == "BOOTSTRAP-SHARED")
         assert location_id in {location["id"] for location in child.json()}
         # These places are discoverable before any catalog or stock exists.
         stock = await client.get("/api/v1/inventory", params={"store_id": str(stores["MAIN"])})

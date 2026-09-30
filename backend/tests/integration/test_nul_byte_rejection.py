@@ -39,6 +39,7 @@ from app.core.errors import ValidationFailedError
 from app.modules.catalog.models import SizeSystemCode
 from app.modules.catalog.service import ProductDraft, SizeDraft, VariantDraft
 from app.modules.catalog.service import create_product as create_product_command
+from app.modules.refunds.models import ReturnCondition
 from app.modules.refunds.service import RefundLineInput, create_refund
 from tests.conftest import requires_database
 from tests.integration.test_product_lifecycle_api import (
@@ -270,7 +271,14 @@ async def test_the_services_refuse_a_nul_without_the_router(maker):
                 scope=shop.scope(),
                 sale_id=uuid.UUID(sold.sale_id),
                 command_id=uuid.uuid4(),
-                lines=[RefundLineInput(sale_item_id=sale_item_id, quantity=1, restock=True)],
+                lines=[
+                    RefundLineInput(
+                        sale_item_id=sale_item_id,
+                        quantity=1,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
+                ],
                 reason=POISON,
             )
         with pytest.raises(ValidationFailedError):
@@ -320,7 +328,8 @@ async def test_unstorable_text_is_refused_everywhere_it_is_accepted(maker, escap
         sold = await sell(client, shop)
         body = (
             f'{{"command_id": "{uuid.uuid4()}", "reason": "bad{escape}text", "lines": '
-            f'[{{"sale_item_id": "{sold.line()["id"]}", "quantity": 1, "restock": true}}]}}'
+            f'[{{"sale_item_id": "{sold.line()["id"]}", "quantity": 1, "restock": true, '
+            f'"condition": "INTACT"}}]}}'
         )
         response = await client.post(
             f"/api/v1/sales/{sold.sale_id}/refunds",

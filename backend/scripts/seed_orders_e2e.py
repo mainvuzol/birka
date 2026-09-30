@@ -73,6 +73,11 @@ async def main() -> None:
         # with its size not known (ADR-0005 §3): what a seller gives a size to
         # at the counter.
         legacy = StockLocation(organization_id=org.id, name="Старі залишки", code="E2E-LEGACY")
+        # A fifth for returns, whose goods come back into it and would move
+        # the balances the other specs count; and the store's «Брак», where a
+        # damaged return goes and nothing sells (owner decision, 2026-10-01).
+        returns = StockLocation(organization_id=org.id, name="Склад повернень", code="E2E-RETURNS")
+        damaged = StockLocation(organization_id=org.id, name="Брак", code="E2E-BIN")
         concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
@@ -82,7 +87,21 @@ async def main() -> None:
             name="шоколад",
             normalized_name="шоколад",
         )
-        session.add_all([store, location, till, counted, legacy, concept, system, user, colour])
+        session.add_all(
+            [
+                store,
+                location,
+                till,
+                counted,
+                legacy,
+                returns,
+                damaged,
+                concept,
+                system,
+                user,
+                colour,
+            ]
+        )
         await session.flush()
         size = Size(size_system_id=system.id, code="M")
         # Held nowhere: what a stocktake finds on a shelf the system says is empty.
@@ -94,7 +113,7 @@ async def main() -> None:
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        for reachable in (location, till, counted, legacy):
+        for reachable in (location, till, counted, legacy, returns):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -104,6 +123,16 @@ async def main() -> None:
                     can_receive=True,
                 )
             )
+        session.add(
+            StoreLocationAccess(
+                organization_id=org.id,
+                store_id=store.id,
+                location_id=damaged.id,
+                can_sell=False,
+                can_receive=True,
+                damaged_returns=True,
+            )
+        )
         await session.flush()
         await apply_movements(
             session,
@@ -144,6 +173,8 @@ async def main() -> None:
             "till_location_id": str(till.id),
             "count_location_id": str(counted.id),
             "legacy_location_id": str(legacy.id),
+            "returns_location_id": str(returns.id),
+            "bin_location_id": str(damaged.id),
             "variant_id": str(variant.id),
             "size_id": str(size.id),
         }

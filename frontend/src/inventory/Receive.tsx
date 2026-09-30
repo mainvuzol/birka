@@ -78,8 +78,11 @@ export function Receive({
     retry: false,
   });
 
+  // A store's «Брак» takes damaged returns, not deliveries: offering it here
+  // would put new goods where nothing sells (owner decision, 2026-10-01).
   const receivable = (locations.data ?? []).filter(
-    (location) => location.is_active && location.can_receive,
+    (location) =>
+      location.is_active && location.can_receive && !location.damaged_returns,
   );
   const onlyWarehouse = receivable.length === 1 ? receivable[0] : undefined;
 
@@ -271,14 +274,20 @@ export function Receive({
                 <option
                   key={location.id}
                   value={location.id}
-                  disabled={!location.is_active || !location.can_receive}
+                  disabled={
+                    !location.is_active ||
+                    !location.can_receive ||
+                    location.damaged_returns
+                  }
                 >
                   {location.name}
                   {!location.is_active
                     ? " — на паузі"
-                    : !location.can_receive
-                      ? " — без права приймання"
-                      : ""}
+                    : location.damaged_returns
+                      ? " — брак, лише для повернень"
+                      : !location.can_receive
+                        ? " — без права приймання"
+                        : ""}
                 </option>
               ))}
             </select>

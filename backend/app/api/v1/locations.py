@@ -23,6 +23,8 @@ class LocationResponse(BaseModel):
     is_active: bool
     can_sell: bool
     can_receive: bool
+    # The store's «Брак», where units returned damaged go; nothing sells there.
+    damaged_returns: bool
 
 
 @router.get("/stock-locations", response_model=list[LocationResponse])
@@ -44,6 +46,7 @@ async def list_locations(
             is_active=location.is_active,
             can_sell=location.can_sell,
             can_receive=location.can_receive,
+            damaged_returns=location.damaged_returns,
         )
         for location in locations
     ]

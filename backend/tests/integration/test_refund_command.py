@@ -40,7 +40,7 @@ from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import CanonicalConcept
 from app.modules.inventory.models import Inventory, MovementType, StockMovement
 from app.modules.inventory.service import find_divergences
-from app.modules.refunds.models import Refund, RefundItem
+from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
 from app.modules.refunds.service import RefundLineInput, create_refund
 from app.modules.sales.models import Sale, SaleStatus
 from app.modules.tenancy.models import Store, StoreKind
@@ -169,7 +169,13 @@ def refund_body(
     payload: dict[str, Any] = {
         "command_id": command_id or str(uuid.uuid4()),
         "lines": [
-            {"sale_item_id": sale_item_id, "quantity": quantity, "restock": restock}
+            {
+                "sale_item_id": sale_item_id,
+                "quantity": quantity,
+                "restock": restock,
+                # Goods that came back are stated intact unless a test says so.
+                **({"condition": "INTACT"} if restock else {}),
+            }
             for sale_item_id, quantity, restock in lines
         ],
     }
@@ -831,6 +837,7 @@ async def test_an_unsupported_line_field_is_refused(maker):
                         "sale_item_id": sold.line()["id"],
                         "quantity": 1,
                         "restock": True,
+                        "condition": "INTACT",
                         "amount": "1.00",
                     }
                 ],
@@ -979,7 +986,14 @@ async def test_two_simultaneous_refunds_of_one_line_cannot_both_succeed(
                     scope=scope,
                     sale_id=uuid.UUID(sold.sale_id),
                     command_id=uuid.uuid4(),
-                    lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+                    lines=[
+                        RefundLineInput(
+                            sale_item_id=item_id,
+                            quantity=1,
+                            restock=True,
+                            condition=ReturnCondition.INTACT,
+                        )
+                    ],
                 )
             except RefundExceedsSoldError:
                 await session.rollback()
@@ -993,7 +1007,11 @@ async def test_two_simultaneous_refunds_of_one_line_cannot_both_succeed(
             scope=scope,
             sale_id=uuid.UUID(sold.sale_id),
             command_id=uuid.uuid4(),
-            lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+            lines=[
+                RefundLineInput(
+                    sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
+                )
+            ],
         )
         task = asyncio.create_task(contender())
         try:
@@ -1035,7 +1053,14 @@ async def test_many_racing_refunds_return_exactly_what_was_sold(
                     scope=scope,
                     sale_id=uuid.UUID(sold.sale_id),
                     command_id=uuid.uuid4(),
-                    lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+                    lines=[
+                        RefundLineInput(
+                            sale_item_id=item_id,
+                            quantity=1,
+                            restock=True,
+                            condition=ReturnCondition.INTACT,
+                        )
+                    ],
                 )
             except RefundExceedsSoldError:
                 await session.rollback()
@@ -1082,7 +1107,14 @@ async def test_a_refund_and_a_sale_of_the_same_item_agree_on_the_ledger(
                     scope=scope,
                     sale_id=uuid.UUID(sold.sale_id),
                     command_id=uuid.uuid4(),
-                    lines=[RefundLineInput(sale_item_id=item_id, quantity=2, restock=True)],
+                    lines=[
+                        RefundLineInput(
+                            sale_item_id=item_id,
+                            quantity=2,
+                            restock=True,
+                            condition=ReturnCondition.INTACT,
+                        )
+                    ],
                 )
                 await session.commit()
 
@@ -1145,7 +1177,14 @@ async def test_the_service_refuses_what_the_schema_refuses(
                 scope=shop.scope(),
                 sale_id=sale_id,
                 command_id=uuid.uuid4(),
-                lines=[RefundLineInput(sale_item_id=item_id, quantity=0, restock=True)],
+                lines=[
+                    RefundLineInput(
+                        sale_item_id=item_id,
+                        quantity=0,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
+                ],
             )
         with pytest.raises(ValidationFailedError):
             await create_refund(
@@ -1153,7 +1192,14 @@ async def test_the_service_refuses_what_the_schema_refuses(
                 scope=shop.scope(),
                 sale_id=sale_id,
                 command_id=uuid.uuid4(),
-                lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+                lines=[
+                    RefundLineInput(
+                        sale_item_id=item_id,
+                        quantity=1,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
+                ],
                 reason="x" * 1001,
             )
         with pytest.raises(PermissionDeniedError):
@@ -1162,7 +1208,14 @@ async def test_the_service_refuses_what_the_schema_refuses(
                 scope=shop.scope(SELLER - {Permission.SALE_REFUND}),
                 sale_id=sale_id,
                 command_id=uuid.uuid4(),
-                lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+                lines=[
+                    RefundLineInput(
+                        sale_item_id=item_id,
+                        quantity=1,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
+                ],
             )
         await session.rollback()
 
@@ -1356,7 +1409,14 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
                 scope=scope,
                 sale_id=uuid.UUID(sale["id"]),
                 command_id=uuid.uuid4(),
-                lines=[RefundLineInput(sale_item_id=second_line, quantity=1, restock=True)],
+                lines=[
+                    RefundLineInput(
+                        sale_item_id=second_line,
+                        quantity=1,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
+                ],
             )
             await session.commit()
 
@@ -1366,7 +1426,14 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
             scope=scope,
             sale_id=uuid.UUID(sale["id"]),
             command_id=uuid.uuid4(),
-            lines=[RefundLineInput(sale_item_id=first_line, quantity=1, restock=True)],
+            lines=[
+                RefundLineInput(
+                    sale_item_id=first_line,
+                    quantity=1,
+                    restock=True,
+                    condition=ReturnCondition.INTACT,
+                )
+            ],
         )
         task = asyncio.create_task(other_line())
         try:
@@ -1416,7 +1483,11 @@ async def test_the_same_command_arriving_twice_at_once_is_serialized(
             scope=scope,
             sale_id=uuid.UUID(sold.sale_id),
             command_id=command_id,
-            lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+            lines=[
+                RefundLineInput(
+                    sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
+                )
+            ],
         )
 
     async def retry() -> str:
@@ -1631,7 +1702,12 @@ async def test_a_quantity_that_is_not_an_integer_is_refused(maker, quantity):
             {
                 "command_id": str(uuid.uuid4()),
                 "lines": [
-                    {"sale_item_id": sold.line()["id"], "quantity": quantity, "restock": True}
+                    {
+                        "sale_item_id": sold.line()["id"],
+                        "quantity": quantity,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
                 ],
             },
         )
@@ -1668,7 +1744,12 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                 sale_id=sale_id,
                 command_id=uuid.uuid4(),
                 lines=[
-                    RefundLineInput(sale_item_id=uuid.uuid4(), quantity=1, restock=True)
+                    RefundLineInput(
+                        sale_item_id=uuid.uuid4(),
+                        quantity=1,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
                     for _ in range(101)
                 ],
             )
@@ -1691,7 +1772,11 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
             scope=shop.scope(),
             sale_id=sale_id,
             command_id=command_id,
-            lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+            lines=[
+                RefundLineInput(
+                    sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
+                )
+            ],
         )
         await session.commit()
 
@@ -1702,7 +1787,14 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                 scope=shop.scope(SELLER - {Permission.SALE_REFUND}),
                 sale_id=sale_id,
                 command_id=command_id,
-                lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+                lines=[
+                    RefundLineInput(
+                        sale_item_id=item_id,
+                        quantity=1,
+                        restock=True,
+                        condition=ReturnCondition.INTACT,
+                    )
+                ],
             )
         await session.rollback()
 
@@ -1714,7 +1806,11 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
             scope=shop.scope(SELLER - {Permission.SALE_VIEW}),
             sale_id=sale_id,
             command_id=command_id,
-            lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock=True)],
+            lines=[
+                RefundLineInput(
+                    sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
+                )
+            ],
         )
         assert replayed.refund.command_id == command_id
         await session.rollback()
@@ -1802,7 +1898,9 @@ async def test_a_lone_surrogate_is_refused_not_crashed(maker):
             headers={**key(), "Content-Type": "application/json"},
             content=(
                 '{"command_id": "' + str(uuid.uuid4()) + '", "reason": "\\ud800", "lines": '
-                '[{"sale_item_id": "' + sold.line()["id"] + '", "quantity": 1, "restock": true}]}'
+                '[{"sale_item_id": "'
+                + sold.line()["id"]
+                + '", "quantity": 1, "restock": true, "condition": "INTACT"}]}'
             ).encode(),
         )
         assert response.status_code == 422, f"{response.status_code}: {response.text[:300]}"

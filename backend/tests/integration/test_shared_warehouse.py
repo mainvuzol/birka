@@ -587,7 +587,14 @@ async def test_a_return_restocks_the_warehouse_the_goods_were_sold_from(maker):
             f"/api/v1/sales/{sale['id']}/refunds",
             json={
                 "command_id": str(uuid.uuid4()),
-                "lines": [{"sale_item_id": sale["items"][0]["id"], "quantity": 1, "restock": True}],
+                "lines": [
+                    {
+                        "sale_item_id": sale["items"][0]["id"],
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
+                ],
             },
             headers=key(),
         )
@@ -635,7 +642,14 @@ async def test_a_return_is_refused_when_the_store_cannot_receive_at_that_warehou
             f"/api/v1/sales/{sale['id']}/refunds",
             json={
                 "command_id": str(uuid.uuid4()),
-                "lines": [{"sale_item_id": sale["items"][0]["id"], "quantity": 1, "restock": True}],
+                "lines": [
+                    {
+                        "sale_item_id": sale["items"][0]["id"],
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
+                ],
             },
             headers=key(),
         )
@@ -726,7 +740,7 @@ async def test_one_refund_returns_each_line_to_the_warehouse_it_came_from(maker)
             json={
                 "command_id": str(uuid.uuid4()),
                 "lines": [
-                    {"sale_item_id": item_id, "quantity": 1, "restock": True}
+                    {"sale_item_id": item_id, "quantity": 1, "restock": True, "condition": "INTACT"}
                     for item_id in sold_from
                 ],
             },
@@ -767,7 +781,14 @@ async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
         ).json()
         refund_body = {
             "command_id": str(uuid.uuid4()),
-            "lines": [{"sale_item_id": sale["items"][0]["id"], "quantity": 1, "restock": True}],
+            "lines": [
+                {
+                    "sale_item_id": sale["items"][0]["id"],
+                    "quantity": 1,
+                    "restock": True,
+                    "condition": "INTACT",
+                }
+            ],
         }
         headers = key()
         first = await client.post(
@@ -795,7 +816,14 @@ async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
             f"/api/v1/sales/{sale['id']}/refunds",
             json={
                 "command_id": str(uuid.uuid4()),
-                "lines": [{"sale_item_id": sale["items"][0]["id"], "quantity": 1, "restock": True}],
+                "lines": [
+                    {
+                        "sale_item_id": sale["items"][0]["id"],
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
+                ],
             },
             headers=key(),
         )

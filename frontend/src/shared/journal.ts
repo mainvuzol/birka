@@ -11,6 +11,9 @@ import { api, ApiError } from "@/shared/api";
  * identical attempt returns the original answer however late it arrives —
  * even after the 7-day cache is gone — so resending *is* the recovery.
  *
+ * A return at the till (`@/returns/commands`) uses it too: its path names the
+ * sale, and what is sent leaves out what the journal keeps only for itself.
+ *
  * The till keeps its own journal (`@/sales/commands`): a sale is read back by
  * its id once acknowledged, which these commands have no need for.
  */
@@ -62,13 +65,16 @@ export function journal<
   Result,
 >({
   path,
+  payload = (body) => body,
   scope,
   isBody,
   corrupt,
   unfinished,
 }: {
-  /** Where the command is sent, e.g. `/inventory/receipts`. */
-  path: string;
+  /** Where the command is sent, e.g. `/inventory/receipts`, or where this one is. */
+  path: string | ((body: Body) => string);
+  /** What is sent, when it is not the whole body the journal keeps. */
+  payload?: (body: Body) => unknown;
   /** The storage key's prefix: `birka:<scope>:<organization>:<user>:<store>`. */
   scope: string;
   /** Every field of the body, checked; `store_id` and `command_id` are checked here. */
@@ -150,7 +156,12 @@ export function journal<
       current = { ...current, ambiguous: true };
       use.setState({ pending: current });
       localStorage.setItem(storageKey, JSON.stringify(current));
-      const result = await api<Result>(path, token, current.body, current.key);
+      const result = await api<Result>(
+        typeof path === "string" ? path : path(current.body),
+        token,
+        payload(current.body),
+        current.key,
+      );
       localStorage.removeItem(storageKey);
       use.setState({ pending: null });
       return { kind: "done", result };

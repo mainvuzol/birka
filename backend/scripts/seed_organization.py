@@ -4,6 +4,8 @@ Run against a migrated database:
     python -m scripts.seed_organization --telegram-user-id 123456789
 
 Add --with-child-warehouse to create an optional SECOND-only warehouse.
+Each store also gets its own «Брак», where units returned damaged go and
+nothing is sold (owner decision, 2026-10-01).
 Existing warehouses without a recorded bootstrap mapping require explicit
 operator setup; their codes and names never imply authority. Repeating setup
 preserves grants (including revocation), paused warehouses and quantities.
@@ -38,6 +40,7 @@ from app.modules.tenancy.models import (
 
 SHARED_ACTION = "bootstrap.shared_warehouse.v1"
 CHILD_ACTION = "bootstrap.child_warehouse.v1"
+DAMAGED_ACTION = "bootstrap.damaged_returns.v1"
 
 
 class BootstrapConflictError(ValueError):
@@ -136,6 +139,77 @@ async def _create_warehouse(
     )
 
 
+async def _ensure_damaged_returns(
+    session: AsyncSession, *, org_id: uuid.UUID, stores: dict[str, uuid.UUID]
+) -> None:
+    """Each store's own «Брак» (owner decision, 2026-10-01): a warehouse the
+    store receives damaged returns into and never sells from.
+
+    Created once per store and recorded. A recorded one is never created
+    again, even if an operator later revoked or changed its grant: repeating
+    setup preserves what was changed by hand. A store someone already gave a
+    «Брак» by hand keeps it.
+    """
+    recorded = {
+        (entry.after or {}).get("store_id")
+        for entry in await session.scalars(
+            select(AuditLog).where(
+                AuditLog.organization_id == org_id, AuditLog.action == DAMAGED_ACTION
+            )
+        )
+    }
+    for role, store_id in stores.items():
+        if str(store_id) in recorded or await session.scalar(
+            select(StoreLocationAccess.id).where(
+                StoreLocationAccess.store_id == store_id,
+                StoreLocationAccess.damaged_returns.is_(True),
+            )
+        ):
+            continue
+        code = f"BOOTSTRAP-DAMAGED-{role}"
+        if await session.scalar(
+            select(StockLocation.id).where(
+                StockLocation.organization_id == org_id, StockLocation.code == code
+            )
+        ):
+            raise BootstrapConflictError(
+                f"Warehouse {code} exists but is not recorded as a store's «Брак»; "
+                "set it up explicitly"
+            )
+        store = await session.get(Store, store_id)
+        if store is None:
+            raise BootstrapConflictError(
+                "Bootstrap targets changed; explicit operator setup required"
+            )
+        location = StockLocation(organization_id=org_id, code=code, name=f"Брак — {store.name}")
+        session.add(location)
+        await session.flush()
+        session.add(
+            StoreLocationAccess(
+                organization_id=org_id,
+                store_id=store_id,
+                location_id=location.id,
+                can_sell=False,
+                can_receive=True,
+                damaged_returns=True,
+            )
+        )
+        await audit.record(
+            session,
+            organization_id=org_id,
+            actor_user_id=None,
+            action=DAMAGED_ACTION,
+            entity_type="stock_location",
+            entity_id=location.id,
+            after={
+                "store_id": str(store_id),
+                "location_id": str(location.id),
+                "access": {"can_sell": False, "can_receive": True, "damaged_returns": True},
+            },
+            reason="Explicit CLI organization bootstrap; no stock was created or moved",
+        )
+
+
 async def seed_in_session(
     session: AsyncSession,
     *,
@@ -207,7 +281,7 @@ async def seed_in_session(
             # code is not proof, and creating a second warehouse would hide that.
             recorded_locations = select(AuditLog.entity_id).where(
                 AuditLog.organization_id == organization.id,
-                AuditLog.action.in_([SHARED_ACTION, CHILD_ACTION]),
+                AuditLog.action.in_([SHARED_ACTION, CHILD_ACTION, DAMAGED_ACTION]),
                 AuditLog.entity_id.is_not(None),
             )
             if await session.scalar(
@@ -224,6 +298,10 @@ async def seed_in_session(
             await _create_warehouse(
                 session, org_id=organization.id, main_id=main_id, child_id=child_id, child=True
             )
+
+    await _ensure_damaged_returns(
+        session, org_id=organization.id, stores={"MAIN": main_id, "SECOND": child_id}
+    )
 
     roles = await seed_default_roles(session, organization.id)
     await _lock(session, f"birka:bootstrap:telegram-user:{telegram_user_id}")

@@ -126,6 +126,21 @@ class RefundExceedsSoldError(DomainError):
     message = "Refund exceeds the quantity originally sold"
 
 
+class DamagedReturnsUnavailableError(DomainError):
+    """A unit came back damaged, and the store has nowhere to put it.
+
+    The owner decided on 2026-10-01 that a damaged unit goes to the store's
+    own «Брак», where nothing sells. `details.reason` says why it cannot:
+    `NOT_SET_UP` — the store has no «Брак» yet; `SOLD_FROM` — some store sells
+    from the warehouse marked as it, so damaged goods would be back on sale.
+    Nothing is written; set the warehouse up, then take the return.
+    """
+
+    code = "DAMAGED_RETURNS_UNAVAILABLE"
+    http_status = 409
+    message = "The store has no «Брак» warehouse to take damaged goods"
+
+
 class CatalogAmbiguousError(DomainError):
     code = "CATALOG_AMBIGUOUS"
     http_status = 409
@@ -201,6 +216,7 @@ __all__ = [
     "AuthenticationFailedError",
     "CatalogAmbiguousError",
     "CorrectionExceedsShortfallError",
+    "DamagedReturnsUnavailableError",
     "DomainError",
     "ForbiddenStoreError",
     "IdempotencyConflictError",
