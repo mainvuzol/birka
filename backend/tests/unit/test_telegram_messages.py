@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from aiogram.client.session.base import BaseSession
+from scripts.backup_watch import sender
 
 from app.modules.telegram.messages import MAX_TEXT, UndeliverableError, send_message
 
@@ -62,7 +63,18 @@ async def test_a_message_goes_as_plain_text_to_the_persons_chat():
     assert request.chat_id == 42
     assert request.text == "⚠️ <b>not markup</b>"
     assert request.parse_mode is None
+    assert request.disable_notification is False
     assert telegram.closed
+
+
+async def test_the_backup_watcher_sends_without_a_sound():
+    """Owner decision, 2026-10-01: a failed night must not wake anyone; the
+    owner reads the «Резервні копії» section."""
+    telegram = delivered()
+    await sender(TOKEN, session=telegram)(42, "⚠️ Нічна резервна копія не вдалася.")
+    [request] = telegram.requests
+    assert request.disable_notification is True
+    assert request.chat_id == 42
 
 
 async def test_a_message_longer_than_telegram_takes_is_cut_not_refused():

@@ -80,23 +80,25 @@ Telegram. The following are how, chosen to be safe and easy to change:
 - **At least once rather than at most once.** A duplicate warning is a
   nuisance; a missing one is what this exists to prevent.
 
-**For the owner to decide, if it matters:** the job runs at 03:15, so a
-failed night's message arrives at night with a notification. It could
-instead be sent silently, or held until morning.
+**Decided by the owner on 2026-10-01:** every backup message is sent
+**silently**, without a sound or a vibration, whatever the hour. The job runs
+at 03:15, and a failed night must not wake anyone; the owner looks at the
+section to see what went wrong (business-rules.md).
 
 ## Evidence
 
-- **Backend: 1033 passed, 1 skipped** (the `age` test, run by CI). 40 are
+- **Backend: 1034 passed, 1 skipped** (the `age` test, run by CI). 41 are
   new:
   - 13 for the state and the words;
-  - 8 for the Telegram client;
+  - 9 for the Telegram client, one of them that the watcher sends silently;
   - 17 for recording, queuing, sending, the section and the migration;
   - 1 for the owner-only permission;
   - 1 freezing `0017`, which has shipped.
 - **The Telegram client is tested against Telegram's own answers**, played
   through aiogram's response handling: 403 and «chat not found» are final,
   while 429, 5xx and a bad token are worth another try. The text goes as
-  plain text, so nothing in it is read as markup.
+  plain text, so nothing in it is read as markup, and the watcher's
+  messages go with `disable_notification`.
 - **E2E: 61 passed against the real API**, 5 of them new, on a Pixel 7
   profile. The seed gives the owner a failed night, two good ones and a
   message Telegram refused. The tests prove:
@@ -113,7 +115,7 @@ instead be sent silently, or held until morning.
   back up is lossless. Frontend lint, types and build pass, with 0
   advisories.
 
-**Mutation testing — twenty-three, twenty-three caught.**
+**Mutation testing — twenty-four, twenty-four caught.**
 
 | Mutation | Caught by |
 |---|---|
@@ -130,6 +132,7 @@ instead be sent silently, or held until morning.
 | Messages are not locked while sent | the two-watchers test |
 | Telegram's 403 is taken as worth retrying | the client's refusal tests |
 | The message may be read as markup | the plain-text test |
+| The watcher's messages make a sound | the silent-sender test |
 | The section is open to anyone | the owner-only API test |
 | A grant for one store opens the section | the same |
 | A night that could not be recorded passes | the cannot-back-up test |

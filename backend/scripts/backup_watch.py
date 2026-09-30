@@ -11,7 +11,9 @@ from cron: a schedule that stopped is exactly what it has to notice, and the
 nightly job cannot report a night it never ran.
 
 It needs the database and the bot token. It sends to people holding
-`backup:view` organization-wide, in their private chat with the bot.
+`backup:view` organization-wide, in their private chat with the bot, and
+always silently: the owner decided on 2026-10-01 that a failed night must not
+wake anyone, and that they look at the «Резервні копії» section themselves.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import signal
 import sys
 from datetime import UTC, datetime
 
+from aiogram.client.session.base import BaseSession
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
@@ -37,6 +40,11 @@ from app.modules.telegram.messages import send_message
 logger = get_logger(__name__)
 
 EVERY_SECONDS = 600
+
+
+def sender(token: str, *, session: BaseSession | None = None) -> Send:
+    """The bot, sending without a sound (owner decision, 2026-10-01)."""
+    return functools.partial(send_message, token, silent=True, session=session)
 
 
 async def look(maker: async_sessionmaker[AsyncSession], send: Send, now: datetime) -> None:
@@ -52,7 +60,7 @@ async def look(maker: async_sessionmaker[AsyncSession], send: Send, now: datetim
 async def watch(settings: Settings, every: float) -> None:
     engine = create_engine(settings)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    send = functools.partial(send_message, settings.telegram_bot_token.get_secret_value())
+    send = sender(settings.telegram_bot_token.get_secret_value())
     stop = asyncio.Event()
     # PID 1 in a container ignores SIGTERM unless it asks for it.
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, stop.set)

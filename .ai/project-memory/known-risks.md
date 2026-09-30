@@ -197,9 +197,9 @@ daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
     owner who opens it.
   - **A message may arrive twice** if the watcher dies between sending it and
     recording it. Chosen over the opposite risk: a warning that never comes.
-  - **Messages come when the night fails, at night.** The job runs at
-    03:15; the message follows within ten minutes, with a notification. Not
-    asked of the owner (see the report).
+  - **Messages are silent** (owner decision, 2026-10-01): nothing wakes
+    anyone at 03:15, and a warning is seen only when the owner looks at the
+    bot's chat or the section. The tab's «⚠» is there for that.
   - **Not run in production and not sent to a real Telegram.** The Telegram
     client is tested against Telegram's own answers played back, not the
     network.

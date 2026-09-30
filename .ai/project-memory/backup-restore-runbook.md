@@ -73,8 +73,10 @@ minutes it reads the nights in `backup_run` and decides:
 - **Who is told:** everyone holding `backup:view` organization-wide — the
   owner's role by default. A grant for one store is not enough: a backup is
   of the whole server.
-- **Where:** the person's private chat with the shop's bot. Telegram lets a
-  bot write only to someone who has pressed «Start» in its chat. If Telegram
+- **Where:** the person's private chat with the shop's bot, **silently** —
+  no sound, whatever the hour (owner decision, 2026-10-01): the owner reads
+  the section. Telegram lets a bot write only to someone who has pressed
+  «Start» in its chat. If Telegram
   refuses, the section says so and how to fix it.
 - **The section** «Резервні копії» shows the state, what failed in words,
   the last good copy, the last 14 nights, and whether the last message
