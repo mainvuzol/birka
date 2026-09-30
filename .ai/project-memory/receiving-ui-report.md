@@ -121,6 +121,9 @@ No migration, no change to any stock or money rule.
   the screen says so when a search finds nothing.
 - **Two journals now share one protocol**, written twice (`@/sales/commands`,
   `./receiptCommands`). Extract it when a third appears, not before.
+  *Done 2026-09-30:* the stock correction was the third, and receipts and
+  corrections now share `@/shared/journal`; the till keeps its own, since a
+  sale is read back by id.
 - PostgreSQL 17 not re-run for this change set; no migration, no
   version-sensitive SQL.
 

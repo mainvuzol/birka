@@ -453,11 +453,21 @@ async def _apply_movements(
         session, keys=[(r.location_id, r.product_variant_id, r.size_id) for r in requests]
     )
     for request in requests:
+        key = (request.location_id, request.product_variant_id, request.size_id)
         if request.movement_type in {
             MovementType.ADJUSTMENT,
             MovementType.STOCKTAKE_CORRECTION,
-        } and reserved.get((request.location_id, request.product_variant_id, request.size_id), 0):
-            raise ValidationFailedError("Release reservations before correcting this stock key")
+        } and reserved.get(key, 0):
+            # Shaped as the till's refusal is, so a client can say which
+            # order holds the stock rather than only this sentence.
+            raise ValidationFailedError(
+                "Release reservations before correcting this stock key",
+                reason="RESERVED",
+                location_id=str(key[0]),
+                product_variant_id=str(key[1]),
+                size_id=str(key[2]),
+                reserved=reserved[key],
+            )
 
     applied: list[AppliedMovement] = []
 

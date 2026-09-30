@@ -99,6 +99,21 @@ class InsufficientStockError(DomainError):
     message = "Not enough stock for this operation"
 
 
+class StockChangedError(DomainError):
+    """A count was made against a balance that has since moved.
+
+    A stocktake states a count, and the client turns it into a change against
+    the balance it showed. If a sale, a receipt or another correction moved
+    that balance in between, the same change would record a shortage or a
+    surplus nobody observed — so the correction is refused and nothing is
+    written. `details` carry `expected` and `actual`; count again.
+    """
+
+    code = "STOCK_CHANGED"
+    http_status = 409
+    message = "The balance changed after it was counted; count again"
+
+
 class CorrectionExceedsShortfallError(DomainError):
     code = "CORRECTION_EXCEEDS_SHORTFALL"
     http_status = 422

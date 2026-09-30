@@ -440,6 +440,17 @@ test("a store that reaches one sellable warehouse does not ask which", async ({
 });
 
 test("two sellable warehouses are still chosen explicitly", async ({ page }) => {
+  // Exactly two, whatever else the fixture provisions for other specs.
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    const response = await route.fetch();
+    const rows = (await response.json()) as { id: string }[];
+    await route.fulfill({
+      response,
+      json: rows.filter((row) =>
+        [fixture.location_id, fixture.till_location_id].includes(row.id),
+      ),
+    });
+  });
   await stubStock(page, 4);
   await enter(page);
   const warehouse = page.getByRole("combobox", { name: "Склад", exact: true });
