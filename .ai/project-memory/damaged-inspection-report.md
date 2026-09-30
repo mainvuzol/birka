@@ -105,6 +105,15 @@ AWAITING ──take──▶ INSPECTING ──back on sale──▶ RETURNED
   - someone else getting there first;
   - the permission;
   - the stock screen.
+- **A flaky journey fixed on the way.** On this PR's first CI run, a size
+  journey from PR #42 failed once: "Response has been disposed". After a sale
+  the app reads the shelf again, and the test's route handler was still
+  answering that request when the page closed. Every spec now imports `test`
+  from `e2e/fixtures.ts`. It waits for running route handlers before the
+  context closes, and ESLint refuses Playwright's own `test` in a spec.
+  - With the handler held back, the plain `test` cut off the second answer.
+    The fixture let both finish.
+  - The full suite passed twice on a fresh seed.
 - **Gates:** ruff, format, mypy and all 19 import contracts are clean (two
   new). `alembic check` reports no drift. The downgrade to base and back up
   is lossless. Frontend lint and types pass.
@@ -148,7 +157,9 @@ AWAITING ──take──▶ INSPECTING ──back on sale──▶ RETURNED
     frozen migrations list.
 - Frontend:
   - new: `src/damaged/` and `e2e/damaged.spec.ts`;
-  - changed: `App.tsx`, `Stock.tsx`, `Returns.tsx` and `styles.css`.
+  - changed: `App.tsx`, `Stock.tsx`, `Returns.tsx` and `styles.css`;
+  - E2E: new `e2e/fixtures.ts`, each spec's `test` import, and a rule in
+    `eslint.config.js`.
 - Docs:
   - business rules and the risk register;
   - ADR-0001 and ADR-0004 (amendments);

@@ -15,4 +15,22 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "error",
     },
   },
+  {
+    files: ["e2e/**/*.spec.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test"],
+              message:
+                "Import test from ./fixtures: it lets route handlers answer before the page closes.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
