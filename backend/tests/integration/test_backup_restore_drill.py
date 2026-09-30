@@ -102,6 +102,22 @@ def failed(report: dict) -> dict[str, str]:
     return {check["name"]: check["detail"] for check in report["checks"] if not check["ok"]}
 
 
+async def recorded(database: Database) -> list[dict]:
+    """The nights `backup_run` holds, which is what the owner is shown."""
+    engine = create_async_engine(database.url, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.execute(
+                text(
+                    "SELECT ok, archive, archive_bytes, drill_ok, problems "
+                    "FROM backup_run ORDER BY finished_at"
+                )
+            )
+            return [dict(row._mapping) for row in rows]
+    finally:
+        await engine.dispose()
+
+
 async def test_a_backup_restores_and_proves_it_is_the_same_data(source, tmp_path):
     database, _ = source
     server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
@@ -310,6 +326,15 @@ async def test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps(sourc
     assert not old.exists(), "retention removed the old night"
     assert "birka-20250105T030000Z.dump.age" in result["pruned"]
     assert json.loads((tmp_path / "last-run.json").read_text()) == result
+    assert await recorded(database) == [
+        {
+            "ok": True,
+            "archive": result["archive"],
+            "archive_bytes": (tmp_path / result["archive"]).stat().st_size,
+            "drill_ok": True,
+            "problems": [],
+        }
+    ]
 
 
 async def test_a_night_without_the_owners_key_fails_and_deletes_nothing(source, tmp_path):
@@ -321,10 +346,14 @@ async def test_a_night_without_the_owners_key_fails_and_deletes_nothing(source, 
     result = await nightly(database, server, tmp_path, recipients=[])
 
     assert not result["ok"]
-    assert any("not encrypted" in problem for problem in result["problems"])
+    assert [problem["step"] for problem in result["problems"]] == ["key"]
+    assert "not encrypted" in result["problems"][0]["detail"]
     assert result["pruned"] == []
     assert old.exists()
     assert (tmp_path / result["archive"]).exists(), "the night's backup is still kept"
+    [night] = await recorded(database)
+    assert night["ok"] is False
+    assert night["problems"] == result["problems"]
 
 
 async def test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing(source, tmp_path):
@@ -345,9 +374,16 @@ async def test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing(so
 
     assert not result["ok"]
     assert result["drill"]["failed"] == ["ledger"]
+    [problem] = result["problems"]
+    assert problem["step"] == "drill"
+    assert problem["checks"] == ["ledger"]
     assert result["pruned"] == []
     assert old.exists()
     assert (tmp_path / result["archive"]).exists()
+    [night] = await recorded(database)
+    assert night["ok"] is False
+    assert night["drill_ok"] is False
+    assert night["problems"] == result["problems"]
 
 
 async def test_a_night_that_cannot_back_up_says_so(tmp_path):
@@ -358,7 +394,9 @@ async def test_a_night_that_cannot_back_up_says_so(tmp_path):
     result = await nightly(missing, server, tmp_path, recipients=[], allow_plaintext=True)
 
     assert not result["ok"]
-    assert result["problems"][0].startswith("backup failed:")
+    # Nor can it be recorded where the owner would see it: the database is
+    # not there. The watcher sees a missing night as an overdue one.
+    assert [problem["step"] for problem in result["problems"]] == ["backup", "record"]
     assert json.loads((tmp_path / "last-run.json").read_text())["ok"] is False
 
 

@@ -68,6 +68,8 @@ EXPECTED_MANAGER = EXPECTED_SELLER | {
 EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.SNAPSHOT_APPROVE,
     Permission.USER_MANAGE,
+    # Owner decision, 2026-09-30: backups are "a section only the owner sees".
+    Permission.BACKUP_VIEW,
 }
 
 
@@ -127,6 +129,13 @@ def test_only_owner_approves_snapshots_and_manages_users() -> None:
     assert Permission.SNAPSHOT_APPROVE not in manager
     assert Permission.SNAPSHOT_APPROVE in owner
     assert Permission.USER_MANAGE in owner
+
+
+def test_only_the_owner_sees_the_backups() -> None:
+    """Owner decision, 2026-09-30: the backups section is the owner's alone."""
+    assert Permission.BACKUP_VIEW in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
+    assert Permission.BACKUP_VIEW not in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
+    assert Permission.BACKUP_VIEW not in DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
 
 
 # --- scope -----------------------------------------------------------------

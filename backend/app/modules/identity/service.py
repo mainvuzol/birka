@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
 
 from sqlalchemy import select
@@ -70,6 +71,25 @@ async def assert_user_is_active(session: AsyncSession, user_id: uuid.UUID) -> Ap
     return user
 
 
+async def telegram_chats(
+    session: AsyncSession, user_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """The Telegram chat of each *active* user among `user_ids`.
+
+    A bot's private chat with a person has that person's Telegram user id.
+    A disabled account is left out: it no longer hears from the shop.
+    """
+    wanted = list(user_ids)
+    if not wanted:
+        return {}
+    rows = await session.execute(
+        select(AppUser.id, AppUser.telegram_user_id).where(
+            AppUser.id.in_(wanted), AppUser.is_active.is_(True)
+        )
+    )
+    return {row.id: row.telegram_user_id for row in rows}
+
+
 async def authenticate_with_init_data(
     session: AsyncSession,
     *,
@@ -115,4 +135,4 @@ async def authenticate_with_init_data(
     return token, user, scope
 
 
-__all__ = ["assert_user_is_active", "authenticate_with_init_data"]
+__all__ = ["assert_user_is_active", "authenticate_with_init_data", "telegram_chats"]

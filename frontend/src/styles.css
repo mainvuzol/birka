@@ -308,3 +308,31 @@ nav {
   gap: 8px;
   margin: 12px 0;
 }
+
+/* The owner's backups: one block for the verdict, one for Telegram, one for
+   the recent nights. A block that needs the owner is the notice colour. */
+.section-block {
+  border: 1px solid #dce1da;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+.section-block h3 {
+  margin-top: 0;
+}
+.badge.failed {
+  background: #fff0ec;
+  color: #943b27;
+}
+.nights {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.nights > li {
+  padding: 8px 0;
+  border-top: 1px solid #edf0ea;
+}
+.nights > li:first-child {
+  border-top: 0;
+}

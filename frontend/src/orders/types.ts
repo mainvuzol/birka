@@ -8,6 +8,8 @@ export interface Me {
   user_id: string;
   organization_id: string;
   display_name: string;
+  /** Held organization-wide, such as `backup:view`, which no store grants. */
+  organization_permissions: string[];
   stores: Store[];
 }
 export interface Location {

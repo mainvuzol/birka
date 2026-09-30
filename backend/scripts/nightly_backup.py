@@ -22,8 +22,10 @@ Without `BIRKA_BACKUP_AGE_RECIPIENTS` the night fails: the owner decided
 copies leave the server encrypted, and an unencrypted night is not that.
 `--allow-plaintext` exists for tests and first setup only.
 
-Every night ends with `last-run.json` in the directory and exit status 0
-only if everything above held.
+Every night ends with `last-run.json` in the directory, and with one row in
+the database's `backup_run` — the only thing it ever writes there — which is
+how the owner's «Резервні копії» section and the Telegram warning learn of it
+(`scripts.backup_watch`). Exit status 0 only if everything above held.
 """
 
 from __future__ import annotations
@@ -41,6 +43,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from app.modules.backups.service import record_night
 from scripts.backup_database import back_up, sha256
 from scripts.postgres_tools import Database, ToolError, run
 from scripts.restore_drill import drill
@@ -178,14 +184,17 @@ async def nightly(
 ) -> dict[str, Any]:
     started = (now or datetime.now(UTC)).astimezone(UTC)
     result: dict[str, Any] = {"started_at": started.isoformat(), "ok": False, "problems": []}
-    problems: list[str] = result["problems"]
+    # One `{"step", "detail"}` for each step that failed, in the order they
+    # ran: `backup`, `drill` (with the failed `checks`), `encrypt`, `key`,
+    # and `record` when the night could not be written to the database.
+    problems: list[dict[str, Any]] = result["problems"]
     # Every failure below is reported in last-run.json; none is hidden, and
     # none is raised past it, so the night always leaves its record.
     try:
         manifest = await back_up(source, out, now=started)
     except Exception as error:
-        problems.append(f"backup failed: {error}")
-        return _record(out, result)
+        problems.append({"step": "backup", "detail": str(error)})
+        return await _record(source, out, result)
     stem = manifest["archive"].removesuffix(".dump")
     archive = out / manifest["archive"]
     result["archive"] = manifest["archive"]
@@ -197,20 +206,29 @@ async def nightly(
     except Exception as error:
         report = {"ok": False, "checks": [], "error": str(error)}
     (out / f"{stem}.drill.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    failed = [check for check in report.get("checks", []) if not check["ok"]]
     result["drill"] = {
         "ok": report["ok"],
         "restore_seconds": report.get("restore_seconds"),
-        "failed": [c["name"] for c in report.get("checks", []) if not c["ok"]]
-        or ([report["error"]] if "error" in report else []),
+        "failed": [check["name"] for check in failed],
     }
     if not report["ok"]:
-        problems.append(f"restore drill failed: {result['drill']['failed']}")
+        problems.append(
+            {
+                "step": "drill",
+                "checks": [check["name"] for check in failed],
+                "detail": report.get("error")
+                or "; ".join(f"{check['name']}: {check['detail']}" for check in failed),
+            }
+        )
 
     if recipients:
         try:
             sealed = await encrypt(archive, recipients)
         except (ToolError, OSError) as error:
-            problems.append(f"encryption failed, the plaintext is kept: {error}")
+            problems.append(
+                {"step": "encrypt", "detail": f"encryption failed, the plaintext is kept: {error}"}
+            )
         else:
             manifest.update(
                 encrypted_archive=sealed.name,
@@ -222,21 +240,43 @@ async def nightly(
                 json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
             )
             result["archive"] = sealed.name
+            result["bytes"] = manifest["encrypted_bytes"]
     elif not allow_plaintext:
         problems.append(
-            "not encrypted: BIRKA_BACKUP_AGE_RECIPIENTS is not set, and copies leave the "
-            "server only encrypted (owner decision, 2026-09-30)"
+            {
+                "step": "key",
+                "detail": "not encrypted: BIRKA_BACKUP_AGE_RECIPIENTS is not set, and copies "
+                "leave the server only encrypted (owner decision, 2026-09-30)",
+            }
         )
 
     result["ok"] = not problems
     # Only after a good night: a failing job must never delete the copies
     # that came before it.
     result["pruned"] = prune(out, started) if result["ok"] else []
-    return _record(out, result)
+    return await _record(source, out, result)
 
 
-def _record(out: Path, result: dict[str, Any]) -> dict[str, Any]:
+async def remember(source: Database, result: dict[str, Any]) -> None:
+    """The night's row in `backup_run`, for the owner's section and warning."""
+    engine = create_async_engine(source.url, poolclass=NullPool)
+    try:
+        async with AsyncSession(engine) as session:
+            await record_night(session, result)
+    finally:
+        await engine.dispose()
+
+
+async def _record(source: Database, out: Path, result: dict[str, Any]) -> dict[str, Any]:
     result["finished_at"] = datetime.now(UTC).isoformat()
+    try:
+        await remember(source, result)
+    except Exception as error:
+        # The owner is not told of this night, so it has not held. The
+        # watcher still notices: a night missing from the database is an
+        # overdue one.
+        result["problems"].append({"step": "record", "detail": str(error)})
+        result["ok"] = False
     written = out / ".last-run.json.partial"
     written.write_text(json.dumps(result, ensure_ascii=False, indent=2))
     written.rename(out / "last-run.json")

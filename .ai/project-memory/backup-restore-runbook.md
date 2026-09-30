@@ -5,10 +5,12 @@ Status: tooling built and verified on 2026-09-30 (M1-028), see the
 retention, off-server copies and alerting the same day (business-rules.md,
 "backups").
 
-**Not done yet:**
-- the steps below have not been carried out on a production server;
-- backup status does not yet reach the owner in the app or in Telegram (the
-  next change).
+**Not done yet:** the steps below have not been carried out on a production
+server.
+
+The owner hears of every failed or missing night in the app and in Telegram
+since the same day; see [how the owner hears of it](#how-the-owner-hears-of-it)
+and the [alerts report](m1-028-backup-alerts-report.md).
 
 ## The policy
 
@@ -41,7 +43,10 @@ retention, off-server copies and alerting the same day (business-rules.md,
    delete the plaintext. The server can make a copy it can never read back.
 4. **Keep what the policy keeps**, and delete the rest. Only files this
    script named; never the newest; **never on a night that failed**.
-5. **Write `last-run.json`.** Exit 0 only if every step held.
+5. **Write `last-run.json`, and the night's row in `backup_run`** — the one
+   thing the job writes to the database, and what the owner's section and
+   the Telegram message read. A night that cannot write its row has not
+   held. Exit 0 only if every step held.
 
 A night fails without the owner's public key. A night whose drill fails still
 keeps its backup: a drill that fails on the data has found a problem in the
@@ -52,6 +57,37 @@ data, and the copy is still the best one there is.
   the password manager too. A lost session secret only signs everybody out; a
   lost bot token is reissued by @BotFather.
 - Caddy's certificates, which it reissues.
+
+## How the owner hears of it
+
+The `backup-watch` service runs beside the app, restarted by Docker. Every 10
+minutes it reads the nights in `backup_run` and decides:
+
+| State | When | Telegram |
+|---|---|---|
+| OK | the newest night held, and ended less than 26 hours ago | nothing; after a warning, one «✅ знову працює» |
+| FAILED | the newest night did not hold | once for that night, with what failed |
+| OVERDUE | no night at all for 26 hours: cron, the ops image, or the database is broken | once, then once a day while it lasts |
+| NOT_SET_UP | no night was ever recorded | once a day until the first one |
+
+- **Who is told:** everyone holding `backup:view` organization-wide — the
+  owner's role by default. A grant for one store is not enough: a backup is
+  of the whole server.
+- **Where:** the person's private chat with the shop's bot. Telegram lets a
+  bot write only to someone who has pressed «Start» in its chat. If Telegram
+  refuses, the section says so and how to fix it.
+- **The section** «Резервні копії» shows the state, what failed in words,
+  the last good copy, the last 14 nights, and whether the last message
+  reached the person reading.
+- **Each message is recorded before it is sent**, once per person, so it
+  goes out once however often the watcher looks. One that fails to send is
+  tried five times, then given up and shown as failed in the section.
+
+From the server, the state now:
+
+```sh
+docker compose run --rm backup-watch python -m scripts.backup_watch --status   # exit 0 only if OK
+```
 
 ## Setting it up
 
@@ -83,7 +119,13 @@ mkdir -p backups && sudo chown 10001 backups       # the image's user
 docker compose --profile ops build ops             # again after every deploy
 docker compose --profile ops run --rm ops          # the first night, by hand
 cat backups/last-run.json                          # "ok": true
+docker compose up -d backup-watch                  # with the app; `up -d` starts it too
+docker compose run --rm backup-watch python -m scripts.backup_watch --status
 ```
+
+The owner then opens the shop's bot in Telegram and presses «Start» once, so
+the bot may write to them. The «Резервні копії» section shows whether the
+last message got through.
 
 Schedule it, in root's crontab:
 

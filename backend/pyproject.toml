@@ -324,3 +324,66 @@ source_modules = [
     "app.modules.transfers",
 ]
 forbidden_modules = ["app.modules.snapshots"]
+
+# M1-028: the owner hears about the server's backups (ADR-0001, 2026-09-30
+# amendment). `backups → authz, identity, telegram, core`: it asks authz who
+# holds `backup:view`, identity for their Telegram chats, and sends through
+# telegram. It reads no shop's business — a backup is of the whole server —
+# and no module imports it: only the API and the scripts that run the nights
+# and the watcher.
+[[tool.importlinter.contracts]]
+name = "backups reads no shop's business"
+type = "forbidden"
+source_modules = ["app.modules.backups"]
+forbidden_modules = [
+    "app.modules.catalog",
+    "app.modules.inventory",
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+    "app.modules.audit",
+    "app.modules.tenancy",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "nothing depends on the backups section"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.catalog",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.backups"]
+
+# ADR-0001 names `telegram → identity, core`. Today it only sends a message,
+# and needs neither: it must not grow a way into the shop's data.
+[[tool.importlinter.contracts]]
+name = "telegram only talks to Telegram"
+type = "forbidden"
+source_modules = ["app.modules.telegram"]
+forbidden_modules = [
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.catalog",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
