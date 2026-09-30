@@ -187,6 +187,11 @@ current order. Do not clear that journal to recover an uncertain operation;
 restore access/connectivity and retry. Payment tracking remains separate.
 See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
 
+Every Playwright journey also runs in CI (job `e2e`) on every push and pull
+request. It uses the real API and PostgreSQL 17 with the production locale,
+on a Pixel 7 profile. The job's steps are the recipe for a local run; see the
+[E2E in CI report](.ai/project-memory/m1-027-e2e-ci-report.md).
+
 
 ## Catalog parser preview (M1-020)
 
