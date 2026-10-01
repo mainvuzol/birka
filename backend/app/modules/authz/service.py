@@ -8,7 +8,7 @@ from collections import defaultdict
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import AuthenticationFailedError
+from app.core.errors import AuthenticationFailedError, NoAccessError
 from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.authz.scope import RequestScope
@@ -35,7 +35,7 @@ def _coerce(codes: list[str]) -> frozenset[Permission]:
 async def resolve_scope(session: AsyncSession, user_id: uuid.UUID) -> RequestScope:
     """Build the request scope from the user's active memberships.
 
-    Raises `AuthenticationFailedError` when the user has no active membership: an
+    Raises `NoAccessError` when the user has no active membership: an
     authenticated Telegram account with no membership is not a user of this
     system.
     """
@@ -70,7 +70,7 @@ async def resolve_scope(session: AsyncSession, user_id: uuid.UUID) -> RequestSco
     )
     rows = (await session.execute(stmt)).all()
     if not rows:
-        raise AuthenticationFailedError("User has no active membership")
+        raise NoAccessError()
 
     organization_ids = {row.organization_id for row in rows}
     if len(organization_ids) > 1:

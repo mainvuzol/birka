@@ -7,6 +7,23 @@ export function telegramInitData(): string | null {
   return hash.get("tgWebAppData") ?? query.get("tgWebAppData");
 }
 
+/**
+ * The Telegram account number in the launch data, unverified: shown only to
+ * its own holder, to pass on so they can be given access.
+ */
+export function telegramUserId(): number | null {
+  const initData = telegramInitData();
+  if (!initData) return null;
+  try {
+    const user = JSON.parse(
+      new URLSearchParams(initData).get("user") ?? "null",
+    ) as { id?: unknown } | null;
+    return typeof user?.id === "number" ? user.id : null;
+  } catch {
+    return null;
+  }
+}
+
 function applyTheme(theme: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(theme)) {
     if (

@@ -45,6 +45,8 @@ export async function api<T>(
 export function errorText(error: unknown): string {
   if (!(error instanceof ApiError))
     return "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.";
+  if (error.code === "NO_ACCESS")
+    return "Доступ до магазину закрито. Зверніться до власника.";
   if (error.status === 401)
     return "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.";
   if (error.status === 403)

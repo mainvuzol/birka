@@ -249,3 +249,19 @@ same day: intact back where it was sold, damaged to the store's own «Брак»
   return is refused there with `DAMAGED_RETURNS_UNAVAILABLE`, and says so.
 - **A return goes only through the store that sold.** Returns from another
   store remain an open owner question.
+
+## People — 2026-10-01
+
+See the [report](people-report.md). The owner decided that people are added
+on the server, on an owner's word.
+
+- **The approval is a record, not authentication.** Whoever can run
+  `scripts.people` can name any owner with `--approved-by`. Access to the
+  server is the real lock, as it already is for the database itself.
+- **The owner sees who has access only through the administrator** (`list`
+  on the server). That is the owner's choice.
+- **Turning a person off ends their memberships in this organization, not
+  their account.** `app_user.is_active` exists and nothing sets it.
+- **The last owner of every store cannot be removed or turned off.** This is
+  a safety guard of our own, not an owner rule. If the only such owner
+  leaves, `seed_organization` on the server is the way back.

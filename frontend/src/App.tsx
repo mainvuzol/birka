@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
-import { connectTelegram, telegramInitData } from "@/shared/telegram";
+import { api, ApiError, errorText } from "@/shared/api";
+import {
+  connectTelegram,
+  telegramInitData,
+  telegramUserId,
+} from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
 import { decimal, kopecks, money, statusLabels } from "@/orders/types";
@@ -70,6 +74,30 @@ export function App(): JSX.Element {
       <main>
         <h1>birka</h1>
         <p role="status">Входимо в магазин…</p>
+      </main>
+    );
+  if (auth.error instanceof ApiError && auth.error.code === "NO_ACCESS")
+    return (
+      <main>
+        <h1>birka</h1>
+        <h2>Доступу ще немає</h2>
+        <p role="alert">
+          Цей акаунт Telegram не має доступу до жодного магазину.
+        </p>
+        {/* People are added on the server, by this number, on the owner's
+            word (owner decision, 2026-10-01). */}
+        <p>
+          Ваш номер у Telegram: <strong>{telegramUserId() ?? "—"}</strong>.
+          Передайте його власнику магазину. Коли вас додадуть, натисніть
+          «Спробувати ще раз».
+        </p>
+        <button
+          onClick={() => {
+            void auth.refetch();
+          }}
+        >
+          Спробувати ще раз
+        </button>
       </main>
     );
   if (auth.error)
