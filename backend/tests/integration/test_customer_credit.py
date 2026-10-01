@@ -245,6 +245,24 @@ async def test_returned_goods_first_lower_the_debt(maker):
         assert await find_divergences(session, organization_id=shops.organization_id) == []
 
 
+async def test_the_store_sales_say_which_were_paid_in_parts(maker):
+    shops = await make_two_shops(maker)
+    sale, variant, size = await on_credit(maker, shops)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        ordinary = await client.post(
+            "/api/v1/sales",
+            json=sale_body(shops.primary_store, shops.shared_warehouse, variant, size),
+            headers=key(),
+        )
+        assert ordinary.status_code == 201, ordinary.text
+        listed = await client.get("/api/v1/sales", params={"store_id": str(shops.primary_store)})
+
+    # Where a seller finds the sale being returned: the till cannot say up
+    # front what goes back in cash for one paid in parts.
+    flags = {item["id"]: item["paid_in_parts"] for item in listed.json()["sales"]}
+    assert flags == {sale["id"]: True, ordinary.json()["id"]: False}
+
+
 async def test_a_paid_off_sale_gives_back_what_it_is_worth(maker):
     shops = await make_two_shops(maker)
     sale, _, _ = await on_credit(maker, shops)

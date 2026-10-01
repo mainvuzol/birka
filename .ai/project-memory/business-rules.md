@@ -316,4 +316,5 @@ How it is carried out, not decided by the owner:
 - **The phone is kept out of the audit log and the receipt.**
 
 Server side built on 2026-10-01; see the [credit report](customer-credit-report.md).
-The screens follow.
+The screens were built the same day; see the
+[credit screens report](credit-screens-report.md).

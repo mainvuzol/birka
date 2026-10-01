@@ -553,6 +553,17 @@ async def credit_for_sale(session: AsyncSession, *, sale_id: uuid.UUID) -> Credi
     return None if credit is None else await view(session, credit)
 
 
+async def credited_sales(session: AsyncSession, *, sale_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+    """Which of these sales were paid in parts: a return of one lowers its
+    debt first, so the till cannot say up front what goes back in cash."""
+    if not sale_ids:
+        return set()
+    rows = await session.scalars(
+        select(CustomerCredit.sale_id).where(CustomerCredit.sale_id.in_(sale_ids))
+    )
+    return set(rows.all())
+
+
 async def list_credits(
     session: AsyncSession,
     *,
@@ -595,6 +606,7 @@ __all__ = [
     "Entry",
     "ReturnSettlement",
     "credit_for_sale",
+    "credited_sales",
     "fingerprint_of",
     "list_credits",
     "open_credit",

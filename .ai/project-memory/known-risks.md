@@ -305,8 +305,11 @@ See the [report](opening-stock-screen-report.md).
 See the [credit report](customer-credit-report.md).
 
 - **A return of a sale paid in parts must hand back `cash_back`, not
-  `total_amount`.** The returns screen does not know that yet. It will, with
-  the credit screens. No such sale can be made from the app before then.
+  `total_amount`.** The returns screen now says so, and says nothing about
+  cash until the server has answered. See the
+  [credit screens report](credit-screens-report.md).
+- **A customer with two debts shows as two.** Nothing groups debts by
+  customer, and nothing totals what is owed. Not asked.
 - **What is owed is the agreed amount less the ledger's rows.** A written-off
   debt shows nothing owed whatever its rows add up to. A later return only
   ever pays back cash actually paid.

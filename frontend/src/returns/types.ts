@@ -17,6 +17,11 @@ export interface SaleSummary {
   sold_at: string;
   currency_code: string;
   total: string;
+  /**
+   * Paid in parts: a return lowers the debt first, and the refund's answer
+   * says how much goes back in cash.
+   */
+  paid_in_parts: boolean;
   items: SaleLine[];
 }
 
@@ -58,6 +63,19 @@ export interface Refund {
     destination_location_id: string | null;
     display_name: string;
   }[];
+  /** For a sale paid in parts: how the goods' worth was settled. */
+  credit?: CreditSettlement | null;
+}
+
+/**
+ * Returned goods first lower what is owed; money goes back only when the
+ * customer has paid more than the goods they keep are worth (owner decision,
+ * 2026-10-01).
+ */
+export interface CreditSettlement {
+  debt_reduced: string;
+  cash_back: string;
+  owed_after: string;
 }
 
 export function sizeLabel(size: string | null): string {

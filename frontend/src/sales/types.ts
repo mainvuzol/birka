@@ -36,6 +36,25 @@ export interface Sale {
   corrections: string[];
   shortages: string[];
   size_reclassifications: string[];
+  /** A sale paid in parts: what was paid now and what is owed. */
+  credit?: SaleCredit | null;
+}
+
+/**
+ * What a sale paid in parts left owing (owner decisions, 2026-10-01). No name
+ * or phone: a receipt is read more widely than the store's debts are.
+ */
+export interface SaleCredit {
+  credit_id: string;
+  paid_now: string;
+  owed: string;
+}
+
+/** The customer takes the goods now, pays `paid_now` and owes the rest. */
+export interface CreditTerms {
+  customer_name: string;
+  customer_phone: string;
+  paid_now: string;
 }
 
 /**

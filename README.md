@@ -152,9 +152,12 @@ that sold (owner decisions, 2026-10-01). `POST /sales` takes
 - **Write-offs:** the owner writes a debt off at
   `POST /api/v1/credits/{id}/write-off`, with a reason.
 - **Returns:** a return's answer says how much lowers the debt and how much
-  goes back in cash.
+  goes back in cash. `GET /sales` says which sales were `paid_in_parts`.
 
-See the [credit report](.ai/project-memory/customer-credit-report.md).
+In the app: «Оплата частинами» at the till, and a «Борги» section for
+`sale:credit`. Only `credit:write_off` writes a debt off. See the
+[credit report](.ai/project-memory/customer-credit-report.md) and the
+[credit screens report](.ai/project-memory/credit-screens-report.md).
 
 ## Customer orders
 

@@ -208,6 +208,17 @@ textarea {
   padding-top: 12px;
   font-size: 20px;
 }
+.debt {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0;
+}
+.debt dd {
+  margin: 0;
+  text-align: right;
+}
 .notice {
   background: #fff3d6;
   border-color: #e5c36b;
