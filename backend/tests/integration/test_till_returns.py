@@ -417,9 +417,9 @@ async def test_returns_taken_before_conditions_were_asked_keep_no_condition(make
     async with maker() as session:
         await session.execute(
             text(
-                "INSERT INTO refund (id, organization_id, store_id, sale_id, actor_user_id, "
-                "command_id, total_amount, currency_code, created_at) VALUES (:id, :org, :store, "
-                ":sale, :user, :command, 0, 'UAH', now())"
+                "INSERT INTO refund (id, organization_id, store_id, taken_at_store_id, sale_id, "
+                "actor_user_id, command_id, total_amount, currency_code, created_at) VALUES (:id, "
+                ":org, :store, :store, :sale, :user, :command, 0, 'UAH', now())"
             ),
             {
                 "id": (refund_id := uuid.uuid4()),

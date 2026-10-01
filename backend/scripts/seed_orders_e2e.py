@@ -81,6 +81,15 @@ async def main() -> None:
         # A sixth that nothing has ever moved in: the one warehouse a stock
         # list may still be approved into (ADR-0005 §5), once per seed.
         opening = StockLocation(organization_id=org.id, name="Новий склад", code="E2E-OPENING")
+        # A second store of the network, with its own warehouse, that also
+        # sells from the returns warehouse: where goods come from that are
+        # taken back at the first (owner decisions, 2026-10-01).
+        second = Store(
+            organization_id=org.id, name="Другий", code="SECOND", kind=StoreKind.SECONDARY
+        )
+        second_own = StockLocation(
+            organization_id=org.id, name="Склад другого магазину", code="E2E-SECOND"
+        )
         concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
@@ -100,6 +109,8 @@ async def main() -> None:
                 returns,
                 damaged,
                 opening,
+                second,
+                second_own,
                 concept,
                 system,
                 user,
@@ -137,6 +148,16 @@ async def main() -> None:
                 damaged_returns=True,
             )
         )
+        for reachable in (second_own, returns):
+            session.add(
+                StoreLocationAccess(
+                    organization_id=org.id,
+                    store_id=second.id,
+                    location_id=reachable.id,
+                    can_sell=True,
+                    can_receive=True,
+                )
+            )
         await session.flush()
         await apply_movements(
             session,
@@ -160,13 +181,19 @@ async def main() -> None:
         session.add_all(
             [RolePermission(role_id=role.id, permission_code=p.value) for p in Permission]
         )
-        session.add(
-            Membership(
-                user_id=user.id,
-                organization_id=org.id,
-                store_id=store.id,
-                role_id=role.id,
-            )
+        # «Оля» works in both stores, as she did when there was one: the
+        # shared price is set by whoever holds `catalog:set_price` in every
+        # store. What a return taken at one store reaches is that store's.
+        session.add_all(
+            [
+                Membership(
+                    user_id=user.id,
+                    organization_id=org.id,
+                    store_id=shop.id,
+                    role_id=role.id,
+                )
+                for shop in (store, second)
+            ]
         )
         owner = await seed_backups(session, organization_id=org.id, role_id=role.id)
         data = {
@@ -180,6 +207,8 @@ async def main() -> None:
             "returns_location_id": str(returns.id),
             "bin_location_id": str(damaged.id),
             "opening_location_id": str(opening.id),
+            "second_store_id": str(second.id),
+            "second_location_id": str(second_own.id),
             "variant_id": str(variant.id),
             "size_id": str(size.id),
         }

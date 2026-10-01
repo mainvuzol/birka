@@ -117,6 +117,39 @@ async def damaged_returns_locations(
     )
 
 
+async def store_names(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    if not store_ids:
+        return {}
+    rows = await session.execute(
+        select(Store.id, Store.name).where(
+            Store.organization_id == organization_id, Store.id.in_(store_ids)
+        )
+    )
+    return {row.id: row.name for row in rows}
+
+
+async def back_on_sale_locations(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Where this store may put goods back on sale: the warehouses it receives
+    into, never a «Брак». Goods taken back where they were not sold go to the
+    warehouse they were sold from if this store reaches it, and otherwise to
+    one of these (owner decision, 2026-10-01)."""
+    receiving = set(
+        await accessible_locations(
+            session,
+            organization_id=organization_id,
+            store_id=store_id,
+            capability=LocationCapability.RECEIVE,
+        )
+    )
+    return receiving - await damaged_returns_locations(
+        session, organization_id=organization_id, location_ids=receiving
+    )
+
+
 async def sold_from(
     session: AsyncSession, *, organization_id: uuid.UUID, location_id: uuid.UUID
 ) -> bool:

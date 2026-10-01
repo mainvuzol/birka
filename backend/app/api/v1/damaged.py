@@ -25,7 +25,7 @@ from app.core.text import CleanText
 from app.modules.damaged import service as damaged
 from app.modules.damaged.models import DamagedUnit
 from app.modules.identity.service import display_names
-from app.modules.tenancy.service import location_names
+from app.modules.tenancy.service import back_on_sale_locations, location_names
 
 router = APIRouter(prefix="/damaged-units", tags=["damaged"])
 
@@ -43,6 +43,9 @@ class DamagedUnitResponse(BaseModel):
     # Where it goes if it goes back on sale: the warehouse it was sold from.
     sold_from_location_id: uuid.UUID
     sold_from_location_name: str
+    # False for a unit handed back at a store that does not reach that
+    # warehouse: it then goes to one of this store's that the person chooses.
+    back_to_sold_from: bool = True
     note: str | None
 
 
@@ -54,7 +57,8 @@ class ReturnToSaleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # The warehouse the person was shown and confirmed. It must still be the
-    # one the unit was sold from.
+    # one the unit was sold from — or, where the store does not reach that
+    # one, one of the store's own they chose.
     destination_location_id: uuid.UUID
 
 
@@ -75,6 +79,12 @@ async def _shaped(
         organization_id=organization_id,
         location_ids={unit.sold_from_location_id for unit in units},
     )
+    reached = {
+        store_id: await back_on_sale_locations(
+            session, organization_id=organization_id, store_id=store_id
+        )
+        for store_id in {unit.store_id for unit in units}
+    }
     return [
         DamagedUnitResponse(
             id=unit.id,
@@ -86,6 +96,7 @@ async def _shaped(
             status_at=unit.status_at,
             sold_from_location_id=unit.sold_from_location_id,
             sold_from_location_name=places.get(unit.sold_from_location_id, ""),
+            back_to_sold_from=unit.sold_from_location_id in reached[unit.store_id],
             note=unit.note,
         )
         for unit in units

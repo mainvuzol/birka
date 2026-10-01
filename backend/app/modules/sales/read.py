@@ -1,7 +1,9 @@
 """A store's sales, newest first, as a seller looks one up to take a return.
 
 The owner decided on 2026-10-01 that a seller finds the sale being returned
-in the store's list of sales, searchable by the goods' name. Everything here
+in the store's list of sales, searchable by the goods' name — and, since any
+store of the network may take goods back, among the other stores' sales,
+found only by a search. Everything here
 is read from the frozen receipt — the name and size the seller saw — never
 from the catalog as it is now.
 """
@@ -34,11 +36,14 @@ async def list_sales(
     query: str | None,
     limit: int,
     offset: int,
+    elsewhere: bool = False,
 ) -> SalePage:
     """One page of the store's sales, newest first; with `query`, only sales
-    with a line whose name contains it, in any letter case."""
+    with a line whose name contains it, in any letter case. `elsewhere` reads
+    every other store's of the organization instead."""
     statement = select(Sale).where(
-        Sale.organization_id == organization_id, Sale.store_id == store_id
+        Sale.organization_id == organization_id,
+        Sale.store_id != store_id if elsewhere else Sale.store_id == store_id,
     )
     wanted = (query or "").strip().lower()[:MAX_QUERY]
     if wanted:

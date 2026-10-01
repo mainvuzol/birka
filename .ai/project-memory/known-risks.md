@@ -248,7 +248,8 @@ same day: intact back where it was sold, damaged to the store's own «Брак»
   `seed_organization`**, as a new, recorded warehouse. Until then a damaged
   return is refused there with `DAMAGED_RETURNS_UNAVAILABLE`, and says so.
 - **A return goes only through the store that sold.** Returns from another
-  store remain an open owner question.
+  store remain an open owner question. *Built later the same day; see
+  "returns at another store" below.*
 
 ## People — 2026-10-01
 
@@ -318,3 +319,20 @@ See the [credit report](customer-credit-report.md).
 - **The customers' phones are personal data.** Everyone holding `sale:credit`
   in the store sees them, as the owner chose, and so do the backups. They are
   kept out of the audit log, the logs and the receipt.
+
+## Returns at another store — 2026-10-01
+
+See the [report](returns-elsewhere-report.md).
+
+- **A seller sees another store's sales in a search.** Whoever takes returns
+  in their store may search the network's sales by the goods' name, as the
+  owner chose. A search shows the goods, prices and dates, never a
+  customer's name or phone.
+- **Money paid out by one store for another's sale is recorded, not
+  settled.** Each return names the store that paid. Nothing yet adds up what
+  one store paid out for another, and nothing settles it between them.
+- **Goods may come back to a warehouse the selling store does not reach**,
+  when the seller chooses one. It is recorded on the return and in the
+  ledger.
+- **A closed store's own returns keep the old rule.** It may refund without
+  restocking. Taking back another store's goods there is refused.

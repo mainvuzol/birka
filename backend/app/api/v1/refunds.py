@@ -6,17 +6,20 @@ with the same two jobs:
 * `Idempotency-Key` (header) — "give me the same answer" for 7 days;
 * `command_id` (body) — "this is the same business operation", forever.
 
-The store is **not** in the request. A refund happens where the sale happened;
-letting a client name the store would either be redundant or would quietly
-restock one shop from another shop's receipt, which is a transfer and has to
-be an explicit one (invariant I16).
+The store taking the goods back is in the request only when it is not the
+one that sold: any store of the network may take them back, and it is the one
+that hands the money back (owner decisions, 2026-10-01). Its own authority
+decides, never the selling store's.
 
 The money is not in the request either. How many units come back is the
 client's to say; what they are worth was decided when they were sold.
 
-Nor is where the goods go. The client says whether each unit came back intact
-or damaged; intact goes back where it was sold from, and damaged to the
-store's own «Брак» (owner decision, 2026-10-01).
+Nor, as a rule, is where the goods go. The client says whether each unit came
+back intact or damaged; intact goes back where it was sold from, and damaged
+to the «Брак» of the store taking it (owner decisions, 2026-10-01). The one
+exception: taken back at a store that does not reach the warehouse it was
+sold from, an intact part goes to one of that store's own, which the seller
+chooses.
 """
 
 from __future__ import annotations
@@ -70,6 +73,9 @@ class RefundLinePayload(BaseModel):
     # 2026-09-15 §3 and 2026-10-01). A line coming back partly intact and
     # partly damaged is sent as two lines for the same `sale_item_id`.
     condition: Literal["INTACT", "DAMAGED"] | None = None
+    # Only for intact goods taken back at a store that does not reach the
+    # warehouse they were sold from: one of that store's own.
+    location_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _condition_goes_with_the_goods(self) -> RefundLinePayload:
@@ -88,6 +94,20 @@ class RefundRequest(BaseModel):
     command_id: uuid.UUID
     lines: list[RefundLinePayload] = Field(min_length=1, max_length=100)
     reason: CleanText | None = Field(default=None, max_length=1000)
+    # The store taking the goods back, when it is not the one that sold.
+    store_id: uuid.UUID | None = None
+
+    def fingerprinted(self) -> dict[str, object]:
+        """The body as its idempotency fingerprint reads it: what a request
+        that does not use the newer fields sends, it is fingerprinted as
+        before, so a retry from before them still matches."""
+        body = self.model_dump(mode="json")
+        if body["store_id"] is None:
+            del body["store_id"]
+        for line in body["lines"]:
+            if line["location_id"] is None:
+                del line["location_id"]
+        return body
 
 
 class RefundItemResponse(BaseModel):
@@ -120,7 +140,11 @@ class CreditSettlementResponse(BaseModel):
 class RefundResponse(BaseModel):
     id: uuid.UUID
     sale_id: uuid.UUID
+    # The store that sold.
     store_id: uuid.UUID
+    # The store that took the goods back and handed the money back. Absent
+    # from answers given before it was recorded, which were the same store.
+    taken_at_store_id: uuid.UUID | None = None
     currency_code: str
     total_amount: Decimal
     reason: str | None = None
@@ -138,6 +162,7 @@ def _to_response(result: RefundResult) -> RefundResponse:
         id=result.refund.id,
         sale_id=result.refund.sale_id,
         store_id=result.refund.store_id,
+        taken_at_store_id=result.refund.taken_at_store_id,
         currency_code=result.refund.currency_code,
         total_amount=result.refund.total_amount,
         reason=result.refund.reason,
@@ -189,7 +214,10 @@ async def create(
     # is consulted. The permission decision then happens before the idempotency
     # key is claimed, so a revoked grant cannot replay an earlier success
     # (invariant I13).
-    store_id = await sale_store_id(session, organization_id=scope.organization_id, sale_id=sale_id)
+    sold_at = await sale_store_id(session, organization_id=scope.organization_id, sale_id=sale_id)
+    # The store taking the goods back decides: any store of the network may
+    # (owner decisions, 2026-10-01).
+    store_id = payload.store_id or sold_at
     scope.require(Permission.SALE_REFUND, store_id)
     # Where restocked goods would go is a property of the sale, so it can be
     # resolved — and its access checked — before the key is claimed, keeping a
@@ -200,6 +228,7 @@ async def create(
             quantity=line.quantity,
             restock=line.restock,
             condition=ReturnCondition(line.condition) if line.condition else None,
+            location_id=line.location_id,
         )
         for line in payload.lines
     ]
@@ -228,7 +257,7 @@ async def create(
             # `sale_id` is a path parameter, so it has to be folded in by hand.
             # Without it the same key and body aimed at a different receipt
             # would replay this one's answer.
-            {"sale_id": str(sale_id), **payload.model_dump(mode="json")},
+            {"sale_id": str(sale_id), **payload.fingerprinted()},
             actor_user_id=scope.user_id,
             store_id=store_id,
         ),
@@ -250,6 +279,7 @@ async def create(
         lines=lines,
         reason=payload.reason,
         correlation_id=get_correlation_id(),
+        at_store_id=store_id,
     )
 
     body = (

@@ -267,6 +267,17 @@ written off. Stock in «Брак» changes through nothing else. See the
 [returns](.ai/project-memory/till-returns-report.md) and
 [«Брак»](.ai/project-memory/damaged-inspection-report.md) reports.
 
+**Returns at another store:** any store of the network takes back goods
+another one sold, and hands the money back.
+- **Finding the sale:** `GET /sales?store_id=<this store>&elsewhere=true&q=…`
+  searches the other stores' sales. It needs `sale:refund` and a search.
+- **Taking it back:** `POST /sales/{id}/refunds` with `store_id` names the
+  store taking the goods back. Intact goods go where they were sold from.
+  Where this store does not reach that warehouse, a line states `location_id`,
+  one of this store's own. Damaged goods go to this store's «Брак».
+- **The record:** a refund answers `taken_at_store_id`. See the
+  [report](.ai/project-memory/returns-elsewhere-report.md).
+
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it
 (`catalog:set_price`) where goods arrive and on the stock screen. It is one
