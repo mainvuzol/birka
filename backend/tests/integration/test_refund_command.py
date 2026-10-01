@@ -807,10 +807,13 @@ async def test_one_sale_line_may_appear_only_once(maker):
     "body_extra",
     [
         {"amount": "10.00"},
-        {"store_id": "8f14e45f-ceea-467a-9b72-7bd2f1f8a0aa"},
         {"total_amount": "1.00"},
     ],
 )
+# `store_id` was refused here until 2026-10-01: it now names the store taking
+# the goods back when another store sold them (owner decisions), and a store
+# the caller holds no grant in is refused by authority instead
+# (test_returns_elsewhere.py).
 async def test_an_unsupported_top_level_field_is_refused(maker, body_extra):
     """A client that thinks it can quote the refund amount must find out, not
     have the field silently dropped and be told a different number."""

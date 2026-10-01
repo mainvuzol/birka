@@ -32,7 +32,16 @@ serialization point because it is exactly what the invariant is about.
 sold from; damaged goes to the store's own «Брак», where nothing sells. One
 sale line may come back in parts, one per condition, and every part counts
 towards what is still returnable. The destination is derived — from the
-sale line, or from the store's setup — and never accepted from the client.
+sale line, or from the store's setup — and accepted from the client in one
+case only, below.
+
+**Any store of the network may take the goods back** (owner decisions,
+2026-10-01). The store taking them hands the money back and is recorded as
+`taken_at_store_id`; `store_id` stays the store that sold. Damaged goods go
+to the «Брак» of the store taking them, where they were handed back. Intact
+goods go back where they were sold from when that store reaches it; when it
+does not — another store's own warehouse — the seller chooses one of their
+own store's, and that choice is the one destination a client ever states.
 
 Lock order is fixed and identical in every path — the router's idempotency-row
 insert first (it blocks a concurrent inserter of the same key), then the
@@ -78,9 +87,11 @@ from app.modules.sales.models import Sale, SaleItem, SaleStatus
 from app.modules.sales.service import MAX_MONEY, money
 from app.modules.tenancy.service import (
     LocationCapability,
+    back_on_sale_locations,
     damaged_returns_location,
     sold_from,
     store_is_active,
+    validate_active_stores,
 )
 
 logger = get_logger(__name__)
@@ -105,6 +116,10 @@ class RefundLineInput:
     quantity: int
     restock: bool
     condition: ReturnCondition | None = None
+    # Where an intact part goes when the store taking it back does not reach
+    # the warehouse it was sold from, and only then (owner decision,
+    # 2026-10-01).
+    location_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,12 +198,18 @@ def _normalize(
                 sale_item_id=str(line.sale_item_id),
             )
         seen.add(part)
+        if line.location_id is not None and condition is not ReturnCondition.INTACT:
+            raise ValidationFailedError(
+                "Only intact goods coming back are put in a warehouse of one's choosing",
+                sale_item_id=str(line.sale_item_id),
+            )
         normalized.append(
             RefundLineInput(
                 sale_item_id=line.sale_item_id,
                 quantity=line.quantity,
                 restock=line.restock,
                 condition=condition,
+                location_id=line.location_id,
             )
         )
 
@@ -245,15 +266,72 @@ async def damaged_destination(
     return location
 
 
+async def _elsewhere(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale: Sale, taking: uuid.UUID
+) -> set[uuid.UUID] | None:
+    """Where the store taking goods back may put them back on sale, when it is
+    not the store that sold them; None when it is, and nothing changes."""
+    if taking == sale.store_id:
+        return None
+    # A store of this network, and trading: a closed one takes nothing back
+    # for another (its own sales keep the rule they had).
+    await validate_active_stores(session, organization_id=organization_id, store_ids={taking})
+    return await back_on_sale_locations(session, organization_id=organization_id, store_id=taking)
+
+
 def _destination(
-    line: RefundLineInput, sale_item: SaleItem, damaged: uuid.UUID | None
+    line: RefundLineInput,
+    sale_item: SaleItem,
+    damaged: uuid.UUID | None,
+    elsewhere: set[uuid.UUID] | None = None,
 ) -> uuid.UUID | None:
-    """Where this part goes: nowhere, back where it was sold from, or «Брак»."""
+    """Where this part goes: nowhere, «Брак», back where it was sold from, or
+    — taken back at a store that does not reach that warehouse — where the
+    seller chose."""
     if not line.restock:
         return None
     if line.condition is ReturnCondition.DAMAGED:
         return damaged
-    return sale_item.source_location_id
+    if elsewhere is None or sale_item.source_location_id in elsewhere:
+        return sale_item.source_location_id
+    return line.location_id
+
+
+def _check_choices(
+    lines: list[RefundLineInput],
+    sale_items: dict[uuid.UUID, SaleItem],
+    elsewhere: set[uuid.UUID] | None,
+) -> None:
+    """A warehouse is chosen exactly when the store taking the goods back does
+    not reach the one they were sold from, and is then one of its own."""
+    for line in lines:
+        sale_item = sale_items.get(line.sale_item_id)
+        if sale_item is None or not line.restock or line.condition is ReturnCondition.DAMAGED:
+            continue
+        sold_from_here = elsewhere is None or sale_item.source_location_id in elsewhere
+        if sold_from_here:
+            if line.location_id not in (None, sale_item.source_location_id):
+                raise ValidationFailedError(
+                    "Intact goods go back to the warehouse they were sold from",
+                    reason="SOLD_FROM",
+                    sale_item_id=str(line.sale_item_id),
+                    sold_from_location_id=str(sale_item.source_location_id),
+                )
+        elif line.location_id is None:
+            raise ValidationFailedError(
+                "This store does not reach the warehouse the goods were sold from; "
+                "choose one of its own",
+                reason="CHOOSE_A_WAREHOUSE",
+                sale_item_id=str(line.sale_item_id),
+                sold_from_location_id=str(sale_item.source_location_id),
+            )
+        elif elsewhere is not None and line.location_id not in elsewhere:
+            raise ValidationFailedError(
+                "Goods go back on sale in a warehouse this store receives into, never «Брак»",
+                reason="NOT_A_WAREHOUSE_OF_THIS_STORE",
+                sale_item_id=str(line.sale_item_id),
+                location_id=str(line.location_id),
+            )
 
 
 def _fingerprint(
@@ -264,6 +342,8 @@ def _fingerprint(
     reason: str | None,
     sale_items: dict[uuid.UUID, SaleItem],
     damaged: uuid.UUID | None,
+    taking: uuid.UUID,
+    elsewhere: set[uuid.UUID] | None,
 ) -> str:
     """Everything that makes this refund *this* refund.
 
@@ -294,9 +374,16 @@ def _fingerprint(
                 str(destination)
                 for line in lines
                 if line.sale_item_id in sale_items
-                and (destination := _destination(line, sale_items[line.sale_item_id], damaged))
+                and (
+                    destination := _destination(
+                        line, sale_items[line.sale_item_id], damaged, elsewhere
+                    )
+                )
                 is not None
             ),
+            # Only when taken at another store, so every earlier refund keeps
+            # the fingerprint it had.
+            **({"taken_at_store_id": str(taking)} if taking != sale.store_id else {}),
         },
         actor_user_id=scope.user_id,
         store_id=sale.store_id,
@@ -396,8 +483,8 @@ async def _existing_command(
         # reason: there is nothing to compare, and a retry is not something to
         # assume.
         details = {"command_id": str(command_id)}
-        if existing.store_id in scope.store_ids and scope.can(
-            Permission.SALE_REFUND, existing.store_id
+        if existing.taken_at_store_id in scope.store_ids and scope.can(
+            Permission.SALE_REFUND, existing.taken_at_store_id
         ):
             details["refund_id"] = str(existing.id)
         raise IdempotencyConflictError(
@@ -409,7 +496,7 @@ async def _existing_command(
     # The right to replay is the right to have issued the command, not a
     # stricter one: a client that timed out must be able to learn the outcome
     # of its own authorized refund (independent review, 2026-09-15).
-    scope.require(Permission.SALE_REFUND, existing.store_id)
+    scope.require(Permission.SALE_REFUND, existing.taken_at_store_id)
     return await _read_refund(session, existing)
 
 
@@ -422,8 +509,12 @@ async def create_refund(
     lines: list[RefundLineInput],
     reason: str | None = None,
     correlation_id: str | None = None,
+    at_store_id: uuid.UUID | None = None,
 ) -> RefundResult:
     """Take goods back against an existing sale, or raise and roll back.
+
+    `at_store_id` is the store taking them back, when it is not the one that
+    sold (owner decisions, 2026-10-01).
 
     Everything below commits together or not at all: the refund, its lines, the
     stock that came back, and the audit entry that explains it.
@@ -432,8 +523,10 @@ async def create_refund(
     sale = await _load_sale(session, organization_id=scope.organization_id, sale_id=sale_id)
 
     # Re-checked here even though the router already decided: this service is
-    # the command boundary for any caller that is not an HTTP request.
-    scope.require(Permission.SALE_REFUND, sale.store_id)
+    # the command boundary for any caller that is not an HTTP request. The
+    # authority is the store taking the goods back, whichever store sold.
+    taking = at_store_id or sale.store_id
+    scope.require(Permission.SALE_REFUND, taking)
 
     if sale.status is not SaleStatus.COMPLETED:
         # Nothing voids a sale yet. The guard is here so that when something
@@ -454,10 +547,14 @@ async def create_refund(
             await session.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id))
         ).all()
     }
+    elsewhere = await _elsewhere(
+        session, organization_id=scope.organization_id, sale=sale, taking=taking
+    )
+    _check_choices(lines, preview, elsewhere)
+    # Damaged goods stay where they were handed back: the «Брак» of the store
+    # taking them (owner decision, 2026-10-01).
     damaged = (
-        await damaged_destination(
-            session, organization_id=scope.organization_id, store_id=sale.store_id
-        )
+        await damaged_destination(session, organization_id=scope.organization_id, store_id=taking)
         if any(line.condition is ReturnCondition.DAMAGED for line in lines)
         else None
     )
@@ -465,17 +562,25 @@ async def create_refund(
         session,
         scope=scope,
         permission=Permission.SALE_REFUND,
-        store_id=sale.store_id,
+        store_id=taking,
         location_ids={
             destination
             for line in lines
             if line.sale_item_id in preview
-            and (destination := _destination(line, preview[line.sale_item_id], damaged)) is not None
+            and (destination := _destination(line, preview[line.sale_item_id], damaged, elsewhere))
+            is not None
         },
         capability=LocationCapability.RECEIVE,
     )
     request_fingerprint = _fingerprint(
-        scope=scope, sale=sale, lines=lines, reason=reason, sale_items=preview, damaged=damaged
+        scope=scope,
+        sale=sale,
+        lines=lines,
+        reason=reason,
+        sale_items=preview,
+        damaged=damaged,
+        taking=taking,
+        elsewhere=elsewhere,
     )
     existing = await _existing_command(
         session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
@@ -551,6 +656,7 @@ async def create_refund(
     refund = Refund(
         organization_id=scope.organization_id,
         store_id=sale.store_id,
+        taken_at_store_id=taking,
         sale_id=sale.id,
         actor_user_id=scope.user_id,
         command_id=command_id,
@@ -573,7 +679,9 @@ async def create_refund(
             amount=amount,
             restock=line.restock,
             condition=line.condition.value if line.condition else None,
-            destination_location_id=_destination(line, sale_items[line.sale_item_id], damaged),
+            destination_location_id=_destination(
+                line, sale_items[line.sale_item_id], damaged, elsewhere
+            ),
         )
         for line, amount in zip(lines, amounts, strict=True)
     ]
@@ -601,7 +709,7 @@ async def create_refund(
     # exception the owner made on 2026-10-01: a damaged unit goes to the
     # store's «Брак», so it is never back on sale.
     if restocked and not await store_is_active(
-        session, organization_id=scope.organization_id, store_id=sale.store_id
+        session, organization_id=scope.organization_id, store_id=taking
     ):
         # A closed store can give money back; it has no shelf to put goods on,
         # and inventing one would be stock in a store that is not trading.
@@ -616,7 +724,7 @@ async def create_refund(
         raise ValidationFailedError(
             "Goods cannot be returned to a store that is closed; "
             "refund without restocking, or reopen the store",
-            store_id=str(sale.store_id),
+            store_id=str(taking),
         )
     if restocked:
         await apply_movements(
@@ -625,7 +733,7 @@ async def create_refund(
             requests=[
                 MovementRequest(
                     location_id=item.destination_location_id,
-                    acting_store_id=sale.store_id,
+                    acting_store_id=taking,
                     product_variant_id=sale_items[line.sale_item_id].product_variant_id,
                     size_id=sale_items[line.sale_item_id].size_id,
                     quantity_delta=line.quantity,
@@ -652,7 +760,7 @@ async def create_refund(
         await register(
             session,
             organization_id=scope.organization_id,
-            store_id=sale.store_id,
+            store_id=taking,
             location_id=damaged,
             parts=[
                 DamagedPart(
@@ -686,6 +794,7 @@ async def create_refund(
             "refund_id": str(refund.id),
             "total_amount": str(refund.total_amount),
             "currency_code": refund.currency_code,
+            **({"taken_at_store_id": str(taking)} if taking != sale.store_id else {}),
             **(
                 {
                     "debt_reduced": str(credit.debt_reduced),
@@ -712,6 +821,7 @@ async def create_refund(
         refund_id=str(refund.id),
         sale_id=str(sale.id),
         store_id=str(sale.store_id),
+        taken_at_store_id=str(taking),
         lines=len(refund_items),
         restocked=len(restocked),
         total=str(refund.total_amount),
@@ -759,38 +869,50 @@ async def refund_destinations(
     store_id: uuid.UUID,
     lines: list[RefundLineInput],
 ) -> set[uuid.UUID]:
-    """Where the goods coming back would go: the warehouse each intact part
-    was sold from, and the store's «Брак» for damaged parts.
+    """Where the goods coming back would go, taken back at `store_id`: the
+    warehouse each intact part was sold from — or the one chosen, at a store
+    that does not reach it — and that store's «Брак» for damaged parts.
 
     Read from the sale and the store's setup, because that is where the
-    answer lives — the client never states a destination. Exposed so the
-    router can check the store's access to those warehouses *before* it
-    claims an idempotency key, which is what stops a revoked grant from
-    replaying a cached success.
+    answer lives. Exposed so the router can check the store's access to those
+    warehouses *before* it claims an idempotency key, which is what stops a
+    revoked grant from replaying a cached success.
 
-    Unknown ids are simply absent: the authoritative validation happens in the
-    command, under the sale's own row locks.
+    Unknown ids, and a choice that is missing or not allowed, are simply
+    absent: the authoritative validation happens in the command, under the
+    sale's own row locks.
     """
+    sale = await _load_sale(session, organization_id=organization_id, sale_id=sale_id)
+    elsewhere = await _elsewhere(
+        session, organization_id=organization_id, sale=sale, taking=store_id
+    )
     intact = {
         line.sale_item_id
         for line in lines
         if line.restock and line.condition is not ReturnCondition.DAMAGED
     }
-    destinations: set[uuid.UUID] = set()
-    if intact:
-        destinations |= set(
-            (
+    sale_items = (
+        {
+            item.id: item
+            for item in (
                 await session.scalars(
-                    select(SaleItem.source_location_id)
-                    .join(Sale, Sale.id == SaleItem.sale_id)
-                    .where(
-                        SaleItem.sale_id == sale_id,
-                        SaleItem.id.in_(intact),
-                        Sale.organization_id == organization_id,
-                    )
+                    select(SaleItem).where(SaleItem.sale_id == sale.id, SaleItem.id.in_(intact))
                 )
             ).all()
-        )
+        }
+        if intact
+        else {}
+    )
+    destinations = {
+        destination
+        for line in lines
+        if line.sale_item_id in sale_items
+        and line.condition is not ReturnCondition.DAMAGED
+        and (destination := _destination(line, sale_items[line.sale_item_id], None, elsewhere))
+        is not None
+        # A choice the command will refuse is not checked for access first.
+        and (elsewhere is None or destination in elsewhere)
+    }
     if any(line.restock and line.condition is ReturnCondition.DAMAGED for line in lines):
         destinations.add(
             await damaged_destination(session, organization_id=organization_id, store_id=store_id)

@@ -50,7 +50,7 @@ accepted.
 | **Moving goods between warehouses has no screen** | Not needed. Both stores sell from one shared warehouse (owner, 2026-10-01). Build it when a separate warehouse appears; the server side exists. |
 | **Store states** (blocked, archived), **payments and installments** | Owner decisions from 2026-09-15. They need the owner's rules before any code. |
 | **A return to the supplier** | Written off with a note until it has a step of its own. |
-| **Returns at another store** | An open owner question. A return goes through the store that sold. |
+| **Returns at another store** | Done on 2026-10-01 (owner decisions): any store of the network takes the goods back and hands the money back ([report](returns-elsewhere-report.md)). |
 | **Renaming a store** | Done on 2026-10-01 (owner decision): the seed takes the real names, and `scripts.stores rename` changes one on an owner's word. |
 | **Catalog: verified promotion and broader ambiguity resolution** (M1-021/022) | Needs human-confirmed evaluation data that does not exist yet. Review by a person works today. |
 | **Q5, confirming a transfer on arrival** | Transfers are single-step; nothing uses them yet. |

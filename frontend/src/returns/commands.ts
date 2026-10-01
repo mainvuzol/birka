@@ -16,7 +16,9 @@ function isPart(value: unknown): boolean {
     Number.isInteger(value.quantity) &&
     value.quantity > 0 &&
     value.restock === true &&
-    (value.condition === "INTACT" || value.condition === "DAMAGED")
+    (value.condition === "INTACT" || value.condition === "DAMAGED") &&
+    (value.location_id === undefined ||
+      (value.condition === "INTACT" && isId(value.location_id)))
   );
 }
 
@@ -26,11 +28,14 @@ const returns = journal<ReturnBody, Refund>({
     command_id: body.command_id,
     lines: body.lines,
     reason: body.reason,
+    // Taken back here, sold at another store of the network.
+    ...(body.elsewhere ? { store_id: body.store_id } : {}),
   }),
   scope: "return-pending",
   isBody: (body) =>
     isId(body.sale_id) &&
     (body.reason === null || typeof body.reason === "string") &&
+    (body.elsewhere === undefined || typeof body.elsewhere === "boolean") &&
     Array.isArray(body.lines) &&
     body.lines.length > 0 &&
     body.lines.every(isPart),

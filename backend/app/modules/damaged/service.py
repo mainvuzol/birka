@@ -52,7 +52,7 @@ from app.modules.authz.scope import RequestScope
 from app.modules.damaged.models import IN_BIN, DamagedStatus, DamagedUnit
 from app.modules.inventory.models import MovementReason
 from app.modules.inventory.service import record_adjustment
-from app.modules.tenancy.service import LocationCapability
+from app.modules.tenancy.service import LocationCapability, back_on_sale_locations
 from app.modules.transfers.service import TransferLineInput, move_goods
 
 logger = get_logger(__name__)
@@ -241,24 +241,34 @@ async def return_to_sale(
     correlation_id: str | None = None,
 ) -> DamagedUnit:
     """Back on sale, in the warehouse it was sold from — the one the person
-    was shown and confirmed, which must still be that one."""
+    was shown and confirmed, which must still be that one.
+
+    A unit handed back at a store that does not reach that warehouse — one
+    sold from another store's own — goes to a warehouse of this store's that
+    the person chooses instead, as intact goods taken back there do (owner
+    decision, 2026-10-01)."""
     unit = await _locked(session, scope=scope, unit_id=unit_id)
     if unit.status == DamagedStatus.RETURNED:
         return unit
     if unit.status != DamagedStatus.INSPECTING:
         _refuse(unit, DamagedStatus.INSPECTING)
     if destination_location_id != unit.sold_from_location_id:
-        raise ValidationFailedError(
-            "A unit goes back on sale only to the warehouse it was sold from",
-            damaged_unit_id=str(unit.id),
-            sold_from_location_id=str(unit.sold_from_location_id),
+        own = await back_on_sale_locations(
+            session, organization_id=scope.organization_id, store_id=unit.store_id
         )
+        if unit.sold_from_location_id in own or destination_location_id not in own:
+            raise ValidationFailedError(
+                "A unit goes back on sale only to the warehouse it was sold from, or — "
+                "where this store does not reach that one — to one of this store's own",
+                damaged_unit_id=str(unit.id),
+                sold_from_location_id=str(unit.sold_from_location_id),
+            )
     await require_stock_access(
         session,
         scope=scope,
         permission=Permission.DAMAGED_HANDLE,
         store_id=unit.store_id,
-        location_ids={unit.location_id, unit.sold_from_location_id},
+        location_ids={unit.location_id, destination_location_id},
         capability=LocationCapability.RECEIVE,
     )
     moved = await move_goods(
@@ -268,12 +278,12 @@ async def return_to_sale(
         store_id=unit.store_id,
         command_id=uuid.uuid5(STEPS, f"{unit.id}:returned"),
         command_fingerprint=idempotency.fingerprint(
-            {"damaged_unit_id": str(unit.id), "to": str(unit.sold_from_location_id)},
+            {"damaged_unit_id": str(unit.id), "to": str(destination_location_id)},
             actor_user_id=scope.user_id,
             store_id=unit.store_id,
         ),
         from_location_id=unit.location_id,
-        to_location_id=unit.sold_from_location_id,
+        to_location_id=destination_location_id,
         lines=[
             TransferLineInput(
                 product_variant_id=unit.product_variant_id, size_id=unit.size_id, quantity=1

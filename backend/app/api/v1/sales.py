@@ -33,7 +33,7 @@ from sqlalchemy import select
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
-from app.core.errors import NotFoundError
+from app.core.errors import NotFoundError, ValidationFailedError
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
@@ -52,7 +52,7 @@ from app.modules.sales.service import (
     shortage_ids,
 )
 from app.modules.sales.shelf import ShelfLine, read_empty_shelf, report_empty_shelf
-from app.modules.tenancy.service import LocationCapability
+from app.modules.tenancy.service import LocationCapability, back_on_sale_locations, store_names
 
 router = APIRouter(tags=["sales"])
 
@@ -458,10 +458,19 @@ class SaleLineSummary(BaseModel):
     line_total: Decimal
     # Already come back, in every part and condition.
     refunded: int
+    # Whether intact goods taken back at the asking store go back to the
+    # warehouse they were sold from. When not — another store's own warehouse
+    # — the seller chooses one of the asking store's (owner decision,
+    # 2026-10-01).
+    back_to_sold_from: bool = True
 
 
 class SaleSummary(BaseModel):
     id: uuid.UUID
+    # The store that sold it, which a sale found among other stores' differs
+    # from the store asking.
+    store_id: uuid.UUID
+    store_name: str
     sold_at: datetime
     currency_code: str
     total: Decimal
@@ -484,10 +493,24 @@ async def list_store_sales(
     q: Annotated[CleanText | None, Query(max_length=MAX_QUERY)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    elsewhere: bool = False,
 ) -> SaleListResponse:
     """The store's sales, newest first — where a seller finds the sale a
-    customer is returning (owner decision, 2026-10-01)."""
+    customer is returning (owner decision, 2026-10-01).
+
+    `elsewhere=true` searches the other stores' sales instead, for a return
+    taken here of goods bought there: any store of the network may take them
+    back (owner decisions, 2026-10-01). Only whoever takes returns here may,
+    and only by a search — the other stores' sales are found, never browsed.
+    """
     scope.require(Permission.SALE_VIEW, store_id)
+    if elsewhere:
+        scope.require(Permission.SALE_REFUND, store_id)
+        if len((q or "").strip()) < 2:
+            raise ValidationFailedError(
+                "Another store's sale is found by searching for its goods",
+                reason="SEARCH_REQUIRED",
+            )
     page = await list_sales(
         session,
         organization_id=scope.organization_id,
@@ -495,9 +518,22 @@ async def list_store_sales(
         query=q,
         limit=limit,
         offset=offset,
+        elsewhere=elsewhere,
     )
     refunded = await refunded_quantities(
         session, sale_item_ids=[item.id for items in page.items.values() for item in items]
+    )
+    names = await store_names(
+        session,
+        organization_id=scope.organization_id,
+        store_ids={sale.store_id for sale in page.sales},
+    )
+    reached = (
+        await back_on_sale_locations(
+            session, organization_id=scope.organization_id, store_id=store_id
+        )
+        if elsewhere
+        else None
     )
     paid_in_parts = await credit_service.credited_sales(
         session, sale_ids=[sale.id for sale in page.sales]
@@ -507,6 +543,8 @@ async def list_store_sales(
         sales=[
             SaleSummary(
                 id=sale.id,
+                store_id=sale.store_id,
+                store_name=names.get(sale.store_id, ""),
                 sold_at=sale.sold_at,
                 currency_code=sale.currency_code,
                 total=sale.total,
@@ -521,6 +559,7 @@ async def list_store_sales(
                         final_unit_price=item.final_unit_price,
                         line_total=item.line_total,
                         refunded=refunded.get(item.id, 0),
+                        back_to_sold_from=reached is None or item.source_location_id in reached,
                     )
                     for item in page.items[sale.id]
                 ],

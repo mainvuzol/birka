@@ -148,7 +148,7 @@ happens to a damaged unit to be designed.
   Gathering it elsewhere is an ordinary move.
 - **A return is taken only in the store that made the sale.** Returns from
   another store remain a separate question (owner-decisions-2026-09-15.md
-  §1).
+  §1). *Answered later the same day: see "returns at another store".*
 - **The seller finds the sale in the store's list of sales**, newest first,
   searchable by the goods' name.
 
@@ -338,3 +338,35 @@ were taken up with the screens.
 How it is carried out, not decided by the owner: a Ukrainian number is
 compared in its own ten digits, so `380…` written with the country code and
 `0…` written without it are one. Other numbers are compared as written.
+
+## Owner decision — 2026-10-01 (returns at another store)
+
+Asked when the owner chose it as the next work. It answers what
+owner-decisions-2026-09-15.md §1 left open: who may take back goods the other
+store sold, where they go, and which store handles the money.
+
+- **Any store of the network may take the goods back.** Whoever takes returns
+  in their own store finds the other store's sale by a search, and takes it
+  there. They see such sales only in that search.
+- **Intact goods go back to the warehouse they were sold from**, as before.
+  Where the store taking them back does not reach it (another store's own
+  warehouse), the seller chooses one of their own store's.
+- **The store taking them back hands the money back.** The record names both
+  the store that sold and the store that paid out.
+- **A sale paid in parts comes back by the same rules.** What is owed is
+  lowered first and stays the selling store's debt; any cash back is handed
+  over by the store taking the goods back.
+
+How it is carried out, not decided by the owner:
+- **Damaged goods go to the «Брак» of the store taking them back.** It
+  follows the rule of the same day that a damaged coat stays where it was
+  handed back.
+- **A damaged unit from another store's own warehouse** goes back on sale,
+  after inspection, in a warehouse of the store holding it that the person
+  chooses. This is the same rule as intact goods.
+- **Another store's sales are found by a search of two letters or more.**
+  They are never listed whole.
+- **A closed store takes nothing back for another store.** Its own sales keep
+  the rule they had.
+
+Built on 2026-10-01; see the [report](returns-elsewhere-report.md).

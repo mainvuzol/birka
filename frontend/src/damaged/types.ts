@@ -15,5 +15,10 @@ export interface DamagedUnit {
   /** Where it goes if it goes back on sale: where it was sold from. */
   sold_from_location_id: string;
   sold_from_location_name: string;
+  /**
+   * False for a unit handed back at a store that does not reach that
+   * warehouse: it goes to one of this store's the person chooses.
+   */
+  back_to_sold_from: boolean;
   note: string | null;
 }

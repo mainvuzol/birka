@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
-import type { Store } from "@/orders/types";
+import type { Location, Store } from "@/orders/types";
+import { useBackOnSale } from "@/returns/places";
 import { sizeLabel } from "@/returns/types";
 import type { DamagedUnit } from "./types";
 
@@ -12,7 +13,9 @@ import type { DamagedUnit } from "./types";
  * Every unit a return put here, and what anyone who takes returns may do with
  * it: take it for inspection — the others see who is looking — then put it
  * back on sale in the warehouse it was sold from, or confirm it damaged; a
- * confirmed unit may be looked at again, or written off.
+ * confirmed unit may be looked at again, or written off. A unit handed back
+ * here but sold from another store's own warehouse goes back on sale in a
+ * warehouse of this store the person chooses (owner decision, 2026-10-01).
  *
  * Every step is safe to press twice: the server answers a step already done
  * with the unit as it is. So no journal is kept here — if an answer is lost,
@@ -40,6 +43,11 @@ export function Damaged({
       ),
     retry: false,
   });
+  const places = useBackOnSale(
+    store,
+    token,
+    (units.data?.units ?? []).some((unit) => !unit.back_to_sold_from),
+  );
 
   async function act(
     unit: DamagedUnit,
@@ -115,6 +123,7 @@ export function Damaged({
                 <Unit
                   key={unit.id}
                   unit={unit}
+                  places={places.data ?? []}
                   busy={blocked || busy !== null}
                   act={(action, body) => {
                     void act(unit, action, body);
@@ -138,10 +147,13 @@ function when(iso: string): string {
 
 function Unit({
   unit,
+  places,
   busy,
   act,
 }: {
   unit: DamagedUnit;
+  /** This store's warehouses, for a unit sold from another store's own. */
+  places: Location[];
   busy: boolean;
   act: (
     action: "take" | "return-to-sale" | "confirm" | "write-off",
@@ -152,7 +164,9 @@ function Unit({
     "return" | "confirm" | "write-off" | null
   >(null);
   const [note, setNote] = useState("");
+  const [place, setPlace] = useState("");
   const trimmed = note.trim();
+  const placeName = places.find((location) => location.id === place)?.name;
   return (
     <article className="damaged-unit" aria-label={unit.display_name}>
       <strong>
@@ -168,7 +182,46 @@ function Unit({
         </small>
       )}
       {unit.note && <small>Примітка: {unit.note}</small>}
-      {asking === "return" ? (
+      {asking === "return" && !unit.back_to_sold_from ? (
+        <div className="actions">
+          <label>
+            Повернути в продаж на склад вашого магазину
+            <select
+              value={place}
+              onChange={(event) => {
+                setPlace(event.target.value);
+              }}
+            >
+              <option value="">Оберіть склад</option>
+              {places.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              Його продали з власного складу іншого магазину, куди ваш магазин
+              не має доступу.
+            </span>
+          </label>
+          <button
+            disabled={busy || !placeName}
+            onClick={() => {
+              act("return-to-sale", { destination_location_id: place });
+            }}
+          >
+            {placeName ? `Так, повернути на «${placeName}»` : "Оберіть склад"}
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setAsking(null);
+            }}
+          >
+            Скасувати
+          </button>
+        </div>
+      ) : asking === "return" ? (
         <div className="actions">
           <p>
             Повернути в продаж на склад «{unit.sold_from_location_name}», звідки

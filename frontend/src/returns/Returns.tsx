@@ -5,6 +5,7 @@ import { ApiError, api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { submitReturn, useReturnCommand } from "./commands";
+import { useBackOnSale } from "./places";
 import { sizeLabel } from "./types";
 import type { Refund, ReturnPart, SaleList, SaleSummary } from "./types";
 
@@ -17,6 +18,12 @@ const pageSize = 20;
  * how many of each line came back intact and how many damaged. Intact goes
  * back to the warehouse it was sold from; damaged to the store's «Брак»,
  * where nothing sells. The money is what was paid, worked out by the server.
+ *
+ * Goods bought at another store of the network come back here too (owner
+ * decisions, 2026-10-01): the seller finds that sale by a search among the
+ * other stores', this store hands the money back, and damaged goods stay in
+ * this store's «Брак». Intact goods sold from a warehouse this store does
+ * not reach go to one of its own, which the seller chooses.
  */
 export function Returns({
   store,
@@ -33,27 +40,35 @@ export function Returns({
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(pageSize);
+  // Bought at another store of the network: found only by a search.
+  const [elsewhere, setElsewhere] = useState(false);
   const [selected, setSelected] = useState<SaleSummary | null>(null);
-  const [done, setDone] = useState<Refund | null>(null);
+  const [done, setDone] = useState<{
+    refund: Refund;
+    chosen: string | undefined;
+  } | null>(null);
+  const searching = !elsewhere || search.length >= 2;
   const sales = useQuery({
-    queryKey: ["store-sales", store.id, search, shown],
+    queryKey: ["store-sales", store.id, elsewhere, search, shown],
     queryFn: () =>
       api<SaleList>(
         `/sales?store_id=${store.id}&limit=${String(shown)}${
-          search ? `&q=${encodeURIComponent(search)}` : ""
-        }`,
+          elsewhere ? "&elsewhere=true" : ""
+        }${search ? `&q=${encodeURIComponent(search)}` : ""}`,
         token,
       ),
+    enabled: searching,
     retry: false,
   });
 
-  async function settled(refund: Refund): Promise<void> {
-    setDone(refund);
+  async function settled(refund: Refund, chosen?: string): Promise<void> {
+    setDone({ refund, chosen });
     setSelected(null);
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["store-sales", store.id] }),
       cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
       cache.invalidateQueries({ queryKey: ["credits", store.id] }),
+      cache.invalidateQueries({ queryKey: ["damaged-units", store.id] }),
     ]);
   }
 
@@ -65,8 +80,8 @@ export function Returns({
         journalKey={journalKey}
         blocked={blocked}
         sale={selected}
-        settled={(refund) => {
-          void settled(refund);
+        settled={(refund, chosen) => {
+          void settled(refund, chosen);
         }}
         back={() => {
           setSelected(null);
@@ -92,7 +107,26 @@ export function Returns({
         Знайдіть продаж, з якого повертають товар. Цілий товар повернеться на
         склад, з якого його продали, пошкоджений — на склад «Брак» магазину.
       </p>
-      {done && <Done refund={done} />}
+      {done && <Done refund={done.refund} chosen={done.chosen} />}
+      <label>
+        Де купили
+        <select
+          value={elsewhere ? "ELSEWHERE" : "HERE"}
+          onChange={(event) => {
+            setElsewhere(event.target.value === "ELSEWHERE");
+            setShown(pageSize);
+          }}
+        >
+          <option value="HERE">У цьому магазині</option>
+          <option value="ELSEWHERE">В іншому магазині мережі</option>
+        </select>
+      </label>
+      {elsewhere && (
+        <p className="hint">
+          Повернення приймає будь-який магазин мережі, і гроші покупцю віддаєте
+          ви. Продаж іншого магазину знаходять за назвою товару.
+        </p>
+      )}
       <form
         className="search"
         onSubmit={(event) => {
@@ -113,15 +147,19 @@ export function Returns({
         </label>
         <button type="submit">Знайти</button>
       </form>
-      {sales.isPending ? (
+      {!searching ? (
+        <p>Введіть назву товару, щоб знайти продаж іншого магазину.</p>
+      ) : sales.isPending ? (
         <p role="status">Завантажуємо продажі…</p>
       ) : sales.error ? (
         <p role="alert">{errorText(sales.error)}</p>
       ) : sales.data.sales.length === 0 ? (
         <p>
-          {search
-            ? "Продажів із таким товаром не знайдено."
-            : "У цьому магазині ще немає продажів."}
+          {elsewhere
+            ? "В інших магазинах продажів із таким товаром не знайдено."
+            : search
+              ? "Продажів із таким товаром не знайдено."
+              : "У цьому магазині ще немає продажів."}
         </p>
       ) : (
         <>
@@ -129,6 +167,7 @@ export function Returns({
             <SaleCard
               key={sale.id}
               sale={sale}
+              here={sale.store_id === store.id}
               choose={() => {
                 setDone(null);
                 setSelected(sale);
@@ -162,10 +201,12 @@ function when(iso: string): string {
 
 function SaleCard({
   sale,
+  here,
   choose,
   blocked,
 }: {
   sale: SaleSummary;
+  here: boolean;
   choose: () => void;
   blocked: boolean;
 }): JSX.Element {
@@ -175,6 +216,7 @@ function SaleCard({
       <strong>
         {when(sale.sold_at)} · {money(sale.total)}
       </strong>
+      {!here && <span>Продано в магазині «{sale.store_name}»</span>}
       {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
       <ul>
         {sale.items.map((item) => (
@@ -195,13 +237,25 @@ function SaleCard({
   );
 }
 
-export function Done({ refund }: { refund: Refund }): JSX.Element {
+export function Done({
+  refund,
+  chosen,
+}: {
+  refund: Refund;
+  /** The warehouse of this store intact goods went to, when one was chosen. */
+  chosen?: string | undefined;
+}): JSX.Element {
   const damaged = refund.items.some((item) => item.condition === "DAMAGED");
   const intact = refund.items.some((item) => item.condition === "INTACT");
   const { credit } = refund;
+  const elsewhere =
+    !!refund.taken_at_store_id && refund.taken_at_store_id !== refund.store_id;
   return (
     <div className="section-block" role="status">
       <h3>Повернення оформлено</h3>
+      {elsewhere && (
+        <p>Товар куплено в іншому магазині мережі — гроші віддаєте ви.</p>
+      )}
       {credit ? (
         <>
           {(kopecks(credit.debt_reduced) ?? 0n) > 0n && (
@@ -221,7 +275,12 @@ export function Done({ refund }: { refund: Refund }): JSX.Element {
       ) : (
         <p>Поверніть покупцю {money(refund.total_amount)}.</p>
       )}
-      {intact && <p>Цілий товар повернуто на склад, з якого його продали.</p>}
+      {intact &&
+        (chosen ? (
+          <p>Цілий товар повернуто на склад «{chosen}» вашого магазину.</p>
+        ) : (
+          <p>Цілий товар повернуто на склад, з якого його продали.</p>
+        ))}
       {damaged && (
         <p>
           Пошкоджений товар — на складі «Брак» магазину. Його можна перевірити в
@@ -253,15 +312,21 @@ function ReturnForm({
   journalKey: string;
   blocked: boolean;
   sale: SaleSummary;
-  settled: (refund: Refund) => void;
+  settled: (refund: Refund, chosen: string | undefined) => void;
   back: () => void;
 }): JSX.Element {
   const { busy, pending } = useReturnCommand();
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [counts, setCounts] = useState<Counts>({});
+  // Per sale line: the warehouse of this store intact goods go to, when the
+  // one they were sold from is another store's own.
+  const [places, setPlaces] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
   const [refusal, setRefusal] = useState<unknown>(null);
   const lines = sale.items.filter((item) => item.refunded < item.quantity);
+  const elsewhere = sale.store_id !== store.id;
+  const choosing = lines.some((item) => !item.back_to_sold_from);
+  const ownPlaces = useBackOnSale(store, token, choosing);
 
   const problems: string[] = [];
   const parts: ReturnPart[] = [];
@@ -281,6 +346,13 @@ function ReturnForm({
       );
       continue;
     }
+    const place = places[item.id];
+    if (intact > 0 && !item.back_to_sold_from && !place) {
+      problems.push(
+        `${item.display_name}: оберіть склад вашого магазину для цілого товару.`,
+      );
+      continue;
+    }
     for (const [quantity, condition] of [
       [intact, "INTACT"],
       [damaged, "DAMAGED"],
@@ -291,10 +363,23 @@ function ReturnForm({
           quantity,
           restock: true,
           condition,
+          ...(condition === "INTACT" && !item.back_to_sold_from && place
+            ? { location_id: place }
+            : {}),
         });
         total += (kopecks(item.final_unit_price) ?? 0n) * BigInt(quantity);
       }
   }
+  const chosen = parts
+    .map((part) => part.location_id)
+    .filter((id): id is string => id !== undefined);
+  const chosenName =
+    chosen.length > 0
+      ? ownPlaces.data
+          ?.filter((location) => chosen.includes(location.id))
+          .map((location) => location.name)
+          .join("», «")
+      : undefined;
   const working = busy || pending !== null;
   const ready = problems.length === 0 && parts.length > 0;
 
@@ -318,11 +403,12 @@ function ReturnForm({
         command_id: commandId,
         lines: parts,
         reason: trimmed ? trimmed : null,
+        ...(elsewhere ? { elsewhere: true } : {}),
       },
     });
     if (outcome.kind === "done") {
       setCommandId(crypto.randomUUID());
-      settled(outcome.result);
+      settled(outcome.result, chosenName);
     } else if (outcome.kind === "refused") {
       setRefusal(outcome.error);
       setCommandId(crypto.randomUUID());
@@ -338,8 +424,15 @@ function ReturnForm({
         </button>
       </div>
       <p>
-        Продаж {when(sale.sold_at)} на {money(sale.total)}.
+        Продаж {when(sale.sold_at)} на {money(sale.total)}
+        {elsewhere && ` у магазині «${sale.store_name}»`}.
       </p>
+      {elsewhere && (
+        <p className="hint">
+          Товар куплено в іншому магазині мережі: гроші покупцю віддаєте ви,
+          пошкоджений товар лишається у вашому «Браку».
+        </p>
+      )}
       {sale.paid_in_parts && (
         <p className="hint">
           Цей продаж оплачували частинами. Повернений товар спершу зменшує борг
@@ -388,6 +481,28 @@ function ReturnForm({
                   />
                 </label>
               </div>
+              {!item.back_to_sold_from && (
+                <label>
+                  Цілий товар — на склад вашого магазину
+                  <select
+                    value={places[item.id] ?? ""}
+                    onChange={(event) => {
+                      setPlaces({ ...places, [item.id]: event.target.value });
+                    }}
+                  >
+                    <option value="">Оберіть склад</option>
+                    {(ownPlaces.data ?? []).map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="hint">
+                    Його продали з власного складу іншого магазину, куди ваш
+                    магазин не має доступу.
+                  </span>
+                </label>
+              )}
             </div>
           );
         })}
@@ -401,6 +516,7 @@ function ReturnForm({
             }}
           />
         </label>
+        {ownPlaces.error && <p role="alert">{errorText(ownPlaces.error)}</p>}
         {problems.map((problem) => (
           <p key={problem} role="alert">
             {problem}
@@ -435,6 +551,13 @@ function refusalText(error: unknown): string {
         : "У цього магазину ще немає складу «Брак» для пошкодженого товару. Зверніться до власника.";
     if (error.code === "REFUND_EXCEEDS_SOLD")
       return "Частину цього товару вже повернули. Поверніться до списку й оновіть продаж.";
+    if (
+      error.details.reason === "CHOOSE_A_WAREHOUSE" ||
+      error.details.reason === "NOT_A_WAREHOUSE_OF_THIS_STORE"
+    )
+      return "Цілий товар цього продажу йде на склад вашого магазину — оберіть його ще раз.";
+    if (error.details.reason === "SEARCH_REQUIRED")
+      return "Продаж іншого магазину знаходять за назвою товару.";
   }
   return errorText(error);
 }

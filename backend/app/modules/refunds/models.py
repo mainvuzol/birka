@@ -59,6 +59,12 @@ class Refund(UUIDPrimaryKey, TimestampMixin, Base):
     sale_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("sale.id", ondelete="RESTRICT"), nullable=False
     )
+    # The store that took the goods back and handed the money back. Any store
+    # of the network may (owner decision, 2026-10-01); `store_id` stays the
+    # store that sold.
+    taken_at_store_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), ForeignKey("store.id", ondelete="RESTRICT"), nullable=False
+    )
     actor_user_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
         ForeignKey("app_user.id", ondelete="RESTRICT"),
@@ -80,6 +86,7 @@ class Refund(UUIDPrimaryKey, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "command_id", name="uq_refund_org_command"),
         Index("ix_refund_sale", "sale_id"),
+        Index("ix_refund_taken_at_store", "taken_at_store_id"),
         CheckConstraint("total_amount >= 0", name="amount_not_negative"),
         CheckConstraint("char_length(currency_code) = 3", name="currency_code_iso4217"),
     )
