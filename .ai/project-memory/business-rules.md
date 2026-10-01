@@ -221,7 +221,11 @@ line is on the shelf («фізично є 0»).
   correction's bounds (I25).
 
 This applies only to people allowed «фізично відсутній» — by default a manager
-and the owner. Not built yet: it comes after the suggested price.
+and the owner.
 
-**Not asked yet:** what happens when the empty line was the basket's only
-line, so nothing is left to sell.
+The owner answered the remaining case the same day:
+- **When nothing is left to sell, the shortage is still recorded, without a
+  sale.** The till says so, and the ledger takes off the units it believed
+  were there, as for any other line.
+
+Built on 2026-10-01; see the [empty shelf report](empty-shelf-report.md).

@@ -28,6 +28,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -163,4 +164,51 @@ class SaleItem(UUIDPrimaryKey, Base):
     )
 
 
-__all__ = ["Sale", "SaleItem", "SaleStatus"]
+class ShelfShortage(UUIDPrimaryKey, TimestampMixin, Base):
+    """A basket nothing of which was on the shelf, so nothing was sold.
+
+    Owner decision, 2026-10-01 (Q-G): a line with nothing on the shelf is
+    dropped and its shortage recorded; when that leaves nothing to sell, the
+    shortage is still recorded, without a sale. The units the ledger believed
+    in are taken off by `MISSING_AT_SALE` movements naming this row
+    (`reference_type = 'shelf_shortage'`), bounded as at a sale (I25).
+
+    The row is the command's permanent identity (I20), and it shares the
+    basket's `command_id` with sales: a basket becomes a sale or an empty
+    shelf, never both, and a retry finds whichever it became. It exists even
+    when the ledger believed in none of it and nothing was taken off, so a
+    retry after a delivery cannot take off what arrived since.
+    """
+
+    __tablename__ = "shelf_shortage"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    store_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    reported_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    command_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    # What the seller went for, line by line, and what the ledger took off —
+    # with the names as the till showed them, so the answer reads the same on
+    # a retry a year later.
+    lines: Mapped[list[dict[str, Any]]] = mapped_column(postgresql.JSONB, nullable=False)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "command_id", name="uq_shelf_shortage_org_command"),
+        ForeignKeyConstraint(
+            ["organization_id", "store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_shelf_shortage_org_store",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_shelf_shortage_store_created_at", "store_id", "created_at"),
+    )
+
+
+__all__ = ["Sale", "SaleItem", "SaleStatus", "ShelfShortage"]

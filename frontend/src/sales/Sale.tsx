@@ -7,8 +7,14 @@ import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
 import { asInput } from "@/prices/SuggestedPrice";
+import { sizeLabel } from "@/returns/types";
 import { submitSale, useSaleCommand } from "./commands";
-import type { SaleLine, Sale as SaleReceipt, Shortfall } from "./types";
+import type {
+  EmptyShelf,
+  SaleLine,
+  Sale as SaleReceipt,
+  Shortfall,
+} from "./types";
 import { stockKey } from "./types";
 
 const pageSize = 100;
@@ -73,6 +79,9 @@ export function Sale({
   const [refusal, setRefusal] = useState<unknown>(null);
   const [present, setPresent] = useState("");
   const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
+  // Lines dropped from the receipt's sale because nothing was on the shelf.
+  const [dropped, setDropped] = useState<string[]>([]);
+  const [nothingSold, setNothingSold] = useState<EmptyShelf | null>(null);
   const [validation, setValidation] = useState("");
   const { busy, pending } = useSaleCommand();
 
@@ -214,11 +223,16 @@ export function Sale({
     setShortfall(null);
     setRefusal(null);
     setValidation("");
+    // Nothing on the shelf of a line drops it from the sale (owner decision,
+    // 2026-10-01; Q-G). Nothing on the shelf of any line leaves no sale to
+    // make, and the basket records an empty shelf instead.
+    const empty = draft.filter((_, index) => nextMissing[index] === 0);
     const outcome = await submitSale(journalKey, token, {
       // A new key per payload: one key then always answers one payload, and a
       // replay of it is unambiguous. `command_id` is what keeps the corrected
       // attempt from selling twice.
       key: crypto.randomUUID(),
+      emptyShelf: draft.length > 0 && empty.length === draft.length,
       body: {
         store_id: store.id,
         command_id: commandId,
@@ -237,8 +251,13 @@ export function Sale({
         })),
       },
     });
-    if (outcome.kind === "sold") {
-      setReceipt(outcome.sale);
+    if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
+      if (outcome.kind === "sold") {
+        setReceipt(outcome.sale);
+        setDropped(empty.map((d) => `${d.name} · ${d.size}`));
+      } else {
+        setNothingSold(outcome.shelf);
+      }
       setDraft([]);
       setFound({});
       setMissing({});
@@ -321,12 +340,24 @@ export function Sale({
         )));
   const working = busy || pending !== null;
 
+  if (nothingSold)
+    return (
+      <NothingSold
+        shelf={nothingSold}
+        next={() => {
+          setNothingSold(null);
+        }}
+      />
+    );
+
   if (receipt)
     return (
       <Receipt
         receipt={receipt}
+        dropped={dropped}
         next={() => {
           setReceipt(null);
+          setDropped([]);
         }}
       />
     );
@@ -548,8 +579,12 @@ export function Sale({
             {found[index] !== undefined && (
               <span>Підтверджено на місці: +{found[index]}</span>
             )}
-            {missing[index] !== undefined && (
-              <span>На місці лише {missing[index]}</span>
+            {missing[index] === 0 ? (
+              <span>На полиці немає — не продається</span>
+            ) : (
+              missing[index] !== undefined && (
+                <span>На місці лише {missing[index]}</span>
+              )
             )}
             {d.fromUnknown && (
               <span className="hint">Розмір з етикетки товару без розміру</span>
@@ -651,7 +686,24 @@ export function Sale({
                       Товар на місці — продати {shortfall.requested}
                     </button>
                   )}
-                  {/* With one unit asked for, fewer present is none: remove the line. */}
+                  {mayReportMissing && (
+                    <button
+                      type="button"
+                      disabled={working}
+                      onClick={() => {
+                        const next = { ...missing, [shortIndex]: 0 };
+                        setMissing(next);
+                        void send(found, next, clarified);
+                      }}
+                    >
+                      {draft.every(
+                        (_, index) =>
+                          index === shortIndex || missing[index] === 0,
+                      )
+                        ? "На полиці немає жодної — записати нестачу"
+                        : "На полиці немає жодної — продати решту"}
+                    </button>
+                  )}
                   {mayReportMissing && shortfall.requested > 1 && (
                     <>
                       <label>
@@ -675,7 +727,7 @@ export function Sale({
                             count >= shortfall.requested
                           ) {
                             setValidation(
-                              `Вкажіть від 1 до ${String(shortfall.requested - 1)} одиниць. Якщо немає жодної — приберіть рядок із кошика.`,
+                              `Вкажіть від 1 до ${String(shortfall.requested - 1)} одиниць. Якщо немає жодної — натисніть «На полиці немає жодної».`,
                             );
                             return;
                           }
@@ -715,9 +767,11 @@ export function Sale({
 
 function Receipt({
   receipt,
+  dropped,
   next,
 }: {
   receipt: SaleReceipt;
+  dropped: string[];
   next: () => void;
 }): JSX.Element {
   return (
@@ -741,6 +795,9 @@ function Receipt({
           складу.
         </p>
       )}
+      {dropped.length > 0 && (
+        <p>Не продано — на полиці не було: {dropped.join(", ")}.</p>
+      )}
       {receipt.shortages.length > 0 && (
         <p className="hint">
           Списано як фізично відсутнє: {receipt.shortages.length} рух(и) складу.
@@ -760,6 +817,41 @@ function Receipt({
   );
 }
 
+/** Nothing in the basket was on the shelf: no sale, and the shortage recorded. */
+function NothingSold({
+  shelf,
+  next,
+}: {
+  shelf: EmptyShelf;
+  next: () => void;
+}): JSX.Element {
+  return (
+    <section>
+      <h2>Продажу немає</h2>
+      <p>Нічого з кошика не було на полиці. Нестачу записано.</p>
+      {shelf.lines.map((line) => (
+        <div
+          className="line"
+          key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
+        >
+          <strong>
+            {line.display_name} · {sizeLabel(line.size)}
+          </strong>
+          <span>
+            {line.removed > 0
+              ? `Знято з обліку: ${String(line.removed)} од.`
+              : "Облік і так не мав цих одиниць — нічого не знято."}
+          </span>
+        </div>
+      ))}
+      <p className="hint">Перевірте склад із менеджером.</p>
+      <button type="button" onClick={next}>
+        Новий продаж
+      </button>
+    </section>
+  );
+}
+
 /** What the till can say about a refusal it knows the cause of. */
 function refusalText(error: unknown): string {
   const details = (error as Partial<ApiError> | null)?.details ?? {};
@@ -770,6 +862,8 @@ function refusalText(error: unknown): string {
       return "Облік змінився, поки ви відповідали. Натисніть «Продати» ще раз, щоб побачити, чого бракує тепер.";
     case "SIZE_NOT_KNOWN_AMBIGUOUS":
       return "Ця модель записана на складі під кількома невідомими розмірами, тож уточнити розмір не можна. Зверніться до менеджера.";
+    case "NOTHING_TO_SELL":
+      return "У кошику не лишилося нічого, що є на полиці.";
     case "RESERVED":
       return "Частина цих одиниць у резерві замовлення, тому під час продажу облік не виправити. Зменшіть кількість або продайте інший товар.";
     default:

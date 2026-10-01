@@ -102,10 +102,13 @@ Live risks and properties, in order:
   needs a manager to look the sale up.
 - **`size_clarified` has a screen** since PR #42: the till offers the size
   on the label.
-- **Confirming zero present is refused**, and the till's honest answer is to
-  remove the line by hand. One extra tap while a customer waits. The owner
-  answered Q-G on 2026-10-01: drop the line and record the shortage. It is
-  not built yet.
+- **Zero present is an answer now (Q-G, 2026-10-01).**
+  - The line is dropped and its shortage recorded, and the rest is sold.
+  - A basket with nothing left records an empty shelf without a sale.
+
+  See the [report](empty-shelf-report.md). What remains:
+  - **Nothing shows recorded empty shelves.** They are in the ledger and the
+    audit log; a manager sees them only as `MISSING_AT_SALE` movements.
 - **`POST /sales` p95 is measured and passes** (2026-09-29, worst p95 95 ms
   against a 500 ms budget with six concurrent sellers; the catalogue read is
   38 ms against 300 ms). The warehouse lock M1-023 put on the hot path costs

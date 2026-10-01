@@ -207,6 +207,13 @@ override it with its own (`STORE`), which needs the permission in that store. A 
 with `PRICE_CHANGED` if that no longer stands. See the
 [report](.ai/project-memory/suggested-price-report.md).
 
+**Nothing on the shelf** («На полиці немає жодної»): a line the seller finds
+none of is dropped from the sale (`missing_in_store` with `quantity: 0`). Its
+shortage is recorded, and the rest is sold. When nothing is left to sell,
+`POST /shelf-shortages` records the shortage without a sale, under the
+basket's own `command_id`. A basket becomes a sale or an empty shelf, never
+both. See the [report](.ai/project-memory/empty-shelf-report.md).
+
 Every Playwright journey also runs in CI (job `e2e`) on every push and pull
 request. It uses the real API and PostgreSQL 17 with the production locale,
 on a Pixel 7 profile. The job's steps are the recipe for a local run; see the

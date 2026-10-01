@@ -38,6 +38,27 @@ export interface Sale {
   size_reclassifications: string[];
 }
 
+/**
+ * What `POST /shelf-shortages` recorded: nothing in the basket was on the
+ * shelf, so nothing was sold, and the ledger took off what it believed in
+ * (owner decision, 2026-10-01; Q-G).
+ */
+export interface EmptyShelf {
+  id: string;
+  store_id: string;
+  command_id: string;
+  recorded_at: string;
+  lines: {
+    source_location_id: string;
+    product_variant_id: string;
+    size_id: string;
+    display_name: string;
+    size: string | null;
+    requested: number;
+    removed: number;
+  }[];
+}
+
 /** The `details` of an `INSUFFICIENT_STOCK` refusal. */
 export interface Shortfall {
   location_id: string;
