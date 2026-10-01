@@ -64,6 +64,8 @@ EXPECTED_MANAGER = EXPECTED_SELLER | {
     Permission.TRANSFER_CREATE,
     Permission.TRANSFER_RECEIVE,
     Permission.CATALOG_MERGE,
+    # Owner decision, 2026-10-01: the owner and managers set prices.
+    Permission.CATALOG_SET_PRICE,
     Permission.SNAPSHOT_IMPORT,
     Permission.REPORT_VIEW_FINANCIAL,
 }
@@ -139,6 +141,14 @@ def test_everyone_who_takes_returns_handles_the_damaged_goods() -> None:
         permissions = DEFAULT_ROLE_PERMISSIONS[role]
         assert Permission.SALE_REFUND in permissions
         assert Permission.DAMAGED_HANDLE in permissions
+
+
+def test_the_owner_and_managers_set_prices_and_a_seller_does_not() -> None:
+    """Owner decision, 2026-10-01 (Q-F): a seller sees the suggested price
+    and agrees the final one at the counter, but does not set it."""
+    assert Permission.CATALOG_SET_PRICE in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
+    assert Permission.CATALOG_SET_PRICE in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
+    assert Permission.CATALOG_SET_PRICE not in DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
 
 
 def test_only_the_owner_sees_the_backups() -> None:

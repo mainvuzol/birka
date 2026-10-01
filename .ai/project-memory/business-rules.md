@@ -180,3 +180,41 @@ The owner then answered the open questions the same day:
 
 Built on 2026-10-01; see the
 [«Брак» report](damaged-inspection-report.md).
+
+## Owner decision — 2026-10-01 (suggested selling price, Q-F)
+
+Asked because the till could not prefill a price: `variant_price` existed,
+but nobody had said who may set it. Typing a price on every sale kept
+`taps-to-sale` over its budget.
+
+- **The owner and managers set the suggested price; a seller sees it.** The
+  final price is still agreed at the counter, as decided on 2026-09-15.
+- **One price for the whole shop, which a store may override with its own.**
+  That store's till suggests its own price, and every other till the shared
+  one.
+- **It is set where goods arrive and on the stock screen.** There is one
+  price per model and colour, for every size.
+
+Applied with the scope rule every command already follows (I12/I13).
+- **The shared price needs the permission organization-wide.** The owner's
+  membership is organization-wide by default.
+- **A store's own price needs it in that store.** A manager who belongs to
+  one store sets that store's price, never another store's.
+
+Built on 2026-10-01; see the
+[suggested price report](suggested-price-report.md).
+
+## Owner decision — 2026-10-01 (nothing on the shelf, Q-G)
+
+Carried over from M1-030. The case: a seller confirms that **none** of a
+line is on the shelf («фізично є 0»).
+- **Drop the line from the basket and sell the rest.**
+- **Record the shortage**, as «фізично відсутній» does for part of a line.
+  The ledger takes off the units it believed were there, within that
+  correction's bounds (I25).
+
+This applies only to people allowed «фізично відсутній» — by default a manager
+and the owner. Not built yet: it comes after the suggested price.
+
+**Not asked yet:** what happens when the empty line was the basket's only
+line, so nothing is left to sell.

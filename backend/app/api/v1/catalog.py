@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import (
@@ -37,6 +37,14 @@ from app.core import idempotency
 from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import SizeSystemCode
+from app.modules.catalog.prices import (
+    PriceScope,
+    SuggestedPrice,
+    currency,
+    prices_of,
+    set_price,
+    suggested_prices,
+)
 from app.modules.catalog.read import describe_variants, real_sizes, size_labels, unknown_size_ids
 from app.modules.catalog.search import search_families, search_receivable_variants
 from app.modules.catalog.service import (
@@ -273,6 +281,8 @@ class StockOption(BaseModel):
     quantity: int
     reserved_quantity: int
     available_quantity: int
+    # What this store's till suggests: its own price, else the shared one.
+    suggested_price: Decimal | None
 
 
 class StockOptionsResponse(BaseModel):
@@ -302,6 +312,12 @@ async def stock_options(
     descriptions = await describe_variants(session, [row.product_variant_id for row in page])
     labels = await size_labels(session, [row.size_id for row in page])
     unknown = await unknown_size_ids(session, organization_id=scope.organization_id)
+    prices = await suggested_prices(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        variant_ids=[row.product_variant_id for row in page],
+    )
     return StockOptionsResponse(
         items=[
             StockOption(
@@ -313,6 +329,7 @@ async def stock_options(
                 quantity=row.quantity,
                 reserved_quantity=row.reserved_quantity,
                 available_quantity=row.available_quantity,
+                suggested_price=prices[row.product_variant_id].suggested,
             )
             for row in page
         ],
@@ -379,6 +396,89 @@ async def receivable_variants(
             session, scope=scope, store_id=store_id, query=query, limit=limit, offset=offset
         )
     )
+
+
+# A price as a person states it: hryvnias to the kopeck, more than nothing.
+# "No price" is null, never zero — a till prefilled with 0 sells a coat free.
+Price = Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
+
+
+class PricesResponse(BaseModel):
+    product_variant_id: uuid.UUID
+    currency_code: str
+    # The shared price, for every store without its own.
+    shared_price: Decimal | None
+    # This store's own price, if it has one.
+    store_price: Decimal | None
+    # What this store's till suggests.
+    suggested_price: Decimal | None
+
+
+def _prices(variant_id: uuid.UUID, code: str, prices: SuggestedPrice) -> PricesResponse:
+    return PricesResponse(
+        product_variant_id=variant_id,
+        currency_code=code,
+        shared_price=prices.shared,
+        store_price=prices.store,
+        suggested_price=prices.suggested,
+    )
+
+
+@router.get("/prices", response_model=PricesResponse)
+async def prices(
+    store_id: uuid.UUID, product_variant_id: uuid.UUID, scope: ScopeDep, session: SessionDep
+) -> PricesResponse:
+    """A model's suggested selling price in one store, and where it comes from."""
+    found = await prices_of(session, scope=scope, store_id=store_id, variant_id=product_variant_id)
+    return _prices(
+        product_variant_id,
+        await currency(session, organization_id=scope.organization_id),
+        found,
+    )
+
+
+class PriceChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # The working context: the store whose screen the change was made on.
+    store_id: uuid.UUID
+    product_variant_id: uuid.UUID
+    # The shared price, or this store's own.
+    applies_to: Literal["ORGANIZATION", "STORE"]
+    # The price the screen showed for that scope; null when it showed none.
+    expected_price: Price | None
+    # The new price; null removes it.
+    suggested_price: Price | None
+
+
+@router.post("/prices", response_model=PricesResponse)
+async def change_price(
+    payload: PriceChangeRequest, scope: ScopeDep, session: SessionDep
+) -> PricesResponse:
+    """Set, change or remove a suggested selling price (owner decision,
+    2026-10-01): the owner and managers set it, shared or for one store.
+
+    Refused with `PRICE_CHANGED` and the current price if the one the screen
+    showed no longer stands; answered as done if the price already is what
+    was asked, so a retry after a lost answer is safe. No idempotency key is
+    needed: the request says what the price should be, not what to add to it.
+    """
+    found = await set_price(
+        session,
+        scope=scope,
+        store_id=payload.store_id,
+        variant_id=payload.product_variant_id,
+        applies_to=PriceScope(payload.applies_to),
+        expected=payload.expected_price,
+        price=payload.suggested_price,
+    )
+    body = _prices(
+        payload.product_variant_id,
+        await currency(session, organization_id=scope.organization_id),
+        found,
+    )
+    await session.commit()
+    return body
 
 
 class SizeOptionResponse(BaseModel):

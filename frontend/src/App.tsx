@@ -164,6 +164,10 @@ function Workspace({
   // The owner's section. A backup is of the whole server, so only a grant
   // held organization-wide opens it, never one for a store.
   const canSeeBackups = me.organization_permissions.includes("backup:view");
+  // Held organization-wide, `catalog:set_price` sets the shared price; held
+  // only in a store, that store's own (owner decision, 2026-10-01).
+  const maySharePrice =
+    me.organization_permissions.includes("catalog:set_price");
   const backupsKey = `${me.organization_id}:${me.user_id}`;
   const backups = useBackups(token, backupsKey, canSeeBackups);
   const backupsNeedYou =
@@ -646,6 +650,7 @@ function Workspace({
             store={store}
             token={token}
             journalKey={receiptKey}
+            maySharePrice={maySharePrice}
             blocked={
               storageError ||
               catalogStorageError ||
@@ -671,6 +676,7 @@ function Workspace({
             token={token}
             scopeKey={key}
             journalKey={adjustmentKey}
+            maySharePrice={maySharePrice}
             blocked={otherThanAdjustment || adjustmentStorageError}
           />
         ) : (

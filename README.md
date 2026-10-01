@@ -198,6 +198,15 @@ written off. Stock in «Брак» changes through nothing else. See the
 [returns](.ai/project-memory/till-returns-report.md) and
 [«Брак»](.ai/project-memory/damaged-inspection-report.md) reports.
 
+**Suggested selling price:** the till prefills it when a model is picked, and
+the seller may still agree another. The owner and managers set it
+(`catalog:set_price`) where goods arrive and on the stock screen. It is one
+price for the whole shop (`POST /catalog/prices`, `applies_to: ORGANIZATION`,
+which needs the permission organization-wide). A store may override it with its
+own (`STORE`). A change states the price the screen showed, and is refused
+with `PRICE_CHANGED` if that no longer stands. See the
+[report](.ai/project-memory/suggested-price-report.md).
+
 Every Playwright journey also runs in CI (job `e2e`) on every push and pull
 request. It uses the real API and PostgreSQL 17 with the production locale,
 on a Pixel 7 profile. The job's steps are the recipe for a local run; see the

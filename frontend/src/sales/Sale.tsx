@@ -6,6 +6,7 @@ import type { ApiError } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
+import { asInput } from "@/prices/SuggestedPrice";
 import { submitSale, useSaleCommand } from "./commands";
 import type { SaleLine, Sale as SaleReceipt, Shortfall } from "./types";
 import { stockKey } from "./types";
@@ -399,6 +400,20 @@ export function Sale({
                   onChange={(event) => {
                     setOption(event.target.value);
                     setLabelSize("");
+                    // The model's suggested price, which the seller may
+                    // change: the agreed price is the one sold at (owner
+                    // decisions, 2026-09-15 and 2026-10-01). A model with
+                    // none leaves the field empty, never a previous one's.
+                    const picked = stock.data.items.find(
+                      (item) =>
+                        `${item.product_variant_id}:${item.size_id}` ===
+                        event.target.value,
+                    );
+                    setPrice(
+                      picked?.suggested_price
+                        ? asInput(picked.suggested_price)
+                        : "",
+                    );
                   }}
                 >
                   <option value="">Оберіть товар</option>
@@ -505,6 +520,12 @@ export function Sale({
                 setPrice(event.target.value);
               }}
             />
+            {selected?.suggested_price && (
+              <span className="hint">
+                Рекомендована {money(selected.suggested_price)}. Домовилися про
+                іншу — змініть.
+              </span>
+            )}
           </label>
         </div>
         <button
