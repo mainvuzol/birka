@@ -137,6 +137,21 @@ python -m scripts.people deactivate --approved-by <owner> --telegram-user-id <id
 
 See the [people report](.ai/project-memory/people-report.md).
 
+## Paying in parts
+
+A customer may take the goods, pay part now and owe the rest to the store
+that sold (owner decisions, 2026-10-01). `POST /sales` takes
+`credit: {customer_name, customer_phone, paid_now}`.
+
+- **Debts:** `GET /api/v1/credits?store_id=` lists a store's debts.
+- **Payments:** `POST /api/v1/credits/{id}/payments` takes one.
+- **Write-offs:** the owner writes a debt off at
+  `POST /api/v1/credits/{id}/write-off`, with a reason.
+- **Returns:** a return's answer says how much lowers the debt and how much
+  goes back in cash.
+
+See the [credit report](.ai/project-memory/customer-credit-report.md).
+
 ## Customer orders
 
 `POST /api/v1/orders` accepts `store_id`, permanent `command_id`, and price/quantity

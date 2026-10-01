@@ -65,6 +65,7 @@ from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.credit.service import ReturnSettlement, return_settlement, settle_return
 from app.modules.damaged.service import DamagedPart, register
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import (
@@ -121,6 +122,10 @@ class RefundResult:
     # one sale may hold two lines of the same variant and size, so the pairing
     # would not survive being read back from the ledger.
     movements: list[uuid.UUID]
+    # A sale paid in parts: how the goods' worth split between what was owed
+    # and cash back (owner decision, 2026-10-01). None for one paid in full,
+    # whose `total_amount` is the cash back.
+    credit: ReturnSettlement | None = None
 
 
 async def _load_sale(
@@ -303,6 +308,7 @@ def _result(
     items: list[RefundItem],
     sale_items: dict[uuid.UUID, SaleItem],
     movements: list[uuid.UUID],
+    credit: ReturnSettlement | None = None,
 ) -> RefundResult:
     """Assemble a result in the one canonical order.
 
@@ -321,6 +327,7 @@ def _result(
             for item in sorted(items, key=lambda item: (str(item.sale_item_id), str(item.id)))
         ],
         movements=movements,
+        credit=credit,
     )
 
 
@@ -350,6 +357,7 @@ async def _read_refund(session: AsyncSession, refund: Refund) -> RefundResult:
         await refund_return_movement_ids(
             session, organization_id=refund.organization_id, refund_id=refund.id
         ),
+        await return_settlement(session, refund_id=refund.id),
     )
 
 
@@ -571,6 +579,17 @@ async def create_refund(
     ]
     session.add_all(refund_items)
     await session.flush()
+    # Taken after the sale's lines are locked, so two returns of one sale
+    # split its debt one after the other.
+    credit = await settle_return(
+        session,
+        organization_id=scope.organization_id,
+        sale_id=sale.id,
+        refund_id=refund.id,
+        worth=refund.total_amount,
+        actor_user_id=scope.user_id,
+        correlation_id=correlation_id,
+    )
 
     movements: list[uuid.UUID] = []
     restocked = [
@@ -667,6 +686,14 @@ async def create_refund(
             "refund_id": str(refund.id),
             "total_amount": str(refund.total_amount),
             "currency_code": refund.currency_code,
+            **(
+                {
+                    "debt_reduced": str(credit.debt_reduced),
+                    "cash_back": str(credit.cash_back),
+                }
+                if credit is not None
+                else {}
+            ),
             "refunded_now": {
                 str(sale_item_id): quantity for sale_item_id, quantity in requested.items()
             },
@@ -690,7 +717,7 @@ async def create_refund(
         total=str(refund.total_amount),
     )
 
-    return _result(refund, refund_items, sale_items, movements)
+    return _result(refund, refund_items, sale_items, movements, credit)
 
 
 async def refunded_quantities(

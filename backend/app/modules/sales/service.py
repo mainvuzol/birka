@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Protocol
@@ -706,9 +706,15 @@ async def create_sale(
     found_in_store: list[FoundInStore] | None = None,
     missing_in_store: list[MissingInStore] | None = None,
     size_clarified: list[SizeClarified] | None = None,
+    credit_terms: Mapping[str, str] | None = None,
     correlation_id: str | None = None,
 ) -> SaleResult:
-    """Sell the basket, or raise and let the transaction roll back."""
+    """Sell the basket, or raise and let the transaction roll back.
+
+    `credit_terms` is what a sale paid in parts states, as the credit module
+    words it. The sale never reads it: it is part of what makes this command
+    this command, so the same command_id retried with other terms, or none,
+    is refused rather than replayed. The caller opens the credit itself."""
     if not lines:
         raise ValidationFailedError("A sale must contain at least one line")
 
@@ -783,6 +789,9 @@ async def create_sale(
                 {"line_index": clarified.line_index, "quantity": clarified.quantity}
                 for clarified in clarifications_requested
             ],
+            # Absent, not empty, for a sale paid in full, so every sale made
+            # before credit existed keeps the fingerprint it was stored with.
+            **({"credit": dict(credit_terms)} if credit_terms is not None else {}),
         },
         actor_user_id=scope.user_id,
         store_id=store_id,

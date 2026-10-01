@@ -37,6 +37,7 @@ from app.core.errors import NotFoundError
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
+from app.modules.credit import service as credit_service
 from app.modules.refunds.service import refunded_quantities
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
 from app.modules.sales.read import MAX_QUERY, list_sales
@@ -104,6 +105,18 @@ class SizeClarifiedPayload(BaseModel):
     quantity: int = Field(gt=0, le=1000)
 
 
+class CreditPayload(BaseModel):
+    """The customer pays in parts (owner decisions, 2026-10-01): takes the
+    goods now, pays `paid_now` — above nothing, below the total — and owes the
+    rest to this store."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_name: CleanText = Field(min_length=1, max_length=200)
+    customer_phone: CleanText = Field(min_length=1, max_length=40)
+    paid_now: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+
+
 class SaleRequest(BaseModel):
     store_id: uuid.UUID
     # Client-generated and permanent. Two requests carrying the same command_id
@@ -113,6 +126,8 @@ class SaleRequest(BaseModel):
     found_in_store: list[FoundInStorePayload] = Field(default_factory=list, max_length=100)
     missing_in_store: list[MissingInStorePayload] = Field(default_factory=list, max_length=100)
     size_clarified: list[SizeClarifiedPayload] = Field(default_factory=list, max_length=100)
+    # Present only when the customer pays in parts.
+    credit: CreditPayload | None = None
 
 
 class SaleItemResponse(BaseModel):
@@ -126,6 +141,15 @@ class SaleItemResponse(BaseModel):
     final_unit_price: Decimal
     line_total: Decimal
     display_name: str
+
+
+class SaleCreditResponse(BaseModel):
+    """What a sale paid in parts left owing. No name or phone: a receipt is
+    read more widely than the store's debts are."""
+
+    credit_id: uuid.UUID
+    paid_now: Decimal
+    owed: Decimal
 
 
 class SaleResponse(BaseModel):
@@ -151,6 +175,7 @@ class SaleResponse(BaseModel):
             "into the size sold."
         ),
     )
+    credit: SaleCreditResponse | None = None
 
 
 def _to_response(
@@ -159,8 +184,14 @@ def _to_response(
     corrections: list[uuid.UUID],
     shortages: list[uuid.UUID],
     reclassifications: list[uuid.UUID],
+    credit: credit_service.CreditView | None = None,
 ) -> SaleResponse:
     return SaleResponse(
+        credit=(
+            SaleCreditResponse(credit_id=credit.id, paid_now=credit.paid, owed=credit.owed)
+            if credit is not None
+            else None
+        ),
         id=sale.id,
         store_id=sale.store_id,
         currency_code=sale.currency_code,
@@ -205,6 +236,17 @@ async def create(
         scope.require(Permission.INVENTORY_CORRECT_DURING_SALE, payload.store_id)
     if payload.missing_in_store:
         scope.require(Permission.INVENTORY_REPORT_MISSING_DURING_SALE, payload.store_id)
+    credit = (
+        credit_service.terms(
+            customer_name=payload.credit.customer_name,
+            customer_phone=payload.credit.customer_phone,
+            paid_now=payload.credit.paid_now,
+        )
+        if payload.credit is not None
+        else None
+    )
+    if credit is not None:
+        scope.require(Permission.SALE_CREDIT, payload.store_id)
     # Invariant I23, and it belongs here rather than only in the service: the
     # service runs *after* the replay branch below, so a store whose warehouse
     # access was revoked would keep being handed its cached success.
@@ -279,7 +321,19 @@ async def create(
             SizeClarified(line_index=clarified.line_index, quantity=clarified.quantity)
             for clarified in payload.size_clarified
         ],
+        credit_terms=credit_service.fingerprint_of(credit) if credit is not None else None,
         correlation_id=get_correlation_id(),
+    )
+    opened = (
+        await credit_service.open_credit(
+            session,
+            scope=scope,
+            sale=result.sale,
+            credit=credit,
+            correlation_id=get_correlation_id(),
+        )
+        if credit is not None
+        else None
     )
 
     body = (
@@ -291,6 +345,7 @@ async def create(
             result.corrections,
             result.shortages,
             result.reclassifications,
+            opened,
         )
     )
     result.sale.response_snapshot = body.model_dump(mode="json")

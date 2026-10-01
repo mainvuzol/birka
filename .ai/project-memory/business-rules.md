@@ -281,3 +281,30 @@ Asked while drawing up the [release checklist](release-checklist.md).
   list.
 - **Moving goods between warehouses needs no screen at the start.** Both
   stores sell from one shared warehouse.
+
+## Owner decision — 2026-10-01 (paying in parts)
+
+Asked when the owner chose this as the next work. The 2026-09-15 decisions
+had confirmed full and installment payment, and left the rules open.
+
+- **The customer takes the goods at once.** They pay part now and owe the
+  rest. Any first payment above nothing will do.
+- **The shop records the customer's name and phone.**
+- **There is no schedule.** The customer pays when they can. The shop sees
+  what was paid, what is left, and when the last payment came.
+- **A seller and above** sell this way and take later payments.
+- **Payments are taken only in the store that sold.**
+- **Returned goods first lower what is owed.** Money goes back only when the
+  customer has paid more than the goods they keep are worth.
+- **The owner may write off a debt** that will not be paid, saying why.
+  It shows in the history.
+
+How it is carried out, not decided by the owner:
+- **A payment above what is owed is refused.** A sale paid in full at once is
+  an ordinary sale, not a debt.
+- **A written-off debt never becomes cash.** After a write-off, a return gives
+  back at most what was actually paid.
+- **The phone is kept out of the audit log and the receipt.**
+
+Server side built on 2026-10-01; see the [credit report](customer-credit-report.md).
+The screens follow.
