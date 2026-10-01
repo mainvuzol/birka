@@ -847,6 +847,28 @@ async def test_numbers_must_say_where_they_came_from(world):
     }
 
 
+async def test_each_line_says_whether_it_may_be_taken_as_one_piece(world):
+    w = world
+    async with w.client() as client:
+        snapshot = await imported(
+            client,
+            w,
+            ["Куртка", "Бомбер шоколад 3 шт", "Куртка 2 шт 3 шт", "Куртка 1636", "3 куртки"],
+        )
+        lines = await client.get(f"/api/v1/snapshots/{snapshot['snapshot_id']}/lines")
+
+    assert lines.status_code == 200, lines.text
+    # Only the countless line: never one with a count, two of them, or a
+    # number nobody can say is a count.
+    assert [line["may_imply_one"] for line in lines.json()["items"]] == [
+        True,
+        False,
+        False,
+        False,
+        False,
+    ]
+
+
 async def test_size_not_known_is_one_row_that_only_this_path_creates(world):
     w = world
     async with w.client() as client:

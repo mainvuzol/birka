@@ -207,6 +207,9 @@ class LineResponse(BaseModel):
     status: SnapshotRowStatus
     quantity_state: SnapshotQuantityState
     quantity_total: int | None
+    # A line with no number that could be a count, which may be taken as one
+    # piece (`LINE_IMPLIES_ONE`); every other line needs its count stated.
+    may_imply_one: bool
     review_reasons: list[str]
     candidates: dict[str, list[str]]
     unclassified: list[str]

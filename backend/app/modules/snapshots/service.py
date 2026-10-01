@@ -476,6 +476,10 @@ async def _row_views(
                 "status": row.status,
                 "quantity_state": row.quantity_state,
                 "quantity_total": row.quantity_total,
+                # Whether `LINE_IMPLIES_ONE` may answer it: `check_basis`'s own
+                # rule, so a client offers only what the server accepts.
+                "may_imply_one": row.quantity_state is SnapshotQuantityState.UNKNOWN_QUANTITY
+                and mentions_no_count(line.parsed if line else None),
                 **_parse_summary(line.parsed if line else None),
                 "quantity_basis": row.quantity_basis,
                 "allocations": by_row.get(row.id, []),

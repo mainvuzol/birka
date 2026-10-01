@@ -272,7 +272,15 @@ never divided automatically. See [scope and verification](.ai/project-memory/m1-
 ## Legacy stock lists → opening balances (M1-023)
 
 A paper or PDF availability list becomes stock in three steps, never one
-([ADR-0005](.ai/decisions/ADR-0005-legacy-snapshot-import.md)):
+([ADR-0005](.ai/decisions/ADR-0005-legacy-snapshot-import.md)).
+
+**In the app,** «Початкові залишки» does all three:
+- a manager types the list;
+- a manager answers each line;
+- the owner approves the list or rejects it.
+
+See the [opening stock report](.ai/project-memory/opening-stock-screen-report.md).
+Through the API:
 
 1. `POST /api/v1/snapshots` with a client `command_id` (unique within the
    organization; a retry repeats it), `store_id`, `location_id` and up to 1000
