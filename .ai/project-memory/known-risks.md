@@ -284,3 +284,18 @@ See the [release checklist](release-checklist.md) and the
 - **Docker logs were unbounded** until this gate; they are now 5 × 10 MB per
   service. The cron log of the nightly backup is not rotated: it grows by a
   few lines a night.
+
+## «Початкові залишки» — 2026-10-01
+
+See the [report](opening-stock-screen-report.md).
+
+- **A list goes only into a warehouse with no history.** Nothing says so
+  before the approval. The screen's hint does, and the refusal explains
+  itself. Approve the lists before the first receipt or sale there.
+- **The photos → parser → JSON way does not exist yet.** Its JSON is not to
+  be loaded as stock directly, or the review would be bypassed. Unless the
+  owner decides otherwise, it becomes a list's lines and passes through the
+  same review.
+- **A slow review is the price of no invented counts.** Hundreds of lines on
+  a phone take time. Not measured with real notebooks.
+

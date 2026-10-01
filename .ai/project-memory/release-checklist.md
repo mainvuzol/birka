@@ -34,7 +34,7 @@ accepted.
 
 | # | | Who | Status |
 |---|---|---|---|
-| 15 | **The shops' existing stock gets in.** The owner chose on 2026-10-01: either lists with review (ADR-0005, server side built) or photos of the notebooks → a separate parser → JSON. Whatever is still missing is added one by one. Neither has a screen yet. | agent, then the shops | **blocker: build next** |
+| 15 | **The shops' existing stock gets in.** The owner chose on 2026-10-01: either lists with review (ADR-0005), or photos of the notebooks → a separate parser → JSON. Whatever is still missing is added one by one. **Lists with review now have their screen, «Початкові залишки»** ([report](opening-stock-screen-report.md); local). The JSON way waits for the owner's choice and the parser's format. | agent, then the shops | built locally; the shops then type and review their lists |
 | 16 | **A server:** domain, HTTPS, Docker, `.env` with `BIRKA_APP_ENV=production`. | administrator | not started |
 | 17 | **The bot's menu button** opens `https://<domain>/`. | administrator | not started |
 | 18 | **The owner and the shop's places** (`seed_organization`), then the sellers (`scripts.people`). | administrator, on the owner's word | not started |

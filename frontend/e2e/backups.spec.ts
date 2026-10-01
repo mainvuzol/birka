@@ -110,7 +110,9 @@ test("a seller, even holding every permission for the store, has no such section
     if (request.url().includes("/api/v1/backups")) asked.push(request.url());
   });
   await enter(page, fixture.telegram_user_id);
-  await expect(page.getByRole("button", { name: "Залишки" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Залишки", exact: true }),
+  ).toBeVisible();
   await expect(tab(page)).toHaveCount(0);
   expect(asked).toEqual([]);
 });

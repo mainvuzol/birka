@@ -78,6 +78,9 @@ async def main() -> None:
         # damaged return goes and nothing sells (owner decision, 2026-10-01).
         returns = StockLocation(organization_id=org.id, name="Склад повернень", code="E2E-RETURNS")
         damaged = StockLocation(organization_id=org.id, name="Брак", code="E2E-BIN")
+        # A sixth that nothing has ever moved in: the one warehouse a stock
+        # list may still be approved into (ADR-0005 §5), once per seed.
+        opening = StockLocation(organization_id=org.id, name="Новий склад", code="E2E-OPENING")
         concept = CanonicalConcept(organization_id=org.id, name="Лоран", normalized_name="лоран")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         user = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
@@ -96,6 +99,7 @@ async def main() -> None:
                 legacy,
                 returns,
                 damaged,
+                opening,
                 concept,
                 system,
                 user,
@@ -113,7 +117,7 @@ async def main() -> None:
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        for reachable in (location, till, counted, legacy, returns):
+        for reachable in (location, till, counted, legacy, returns, opening):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -175,6 +179,7 @@ async def main() -> None:
             "legacy_location_id": str(legacy.id),
             "returns_location_id": str(returns.id),
             "bin_location_id": str(damaged.id),
+            "opening_location_id": str(opening.id),
             "variant_id": str(variant.id),
             "size_id": str(size.id),
         }

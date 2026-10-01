@@ -13,7 +13,8 @@ const pageSize = 20;
  * Receiving needs it because a delivery is usually of something the shop has
  * run out of; a stocktake needs it for goods found on a shelf the system says
  * is empty. Both are exactly what a stock list can never offer. The endpoint
- * requires `inventory:receive`.
+ * requires `inventory:receive`. A legacy list's review starts from what its
+ * line reads, as `initialSearch`.
  */
 export function CatalogPicker({
   store,
@@ -21,14 +22,16 @@ export function CatalogPicker({
   scopeKey,
   variant,
   onVariant,
+  initialSearch = "",
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   variant: ReceivableVariant | null;
   onVariant: (variant: ReceivableVariant | null) => void;
+  initialSearch?: string;
 }): JSX.Element {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [asked, setAsked] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const variants = useQuery({

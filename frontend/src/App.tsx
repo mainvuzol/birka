@@ -38,6 +38,7 @@ import type { Adjustment } from "@/inventory/adjustmentTypes";
 import { Backups, useBackups } from "@/backups/Backups";
 import { Returns } from "@/returns/Returns";
 import { Damaged } from "@/damaged/Damaged";
+import { Openings } from "@/openings/Openings";
 import {
   loadReturn,
   resolveReturn,
@@ -187,11 +188,16 @@ function Workspace({
     | "receive"
     | "returns"
     | "damaged"
+    | "openings"
     | "backups"
   >("list");
   // The owner's section. A backup is of the whole server, so only a grant
   // held organization-wide opens it, never one for a store.
   const canSeeBackups = me.organization_permissions.includes("backup:view");
+  // Existing stock, entered as a list: whoever imports lists or approves them.
+  const canSeeOpenings =
+    store.permissions.includes("snapshot:import") ||
+    store.permissions.includes("snapshot:approve");
   const backupsKey = `${me.organization_id}:${me.user_id}`;
   const backups = useBackups(token, backupsKey, canSeeBackups);
   const backupsNeedYou =
@@ -425,6 +431,17 @@ function Workspace({
             }}
           >
             Брак
+          </button>
+        )}
+        {canSeeOpenings && (
+          <button
+            className={tab === "openings" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("openings");
+            }}
+          >
+            Початкові залишки
           </button>
         )}
         {canSeeBackups && (
@@ -756,6 +773,17 @@ function Workspace({
           <Damaged store={store} token={token} blocked={blocked} />
         ) : (
           <p role="alert">Немає доступу до розділу «Брак».</p>
+        )
+      ) : tab === "openings" ? (
+        canSeeOpenings ? (
+          <Openings
+            store={store}
+            token={token}
+            scopeKey={key}
+            blocked={blocked}
+          />
+        ) : (
+          <p role="alert">Немає доступу до початкових залишків.</p>
         )
       ) : tab === "backups" ? (
         canSeeBackups ? (

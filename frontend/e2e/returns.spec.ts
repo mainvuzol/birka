@@ -308,7 +308,9 @@ test("taking returns needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await page.getByRole("button", { name: "Основний MAIN" }).click();
-  await expect(page.getByRole("button", { name: "Залишки" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Залишки", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Повернення", exact: true }),
   ).toHaveCount(0);

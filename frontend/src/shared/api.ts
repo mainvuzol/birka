@@ -17,9 +17,12 @@ export async function api<T>(
   // A command that carries one. Sales require it; reads and the order
   // commands, which identify themselves by `command_id` alone, do not.
   idempotencyKey?: string,
+  // A body is POSTed unless this says otherwise: a stock list's line is
+  // answered by a PUT, which replaces its previous answer.
+  method: "POST" | "PUT" = "POST",
 ): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: body === undefined ? "GET" : method,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
