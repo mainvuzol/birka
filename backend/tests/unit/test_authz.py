@@ -70,6 +70,9 @@ EXPECTED_MANAGER = EXPECTED_SELLER | {
     Permission.CATALOG_SET_PRICE,
     Permission.SNAPSHOT_IMPORT,
     Permission.REPORT_VIEW_FINANCIAL,
+    # Owner decision, 2026-10-01: the owner and managers return goods to a
+    # supplier; a seller does not.
+    Permission.SUPPLIER_RETURN,
 }
 EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.SNAPSHOT_APPROVE,

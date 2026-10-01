@@ -125,3 +125,16 @@ tenancy, core` (+ audit).
   ledger's door (`tenancy.hold_stores`), never by this module.
 - No module imports it; only the API does. Contracts are in
   `backend/pyproject.toml`.
+
+2026-10-01 amendment (returns to a supplier): module `suppliers` owns the
+network's suppliers and the goods returned to them (`supplier`,
+`supplier_return`, `supplier_return_line`, `supplier_return_cancel`).
+Permitted edges: `suppliers → inventory, catalog, identity, authz, tenancy,
+core` (+ audit).
+- Goods leave and come back as ledger movements (`SUPPLIER_RETURN`,
+  `SUPPLIER_RETURN_CANCEL`) through `inventory.apply_movements`.
+- A unit from «Брак» goes back, and comes back, through the «Брак» section:
+  `damaged → suppliers` is the one edge into this module besides the API. So
+  stock in «Брак» still changes only through returns and that section, and
+  this module never imports `damaged`.
+- Contracts are in `backend/pyproject.toml`.

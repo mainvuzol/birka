@@ -5,6 +5,7 @@ import { ApiError, api, errorText } from "@/shared/api";
 import type { Location, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import { sizeLabel } from "@/returns/types";
+import { SupplierPicker } from "@/suppliers/Picker";
 import type { DamagedUnit } from "./types";
 
 /**
@@ -55,7 +56,12 @@ export function Damaged({
 
   async function act(
     unit: DamagedUnit,
-    action: "take" | "return-to-sale" | "confirm" | "write-off",
+    action:
+      | "take"
+      | "return-to-sale"
+      | "confirm"
+      | "write-off"
+      | "return-to-supplier",
     body: Record<string, unknown> = {},
   ): Promise<void> {
     setBusy(unit.id);
@@ -79,6 +85,7 @@ export function Damaged({
       await Promise.all([
         cache.invalidateQueries({ queryKey: ["damaged-units", store.id] }),
         cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
+        cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
       ]);
     }
   }
@@ -131,6 +138,13 @@ export function Damaged({
                   places={places.data ?? []}
                   busy={blocked || busy !== null}
                   readOnly={readOnly}
+                  supplier={
+                    // The owner and managers return a confirmed unit to its
+                    // supplier instead (owner decision, 2026-10-01).
+                    store.permissions.includes("supplier:return")
+                      ? { store, token }
+                      : null
+                  }
                   act={(action, body) => {
                     void act(unit, action, body);
                   }}
@@ -156,6 +170,7 @@ function Unit({
   places,
   busy,
   readOnly,
+  supplier,
   act,
 }: {
   unit: DamagedUnit;
@@ -163,14 +178,22 @@ function Unit({
   places: Location[];
   busy: boolean;
   readOnly: boolean;
+  /** Whoever may return it to its supplier; null for everyone else. */
+  supplier: { store: Store; token: string } | null;
   act: (
-    action: "take" | "return-to-sale" | "confirm" | "write-off",
+    action:
+      | "take"
+      | "return-to-sale"
+      | "confirm"
+      | "write-off"
+      | "return-to-supplier",
     body?: Record<string, unknown>,
   ) => void;
 }): JSX.Element {
   const [asking, setAsking] = useState<
-    "return" | "confirm" | "write-off" | null
+    "return" | "confirm" | "write-off" | "supplier" | null
   >(null);
+  const [supplierId, setSupplierId] = useState("");
   const [note, setNote] = useState("");
   const [place, setPlace] = useState("");
   const trimmed = note.trim();
@@ -244,6 +267,45 @@ function Unit({
             }}
           >
             Так, повернути на «{unit.sold_from_location_name}»
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setAsking(null);
+            }}
+          >
+            Скасувати
+          </button>
+        </div>
+      ) : asking === "supplier" && supplier ? (
+        <div className="actions">
+          <SupplierPicker
+            store={supplier.store}
+            token={supplier.token}
+            value={supplierId}
+            change={setSupplierId}
+            disabled={busy}
+          />
+          <label>
+            Примітка для постачальника (необов’язково)
+            <textarea
+              value={note}
+              maxLength={1000}
+              onChange={(event) => {
+                setNote(event.target.value);
+              }}
+            />
+          </label>
+          <button
+            disabled={busy || supplierId === ""}
+            onClick={() => {
+              act("return-to-supplier", {
+                supplier_id: supplierId,
+                note: trimmed ? trimmed : null,
+              });
+            }}
+          >
+            Так, повернути постачальнику
           </button>
           <button
             className="quiet"
@@ -337,6 +399,17 @@ function Unit({
               >
                 Списати
               </button>
+              {supplier && (
+                <button
+                  className="quiet"
+                  disabled={busy}
+                  onClick={() => {
+                    setAsking("supplier");
+                  }}
+                >
+                  Повернути постачальнику
+                </button>
+              )}
             </>
           )}
         </div>

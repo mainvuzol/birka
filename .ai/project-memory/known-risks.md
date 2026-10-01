@@ -362,3 +362,18 @@ See the [report](store-states-report.md).
 - **"Only reading" is decided by the HTTP method.** Every command is a POST;
   a GET that changed something would be let through in a closed store. None
   does today, and a review of every `GET` handler found none writing.
+
+## Returns to a supplier — 2026-10-01
+
+See the [report](supplier-returns-report.md).
+
+- **No money is recorded with a return.** The owner chose goods only: what
+  the supplier pays back or sets off stays outside the system until the
+  store's purchase installments are built.
+- **Receiving does not record a supplier.** A return names one, but nothing
+  links it to the delivery the goods came in.
+- **A cancellation puts goods back where they left.** If that warehouse has
+  been closed since, the cancellation is refused until it is reopened.
+- **Acquisition costs are untouched.** A return does not say which lot went
+  back; the ledger records the units only.
+
