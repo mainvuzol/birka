@@ -45,6 +45,9 @@ accepted.
 
 ## Decided not to block the release
 
+What is still to be built after the release, and what waits on the owner,
+is listed in the [backlog](backlog.md).
+
 | | |
 |---|---|
 | **Moving goods between warehouses has no screen** | Not needed. Both stores sell from one shared warehouse (owner, 2026-10-01). Build it when a separate warehouse appears; the server side exists. |
