@@ -7,6 +7,8 @@ retention, off-server copies and alerting the same day (business-rules.md,
 
 **Not done yet:** the steps below have not been carried out on a production
 server.
+The server itself is set up by the [server runbook](server-runbook.md), which
+sends you here at its step 8.
 
 The owner hears of every failed or missing night in the app and in Telegram
 since the same day; see [how the owner hears of it](#how-the-owner-hears-of-it)

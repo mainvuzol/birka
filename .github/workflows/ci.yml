@@ -142,6 +142,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: The server's compose file is valid, every service and profile
+        # Nothing else reads it before a server does (server-runbook.md).
+        run: |
+          POSTGRES_PASSWORD=ci BIRKA_TELEGRAM_BOT_TOKEN=ci BIRKA_SESSION_SECRET=ci \
+            docker compose -f infra/docker-compose.yml --profile ops config --quiet
+
       - name: Build the ops image, and the API image beside it
         run: |
           docker build --target ops -t birka-ops backend
@@ -209,6 +215,86 @@ jobs:
           path: |
             backups/last-run.json
             backups/*.drill.json
+          if-no-files-found: ignore
+
+  hot-path:
+    # M1-028: the two server budgets the release gate quotes — catalogue read
+    # p95 <= 300 ms and POST /sales p95 <= 500 ms — measured on the pinned
+    # PostgreSQL 17 with the production locale, through one uvicorn process as
+    # the server runs it. Until now they were measured only on a laptop, on
+    # PostgreSQL 16.2 (hot-path-budget-report.md). A shared runner is slower
+    # and noisier than either, and the budgets have five times headroom or
+    # more: a failure here is a regression worth reading, not noise.
+    name: hot path budgets (PostgreSQL 17)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: birka
+          POSTGRES_PASSWORD: birka
+          # The harness refuses any database not named birka_perf.
+          POSTGRES_DB: birka_perf
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U birka -d birka_perf"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      BIRKA_APP_ENV: ci
+      BIRKA_DATABASE_URL: postgresql+asyncpg://birka:birka@localhost:5432/birka_perf
+      BIRKA_PERF_DATABASE_URL: postgresql+asyncpg://birka:birka@localhost:5432/birka_perf
+      BIRKA_PERF_API_URL: http://127.0.0.1:58043
+      BIRKA_TELEGRAM_BOT_TOKEN: "123456:ci-placeholder-token"
+      BIRKA_SESSION_SECRET: ci-session-secret-that-is-long-enough-32
+      BIRKA_LOG_LEVEL: WARNING
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Migrate, and start the API as the server runs it
+        run: |
+          alembic upgrade head
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 58043 \
+            --no-access-log > /tmp/birka-perf-api.log 2>&1 &
+          for attempt in $(seq 30); do
+            curl -fsS http://127.0.0.1:58043/api/v1/health && exit 0
+            sleep 1
+          done
+          cat /tmp/birka-perf-api.log
+          exit 1
+
+      - name: Measure, and fail on a budget breached
+        # pipefail: tee must not hide the harness's own exit status.
+        run: |
+          set -o pipefail
+          python -m scripts.measure_hot_path 2>&1 | tee /tmp/hot-path.txt
+
+      - name: Preserve the figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hot-path
+          path: |
+            /tmp/hot-path.txt
+            /tmp/birka-perf-api.log
           if-no-files-found: ignore
 
   e2e:

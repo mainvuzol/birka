@@ -259,3 +259,25 @@ How it is carried out, not decided by the owner:
   to pass on.
 
 Built on 2026-10-01; see the [people report](people-report.md).
+
+## Owner decision — 2026-10-01 (going live)
+
+Asked while drawing up the [release checklist](release-checklist.md).
+
+- **The shops' existing stock gets in in one of two ways.** Either:
+  - lists with review, as decided on 2026-09-29 (ADR-0005): a list is kept
+    line by line, a person states each line, and the owner approves it into
+    opening balances; or
+  - the shops photograph their notebooks and tables, a separate parser reads
+    them, and the result is added to the warehouses as JSON.
+
+  **Whatever is still missing is added one by one.** Not decided yet:
+  - which of the two ways;
+  - the JSON's shape, since the parser does not exist yet;
+  - whether its lines still pass through review before approval.
+
+  The rules of 2026-09-29 stand until the owner changes them: an opening
+  balance only into a warehouse with no history, and only as the answer to a
+  list.
+- **Moving goods between warehouses needs no screen at the start.** Both
+  stores sell from one shared warehouse.

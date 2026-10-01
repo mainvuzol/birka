@@ -2,10 +2,20 @@
 # PostgreSQL 17: ADR-0002 requires >= 15 for UNIQUE NULLS NOT DISTINCT.
 name: birka
 
+# Docker keeps every container's output, unbounded by default: on a small
+# server the API's log alone would fill the disk in time, and the database
+# would stop with it. Each service keeps at most 5 × 10 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-birka}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -32,6 +42,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -60,6 +71,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
       target: ops
+    logging: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -84,6 +96,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -107,6 +120,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *logging
     depends_on:
       api:
         condition: service_started
