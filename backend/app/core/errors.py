@@ -50,6 +50,18 @@ class SessionExpiredError(AuthenticationFailedError):
     message = "Session has expired"
 
 
+class NoAccessError(AuthenticationFailedError):
+    """A Telegram account no store has let in, or has let go.
+
+    Its own code so the app can tell the person what to do: pass their
+    Telegram number to the owner, who has them added on the server (owner
+    decision, 2026-10-01).
+    """
+
+    code = "NO_ACCESS"
+    message = "This Telegram account has no access to any store"
+
+
 class PermissionDeniedError(DomainError):
     code = "PERMISSION_DENIED"
     http_status = 403
@@ -266,6 +278,7 @@ __all__ = [
     "InsufficientStockError",
     "InvalidInitDataError",
     "LocationAccessDeniedError",
+    "NoAccessError",
     "NotFoundError",
     "OpeningBalanceConflictError",
     "PermissionDeniedError",

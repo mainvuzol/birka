@@ -96,6 +96,33 @@ Apply migrations through 0011 before this version. Downgrade refuses private ass
 older application builds that ignore private controls are also unsafe to deploy
 while those assignments exist. See the [private control report](.ai/project-memory/private-location-report.md).
 
+## Who works where
+
+Everyone but the bootstrap owner is added on the server, by the number of
+their Telegram account, and only on an owner's word (owner decision,
+2026-10-01). Someone not yet added opens the app and sees that number, to
+pass on. Each change names the owner with `--approved-by`. That owner must
+hold `user:manage` there, and every permission of the role concerned. A
+child store's owner decides only in that store.
+
+```sh
+python -m scripts.people list
+python -m scripts.people grant --approved-by <owner> --telegram-user-id <id> --store MAIN --role SELLER
+python -m scripts.people remove --approved-by <owner> --telegram-user-id <id> --store MAIN
+python -m scripts.people deactivate --approved-by <owner> --telegram-user-id <id>   # every store
+```
+
+- **Roles** are `SELLER`, `MANAGER`, `OWNER`, or one the organization
+  composed.
+- **`--all-stores`** in place of `--store` gives, or takes away, a role in
+  every store.
+- **Nothing is deleted.** A removed person's history stays under their name,
+  and the next `grant` lets them back in.
+- **On the server:** `docker compose run --rm --no-deps api python -m
+  scripts.people …`.
+
+See the [people report](.ai/project-memory/people-report.md).
+
 ## Customer orders
 
 `POST /api/v1/orders` accepts `store_id`, permanent `command_id`, and price/quantity

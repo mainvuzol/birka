@@ -229,3 +229,33 @@ The owner answered the remaining case the same day:
   were there, as for any other line.
 
 Built on 2026-10-01; see the [empty shelf report](empty-shelf-report.md).
+
+## Owner decision — 2026-10-01 (people, Q4)
+
+Asked because nothing could add a seller: the bootstrap creates one owner,
+and no screen or command gave anyone else a store.
+
+- **A person is added on the server**, by a command the technical
+  administrator runs, by the number of the person's Telegram account. The
+  app has no section for it.
+- **Only an owner adds and removes people.** The network's owner decides in
+  any store. A child store's owner decides only in that store. A manager
+  does not.
+- **A person can leave one store, or be turned off completely.** Turning
+  off covers every store at once. Either way access ends straight away, and
+  what the person did stays in the history under their name.
+- **Each seller works from their own Telegram** (Q4, devices), so every sale
+  names who made it.
+
+How it is carried out, not decided by the owner:
+- **Every change names the owner on whose word it is made.** That owner must
+  hold `user:manage` where the change applies, and every permission of the
+  role given or taken away. So nobody gives more than they hold. The owner
+  is the actor of the audit record.
+- **A safety guard of our own:** a change is refused if it would leave nobody
+  who manages people in every store. After that, no change could ever be
+  approved again.
+- **Someone the shop has not added sees their Telegram number** in the app,
+  to pass on.
+
+Built on 2026-10-01; see the [people report](people-report.md).

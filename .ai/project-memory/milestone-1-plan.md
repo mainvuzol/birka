@@ -102,7 +102,7 @@ Confirmed at revision 3:
 | Q1 | Currency; price source; discounts | **ANSWERED → F33** |
 | Q2 | Is stock counted per size | **ANSWERED → F34** |
 | Q3 | Selling when system shows zero | **ANSWERED → F30** |
-| Q4 | Number of sellers, shared vs personal devices, cross-store visibility | open — M1-008/009 defaults hold, blocks nothing |
+| Q4 | Number of sellers, shared vs personal devices, cross-store visibility | **partly answered 2026-10-01**: each seller works from their own Telegram; people are added on the server, on an owner's word, per store or for every store (business-rules.md, "people"). The number of sellers was not asked. |
 | Q5 | Transfer confirmation on receipt | open — default single-step, blocks nothing |
 | U11 | Real legacy documents | **ANSWERED → F35** |
 
