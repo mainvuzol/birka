@@ -173,13 +173,68 @@ and settings. Evidence:
 - through one uvicorn process, as the server runs it;
 - on PostgreSQL 17 with the production locale.
 
-It fails the build on a breached budget and keeps the figures as an
-artifact. Read them as a shared runner's numbers, slower and noisier than
-the laptop's. That closes "PostgreSQL 17 numbers: this ran on 16.2", the
-open item above.
+It keeps the figures as an artifact. That closes "PostgreSQL 17 numbers:
+this ran on 16.2", the open item above. What it fails on changed after its
+first runs; see the next update.
 
 **Still open:**
 - `time-to-sale ≤ 15 s`, which needs a person;
 - a real device profile.
 
 Both are rows of the [release checklist](release-checklist.md).
+
+## Update — 2026-10-01: the first PostgreSQL 17 figures, and what CI fails on
+
+The `hot-path` job's first two runs on PR #50 both passed. Under
+concurrency, though, they came much closer to the budgets than the laptop
+predicted.
+
+Evidence: `ci-pg17-push.txt` and `ci-pg17-pull-request.txt` in
+[`output/verification/2026-10-01-hot-path/`](../../output/verification/2026-10-01-hot-path/).
+
+| Case | laptop, PG 16.2 (worst of 3) | **CI, PG 17 (worst of 2)** | Budget |
+|---|---|---|---|
+| `GET /catalog/stock-options` | 6.8 | **29.3** | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 58.6 | **290.8** | 300 ms |
+| `POST /sales`, 1 line | 10.6 | **49.2** | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 39.8 | **284.7** | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 55.6 | **447.4** | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 74.0 | **273.8** | 500 ms |
+
+**Why.** The runner is a private repository's standard Linux machine:
+- it has two CPUs by GitHub's documentation. Its log does not say, and the
+  harness now prints the count;
+- it is about 4–5× slower than the laptop for this work;
+- the harness, the API and the database share its CPUs.
+
+**What dominates is Python, not PostgreSQL.** A profile of the catalogue
+read, by statement log and `cProfile`:
+- 33 statements per request take about 0.75 ms of database time together;
+- the request takes about 5.4 ms on the laptop;
+- the rest is spread across SQLAlchemy's ORM, FastAPI and serialization,
+  with no single hot spot.
+
+Fewer statements would gain a fraction; nothing here would gain a multiple.
+
+**How to read it.** Six sellers asking back to back is roughly fifty
+requests a second, about a hundred times what two shops' tills ask.
+- One seller has ten times headroom, even on this runner.
+- The concurrent cases measure the runner as much as the code.
+- A gate on them would fail pull requests at random. Two of six cases came
+  within 3 % and 11 % of their budgets.
+
+**So CI now fails on what one seller sees.**
+- `BIRKA_PERF_GATE=one-seller` gates only the concurrency-1 cases.
+- It still prints every case's verdict; a breach under concurrency is
+  marked `(not gated)`.
+- `all`, the default, still gates everything, and is the release reading.
+- The harness now prints the machine's CPU count beside its figures.
+- Checked both ways, with a budget lowered to force a breach:
+  - a breach for one seller fails the run;
+  - a breach under concurrency fails it only with `all`.
+
+**For the server:** this is the evidence behind the runbook's "2 vCPU"
+estimate. A two-CPU machine also running the load generator served six
+sellers asking back to back within budget. The shops will ask about a
+hundredth as often.
+

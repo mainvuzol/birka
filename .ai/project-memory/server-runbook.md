@@ -16,7 +16,7 @@ to it at the step where it belongs.
 
 | | |
 |---|---|
-| A server | Linux with Docker Engine and the Compose plugin. 2 vCPU, 2 GB RAM and 20 GB of disk is an estimate for two shops, not a measurement. The nightly drill restores a full copy beside the database, so leave room for two. |
+| A server | Linux with Docker Engine and the Compose plugin. 2 vCPU, 2 GB RAM and 20 GB of disk is an estimate for two shops. The CPU part rests on CI: a two-CPU runner served six sellers asking back to back within budget, while also running the load ([figures](hot-path-budget-report.md#update--2026-10-01-the-first-postgresql-17-figures-and-what-ci-fails-on)). The nightly drill restores a full copy beside the database, so leave room for two. |
 | A domain name | its DNS `A` record pointing at the server. Telegram opens a Mini App only over HTTPS; Caddy gets the certificate itself. |
 | Open ports | 22 (SSH), 80 and 443. Nothing else: the database is never published. |
 | The clock | synchronized (`timedatectl` says `System clock synchronized: yes`). Telegram's sign-in data is refused when its time is in the future, or more than an hour old. |
@@ -228,4 +228,5 @@ money is recorded says so, and says what its downgrade refuses.
 - **The images use `postgres:17-alpine` and `caddy:2-alpine`.** A build
   picks up their newest minor versions.
 - **The server size is an estimate.** The hot-path budgets are measured on
-  a laptop and on a CI runner, not on a phone in a shop.
+  a laptop and on a two-CPU CI runner, not on the server or on a phone in a
+  shop.
