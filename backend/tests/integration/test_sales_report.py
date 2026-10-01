@@ -1,0 +1,434 @@
+"""The sales report (owner decisions, 2026-10-02), over HTTP against real
+PostgreSQL, signed in as the network's people.
+
+- The owner and managers read it, each for the stores they hold
+  `report:view_financial` in; a seller does not.
+- Today, or any day or days, by the store's own clock.
+- What was sold and returned, and the money through the till: sales paid in
+  full, payments towards debts, less what returns handed back.
+- Each store, and the stores together for whoever sees several.
+- A return counts on the day it was taken.
+- A sale and its returns are the store's that sold; money is the store's
+  whose till it went through.
+- The models sold, and every sale and return.
+
+All data is synthetic.
+"""
+
+from __future__ import annotations
+
+import os
+import uuid
+from collections.abc import AsyncIterator
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import pytest
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine as new_engine
+
+from app.modules.authz.models import Membership
+from app.modules.authz.permissions import RoleCode
+from app.modules.authz.service import seed_default_roles
+from app.modules.identity.models import AppUser
+from app.modules.refunds.models import Refund
+from app.modules.sales.models import Sale
+from tests.conftest import requires_database
+from tests.integration.test_shared_warehouse import key, sale_body
+from tests.integration.test_store_states import Network, as_, network, set_state, stocked
+
+pytestmark = [pytest.mark.integration, requires_database()]
+
+KYIV = ZoneInfo("Europe/Kyiv")
+REPORT = "/api/v1/reports/sales"
+
+
+@pytest.fixture
+async def engine() -> AsyncIterator[AsyncEngine]:
+    instance = new_engine(os.environ["BIRKA_TEST_DATABASE_URL"])
+    yield instance
+    await instance.dispose()
+
+
+@pytest.fixture
+def maker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
+
+
+def credit(paid_now: str) -> dict:
+    return {
+        "credit": {
+            "customer_name": "Ірина Коваль",
+            "customer_phone": "0671234567",
+            "paid_now": paid_now,
+        }
+    }
+
+
+async def sell(
+    maker, net: Network, by: uuid.UUID, store: uuid.UUID, *, qty: int = 2, **extra
+) -> dict:
+    """Coats at 1500 each, from the shared warehouse."""
+    variant, size = await stocked(maker, net, net.shops.shared_warehouse, qty=qty)
+    async with as_(maker, net, by) as client:
+        response = await client.post(
+            "/api/v1/sales",
+            json=sale_body(store, net.shops.shared_warehouse, variant, size, qty=qty) | extra,
+            headers=key(),
+        )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def take_back(maker, net: Network, sale: dict, *, by: uuid.UUID, at: uuid.UUID, qty: int = 1):
+    async with as_(maker, net, by) as client:
+        response = await client.post(
+            f"/api/v1/sales/{sale['id']}/refunds",
+            json={
+                "command_id": str(uuid.uuid4()),
+                "store_id": str(at),
+                "lines": [
+                    {
+                        "sale_item_id": sale["items"][0]["id"],
+                        "quantity": qty,
+                        "restock": True,
+                        "condition": "INTACT",
+                    }
+                ],
+            },
+            headers=key(),
+        )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def pay(maker, net: Network, credit_id: str, amount: str, *, by: uuid.UUID, at=None):
+    async with as_(maker, net, by) as client:
+        response = await client.post(
+            f"/api/v1/credits/{credit_id}/payments",
+            json={"command_id": str(uuid.uuid4()), "amount": amount}
+            | ({"store_id": str(at)} if at else {}),
+        )
+    assert response.status_code == 201, response.text
+
+
+async def read(maker, net: Network, by: uuid.UUID, path: str = REPORT, **params):
+    async with as_(maker, net, by) as client:
+        return await client.get(path, params={k: str(v) for k, v in params.items()})
+
+
+def figures(report: dict, store: uuid.UUID) -> dict:
+    [found] = [each for each in report["stores"] if each["store_id"] == str(store)]
+    return found
+
+
+def money_of(found: dict) -> tuple:
+    return tuple(
+        found[name]
+        for name in (
+            "sales",
+            "units",
+            "sold",
+            "returns",
+            "returned_units",
+            "returned",
+            "net",
+            "paid_in_full",
+            "debt_payments",
+            "paid_back",
+            "cash",
+        )
+    )
+
+
+async def a_store_manager(maker, net: Network, store: uuid.UUID) -> uuid.UUID:
+    async with maker() as session:
+        roles = await seed_default_roles(session, net.shops.organization_id)
+        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Марта")
+        session.add(user)
+        await session.flush()
+        session.add(
+            Membership(
+                user_id=user.id,
+                organization_id=net.shops.organization_id,
+                store_id=store,
+                role_id=roles[RoleCode.MANAGER.value].id,
+            )
+        )
+        await session.commit()
+        return user.id
+
+
+async def test_a_day_of_one_store_in_sales_returns_and_money(maker):
+    net = await network(maker)
+    primary = net.shops.primary_store
+    paid = await sell(maker, net, net.seller, primary)
+    in_parts = await sell(maker, net, net.seller, primary, **credit("1000.00"))
+    await pay(maker, net, in_parts["credit"]["credit_id"], "500.00", by=net.seller)
+    # Both coats of the sale paid in full come back, in one return, for their
+    # money; one of the sale paid in parts only lowers the debt, 1500 still
+    # being owed.
+    await take_back(maker, net, paid, by=net.seller, at=primary, qty=2)
+    await take_back(maker, net, in_parts, by=net.seller, at=primary)
+
+    response = await read(maker, net, net.owner)
+
+    assert response.status_code == 200, response.text
+    report = response.json()
+    assert report["date_from"] == report["date_to"] == report["today"]
+    assert report["today"] == datetime.now(KYIV).date().isoformat()
+    assert report["currency_code"] == "UAH"
+    assert [each["store_name"] for each in report["stores"]] == ["Дочірній", "Основний"]
+    here = figures(report, primary)
+    assert money_of(here) == (
+        2,
+        4,
+        "6000.00",
+        2,
+        3,
+        "4500.00",
+        "1500.00",
+        "3000.00",
+        "1500.00",
+        "3000.00",
+        "1500.00",
+    )
+    assert here["store_state"] == "ACTIVE"
+    assert money_of(figures(report, net.shops.child_store)) == (
+        0,
+        0,
+        "0.00",
+        0,
+        0,
+        "0.00",
+        "0.00",
+        "0.00",
+        "0.00",
+        "0.00",
+        "0.00",
+    )
+    # The stores together.
+    assert money_of(report["total"]) == money_of(here)
+
+
+async def test_the_sale_is_the_sellers_and_the_money_the_tills(maker):
+    net = await network(maker)
+    primary, child = net.shops.primary_store, net.shops.child_store
+    # Sold at the child store, brought back to the primary one.
+    sold_there = await sell(maker, net, net.child_seller, child, qty=1)
+    await take_back(maker, net, sold_there, by=net.seller, at=primary)
+    # A debt of the child store, paid at the primary one while the child is
+    # blocked.
+    owed = await sell(maker, net, net.child_seller, child, **credit("500.00"))
+    assert (await set_state(maker, net, "BLOCKED")).status_code == 200
+    await pay(maker, net, owed["credit"]["credit_id"], "200.00", by=net.seller, at=primary)
+
+    report = (await read(maker, net, net.owner)).json()
+
+    there = figures(report, child)
+    assert there["store_state"] == "BLOCKED"
+    # Both sales and the return are the child's: it sold them.
+    assert (there["sales"], there["sold"], there["returns"], there["returned"]) == (
+        2,
+        "4500.00",
+        1,
+        "1500.00",
+    )
+    # Its till took the coat sold in full and the first payment; it handed
+    # nothing back and took no later payment.
+    assert (
+        there["paid_in_full"],
+        there["debt_payments"],
+        there["paid_back"],
+        there["cash"],
+    ) == ("1500.00", "500.00", "0.00", "2000.00")
+    here = figures(report, primary)
+    assert (here["sales"], here["returns"]) == (0, 0)
+    # The primary store's till handed the money back and took the payment.
+    assert (here["debt_payments"], here["paid_back"], here["cash"]) == (
+        "200.00",
+        "1500.00",
+        "-1300.00",
+    )
+    assert report["total"]["cash"] == "700.00"
+    assert report["total"]["net"] == "3000.00"
+
+
+async def test_a_day_is_the_stores_own_and_a_return_counts_on_its_day(maker):
+    net = await network(maker)
+    primary = net.shops.primary_store
+    sale = await sell(maker, net, net.seller, primary, qty=1)
+    refund = await take_back(maker, net, sale, by=net.seller, at=primary)
+    # Sold at 23:30 in Kyiv on the 10th of March — 21:30 on the 10th by UTC —
+    # and brought back at 00:10 on the 11th, which is still the 10th by UTC.
+    async with maker() as session:
+        await session.execute(
+            update(Sale)
+            .where(Sale.id == uuid.UUID(sale["id"]))
+            .values(sold_at=datetime(2026, 3, 10, 23, 30, tzinfo=KYIV))
+        )
+        await session.execute(
+            update(Refund)
+            .where(Refund.id == uuid.UUID(refund["id"]))
+            .values(created_at=datetime(2026, 3, 11, 0, 10, tzinfo=KYIV))
+        )
+        await session.commit()
+
+    tenth = figures((await read(maker, net, net.owner, date_from="2026-03-10")).json(), primary)
+    eleventh = figures((await read(maker, net, net.owner, date_from="2026-03-11")).json(), primary)
+    both = (await read(maker, net, net.owner, date_from="2026-03-10", date_to="2026-03-11")).json()
+    ninth = figures((await read(maker, net, net.owner, date_from="2026-03-09")).json(), primary)
+
+    assert (tenth["sales"], tenth["returns"], tenth["net"], tenth["cash"]) == (
+        1,
+        0,
+        "1500.00",
+        "1500.00",
+    )
+    # The day of the sale is never changed by its return.
+    assert (eleventh["sales"], eleventh["returns"], eleventh["net"], eleventh["cash"]) == (
+        0,
+        1,
+        "-1500.00",
+        "-1500.00",
+    )
+    assert (both["date_from"], both["date_to"]) == ("2026-03-10", "2026-03-11")
+    assert figures(both, primary)["net"] == "0.00"
+    assert (ninth["sales"], ninth["returns"]) == (0, 0)
+
+
+async def test_who_reads_the_report_and_for_which_stores(maker):
+    net = await network(maker)
+    primary, child = net.shops.primary_store, net.shops.child_store
+    child_manager = await a_store_manager(maker, net, child)
+    await sell(maker, net, net.seller, primary, qty=1)
+
+    seller = await read(maker, net, net.seller)
+    assert seller.status_code == 403, seller.text
+    assert seller.json()["code"] == "PERMISSION_DENIED"
+    assert (await read(maker, net, net.child_seller)).status_code == 403
+    for path in (f"{REPORT}/models", f"{REPORT}/entries"):
+        assert (await read(maker, net, net.seller, path)).status_code == 403
+        assert (await read(maker, net, net.seller, path, store_id=primary)).status_code == 403
+
+    # A manager of one store reads that store alone, and no total.
+    mine = (await read(maker, net, child_manager)).json()
+    assert [each["store_id"] for each in mine["stores"]] == [str(child)]
+    assert mine["total"] is None
+    elsewhere = await read(maker, net, child_manager, f"{REPORT}/entries", store_id=primary)
+    assert elsewhere.status_code == 403, elsewhere.text
+    # The network's manager and owner read every store, and the total.
+    for person in (net.manager, net.owner):
+        every = (await read(maker, net, person)).json()
+        assert {each["store_id"] for each in every["stores"]} == {str(primary), str(child)}
+        assert every["total"]["sales"] == 1
+
+    # A blocked store is read by the network, never by its own people.
+    assert (await set_state(maker, net, "BLOCKED")).status_code == 200
+    assert {each["store_id"] for each in (await read(maker, net, net.owner)).json()["stores"]} == {
+        str(primary),
+        str(child),
+    }
+    blocked = await read(maker, net, child_manager)
+    assert blocked.status_code == 403, blocked.text
+    shut = await read(maker, net, child_manager, f"{REPORT}/models", store_id=child)
+    assert shut.status_code == 403
+    assert shut.json()["code"] == "STORE_NOT_TRADING"
+
+
+async def test_a_period_is_one_day_to_a_year(maker):
+    net = await network(maker)
+
+    backwards = await read(maker, net, net.owner, date_from="2026-03-11", date_to="2026-03-10")
+    # 367 days, and 366: a year with its leap day.
+    too_long = await read(maker, net, net.owner, date_from="2025-03-09", date_to="2026-03-10")
+    a_year = await read(maker, net, net.owner, date_from="2025-03-10", date_to="2026-03-10")
+    one_day = await read(maker, net, net.owner, f"{REPORT}/entries", date_from="2026-03-11")
+    only_last = await read(maker, net, net.owner, f"{REPORT}/models", date_to="2026-03-11")
+
+    for refused in (backwards, too_long):
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["details"]["reason"] == "PERIOD"
+    assert a_year.status_code == 200, a_year.text
+    assert (one_day.json()["date_from"], one_day.json()["date_to"]) == ("2026-03-11", "2026-03-11")
+    assert (only_last.json()["date_from"], only_last.json()["date_to"]) == (
+        "2026-03-11",
+        "2026-03-11",
+    )
+
+
+async def test_the_models_sold_and_every_sale_and_return(maker):
+    net = await network(maker)
+    primary, child = net.shops.primary_store, net.shops.child_store
+    two = await sell(maker, net, net.seller, primary, qty=2)
+    three = await sell(maker, net, net.seller, primary, qty=3, **credit("1000.00"))
+    elsewhere = await sell(maker, net, net.child_seller, child, qty=1)
+    returned = await take_back(maker, net, three, by=net.seller, at=primary)
+    brought = await take_back(maker, net, elsewhere, by=net.seller, at=primary)
+
+    models = (await read(maker, net, net.owner, f"{REPORT}/models", store_id=primary)).json()
+    every_model = (await read(maker, net, net.owner, f"{REPORT}/models")).json()
+    listed = (await read(maker, net, net.owner, f"{REPORT}/entries", store_id=primary)).json()
+    child_listed = (await read(maker, net, net.owner, f"{REPORT}/entries", store_id=child)).json()
+    first = (
+        await read(maker, net, net.owner, f"{REPORT}/entries", store_id=primary, limit=1)
+    ).json()
+    exactly = (
+        await read(maker, net, net.owner, f"{REPORT}/entries", store_id=child, limit=2)
+    ).json()
+
+    # The most money first; a model's returns beside it.
+    assert [
+        (m["display_name"], m["units"], m["sold"], m["returned_units"], m["returned"])
+        for m in models["models"]
+    ] == [
+        (three["items"][0]["display_name"], 3, "4500.00", 1, "1500.00"),
+        (two["items"][0]["display_name"], 2, "3000.00", 0, "0.00"),
+    ]
+    assert len(every_model["models"]) == 3
+
+    # The primary store's: its two sales, the return of one, and the return
+    # it took of the child's sale, the newest first.
+    assert [(e["kind"], e["id"]) for e in listed["entries"]] == [
+        ("RETURN", brought["id"]),
+        ("RETURN", returned["id"]),
+        ("SALE", three["id"]),
+        ("SALE", two["id"]),
+    ]
+    took, gave_back, in_parts, paid = listed["entries"]
+    assert paid["goods"] == [f"{two['items'][0]['display_name']}, M × 2"]
+    assert (paid["by"], paid["units"], paid["amount"], paid["cash"], paid["paid_in_parts"]) == (
+        "seller",
+        2,
+        "3000.00",
+        "3000.00",
+        False,
+    )
+    assert (in_parts["amount"], in_parts["cash"], in_parts["paid_in_parts"]) == (
+        "4500.00",
+        "1000.00",
+        True,
+    )
+    # A return of a sale paid in parts lowered the debt: nothing left the till.
+    assert (gave_back["amount"], gave_back["cash"], gave_back["paid_in_parts"]) == (
+        "1500.00",
+        "0.00",
+        True,
+    )
+    assert (
+        took["store_name"],
+        took["taken_at_store_name"],
+        took["by"],
+        took["amount"],
+        took["cash"],
+    ) == ("Дочірній", "Основний", "seller", "1500.00", "1500.00")
+    # The child's list has its sale and the return of it taken elsewhere.
+    assert [(e["kind"], e["id"]) for e in child_listed["entries"]] == [
+        ("RETURN", brought["id"]),
+        ("SALE", elsewhere["id"]),
+    ]
+    assert first["has_more"] is True
+    assert [e["id"] for e in first["entries"]] == [brought["id"]]
+    assert (len(exactly["entries"]), exactly["has_more"]) == (2, False)
+    assert listed["has_more"] is False

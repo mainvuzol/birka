@@ -7,7 +7,8 @@ Nothing is invented in the meantime.
 
 What is built leaves this list for its report. Where an order goes is built
 ([report](order-shipping-report.md)), and so are goods borrowed from another
-shop ([report](borrowed-goods-report.md)). Settling money between the
+shop ([report](borrowed-goods-report.md)) and the sales report the owner
+chose next ([report](sales-report-report.md)). Settling money between the
 network's stores left it too: the owner decided on 2026-10-01 that stores of
 one network do not settle with each other.
 

@@ -23,7 +23,7 @@ updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 130 Playwright journeys on a phone profile, against the real API;
+- 133 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -350,6 +350,19 @@ record invoices on their own, never with a delivery («Накладні»).
 - **Unsold:** `POST /supplier-returns` with the `stock_lot_id` sends them
   back to their supplier, never more than is on hand (`MORE_THAN_ON_HAND`).
   See the [report](.ai/project-memory/borrowed-goods-report.md).
+
+**The sales report** (owner decisions, 2026-10-02): what each store sold and
+took back, and the money through its till («Звіт»). The owner and managers
+read it (`report:view_financial`), each for the stores they hold it in.
+- **Each store, and the stores together:** `GET /reports/sales` for today,
+  or `date_from` and `date_to`, one day to a year (`PERIOD`), by the store's
+  own clock.
+- **The models sold:** `GET /reports/sales/models`, the most money first.
+- **Every sale and return:** `GET /reports/sales/entries`, the newest first.
+  Both read one store with `store_id`, or every store the report shows.
+- A sale and its returns are the store's that sold; money is the store's
+  whose till it went through. A return counts on the day it was taken. See
+  the [report](.ai/project-memory/sales-report-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

@@ -49,6 +49,9 @@ export function errorText(error: unknown): string {
   if (!(error instanceof ApiError))
     return "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.";
   // Paying in parts, refused for what the seller stated.
+  // The sales report: one day to a year (owner decisions, 2026-10-02).
+  if (error.details.reason === "PERIOD")
+    return "Оберіть період від одного дня до року; перший день — не пізніше останнього.";
   if (error.details.reason === "PAID_IN_FULL")
     return "Клієнт сплачує все одразу — це звичайний продаж. Зніміть «Оплата частинами».";
   if (error.details.reason === "CUSTOMER_NAME")

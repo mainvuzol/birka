@@ -610,3 +610,51 @@ How it is carried out, not decided by the owner:
   arrived, one model and size at a time.
 - **Goods borrowed before receipts named a supplier** are not on the list:
   nobody can say whose they were.
+
+## Owner decision — 2026-10-02 (the sales report)
+
+Asked when the owner chose a sales report as the next work: the app had no
+figures of any kind for a day or a period.
+
+- **The owner and managers see it.** A seller does not. It is the right the
+  app already had for financial reports (`report:view_financial`), which the
+  manager's role holds by default.
+- **For today, or any day or days.** It opens on today; yesterday, this week
+  and this month are a tap away, and any dates from one to the next.
+- **What it shows:**
+  - **sales and returns:** how many sales and units, for how much; the
+    returns are taken off, and what was sold less what came back is shown;
+  - **the money through the till:** sales paid in full, payments towards a
+    debt (the first with the sale, and every later one), less what returns
+    handed back. It is what the till should hold.
+- **Each store on its own, and the stores together** for whoever sees more
+  than one. Each person sees only the stores they have access to.
+- **A return counts on the day it was taken.** A past day's report never
+  changes.
+- **A sale and its returns are the store's that sold; money is the store's
+  whose till it went through.** A return taken at another store lowers the
+  sales of the store that sold, and its money leaves the till of the store
+  that took it. A debt paid at another store is that store's money.
+- **One sum of money.** The app does not ask whether a customer paid in
+  cash or by card; that can be split later, as separate work.
+- **What the store pays its suppliers is not the till's.** It stays in
+  «Накладні».
+- **Beside the figures:** the models sold, with how many and for how much,
+  the most first; and every sale and return of those days, with the time,
+  the sum and who made it.
+
+How it is carried out, not decided by the owner:
+- **A day is the store's own,** by its clock (Europe/Kyiv): a return taken
+  at 00:10 is that day's, though by UTC it is still the day before.
+- **A period is one day to a year,** 366 days at most.
+- **A return of a sale paid in parts** takes out of the till only the cash it
+  handed back; the rest lowered what was owed.
+- **A blocked or archived store is in the report** of whoever may read it:
+  the owner and the network's managers. Its own people see nothing there.
+- **A model renamed between two sales is one model,** named as it was last.
+- **The «Продажі й повернення» list of a store** has its own sales, the
+  returns of them wherever they were taken, and the returns it took of
+  another store's sales: each changed its figures or its till.
+
+Built on 2026-10-02; see the [report](sales-report-report.md).
+
