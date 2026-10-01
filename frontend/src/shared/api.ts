@@ -57,6 +57,11 @@ export function errorText(error: unknown): string {
     return "Телефон покупця має містити від 10 до 15 цифр.";
   if (error.code === "NO_ACCESS")
     return "Доступ до магазину закрито. Зверніться до власника.";
+  // A blocked or archived store does nothing (owner decisions, 2026-10-01).
+  if (error.code === "STORE_NOT_TRADING")
+    return error.details.state === "ARCHIVED"
+      ? "Магазин закрито, він в архіві: операції в ньому не проводяться."
+      : "Магазин заблоковано власником: операції в ньому зупинено.";
   if (error.status === 401)
     return "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.";
   if (error.status === 403)

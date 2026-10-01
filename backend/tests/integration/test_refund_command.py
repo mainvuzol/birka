@@ -43,7 +43,7 @@ from app.modules.inventory.service import find_divergences
 from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
 from app.modules.refunds.service import RefundLineInput, create_refund
 from app.modules.sales.models import Sale, SaleStatus
-from app.modules.tenancy.models import Store, StoreKind
+from app.modules.tenancy.models import Store, StoreKind, StoreState
 from tests.conftest import requires_database
 from tests.integration.test_product_lifecycle_api import (
     SELLER,
@@ -1646,18 +1646,15 @@ async def test_a_sale_in_a_sibling_store_cannot_be_refunded(maker):
         assert await stock_of(session, sold) == 3
 
 
-async def test_restocking_into_a_closed_store_is_refused_whole(maker):
-    """A defined failure state, not an accident.
+async def test_a_store_that_does_not_trade_takes_nothing_back(maker):
+    """Not even money without the goods (owner decisions, 2026-10-01).
 
-    A closed store can give money back; it has no shelf to put goods on. Both
-    halves are pinned here so that split is a decision on record rather than
-    something discovered later — and so that the refusal takes the *whole*
-    refund with it rather than paying the money while silently skipping the
-    stock.
-
-    Whether the split is what the owner wants is an open question; the
-    alternative is to refuse the refund outright and send the customer to the
-    store that is still trading.
+    Until then a closed store could give money back with nothing restocked,
+    an open question in this test's place. The owner answered it: a blocked
+    store does nothing, and its customers return at a store that trades. The
+    refusal takes the whole return with it, and names the state — even for a
+    scope built before the store was blocked, which only the ledger's door
+    sees.
     """
     shop = await make_shop(maker)
     async with api(maker, shop.scope()) as client:
@@ -1666,28 +1663,22 @@ async def test_restocking_into_a_closed_store_is_refused_whole(maker):
         async with maker() as session:
             store = await session.get(Store, shop.store_id)
             assert store is not None
-            store.is_active = False
+            store.state = StoreState.BLOCKED
             await session.commit()
 
-        blocked = await refund(client, sold.sale_id, refund_body((sold.line()["id"], 1, True)))
-        assert blocked.status_code == 422, blocked.text
-        assert blocked.json()["code"] == "VALIDATION_ERROR"
-        # The message names the real reason. It used to come out of
-        # `lock_stock` as "Unknown store" — about a store the caller is
-        # standing in (independent review, 2026-09-15).
-        assert "closed" in blocked.json()["message"]
-        assert blocked.json()["details"]["store_id"] == str(shop.store_id)
-
-        async with maker() as session:
-            assert await refund_rows(session, shop) == 0
-            assert await stock_of(session, sold) == 3
-
-        written_off = await refund(client, sold.sale_id, refund_body((sold.line()["id"], 1, False)))
-        assert written_off.status_code == 201, written_off.text
-        assert written_off.json()["movements"] == []
+        for restock in (True, False):
+            blocked = await refund(
+                client, sold.sale_id, refund_body((sold.line()["id"], 1, restock))
+            )
+            assert blocked.status_code == 403, blocked.text
+            assert blocked.json()["code"] == "STORE_NOT_TRADING"
+            assert blocked.json()["details"] == {
+                "store_id": str(shop.store_id),
+                "state": "BLOCKED",
+            }
 
     async with maker() as session:
-        assert await refund_rows(session, shop) == 1
+        assert await refund_rows(session, shop) == 0
         assert await stock_of(session, sold) == 3
 
 

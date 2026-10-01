@@ -111,3 +111,17 @@ transfers, inventory, authz, tenancy, core` (+ audit).
   correction's own core (ADR-0007).
 - Only `refunds`, which registers the units, and the API import it. Contracts
   are in `backend/pyproject.toml`.
+
+2026-10-01 amendment (store states): module `stores` changes a store's state
+— trading, blocked, archived — on the owner's word. Its tables stay in
+`tenancy` (`store.state`, `store_state_change`), which every module already
+reads. Permitted edges: `stores → inventory, orders, identity, authz,
+tenancy, core` (+ audit).
+- It reads how many units stand in the store's own warehouses and its «Брак»
+  (`inventory.units_held`) and how many of its orders are open
+  (`orders.open_order_count`), because only an empty store is archived.
+- It moves no goods and no money. What a store that does not trade may not do
+  is refused by the person's scope (`authz/scope.py`) and held at the
+  ledger's door (`tenancy.hold_stores`), never by this module.
+- No module imports it; only the API does. Contracts are in
+  `backend/pyproject.toml`.

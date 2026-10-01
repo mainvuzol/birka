@@ -367,6 +367,68 @@ How it is carried out, not decided by the owner:
 - **Another store's sales are found by a search of two letters or more.**
   They are never listed whole.
 - **A closed store takes nothing back for another store.** Its own sales keep
-  the rule they had.
+  the rule they had. *Superseded the same day by "store states": a blocked
+  or archived store takes nothing back at all, its own sales included.*
 
 Built on 2026-10-01; see the [report](returns-elsewhere-report.md).
+
+## Owner decision — 2026-10-01 (store states)
+
+Asked when the owner chose it as the next work. It answers what
+owner-decisions-2026-09-15.md §2 left open: what a blocked or archived store
+may do, and who blocks, archives and reopens one.
+
+- **The owner of the network blocks, unblocks, archives and reopens a store,
+  in the app.** Each change needs a reason and is recorded. The owner of a
+  child store does not change her own store's state.
+- **A blocked store is only read.** Nothing is done in it: no sale, receipt,
+  return, debt payment, order, stock correction or «Брак» step.
+  - The owner and the network's managers see its history, stock and debts.
+  - Its own people see only that it is blocked, and since when.
+  - Customers return its sales at another store (see "returns at another
+    store").
+  - Once it is unblocked, everything works as before.
+- **Debts of a blocked or archived store are paid at any store of the network
+  that trades.** The record names the store that took the money. The debt
+  stays the selling store's.
+- **Only an empty store is archived.** Its own warehouse and its «Брак» must
+  be empty, and it must have no open orders. Otherwise the archive is refused
+  with a list of what is left.
+- **An archived store may be opened again by the owner,** with a reason. Its
+  people come back with the roles they had, unless they were removed
+  separately.
+- **A blocked or archived store is read by the owner and managers of the
+  network.** Someone added to that store alone, including the owner of a
+  child store, sees only «Магазин заблоковано» or «…в архіві».
+- **Open orders of a blocked store wait** until it is unblocked. Their goods
+  stay held, and nobody else sells them. An archive is still refused while
+  they are open.
+- **Sellers see no reason**, only «Магазин заблоковано власником» and the
+  date. The reason is for the owner and whoever reads the store's history.
+- **The owner of the network may write off a debt of a blocked or archived
+  store.** Writing off is the owner's decision about money, not an operation
+  in the store. The owner of a child store does not.
+
+How it is carried out, not decided by the owner:
+- **"Nothing is done in it"** is enforced in one place: the person's scope.
+  - A blocked or archived store answers any change with `STORE_NOT_TRADING`.
+  - Only a request that reads (`GET`) is let through, and only for a
+    network-wide role.
+  - Its own people's grants count for nothing while it does not trade.
+- **A command that moves stock holds its store until it commits.** A change
+  of state waits for it, and a command that comes after sees the new state.
+  So nothing lands in a store in the instant it is archived.
+- **A private warehouse of a store stays private.** The network's owner
+  reads a blocked store's shared warehouses, not its own one (owner rule of
+  2026-09-23). The archive's refusal still names it and its unit count, so
+  the owner knows what is left.
+- **An archived store is opened, never blocked.** Archived → blocked is
+  refused.
+- **Other stores' debts are found by a search of two letters or more,** as
+  other stores' sales are. They are never listed whole.
+- **People are still let go from a blocked store** by `scripts.people`, on
+  the network owner's word. Nobody new is added to it.
+- **A store an operator had set inactive before this** becomes blocked: the
+  state that keeps every rule an inactive store had.
+
+Built on 2026-10-01; see the [report](store-states-report.md).

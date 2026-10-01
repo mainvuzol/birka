@@ -8,16 +8,19 @@ memberships (invariant I12).
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    DateTime,
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -33,6 +36,22 @@ class StoreKind(StrEnum):
 
     PRIMARY = "PRIMARY"
     SECONDARY = "SECONDARY"
+
+
+class StoreState(StrEnum):
+    """Whether a store trades (owner decisions, 2026-10-01).
+
+    Only a trading store does anything. A blocked or archived one is read by
+    the owner and the network's managers and changed by nobody; its people
+    see only that it is blocked or archived, and since when.
+    """
+
+    ACTIVE = "ACTIVE"
+    # Stopped for now by the owner, and started again by the owner.
+    BLOCKED = "BLOCKED"
+    # Closed: it stopped trading. Only an empty store is archived, and the
+    # owner may open it again.
+    ARCHIVED = "ARCHIVED"
 
 
 class Organization(UUIDPrimaryKey, TimestampMixin, Base):
@@ -60,9 +79,14 @@ class Store(UUIDPrimaryKey, TimestampMixin, Base):
         Enum(StoreKind, name="store_kind", native_enum=True), nullable=False
     )
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Europe/Kyiv")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    state: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=StoreState.ACTIVE.value
+    )
+    # When the state last changed; NULL for a store that has always traded.
+    state_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
+        CheckConstraint("state IN ('ACTIVE', 'BLOCKED', 'ARCHIVED')", name="state_known"),
         UniqueConstraint("organization_id", "code", name="uq_store_org_code"),
         # Target for membership's composite foreign key: a membership may only
         # reference a store belonging to its own organization (invariant I12).
@@ -151,4 +175,59 @@ class StoreLocationAccess(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
 
-__all__ = ["Organization", "StockLocation", "Store", "StoreKind", "StoreLocationAccess"]
+class StoreStateChange(UUIDPrimaryKey, TimestampMixin, Base):
+    """Every change of a store's state, with the owner's reason. Append-only.
+
+    Named by the client's permanent `command_id`, as a sale is: the same
+    command is answered with what it did, however late it is retried, and
+    never blocks a store twice after it was unblocked in between.
+    """
+
+    __tablename__ = "store_state_change"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    store_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    from_state: Mapped[str] = mapped_column(String(10), nullable=False)
+    to_state: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Seen by the owner and whoever reads the store's history, never by its
+    # sellers (owner decision, 2026-10-01).
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    command_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_store_state_change_org_store",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "from_state IN ('ACTIVE', 'BLOCKED', 'ARCHIVED') "
+            "AND to_state IN ('ACTIVE', 'BLOCKED', 'ARCHIVED')",
+            name="states_known",
+        ),
+        CheckConstraint("from_state <> to_state", name="changes_something"),
+        CheckConstraint("char_length(btrim(reason)) > 0", name="says_why"),
+        UniqueConstraint("organization_id", "command_id", name="uq_store_state_change_org_command"),
+        Index("ix_store_state_change_store_id_created_at", "store_id", "created_at"),
+    )
+
+
+__all__ = [
+    "Organization",
+    "StockLocation",
+    "Store",
+    "StoreKind",
+    "StoreLocationAccess",
+    "StoreState",
+    "StoreStateChange",
+]

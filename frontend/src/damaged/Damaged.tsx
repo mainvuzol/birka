@@ -25,11 +25,14 @@ export function Damaged({
   store,
   token,
   blocked,
+  readOnly = false,
 }: {
   store: Store;
   token: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
+  /** The store does not trade: its «Брак» is read, and nothing is done in it. */
+  readOnly?: boolean;
 }): JSX.Element {
   const cache = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
@@ -46,7 +49,8 @@ export function Damaged({
   const places = useBackOnSale(
     store,
     token,
-    (units.data?.units ?? []).some((unit) => !unit.back_to_sold_from),
+    !readOnly &&
+      (units.data?.units ?? []).some((unit) => !unit.back_to_sold_from),
   );
 
   async function act(
@@ -100,8 +104,9 @@ export function Damaged({
         </button>
       </div>
       <p className="hint">
-        Пошкоджений товар із повернень. Візьміть одиницю на перевірку, а потім
-        поверніть її в продаж або підтвердьте брак.
+        {readOnly
+          ? "Пошкоджений товар із повернень. Магазин не торгує: тут лише перегляд."
+          : "Пошкоджений товар із повернень. Візьміть одиницю на перевірку, а потім поверніть її в продаж або підтвердьте брак."}
       </p>
       {problem && <p role="alert">{problem}</p>}
       {units.isPending ? (
@@ -125,6 +130,7 @@ export function Damaged({
                   unit={unit}
                   places={places.data ?? []}
                   busy={blocked || busy !== null}
+                  readOnly={readOnly}
                   act={(action, body) => {
                     void act(unit, action, body);
                   }}
@@ -149,12 +155,14 @@ function Unit({
   unit,
   places,
   busy,
+  readOnly,
   act,
 }: {
   unit: DamagedUnit;
   /** This store's warehouses, for a unit sold from another store's own. */
   places: Location[];
   busy: boolean;
+  readOnly: boolean;
   act: (
     action: "take" | "return-to-sale" | "confirm" | "write-off",
     body?: Record<string, unknown>,
@@ -182,7 +190,7 @@ function Unit({
         </small>
       )}
       {unit.note && <small>Примітка: {unit.note}</small>}
-      {asking === "return" && !unit.back_to_sold_from ? (
+      {readOnly ? null : asking === "return" && !unit.back_to_sold_from ? (
         <div className="actions">
           <label>
             Повернути в продаж на склад вашого магазину

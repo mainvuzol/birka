@@ -54,7 +54,13 @@ from app.modules.identity.models import AppUser
 from app.modules.inventory.models import Inventory, MovementType, StockMovement
 from app.modules.inventory.service import find_divergences
 from app.modules.sales.models import Sale
-from app.modules.tenancy.models import Organization, Store, StoreKind, StoreLocationAccess
+from app.modules.tenancy.models import (
+    Organization,
+    Store,
+    StoreKind,
+    StoreLocationAccess,
+    StoreState,
+)
 from app.modules.transfers.models import Transfer, TransferItem, TransferStatus
 from tests.conftest import provision_location, requires_database
 
@@ -871,17 +877,17 @@ async def test_a_closed_warehouse_is_neither_source_nor_destination(maker, close
 
 
 async def test_a_store_that_is_not_trading_does_not_move_goods(maker):
-    """The rule every stock command already obeys, kept rather than reinvented:
-    the initiating store is the acting store, and an inactive store does not
-    act. Nothing here defines what a *blocked* store may do — that is the
-    owner's permission matrix, still to come."""
+    """The rule every stock command obeys: the initiating store is the acting
+    store, and a blocked store does nothing (owner decisions, 2026-10-01).
+    Refused at the ledger's door by name, even for a scope built before the
+    store was blocked."""
     shops = await make_shops(maker)
     coat = await stock(
         maker, shops, warehouse=shops.child_warehouse, store=shops.child_store, quantities={"M": 2}
     )
     async with maker() as session:
         await session.execute(
-            update(Store).where(Store.id == shops.child_store).values(is_active=False)
+            update(Store).where(Store.id == shops.child_store).values(state=StoreState.BLOCKED)
         )
         await session.commit()
 
@@ -896,7 +902,9 @@ async def test_a_store_that_is_not_trading_does_not_move_goods(maker):
             ),
             headers=key(),
         )
-    assert response.status_code == 404, response.text
+    assert response.status_code == 403, response.text
+    assert response.json()["code"] == "STORE_NOT_TRADING"
+    assert response.json()["details"]["state"] == "BLOCKED"
     await assert_nothing_moved(maker, shops, coat, shared=0, child=2)
 
 

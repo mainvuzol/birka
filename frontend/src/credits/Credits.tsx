@@ -10,6 +10,8 @@ import { statusLabels } from "./types";
 import type { Credit, CreditEntry, CustomerPage, StoreDebts } from "./types";
 
 const pageSize = 20;
+// As the server: another store's customers are found by two letters at least.
+const minSearch = 2;
 
 /**
  * A store's debts: sales paid in parts (owner decisions, 2026-10-01).
@@ -20,17 +22,28 @@ const pageSize = 20;
  * payment on the debt they choose, here, in the store that sold. The owner
  * may write off a debt that will not be paid, saying why. Returns lower a
  * debt from «Повернення». The store sees what it is owed in all.
+ *
+ * While the store that sold is blocked or archived, any store that trades
+ * finds its debts by a search and takes the payments; the debt stays that
+ * store's, and the owner of the network may still write it off (owner
+ * decisions, 2026-10-01, "store states").
  */
 export function Credits({
   store,
   token,
   journalKey,
   blocked,
+  readOnly = false,
+  networkOwner = false,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   blocked: boolean;
+  /** This store does not trade: its debts are read, and paid elsewhere. */
+  readOnly?: boolean;
+  /** The owner of the network, who writes off a debt of a store that does not trade. */
+  networkOwner?: boolean;
 }): JSX.Element {
   const cache = useQueryClient();
   const [query, setQuery] = useState("");
@@ -38,15 +51,30 @@ export function Credits({
   const [owedOnly, setOwedOnly] = useState(true);
   const [shown, setShown] = useState(pageSize);
   const [selected, setSelected] = useState<Credit | null>(null);
+  // Whose debts: this store's, or those of the stores that do not trade.
+  const [elsewhere, setElsewhere] = useState(false);
+  // Other stores' customers are found, never browsed.
+  const searched = !elsewhere || search.length >= minSearch;
   const customers = useQuery({
-    queryKey: ["credits", store.id, "customers", search, owedOnly, shown],
+    queryKey: [
+      "credits",
+      store.id,
+      "customers",
+      elsewhere,
+      search,
+      owedOnly,
+      shown,
+    ],
     queryFn: () =>
       api<CustomerPage>(
         `/credits/customers?store_id=${store.id}&limit=${String(shown)}${
           owedOnly ? "&status=OPEN" : ""
-        }${search ? `&query=${encodeURIComponent(search)}` : ""}`,
+        }${search ? `&query=${encodeURIComponent(search)}` : ""}${
+          elsewhere ? "&elsewhere=true" : ""
+        }`,
         token,
       ),
+    enabled: searched,
     retry: false,
   });
   const summary = useQuery({
@@ -63,6 +91,8 @@ export function Credits({
         token={token}
         journalKey={journalKey}
         blocked={blocked}
+        readOnly={readOnly}
+        networkOwner={networkOwner}
         credit={selected}
         changed={(credit) => {
           setSelected(credit);
@@ -90,10 +120,28 @@ export function Credits({
         </button>
       </div>
       <p className="hint">
-        Покупці, які забрали товар і доплачують частинами. Внески приймає лише
-        магазин, де продали.
+        {readOnly
+          ? "Магазин не торгує: його борги тут лише для перегляду. Внески приймає будь-який магазин мережі, що працює."
+          : "Покупці, які забрали товар і доплачують частинами. Внески приймає магазин, де продали, а поки він заблокований чи закритий — будь-який магазин мережі, що працює."}
       </p>
-      {summary.data && (
+      {!readOnly && (
+        <label>
+          Де брали в борг
+          <select
+            value={elsewhere ? "ELSEWHERE" : "HERE"}
+            onChange={(event) => {
+              setElsewhere(event.target.value === "ELSEWHERE");
+              setShown(pageSize);
+            }}
+          >
+            <option value="HERE">У цьому магазині</option>
+            <option value="ELSEWHERE">
+              У магазині, що заблокований чи закритий
+            </option>
+          </select>
+        </label>
+      )}
+      {!elsewhere && summary.data && (
         <div className="section-block" aria-label="Скільки винні магазину">
           <p className="total">
             Магазину винні <strong>{money(summary.data.owed)}</strong>
@@ -138,17 +186,24 @@ export function Credits({
           <option value="ALL">Усі, разом зі сплаченими й списаними</option>
         </select>
       </label>
-      {customers.isPending ? (
+      {!searched ? (
+        <p>
+          Знайдіть покупця за ім’ям або телефоном — щонайменше дві літери чи
+          цифри.
+        </p>
+      ) : customers.isPending ? (
         <p role="status">Завантажуємо борги…</p>
       ) : customers.error ? (
         <p role="alert">{errorText(customers.error)}</p>
       ) : customers.data.items.length === 0 ? (
         <p>
-          {search
-            ? "Боргів за таким ім’ям чи телефоном не знайдено."
-            : owedOnly
-              ? "Зараз ніхто не винен цьому магазину."
-              : "У цьому магазині ще не продавали частинами."}
+          {elsewhere
+            ? "Боргів магазинів, що не працюють, за таким ім’ям чи телефоном не знайдено."
+            : search
+              ? "Боргів за таким ім’ям чи телефоном не знайдено."
+              : owedOnly
+                ? "Зараз ніхто не винен цьому магазину."
+                : "У цьому магазині ще не продавали частинами."}
         </p>
       ) : (
         <>
@@ -175,6 +230,11 @@ export function Credits({
                         ? `Винні ${money(credit.owed)} з ${money(credit.amount)}`
                         : statusLabels[credit.status]}
                     </p>
+                    {credit.store_id !== store.id && (
+                      <p className="hint">
+                        Продано в магазині «{credit.store_name}»
+                      </p>
+                    )}
                     <p className="hint">
                       {credit.goods.join(", ")} · продано{" "}
                       {when(credit.opened_at)}
@@ -230,6 +290,8 @@ function Debt({
   token,
   journalKey,
   blocked,
+  readOnly,
+  networkOwner,
   credit,
   changed,
   back,
@@ -238,6 +300,8 @@ function Debt({
   token: string;
   journalKey: string;
   blocked: boolean;
+  readOnly: boolean;
+  networkOwner: boolean;
   credit: Credit;
   changed: (credit: Credit) => void;
   back: () => void;
@@ -249,13 +313,19 @@ function Debt({
   const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const mayWriteOff = store.permissions.includes("credit:write_off");
+  // Another store's debt, paid here because that one does not trade.
+  const elsewhere = credit.store_id !== store.id;
+  // The owner writes off; for a store that does not trade, the network's.
+  const mayWriteOff =
+    credit.store_state === "ACTIVE"
+      ? !readOnly && store.permissions.includes("credit:write_off")
+      : networkOwner;
   const owed = kopecks(credit.owed) ?? 0n;
   const working = busy || pending !== null;
 
   async function send(
     body:
-      | { kind: "payment"; amount: string }
+      | { kind: "payment"; amount: string; elsewhere?: boolean }
       | { kind: "write-off"; reason: string },
   ): Promise<void> {
     setProblem(null);
@@ -291,7 +361,12 @@ function Debt({
       // Refused because the debt moved on — another payment, a return: show
       // it as it is now.
       try {
-        changed(await api<Credit>(`/credits/${credit.id}`, token));
+        changed(
+          await api<Credit>(
+            `/credits/${credit.id}${elsewhere ? `?store_id=${store.id}` : ""}`,
+            token,
+          ),
+        );
       } catch {
         // What was shown stays; the refusal says what to do.
       }
@@ -310,7 +385,11 @@ function Debt({
       );
       return;
     }
-    void send({ kind: "payment", amount: decimal(cents) });
+    void send({
+      kind: "payment",
+      amount: decimal(cents),
+      ...(elsewhere ? { elsewhere: true } : {}),
+    });
   }
 
   return (
@@ -330,6 +409,13 @@ function Debt({
       <p className="hint">
         {credit.goods.join(", ")} · продано {when(credit.opened_at)}
       </p>
+      {elsewhere && (
+        <p className="notice">
+          Продано в магазині «{credit.store_name}», який зараз{" "}
+          {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
+          Внесок приймає цей магазин; борг лишається за «{credit.store_name}».
+        </p>
+      )}
       <dl className="debt">
         <dt>Сума продажу</dt>
         <dd>{money(credit.amount)}</dd>
@@ -361,7 +447,7 @@ function Debt({
       )}
       {done && <p role="status">{done}</p>}
       {problem && <p role="alert">{problem}</p>}
-      {credit.status === "OPEN" && (
+      {credit.status === "OPEN" && !readOnly && (
         <fieldset disabled={blocked || working}>
           <legend>Внесок</legend>
           <label>
@@ -455,6 +541,7 @@ function Debt({
               (kopecks(entry.cash_back) ?? 0n) > 0n &&
               ` (готівкою повернено ${money(entry.cash_back)})`}{" "}
             · {entry.by}
+            {entry.taken_at && ` · прийняв магазин «${entry.taken_at}»`}
             {entry.note && ` · ${entry.note}`}
           </li>
         ))}
@@ -474,6 +561,10 @@ function refusalText(error: unknown): string {
         return "Внесок має бути більшим за нуль.";
       case "NO_REASON":
         return "Вкажіть, чому списуємо борг.";
+      case "PAID_WHERE_SOLD":
+        return "Магазин, де продали, знову працює — внесок приймає він.";
+      case "SEARCH_REQUIRED":
+        return "Знайдіть покупця за ім’ям або телефоном — щонайменше дві літери чи цифри.";
     }
   }
   return errorText(error);

@@ -17,6 +17,7 @@ they were once entitled to. See `authz/scope.py` and invariant I13.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -35,9 +36,10 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.refunds import router as refunds_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.snapshots import router as snapshots_router
+from app.api.v1.stores import router as stores_router
 from app.api.v1.transfers import router as transfers_router
 from app.modules.identity.service import authenticate_with_init_data
-from app.modules.tenancy.models import Store
+from app.modules.tenancy.models import Store, StoreState
 
 router = APIRouter()
 router.include_router(catalog_router)
@@ -53,6 +55,7 @@ router.include_router(transfers_router)
 router.include_router(snapshots_router)
 router.include_router(backups_router)
 router.include_router(damaged_router)
+router.include_router(stores_router)
 
 
 # --- schemas ---------------------------------------------------------------
@@ -79,6 +82,12 @@ class StoreAccessResponse(BaseModel):
     id: uuid.UUID
     name: str
     code: str
+    # Whether it trades. A blocked or archived store is listed so its people
+    # learn that it is, and since when, never why (owner decision,
+    # 2026-10-01); `permissions` are then what this person may still read in
+    # it, and empty for its own people.
+    state: StoreState
+    state_since: datetime | None
     permissions: list[str]
 
 
@@ -128,7 +137,9 @@ async def me(scope: ScopeDep, session: SessionDep) -> MeResponse:
     stores = (
         (
             await session.execute(
-                select(Store).where(Store.id.in_(scope.store_ids)).order_by(Store.code)
+                select(Store)
+                .where(Store.id.in_(scope.store_ids | set(scope.closed_stores)))
+                .order_by(Store.code)
             )
         )
         .scalars()
@@ -145,6 +156,8 @@ async def me(scope: ScopeDep, session: SessionDep) -> MeResponse:
                 id=store.id,
                 name=store.name,
                 code=store.code,
+                state=StoreState(store.state),
+                state_since=store.state_since,
                 permissions=sorted(p.value for p in scope.permissions_for(store.id)),
             )
             for store in stores

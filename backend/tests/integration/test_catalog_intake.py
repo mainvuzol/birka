@@ -25,7 +25,7 @@ from app.modules.catalog.models import (
 )
 from app.modules.catalog.review import reject_decision
 from app.modules.catalog.service import ProductDraft, SizeDraft, VariantDraft
-from app.modules.tenancy.models import Store
+from app.modules.tenancy.models import Store, StoreState
 from tests.conftest import requires_database
 from tests.integration.test_catalog_decisions import confirm, proposal, scope
 from tests.integration.test_sale_command import make_shop
@@ -247,7 +247,7 @@ async def test_api_permissions_store_scope_and_inactive_store(maker):
         assert (await client.post(endpoint, json=payload)).status_code == 404
     async with maker() as session:
         await session.execute(
-            update(Store).where(Store.id == shop.store_id).values(is_active=False)
+            update(Store).where(Store.id == shop.store_id).values(state=StoreState.BLOCKED)
         )
         await session.commit()
     async with api(maker, scope(shop)) as client:

@@ -89,8 +89,8 @@ from app.modules.tenancy.service import (
     LocationCapability,
     back_on_sale_locations,
     damaged_returns_location,
+    hold_trading_stores,
     sold_from,
-    store_is_active,
     validate_active_stores,
 )
 
@@ -273,8 +273,8 @@ async def _elsewhere(
     not the store that sold them; None when it is, and nothing changes."""
     if taking == sale.store_id:
         return None
-    # A store of this network, and trading: a closed one takes nothing back
-    # for another (its own sales keep the rule they had).
+    # A store of this network, and trading: a blocked or archived one takes
+    # nothing back, its own sales included (owner decisions, 2026-10-01).
     await validate_active_stores(session, organization_id=organization_id, store_ids={taking})
     return await back_on_sale_locations(session, organization_id=organization_id, store_id=taking)
 
@@ -527,6 +527,11 @@ async def create_refund(
     # authority is the store taking the goods back, whichever store sold.
     taking = at_store_id or sale.store_id
     scope.require(Permission.SALE_REFUND, taking)
+    # Only a trading store takes anything back, its own sales included: a
+    # blocked or archived one does nothing, and its customers go to another
+    # (owner decisions, 2026-10-01). Held until commit, so a store blocked in
+    # the meantime waits for this return or refuses it.
+    await hold_trading_stores(session, organization_id=scope.organization_id, store_ids={taking})
 
     if sale.status is not SaleStatus.COMPLETED:
         # Nothing voids a sale yet. The guard is here so that when something
@@ -708,24 +713,6 @@ async def create_refund(
     # and must be two explicit operations (invariant I16) — with the one
     # exception the owner made on 2026-10-01: a damaged unit goes to the
     # store's «Брак», so it is never back on sale.
-    if restocked and not await store_is_active(
-        session, organization_id=scope.organization_id, store_id=taking
-    ):
-        # A closed store can give money back; it has no shelf to put goods on,
-        # and inventing one would be stock in a store that is not trading.
-        # Stated here rather than inherited from `lock_stock`, which would
-        # refuse this with "Unknown store" — wrong, and about a store the
-        # caller is standing in (independent review, 2026-09-15).
-        #
-        # OPEN QUESTION for the owner: is that the right split? The alternative
-        # is to refuse the whole refund, and send the customer to the store
-        # that is still trading. Nothing sets `is_active = False` from the
-        # application yet, so this is reachable only by an operator today.
-        raise ValidationFailedError(
-            "Goods cannot be returned to a store that is closed; "
-            "refund without restocking, or reopen the store",
-            store_id=str(taking),
-        )
     if restocked:
         await apply_movements(
             session,

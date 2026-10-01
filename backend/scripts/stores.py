@@ -27,7 +27,12 @@ import app.models_registry  # noqa: F401  - every table on the metadata, like mi
 from app.core.config import get_settings
 from app.core.db import create_engine
 from app.core.errors import DomainError
-from app.modules.tenancy.models import Organization, Store
+from app.modules.tenancy.models import Organization, Store, StoreState
+
+
+def _state(state: str) -> str:
+    """Nothing for a store that trades; «(blocked)» or «(archived)» else."""
+    return "" if state == StoreState.ACTIVE else f"  ({state.lower()})"
 
 
 async def run(args: argparse.Namespace) -> str:
@@ -41,7 +46,7 @@ async def run(args: argparse.Namespace) -> str:
             if args.command == "list":
                 rows = (
                     await session.execute(
-                        select(Organization.name, Store.code, Store.name, Store.is_active)
+                        select(Organization.name, Store.code, Store.name, Store.state)
                         .join(Store, Store.organization_id == Organization.id)
                         .order_by(Organization.name, Store.code)
                     )
@@ -49,8 +54,8 @@ async def run(args: argparse.Namespace) -> str:
                 if not rows:
                     return "no stores yet"
                 return "\n".join(
-                    f"{code:<8} {name}{'' if active else '  (closed)'}  [{organization}]"
-                    for organization, code, name, active in rows
+                    f"{code:<8} {name}{_state(state)}  [{organization}]"
+                    for organization, code, name, state in rows
                 )
             changed = await rename_store(
                 session, approved_by=args.approved_by, store_code=args.store, name=args.name

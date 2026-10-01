@@ -20,7 +20,7 @@ from app.modules.catalog.models import (
     SourceIdentity,
 )
 from app.modules.catalog.search import search_families
-from app.modules.tenancy.models import Store
+from app.modules.tenancy.models import Store, StoreState
 from tests.conftest import requires_database
 from tests.integration.test_catalog_decisions import scope
 from tests.integration.test_sale_command import make_shop
@@ -193,7 +193,7 @@ async def test_api_permissions_store_and_input_validation(maker):
             assert (await client.get(url, params=params | invalid)).status_code == 422
     async with maker() as session:
         await session.execute(
-            update(Store).where(Store.id == shop.store_id).values(is_active=False)
+            update(Store).where(Store.id == shop.store_id).values(state=StoreState.BLOCKED)
         )
         await session.commit()
     async with api(maker, scope(shop)) as client:

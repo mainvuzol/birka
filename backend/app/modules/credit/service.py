@@ -21,8 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
 from app.core.errors import (
+    ForbiddenStoreError,
     IdempotencyConflictError,
     NotFoundError,
+    StoreNotTradingError,
     ValidationFailedError,
 )
 from app.core.logging import get_logger
@@ -34,6 +36,8 @@ from app.modules.credit.models import CreditEntry, CreditStatus, CustomerCredit,
 from app.modules.identity.models import AppUser
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.sales.service import money
+from app.modules.tenancy.models import Store, StoreState
+from app.modules.tenancy.service import hold_stores, store_names, store_state
 
 logger = get_logger(__name__)
 
@@ -43,6 +47,9 @@ MAX_PHONE = 40
 MAX_REASON = 1000
 # Room for a country code; fewer than ten digits is not a phone anyone calls.
 PHONE_DIGITS = range(10, 16)
+# A search among the debts of stores that do not trade: never a browse of
+# other stores' customers, as a return at another store is never one either.
+MIN_SEARCH = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +78,8 @@ class Entry:
     at: datetime
     by: str
     note: str | None
+    # A payment another store took, because the one that sold did not trade.
+    taken_at: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +87,11 @@ class CreditView:
     id: uuid.UUID
     sale_id: uuid.UUID
     store_id: uuid.UUID
+    # The store that sold, and whether it trades: while it does not, any store
+    # of the network that trades takes the payments (owner decision,
+    # 2026-10-01).
+    store_name: str
+    store_state: StoreState
     customer_name: str
     customer_phone: str
     amount: Decimal
@@ -306,16 +320,29 @@ async def pay(
     credit_id: uuid.UUID,
     command_id: uuid.UUID,
     amount: Decimal,
+    at_store_id: uuid.UUID | None = None,
     correlation_id: str | None = None,
 ) -> CreditView:
-    """A later payment, taken in the store that sold (owner decision)."""
+    """A later payment, taken in the store that sold while it trades, and in
+    any store of the network that trades while it does not (owner decisions,
+    2026-10-01). `at_store_id` is that other store; the debt stays the selling
+    store's either way."""
     paid = money(amount)
     if paid <= ZERO:
         raise ValidationFailedError("A payment is more than nothing", reason="NOTHING_PAID")
     credit = await _locked(session, organization_id=scope.organization_id, credit_id=credit_id)
-    scope.require(Permission.SALE_CREDIT, credit.store_id)
+    taking = at_store_id or credit.store_id
+    # The authority is the store taking the money. A blocked or archived one
+    # is refused here by name, before any answer is replayed.
+    scope.require(Permission.SALE_CREDIT, taking)
     fingerprint = idempotency.fingerprint(
-        {"pay": str(credit_id), "amount": str(paid)},
+        {
+            "pay": str(credit_id),
+            "amount": str(paid),
+            # Only when it differs, so a payment where the goods were sold
+            # is fingerprinted exactly as before.
+            **({"taken_at_store_id": str(taking)} if taking != credit.store_id else {}),
+        },
         actor_user_id=scope.user_id,
         store_id=credit.store_id,
     )
@@ -328,6 +355,17 @@ async def pay(
     )
     if replay is not None:
         return replay
+    states = await hold_stores(
+        session, organization_id=scope.organization_id, store_ids={taking, credit.store_id}
+    )
+    if states[taking] is not StoreState.ACTIVE:
+        raise StoreNotTradingError(store_id=str(taking), state=states[taking].value)
+    if taking != credit.store_id and states[credit.store_id] is StoreState.ACTIVE:
+        raise ValidationFailedError(
+            "The store that sold takes the payments while it trades",
+            reason="PAID_WHERE_SOLD",
+            store_id=str(credit.store_id),
+        )
     if credit.status != CreditStatus.OPEN.value:
         raise ValidationFailedError(
             "Nothing is owed on this sale any more", reason="NOT_OWED", status=credit.status
@@ -345,6 +383,7 @@ async def pay(
             command_fingerprint=fingerprint,
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
+            taken_at_store_id=taking if taking != credit.store_id else None,
         )
     )
     await session.flush()
@@ -358,9 +397,13 @@ async def pay(
         entity_type="customer_credit",
         entity_id=credit.id,
         before={"owed": str(owed)},
-        after={"owed": str(money(owed - paid)), "paid": str(paid)},
+        after={
+            "owed": str(money(owed - paid)),
+            "paid": str(paid),
+            **({"taken_at_store_id": str(taking)} if taking != credit.store_id else {}),
+        },
     )
-    logger.info("credit.paid", credit_id=str(credit.id))
+    logger.info("credit.paid", credit_id=str(credit.id), taken_at_store_id=str(taking))
     return await view(session, credit)
 
 
@@ -378,7 +421,16 @@ async def write_off(
     if not why or len(why) > MAX_REASON or not is_storable(why):
         raise ValidationFailedError(f"Say why, in 1 to {MAX_REASON} characters", reason="NO_REASON")
     credit = await _locked(session, organization_id=scope.organization_id, credit_id=credit_id)
-    scope.require(Permission.CREDIT_WRITE_OFF, credit.store_id)
+    if (
+        await store_state(session, organization_id=scope.organization_id, store_id=credit.store_id)
+        is StoreState.ACTIVE
+    ):
+        scope.require(Permission.CREDIT_WRITE_OFF, credit.store_id)
+    else:
+        # Nothing is done in a store that does not trade, but a debt it is
+        # owed is still the owner's to write off: the network's owner, whose
+        # role covers every store (owner decision, 2026-10-01).
+        scope.require(Permission.CREDIT_WRITE_OFF)
     fingerprint = idempotency.fingerprint(
         {"write_off": str(credit_id), "reason": why},
         actor_user_id=scope.user_id,
@@ -528,6 +580,16 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
             )
         ).all()
     )
+    names = await store_names(
+        session,
+        organization_id=credit.organization_id,
+        store_ids={credit.store_id}
+        | {entry.taken_at_store_id for entry, _ in entries if entry.taken_at_store_id},
+    )
+    state = await store_state(
+        session, organization_id=credit.organization_id, store_id=credit.store_id
+    )
+    assert state is not None
     total = dict.fromkeys(EntryKind, ZERO)
     cash_back = ZERO
     last_payment: datetime | None = None
@@ -551,6 +613,8 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
         id=credit.id,
         sale_id=credit.sale_id,
         store_id=credit.store_id,
+        store_name=names[credit.store_id],
+        store_state=state,
         customer_name=credit.customer_name,
         customer_phone=credit.customer_phone,
         amount=credit.amount,
@@ -573,6 +637,7 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
                 at=entry.created_at,
                 by=name,
                 note=entry.note,
+                taken_at=names[entry.taken_at_store_id] if entry.taken_at_store_id else None,
             )
             for entry, name in entries
         ],
@@ -580,8 +645,14 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
 
 
 async def read_credit(
-    session: AsyncSession, *, scope: RequestScope, credit_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    credit_id: uuid.UUID,
+    at_store_id: uuid.UUID | None = None,
 ) -> CreditView:
+    """One debt, read in the store that sold it, or — while that store does
+    not trade — in `at_store_id`, a store that takes its payments."""
     credit = await session.scalar(
         select(CustomerCredit).where(
             CustomerCredit.id == credit_id,
@@ -590,7 +661,18 @@ async def read_credit(
     )
     if credit is None:
         raise NotFoundError("Unknown debt", credit_id=str(credit_id))
-    scope.require(Permission.SALE_CREDIT, credit.store_id)
+    if at_store_id is None or at_store_id == credit.store_id:
+        scope.require(Permission.SALE_CREDIT, credit.store_id)
+    else:
+        scope.require(Permission.SALE_CREDIT, at_store_id)
+        if (
+            await store_state(
+                session, organization_id=scope.organization_id, store_id=credit.store_id
+            )
+            is StoreState.ACTIVE
+        ):
+            # Another store's debt is no business of this one while it trades.
+            raise ForbiddenStoreError(store_id=str(credit.store_id))
     return await view(session, credit)
 
 
@@ -637,11 +719,24 @@ async def list_credits(
 
 
 def _in_store(
-    statement: Select[Any], scope: RequestScope, store_id: uuid.UUID, status: CreditStatus | None
+    statement: Select[Any],
+    scope: RequestScope,
+    store_id: uuid.UUID,
+    status: CreditStatus | None,
+    elsewhere: bool = False,
 ) -> Select[Any]:
+    """The store's own debts; with `elsewhere`, those of every store of the
+    network that does not trade, whose payments this one may take."""
     statement = statement.where(
         CustomerCredit.organization_id == scope.organization_id,
-        CustomerCredit.store_id == store_id,
+        CustomerCredit.store_id.in_(
+            select(Store.id).where(
+                Store.organization_id == scope.organization_id,
+                Store.state != StoreState.ACTIVE.value,
+            )
+        )
+        if elsewhere
+        else CustomerCredit.store_id == store_id,
     )
     if status is not None:
         statement = statement.where(CustomerCredit.status == status.value)
@@ -676,6 +771,7 @@ async def list_customers(
     query: str,
     limit: int,
     offset: int,
+    elsewhere: bool = False,
 ) -> tuple[list[CustomerView], bool]:
     """A store's debts by customer, the one with the newest debt first.
 
@@ -683,16 +779,26 @@ async def list_customers(
     them: «Коваль» finds the phone, and the same phone's debt written down as
     «Ірина» is the same customer's. A payment is still taken on one debt the
     seller chooses (owner decision, 2026-10-01).
+
+    `elsewhere` looks among the debts of the stores that do not trade, whose
+    payments any trading store takes (owner decision, 2026-10-01). Only by a
+    search: other stores' customers are found, never browsed.
     """
     scope.require(Permission.SALE_CREDIT, store_id)
+    wanted = query.strip()
+    if elsewhere and len(wanted) < MIN_SEARCH:
+        raise ValidationFailedError(
+            "Search for the customer by name or phone", reason="SEARCH_REQUIRED"
+        )
     customer = _CUSTOMER.label("customer")
     latest = func.max(CustomerCredit.created_at).label("latest")
-    grouped = _in_store(select(customer, latest), scope, store_id, status)
-    wanted = query.strip()
+    grouped = _in_store(select(customer, latest), scope, store_id, status, elsewhere)
     if wanted:
         grouped = grouped.where(
             _CUSTOMER.in_(
-                _in_store(select(_CUSTOMER), scope, store_id, status).where(_found_by(wanted))
+                _in_store(select(_CUSTOMER), scope, store_id, status, elsewhere).where(
+                    _found_by(wanted)
+                )
             )
         )
     rows = (
@@ -707,7 +813,7 @@ async def list_customers(
     debts: dict[str, list[CreditView]] = {phone: [] for phone in phones}
     for credit in (
         await session.scalars(
-            _in_store(select(CustomerCredit), scope, store_id, status)
+            _in_store(select(CustomerCredit), scope, store_id, status, elsewhere)
             .where(_CUSTOMER.in_(phones))
             .order_by(CustomerCredit.created_at.desc(), CustomerCredit.id)
         )

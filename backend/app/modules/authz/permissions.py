@@ -71,6 +71,11 @@ class Permission(StrEnum):
     # Writing off what a customer will not pay, with a reason. The owner's.
     CREDIT_WRITE_OFF = "credit:write_off"
 
+    # Blocking a store, archiving one and opening it again (owner decision,
+    # 2026-10-01: "the owner, in the app"). Honoured network-wide only: the
+    # owner of a child store does not change her own store's state.
+    STORE_MANAGE = "store:manage"
+
 
 class RoleCode(StrEnum):
     OWNER = "OWNER"
@@ -132,6 +137,8 @@ _OWNER: frozenset[Permission] = _MANAGER | frozenset(
         Permission.BACKUP_VIEW,
         # Owner decision, 2026-10-01: the owner writes off a debt, with a reason.
         Permission.CREDIT_WRITE_OFF,
+        # Owner decision, 2026-10-01: the owner blocks and archives a store.
+        Permission.STORE_MANAGE,
     }
 )
 

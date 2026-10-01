@@ -47,7 +47,7 @@ from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.authz.service import resolve_scope
 from app.modules.identity.models import AppUser
-from app.modules.tenancy.models import Organization, Store
+from app.modules.tenancy.models import Organization, Store, StoreState
 
 logger = get_logger(__name__)
 
@@ -148,8 +148,16 @@ async def _role(
 def _require_authority(
     scope: RequestScope, store: Store | None, permissions: frozenset[Permission]
 ) -> None:
-    """Only an owner, and never more than they hold where it applies."""
-    held = scope.permissions_for(store.id if store is not None else None)
+    """Only an owner, and never more than they hold where it applies.
+
+    Who works in a store that does not trade is the network owner's to change:
+    nothing is done in it, but a person may still be let go from it (owner
+    decisions, 2026-10-01). Its own grants count for nothing meanwhile.
+    """
+    if store is not None and store.state != StoreState.ACTIVE:
+        held = scope.org_permissions
+    else:
+        held = scope.permissions_for(store.id if store is not None else None)
     where = store.code if store is not None else "every store"
     if Permission.USER_MANAGE not in held:
         raise PermissionDeniedError(
@@ -236,8 +244,12 @@ async def grant(
     """
     scope = await authorize(session, approved_by)
     store = await _store(session, scope.organization_id, store_code)
-    if store is not None and not store.is_active:
-        raise ValidationFailedError(f"Store {store.code} is closed", store_code=store.code)
+    if store is not None and store.state != StoreState.ACTIVE:
+        # A store that does not trade takes nobody new: its people come back
+        # with it, as they were (owner decision, 2026-10-01).
+        raise ValidationFailedError(
+            f"Store {store.code} is not trading", store_code=store.code, state=store.state
+        )
     role, permissions = await _role(session, scope.organization_id, code=role_code)
     _require_authority(scope, store, permissions)
 

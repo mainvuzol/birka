@@ -449,3 +449,50 @@ source_modules = [
     "app.modules.transfers",
 ]
 forbidden_modules = ["app.modules.damaged"]
+
+# 2026-10-01 (ADR-0001 amendment): module `stores` changes a store's state —
+# trading, blocked, archived — on the owner's word. `stores → inventory,
+# orders, identity, authz, tenancy, core` (+ audit): it reads how many units
+# stand in the store's own warehouses and «Брак» and how many of its orders
+# are open, because only an empty store is archived. It moves no goods and no
+# money; what a store that does not trade may not do is refused by the
+# person's scope and held at the ledger's door, never by this module.
+[[tool.importlinter.contracts]]
+name = "a store's state changes nothing but the state"
+type = "forbidden"
+source_modules = ["app.modules.stores"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.snapshots",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.catalog",
+    "app.modules.backups",
+    "app.modules.inventory.repository",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "nothing depends on the store-state command"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.stores"]

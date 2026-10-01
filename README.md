@@ -23,7 +23,7 @@ updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 83 Playwright journeys on a phone profile, against the real API;
+- 109 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -277,6 +277,20 @@ another one sold, and hands the money back.
   one of this store's own. Damaged goods go to this store's «Брак».
 - **The record:** a refund answers `taken_at_store_id`. See the
   [report](.ai/project-memory/returns-elsewhere-report.md).
+
+**Store states:** the owner of the network blocks a store, archives one that
+stopped trading and opens either again, saying why («Магазини» in the app).
+- **The change:** `POST /stores/{id}/state` with `state` (`ACTIVE`,
+  `BLOCKED`, `ARCHIVED`) and a `reason`, named by a `command_id`;
+  `GET /stores` lists them. Both need `store:manage` held network-wide.
+  Only an empty store is archived: a refusal lists its `leftovers`.
+- **A store that does not trade** answers every change with
+  `STORE_NOT_TRADING`. A network-wide role still reads it; its own people see
+  only its `state` in `/me`.
+- **Its debts** are found at a store that trades with
+  `GET /credits/customers?elsewhere=true&query=…` and paid there with
+  `store_id` on the payment. See the
+  [report](.ai/project-memory/store-states-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it
