@@ -8,6 +8,10 @@ export interface Prices {
   store_price: string | null;
   // What this store's till suggests.
   suggested_price: string | null;
+  // Whether the person asking may change the shared price: they hold
+  // `catalog:set_price` organization-wide or in every store, which only the
+  // server knows.
+  may_set_shared: boolean;
 }
 
 export type AppliesTo = "ORGANIZATION" | "STORE";

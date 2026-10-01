@@ -41,6 +41,7 @@ from app.modules.catalog.prices import (
     PriceScope,
     SuggestedPrice,
     currency,
+    may_set_shared,
     prices_of,
     set_price,
     suggested_prices,
@@ -412,15 +413,21 @@ class PricesResponse(BaseModel):
     store_price: Decimal | None
     # What this store's till suggests.
     suggested_price: Decimal | None
+    # Whether the person asking may change the shared price: only the server
+    # knows every store they would need to hold `catalog:set_price` in.
+    may_set_shared: bool
 
 
-def _prices(variant_id: uuid.UUID, code: str, prices: SuggestedPrice) -> PricesResponse:
+def _prices(
+    variant_id: uuid.UUID, code: str, prices: SuggestedPrice, *, may_share: bool
+) -> PricesResponse:
     return PricesResponse(
         product_variant_id=variant_id,
         currency_code=code,
         shared_price=prices.shared,
         store_price=prices.store,
         suggested_price=prices.suggested,
+        may_set_shared=may_share,
     )
 
 
@@ -434,6 +441,7 @@ async def prices(
         product_variant_id,
         await currency(session, organization_id=scope.organization_id),
         found,
+        may_share=await may_set_shared(session, scope=scope),
     )
 
 
@@ -456,7 +464,8 @@ async def change_price(
     payload: PriceChangeRequest, scope: ScopeDep, session: SessionDep
 ) -> PricesResponse:
     """Set, change or remove a suggested selling price (owner decision,
-    2026-10-01): the owner and managers set it, shared or for one store.
+    2026-10-01): the owner and managers set it, shared or for one store. The
+    shared price takes the permission organization-wide or in every store.
 
     Refused with `PRICE_CHANGED` and the current price if the one the screen
     showed no longer stands; answered as done if the price already is what
@@ -476,6 +485,7 @@ async def change_price(
         payload.product_variant_id,
         await currency(session, organization_id=scope.organization_id),
         found,
+        may_share=await may_set_shared(session, scope=scope),
     )
     await session.commit()
     return body

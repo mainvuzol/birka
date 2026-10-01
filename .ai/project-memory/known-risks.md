@@ -91,9 +91,10 @@ Live risks and properties, in order:
     suggestion costs a correction, never a wrong sale.
   - **A price's history is in the audit log only.** Nothing shows it in the
     app.
-  - **A manager who belongs to one store cannot change the shared price.**
-    That follows the scope rule, and it needs an organization-wide membership.
-    Whether the owner's managers have one is a membership the owner sets.
+  - **The shared price needs the permission in every store**, unless it is
+    held organization-wide. A store opened later takes that right away from
+    anyone holding it store by store, until they are given it in the new
+    store too. That is deliberate: the shared price reaches the new till.
 - **The sale journal lives in `localStorage`.** Clearing the app's data while a
   sale's outcome is unknown loses the record of which key to replay. The sale
   itself is still safe — `command_id` is permanent and the server holds the

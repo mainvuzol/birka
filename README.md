@@ -201,9 +201,9 @@ written off. Stock in «Брак» changes through nothing else. See the
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it
 (`catalog:set_price`) where goods arrive and on the stock screen. It is one
-price for the whole shop (`POST /catalog/prices`, `applies_to: ORGANIZATION`,
-which needs the permission organization-wide). A store may override it with its
-own (`STORE`). A change states the price the screen showed, and is refused
+price for the whole shop (`POST /catalog/prices`, `applies_to: ORGANIZATION`),
+which needs the permission organization-wide or in every store. A store may
+override it with its own (`STORE`), which needs the permission in that store. A change states the price the screen showed, and is refused
 with `PRICE_CHANGED` if that no longer stands. See the
 [report](.ai/project-memory/suggested-price-report.md).
 

@@ -8,9 +8,10 @@ import { readFileSync } from "node:fs";
  *
  * The owner and managers set it — shared for every store, or a store's own
  * that overrides it — where goods arrive and on the stock screen; the till
- * prefills it and the seller may still agree another. «Оля» holds every
- * permission in one store, so she sets that store's price; the owner holds
- * them organization-wide, so she sets the shared one too.
+ * prefills it and the seller may still agree another. The shared price needs
+ * the permission over every till: organization-wide, as the owner holds it,
+ * or in every store. The seed's shop has one store and «Оля» holds every
+ * permission in it, so she may set either.
  *
  * Each test prices models of its own, received into the returns warehouse, so
  * nothing here changes what another journey's till suggests.
@@ -141,16 +142,9 @@ test("a store's price set on the stock screen is what its till suggests", async 
   await row(page, priced.name)
     .getByRole("button", { name: "Змінити ціну продажу" })
     .click();
-  // Held in this store only: no choice of the shared price is offered.
-  await expect(
-    row(page, priced.name).getByText(
-      "Ця ціна діятиме лише в магазині «Основний».",
-      { exact: false },
-    ),
-  ).toBeVisible();
-  await expect(
-    row(page, priced.name).getByRole("combobox", { name: "Яку ціну змінюємо" }),
-  ).toHaveCount(0);
+  await row(page, priced.name)
+    .getByRole("combobox", { name: "Яку ціну змінюємо" })
+    .selectOption("STORE");
   await row(page, priced.name).getByLabel("Нова ціна, грн").fill("0");
   await row(page, priced.name)
     .getByRole("button", { name: "Зберегти ціну" })
@@ -254,13 +248,13 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
     .click();
   await row(page, priced.name).getByLabel("Нова ціна, грн").fill("1850");
 
-  // Someone else sets it first.
+  // Someone else sets the same, shared, price first.
   const elsewhere = await page.request.post("/api/v1/catalog/prices", {
     headers: { Authorization: `Bearer ${bearer}` },
     data: {
       store_id: fixture.store_id,
       product_variant_id: priced.variant,
-      applies_to: "STORE",
+      applies_to: "ORGANIZATION",
       expected_price: null,
       suggested_price: "1700.00",
     },
@@ -280,6 +274,51 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
   await row(page, priced.name)
     .getByRole("button", { name: "Зберегти ціну" })
     .click();
+  await expect(row(page, priced.name)).toContainText(
+    "Ціна продажу: 1850,00 грн",
+  );
+});
+
+test("whoever may set only this store's price is told so, and sets that", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  // As for a manager of one store in a shop of several: the server answers
+  // that the shared price is not theirs to change.
+  await page.route("**/api/v1/catalog/prices?**", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: { ...((await response.json()) as object), may_set_shared: false },
+    });
+  });
+  await enter(page, seller, "Залишки");
+  await stockOf(page);
+  await row(page, priced.name)
+    .getByRole("button", { name: "Змінити ціну продажу" })
+    .click();
+  await expect(
+    row(page, priced.name).getByText(
+      "Ця ціна діятиме лише в магазині «Основний».",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await expect(
+    row(page, priced.name).getByRole("combobox", { name: "Яку ціну змінюємо" }),
+  ).toHaveCount(0);
+  const sent = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v1/catalog/prices"),
+  );
+  await row(page, priced.name).getByLabel("Нова ціна, грн").fill("1850");
+  await row(page, priced.name)
+    .getByRole("button", { name: "Зберегти ціну" })
+    .click();
+  expect((await sent).postDataJSON()).toMatchObject({
+    applies_to: "STORE",
+    suggested_price: "1850.00",
+  });
   await expect(row(page, priced.name)).toContainText(
     "Ціна продажу: 1850,00 грн",
   );

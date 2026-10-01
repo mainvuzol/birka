@@ -15,10 +15,13 @@ What the owner decided (business-rules.md, "suggested selling price"):
 - **It is set where goods arrive, and on the stock screen.** One price per
   model and colour — a variant — for every size.
 
-The shared price is the organization's, so setting it takes the permission
-organization-wide; a store's own price takes it in that store. That is the
-scope rule every command already follows (I12/I13), not a new one: a store's
-manager changes what that store's till suggests, and no other store's.
+A store's own price takes `catalog:set_price` in that store: a store's
+manager changes what that store's till suggests, and no other store's — the
+scope rule every command already follows (I12/I13). The shared price reaches
+every store's till, so it takes the permission over all of them: held
+organization-wide, or held in every one of the organization's stores, paused
+ones included (owner decision, 2026-10-01). A child store's owner who is also
+a manager of the main store, in a shop of those two, sets the shared price.
 
 **Nobody overwrites a price they have not seen.** A change states the price
 the screen showed. If that no longer stands, the change is refused with the
@@ -38,7 +41,7 @@ from enum import StrEnum
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError, PriceChangedError
+from app.core.errors import NotFoundError, PermissionDeniedError, PriceChangedError
 from app.modules.audit import service as audit
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
@@ -49,7 +52,7 @@ from app.modules.catalog.models import (
     ProductVariant,
     VariantPrice,
 )
-from app.modules.tenancy.models import Organization
+from app.modules.tenancy.models import Organization, Store
 from app.modules.tenancy.service import validate_active_stores
 
 KOPECK = Decimal("0.01")
@@ -158,6 +161,20 @@ async def prices_of(
     return prices[variant_id]
 
 
+async def may_set_shared(session: AsyncSession, *, scope: RequestScope) -> bool:
+    """Whether this person may change the shared price: they hold
+    `catalog:set_price` organization-wide, or in every store of the
+    organization — paused ones too, whose tills will suggest it again."""
+    if scope.can(Permission.CATALOG_SET_PRICE):
+        return True
+    stores = (
+        await session.scalars(
+            select(Store.id).where(Store.organization_id == scope.organization_id)
+        )
+    ).all()
+    return bool(stores) and all(scope.can(Permission.CATALOG_SET_PRICE, s) for s in stores)
+
+
 async def _lock(
     session: AsyncSession,
     *,
@@ -197,9 +214,14 @@ async def set_price(
         scope.require(Permission.CATALOG_SET_PRICE, store_id)
         row_store_id: uuid.UUID | None = store_id
     else:
-        # The store is the working context; the authority is organization-wide.
+        # The store is the working context; the authority is over every till.
         scope.require_store(store_id)
-        scope.require(Permission.CATALOG_SET_PRICE)
+        if not await may_set_shared(session, scope=scope):
+            raise PermissionDeniedError(
+                f"Missing permission {Permission.CATALOG_SET_PRICE.value} in every store",
+                permission=Permission.CATALOG_SET_PRICE.value,
+                store_id=None,
+            )
         row_store_id = None
     await validate_active_stores(
         session, organization_id=scope.organization_id, store_ids={store_id}
@@ -275,6 +297,7 @@ __all__ = [
     "PriceScope",
     "SuggestedPrice",
     "currency",
+    "may_set_shared",
     "prices_of",
     "set_price",
     "suggested_prices",

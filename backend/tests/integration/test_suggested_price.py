@@ -29,6 +29,7 @@ from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, 
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import EntityStatus, ProductVariant
 from app.modules.catalog.prices import PriceScope, set_price
+from app.modules.tenancy.models import Store, StoreKind
 from tests.conftest import requires_database
 from tests.integration.test_shared_warehouse import TwoShops, api, make_two_shops, stock_a_coat
 
@@ -135,6 +136,8 @@ async def test_a_manager_sets_the_store_price_and_the_till_suggests_it(maker):
         "shared_price": None,
         "store_price": "1850.50",
         "suggested_price": "1850.50",
+        # A manager of one of the two stores: not every till is theirs.
+        "may_set_shared": False,
     }
     assert await suggested_at_till(maker, shops, shops.primary_store, variant) == "1850.50"
     # Another store's till does not see this store's own price.
@@ -181,6 +184,72 @@ async def test_the_shared_price_is_set_organization_wide_and_reaches_every_till(
     assert stated == {"applies_to": "ORGANIZATION", "store_id": None, "suggested_price": "2000.00"}
     assert await suggested_at_till(maker, shops, shops.primary_store, variant) == "2000.00"
     assert await suggested_at_till(maker, shops, shops.child_store, variant) == "2000.00"
+
+
+async def prices_seen(
+    maker: async_sessionmaker[AsyncSession], scope: RequestScope, store: uuid.UUID, variant: str
+) -> dict[str, Any]:
+    async with api(maker, scope) as client:
+        response = await client.get(
+            "/api/v1/catalog/prices",
+            params={"store_id": str(store), "product_variant_id": variant},
+        )
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+async def test_whoever_holds_the_price_in_every_store_sets_the_shared_one(maker):
+    """Owner decision, 2026-10-01: a child store's owner may also manage the
+    main store. Holding the price in every store, they set the shared one
+    too. Every store counts, a paused one included; some of them do not."""
+    shops = await make_two_shops(maker)
+    variant = await coat(maker, shops)
+
+    def holding(child: frozenset[Permission]) -> RequestScope:
+        return RequestScope(
+            user_id=shops.user_id,
+            organization_id=shops.organization_id,
+            store_permissions={shops.primary_store: MANAGER, shops.child_store: child},
+        )
+
+    shared = {
+        "store": shops.child_store,
+        "variant": variant,
+        "applies_to": "ORGANIZATION",
+    }
+    some = holding(SELLER)
+    assert (await prices_seen(maker, some, shops.child_store, variant))["may_set_shared"] is False
+    refused = await change(maker, some, **shared, expected=None, price="2000.00")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "PERMISSION_DENIED"
+
+    every = holding(OWNER)
+    assert (await prices_seen(maker, every, shops.child_store, variant))["may_set_shared"] is True
+    response = await change(maker, every, **shared, expected=None, price="2000.00")
+    assert response.status_code == 200, response.text
+    assert response.json()["may_set_shared"] is True
+    assert await suggested_at_till(maker, shops, shops.primary_store, variant) == "2000.00"
+    assert await suggested_at_till(maker, shops, shops.child_store, variant) == "2000.00"
+
+    # A third store, paused, where they hold nothing: its till will suggest
+    # the shared price again when it reopens.
+    async with maker() as session:
+        session.add(
+            Store(
+                organization_id=shops.organization_id,
+                name="На паузі",
+                code="PAUSED",
+                kind=StoreKind.SECONDARY,
+                is_active=False,
+            )
+        )
+        await session.commit()
+    assert (await prices_seen(maker, every, shops.child_store, variant))["may_set_shared"] is False
+    paused = await change(maker, every, **shared, expected="2000.00", price="2100.00")
+    assert paused.status_code == 403
+    # Organization-wide, the owner still does.
+    assert (await prices_seen(maker, owner(shops), shops.child_store, variant))["may_set_shared"]
 
 
 async def test_a_store_price_overrides_the_shared_one_until_it_is_removed(maker):

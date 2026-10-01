@@ -31,10 +31,15 @@ dropped and the shortage recorded. That is the next branch, not this one.
 **The price** (`catalog/prices.py`):
 - **The till suggests the store's own price, else the shared one.**
   `stock-options` carries it as `suggested_price`.
-- **Setting the shared price takes `catalog:set_price` organization-wide.**
-  A store's own price takes it in that store. This is the scope rule every
-  command follows (I12/I13): a manager who belongs to one store changes that
-  store's till, and no other.
+- **A store's own price takes `catalog:set_price` in that store.** This is
+  the scope rule every command follows (I12/I13): a manager who belongs to
+  one store changes that store's till, and no other.
+- **The shared price takes the permission over every till.** It may be held
+  organization-wide, or in every store of the organization, paused ones
+  included. The owner confirmed this, with a case in mind: a child store's
+  owner may also manage the main store.
+  - Only the server knows all the stores, so the price read answers
+    `may_set_shared` and the app offers the choice from that.
 - **Nobody overwrites a price they have not seen.**
   - A change states the price the screen showed (`expected_price`). If that
     no longer stands, the change is refused with the one that does
@@ -66,18 +71,20 @@ whatever the role is called.
 - **The stock screen shows each model's price**, with «Змінити ціну
   продажу» for whoever may set it. «Брак» shows none: nothing there is for
   sale.
-- **Whoever holds the permission organization-wide chooses** the shared
-  price or this store's own. Anyone else sets this store's own and is told
-  so. Removing a store's own price brings the shared one back.
+- **Whoever may set the shared price chooses** it or this store's own.
+  Anyone else sets this store's own and is told so. Removing a store's own
+  price brings the shared one back.
 
 ## Evidence
 
-- **Backend: 1096 passed, 1 skipped** (the `age` test, run by CI). 16 are
-  new: 14 for the price, 1 for the permission, and 1 freezing `0020`.
+- **Backend: 1097 passed, 1 skipped** (the `age` test, run by CI). 17 are
+  new: 15 for the price, 1 for the permission, and 1 freezing `0020`.
   - **The price's own tests:**
     - the store's price reaches its own till, and no other store's;
-    - the shared price needs the permission organization-wide, and reaches
+    - the shared price is refused to a manager of one store, and reaches
       every till;
+    - whoever holds the price in every store sets the shared one. Holding it
+      in some stores does not count, and a paused store counts as a store;
     - a store's own price overrides the shared one until it is removed;
     - a seller sees the price but does not set it;
     - nobody overwrites a price they have not seen, a retry is answered as
@@ -88,12 +95,13 @@ whatever the role is called.
       are fields nobody asked for;
     - another organization's model, or a merged one, is not priced;
     - the migration's grant, and its removal on downgrade.
-- **E2E: 77 passed against the real API**, 4 of them new:
+- **E2E: 78 passed against the real API**, 5 of them new:
   - a store's price, set on the stock screen, is what its till prefills and
     sells at, with nothing typed;
   - the owner sets the shared price while receiving, and the store's own
     overrides it until removed;
   - a price someone else changed meanwhile is not overwritten unseen;
+  - whoever may set only this store's price is told so, and sets that;
   - whoever does not set prices sees them and is offered no change.
 
   The «Брак» stock test now also checks that «Брак» shows no price.
@@ -101,9 +109,11 @@ whatever the role is called.
   `alembic check` reports no drift. The downgrade to base and back up is
   lossless on a fresh database. Frontend lint, types and build pass.
 
-**Mutation testing: 24 tried, 23 caught (backend 16, frontend 7).**
+**Mutation testing: 27 tried, 26 caught (backend 18, frontend 8).**
 - Caught:
   - either permission check, and the manager's default;
+  - the shared price allowed from some stores, or with paused stores left
+    out;
   - the stale-price refusal, and the retry answered as done;
   - the shared price beating the store's own;
   - the till not told the price, or not shown the store's own;
@@ -116,6 +126,7 @@ whatever the role is called.
   - in the app:
     - the till keeping the previous model's price, or prefilling none;
     - the editor offered to anyone;
+    - the shared price offered whatever the server says;
     - «Брак» showing a price;
     - a change stated against the wrong price;
     - the owner starting at the store's own price;

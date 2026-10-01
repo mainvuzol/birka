@@ -45,14 +45,11 @@ export function Receive({
   store,
   token,
   journalKey,
-  maySharePrice,
   blocked,
 }: {
   store: Store;
   token: string;
   journalKey: string;
-  /** Holds `catalog:set_price` organization-wide: may set the shared price. */
-  maySharePrice: boolean;
   blocked: boolean;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
@@ -364,7 +361,6 @@ export function Receive({
             token={token}
             scopeKey={journalKey}
             variantId={variant.product_variant_id}
-            mayShare={maySharePrice}
             blocked={blocked}
           />
         )}

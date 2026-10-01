@@ -29,15 +29,12 @@ export function Stock({
   token,
   scopeKey,
   journalKey,
-  maySharePrice,
   blocked,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   journalKey: string;
-  /** Holds `catalog:set_price` organization-wide: may set the shared price. */
-  maySharePrice: boolean;
   blocked: boolean;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
@@ -270,7 +267,6 @@ export function Stock({
                             token={token}
                             scopeKey={scopeKey}
                             variantId={item.product_variant_id}
-                            mayShare={maySharePrice}
                             blocked={blocked}
                             onDone={() => {
                               setPricing(null);

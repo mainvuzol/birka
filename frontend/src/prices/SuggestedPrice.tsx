@@ -12,8 +12,9 @@ import type { AppliesTo, Prices } from "./types";
  * The till prefills it, so a seller does not type it on every sale; the
  * final price is still agreed at the counter. The owner and managers set it
  * (`catalog:set_price`): one price for the whole shop, which a store may
- * override with its own. Holding the permission organization-wide sets the
- * shared price; holding it in this store, the store's own.
+ * override with its own. Holding the permission in this store sets the
+ * store's own; holding it organization-wide, or in every store, also the
+ * shared one — the server says which (`may_set_shared`).
  *
  * A change states the price the screen showed, so nobody overwrites one they
  * have not seen; saving twice is safe.
@@ -23,15 +24,12 @@ export function SuggestedPrice({
   token,
   scopeKey,
   variantId,
-  mayShare,
   blocked,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   variantId: string;
-  /** The person holds `catalog:set_price` organization-wide. */
-  mayShare: boolean;
   blocked: boolean;
 }): JSX.Element {
   const [editing, setEditing] = useState(false);
@@ -68,7 +66,6 @@ export function SuggestedPrice({
                 token={token}
                 scopeKey={scopeKey}
                 variantId={variantId}
-                mayShare={mayShare}
                 blocked={blocked}
                 onDone={() => {
                   setEditing(false);
@@ -105,7 +102,6 @@ export function PriceEditor({
   token,
   scopeKey,
   variantId,
-  mayShare,
   blocked,
   onDone,
   onCancel,
@@ -114,7 +110,6 @@ export function PriceEditor({
   token: string;
   scopeKey: string;
   variantId: string;
-  mayShare: boolean;
   blocked: boolean;
   onDone: (prices: Prices) => void;
   onCancel: () => void;
@@ -141,7 +136,6 @@ export function PriceEditor({
       token={token}
       scopeKey={scopeKey}
       variantId={variantId}
-      mayShare={mayShare}
       blocked={blocked}
       prices={prices.data}
       refetch={async () => {
@@ -158,7 +152,6 @@ function Form({
   token,
   scopeKey,
   variantId,
-  mayShare,
   blocked,
   prices,
   refetch,
@@ -169,7 +162,6 @@ function Form({
   token: string;
   scopeKey: string;
   variantId: string;
-  mayShare: boolean;
   blocked: boolean;
   prices: Prices;
   refetch: () => Promise<void>;
@@ -179,6 +171,7 @@ function Form({
   const cache = useQueryClient();
   // A store with its own price is changing that one; otherwise whoever may
   // set the shared price starts there.
+  const mayShare = prices.may_set_shared;
   const [appliesTo, setAppliesTo] = useState<AppliesTo>(
     prices.store_price === null && mayShare ? "ORGANIZATION" : "STORE",
   );
