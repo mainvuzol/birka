@@ -648,12 +648,20 @@ def _in_store(
     return statement
 
 
+# What a phone is written with: «+38 (067) 123-45-67».
+_PHONE_LIKE = re.compile(r"[\d\s()+\-]+")
+
+
 def _found_by(wanted: str) -> Any:
-    """The customer's name, or any spelling of their phone."""
+    """The customer's name, or any spelling of their phone.
+
+    Only a query written as a phone is looked for among phones: the digits of
+    «Ірина 2» are part of a name, and would find whoever's number holds a 2.
+    """
     conditions: list[Any] = [
         func.lower(CustomerCredit.customer_name).contains(wanted.lower(), autoescape=True)
     ]
-    if digits(wanted):
+    if _PHONE_LIKE.fullmatch(wanted) and digits(wanted):
         conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))
         conditions.append(_CUSTOMER.contains(customer_key(digits(wanted)), autoescape=True))
     return or_(*conditions)

@@ -438,6 +438,9 @@ async def test_a_debt_is_found_by_name_or_by_any_form_of_its_phone(maker):
         assert await found("123-45") == [sale["credit"]["credit_id"]]
         assert await found("коваль") == [sale["credit"]["credit_id"]]
         assert await found("Петренко") == []
+        # A name's digits are part of the name, never a phone to look for.
+        assert await found("Петренко 067") == []
+        assert await found("+38 (067)") == [sale["credit"]["credit_id"]]
 
 
 async def test_a_store_lists_only_its_own_debts(maker):
@@ -501,6 +504,8 @@ async def test_one_phone_is_one_customer_whatever_the_name(maker):
     # «Ірина» is the same customer as «Коваль».
     [found] = await customers(maker, shops, query="Коваль")
     assert len(found["credits"]) == 2
+    # Олег's number holds a 0 and a 1; a name with them is still a name.
+    assert await customers(maker, shops, query="Ірина 01") == []
 
     # A payment is still taken on the debt the seller chooses.
     paid = await pay(maker, shops, second["credit"]["credit_id"], "1000.00")

@@ -160,7 +160,7 @@ them in the same change, and the owner gave the rules (business-rules.md,
   - frontend lint, types and build pass;
   - prettier is clean on every changed hunk.
 
-**Mutation testing — 42 mutants, all caught (backend 10, frontend 32).**
+**Mutation testing — 43 mutants, all caught (backend 11, frontend 32).**
 The first 22 ran before the review additions; the till's checks were
 mutated again once they moved into the shared form.
 - **Backend:** no sale marked as paid in parts.
@@ -201,7 +201,8 @@ mutated again once they moved into the shared form.
   - a collected order opening no debt;
   - other terms replayed under the same command;
   - a revoked grant handed the cached collection;
-  - the order not saying what is owed.
+  - the order not saying what is owed;
+  - a name's digits looked for among phones.
 - **Frontend:**
   - the store's total not shown;
   - a customer's total being one debt's;
@@ -215,6 +216,11 @@ mutated again once they moved into the shared form.
 
 ## Found on the way
 
+- **A name with digits was also looked for among phones** (since #54). A
+  search for «Покупець 1a2b» took «12» from it, and found whoever's number
+  holds a 12. Grouping by customer made it show: CI found a second customer
+  for one name. The server now looks among phones only for a query written
+  as a phone (digits, spaces, `+`, `-`, brackets), and two tests pin it.
 - **A `+38` number and the same number without it were two customers.**
   The stored digits keep how the phone was written. The server tests caught
   it, and grouping now compares a Ukrainian number in its own ten digits.
