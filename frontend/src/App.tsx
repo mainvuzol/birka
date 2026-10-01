@@ -45,6 +45,8 @@ import {
   useCreditCommand,
 } from "@/credits/commands";
 import type { Credit } from "@/credits/types";
+import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
+import type { TermsInput } from "@/credits/Terms";
 import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import {
@@ -1151,6 +1153,10 @@ function OrderDetail({
   const [reason, setReason] = useState("");
   const [received, setReceived] = useState(false);
   const [returning, setReturning] = useState(false);
+  // Collected and paid in parts, as at the till (owner decision, 2026-10-01).
+  const [credit, setCredit] = useState<TermsInput>(noTerms);
+  const [problem, setProblem] = useState("");
+  const mayCredit = store.permissions.includes("sale:credit");
   const next = {
     READY_TO_DISPATCH: "dispatch",
     DISPATCHED: "arrive",
@@ -1187,12 +1193,41 @@ function OrderDetail({
         оплату.
       </p>
       {order.sale_id && <p role="status">Продаж зафіксовано.</p>}
+      {order.credit && (
+        <p>
+          Оплата частинами: сплачено {money(order.credit.paid)}, клієнт винен{" "}
+          {money(order.credit.owed)}. Наступні внески — у розділі «Борги».
+        </p>
+      )}
+      {next === "collect" &&
+        mayCredit &&
+        store.permissions.includes("sale:create") && (
+          <fieldset disabled={blocked}>
+            <legend>Оплата</legend>
+            <TermsFields
+              value={credit}
+              change={(value) => {
+                setCredit(value);
+                setProblem("");
+              }}
+              total={kopecks(order.total) ?? 0n}
+              hint="Клієнт забирає замовлення, сплачує частину зараз, решту винен цьому магазину. Наступні внески — у розділі «Борги»."
+            />
+          </fieldset>
+        )}
+      {problem && <p role="alert">{problem}</p>}
       <div className="actions">
         {next && store.permissions.includes("sale:create") && (
           <button
             disabled={blocked}
             onClick={() => {
-              action(next);
+              if (next !== "collect" || !credit.inParts) {
+                action(next);
+                return;
+              }
+              const terms = checkTerms(credit, kopecks(order.total) ?? 0n);
+              if (typeof terms === "string") setProblem(terms);
+              else action(next, { credit: terms });
             }}
           >
             {actionLabels[next]}

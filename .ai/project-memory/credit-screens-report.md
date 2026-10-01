@@ -8,7 +8,8 @@ Branch: `feat/credit-screens`.
 
 The server for a sale paid in parts merged as PR #54 with no screen. Until
 now nothing in the app could sell this way. The owner's rules are in
-business-rules.md, "paying in parts"; nothing new was decided here.
+business-rules.md, "paying in parts". Three more were decided for the
+review additions below ("debts by customer, totals, orders").
 
 ## What exists now
 
@@ -70,12 +71,58 @@ For a sale paid in parts the seller has no way to work the amount out.
 **The server gained one field.** `GET /sales` now says whether each sale was
 paid in parts (`paid_in_parts`).
 
+### Added on review: debts by customer, the store's total, orders
+
+The first version left three things out, as not asked. The user asked for
+them in the same change, and the owner gave the rules (business-rules.md,
+"debts by customer, totals, orders"):
+
+- **One phone is one customer.**
+  - «Борги» now lists customers, each with every debt and what they owe in
+    all, the one with the newest debt first.
+  - The newest debt names the customer.
+  - A search by any name or spelling of the phone finds the customer, and
+    then shows all their debts. The debt written as «Ірина» belongs to
+    «Ірина Коваль» when the phone is one.
+  - A payment is still taken on the debt the seller opens.
+  - `GET /credits/customers` groups on the server, so a customer's debts
+    never split across pages.
+- **The store's total.** «Магазину винні N», with how many customers owe
+  and how many debts are open, at the top of «Борги»
+  (`GET /credits/summary`). It is by store only.
+- **An order collected may be paid in parts.**
+  - «Клієнт забрав» offers «Оплата частинами» with the till's own form and
+    checks. The till and the order now share it (`credits/Terms.tsx`).
+  - `POST /orders/{id}/collect` takes `credit`. The debt opens in the
+    collection's own transaction, owed to the order's store.
+  - The terms are in the command's fingerprint: the same command with other
+    terms is refused, and a revoked grant is not handed the cached answer.
+  - The order then shows what is paid and owed (`credit` on the order).
+
 ## Evidence
 
-- **Backend: 1156 passed, 1 skipped** (the `age` test, run by CI). The one new
-  test pins `paid_in_parts`: true for a sale paid in parts, false for an
-  ordinary one.
-- **E2E: 95 passed** on a fresh database against the real API. 8 are new:
+- **Backend: 1162 passed, 1 skipped** (the `age` test, run by CI). 7 tests
+  are new:
+  - `paid_in_parts`: true for a sale paid in parts, false for an ordinary one;
+  - **one phone is one customer:** two spellings and two names are one card,
+    the newest name, both debts and their sum; a search by the older name
+    finds both; a debt paid off leaves the owing list;
+  - customers come a page at a time;
+  - **the store's total:**
+    - only open debts, less what was paid and returned;
+    - a phone written two ways is one customer;
+    - the other store's debts are its own;
+    - only `sale:credit` in that store sees it;
+  - **an order collected paid in parts:**
+    - the debt opens, and the order then shows it;
+    - the same command replays;
+    - other terms are refused, and a revoked grant gets no cached answer;
+    - payments and a return then work as for any debt;
+  - **the till's rules at collection:** everything paid, a bad phone, a blank
+    name, nothing paid and no permission are refused, and nothing of them
+    stays. The order is then collected as an ordinary sale;
+  - only a collection takes terms.
+- **E2E: 99 passed** on a fresh database against the real API. 12 are new:
   - **The whole path.** A sale paid in parts at the till, with the terms on
     the wire. Then «Борги» finds it by phone, takes 500, then the rest, and
     the debt closes and leaves the list of those owing.
@@ -95,13 +142,27 @@ paid in parts (`paid_in_parts`).
     - the second, with its answer lost and then settled, lowers it by 500
       and gives 1000 back.
   - **Permissions.** Without `sale:credit`, neither the option nor «Борги».
+  - **One phone is one customer, and the store's total.**
+    - Two debts written under two names and two spellings make one card.
+      Searching the older name finds both.
+    - The total rises by what the second debt leaves owing.
+    - Paying the older debt off, chosen by the seller, lowers the customer's
+      sum and the store's total.
+  - **An order collected in parts.**
+    - Everything paid now is stopped before sending.
+    - Part paid sends the terms; the order shows paid and owed, and the debt
+      appears in «Борги».
+  - **An order collected without the option** sends no terms.
+  - **Collecting in parts needs `sale:credit`.**
 - **Gates:**
   - ruff, format, mypy, all 20 import contracts and `alembic check` are
     clean;
   - frontend lint, types and build pass;
   - prettier is clean on every changed hunk.
 
-**Mutation testing — 22 mutants, all caught (backend 1, frontend 21).**
+**Mutation testing — 42 mutants, all caught (backend 10, frontend 32).**
+The first 22 ran before the review additions; the till's checks were
+mutated again once they moved into the shared form.
 - **Backend:** no sale marked as paid in parts.
 - **The till:**
   - the terms not sent;
@@ -130,7 +191,33 @@ paid in parts (`paid_in_parts`).
     goods' whole worth;
   - the button promising that cash before the server has answered.
 
+**The review additions:**
+- **Backend:**
+  - a `+38` number taken as another customer;
+  - a search showing only the debts it matched;
+  - the total counting settled and written-off debts;
+  - the total ignoring what was paid;
+  - the total counting a phone written twice as two customers;
+  - a collected order opening no debt;
+  - other terms replayed under the same command;
+  - a revoked grant handed the cached collection;
+  - the order not saying what is owed.
+- **Frontend:**
+  - the store's total not shown;
+  - a customer's total being one debt's;
+  - every button opening the newest debt;
+  - the shared form's checks: everything paid, the phone, a blank name;
+  - the order's terms not sent;
+  - the order checked against another total;
+  - the order not showing what is owed;
+  - the option offered at collection without `sale:credit`;
+  - the till not offering the shared form.
+
 ## Found on the way
+
+- **A `+38` number and the same number without it were two customers.**
+  The stored digits keep how the phone was written. The server tests caught
+  it, and grouping now compares a Ukrainian number in its own ten digits.
 
 - **A return whose answer was lost said nothing once settled.** It now says
   what to hand back (see above).
@@ -141,11 +228,12 @@ paid in parts (`paid_in_parts`).
 
 ## Not covered here
 
-- **A customer with two debts shows as two.** Nothing groups debts by
-  customer. Not asked.
-- **Nothing reports totals owed** across a store or the network. Not asked.
-- **Paying an order collected as a sale in parts** is not possible, as on the
-  server.
+- **There is no network total.** The owner chose a total by store only.
+- **A payment goes to one debt.** A customer with several debts pays on the
+  one the seller chooses, as the owner decided.
+- **Only a Ukrainian number is matched across its spellings.** Another
+  country's number written once with its code and once without is two
+  customers.
 - **The phone is shown to everyone holding `sale:credit` in the store,** as
   the owner chose. It also sits in the backups.
 - **Nothing has run in production.**
@@ -153,18 +241,26 @@ paid in parts (`paid_in_parts`).
 ## Changed files
 
 - New:
-  - `frontend/src/credits/Credits.tsx`, `commands.ts`, `types.ts`;
+  - `frontend/src/credits/Credits.tsx`, `Terms.tsx`, `commands.ts`,
+    `types.ts`;
   - `frontend/e2e/credits.spec.ts`.
 - Frontend:
   - `src/sales/Sale.tsx`, `commands.ts`, `types.ts` — the option, the terms
     in the journal, the receipt;
   - `src/returns/Returns.tsx`, `types.ts` — the split;
-  - `src/App.tsx` — the section, its journal, and a settled return's notice;
+  - `src/App.tsx` — the section, its journal, a settled return's notice,
+    and paying in parts on collecting an order;
+  - `src/orders/types.ts` — `credit` on an order;
+  - `src/shared/api.ts` — the terms' refusals in words;
   - `src/styles.css` — the debt's summary.
 - Backend:
   - `app/api/v1/sales.py` — `paid_in_parts`;
-  - `app/modules/credit/service.py` — `credited_sales`;
-  - `tests/integration/test_customer_credit.py` — one test.
+  - `app/api/v1/credits.py` — `customers` and `summary`;
+  - `app/api/v1/orders.py`, `app/modules/orders/service.py` — `credit` on
+    collecting an order;
+  - `app/modules/credit/service.py` — `credited_sales`, `list_customers`,
+    `store_debts`, `customer_key`;
+  - `tests/integration/test_customer_credit.py` — 7 tests.
 - Docs:
   - the credit report;
   - business rules;

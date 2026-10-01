@@ -42,6 +42,33 @@ export interface CreditPage {
 }
 
 /**
+ * `GET /credits/customers`: one customer's debts in the store. One phone is
+ * one customer (owner decision, 2026-10-01), however each sale wrote the name.
+ */
+export interface Customer {
+  /** The number in its own ten digits for a Ukrainian one. */
+  phone_digits: string;
+  /** As the newest of these debts wrote them. */
+  customer_name: string;
+  customer_phone: string;
+  owed: string;
+  open_debts: number;
+  credits: Credit[];
+}
+
+export interface CustomerPage {
+  items: Customer[];
+  has_more: boolean;
+}
+
+/** `GET /credits/summary`: what the store is owed now, by store only. */
+export interface StoreDebts {
+  owed: string;
+  customers: number;
+  debts: number;
+}
+
+/**
  * What the journal keeps of a payment or a write-off. `store_id` and
  * `credit_id` are the journal's own: the server takes the debt from the path
  * and the store from the debt.

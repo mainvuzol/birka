@@ -8,10 +8,10 @@ import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
 import { asInput } from "@/prices/SuggestedPrice";
 import { sizeLabel } from "@/returns/types";
-import { phoneDigits } from "@/credits/types";
+import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
+import type { TermsInput } from "@/credits/Terms";
 import { submitSale, useSaleCommand } from "./commands";
 import type {
-  CreditTerms,
   EmptyShelf,
   SaleLine,
   Sale as SaleReceipt,
@@ -87,10 +87,7 @@ export function Sale({
   const [validation, setValidation] = useState("");
   // Paying in parts (owner decisions, 2026-10-01): the customer takes the
   // goods now, pays part and owes the rest to this store.
-  const [inParts, setInParts] = useState(false);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [paidNow, setPaidNow] = useState("");
+  const [credit, setCredit] = useState<TermsInput>(noTerms);
   const { busy, pending } = useSaleCommand();
 
   const mayCorrect = store.permissions.includes(
@@ -241,7 +238,8 @@ export function Sale({
           BigInt(nextMissing[index] ?? d.line.quantity),
       0n,
     );
-    const terms = inParts && !emptyShelf ? creditTerms(sold) : null;
+    const terms =
+      credit.inParts && !emptyShelf ? checkTerms(credit, sold) : null;
     if (typeof terms === "string") {
       setValidation(terms);
       return;
@@ -289,10 +287,7 @@ export function Sale({
       setCommandId(crypto.randomUUID());
       setPresent("");
       // The next customer is someone else.
-      setInParts(false);
-      setCustomerName("");
-      setCustomerPhone("");
-      setPaidNow("");
+      setCredit(noTerms);
       await stock.refetch();
     } else if (outcome.kind === "refused") {
       const { error, shortfall: short } = outcome;
@@ -330,25 +325,6 @@ export function Sale({
       }
       setPresent("");
     }
-  }
-
-  /** The customer's terms as the server takes them, or what is wrong with them. */
-  function creditTerms(sold: bigint): CreditTerms | string {
-    const name = customerName.trim();
-    const phone = customerPhone.trim();
-    const paid = kopecks(paidNow);
-    if (name === "") return "Вкажіть ім’я покупця, який платить частинами.";
-    if (phoneDigits(phone) < 10 || phoneDigits(phone) > 15)
-      return "Телефон покупця має містити від 10 до 15 цифр.";
-    if (paid === null || paid <= 0n)
-      return "Вкажіть, скільки покупець сплачує зараз — більше нуля, з точністю до копійок.";
-    if (paid >= sold)
-      return `Покупець сплачує все одразу (${money(decimal(sold))}) — це звичайний продаж. Зніміть «Оплата частинами».`;
-    return {
-      customer_name: name,
-      customer_phone: phone,
-      paid_now: decimal(paid),
-    };
   }
 
   function indexOf(short: Shortfall): number {
@@ -657,67 +633,12 @@ export function Sale({
           Разом <strong>{money(decimal(total))}</strong>
         </p>
         {mayCredit && (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={inParts}
-              onChange={(event) => {
-                setInParts(event.target.checked);
-              }}
-            />
-            Оплата частинами
-          </label>
-        )}
-        {mayCredit && inParts && (
-          <div className="section-block">
-            <p className="hint">
-              Покупець забирає товар зараз, решту доплачує, коли зможе. Внески
-              приймає лише цей магазин, у розділі «Борги».
-            </p>
-            <label>
-              Ім’я покупця
-              <input
-                value={customerName}
-                maxLength={200}
-                autoComplete="off"
-                onChange={(event) => {
-                  setCustomerName(event.target.value);
-                }}
-              />
-            </label>
-            <label>
-              Телефон покупця
-              <input
-                type="tel"
-                inputMode="tel"
-                value={customerPhone}
-                maxLength={40}
-                autoComplete="off"
-                onChange={(event) => {
-                  setCustomerPhone(event.target.value);
-                }}
-              />
-            </label>
-            <label>
-              Сплачує зараз, грн
-              <input
-                inputMode="decimal"
-                placeholder="0,00"
-                value={paidNow}
-                onChange={(event) => {
-                  setPaidNow(event.target.value);
-                }}
-              />
-            </label>
-            {(() => {
-              const paid = kopecks(paidNow);
-              return paid !== null && paid > 0n && paid < total ? (
-                <p>
-                  Лишиться винен <strong>{money(decimal(total - paid))}</strong>
-                </p>
-              ) : null;
-            })()}
-          </div>
+          <TermsFields
+            value={credit}
+            change={setCredit}
+            total={total}
+            hint="Покупець забирає товар зараз, решту доплачує, коли зможе. Внески приймає лише цей магазин, у розділі «Борги»."
+          />
         )}
         <button
           type="button"

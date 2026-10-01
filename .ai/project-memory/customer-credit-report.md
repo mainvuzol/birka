@@ -140,7 +140,8 @@ the goods' worth. The credit module reaches neither refunds nor the ledger.
 - **The screens:** the option at the till, a «Борги» section, and the cash
   to hand back on a return. Built next, the same day; see the
   [credit screens report](credit-screens-report.md).
-- **Customer orders collected as a sale** cannot be paid in parts. Not asked.
+- **Customer orders collected as a sale** cannot be paid in parts. Added
+  later the same day; see the [credit screens report](credit-screens-report.md).
 - **The store's own purchase installments** (owner, 2026-09-15) are a
   separate record, and not built.
 - **Nothing reports totals owed** across stores.

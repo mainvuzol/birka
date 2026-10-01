@@ -11,7 +11,9 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import ScopeDep, SessionDep
+from app.api.v1.sales import CreditPayload
 from app.core.text import CleanText
+from app.modules.credit import service as credit_service
 from app.modules.orders.service import (
     OrderLineInput,
     create_order,
@@ -45,6 +47,13 @@ class OrderActionRequest(BaseModel):
     command_id: uuid.UUID
 
 
+class CollectOrderRequest(OrderActionRequest):
+    # Present only when the customer pays in parts: as at the till, above
+    # nothing now and the rest owed to the order's store (owner decision,
+    # 2026-10-01).
+    credit: CreditPayload | None = None
+
+
 class ReturnOrderRequest(OrderActionRequest):
     reason: CleanText = Field(min_length=1, max_length=1000)
     physically_received: Literal[True]
@@ -62,6 +71,15 @@ class OrderItemResponse(BaseModel):
     size_label: str | None = None
 
 
+class OrderCreditResponse(BaseModel):
+    """A collected order paid in parts: what is paid and owed so far. No
+    name or phone, as on a sale's receipt."""
+
+    credit_id: uuid.UUID
+    paid: str
+    owed: str
+
+
 class OrderResponse(BaseModel):
     id: uuid.UUID
     store_id: uuid.UUID
@@ -74,6 +92,7 @@ class OrderResponse(BaseModel):
     items: list[OrderItemResponse]
     # Legacy permanent command snapshots remain replayable unchanged.
     created_at: datetime | None = None
+    credit: OrderCreditResponse | None = None
 
 
 class OrderListResponse(BaseModel):
@@ -128,10 +147,36 @@ async def return_goods(
     return body
 
 
+@router.post("/orders/{order_id}/collect", response_model=OrderResponse)
+async def collect(
+    order_id: uuid.UUID, payload: CollectOrderRequest, scope: ScopeDep, session: SessionDep
+) -> dict[str, Any]:
+    """The customer has the goods: the sale is recognised now, and may be paid
+    in parts."""
+    body = await transition_order(
+        session,
+        scope=scope,
+        order_id=order_id,
+        command_id=payload.command_id,
+        action="collect",
+        credit=(
+            credit_service.terms(
+                customer_name=payload.credit.customer_name,
+                customer_phone=payload.credit.customer_phone,
+                paid_now=payload.credit.paid_now,
+            )
+            if payload.credit is not None
+            else None
+        ),
+    )
+    await session.commit()
+    return body
+
+
 @router.post("/orders/{order_id}/{action}", response_model=OrderResponse)
 async def transition(
     order_id: uuid.UUID,
-    action: Literal["dispatch", "arrive", "collect", "cancel"],
+    action: Literal["dispatch", "arrive", "cancel"],
     payload: OrderActionRequest,
     scope: ScopeDep,
     session: SessionDep,

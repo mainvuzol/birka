@@ -48,6 +48,13 @@ export async function api<T>(
 export function errorText(error: unknown): string {
   if (!(error instanceof ApiError))
     return "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.";
+  // Paying in parts, refused for what the seller stated.
+  if (error.details.reason === "PAID_IN_FULL")
+    return "Клієнт сплачує все одразу — це звичайний продаж. Зніміть «Оплата частинами».";
+  if (error.details.reason === "CUSTOMER_NAME")
+    return "Вкажіть ім’я покупця, який платить частинами.";
+  if (error.details.reason === "CUSTOMER_PHONE")
+    return "Телефон покупця має містити від 10 до 15 цифр.";
   if (error.code === "NO_ACCESS")
     return "Доступ до магазину закрито. Зверніться до власника.";
   if (error.status === 401)

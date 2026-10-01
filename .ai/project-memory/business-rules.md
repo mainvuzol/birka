@@ -318,3 +318,23 @@ How it is carried out, not decided by the owner:
 Server side built on 2026-10-01; see the [credit report](customer-credit-report.md).
 The screens were built the same day; see the
 [credit screens report](credit-screens-report.md).
+
+## Owner decision — 2026-10-01 (debts by customer, totals, orders)
+
+Asked when the debts by customer, the store's total and orders paid in parts
+were taken up with the screens.
+
+- **One phone is one customer**, whatever name each sale was written under.
+  «+38 (067) 123-45-67» and «0671234567» are one number.
+- **A customer with several debts pays on the debt the seller chooses.**
+  The customer's card shows every debt and what they owe in all; nothing is
+  spread across debts by itself.
+- **What is owed in all is shown by store only**, in its «Борги». There is
+  no network total.
+- **An order collected may be paid in parts, by the till's rules:** something
+  above nothing at collection, the rest owed to the store that took the
+  order, and later payments in its «Борги».
+
+How it is carried out, not decided by the owner: a Ukrainian number is
+compared in its own ten digits, so `380…` written with the country code and
+`0…` written without it are one. Other numbers are compared as written.

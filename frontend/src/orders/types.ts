@@ -63,6 +63,8 @@ export interface Order {
   total: string;
   created_at: string | null;
   items: OrderItem[];
+  /** A collected order paid in parts: what is paid and owed so far. */
+  credit?: { credit_id: string; paid: string; owed: string } | null;
 }
 export const statusLabels: Record<Status, string> = {
   READY_TO_DISPATCH: "До відправлення",

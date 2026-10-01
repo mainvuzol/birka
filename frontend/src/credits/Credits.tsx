@@ -7,7 +7,7 @@ import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
 import { submitCreditCommand, useCreditCommand } from "./commands";
 import { statusLabels } from "./types";
-import type { Credit, CreditEntry, CreditPage } from "./types";
+import type { Credit, CreditEntry, CustomerPage, StoreDebts } from "./types";
 
 const pageSize = 20;
 
@@ -15,9 +15,11 @@ const pageSize = 20;
  * A store's debts: sales paid in parts (owner decisions, 2026-10-01).
  *
  * The customer took the goods and pays the rest when they can; there is no
- * schedule. A seller finds the debt by the customer's name or phone and takes
- * a payment, here, in the store that sold. The owner may write off a debt
- * that will not be paid, saying why. Returns lower a debt from «Повернення».
+ * schedule. A seller finds the customer by name or phone — one phone is one
+ * customer, with all their debts and what they owe in all — and takes a
+ * payment on the debt they choose, here, in the store that sold. The owner
+ * may write off a debt that will not be paid, saying why. Returns lower a
+ * debt from «Повернення». The store sees what it is owed in all.
  */
 export function Credits({
   store,
@@ -36,15 +38,21 @@ export function Credits({
   const [owedOnly, setOwedOnly] = useState(true);
   const [shown, setShown] = useState(pageSize);
   const [selected, setSelected] = useState<Credit | null>(null);
-  const credits = useQuery({
-    queryKey: ["credits", store.id, search, owedOnly, shown],
+  const customers = useQuery({
+    queryKey: ["credits", store.id, "customers", search, owedOnly, shown],
     queryFn: () =>
-      api<CreditPage>(
-        `/credits?store_id=${store.id}&limit=${String(shown)}${
+      api<CustomerPage>(
+        `/credits/customers?store_id=${store.id}&limit=${String(shown)}${
           owedOnly ? "&status=OPEN" : ""
         }${search ? `&query=${encodeURIComponent(search)}` : ""}`,
         token,
       ),
+    retry: false,
+  });
+  const summary = useQuery({
+    queryKey: ["credits", store.id, "summary"],
+    queryFn: () =>
+      api<StoreDebts>(`/credits/summary?store_id=${store.id}`, token),
     retry: false,
   });
 
@@ -72,9 +80,10 @@ export function Credits({
         <h2>Борги</h2>
         <button
           className="quiet"
-          disabled={credits.isFetching}
+          disabled={customers.isFetching}
           onClick={() => {
-            void credits.refetch();
+            void customers.refetch();
+            void summary.refetch();
           }}
         >
           Оновити
@@ -84,6 +93,17 @@ export function Credits({
         Покупці, які забрали товар і доплачують частинами. Внески приймає лише
         магазин, де продали.
       </p>
+      {summary.data && (
+        <div className="section-block" aria-label="Скільки винні магазину">
+          <p className="total">
+            Магазину винні <strong>{money(summary.data.owed)}</strong>
+          </p>
+          <p className="hint">
+            Покупців: {summary.data.customers} · відкритих боргів:{" "}
+            {summary.data.debts}
+          </p>
+        </div>
+      )}
       <form
         className="search"
         onSubmit={(event) => {
@@ -118,11 +138,11 @@ export function Credits({
           <option value="ALL">Усі, разом зі сплаченими й списаними</option>
         </select>
       </label>
-      {credits.isPending ? (
+      {customers.isPending ? (
         <p role="status">Завантажуємо борги…</p>
-      ) : credits.error ? (
-        <p role="alert">{errorText(credits.error)}</p>
-      ) : credits.data.items.length === 0 ? (
+      ) : customers.error ? (
+        <p role="alert">{errorText(customers.error)}</p>
+      ) : customers.data.items.length === 0 ? (
         <p>
           {search
             ? "Боргів за таким ім’ям чи телефоном не знайдено."
@@ -132,39 +152,53 @@ export function Credits({
         </p>
       ) : (
         <>
-          {credits.data.items.map((credit) => (
-            <article className="order-card" key={credit.id}>
-              <strong>{credit.customer_name}</strong>
-              <span>{credit.customer_phone}</span>
+          {customers.data.items.map((customer) => (
+            <article className="order-card" key={customer.phone_digits}>
+              <strong>{customer.customer_name}</strong>
+              <span>{customer.customer_phone}</span>
               <p>
-                {credit.status === "OPEN" ? (
+                {customer.open_debts > 0 ? (
                   <>
-                    Винні <strong>{money(credit.owed)}</strong> з{" "}
-                    {money(credit.amount)}
+                    Винні всього <strong>{money(customer.owed)}</strong>
+                    {customer.open_debts > 1 &&
+                      ` · боргів: ${String(customer.open_debts)}`}
                   </>
                 ) : (
-                  <span className="badge">{statusLabels[credit.status]}</span>
+                  <span className="badge">Нічого не винні</span>
                 )}
               </p>
-              <p className="hint">
-                {credit.goods.join(", ")} · продано {when(credit.opened_at)}
-                {credit.last_payment_at &&
-                  ` · останній внесок ${when(credit.last_payment_at)}`}
-              </p>
-              <button
-                className="quiet"
-                onClick={() => {
-                  setSelected(credit);
-                }}
-              >
-                Відкрити борг {credit.customer_name}
-              </button>
+              <ul aria-label={`Борги: ${customer.customer_name}`}>
+                {customer.credits.map((credit) => (
+                  <li key={credit.id}>
+                    <p>
+                      {credit.status === "OPEN"
+                        ? `Винні ${money(credit.owed)} з ${money(credit.amount)}`
+                        : statusLabels[credit.status]}
+                    </p>
+                    <p className="hint">
+                      {credit.goods.join(", ")} · продано{" "}
+                      {when(credit.opened_at)}
+                      {credit.last_payment_at &&
+                        ` · останній внесок ${when(credit.last_payment_at)}`}
+                    </p>
+                    <button
+                      className="quiet"
+                      onClick={() => {
+                        setSelected(credit);
+                      }}
+                    >
+                      Відкрити борг {customer.customer_name} від{" "}
+                      {when(credit.opened_at)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </article>
           ))}
-          {credits.data.has_more && (
+          {customers.data.has_more && (
             <button
               className="quiet"
-              disabled={credits.isFetching}
+              disabled={customers.isFetching}
               onClick={() => {
                 setShown(shown + pageSize);
               }}

@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
@@ -99,10 +99,14 @@ async function stocked(page: Page): Promise<Coat> {
   return { model, variant, size, token };
 }
 
-/** Two coats at 1500, 3000 in all, 1000 paid now — through the API. */
+/**
+ * Two coats at 1500, 3000 in all, 1000 paid now — through the API. One phone
+ * is one customer, so each journey's customer has a number of their own.
+ */
 async function onCredit(
   page: Page,
   customer: string,
+  phone: string = newPhone(),
 ): Promise<Coat & { sale: { id: string; credit: { credit_id: string } } }> {
   const coat = await stocked(page);
   const response = await page.request.post("/api/v1/sales", {
@@ -124,7 +128,7 @@ async function onCredit(
       ],
       credit: {
         customer_name: customer,
-        customer_phone: "+38 (067) 123-45-67",
+        customer_phone: phone,
         paid_now: "1000.00",
       },
     },
@@ -148,6 +152,11 @@ async function owed(page: Page, token: string, id: string): Promise<string> {
 
 function customer(): string {
   return `Покупець ${randomUUID().slice(0, 8)}`;
+}
+
+/** A Ukrainian mobile number nobody else in the run has: «0671234567». */
+function newPhone(): string {
+  return `067${String(randomBytes(4).readUInt32BE() % 10_000_000).padStart(7, "0")}`;
 }
 
 /** Two coats in the till's basket, at 1500 each. */
@@ -218,12 +227,14 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
 }) => {
   const coat = await stocked(page);
   const name = customer();
+  const tel = newPhone();
+  const written = `${tel.slice(0, 3)} ${tel.slice(3, 6)} ${tel.slice(6, 8)} ${tel.slice(8)}`;
   const sales = posts(page, "/api/v1/sales");
   await basket(page, coat);
 
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill(name);
-  await page.getByLabel("Телефон покупця").fill("067 123 45 67");
+  await page.getByLabel("Телефон покупця").fill(written);
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
   await expect(page.getByText("Лишиться винен 2000,00 грн")).toBeVisible();
   await page.getByRole("button", { name: "Продати" }).click();
@@ -236,7 +247,7 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   expect(sales.bodies).toHaveLength(1);
   expect((sales.bodies[0] as { credit: unknown }).credit).toEqual({
     customer_name: name,
-    customer_phone: "067 123 45 67",
+    customer_phone: written,
     paid_now: "1000.00",
   });
   // The next customer starts without these terms.
@@ -244,7 +255,7 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(page.getByLabel("Оплата частинами")).not.toBeChecked();
 
   await page.getByRole("button", { name: "Борги", exact: true }).click();
-  await page.getByLabel("Пошук за ім’ям або телефоном").fill("0671234567");
+  await page.getByLabel("Пошук за ім’ям або телефоном").fill(tel);
   await page.getByRole("button", { name: "Знайти" }).click();
   const card = page.getByRole("article").filter({ hasText: name });
   await expect(card).toContainText("Винні 2000,00 грн з 3000,00 грн");
@@ -349,7 +360,7 @@ test("a sale paid in parts whose answer is lost is resent with the same terms", 
   await basket(page, coat);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill(customer());
-  await page.getByLabel("Телефон покупця").fill("0671234567");
+  await page.getByLabel("Телефон покупця").fill(newPhone());
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
   await page.getByRole("button", { name: "Продати" }).click();
 
@@ -552,6 +563,189 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   expect(await owed(page, token, sale.credit.credit_id)).toBe("0.00");
 });
 
+/** What the store is owed now, through the API. */
+async function storeOwed(page: Page, token: string): Promise<bigint> {
+  const response = await page.request.get(
+    `/api/v1/credits/summary?store_id=${fixture.store_id}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const { owed: sum } = (await response.json()) as { owed: string };
+  const [whole = "0", fraction = "00"] = sum.split(".");
+  return BigInt(whole) * 100n + BigInt(fraction);
+}
+
+function hryvnias(kopecks: bigint): string {
+  return `${String(kopecks / 100n)},${String(kopecks % 100n).padStart(2, "0")} грн`;
+}
+
+test("one phone is one customer, whatever the name, and the store sees what it is owed", async ({
+  page,
+}) => {
+  const tel = newPhone();
+  const name = customer();
+  const first = await onCredit(
+    page,
+    `${name} Коваль`,
+    `+38 (${tel.slice(0, 3)}) ${tel.slice(3)}`,
+  );
+  const before = await storeOwed(page, first.token);
+  const second = await onCredit(page, name, tel);
+  // The second debt adds what it leaves owing to the store's total.
+  expect(await storeOwed(page, first.token)).toBe(before + 200000n);
+
+  await page.goto(launch());
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  const total = page.getByLabel("Скільки винні магазину");
+  await expect(total).toContainText(
+    `Магазину винні ${hryvnias(before + 200000n)}`,
+  );
+  // Found by the name only the older debt carries, then shown with both.
+  await page.getByLabel("Пошук за ім’ям або телефоном").fill(`${name} Коваль`);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  const card = page.getByRole("article");
+  await expect(card).toHaveCount(1);
+  // The newest debt names the customer.
+  await expect(card.locator("strong").first()).toHaveText(name);
+  await expect(card).toContainText("Винні всього 4000,00 грн · боргів: 2");
+  const debts = card.getByRole("list", { name: `Борги: ${name}` });
+  await expect(debts.getByRole("listitem")).toHaveCount(2);
+
+  // The seller chooses which debt the money goes to: the older one.
+  await debts
+    .getByRole("listitem")
+    .nth(1)
+    .getByRole("button", { name: /Відкрити борг/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: `${name} Коваль` }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Увесь залишок" }).click();
+  await page.getByRole("button", { name: "Прийняти внесок" }).click();
+  await expect(
+    page.getByText("Внесок 2000,00 грн прийнято. Борг сплачено повністю."),
+  ).toBeVisible();
+  expect(await owed(page, first.token, first.sale.credit.credit_id)).toBe(
+    "0.00",
+  );
+  expect(await owed(page, first.token, second.sale.credit.credit_id)).toBe(
+    "2000.00",
+  );
+
+  await page.getByRole("button", { name: "До списку боргів" }).click();
+  await expect(total).toContainText(`Магазину винні ${hryvnias(before)}`);
+  await page.getByLabel("Пошук за ім’ям або телефоном").fill(tel);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await expect(page.getByRole("article")).toContainText(
+    "Винні всього 2000,00 грн",
+  );
+  await expect(page.getByRole("article").getByRole("listitem")).toHaveCount(1);
+});
+
+/** An order of two coats at 1500, sent and arrived — through the API. */
+async function arrived(page: Page): Promise<Coat & { order: string }> {
+  const coat = await stocked(page);
+  const headers = { Authorization: `Bearer ${coat.token}` };
+  const created = await page.request.post("/api/v1/orders", {
+    headers,
+    data: {
+      store_id: fixture.store_id,
+      command_id: randomUUID(),
+      lines: [
+        {
+          product_variant_id: coat.variant,
+          size_id: coat.size,
+          source_location_id: fixture.returns_location_id,
+          quantity: 2,
+          unit_price: "1500.00",
+        },
+      ],
+    },
+  });
+  expect(created.status()).toBe(201);
+  const { id: order } = (await created.json()) as { id: string };
+  for (const action of ["dispatch", "arrive"]) {
+    const moved = await page.request.post(`/api/v1/orders/${order}/${action}`, {
+      headers,
+      data: { command_id: randomUUID() },
+    });
+    expect(moved.status()).toBe(200);
+  }
+  return { ...coat, order };
+}
+
+test("an order collected may be paid in parts, by the till's rules", async ({
+  page,
+}) => {
+  const { model } = await arrived(page);
+  const name = customer();
+  const tel = newPhone();
+  const collected = posts(page, "/collect");
+  await page.goto(launch());
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await page.getByRole("button", { name: new RegExp(model) }).click();
+  await expect(
+    page.getByText("Прибув на пошту", { exact: true }),
+  ).toBeVisible();
+
+  await page.getByLabel("Оплата частинами").check();
+  await page.getByLabel("Ім’я покупця").fill(name);
+  await page.getByLabel("Телефон покупця").fill(tel);
+  await page.getByLabel("Сплачує зараз, грн").fill("3000");
+  const collect = page.getByRole("button", {
+    name: "Клієнт забрав",
+    exact: true,
+  });
+  await collect.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Покупець сплачує все одразу (3000,00 грн) — це звичайний продаж.",
+  );
+  expect(collected.bodies).toEqual([]);
+
+  await page.getByLabel("Сплачує зараз, грн").fill("500");
+  await expect(page.getByText("Лишиться винен 2500,00 грн")).toBeVisible();
+  await collect.click();
+  await expect(page.getByText("Продаж зафіксовано.")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Оплата частинами: сплачено 500,00 грн, клієнт винен 2500,00 грн.",
+    ),
+  ).toBeVisible();
+  expect(collected.bodies).toHaveLength(1);
+  const body = collected.bodies[0] as { command_id: string; credit: unknown };
+  expect(body.credit).toEqual({
+    customer_name: name,
+    customer_phone: tel,
+    paid_now: "500.00",
+  });
+
+  // A debt like any other, in this store's «Борги».
+  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await page.getByLabel("Пошук за ім’ям або телефоном").fill(tel);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await expect(page.getByRole("article")).toContainText(
+    "Винні 2500,00 грн з 3000,00 грн",
+  );
+  await expect(page.getByRole("article")).toContainText(model);
+});
+
+test("an order collected without paying in parts stays an ordinary sale", async ({
+  page,
+}) => {
+  const { model } = await arrived(page);
+  const collected = posts(page, "/collect");
+  await page.goto(launch());
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await page.getByRole("button", { name: new RegExp(model) }).click();
+  await page
+    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .click();
+  await expect(page.getByText("Продаж зафіксовано.")).toBeVisible();
+  await expect(page.getByText(/Оплата частинами: сплачено/)).toHaveCount(0);
+  expect(collected.bodies).toHaveLength(1);
+  expect(collected.bodies[0]).not.toHaveProperty("credit");
+});
+
 test("paying in parts needs its own permission", async ({ page }) => {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();
@@ -570,4 +764,26 @@ test("paying in parts needs its own permission", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Борги", exact: true }),
   ).toHaveCount(0);
+});
+
+test("collecting an order in parts needs the same permission", async ({
+  page,
+}) => {
+  const { model } = await arrived(page);
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter((p) => p !== "sale:credit");
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(launch());
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await page.getByRole("button", { name: new RegExp(model) }).click();
+  await expect(
+    page.getByRole("button", { name: "Клієнт забрав", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
 });

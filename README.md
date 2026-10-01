@@ -154,8 +154,14 @@ that sold (owner decisions, 2026-10-01). `POST /sales` takes
 - **Returns:** a return's answer says how much lowers the debt and how much
   goes back in cash. `GET /sales` says which sales were `paid_in_parts`.
 
-In the app: «Оплата частинами» at the till, and a «Борги» section for
-`sale:credit`. Only `credit:write_off` writes a debt off. See the
+- **By customer:** `GET /api/v1/credits/customers?store_id=` groups a store's
+  debts by customer, where one phone is one customer.
+  `GET /api/v1/credits/summary?store_id=` says what the store is owed in all.
+- **Orders:** `POST /api/v1/orders/{id}/collect` takes the same `credit` as a
+  sale.
+
+In the app: «Оплата частинами» at the till and on collecting an order, and a
+«Борги» section for `sale:credit`. Only `credit:write_off` writes a debt off. See the
 [credit report](.ai/project-memory/customer-credit-report.md) and the
 [credit screens report](.ai/project-memory/credit-screens-report.md).
 

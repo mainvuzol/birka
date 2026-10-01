@@ -308,8 +308,10 @@ See the [credit report](customer-credit-report.md).
   `total_amount`.** The returns screen now says so, and says nothing about
   cash until the server has answered. See the
   [credit screens report](credit-screens-report.md).
-- **A customer with two debts shows as two.** Nothing groups debts by
-  customer, and nothing totals what is owed. Not asked.
+- **One phone is one customer** (owner, 2026-10-01). Two people who share a
+  phone, such as a couple, show as one customer with both their debts. A
+  customer who changes number shows as two. Only a Ukrainian number is
+  matched across its spellings (`380…` and `0…`).
 - **What is owed is the agreed amount less the ledger's rows.** A written-off
   debt shows nothing owed whatever its rows add up to. A later return only
   ever pays back cash actually paid.
