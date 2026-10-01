@@ -23,7 +23,7 @@ accepted.
 | 6 | **The owner hears of a failed or missing night**, in the app and in Telegram. | [alerts report](m1-028-backup-alerts-report.md) |
 | 7 | **People can be given a store**, on an owner's word. | [people report](people-report.md) |
 | 8 | **Server budgets, on a laptop.** Catalogue read p95 ≤ 300 ms and `POST /sales` p95 ≤ 500 ms, re-measured after PRs #47–#49: 5× headroom or more. | [hot path report](hot-path-budget-report.md#update--2026-10-01-the-release-gate) |
-| 9 | **The same budgets on PostgreSQL 17, in CI.** *This branch.* A job runs the harness on every push and fails on a breach. | CI job `hot-path`; its figures arrive with its first run |
+| 9 | **The same budgets on PostgreSQL 17, in CI.** One seller has 10× headroom even on a two-CPU runner: p95 29 ms for the catalogue read, 49 ms for a sale. Six sellers asking back to back stay within budget, but by as little as 3 %. CI therefore gates the one-seller cases and prints the rest. | [hot path report](hot-path-budget-report.md#update--2026-10-01-the-first-postgresql-17-figures-and-what-ci-fails-on) · CI job `hot-path` |
 | 10 | **`taps-to-sale` ≤ 5**, for a model with a suggested price. | [hot path report](hot-path-budget-report.md#update--2026-10-01-the-suggested-price) |
 | 11 | **The API refuses to start in production without its secrets**, and hides its API docs there. | `test_config.py`, `test_app.py` |
 | 12 | **Store and organization boundaries hold** on every command. | invariants I12/I13; the reviews in each report |

@@ -271,9 +271,12 @@ on the server, on an owner's word.
 See the [release checklist](release-checklist.md) and the
 [server runbook](server-runbook.md).
 
-- **The `hot-path` CI job measures on a shared runner.** A breached budget
-  fails the build. If it ever fails without a code change, read the
-  artifact before believing either the runner or the code.
+- **The `hot-path` CI job measures on a shared two-CPU runner**, where six
+  sellers asking back to back came within 3 % of a budget. CI fails only on
+  the one-seller cases, which have 10× headroom there. A regression that
+  shows only under concurrency is printed as `(not gated)`, not failed:
+  read the artifact when touching locks or the hot path, and take the
+  release reading with `BIRKA_PERF_GATE=all`.
 - **A rebuild picks up new minor versions** of `postgres:17-alpine` and
   `caddy:2-alpine`, untested.
 - **The server's size is an estimate**, and public HTTPS issuance has never

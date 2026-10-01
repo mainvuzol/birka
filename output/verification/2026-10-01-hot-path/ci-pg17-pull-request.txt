@@ -1,0 +1,82 @@
+seeding 400 variants × 6 sizes …
+2026-10-01 09:09:14 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=41adeeef-5343-42c9-9bf9-840258e69832 types=['DELIVERY']
+2026-10-01 09:09:16 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=41adeeef-5343-42c9-9bf9-840258e69832 types=['DELIVERY']
+2026-10-01 09:09:19 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=41adeeef-5343-42c9-9bf9-840258e69832 types=['DELIVERY']
+2026-10-01 09:09:21 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=41adeeef-5343-42c9-9bf9-840258e69832 types=['DELIVERY']
+2026-10-01 09:09:22 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=400 organization_id=41adeeef-5343-42c9-9bf9-840258e69832 types=['DELIVERY']
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=   21.8  p95=   29.3  p99=   87.5  max=  168.7  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=  114.2  p95=  258.6  p99=  285.7  max=  336.9  pass
+POST /sales · 1 line                     n=200  p50=   38.1  p95=   41.6  p99=   49.1  max=   57.5  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=  185.6  p95=  269.1  p99=  369.7  max=  583.7  pass
+POST /sales · 4 lines (6 sellers)        n=200  p50=  290.6  p95=  391.0  p99=  521.5  max=  844.7  pass
+POST /sales · same coat, 6 sellers       n=120  p50=  198.0  p95=  273.8  p99=  401.7  max=  402.6  pass
+
+[
+  {
+    "case": "GET /catalog/stock-options",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 21.840990499995883,
+    "p95": 29.265213000002177,
+    "p99": 87.48633300000108,
+    "max": 168.651691000008,
+    "budget": 300.0,
+    "verdict": "pass"
+  },
+  {
+    "case": "GET /catalog/stock-options (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 114.15582199999363,
+    "p95": 258.57191299999727,
+    "p99": 285.694534000001,
+    "max": 336.8621179999991,
+    "budget": 300.0,
+    "verdict": "pass"
+  },
+  {
+    "case": "POST /sales \u00b7 1 line",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 38.126968000007366,
+    "p95": 41.57444199999816,
+    "p99": 49.109076999997114,
+    "max": 57.47505700000488,
+    "budget": 500.0,
+    "verdict": "pass"
+  },
+  {
+    "case": "POST /sales \u00b7 1 line (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 185.59642249999797,
+    "p95": 269.08710600000063,
+    "p99": 369.71776000000034,
+    "max": 583.6884689999948,
+    "budget": 500.0,
+    "verdict": "pass"
+  },
+  {
+    "case": "POST /sales \u00b7 4 lines (6 sellers)",
+    "concurrency": 6,
+    "n": 200,
+    "p50": 290.56701649999894,
+    "p95": 390.9586699999892,
+    "p99": 521.5076359999955,
+    "max": 844.7422609999933,
+    "budget": 500.0,
+    "verdict": "pass"
+  },
+  {
+    "case": "POST /sales \u00b7 same coat, 6 sellers",
+    "concurrency": 6,
+    "n": 120,
+    "p50": 197.99390649998827,
+    "p95": 273.8331950000088,
+    "p99": 401.7061799999908,
+    "max": 402.6289369999745,
+    "budget": 500.0,
+    "verdict": "pass"
+  }
+]

@@ -82,6 +82,16 @@ STOCK_PER_KEY = 200
 
 BUDGETS_MS = {"GET /catalog/stock-options": 300.0, "POST /sales": 500.0}
 
+# Which breaches fail the run. `all`, the default, is the release gate's own
+# reading. CI sets `one-seller`, where a breach under concurrency is printed
+# and not fatal. On a shared two-CPU runner the harness, the API and the
+# database share the same CPUs. Six sellers asking back to back, some hundred
+# times the two shops' rate, put the runner as much as the code under test:
+# its first two runs came within 3 % of a budget (hot-path-budget-report.md,
+# 2026-10-01). One seller still has ten times headroom there.
+GATES = ("all", "one-seller")
+GATE = os.environ.get("BIRKA_PERF_GATE", "all")
+
 
 @dataclass(frozen=True, slots=True)
 class World:
@@ -207,6 +217,7 @@ def summarise(name: str, concurrency: int, samples: list[float]) -> dict[str, ob
         "max": ordered[-1],
         "budget": budget,
         "verdict": "—" if budget is None else ("pass" if p95 <= budget else "FAIL"),
+        "gated": budget is not None and (GATE == "all" or concurrency == 1),
     }
 
 
@@ -249,6 +260,10 @@ async def drive(
 async def main() -> None:
     url = os.environ["BIRKA_PERF_DATABASE_URL"]
     api = os.environ.get("BIRKA_PERF_API_URL", "http://127.0.0.1:58043")
+    if GATE not in GATES:
+        raise SystemExit(f"BIRKA_PERF_GATE must be one of {', '.join(GATES)}, not {GATE!r}")
+    # The figures mean little without the machine that made them.
+    print(f"gate: {GATE}; {os.cpu_count()} CPUs; harness, API and database on one machine")
     print(f"seeding {VARIANTS} variants × {len(SIZES)} sizes …", flush=True)
     world = await seed(url)
     print(f"seeded {len(world.keys)} stock keys", flush=True)
@@ -315,13 +330,14 @@ async def main() -> None:
             print(
                 f"{row['case']:<40} n={row['n']:<4} "
                 f"p50={row['p50']:7.1f}  p95={row['p95']:7.1f}  "
-                f"p99={row['p99']:7.1f}  max={row['max']:7.1f}  {row['verdict']}",
+                f"p99={row['p99']:7.1f}  max={row['max']:7.1f}  {row['verdict']}"
+                f"{'' if row['gated'] else '  (not gated)'}",
                 flush=True,
             )
 
     print()
     print(json.dumps(rows, indent=2))
-    if any(row["verdict"] == "FAIL" for row in rows):
+    if any(row["verdict"] == "FAIL" and row["gated"] for row in rows):
         raise SystemExit(1)
 
 
