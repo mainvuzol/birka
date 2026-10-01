@@ -108,8 +108,32 @@ No migration, no schema change, no change to any business rule.
 ## Still open after this
 
 - **Q-F (who sets a suggested price)** now blocks a measured budget.
+  *Answered and built on 2026-10-01; see the update below.*
 - PostgreSQL 17 numbers: this ran on 16.2. Worth one isolated Docker run
   before release, since the release gate will quote these figures.
 - A real device profile — phone, mobile network, Telegram webview — is a
   different measurement and belongs with the release gate, not here.
 - `time-to-sale ≤ 15 s` is unmeasured: it needs a person, not a script.
+
+## Update — 2026-10-01: the suggested price
+
+The owner answered Q-F the same day; see the
+[suggested price report](suggested-price-report.md). The till now prefills a
+model's suggested price when the seller picks it. On the built screen, for a
+model with a price:
+
+| | taps |
+|---|---|
+| open «Продаж» | 1 |
+| choose the warehouse (one sellable) | 0 |
+| choose product and size | 2 |
+| quantity (already `1`) | 0 |
+| the price (prefilled) | 0 |
+| «Додати в кошик» | 1 |
+| «Продати» | 1 |
+| **total** | **5** |
+
+No typing at all. **The budget is met for a priced model.** A model nobody
+has priced is still 6 taps plus typing, so the budget holds only as far as
+the shop prices its models. A browser test sells with nothing typed and
+checks that the sent price is the suggested one.

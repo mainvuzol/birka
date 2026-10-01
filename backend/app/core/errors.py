@@ -175,6 +175,18 @@ class CatalogAmbiguousError(DomainError):
     message = "Catalog interpretation is ambiguous and needs review"
 
 
+class PriceChangedError(DomainError):
+    """The suggested price is no longer the one the person saw.
+
+    `details.current` is the price that stands now, or null if there is none.
+    Someone else changed it in between; nothing is written.
+    """
+
+    code = "PRICE_CHANGED"
+    http_status = 409
+    message = "The suggested price changed since it was shown; look at it again"
+
+
 # --- legacy snapshot import (M1-023, ADR-0005) --------------------------------
 
 
@@ -257,6 +269,7 @@ __all__ = [
     "NotFoundError",
     "OpeningBalanceConflictError",
     "PermissionDeniedError",
+    "PriceChangedError",
     "RefundExceedsSoldError",
     "SessionExpiredError",
     "SnapshotConflictError",

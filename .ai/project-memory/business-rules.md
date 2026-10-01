@@ -180,3 +180,48 @@ The owner then answered the open questions the same day:
 
 Built on 2026-10-01; see the
 [«Брак» report](damaged-inspection-report.md).
+
+## Owner decision — 2026-10-01 (suggested selling price, Q-F)
+
+Asked because the till could not prefill a price: `variant_price` existed,
+but nobody had said who may set it. Typing a price on every sale kept
+`taps-to-sale` over its budget.
+
+- **The owner and managers set the suggested price; a seller sees it.** The
+  final price is still agreed at the counter, as decided on 2026-09-15.
+- **One price for the whole shop, which a store may override with its own.**
+  That store's till suggests its own price, and every other till the shared
+  one.
+- **It is set where goods arrive and on the stock screen.** There is one
+  price per model and colour, for every size.
+
+The owner confirmed the details the same day:
+- **A store's own price needs the permission in that store.** A manager who
+  belongs to one store sets that store's price, never another store's (the
+  scope rule, I12/I13).
+- **The shared price needs the permission over every store's till.** It may
+  be held organization-wide, as the owner's membership is by default. Or it
+  may be held in every one of the organization's stores, paused ones
+  included. For example, a child store's owner may also be a manager of the
+  main store, and so sets the shared price too.
+- **The seller may still adjust the prefilled price** at the counter.
+- **A price is more than zero.** "No price" is a state of its own, so a till
+  never prefills 0.
+
+Built on 2026-10-01; see the
+[suggested price report](suggested-price-report.md).
+
+## Owner decision — 2026-10-01 (nothing on the shelf, Q-G)
+
+Carried over from M1-030. The case: a seller confirms that **none** of a
+line is on the shelf («фізично є 0»).
+- **Drop the line from the basket and sell the rest.**
+- **Record the shortage**, as «фізично відсутній» does for part of a line.
+  The ledger takes off the units it believed were there, within that
+  correction's bounds (I25).
+
+This applies only to people allowed «фізично відсутній» — by default a manager
+and the owner. Not built yet: it comes after the suggested price.
+
+**Not asked yet:** what happens when the empty line was the basket's only
+line, so nothing is left to sell.

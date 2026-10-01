@@ -182,8 +182,12 @@ organization?** The table is built for it (`variant_price`, unique per
 organization + store + variant) and unused. Until this is answered the till
 cannot prefill a price, and "taps-to-sale ≤ 5" stays out of reach. This is a
 permission question, not a technical one, so it is not being guessed.
+*Answered 2026-10-01 and built: see the
+[suggested price report](suggested-price-report.md).*
 
 **Q-G. Should confirming that *nothing* is present drop the line instead of
 refusing the sale?** Carried over from M1-030 and now visible at the counter:
 the till offers to remove the line by hand, which is correct but is one more
 tap during the moment a customer is waiting.
+*Answered 2026-10-01: drop the line and record the shortage (business-rules.md).
+Not built yet.*

@@ -31,6 +31,8 @@ export interface StockOption {
   quantity: number;
   reserved_quantity: number;
   available_quantity: number;
+  // What this store's till suggests: its own price, else the shared one.
+  suggested_price: string | null;
 }
 export interface Line {
   product_variant_id: string;

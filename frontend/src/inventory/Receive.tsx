@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
+import { SuggestedPrice } from "@/prices/SuggestedPrice";
 import { CatalogPicker } from "./CatalogPicker";
 import { submitReceipt, useReceiptCommand } from "./receiptCommands";
 import { acquisitionLabels } from "./receiptTypes";
@@ -35,6 +36,10 @@ interface Draft {
  * 2026-09-30). The screen shows back the cost the server stored on each lot,
  * not what it typed; the cost is part of the delivery's permanent identity,
  * so the same command at another price is refused as another delivery.
+ *
+ * The model's selling price sits beside it, and whoever may set prices sets
+ * it here as goods arrive (owner decision, 2026-10-01). It is saved on its
+ * own, at once: it belongs to the model, not to this delivery.
  */
 export function Receive({
   store,
@@ -349,6 +354,16 @@ export function Receive({
             />
           </label>
         </div>
+        {variant && (
+          <SuggestedPrice
+            key={variant.product_variant_id}
+            store={store}
+            token={token}
+            scopeKey={journalKey}
+            variantId={variant.product_variant_id}
+            blocked={blocked}
+          />
+        )}
         <label>
           Як надійшов
           <select

@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import { money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
+import { PriceEditor } from "@/prices/SuggestedPrice";
 import { CatalogPicker } from "./CatalogPicker";
 import { Correction } from "./Correction";
 import type { Corrected } from "./Correction";
@@ -18,6 +20,9 @@ const pageSize = 50;
  * Correcting lives beside the balance it corrects: a manager looking at a
  * wrong number fixes it from there. Goods found that the list cannot show,
  * because the system holds none, are picked from the catalogue instead.
+ *
+ * Each model shows the price this store's till suggests, and whoever holds
+ * `catalog:set_price` changes it from here (owner decision, 2026-10-01).
  */
 export function Stock({
   store,
@@ -39,8 +44,11 @@ export function Stock({
   const [editing, setEditing] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
   const [corrected, setCorrected] = useState<Corrected | null>(null);
+  const [pricing, setPricing] = useState<string | null>(null);
+  const [priced, setPriced] = useState<string | null>(null);
   const allowed = store.permissions.includes("inventory:view");
   const canAdjust = store.permissions.includes("inventory:adjust");
+  const canPrice = store.permissions.includes("catalog:set_price");
   const locations = useQuery({
     queryKey: ["inventory-locations", scopeKey, store.id],
     queryFn: () =>
@@ -154,6 +162,8 @@ export function Stock({
                 setEditing(null);
                 setFinding(false);
                 setCorrected(null);
+                setPricing(null);
+                setPriced(null);
               }}
             >
               <option value="">Оберіть склад</option>
@@ -196,6 +206,7 @@ export function Stock({
                   {corrected.adjustment.quantity_after}.
                 </p>
               )}
+              {priced && <p role="status">Ціну продажу збережено: {priced}.</p>}
               {refreshing || stock.isPending ? (
                 <p role="status">Завантажуємо залишки…</p>
               ) : stock.error ? (
@@ -236,6 +247,50 @@ export function Stock({
                       <span>
                         Доступно: <strong>{item.available_quantity}</strong>
                       </span>
+                      {/* «Брак» is not for sale, so it suggests no price. */}
+                      {!selected.damaged_returns && (
+                        <span>
+                          Ціна продажу:{" "}
+                          <strong>
+                            {item.suggested_price
+                              ? money(item.suggested_price)
+                              : "не задана"}
+                          </strong>
+                        </span>
+                      )}
+                      {canPrice &&
+                        !selected.damaged_returns &&
+                        (pricing ===
+                        `${item.product_variant_id}:${item.size_id}` ? (
+                          <PriceEditor
+                            store={store}
+                            token={token}
+                            scopeKey={scopeKey}
+                            variantId={item.product_variant_id}
+                            blocked={blocked}
+                            onDone={() => {
+                              setPricing(null);
+                              setPriced(item.display_name);
+                            }}
+                            onCancel={() => {
+                              setPricing(null);
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="quiet"
+                            disabled={blocked}
+                            onClick={() => {
+                              setPricing(
+                                `${item.product_variant_id}:${item.size_id}`,
+                              );
+                              setPriced(null);
+                            }}
+                          >
+                            Змінити ціну продажу
+                          </button>
+                        ))}
                       {adjustable &&
                         (item.reserved_quantity > 0 ? (
                           <span className="hint">

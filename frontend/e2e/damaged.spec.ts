@@ -277,7 +277,7 @@ test("the «Брак» section needs its own permission", async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test("the stock screen shows «Брак» and offers no correction there", async ({
+test("the stock screen shows «Брак» and offers no correction or price there", async ({
   page,
 }) => {
   await damaged(page, 1);
@@ -295,5 +295,10 @@ test("the stock screen shows «Брак» and offers no correction there", async
   await expect(page.getByRole("article").first()).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Виправити залишок" }),
+  ).toHaveCount(0);
+  // Nothing in «Брак» is for sale, so it suggests no price to change.
+  await expect(page.getByText("Ціна продажу:")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Змінити ціну продажу" }),
   ).toHaveCount(0);
 });

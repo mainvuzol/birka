@@ -84,22 +84,28 @@ Live risks and properties, in order:
   does not know about, of a model another customer has reserved, simply cannot
   sell it. The till says why. Found when a browser test sharing a warehouse
   with the order specs could never reach the correction.
-- **`VariantPrice` is dead scaffolding.** The column, the uniqueness and the
-  docstring promising the seller "does not retype it" all exist; nothing writes
-  it, nothing reads it, no endpoint exposes it. Every price is typed at the
-  counter. Who may set a suggested price is unanswered (owner question Q-F), so
-  it was not invented.
+- **The suggested price is now set and read (2026-10-01).** The owner
+  answered Q-F; see the [report](suggested-price-report.md). What remains:
+  - **A till open on one phone keeps the price it loaded** until its list is
+    read again. The seller agrees the final price anyway, so a stale
+    suggestion costs a correction, never a wrong sale.
+  - **A price's history is in the audit log only.** Nothing shows it in the
+    app.
+  - **The shared price needs the permission in every store**, unless it is
+    held organization-wide. A store opened later takes that right away from
+    anyone holding it store by store, until they are given it in the new
+    store too. That is deliberate: the shared price reaches the new till.
 - **The sale journal lives in `localStorage`.** Clearing the app's data while a
   sale's outcome is unknown loses the record of which key to replay. The sale
   itself is still safe — `command_id` is permanent and the server holds the
   cached response for 7 days — but the seller loses the in-app path to it and
   needs a manager to look the sale up.
-- **`size_clarified` has no screen.** A "size not known" coat can be given its
-  size only through the API, so in practice it is still sold as size not known
-  until that increment lands.
+- **`size_clarified` has a screen** since PR #42: the till offers the size
+  on the label.
 - **Confirming zero present is refused**, and the till's honest answer is to
-  remove the line by hand. One extra tap while a customer waits (owner
-  question Q-G, carried over from M1-030).
+  remove the line by hand. One extra tap while a customer waits. The owner
+  answered Q-G on 2026-10-01: drop the line and record the shortage. It is
+  not built yet.
 - **`POST /sales` p95 is measured and passes** (2026-09-29, worst p95 95 ms
   against a 500 ms budget with six concurrent sellers; the catalogue read is
   38 ms against 300 ms). The warehouse lock M1-023 put on the hot path costs
@@ -108,10 +114,10 @@ Live risks and properties, in order:
   This was a laptop on PostgreSQL **16.2**, not the pinned 17, and no phone or
   mobile network was involved: it proves nothing is an order of magnitude
   wrong, not that a seller in a shop feels it.
-- **`taps-to-sale` is over budget: 6 against 5**, measured on the built
-  screen. Prefilling the single sellable warehouse removed two taps; the
-  remainder is typing a price on every sale, because `variant_price` is
-  scaffolding nothing writes. Owner question Q-F now blocks a measured budget.
+- **`taps-to-sale` is 5 against 5 for a model with a suggested price**
+  (2026-10-01), counted on the built screen. The till prefills the price, so
+  nothing is typed. It is still 6, plus typing, for a model nobody has
+  priced. The budget holds only as far as the shop prices its models.
 
 ## Command identity for stock intake — 2026-09-29
 

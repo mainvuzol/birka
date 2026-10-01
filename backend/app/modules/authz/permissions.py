@@ -46,6 +46,11 @@ class Permission(StrEnum):
     CATALOG_CREATE = "catalog:create"
     CATALOG_CONFIRM = "catalog:confirm"
     CATALOG_MERGE = "catalog:merge"
+    # The suggested selling price the till prefills (owner decision,
+    # 2026-10-01: the owner and managers set it, a seller sees it). Held
+    # organization-wide it sets the shared price; held in a store, that
+    # store's own.
+    CATALOG_SET_PRICE = "catalog:set_price"
 
     SNAPSHOT_IMPORT = "snapshot:import"
     SNAPSHOT_APPROVE = "snapshot:approve"
@@ -104,6 +109,8 @@ _MANAGER: frozenset[Permission] = _SELLER | frozenset(
         Permission.TRANSFER_CREATE,
         Permission.TRANSFER_RECEIVE,
         Permission.CATALOG_MERGE,
+        # Owner decision, 2026-10-01: the owner and managers set prices.
+        Permission.CATALOG_SET_PRICE,
         Permission.SNAPSHOT_IMPORT,
         Permission.REPORT_VIEW_FINANCIAL,
     }
