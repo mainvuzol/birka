@@ -137,6 +137,10 @@ python -m scripts.people deactivate --approved-by <owner> --telegram-user-id <id
 
 See the [people report](.ai/project-memory/people-report.md).
 
+The stores' names are given at setup (`seed_organization --main-name …
+--second-name …`). Later, an owner's word changes one:
+`python -m scripts.stores rename --approved-by <owner> --store MAIN --name "…"`.
+
 ## Customer orders
 
 `POST /api/v1/orders` accepts `store_id`, permanent `command_id`, and price/quantity

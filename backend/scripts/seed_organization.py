@@ -24,12 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.core.config import get_settings
 from app.core.db import create_engine
+from app.core.errors import ValidationFailedError
 from app.modules.audit import service as audit
 from app.modules.audit.models import AuditLog
 from app.modules.authz.models import Membership
 from app.modules.authz.permissions import RoleCode
 from app.modules.authz.service import seed_default_roles
 from app.modules.identity.models import AppUser
+from app.modules.identity.stores import store_name
 from app.modules.tenancy.models import (
     Organization,
     StockLocation,
@@ -218,6 +220,8 @@ async def seed_in_session(
     org_name: str,
     currency_code: str = "UAH",
     with_child_warehouse: bool = False,
+    main_name: str = "Основний магазин",
+    second_name: str = "Другий магазин",
 ) -> uuid.UUID:
     """Bootstrap inside a caller-owned transaction; caller must roll back failures.
 
@@ -249,9 +253,11 @@ async def seed_in_session(
                 "No warehouse, stock or grant was changed."
             )
         stores: dict[str, Store] = {}
+        # The names apply only to stores this run creates: an existing store
+        # keeps its name, which `scripts.stores rename` changes on purpose.
         for code, name, kind in (
-            ("MAIN", "Основний магазин", StoreKind.PRIMARY),
-            ("SECOND", "Другий магазин", StoreKind.SECONDARY),
+            ("MAIN", main_name, StoreKind.PRIMARY),
+            ("SECOND", second_name, StoreKind.SECONDARY),
         ):
             store = await session.scalar(
                 select(Store).where(Store.organization_id == organization.id, Store.code == code)
@@ -331,7 +337,13 @@ async def seed_in_session(
 
 
 async def seed(
-    *, telegram_user_id: int, owner_name: str, org_name: str, with_child_warehouse: bool = False
+    *,
+    telegram_user_id: int,
+    owner_name: str,
+    org_name: str,
+    with_child_warehouse: bool = False,
+    main_name: str = "Основний магазин",
+    second_name: str = "Другий магазин",
 ) -> None:
     settings = get_settings()
     engine = create_engine(settings)
@@ -344,6 +356,8 @@ async def seed(
                 org_name=org_name,
                 currency_code=settings.default_currency_code,
                 with_child_warehouse=with_child_warehouse,
+                main_name=main_name,
+                second_name=second_name,
             )
         print(f"seed complete for organization {org_id}")
     finally:
@@ -356,10 +370,13 @@ def main() -> None:
     parser.add_argument("--owner-name", default="Власниця")
     parser.add_argument("--org-name", default="birka")
     parser.add_argument("--with-child-warehouse", action="store_true")
+    parser.add_argument("--main-name", default="Основний магазин", help="the MAIN store's name")
+    parser.add_argument("--second-name", default="Другий магазин", help="the SECOND store's name")
     args = parser.parse_args()
     try:
+        args.main_name, args.second_name = store_name(args.main_name), store_name(args.second_name)
         asyncio.run(seed(**vars(args)))
-    except BootstrapConflictError as exc:
+    except (BootstrapConflictError, ValidationFailedError) as exc:
         parser.exit(2, f"Setup refused: {exc}\n")
 
 
