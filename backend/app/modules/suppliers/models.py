@@ -123,6 +123,13 @@ class SupplierReturn(UUIDPrimaryKey, TimestampMixin, Base):
     command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
     command_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Borrowed goods, or goods under consignment, going back unsold: the lot
+    # they arrived as (`suppliers.borrowed`).
+    stock_lot_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_lot.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -147,6 +154,7 @@ class SupplierReturn(UUIDPrimaryKey, TimestampMixin, Base):
         Index("ix_supplier_return_store_id_created_at", "store_id", "created_at"),
         Index("ix_supplier_return_supplier_id", "supplier_id"),
         Index("ix_supplier_return_damaged_unit_id", "damaged_unit_id"),
+        Index("ix_supplier_return_stock_lot_id", "stock_lot_id"),
     )
 
 
@@ -252,6 +260,16 @@ class SupplierInvoice(UUIDPrimaryKey, TimestampMixin, Base):
     command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
     command_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Borrowed goods, or goods under consignment, sold: the lot they arrived
+    # as, how many of it, and what it was called then. Cancelling the invoice
+    # puts them back on hand (owner decisions, 2026-10-01).
+    stock_lot_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("stock_lot.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    lot_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lot_label: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -274,6 +292,13 @@ class SupplierInvoice(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint("(status = 'OPEN') = (closed_at IS NULL)", name="closed_when_not_open"),
         Index("ix_supplier_invoice_store_id_created_at", "store_id", "created_at"),
         Index("ix_supplier_invoice_supplier_id", "supplier_id"),
+        CheckConstraint(
+            "(stock_lot_id IS NULL) = (lot_quantity IS NULL) "
+            "AND (stock_lot_id IS NULL) = (lot_label IS NULL)",
+            name="sold_names_its_lot",
+        ),
+        CheckConstraint("lot_quantity IS NULL OR lot_quantity > 0", name="lot_quantity_positive"),
+        Index("ix_supplier_invoice_stock_lot_id", "stock_lot_id"),
     )
 
 

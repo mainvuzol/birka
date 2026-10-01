@@ -79,6 +79,18 @@ def money(value: Decimal) -> Decimal:
 
 
 @dataclass(frozen=True, slots=True)
+class SoldLot:
+    """Borrowed goods, or goods under consignment, sold: an invoice for them
+    names their lot (`borrowed.py`, which knows lots; this module does not)."""
+
+    stock_lot_id: uuid.UUID
+    quantity: int
+    # What they were called when sold: kept, so the invoice reads the same
+    # however the catalogue changes. Not part of the command's fingerprint.
+    label: str
+
+
+@dataclass(frozen=True, slots=True)
 class SetOffView:
     """Goods returned to a supplier, counted against one invoice."""
 
@@ -128,6 +140,8 @@ class InvoiceView:
     closed_at: datetime | None
     cancelled: Cancellation | None
     entries: list[EntryView]
+    # Borrowed goods sold, when that is what the invoice is for.
+    sold: SoldLot | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,10 +278,14 @@ async def record_invoice(
     note: str | None,
     currency_code: str,
     correlation_id: str | None = None,
+    sold: SoldLot | None = None,
 ) -> InvoiceView:
     """An invoice the store owes a supplier: the sum on it, and anything from
     nothing to all of it paid at once (owner decisions, 2026-10-01). Paid in
-    full, it is settled at once, and stays in the history."""
+    full, it is settled at once, and stays in the history.
+
+    `sold` is borrowed goods marked sold, which the caller has priced and
+    counted against what is on hand (`borrowed.mark_sold`)."""
     scope.require(Permission.SUPPLIER_DEBT, store_id)
     total = _amount(amount, reason="AMOUNT")
     paid = _amount(paid_now, reason="PAID_NOW", allow_zero=True)
@@ -282,6 +300,13 @@ async def record_invoice(
             "amount": str(total),
             "paid_now": str(paid),
             "note": remark,
+            # Only for borrowed goods sold, so every other invoice keeps its
+            # print.
+            **(
+                {"stock_lot_id": str(sold.stock_lot_id), "lot_quantity": sold.quantity}
+                if sold is not None
+                else {}
+            ),
         },
         actor_user_id=scope.user_id,
         store_id=store_id,
@@ -333,6 +358,9 @@ async def record_invoice(
         command_id=command_id,
         command_fingerprint=fingerprint,
         correlation_id=correlation_id,
+        stock_lot_id=sold.stock_lot_id if sold else None,
+        lot_quantity=sold.quantity if sold else None,
+        lot_label=sold.label if sold else None,
     )
     session.add(invoice)
     await session.flush()
@@ -364,7 +392,12 @@ async def record_invoice(
             "supplier_id": str(supplier.id),
             "amount": str(total),
             "paid_now": str(paid),
-        },
+        }
+        | (
+            {"stock_lot_id": str(sold.stock_lot_id), "lot_quantity": sold.quantity}
+            if sold is not None
+            else {}
+        ),
         reason=remark,
     )
     logger.info("supplier.invoice_recorded", invoice_id=str(invoice.id), store_id=str(store_id))
@@ -909,6 +942,13 @@ async def view(session: AsyncSession, invoice: SupplierInvoice) -> InvoiceView:
             )
             for entry, name in entries
         ],
+        sold=SoldLot(
+            stock_lot_id=invoice.stock_lot_id,
+            quantity=invoice.lot_quantity or 0,
+            label=invoice.lot_label or "",
+        )
+        if invoice.stock_lot_id is not None
+        else None,
     )
 
 
@@ -1016,6 +1056,7 @@ __all__ = [
     "EntryView",
     "InvoiceView",
     "SetOffView",
+    "SoldLot",
     "StoreSupplierDebts",
     "SupplierDebt",
     "cancel_entry",

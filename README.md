@@ -23,7 +23,7 @@ updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 125 Playwright journeys on a phone profile, against the real API;
+- 130 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -336,6 +336,20 @@ record invoices on their own, never with a delivery («Накладні»).
   `POST /supplier-invoices/{id}/write-off` (`supplier:write_off`).
 - **What the store owes:** `GET /supplier-invoices/summary`, in all and by
   supplier. See the [report](.ai/project-memory/supplier-invoices-report.md).
+
+**Borrowed goods, and goods under consignment** (owner decisions,
+2026-10-01): paid for only once sold, at a price agreed for each.
+- **Taken:** `POST /inventory/receipts` with lines `BORROWED` or
+  `CONSIGNMENT`, a `supplier_id` and a `unit_cost` for each. It needs
+  `supplier:debt` (`SUPPLIER`, `PRICE`).
+- **The list:** `GET /borrowed` shows what was taken, sold, returned and is
+  still on hand («Постачальникам»).
+- **Sold:** `POST /supplier-invoices/sold` with a `stock_lot_id` and a
+  quantity is an invoice for their price. Cancelling it puts them back on
+  hand.
+- **Unsold:** `POST /supplier-returns` with the `stock_lot_id` sends them
+  back to their supplier, never more than is on hand (`MORE_THAN_ON_HAND`).
+  See the [report](.ai/project-memory/borrowed-goods-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

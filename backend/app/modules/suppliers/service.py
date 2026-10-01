@@ -46,13 +46,14 @@ from app.modules.catalog.read import describe_variants, size_labels
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import MovementRequest, apply_movements
-from app.modules.suppliers import invoices
+from app.modules.suppliers import borrowed, invoices
 from app.modules.suppliers.common import (
     Cancellation,
     SupplierView,
     clean_note,
     clean_reason,
     clean_text,
+    require_keeper,
     supplier_view,
 )
 from app.modules.suppliers.models import (
@@ -107,19 +108,12 @@ class ReturnView:
     cancelled: Cancellation | None
     # What of it the supplier counts against the store's invoices now.
     set_offs: list[invoices.SetOffView]
+    # Borrowed goods going back unsold: the lot they arrived as.
+    stock_lot_id: uuid.UUID | None = None
 
 
 def _normalized(name: str) -> str:
     return " ".join(name.split()).casefold()
-
-
-def _keeps_the_list(scope: RequestScope, store_id: uuid.UUID) -> None:
-    """Whoever returns goods here, or records what the store owes its
-    suppliers: both pick a supplier from the list, or add one."""
-    if scope.can(Permission.SUPPLIER_DEBT, store_id):
-        scope.require_store(store_id)
-        return
-    scope.require(Permission.SUPPLIER_RETURN, store_id)
 
 
 # --- the list ---------------------------------------------------------------
@@ -130,7 +124,7 @@ async def list_suppliers(
 ) -> list[SupplierView]:
     """The network's suppliers, by name, for whoever returns goods here or
     records what the store owes them."""
-    _keeps_the_list(scope, store_id)
+    require_keeper(scope, store_id)
     rows = await session.scalars(
         select(Supplier)
         .where(Supplier.organization_id == scope.organization_id)
@@ -170,7 +164,7 @@ async def add_supplier(
 ) -> SupplierView:
     """A new supplier, added on the spot. A name already on the list, however
     spaced or capitalised, is refused with that supplier, to pick instead."""
-    _keeps_the_list(scope, store_id)
+    require_keeper(scope, store_id)
     clean = clean_text(name, limit=MAX_NAME, reason="NAME", required=True)
     assert clean is not None
     tel = clean_text(phone, limit=MAX_PHONE, reason="PHONE", required=False)
@@ -220,7 +214,7 @@ async def edit_supplier(
     phone: str | None,
 ) -> SupplierView:
     """A supplier's name or phone, corrected by whoever keeps the list."""
-    _keeps_the_list(scope, store_id)
+    require_keeper(scope, store_id)
     supplier = await session.scalar(
         select(Supplier)
         .where(Supplier.id == supplier_id, Supplier.organization_id == scope.organization_id)
@@ -296,6 +290,7 @@ async def record_return(
     note: str | None,
     correlation_id: str | None,
     damaged_unit_id: uuid.UUID | None = None,
+    stock_lot_id: uuid.UUID | None = None,
 ) -> SupplierReturn:
     """Write one return: its row, the goods out of the warehouse, its lines
     as the catalogue names them now, and the audit entry.
@@ -316,6 +311,7 @@ async def record_return(
         command_id=command_id,
         command_fingerprint=command_fingerprint,
         correlation_id=correlation_id,
+        stock_lot_id=stock_lot_id,
     )
     session.add(row)
     await session.flush()
@@ -521,9 +517,14 @@ async def return_goods(
     lines: Sequence[ReturnLine],
     note: str | None,
     correlation_id: str | None = None,
+    stock_lot_id: uuid.UUID | None = None,
 ) -> ReturnView:
     """Goods from one warehouse back to a supplier, for the owner and
-    managers. Never from a «Брак»: a unit there goes back from «Брак»."""
+    managers. Never from a «Брак»: a unit there goes back from «Брак».
+
+    `stock_lot_id` sends back borrowed goods unsold: that lot's model and
+    size, from where it is, to whom it came from, never more than is on hand
+    (owner decisions, 2026-10-01; `borrowed.py`)."""
     scope.require(Permission.SUPPLIER_RETURN, store_id)
     ordered = _lines(lines)
     remark = clean_note(note)
@@ -535,6 +536,8 @@ async def return_goods(
                 [str(line.product_variant_id), str(line.size_id), line.quantity] for line in ordered
             ],
             "note": remark,
+            # Only for borrowed goods, so every other return keeps its print.
+            **({"stock_lot_id": str(stock_lot_id)} if stock_lot_id is not None else {}),
         },
         actor_user_id=scope.user_id,
         store_id=store_id,
@@ -581,6 +584,19 @@ async def return_goods(
             reason="FROM_DAMAGED",
             location_id=str(location_id),
         )
+    lot = (
+        await borrowed.lot_to_return(
+            session,
+            organization_id=scope.organization_id,
+            store_id=store_id,
+            stock_lot_id=stock_lot_id,
+            location_id=location_id,
+            supplier_id=supplier_id,
+            lines=[(line.product_variant_id, line.size_id, line.quantity) for line in ordered],
+        )
+        if stock_lot_id is not None
+        else None
+    )
     row = await record_return(
         session,
         organization_id=scope.organization_id,
@@ -593,7 +609,10 @@ async def return_goods(
         lines=ordered,
         note=remark,
         correlation_id=correlation_id,
+        stock_lot_id=stock_lot_id,
     )
+    if lot is not None:
+        await borrowed.ensure_on_hand(session, lot, quantity=ordered[0].quantity)
     return await view(session, row)
 
 
@@ -689,6 +708,7 @@ async def view(session: AsyncSession, row: SupplierReturn) -> ReturnView:
         if cancelled is None
         else Cancellation(reason=cancelled[0].reason, by=cancelled[1], at=cancelled[0].created_at),
         set_offs=await invoices.set_offs_of_return(session, supplier_return_id=row.id),
+        stock_lot_id=row.stock_lot_id,
     )
 
 

@@ -24,6 +24,7 @@ from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.errors import (
     IdempotencyConflictError,
+    NotFoundError,
     StockChangedError,
     ValidationFailedError,
 )
@@ -47,6 +48,7 @@ from app.modules.inventory.service import (
     readable_stock,
     record_adjustment,
 )
+from app.modules.suppliers.models import Supplier
 from app.modules.tenancy.service import LocationCapability
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -113,6 +115,14 @@ class ReceiptRequest(BaseModel):
     command_id: uuid.UUID
     lines: list[ReceiptLine] = Field(min_length=1, max_length=200)
     notes: CleanText | None = Field(default=None, max_length=1000)
+    # Whose goods: required when any are borrowed or under consignment, which
+    # are owed for once sold (owner decisions, 2026-10-01).
+    supplier_id: uuid.UUID | None = None
+
+
+# Goods owed for only once sold: taken by whoever keeps the suppliers' debts,
+# from a supplier, at a price agreed for each (owner decisions, 2026-10-01).
+PAID_WHEN_SOLD = frozenset({AcquisitionType.BORROWED, AcquisitionType.CONSIGNMENT})
 
 
 class ReceiptLineResult(BaseModel):
@@ -204,6 +214,10 @@ def _receipt_fingerprint(
     return idempotency.fingerprint(
         {
             "location_id": str(payload.location_id),
+            # Only when stated, so a receipt sent before keeps its print.
+            **(
+                {"supplier_id": str(payload.supplier_id)} if payload.supplier_id is not None else {}
+            ),
             "lines": [
                 {
                     "product_variant_id": str(line.product_variant_id),
@@ -313,6 +327,30 @@ async def receive_goods(
         organization_id=scope.organization_id,
         size_ids={line.size_id for line in payload.lines},
     )
+    owed_when_sold = [line for line in payload.lines if line.acquisition_type in PAID_WHEN_SOLD]
+    if owed_when_sold:
+        # Before the idempotency key is claimed, as the permission above.
+        scope.require(Permission.SUPPLIER_DEBT, payload.store_id)
+        if payload.supplier_id is None:
+            raise ValidationFailedError(
+                "Borrowed goods, and goods under consignment, come from a supplier",
+                reason="SUPPLIER",
+            )
+        if any(line.unit_cost is None or line.unit_cost <= 0 for line in owed_when_sold):
+            raise ValidationFailedError(
+                "Borrowed goods, and goods under consignment, come at an agreed price",
+                reason="PRICE",
+            )
+    if payload.supplier_id is not None and (
+        await session.scalar(
+            select(Supplier.id).where(
+                Supplier.id == payload.supplier_id,
+                Supplier.organization_id == scope.organization_id,
+            )
+        )
+        is None
+    ):
+        raise NotFoundError("Unknown supplier", supplier_id=str(payload.supplier_id))
 
     outcome = await idempotency.claim(
         session,
@@ -320,7 +358,11 @@ async def receive_goods(
         endpoint=RECEIPTS_ENDPOINT,
         key=idempotency_key,
         request_fingerprint=idempotency.fingerprint(
-            payload.model_dump(mode="json"),
+            # Without a supplier when none is stated, so a request cached
+            # before receipts named one is still recognised.
+            payload.model_dump(
+                mode="json", exclude={"supplier_id"} if payload.supplier_id is None else None
+            ),
             actor_user_id=scope.user_id,
             store_id=payload.store_id,
         ),
@@ -380,6 +422,7 @@ async def receive_goods(
         notes=payload.notes,
         correlation_id=correlation_id,
         command_fingerprint=permanent_fingerprint,
+        supplier_id=payload.supplier_id,
     )
     session.add(receipt)
     await session.flush()

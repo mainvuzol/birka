@@ -145,9 +145,21 @@ class GoodsReceipt(UUIDPrimaryKey, TimestampMixin, Base):
     response_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         postgresql.JSONB, nullable=True
     )
+    # Whose goods came: required when any of them are borrowed or under
+    # consignment, which are owed for once sold (owner decisions, 2026-10-01;
+    # `suppliers.borrowed`).
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("organization_id", "command_id", name="uq_goods_receipt_org_command"),
+        ForeignKeyConstraint(
+            ["organization_id", "supplier_id"],
+            ["supplier.organization_id", "supplier.id"],
+            name="fk_goods_receipt_org_supplier",
+            ondelete="RESTRICT",
+        ),
         ForeignKeyConstraint(
             ["organization_id", "location_id"],
             ["stock_location.organization_id", "stock_location.id"],

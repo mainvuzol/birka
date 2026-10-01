@@ -10,6 +10,7 @@ import {
   submitReturnToSupplier,
   useReturnToSupplier,
 } from "./commands";
+import { Borrowed } from "./Borrowed";
 import { SupplierPicker, useSuppliers } from "./Picker";
 import type { ReturnPage, Supplier, SupplierReturn } from "./types";
 
@@ -29,11 +30,14 @@ export function Suppliers({
   store,
   token,
   journalKey,
+  invoiceJournalKey,
   blocked,
 }: {
   store: Store;
   token: string;
   journalKey: string;
+  /** The invoices' journal, through which borrowed goods are marked sold. */
+  invoiceJournalKey: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
 }): JSX.Element {
@@ -206,6 +210,13 @@ export function Suppliers({
           )}
         </>
       )}
+      <Borrowed
+        store={store}
+        token={token}
+        journalKey={journalKey}
+        invoiceJournalKey={invoiceJournalKey}
+        blocked={blocked || working}
+      />
       <SupplierList
         store={store}
         token={token}

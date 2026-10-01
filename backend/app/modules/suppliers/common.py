@@ -10,6 +10,8 @@ from datetime import datetime
 
 from app.core.errors import ValidationFailedError
 from app.core.text import is_storable
+from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.suppliers.models import Supplier
 
 MAX_TEXT = 1000
@@ -44,6 +46,16 @@ def clean_text(value: str | None, *, limit: int, reason: str, required: bool) ->
     return clean
 
 
+def require_keeper(scope: RequestScope, store_id: uuid.UUID) -> None:
+    """Whoever returns goods here, or records what the store owes its
+    suppliers: both pick a supplier from the list, or add one, and both see
+    what was borrowed."""
+    if scope.can(Permission.SUPPLIER_DEBT, store_id):
+        scope.require_store(store_id)
+        return
+    scope.require(Permission.SUPPLIER_RETURN, store_id)
+
+
 def clean_reason(reason: str) -> str:
     why = clean_text(reason, limit=MAX_TEXT, reason="NO_REASON", required=True)
     assert why is not None
@@ -61,5 +73,6 @@ __all__ = [
     "clean_note",
     "clean_reason",
     "clean_text",
+    "require_keeper",
     "supplier_view",
 ]

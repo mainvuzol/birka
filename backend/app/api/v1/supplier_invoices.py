@@ -20,6 +20,10 @@
   `elsewhere=true` lists those of the stores that do not trade instead.
 - `GET /supplier-invoices/summary`: what the store owes, in all and by
   supplier.
+- `POST /supplier-invoices/sold`: borrowed goods, or goods under
+  consignment, sold — an invoice for their agreed price, never for more than
+  is still on hand (owner decisions, 2026-10-01). Cancelling it puts them
+  back on hand.
 
 The owner's and managers' (`supplier:debt`); the write-off is the owner's
 (`supplier:write_off`). The four commands that record money are named by a
@@ -41,7 +45,7 @@ from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.api.v1.suppliers import CancellationResponse, CancelRequest, SupplierResponse
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
-from app.modules.suppliers import invoices
+from app.modules.suppliers import borrowed, invoices
 from app.modules.suppliers.common import Cancellation, SupplierView
 from app.modules.suppliers.models import InvoiceEntryKind, InvoiceStatus
 from app.modules.tenancy.models import StoreState
@@ -66,6 +70,15 @@ class EntryResponse(BaseModel):
     cancelled: CancellationResponse | None
 
 
+class SoldResponse(BaseModel):
+    """Borrowed goods sold, which the invoice is for."""
+
+    stock_lot_id: uuid.UUID
+    quantity: int
+    # What they were called when sold.
+    label: str
+
+
 class InvoiceResponse(BaseModel):
     id: uuid.UUID
     store_id: uuid.UUID
@@ -88,6 +101,7 @@ class InvoiceResponse(BaseModel):
     closed_at: datetime | None
     cancelled: CancellationResponse | None
     entries: list[EntryResponse]
+    sold: SoldResponse | None = None
 
 
 class InvoicePage(BaseModel):
@@ -137,6 +151,16 @@ class SetOffRequest(BaseModel):
     command_id: uuid.UUID
     supplier_return_id: uuid.UUID
     amount: Money = Field(gt=0)
+
+
+class SoldRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: uuid.UUID
+    # The store that borrowed them.
+    store_id: uuid.UUID
+    stock_lot_id: uuid.UUID
+    quantity: int = Field(gt=0, le=10_000)
 
 
 class WriteOffRequest(BaseModel):
@@ -198,6 +222,13 @@ def _response(view: invoices.InvoiceView) -> InvoiceResponse:
             )
             for entry in view.entries
         ],
+        sold=None
+        if view.sold is None
+        else SoldResponse(
+            stock_lot_id=view.sold.stock_lot_id,
+            quantity=view.sold.quantity,
+            label=view.sold.label,
+        ),
     )
 
 
@@ -258,6 +289,24 @@ async def record_invoice(
         amount=payload.amount,
         paid_now=payload.paid_now,
         note=payload.note,
+        currency_code=settings.default_currency_code,
+        correlation_id=get_correlation_id(),
+    )
+    await session.commit()
+    return _response(view)
+
+
+@router.post("/sold", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
+async def mark_sold(
+    payload: SoldRequest, scope: ScopeDep, session: SessionDep, settings: SettingsDep
+) -> InvoiceResponse:
+    view = await borrowed.mark_sold(
+        session,
+        scope=scope,
+        store_id=payload.store_id,
+        stock_lot_id=payload.stock_lot_id,
+        quantity=payload.quantity,
+        command_id=payload.command_id,
         currency_code=settings.default_currency_code,
         correlation_id=get_correlation_id(),
     )

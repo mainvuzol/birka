@@ -566,3 +566,47 @@ How it is carried out, not decided by the owner:
 - **Two waybills are one** whatever their spaces, dashes or letter case.
 - **A correction states the whole of it** — where, the carrier, the waybill
   or the text. Stating it again as it stands adds nothing to the history.
+
+## Owner decision — 2026-10-01 (no settling between the network's stores)
+
+Asked when settling money between stores was offered as the next work.
+
+- **Stores of one network do not settle with each other.** The money is
+  the network's. What one store paid out, or took, for another stays in each
+  return's and payment's history, and nothing adds it up between stores.
+
+## Owner decision — 2026-10-01 (goods borrowed from another shop)
+
+The owner put it in place of settling between stores: a shop of the network
+may take jackets from another shop, "as from a supplier, roughly", which is
+"a loan of jackets with a sum".
+
+- **Borrowed goods are paid for only once sold:** at the price agreed for
+  each when they are taken. Unsold, they go back for nothing.
+- **The other shop is a supplier** on the network's list.
+- **Goods under consignment work the same:** the «Під реалізацію» choice in
+  receiving.
+- **The shop only borrows.** It does not lend its own jackets.
+- **They are taken through receiving,** as «Позичено» or «Під реалізацію»,
+  naming the supplier and the agreed price of each.
+- **Only the owner and managers take them.** A seller receives the shop's
+  own goods only.
+- **The till sells them as any goods.** It does not tell a borrowed jacket
+  from the shop's own of the same model and size.
+- **The owner or a manager marks them sold, by hand,** in «Постачальникам»,
+  in the list «Позичене». That is a debt to the supplier in «Накладні», for
+  the agreed price of those sold, paid there like any invoice.
+- **Unsold ones go back from the same list,** as a return to the supplier.
+- **A «Продано» marked by mistake is undone by cancelling its invoice** in
+  «Накладні». The goods are on hand again.
+
+How it is carried out, not decided by the owner:
+- **A price above nothing is required** for borrowed goods, and a supplier
+  on the list.
+- **Never more is marked sold or sent back than is still on hand:** what was
+  taken, less what stands sold, less what stands returned. A cancelled
+  return puts goods back on hand, as a cancelled invoice does.
+- **Borrowed goods go back to the supplier they came from,** from where they
+  arrived, one model and size at a time.
+- **Goods borrowed before receipts named a supplier** are not on the list:
+  nobody can say whose they were.

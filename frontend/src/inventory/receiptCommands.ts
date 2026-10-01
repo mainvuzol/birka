@@ -32,6 +32,7 @@ const receipts = journal<ReceiptBody, Receipt>({
   scope: "receipt-pending",
   isBody: (body) =>
     isId(body.location_id) &&
+    (body.supplier_id === undefined || isId(body.supplier_id)) &&
     (body.notes === null || typeof body.notes === "string") &&
     Array.isArray(body.lines) &&
     body.lines.length > 0 &&
