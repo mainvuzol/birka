@@ -57,6 +57,11 @@ import type { TermsInput } from "@/credits/Terms";
 import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import { Stores } from "@/stores/Stores";
+import { Suppliers } from "@/suppliers/Suppliers";
+import {
+  loadReturnToSupplier,
+  useReturnToSupplier,
+} from "@/suppliers/commands";
 import { loadStateCommand, useStateCommand } from "@/stores/commands";
 import {
   loadReturn,
@@ -246,6 +251,7 @@ function Workspace({
     | "credits"
     | "backups"
     | "stores"
+    | "suppliers"
   >("list");
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
@@ -255,6 +261,22 @@ function Workspace({
   const storesKey = `birka:store-state-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [storesStorageError, setStoresStorageError] = useState(false);
   const stateCommand = useStateCommand();
+  // Goods back to a supplier: the owner's and managers' (owner decision,
+  // 2026-10-01).
+  const canReturnToSupplier = store.permissions.includes("supplier:return");
+  const supplierKey = `birka:supplier-return-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [supplierStorageError, setSupplierStorageError] = useState(false);
+  const supplierCommand = useReturnToSupplier();
+  useEffect(() => {
+    if (!canReturnToSupplier) return;
+    try {
+      const saved = loadReturnToSupplier(supplierKey);
+      useReturnToSupplier.setState({ pending: saved, error: null });
+      if (saved) setTab("suppliers");
+    } catch {
+      setSupplierStorageError(true);
+    }
+  }, [supplierKey, canReturnToSupplier]);
   useEffect(() => {
     if (!canManageStores) return;
     try {
@@ -417,6 +439,10 @@ function Workspace({
     creditStorageError || creditCommand.busy || creditCommand.pending !== null;
   const storesUnsettled =
     storesStorageError || stateCommand.busy || stateCommand.pending !== null;
+  const supplierUnsettled =
+    supplierStorageError ||
+    supplierCommand.busy ||
+    supplierCommand.pending !== null;
   // Every journal but the stock correction's and the store states' own,
   // which their screens read themselves.
   const othersUnsettled =
@@ -434,12 +460,16 @@ function Workspace({
     receiptCommand.pending !== null ||
     returnUnsettled ||
     creditUnsettled;
-  const otherThanAdjustment = othersUnsettled || storesUnsettled;
+  const otherThanAdjustment =
+    othersUnsettled || storesUnsettled || supplierUnsettled;
   const adjustmentUnsettled =
     adjustmentStorageError ||
     adjustmentCommand.busy ||
     adjustmentCommand.pending !== null;
-  const otherThanStores = othersUnsettled || adjustmentUnsettled;
+  const otherThanStores =
+    othersUnsettled || adjustmentUnsettled || supplierUnsettled;
+  const otherThanSuppliers =
+    othersUnsettled || adjustmentUnsettled || storesUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
   return (
     <>
@@ -578,6 +608,17 @@ function Workspace({
             Резервні копії{backupsNeedYou ? " ⚠" : ""}
           </button>
         )}
+        {canReturnToSupplier && (
+          <button
+            className={tab === "suppliers" ? "active" : "quiet"}
+            disabled={otherThanSuppliers}
+            onClick={() => {
+              setTab("suppliers");
+            }}
+          >
+            Постачальникам
+          </button>
+        )}
         {canManageStores && (
           <button
             className={tab === "stores" ? "active" : "quiet"}
@@ -594,6 +635,12 @@ function Workspace({
         <p role="alert">
           Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
           застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {supplierStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережене повернення постачальнику. Не очищайте
+          дані застосунку; зверніться до менеджера.
         </p>
       )}
       {storesStorageError && (
@@ -1063,6 +1110,17 @@ function Workspace({
           <Backups token={token} scopeKey={backupsKey} />
         ) : (
           <p role="alert">Цей розділ бачить лише власник.</p>
+        )
+      ) : tab === "suppliers" ? (
+        canReturnToSupplier ? (
+          <Suppliers
+            store={store}
+            token={token}
+            journalKey={supplierKey}
+            blocked={otherThanSuppliers}
+          />
+        ) : (
+          <p role="alert">Повертають постачальнику власник і менеджери.</p>
         )
       ) : tab === "stores" ? (
         canManageStores ? (

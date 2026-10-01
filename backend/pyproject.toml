@@ -273,6 +273,7 @@ source_modules = [
     "app.modules.orders",
     "app.modules.snapshots",
     "app.modules.catalog",
+    "app.modules.suppliers",
     "app.api",
 ]
 forbidden_modules = ["app.modules.inventory.repository"]
@@ -444,6 +445,7 @@ source_modules = [
     "app.modules.orders",
     "app.modules.sales",
     "app.modules.snapshots",
+    "app.modules.suppliers",
     "app.modules.telegram",
     "app.modules.tenancy",
     "app.modules.transfers",
@@ -496,3 +498,54 @@ source_modules = [
     "app.modules.transfers",
 ]
 forbidden_modules = ["app.modules.stores"]
+
+# 2026-10-01 (ADR-0001 amendment): module `suppliers` owns the network's
+# suppliers and the goods returned to them. `suppliers → inventory, catalog,
+# identity, authz, tenancy, core` (+ audit): goods leave and come back as
+# ledger movements through `inventory.apply_movements`, and the lines are
+# named as the catalogue names them. A unit from «Брак» goes back through the
+# «Брак» section, which calls this module's core; this module never reaches
+# into «Брак» itself, so stock there still changes only through returns and
+# that section.
+[[tool.importlinter.contracts]]
+name = "a return to a supplier moves goods through the ledger and reads nothing else"
+type = "forbidden"
+source_modules = ["app.modules.suppliers"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.stores",
+    "app.modules.backups",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "only «Брак» and the API use the supplier returns"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.credit",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.stores",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.suppliers"]
+# Only DIRECT imports: a refund registers units in «Брак», which reaches this
+# module underneath, and that is the supported path.
+allow_indirect_imports = true

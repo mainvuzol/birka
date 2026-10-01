@@ -432,3 +432,49 @@ How it is carried out, not decided by the owner:
   state that keeps every rule an inactive store had.
 
 Built on 2026-10-01; see the [report](store-states-report.md).
+
+## Owner decision — 2026-10-01 (returns to a supplier)
+
+Asked when the owner chose it as the next work. Until then a return to a
+supplier was a write-off with a note (release checklist).
+
+- **Suppliers are a list, one for the network.** The person picks a supplier
+  from it, or adds a new one on the spot, with a name and, if wished, a
+  phone. Whoever returns goods may correct a supplier's name or phone. Nobody
+  deletes one. Receiving goods does not record a supplier yet.
+- **Only the goods are recorded,** with a note. Money, or what the supplier
+  sets against what the shop owes, stays outside the system until the
+  store's purchase installments are built.
+- **The owner and managers return goods to a supplier**: those who may
+  already write off or correct stock. Not a seller.
+- **From a warehouse and from «Брак».**
+  - Unsold goods, consignment included, are returned from a warehouse in a
+    section of their own.
+  - A unit in «Брак» whose damage is confirmed may be returned to the
+    supplier instead of being written off, with its own button in «Брак».
+- **A return from a warehouse is one document with a list:** a warehouse, a
+  supplier, several models and sizes with their quantities, and a note. The
+  same section lists the store's returns, filtered by supplier.
+- **A return can be cancelled, with a reason.**
+  - Its goods go back where they were taken from: to the warehouse, or, for
+    a unit from «Брак», back into «Брак» as confirmed damaged.
+  - Both the return and its cancellation stay in the history.
+  - The whole return is cancelled, never a part of it. If the supplier took
+    only some of it, it is cancelled and recorded again as it was.
+  - At any time, and only once.
+- **The list shows this store's returns only,** as «Борги» shows this
+  store's debts.
+
+How it is carried out, not decided by the owner:
+- **Only goods free to sell are returned.** Goods held for an order are not:
+  the order is cancelled first.
+- **A unit returned from «Брак» leaves «Брак» through the «Брак» section,
+  and comes back through it when that return is cancelled.** So stock in
+  «Брак» still changes only through returns and that section.
+- **A warehouse's return never touches a «Брак»**, as a stock correction
+  never does.
+- **A supplier's name is unique in the network,** whatever its spacing or
+  letter case, so one supplier is never written twice.
+- **Cancelling twice changes nothing**: the second answers with the return
+  as it is.
+

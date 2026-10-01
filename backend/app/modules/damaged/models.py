@@ -8,7 +8,9 @@ The owner decided on 2026-10-01 (business-rules.md, "what happens in «Брак�
 - after inspection it either goes back on sale — to the warehouse it was
   sold from — or stays, as «брак підтверджений», no longer for sale;
 - a confirmed unit's fate is decided later: anyone who takes returns may
-  write it off;
+  write it off, and the owner and managers may return it to the supplier
+  instead (owner decision, 2026-10-01, "returns to a supplier"); that return
+  may be cancelled, and the unit is confirmed damaged in «Брак» again;
 - stock in «Брак» changes only through returns and this section.
 
 The stock itself stays in the ledger: a unit's return to sale is a transfer,
@@ -50,6 +52,8 @@ class DamagedStatus(StrEnum):
     RETURNED = "RETURNED"
     # Written off. Gone from «Брак».
     WRITTEN_OFF = "WRITTEN_OFF"
+    # Returned to the supplier. Gone from «Брак» while that return stands.
+    SUPPLIER = "SUPPLIER"
 
 
 # The statuses of a unit still in «Брак».
@@ -99,6 +103,13 @@ class DamagedUnit(UUIDPrimaryKey, TimestampMixin, Base):
     stock_adjustment_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("stock_adjustment.id"), nullable=True
     )
+    # The return to a supplier that took it, while it stands; cleared when it
+    # is cancelled, which the return's own history keeps.
+    supplier_return_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("supplier_return.id", use_alter=True, name="fk_damaged_unit_supplier_return"),
+        nullable=True,
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -121,7 +132,8 @@ class DamagedUnit(UUIDPrimaryKey, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            "status IN ('AWAITING', 'INSPECTING', 'CONFIRMED', 'RETURNED', 'WRITTEN_OFF')",
+            "status IN ('AWAITING', 'INSPECTING', 'CONFIRMED', 'RETURNED', 'WRITTEN_OFF', "
+            "'SUPPLIER')",
             name="status_known",
         ),
         # Anyone looking is someone; a unit nobody touched has no one.
@@ -136,6 +148,10 @@ class DamagedUnit(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint(
             "(status = 'WRITTEN_OFF') = (stock_adjustment_id IS NOT NULL)",
             name="written_off_by_adjustment",
+        ),
+        CheckConstraint(
+            "(status = 'SUPPLIER') = (supplier_return_id IS NOT NULL)",
+            name="with_the_supplier_by_a_return",
         ),
         Index("ix_damaged_unit_store_id_status", "store_id", "status"),
         Index("ix_damaged_unit_refund_item_id", "refund_item_id"),

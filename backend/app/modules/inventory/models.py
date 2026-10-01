@@ -66,6 +66,10 @@ class MovementType(StrEnum):
     TRANSFER_IN = "TRANSFER_IN"
     STOCKTAKE_CORRECTION = "STOCKTAKE_CORRECTION"
     OPENING_BALANCE = "OPENING_BALANCE"
+    # Goods sent back to a supplier, and back again when that is cancelled
+    # (owner decision, 2026-10-01).
+    SUPPLIER_RETURN = "SUPPLIER_RETURN"
+    SUPPLIER_RETURN_CANCEL = "SUPPLIER_RETURN_CANCEL"
 
 
 class MovementReason(StrEnum):

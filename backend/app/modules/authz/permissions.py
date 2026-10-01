@@ -71,6 +71,11 @@ class Permission(StrEnum):
     # Writing off what a customer will not pay, with a reason. The owner's.
     CREDIT_WRITE_OFF = "credit:write_off"
 
+    # Returning goods to a supplier, cancelling such a return, and keeping
+    # the network's list of suppliers (owner decision, 2026-10-01): whoever
+    # may already write off or correct stock.
+    SUPPLIER_RETURN = "supplier:return"
+
     # Blocking a store, archiving one and opening it again (owner decision,
     # 2026-10-01: "the owner, in the app"). Honoured network-wide only: the
     # owner of a child store does not change her own store's state.
@@ -127,6 +132,9 @@ _MANAGER: frozenset[Permission] = _SELLER | frozenset(
         Permission.CATALOG_SET_PRICE,
         Permission.SNAPSHOT_IMPORT,
         Permission.REPORT_VIEW_FINANCIAL,
+        # Owner decision, 2026-10-01: the owner and managers return goods to
+        # a supplier.
+        Permission.SUPPLIER_RETURN,
     }
 )
 

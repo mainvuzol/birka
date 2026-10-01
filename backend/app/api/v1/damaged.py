@@ -2,7 +2,9 @@
 
 Every unit a return put in the store's «Брак», and the four steps anyone who
 takes returns may do with it: take it for inspection, put it back on sale in
-the warehouse it was sold from, confirm it damaged, write it off.
+the warehouse it was sold from, confirm it damaged, write it off. The owner
+and managers may also return a confirmed unit to its supplier, and cancel
+that return.
 
 Each step answers with the unit as it now is. A step repeated after it
 succeeded answers the same way, so a client that lost the answer only has to
@@ -155,6 +157,55 @@ async def write_off(
         scope=scope,
         unit_id=unit_id,
         note=payload.note,
+        correlation_id=get_correlation_id(),
+    )
+    return await _answer(session, scope.organization_id, unit)
+
+
+class ToSupplierRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_id: uuid.UUID
+    note: CleanText | None = Field(default=None, max_length=1000)
+
+
+class CancelToSupplierRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # The return being cancelled: a unit may go back, come back and go again.
+    supplier_return_id: uuid.UUID
+    reason: CleanText = Field(min_length=1, max_length=1000)
+
+
+@router.post("/{unit_id}/return-to-supplier", response_model=DamagedUnitResponse)
+async def return_to_supplier(
+    unit_id: uuid.UUID, payload: ToSupplierRequest, scope: ScopeDep, session: SessionDep
+) -> DamagedUnitResponse:
+    """A confirmed unit back to its supplier instead of written off (owner
+    decision, 2026-10-01). The owner's and managers' (`supplier:return`)."""
+    unit = await damaged.return_to_supplier(
+        session,
+        scope=scope,
+        unit_id=unit_id,
+        supplier_id=payload.supplier_id,
+        note=payload.note,
+        correlation_id=get_correlation_id(),
+    )
+    return await _answer(session, scope.organization_id, unit)
+
+
+@router.post("/{unit_id}/cancel-supplier-return", response_model=DamagedUnitResponse)
+async def cancel_supplier_return(
+    unit_id: uuid.UUID, payload: CancelToSupplierRequest, scope: ScopeDep, session: SessionDep
+) -> DamagedUnitResponse:
+    """That return cancelled, saying why: the unit is confirmed damaged in
+    «Брак» again."""
+    unit = await damaged.cancel_supplier_return(
+        session,
+        scope=scope,
+        unit_id=unit_id,
+        supplier_return_id=payload.supplier_return_id,
+        reason=payload.reason,
         correlation_id=get_correlation_id(),
     )
     return await _answer(session, scope.organization_id, unit)

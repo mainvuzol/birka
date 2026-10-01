@@ -72,6 +72,8 @@ DIRECTION: dict[MovementType, int] = {
     MovementType.REFUND_RETURN: +1,
     MovementType.TRANSFER_IN: +1,
     MovementType.OPENING_BALANCE: +1,
+    MovementType.SUPPLIER_RETURN: -1,
+    MovementType.SUPPLIER_RETURN_CANCEL: +1,
 }
 
 

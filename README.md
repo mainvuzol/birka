@@ -23,7 +23,7 @@ updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 109 Playwright journeys on a phone profile, against the real API;
+- 114 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -291,6 +291,19 @@ stopped trading and opens either again, saying why («Магазини» in the 
   `GET /credits/customers?elsewhere=true&query=…` and paid there with
   `store_id` on the payment. See the
   [report](.ai/project-memory/store-states-report.md).
+
+**Returns to a supplier:** the owner and managers (`supplier:return`) send
+goods back to a supplier from the network's list («Постачальникам»).
+- **From a warehouse:** `POST /supplier-returns` with a `command_id`, the
+  warehouse, the supplier and the lines. Only goods free to sell leave, never
+  from a «Брак».
+- **From «Брак»:** `POST /damaged-units/{id}/return-to-supplier`, for a unit
+  whose damage is confirmed.
+- **Cancelling:** whole, once, with a reason, through
+  `POST /supplier-returns/{id}/cancel` or, for a unit from «Брак»,
+  `/damaged-units/{id}/cancel-supplier-return`.
+- **The list:** `GET/POST/PUT /suppliers`. See the
+  [report](.ai/project-memory/supplier-returns-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

@@ -5,7 +5,9 @@ Owner decisions of 2026-10-01 (business-rules.md, "what happens in «Брак»"
     AWAITING ──take──▶ INSPECTING ──return to sale──▶ RETURNED
         ▲                   │
         │                   └──confirm──▶ CONFIRMED ──write off──▶ WRITTEN_OFF
-        └───────────take again─────────────┘
+        └───────────take again─────────────┘  ▲  │
+                                               │  └──to the supplier──▶ SUPPLIER
+                                               └────cancelled────────────┘
 
 - Anyone who takes returns may do every step (`damaged:handle`).
 - «На перевірці» shows who is looking, so two people do not inspect one
@@ -16,7 +18,9 @@ Owner decisions of 2026-10-01 (business-rules.md, "what happens in «Брак»"
   person is shown and confirms. Anywhere else would be a transfer no one
   asked for.
 - A confirmed unit stays in «Брак», no longer for sale, until someone
-  decides its fate. For now the one fate the app records is writing it off.
+  decides its fate: it is written off, or — by the owner or a manager — sent
+  back to its supplier (owner decision, 2026-10-01, "returns to a supplier").
+  That return may be cancelled, and the unit is confirmed damaged again.
 
 **The ledger does the moving.** A return to sale is a transfer out of «Брак»
 (`transfers.move_goods`, invariant I24), a write-off is a stock adjustment
@@ -52,6 +56,7 @@ from app.modules.authz.scope import RequestScope
 from app.modules.damaged.models import IN_BIN, DamagedStatus, DamagedUnit
 from app.modules.inventory.models import MovementReason
 from app.modules.inventory.service import record_adjustment
+from app.modules.suppliers import service as suppliers
 from app.modules.tenancy.service import LocationCapability, back_on_sale_locations
 from app.modules.transfers.service import TransferLineInput, move_goods
 
@@ -162,6 +167,7 @@ async def _moved(
     note: str | None = None,
     transfer_id: uuid.UUID | None = None,
     stock_adjustment_id: uuid.UUID | None = None,
+    supplier_return_id: uuid.UUID | None = None,
 ) -> DamagedUnit:
     # The time first: a query flushes, and the status and the ledger fact it
     # names must reach the database together (the row's CHECKs hold them so).
@@ -171,6 +177,8 @@ async def _moved(
     unit.status_at = now
     unit.transfer_id = transfer_id or unit.transfer_id
     unit.stock_adjustment_id = stock_adjustment_id or unit.stock_adjustment_id
+    # Only while the return stands: a cancelled one is kept by its own history.
+    unit.supplier_return_id = supplier_return_id
     if note is not None:
         unit.note = note
     await session.flush()
@@ -188,6 +196,7 @@ async def _moved(
             "stock_adjustment_id": str(unit.stock_adjustment_id)
             if unit.stock_adjustment_id
             else None,
+            "supplier_return_id": str(unit.supplier_return_id) if unit.supplier_return_id else None,
         },
         reason=note,
     )
@@ -354,11 +363,127 @@ async def write_off(
     )
 
 
+async def return_to_supplier(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    unit_id: uuid.UUID,
+    supplier_id: uuid.UUID,
+    note: str | None,
+    correlation_id: str | None = None,
+) -> DamagedUnit:
+    """A confirmed unit back to its supplier instead of written off: gone from
+    «Брак» while that return stands. The owner's and managers' to do."""
+    unit = await _locked(session, scope=scope, unit_id=unit_id)
+    scope.require(Permission.SUPPLIER_RETURN, unit.store_id)
+    if unit.status == DamagedStatus.SUPPLIER:
+        return unit
+    if unit.status != DamagedStatus.CONFIRMED:
+        _refuse(unit, DamagedStatus.CONFIRMED)
+    remark = suppliers.clean_note(note)
+    await require_stock_access(
+        session,
+        scope=scope,
+        permission=Permission.SUPPLIER_RETURN,
+        store_id=unit.store_id,
+        location_ids={unit.location_id},
+        capability=LocationCapability.RECEIVE,
+    )
+    # Derived from the unit and how often it went back before, so a second
+    # transaction could never send it twice, and a unit whose return was
+    # cancelled can go back again.
+    times = await suppliers.returns_of_unit(session, damaged_unit_id=unit.id)
+    row = await suppliers.record_return(
+        session,
+        organization_id=scope.organization_id,
+        store_id=unit.store_id,
+        actor_user_id=scope.user_id,
+        command_id=uuid.uuid5(STEPS, f"{unit.id}:supplier:{times}"),
+        command_fingerprint=idempotency.fingerprint(
+            {"damaged_unit_id": str(unit.id), "supplier_id": str(supplier_id), "note": remark},
+            actor_user_id=scope.user_id,
+            store_id=unit.store_id,
+        ),
+        location_id=unit.location_id,
+        supplier_id=supplier_id,
+        lines=[
+            suppliers.ReturnLine(
+                product_variant_id=unit.product_variant_id, size_id=unit.size_id, quantity=1
+            )
+        ],
+        note=remark,
+        correlation_id=correlation_id,
+        damaged_unit_id=unit.id,
+    )
+    return await _moved(
+        session,
+        scope=scope,
+        unit=unit,
+        status=DamagedStatus.SUPPLIER,
+        action="damaged.returned_to_supplier",
+        before=unit.status,
+        supplier_return_id=row.id,
+    )
+
+
+async def cancel_supplier_return(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    unit_id: uuid.UUID,
+    supplier_return_id: uuid.UUID,
+    reason: str,
+    correlation_id: str | None = None,
+) -> DamagedUnit:
+    """That return cancelled, saying why: the unit is back in «Брак», damage
+    confirmed. Once: cancelling it again answers with the unit as it is."""
+    unit = await _locked(session, scope=scope, unit_id=unit_id)
+    scope.require(Permission.SUPPLIER_RETURN, unit.store_id)
+    why = suppliers.clean_reason(reason)
+    row = await suppliers.locked_return(
+        session, organization_id=scope.organization_id, supplier_return_id=supplier_return_id
+    )
+    if row.damaged_unit_id != unit.id:
+        raise NotFoundError(
+            "Unknown return to a supplier", supplier_return_id=str(supplier_return_id)
+        )
+    if await suppliers.is_cancelled(session, supplier_return_id=row.id):
+        return unit
+    if unit.status != DamagedStatus.SUPPLIER or unit.supplier_return_id != row.id:
+        _refuse(unit, DamagedStatus.SUPPLIER)
+    await require_stock_access(
+        session,
+        scope=scope,
+        permission=Permission.SUPPLIER_RETURN,
+        store_id=unit.store_id,
+        location_ids={unit.location_id},
+        capability=LocationCapability.RECEIVE,
+    )
+    await suppliers.record_cancel(
+        session,
+        organization_id=scope.organization_id,
+        actor_user_id=scope.user_id,
+        supplier_return=row,
+        reason=why,
+        correlation_id=correlation_id,
+    )
+    return await _moved(
+        session,
+        scope=scope,
+        unit=unit,
+        status=DamagedStatus.CONFIRMED,
+        action="damaged.supplier_return_cancelled",
+        before=unit.status,
+    )
+
+
 __all__ = [
     "DamagedPart",
+    "cancel_supplier_return",
     "confirm",
     "register",
     "return_to_sale",
+    "return_to_supplier",
     "take",
     "units_in_bin",
     "write_off",

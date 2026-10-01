@@ -49,7 +49,19 @@ from app.modules.snapshots.models import (
     InventorySnapshotAllocation,
     InventorySnapshotRow,
 )
-from app.modules.tenancy.models import Organization, StockLocation, Store, StoreLocationAccess
+from app.modules.suppliers.models import (
+    Supplier,
+    SupplierReturn,
+    SupplierReturnCancel,
+    SupplierReturnLine,
+)
+from app.modules.tenancy.models import (
+    Organization,
+    StockLocation,
+    Store,
+    StoreLocationAccess,
+    StoreStateChange,
+)
 from app.modules.transfers.models import Transfer, TransferItem
 
 __all__ = [
@@ -100,6 +112,11 @@ __all__ = [
     "StockReservation",
     "Store",
     "StoreLocationAccess",
+    "StoreStateChange",
+    "Supplier",
+    "SupplierReturn",
+    "SupplierReturnCancel",
+    "SupplierReturnLine",
     "Transfer",
     "TransferItem",
     "VariantPrice",
