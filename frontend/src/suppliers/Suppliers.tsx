@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
+import { money } from "@/orders/types";
 import type { StockOption, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import {
@@ -85,7 +86,8 @@ export function Suppliers({
       </div>
       <p className="hint">
         Товар, повернений постачальнику: непроданий зі складу або брак із
-        розділу «Брак». Записується лише товар; гроші — поза застосунком.
+        розділу «Брак». Скільки постачальник за нього зарахував, записують
+        заліком у «Накладних».
       </p>
       {pending && (
         <section className="notice">
@@ -474,6 +476,16 @@ function ReturnCard({
         ))}
       </ul>
       {item.note && <p className="hint">{item.note}</p>}
+      {item.set_offs.length > 0 && (
+        <ul aria-label="Зараховано в накладні">
+          {item.set_offs.map((setOff) => (
+            <li key={setOff.entry_id}>
+              Постачальник зарахував {money(setOff.amount)} у накладну ·{" "}
+              {when(setOff.at)}
+            </li>
+          ))}
+        </ul>
+      )}
       {item.cancelled ? (
         <p className="badge">
           Скасовано {when(item.cancelled.at)} · {item.cancelled.reason} ·{" "}
@@ -514,6 +526,12 @@ function ReturnCard({
             </button>
           </div>
         </div>
+      ) : item.set_offs.length > 0 ? (
+        // The goods stay with the supplier while it counts them (owner
+        // decision, 2026-10-01).
+        <p className="hint">
+          Щоб скасувати повернення, спершу скасуйте залік у «Накладних».
+        </p>
       ) : (
         <button
           className="quiet"
@@ -660,6 +678,8 @@ function refusalText(error: unknown): string {
         return "Кожну модель і розмір — один раз, з усією кількістю.";
       case "NO_REASON":
         return "Вкажіть, чому скасовуєте.";
+      case "SET_OFF":
+        return "Постачальник зарахував це повернення в накладну — спершу скасуйте залік у «Накладних».";
     }
   }
   return errorText(error);

@@ -57,6 +57,11 @@ import type { TermsInput } from "@/credits/Terms";
 import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import { Stores } from "@/stores/Stores";
+import { Invoices } from "@/suppliers/Invoices";
+import {
+  loadInvoiceCommand,
+  useInvoiceCommand,
+} from "@/suppliers/invoiceCommands";
 import { Suppliers } from "@/suppliers/Suppliers";
 import {
   loadReturnToSupplier,
@@ -252,6 +257,7 @@ function Workspace({
     | "backups"
     | "stores"
     | "suppliers"
+    | "invoices"
   >("list");
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
@@ -277,6 +283,22 @@ function Workspace({
       setSupplierStorageError(true);
     }
   }, [supplierKey, canReturnToSupplier]);
+  // What the store owes its suppliers: the owner's and managers' (owner
+  // decision, 2026-10-01); a seller never sees it.
+  const canSeeInvoices = store.permissions.includes("supplier:debt");
+  const invoiceKey = `birka:supplier-invoice-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [invoiceStorageError, setInvoiceStorageError] = useState(false);
+  const invoiceCommand = useInvoiceCommand();
+  useEffect(() => {
+    if (!canSeeInvoices) return;
+    try {
+      const saved = loadInvoiceCommand(invoiceKey);
+      useInvoiceCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("invoices");
+    } catch {
+      setInvoiceStorageError(true);
+    }
+  }, [invoiceKey, canSeeInvoices]);
   useEffect(() => {
     if (!canManageStores) return;
     try {
@@ -443,6 +465,10 @@ function Workspace({
     supplierStorageError ||
     supplierCommand.busy ||
     supplierCommand.pending !== null;
+  const invoiceUnsettled =
+    invoiceStorageError ||
+    invoiceCommand.busy ||
+    invoiceCommand.pending !== null;
   // Every journal but the stock correction's and the store states' own,
   // which their screens read themselves.
   const othersUnsettled =
@@ -461,15 +487,26 @@ function Workspace({
     returnUnsettled ||
     creditUnsettled;
   const otherThanAdjustment =
-    othersUnsettled || storesUnsettled || supplierUnsettled;
+    othersUnsettled || storesUnsettled || supplierUnsettled || invoiceUnsettled;
   const adjustmentUnsettled =
     adjustmentStorageError ||
     adjustmentCommand.busy ||
     adjustmentCommand.pending !== null;
   const otherThanStores =
-    othersUnsettled || adjustmentUnsettled || supplierUnsettled;
+    othersUnsettled ||
+    adjustmentUnsettled ||
+    supplierUnsettled ||
+    invoiceUnsettled;
   const otherThanSuppliers =
-    othersUnsettled || adjustmentUnsettled || storesUnsettled;
+    othersUnsettled ||
+    adjustmentUnsettled ||
+    storesUnsettled ||
+    invoiceUnsettled;
+  const otherThanInvoices =
+    othersUnsettled ||
+    adjustmentUnsettled ||
+    storesUnsettled ||
+    supplierUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
   return (
     <>
@@ -619,6 +656,17 @@ function Workspace({
             Постачальникам
           </button>
         )}
+        {canSeeInvoices && (
+          <button
+            className={tab === "invoices" ? "active" : "quiet"}
+            disabled={otherThanInvoices}
+            onClick={() => {
+              setTab("invoices");
+            }}
+          >
+            Накладні
+          </button>
+        )}
         {canManageStores && (
           <button
             className={tab === "stores" ? "active" : "quiet"}
@@ -641,6 +689,12 @@ function Workspace({
         <p role="alert">
           Не вдалося прочитати збережене повернення постачальнику. Не очищайте
           дані застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {invoiceStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережену операцію з накладною. Не очищайте дані
+          застосунку; зверніться до власника.
         </p>
       )}
       {storesStorageError && (
@@ -1121,6 +1175,21 @@ function Workspace({
           />
         ) : (
           <p role="alert">Повертають постачальнику власник і менеджери.</p>
+        )
+      ) : tab === "invoices" ? (
+        canSeeInvoices ? (
+          <Invoices
+            store={store}
+            token={token}
+            journalKey={invoiceKey}
+            blocked={otherThanInvoices}
+            readOnly={!trading}
+            networkOwner={me.organization_permissions.includes(
+              "supplier:write_off",
+            )}
+          />
+        ) : (
+          <p role="alert">Накладні ведуть власник і менеджери.</p>
         )
       ) : tab === "stores" ? (
         canManageStores ? (

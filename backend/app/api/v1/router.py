@@ -37,6 +37,7 @@ from app.api.v1.refunds import router as refunds_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.snapshots import router as snapshots_router
 from app.api.v1.stores import router as stores_router
+from app.api.v1.supplier_invoices import router as supplier_invoices_router
 from app.api.v1.suppliers import router as suppliers_router
 from app.api.v1.transfers import router as transfers_router
 from app.modules.identity.service import authenticate_with_init_data
@@ -58,6 +59,7 @@ router.include_router(backups_router)
 router.include_router(damaged_router)
 router.include_router(stores_router)
 router.include_router(suppliers_router)
+router.include_router(supplier_invoices_router)
 
 
 # --- schemas ---------------------------------------------------------------

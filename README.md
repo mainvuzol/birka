@@ -23,7 +23,7 @@ updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 114 Playwright journeys on a phone profile, against the real API;
+- 120 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -304,6 +304,24 @@ goods back to a supplier from the network's list («Постачальникам
   `/damaged-units/{id}/cancel-supplier-return`.
 - **The list:** `GET/POST/PUT /suppliers`. See the
   [report](.ai/project-memory/supplier-returns-report.md).
+- **A return set off against an invoice** is not cancelled until that
+  set-off is (`SET_OFF`).
+
+**What a store owes its suppliers:** the owner and managers (`supplier:debt`)
+record invoices on their own, never with a delivery («Накладні»).
+- **An invoice:** `POST /supplier-invoices` with a `command_id`, the supplier,
+  the sum on it and what was paid at once, from nothing to all of it.
+- **Paying, in parts:** `POST /supplier-invoices/{id}/payments`, never more
+  than is owed. While the store does not trade, another store that trades
+  pays with `store_id` (`elsewhere=true` lists those invoices).
+- **A set-off:** `POST /supplier-invoices/{id}/set-offs` names a return to
+  the same supplier from the same store, for the sum the supplier counted.
+- **Mistakes:** `POST /supplier-invoices/{id}/entries/{entry_id}/cancel` and
+  `POST /supplier-invoices/{id}/cancel`, with a reason; an invoice only once
+  nothing on it stands. The owner writes off what is left with
+  `POST /supplier-invoices/{id}/write-off` (`supplier:write_off`).
+- **What the store owes:** `GET /supplier-invoices/summary`, in all and by
+  supplier. See the [report](.ai/project-memory/supplier-invoices-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

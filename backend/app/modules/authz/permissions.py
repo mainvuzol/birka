@@ -75,6 +75,13 @@ class Permission(StrEnum):
     # the network's list of suppliers (owner decision, 2026-10-01): whoever
     # may already write off or correct stock.
     SUPPLIER_RETURN = "supplier:return"
+    # What the store owes its suppliers: recording an invoice, paying it,
+    # setting a return off against it, and cancelling any of those recorded
+    # by mistake (owner decision, 2026-10-01: the owner and managers, "the
+    # same people who return goods"). A seller never sees these debts.
+    SUPPLIER_DEBT = "supplier:debt"
+    # Writing off what is left of an invoice, with a reason. The owner's.
+    SUPPLIER_WRITE_OFF = "supplier:write_off"
 
     # Blocking a store, archiving one and opening it again (owner decision,
     # 2026-10-01: "the owner, in the app"). Honoured network-wide only: the
@@ -133,8 +140,9 @@ _MANAGER: frozenset[Permission] = _SELLER | frozenset(
         Permission.SNAPSHOT_IMPORT,
         Permission.REPORT_VIEW_FINANCIAL,
         # Owner decision, 2026-10-01: the owner and managers return goods to
-        # a supplier.
+        # a supplier, and keep what the store owes its suppliers.
         Permission.SUPPLIER_RETURN,
+        Permission.SUPPLIER_DEBT,
     }
 )
 
@@ -147,6 +155,9 @@ _OWNER: frozenset[Permission] = _MANAGER | frozenset(
         Permission.CREDIT_WRITE_OFF,
         # Owner decision, 2026-10-01: the owner blocks and archives a store.
         Permission.STORE_MANAGE,
+        # Owner decision, 2026-10-01: the owner writes off what a supplier
+        # forgave, with a reason.
+        Permission.SUPPLIER_WRITE_OFF,
     }
 )
 

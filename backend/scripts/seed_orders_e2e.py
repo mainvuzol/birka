@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 import app.models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.modules.authz.models import Membership, Role, RolePermission
-from app.modules.authz.permissions import Permission
+from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.authz.scope import RequestScope
 from app.modules.backups.models import AlertKind, AlertStatus, BackupAlert, BackupRun
 from app.modules.catalog.models import (
@@ -37,6 +37,7 @@ from app.modules.snapshots.service import (
     import_snapshot,
     resolve_row,
 )
+from app.modules.suppliers.models import Supplier, SupplierInvoice
 from app.modules.tenancy.models import (
     Organization,
     StockLocation,
@@ -235,9 +236,10 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     blocking a store of the first would stop every journey that sells there.
 
     «Центр» and «Ринок» share a warehouse, and «Ринок» manages one of its
-    own and has its «Брак»; «Старий» stopped trading and is archived. Its owner holds the E2E
-    role network-wide; «Ганна» works in «Центр» only, «Петро» in «Ринок»
-    only."""
+    own and has its «Брак»; «Старий» stopped trading and is archived, still
+    owing a supplier for an invoice. Its owner holds the E2E role
+    network-wide; «Ганна» works in «Центр» only, «Петро» in «Ринок» only;
+    «Марко» manages «Центр» with a manager's default rights."""
     org = Organization(name=f"e2e-states-{uuid.uuid4().hex}", currency_code="UAH")
     session.add(org)
     await session.flush()
@@ -287,13 +289,24 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     session.add(role)
     await session.flush()
     session.add_all([RolePermission(role_id=role.id, permission_code=p.value) for p in Permission])
-    people: dict[str, str] = {}
-    staff: tuple[tuple[str, str, Store | None], ...] = (
-        ("network_owner", "Власник мережі", None),
-        ("network_centre_seller", "Ганна", centre),
-        ("network_market_seller", "Петро", market),
+    manager = Role(organization_id=org.id, code="E2E-MANAGER", name="Тестовий менеджер")
+    session.add(manager)
+    await session.flush()
+    session.add_all(
+        [
+            RolePermission(role_id=manager.id, permission_code=p.value)
+            for p in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
+        ]
     )
-    for key, name, works_in in staff:
+    people: dict[str, str] = {}
+    staff: tuple[tuple[str, str, Store | None, Role], ...] = (
+        ("network_owner", "Власник мережі", None, role),
+        ("network_centre_seller", "Ганна", centre, role),
+        ("network_market_seller", "Петро", market, role),
+        ("network_centre_manager", "Марко", centre, manager),
+    )
+    staff_ids: dict[str, uuid.UUID] = {}
+    for key, name, works_in, held in staff:
         person = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name=name)
         session.add(person)
         await session.flush()
@@ -302,10 +315,34 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
                 user_id=person.id,
                 organization_id=org.id,
                 store_id=works_in.id if works_in is not None else None,
-                role_id=role.id,
+                role_id=held.id,
             )
         )
         people[f"{key}_telegram_user_id"] = str(person.telegram_user_id)
+        staff_ids[key] = person.id
+    # What the archived store still owes: any store of the network that trades
+    # pays it (owner decision, 2026-10-01).
+    owed_to = Supplier(
+        organization_id=org.id,
+        name="Постачальник Старого",
+        normalized_name="постачальник старого",
+        created_by_user_id=staff_ids["network_owner"],
+    )
+    session.add(owed_to)
+    await session.flush()
+    session.add(
+        SupplierInvoice(
+            organization_id=org.id,
+            store_id=old.id,
+            supplier_id=owed_to.id,
+            amount=Decimal("5000.00"),
+            currency_code="UAH",
+            note="накладна до закриття",
+            created_by_user_id=staff_ids["network_owner"],
+            command_id=uuid.uuid4(),
+            command_fingerprint="0" * 64,
+        )
+    )
     return people | {
         "network_centre_store_id": str(centre.id),
         "network_market_store_id": str(market.id),

@@ -49,7 +49,7 @@ accepted.
 |---|---|
 | **Moving goods between warehouses has no screen** | Not needed. Both stores sell from one shared warehouse (owner, 2026-10-01). Build it when a separate warehouse appears; the server side exists. |
 | **Store states** (blocked, archived) | Done on 2026-10-01 (owner decisions): the owner of the network blocks, archives and reopens a store in the app; a store that does not trade is only read ([report](store-states-report.md)). |
-| **The store's purchase installments** | Owner decision from 2026-09-15. It needs the owner's rules before any code. Customers paying in parts is done (2026-10-01). |
+| **The store's purchase installments** | Done on 2026-10-01 (owner decisions): the owner and managers record what the store owes a supplier for each invoice, on its own and never with a delivery, pay it in parts, set returned goods off against it, and cancel mistakes; the owner writes off what is left ([report](supplier-invoices-report.md)). |
 | **A return to the supplier** | Done on 2026-10-01 (owner decisions): the owner and managers return goods from a warehouse or a confirmed unit from «Брак» to a supplier from the network's list, and may cancel it ([report](supplier-returns-report.md)). |
 | **Returns at another store** | Done on 2026-10-01 (owner decisions): any store of the network takes the goods back and hands the money back ([report](returns-elsewhere-report.md)). |
 | **Renaming a store** | Done on 2026-10-01 (owner decision): the seed takes the real names, and `scripts.stores rename` changes one on an owner's word. |

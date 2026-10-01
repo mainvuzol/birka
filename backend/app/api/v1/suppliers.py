@@ -8,15 +8,19 @@
 - `POST /supplier-returns/{id}/cancel`: the whole return cancelled, saying
   why. A unit from «Брак» is cancelled from there
   (`/damaged-units/{id}/cancel-supplier-return`).
-- `GET /supplier-returns`: this store's returns, newest first.
+- `GET /supplier-returns`: this store's returns, newest first, each with
+  what the supplier counts of it against the store's invoices now.
 
 All of it needs `supplier:return` in the store: the owner's and managers'.
+The list of suppliers is also kept by whoever records what the store owes
+them (`supplier:debt`, `supplier_invoices.py`).
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
@@ -84,6 +88,13 @@ class CancellationResponse(BaseModel):
     at: datetime
 
 
+class SetOffResponse(BaseModel):
+    invoice_id: uuid.UUID
+    entry_id: uuid.UUID
+    amount: Decimal
+    at: datetime
+
+
 class ReturnResponse(BaseModel):
     id: uuid.UUID
     store_id: uuid.UUID
@@ -97,6 +108,9 @@ class ReturnResponse(BaseModel):
     at: datetime
     lines: list[LineResponse]
     cancelled: CancellationResponse | None
+    # What the supplier counts of it against invoices now. While any stands,
+    # the return is not cancelled.
+    set_offs: list[SetOffResponse]
 
 
 class ReturnPage(BaseModel):
@@ -134,6 +148,12 @@ def _return(view: service.ReturnView) -> ReturnResponse:
         else CancellationResponse(
             reason=view.cancelled.reason, by=view.cancelled.by, at=view.cancelled.at
         ),
+        set_offs=[
+            SetOffResponse(
+                invoice_id=item.invoice_id, entry_id=item.entry_id, amount=item.amount, at=item.at
+            )
+            for item in view.set_offs
+        ],
     )
 
 
