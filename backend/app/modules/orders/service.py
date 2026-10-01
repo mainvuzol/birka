@@ -23,6 +23,7 @@ from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import describe_variants, size_label
+from app.modules.credit import service as credit_service
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import (
     MovementRequest,
@@ -181,9 +182,10 @@ async def _save(
     action: str,
     before: str | None,
     reason: str | None = None,
+    credit: credit_service.CreditView | None = None,
 ) -> dict[str, Any]:
     await session.flush()
-    body = _response(order, items)
+    body = _response(order, items) | _credit(credit)
     session.add(
         OrderCommand(
             organization_id=scope.organization_id,
@@ -210,6 +212,19 @@ async def _save(
     )
     await session.flush()
     return body
+
+
+def _credit(credit: credit_service.CreditView | None) -> dict[str, Any]:
+    """A collected order paid in parts: what is paid and owed so far."""
+    if credit is None:
+        return {}
+    return {
+        "credit": {
+            "credit_id": str(credit.id),
+            "paid": str(credit.paid),
+            "owed": str(credit.owed),
+        }
+    }
 
 
 async def create_order(
@@ -321,7 +336,12 @@ async def read_order(
 ) -> dict[str, Any]:
     order, items = await _load(session, scope, order_id)
     await _authorize(session, scope, order.store_id, items, "read")
-    return _response(order, items)
+    credit = (
+        await credit_service.credit_for_sale(session, sale_id=order.sale_id)
+        if order.sale_id is not None
+        else None
+    )
+    return _response(order, items) | _credit(credit)
 
 
 async def list_orders(
@@ -396,6 +416,7 @@ async def transition_order(
     command_id: uuid.UUID,
     action: str,
     reason: str | None = None,
+    credit: credit_service.CreditTerms | None = None,
 ) -> dict[str, Any]:
     transitions = {
         "dispatch": ({OrderStatus.READY_TO_DISPATCH}, OrderStatus.DISPATCHED),
@@ -416,10 +437,19 @@ async def transition_order(
             "Confirm physical return with a nonblank reason of at most 1000 characters"
         )
     # Command lock precedes order row lock, consistently across all actions.
+    if credit is not None and action != "collect":
+        raise ValidationFailedError("Only a collected order is paid in parts")
     order, items = await _load(session, scope, order_id)
     await _authorize(session, scope, order.store_id, items, action)
+    if credit is not None:
+        # As at the till, and before any replay: a revoked grant is not
+        # handed its cached answer.
+        scope.require(Permission.SALE_CREDIT, order.store_id)
     request_fingerprint = fingerprint(
-        {"action": action, "order_id": str(order_id), "reason": reason},
+        {"action": action, "order_id": str(order_id), "reason": reason}
+        # Only when paid in parts, so every earlier command keeps its print:
+        # the same command with other terms is another operation.
+        | ({"credit": credit_service.fingerprint_of(credit)} if credit is not None else {}),
         actor_user_id=scope.user_id,
         store_id=order.store_id,
     )
@@ -429,6 +459,7 @@ async def transition_order(
     # populate_existing refreshes the row after waiting on another transition.
     await session.refresh(order, with_for_update=True)
     allowed, target = transitions[action]
+    opened: credit_service.CreditView | None = None
     if order.status not in allowed:
         raise ValidationFailedError("Invalid order transition", status=order.status, action=action)
     before = order.status
@@ -489,7 +520,25 @@ async def transition_order(
             ],
         )
         order.sale_id = sale.id
+        # Collected before the debt is opened: an order holds a sale only
+        # once collected, and opening the debt flushes the order.
+        order.status = target
+        if credit is not None:
+            # In the collection's own transaction: the debt exists exactly
+            # when the sale does.
+            opened = await credit_service.open_credit(
+                session, scope=scope, sale=sale, credit=credit
+            )
     order.status = target
     return await _save(
-        session, scope, order, items, command_id, request_fingerprint, action, before, reason
+        session,
+        scope,
+        order,
+        items,
+        command_id,
+        request_fingerprint,
+        action,
+        before,
+        reason,
+        credit=opened,
     )

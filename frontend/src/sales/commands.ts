@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import { api, ApiError } from "@/shared/api";
-import type { EmptyShelf, Report, Sale, SaleLine, Shortfall } from "./types";
+import type {
+  CreditTerms,
+  EmptyShelf,
+  Report,
+  Sale,
+  SaleLine,
+  Shortfall,
+} from "./types";
 import { shortfallOf } from "./types";
 
 export interface SaleBody {
@@ -15,6 +22,8 @@ export interface SaleBody {
    * the server reads a missing list as an empty one.
    */
   size_clarified?: Report[];
+  /** Present only when the customer pays in parts. */
+  credit?: CreditTerms;
 }
 
 /**
@@ -89,6 +98,19 @@ function isReports(value: unknown, lines: number, least = 1): boolean {
   );
 }
 
+function isTerms(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const terms = value as CreditTerms;
+  return (
+    typeof terms.customer_name === "string" &&
+    terms.customer_name.trim() !== "" &&
+    typeof terms.customer_phone === "string" &&
+    terms.customer_phone.trim() !== "" &&
+    typeof terms.paid_now === "string" &&
+    /^\d{1,10}\.\d{2}$/.test(terms.paid_now)
+  );
+}
+
 /** Storage is untrusted, whatever TypeScript has been told about it. */
 function validateAttempt(key: string, value: unknown): SaleAttempt {
   if (typeof value !== "object" || value === null)
@@ -112,6 +134,8 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
     !isReports((body as SaleBody).missing_in_store, lines.length, 0) ||
     ((body as SaleBody).size_clarified !== undefined &&
       !isReports((body as SaleBody).size_clarified, lines.length)) ||
+    ((body as SaleBody).credit !== undefined &&
+      !isTerms((body as SaleBody).credit)) ||
     (attempt.acknowledged !== undefined &&
       typeof attempt.acknowledged !== "boolean") ||
     (attempt.ambiguous !== undefined &&

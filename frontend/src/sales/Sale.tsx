@@ -8,6 +8,8 @@ import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
 import { asInput } from "@/prices/SuggestedPrice";
 import { sizeLabel } from "@/returns/types";
+import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
+import type { TermsInput } from "@/credits/Terms";
 import { submitSale, useSaleCommand } from "./commands";
 import type {
   EmptyShelf,
@@ -83,6 +85,9 @@ export function Sale({
   const [dropped, setDropped] = useState<string[]>([]);
   const [nothingSold, setNothingSold] = useState<EmptyShelf | null>(null);
   const [validation, setValidation] = useState("");
+  // Paying in parts (owner decisions, 2026-10-01): the customer takes the
+  // goods now, pays part and owes the rest to this store.
+  const [credit, setCredit] = useState<TermsInput>(noTerms);
   const { busy, pending } = useSaleCommand();
 
   const mayCorrect = store.permissions.includes(
@@ -95,6 +100,7 @@ export function Sale({
   // for `inventory:receive`; the default seller holds both.
   const mayReadLabel =
     mayCorrect && store.permissions.includes("inventory:receive");
+  const mayCredit = store.permissions.includes("sale:credit");
 
   const locations = useQuery({
     queryKey: ["sale-locations", journalKey, store.id],
@@ -219,20 +225,35 @@ export function Sale({
     nextMissing: Record<number, number>,
     nextClarified: Record<number, number>,
   ): Promise<void> {
-    const asked = shortfall;
-    setShortfall(null);
-    setRefusal(null);
-    setValidation("");
     // Nothing on the shelf of a line drops it from the sale (owner decision,
     // 2026-10-01; Q-G). Nothing on the shelf of any line leaves no sale to
     // make, and the basket records an empty shelf instead.
     const empty = draft.filter((_, index) => nextMissing[index] === 0);
+    const emptyShelf = draft.length > 0 && empty.length === draft.length;
+    // What will be sold: a line answered «на місці лише N» sells N.
+    const sold = draft.reduce(
+      (sum, d, index) =>
+        sum +
+        (kopecks(d.line.unit_price) ?? 0n) *
+          BigInt(nextMissing[index] ?? d.line.quantity),
+      0n,
+    );
+    const terms =
+      credit.inParts && !emptyShelf ? checkTerms(credit, sold) : null;
+    if (typeof terms === "string") {
+      setValidation(terms);
+      return;
+    }
+    const asked = shortfall;
+    setShortfall(null);
+    setRefusal(null);
+    setValidation("");
     const outcome = await submitSale(journalKey, token, {
       // A new key per payload: one key then always answers one payload, and a
       // replay of it is unambiguous. `command_id` is what keeps the corrected
       // attempt from selling twice.
       key: crypto.randomUUID(),
-      emptyShelf: draft.length > 0 && empty.length === draft.length,
+      emptyShelf,
       body: {
         store_id: store.id,
         command_id: commandId,
@@ -249,6 +270,7 @@ export function Sale({
           line_index: Number(index),
           quantity: value,
         })),
+        ...(terms ? { credit: terms } : {}),
       },
     });
     if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
@@ -264,6 +286,8 @@ export function Sale({
       setClarified({});
       setCommandId(crypto.randomUUID());
       setPresent("");
+      // The next customer is someone else.
+      setCredit(noTerms);
       await stock.refetch();
     } else if (outcome.kind === "refused") {
       const { error, shortfall: short } = outcome;
@@ -608,6 +632,14 @@ export function Sale({
         <p className="total">
           Разом <strong>{money(decimal(total))}</strong>
         </p>
+        {mayCredit && (
+          <TermsFields
+            value={credit}
+            change={setCredit}
+            total={total}
+            hint="Покупець забирає товар зараз, решту доплачує, коли зможе. Внески приймає лише цей магазин, у розділі «Борги»."
+          />
+        )}
         <button
           type="button"
           disabled={draft.length === 0}
@@ -780,6 +812,18 @@ function Receipt({
       <p className="total">
         Разом <strong>{money(receipt.total)}</strong>
       </p>
+      {receipt.credit && (
+        <div className="section-block">
+          <h3>Оплата частинами</h3>
+          <p>
+            Сплачено зараз <strong>{money(receipt.credit.paid_now)}</strong>
+          </p>
+          <p>
+            Покупець винен <strong>{money(receipt.credit.owed)}</strong>
+          </p>
+          <p className="hint">Наступні внески — у розділі «Борги».</p>
+        </div>
+      )}
       {receipt.items.map((item) => (
         <div className="line" key={item.id}>
           <strong>{item.display_name}</strong>
@@ -864,6 +908,14 @@ function refusalText(error: unknown): string {
       return "Ця модель записана на складі під кількома невідомими розмірами, тож уточнити розмір не можна. Зверніться до менеджера.";
     case "NOTHING_TO_SELL":
       return "У кошику не лишилося нічого, що є на полиці.";
+    case "PAID_IN_FULL":
+      return `Покупець сплачує все одразу (${money(String(details.total))}) — це звичайний продаж. Зніміть «Оплата частинами» або змініть суму.`;
+    case "CUSTOMER_NAME":
+      return "Вкажіть ім’я покупця, який платить частинами.";
+    case "CUSTOMER_PHONE":
+      return "Телефон покупця має містити від 10 до 15 цифр.";
+    case "NOTHING_PAID":
+      return "Покупець має сплатити зараз більше нуля.";
     case "RESERVED":
       return "Частина цих одиниць у резерві замовлення, тому під час продажу облік не виправити. Зменшіть кількість або продайте інший товар.";
     default:

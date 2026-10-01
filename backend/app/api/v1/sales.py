@@ -465,6 +465,9 @@ class SaleSummary(BaseModel):
     sold_at: datetime
     currency_code: str
     total: Decimal
+    # A return of a sale paid in parts lowers its debt first; the refund's
+    # answer says how much goes back in cash.
+    paid_in_parts: bool
     items: list[SaleLineSummary]
 
 
@@ -496,6 +499,9 @@ async def list_store_sales(
     refunded = await refunded_quantities(
         session, sale_item_ids=[item.id for items in page.items.values() for item in items]
     )
+    paid_in_parts = await credit_service.credited_sales(
+        session, sale_ids=[sale.id for sale in page.sales]
+    )
     return SaleListResponse(
         has_more=page.has_more,
         sales=[
@@ -504,6 +510,7 @@ async def list_store_sales(
                 sold_at=sale.sold_at,
                 currency_code=sale.currency_code,
                 total=sale.total,
+                paid_in_parts=sale.id in paid_in_parts,
                 items=[
                     SaleLineSummary(
                         id=item.id,

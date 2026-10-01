@@ -245,6 +245,24 @@ async def test_returned_goods_first_lower_the_debt(maker):
         assert await find_divergences(session, organization_id=shops.organization_id) == []
 
 
+async def test_the_store_sales_say_which_were_paid_in_parts(maker):
+    shops = await make_two_shops(maker)
+    sale, variant, size = await on_credit(maker, shops)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        ordinary = await client.post(
+            "/api/v1/sales",
+            json=sale_body(shops.primary_store, shops.shared_warehouse, variant, size),
+            headers=key(),
+        )
+        assert ordinary.status_code == 201, ordinary.text
+        listed = await client.get("/api/v1/sales", params={"store_id": str(shops.primary_store)})
+
+    # Where a seller finds the sale being returned: the till cannot say up
+    # front what goes back in cash for one paid in parts.
+    flags = {item["id"]: item["paid_in_parts"] for item in listed.json()["sales"]}
+    assert flags == {sale["id"]: True, ordinary.json()["id"]: False}
+
+
 async def test_a_paid_off_sale_gives_back_what_it_is_worth(maker):
     shops = await make_two_shops(maker)
     sale, _, _ = await on_credit(maker, shops)
@@ -416,9 +434,13 @@ async def test_a_debt_is_found_by_name_or_by_any_form_of_its_phone(maker):
             return [item["id"] for item in response.json()["items"]]
 
         assert await found("0671234567") == [sale["credit"]["credit_id"]]
+        assert await found("+380671234567") == [sale["credit"]["credit_id"]]
         assert await found("123-45") == [sale["credit"]["credit_id"]]
         assert await found("коваль") == [sale["credit"]["credit_id"]]
         assert await found("Петренко") == []
+        # A name's digits are part of the name, never a phone to look for.
+        assert await found("Петренко 067") == []
+        assert await found("+38 (067)") == [sale["credit"]["credit_id"]]
 
 
 async def test_a_store_lists_only_its_own_debts(maker):
@@ -435,6 +457,255 @@ async def test_a_store_lists_only_its_own_debts(maker):
     async with api(maker, shops.scope(shops.primary_store)) as client:
         listed = await client.get("/api/v1/credits", params={"store_id": str(shops.primary_store)})
     assert [item["id"] for item in listed.json()["items"]] == [ours["credit"]["credit_id"]]
+
+
+async def sold_to(maker, shops: TwoShops, name: str, phone: str, paid_now: str = "1000.00"):
+    """Two coats at 1500, 3000 in all, paid in part by whoever the terms name."""
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        variant, size = await stock_a_coat(
+            client, shops, store=shops.primary_store, warehouse=shops.shared_warehouse, qty=2
+        )
+        body = sale_body(shops.primary_store, shops.shared_warehouse, variant, size, qty=2)
+        terms_ = {"customer_name": name, "customer_phone": phone, "paid_now": paid_now}
+        response = await client.post("/api/v1/sales", json=body | {"credit": terms_}, headers=key())
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def customers(maker, shops: TwoShops, **params: str) -> list[dict]:
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        response = await client.get(
+            "/api/v1/credits/customers", params={"store_id": str(shops.primary_store)} | params
+        )
+    assert response.status_code == 200, response.text
+    return response.json()["items"]
+
+
+async def test_one_phone_is_one_customer_whatever_the_name(maker):
+    shops = await make_two_shops(maker)
+    first = await sold_to(maker, shops, "Ірина Коваль", "+38 (067) 123-45-67")
+    other = await sold_to(maker, shops, "Олег", "050 000 00 01", paid_now="500.00")
+    second = await sold_to(maker, shops, "Ірина", "0671234567", paid_now="2000.00")
+
+    # Owner decision, 2026-10-01: one phone, one customer. The newest debt
+    # names her; both debts and what she owes in all are hers.
+    irina, oleh = await customers(maker, shops, status="OPEN")
+    assert (irina["customer_name"], irina["customer_phone"]) == ("Ірина", "0671234567")
+    assert irina["phone_digits"] == "0671234567"
+    assert [debt["id"] for debt in irina["credits"]] == [
+        second["credit"]["credit_id"],
+        first["credit"]["credit_id"],
+    ]
+    assert (irina["owed"], irina["open_debts"]) == ("3000.00", 2)
+    assert (oleh["customer_name"], oleh["owed"]) == ("Олег", "2500.00")
+    assert [debt["id"] for debt in oleh["credits"]] == [other["credit"]["credit_id"]]
+
+    # Found by any of her debts, then all of them shown: the one written as
+    # «Ірина» is the same customer as «Коваль».
+    [found] = await customers(maker, shops, query="Коваль")
+    assert len(found["credits"]) == 2
+    # Олег's number holds a 0 and a 1; a name with them is still a name.
+    assert await customers(maker, shops, query="Ірина 01") == []
+
+    # A payment is still taken on the debt the seller chooses.
+    paid = await pay(maker, shops, second["credit"]["credit_id"], "1000.00")
+    assert paid.status_code == 201, paid.text
+    # Her newest open debt is now the older one, so Олег comes first.
+    [_, owing] = await customers(maker, shops, status="OPEN")
+    assert [debt["id"] for debt in owing["credits"]] == [first["credit"]["credit_id"]]
+    assert (owing["owed"], owing["open_debts"]) == ("2000.00", 1)
+    [everything, _] = await customers(maker, shops)
+    assert [debt["status"] for debt in everything["credits"]] == ["SETTLED", "OPEN"]
+    assert (everything["owed"], everything["open_debts"]) == ("2000.00", 1)
+
+
+async def test_customers_come_a_page_at_a_time(maker):
+    shops = await make_two_shops(maker)
+    for index in range(3):
+        await sold_to(maker, shops, f"Покупець {index}", f"067000000{index}")
+
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        pages = [
+            (
+                await client.get(
+                    "/api/v1/credits/customers",
+                    params={"store_id": str(shops.primary_store), "limit": 2, "offset": offset},
+                )
+            ).json()
+            for offset in (0, 2)
+        ]
+    assert [c["customer_name"] for c in pages[0]["items"]] == ["Покупець 2", "Покупець 1"]
+    assert pages[0]["has_more"] is True
+    assert [c["customer_name"] for c in pages[1]["items"]] == ["Покупець 0"]
+    assert pages[1]["has_more"] is False
+
+
+async def test_the_store_sees_what_it_is_owed_in_all(maker):
+    shops = await make_two_shops(maker)
+
+    async def summary(store: uuid.UUID, permissions=SELLER):
+        async with api(maker, shops.scope(store, permissions)) as client:
+            return await client.get("/api/v1/credits/summary", params={"store_id": str(store)})
+
+    nothing = await summary(shops.primary_store)
+    assert nothing.json() == {"owed": "0.00", "customers": 0, "debts": 0}
+
+    first = await sold_to(maker, shops, "Ірина Коваль", "0671234567")
+    await sold_to(maker, shops, "Ірина", "+380671234567", paid_now="2500.00")
+    third = await sold_to(maker, shops, "Олег", "0500000001")
+    settled = await sold_to(maker, shops, "Марта", "0930000002")
+    await pay(maker, shops, settled["credit"]["credit_id"], "2000.00")
+    # A debt partly paid and partly returned counts what is still owed.
+    await pay(maker, shops, first["credit"]["credit_id"], "200.00")
+    await give_back(maker, shops, first, 1)
+    # The child store's own debts are its own.
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        variant, size = await stock_a_coat(
+            client, shops, store=shops.child_store, warehouse=shops.child_warehouse, qty=2
+        )
+        body = sale_body(shops.child_store, shops.child_warehouse, variant, size, qty=2)
+        theirs = await client.post("/api/v1/sales", json=body | {"credit": terms()}, headers=key())
+    assert theirs.status_code == 201, theirs.text
+
+    # Owed: 300 (first: 3000 - 1200 paid - 1500 returned) + 500 + 2000; the
+    # settled one counts nothing. Two customers: «Ірина» twice is one phone.
+    owed = await summary(shops.primary_store)
+    assert owed.json() == {"owed": "2800.00", "customers": 2, "debts": 3}
+
+    async with api(maker, shops.scope(shops.primary_store, OWNER)) as client:
+        written = await client.post(
+            f"/api/v1/credits/{third['credit']['credit_id']}/write-off",
+            json={"command_id": str(uuid.uuid4()), "reason": "виїхав"},
+        )
+    assert written.status_code == 200, written.text
+    assert (await summary(shops.primary_store)).json() == {
+        "owed": "800.00",
+        "customers": 1,
+        "debts": 2,
+    }
+    child = await summary(shops.child_store)
+    assert child.json() == {"owed": "2000.00", "customers": 1, "debts": 1}
+
+    # Only whoever sells in parts in that store sees it.
+    unpermitted = await summary(shops.primary_store, SELLER - {Permission.SALE_CREDIT})
+    assert unpermitted.status_code == 403
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        foreign = await client.get(
+            "/api/v1/credits/summary", params={"store_id": str(shops.primary_store)}
+        )
+    assert foreign.status_code == 403
+
+
+async def arrived_order(maker, shops: TwoShops) -> str:
+    """Two coats at 1500 ordered, sent and arrived at the post office."""
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        variant, size = await stock_a_coat(
+            client, shops, store=shops.primary_store, warehouse=shops.shared_warehouse, qty=2
+        )
+        created = await client.post(
+            "/api/v1/orders",
+            json=sale_body(shops.primary_store, shops.shared_warehouse, variant, size, qty=2),
+        )
+        assert created.status_code == 201, created.text
+        order = created.json()["id"]
+        for action in ("dispatch", "arrive"):
+            moved = await client.post(
+                f"/api/v1/orders/{order}/{action}", json={"command_id": str(uuid.uuid4())}
+            )
+            assert moved.status_code == 200, moved.text
+    return order
+
+
+async def collect(maker, shops: TwoShops, order: str, credit: dict | None, command=None, **kw):
+    async with api(maker, shops.scope(shops.primary_store, kw.get("permissions", SELLER))) as c:
+        return await c.post(
+            f"/api/v1/orders/{order}/collect",
+            json={"command_id": command or str(uuid.uuid4())}
+            | ({"credit": credit} if credit is not None else {}),
+        )
+
+
+async def test_a_collected_order_may_be_paid_in_parts(maker):
+    shops = await make_two_shops(maker)
+    order = await arrived_order(maker, shops)
+    command = str(uuid.uuid4())
+
+    collected = await collect(maker, shops, order, terms(), command)
+
+    assert collected.status_code == 200, collected.text
+    body = collected.json()
+    assert body["status"] == "COLLECTED"
+    assert (body["credit"]["paid"], body["credit"]["owed"]) == ("1000.00", "2000.00")
+    # The same command is answered with what it did; other terms are another
+    # operation under a used command.
+    assert (await collect(maker, shops, order, terms(), command)).json() == body
+    conflict = await collect(maker, shops, order, terms("1500.00"), command)
+    assert conflict.status_code == 409, conflict.text
+    # Nor is a revoked grant handed the cached answer.
+    revoked = await collect(
+        maker, shops, order, terms(), command, permissions=SELLER - {Permission.SALE_CREDIT}
+    )
+    assert revoked.status_code == 403, revoked.text
+
+    # A debt like any other: owed to the order's store, paid there, read back
+    # on the order, and lowered first by a return of the sale.
+    credit_id = body["credit"]["credit_id"]
+    state = await debt(maker, shops, credit_id)
+    assert (state["sale_id"], state["store_id"]) == (body["sale_id"], str(shops.primary_store))
+    assert (await pay(maker, shops, credit_id, "500.00")).status_code == 201
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        read = (await client.get(f"/api/v1/orders/{order}")).json()
+        sale = (await client.get(f"/api/v1/sales/{body['sale_id']}")).json()
+    assert (read["credit"]["paid"], read["credit"]["owed"]) == ("1500.00", "1500.00")
+    returned = await give_back(maker, shops, sale, 1)
+    assert returned.json()["credit"] == {
+        "debt_reduced": "1500.00",
+        "cash_back": "0.00",
+        "owed_after": "0.00",
+    }
+
+
+async def test_a_collected_order_paid_in_parts_follows_the_tills_rules(maker):
+    shops = await make_two_shops(maker)
+    order = await arrived_order(maker, shops)
+
+    # Owner decision, 2026-10-01: above nothing at collection, as at the till.
+    for credit, reason in (
+        (terms("3000.00"), "PAID_IN_FULL"),
+        (terms("1000.00", customer_phone="12345"), "CUSTOMER_PHONE"),
+        (terms("1000.00", customer_name="   "), "CUSTOMER_NAME"),
+    ):
+        refused = await collect(maker, shops, order, credit)
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["details"]["reason"] == reason
+    nothing = await collect(maker, shops, order, terms("0"))
+    assert nothing.status_code == 422, nothing.text
+    unpermitted = await collect(
+        maker, shops, order, terms(), permissions=SELLER - {Permission.SALE_CREDIT}
+    )
+    assert unpermitted.status_code == 403, unpermitted.text
+
+    # Nothing of any refusal stayed: the order still waits, and is then
+    # collected as an ordinary sale with no debt.
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        assert (await client.get(f"/api/v1/orders/{order}")).json()["status"] == "ARRIVED"
+    plain = await collect(maker, shops, order, None)
+    assert plain.status_code == 200, plain.text
+    assert plain.json()["credit"] is None
+    async with maker() as session:
+        sale_id = uuid.UUID(plain.json()["sale_id"])
+        assert await service.credit_for_sale(session, sale_id=sale_id) is None
+
+
+async def test_only_a_collection_is_paid_in_parts(maker):
+    shops = await make_two_shops(maker)
+    order = await arrived_order(maker, shops)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        refused = await client.post(
+            f"/api/v1/orders/{order}/arrive",
+            json={"command_id": str(uuid.uuid4()), "credit": terms()},
+        )
+    assert refused.status_code == 422, refused.text
 
 
 def test_the_seller_states_something_paid_whoever_calls() -> None:

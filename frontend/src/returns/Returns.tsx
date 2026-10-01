@@ -53,6 +53,7 @@ export function Returns({
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["store-sales", store.id] }),
       cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
+      cache.invalidateQueries({ queryKey: ["credits", store.id] }),
     ]);
   }
 
@@ -174,6 +175,7 @@ function SaleCard({
       <strong>
         {when(sale.sold_at)} · {money(sale.total)}
       </strong>
+      {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
       <ul>
         {sale.items.map((item) => (
           <li key={item.id}>
@@ -193,13 +195,32 @@ function SaleCard({
   );
 }
 
-function Done({ refund }: { refund: Refund }): JSX.Element {
+export function Done({ refund }: { refund: Refund }): JSX.Element {
   const damaged = refund.items.some((item) => item.condition === "DAMAGED");
   const intact = refund.items.some((item) => item.condition === "INTACT");
+  const { credit } = refund;
   return (
     <div className="section-block" role="status">
       <h3>Повернення оформлено</h3>
-      <p>Поверніть покупцю {money(refund.total_amount)}.</p>
+      {credit ? (
+        <>
+          {(kopecks(credit.debt_reduced) ?? 0n) > 0n && (
+            <p>Борг покупця зменшено на {money(credit.debt_reduced)}.</p>
+          )}
+          <p>
+            {(kopecks(credit.cash_back) ?? 0n) > 0n
+              ? `Поверніть покупцю готівкою ${money(credit.cash_back)}.`
+              : "Готівку покупцю не повертаємо."}
+          </p>
+          <p>
+            {(kopecks(credit.owed_after) ?? 0n) > 0n
+              ? `Покупець ще винен ${money(credit.owed_after)}.`
+              : "Покупець більше нічого не винен."}
+          </p>
+        </>
+      ) : (
+        <p>Поверніть покупцю {money(refund.total_amount)}.</p>
+      )}
       {intact && <p>Цілий товар повернуто на склад, з якого його продали.</p>}
       {damaged && (
         <p>
@@ -319,6 +340,13 @@ function ReturnForm({
       <p>
         Продаж {when(sale.sold_at)} на {money(sale.total)}.
       </p>
+      {sale.paid_in_parts && (
+        <p className="hint">
+          Цей продаж оплачували частинами. Повернений товар спершу зменшує борг
+          покупця; готівкою повертаємо лише те, що сплачено понад вартість
+          товару, який лишається в покупця. Скільки саме — покаже підсумок.
+        </p>
+      )}
       <fieldset disabled={blocked || working}>
         <legend>Що повертають</legend>
         {lines.map((item) => {
@@ -385,9 +413,11 @@ function ReturnForm({
             void send();
           }}
         >
-          {ready
-            ? `Повернути покупцю ${money(decimal(total))}`
-            : "Вкажіть, що повертають"}
+          {!ready
+            ? "Вкажіть, що повертають"
+            : sale.paid_in_parts
+              ? `Оформити повернення на ${money(decimal(total))}`
+              : `Повернути покупцю ${money(decimal(total))}`}
         </button>
       </fieldset>
       {refusal !== null && (

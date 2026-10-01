@@ -1,8 +1,9 @@
 """A store's debts: sales paid in parts (owner decisions, 2026-10-01).
 
-A debt opens with its sale (`credit` on `POST /sales`). Here it is found by
-the customer's name or phone, paid in parts in the store that sold, and
-written off by the owner with a reason. Returns lower it through
+A debt opens with its sale (`credit` on `POST /sales`, or on collecting an
+order). Here it is found by the customer's name or phone, paid in parts in
+the store that sold, and written off by the owner with a reason. One phone
+is one customer, and the store sees what it is owed in all. Returns lower it through
 `POST /sales/{id}/refunds`, which says how much goes back in cash.
 
 Payments and write-offs are named by a client `command_id`, as a sale is:
@@ -63,6 +64,31 @@ class CreditResponse(BaseModel):
 class CreditPage(BaseModel):
     items: list[CreditResponse]
     has_more: bool
+
+
+class CustomerResponse(BaseModel):
+    """One customer's debts in the store: one phone, one customer."""
+
+    phone_digits: str
+    # As the newest of these debts wrote them.
+    customer_name: str
+    customer_phone: str
+    owed: Decimal
+    open_debts: int
+    credits: list[CreditResponse]
+
+
+class CustomerPage(BaseModel):
+    items: list[CustomerResponse]
+    has_more: bool
+
+
+class StoreDebtsResponse(BaseModel):
+    """What the store is owed now, across its open debts."""
+
+    owed: Decimal
+    customers: int
+    debts: int
 
 
 class PaymentRequest(BaseModel):
@@ -133,6 +159,51 @@ async def list_debts(
         offset=offset,
     )
     return CreditPage(items=[_response(view) for view in views], has_more=has_more)
+
+
+# Before `/{credit_id}`, which would otherwise take these names for an id.
+@router.get("/customers", response_model=CustomerPage)
+async def list_customers(
+    store_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    status: CreditStatus | None = None,
+    query: Annotated[CleanText, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+) -> CustomerPage:
+    """The store's debts by customer: one phone is one customer (owner
+    decision, 2026-10-01). `status=OPEN` for those still owing."""
+    customers, has_more = await service.list_customers(
+        session,
+        scope=scope,
+        store_id=store_id,
+        status=status,
+        query=query,
+        limit=limit,
+        offset=offset,
+    )
+    return CustomerPage(
+        items=[
+            CustomerResponse(
+                phone_digits=customer.phone_digits,
+                customer_name=customer.customer_name,
+                customer_phone=customer.customer_phone,
+                owed=customer.owed,
+                open_debts=customer.open_debts,
+                credits=[_response(view) for view in customer.credits],
+            )
+            for customer in customers
+        ],
+        has_more=has_more,
+    )
+
+
+@router.get("/summary", response_model=StoreDebtsResponse)
+async def summary(store_id: uuid.UUID, scope: ScopeDep, session: SessionDep) -> StoreDebtsResponse:
+    """What the store is owed now, by store only (owner decision, 2026-10-01)."""
+    debts = await service.store_debts(session, scope=scope, store_id=store_id)
+    return StoreDebtsResponse(owed=debts.owed, customers=debts.customers, debts=debts.debts)
 
 
 @router.get("/{credit_id}", response_model=CreditResponse)

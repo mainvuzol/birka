@@ -137,15 +137,11 @@ the goods' worth. The credit module reaches neither refunds nor the ledger.
 
 ## Not done here
 
-- **The screens:**
-  - the option at the till;
-  - a «Борги» section;
-  - the cash to hand back on a return.
-
-  Until they exist, nothing in the app sells in parts. A return of such a
-  sale shows `total_amount`, not `cash_back`, but no such sale can be made
-  from the app yet.
-- **Customer orders collected as a sale** cannot be paid in parts. Not asked.
+- **The screens:** the option at the till, a «Борги» section, and the cash
+  to hand back on a return. Built next, the same day; see the
+  [credit screens report](credit-screens-report.md).
+- **Customer orders collected as a sale** cannot be paid in parts. Added
+  later the same day; see the [credit screens report](credit-screens-report.md).
 - **The store's own purchase installments** (owner, 2026-09-15) are a
   separate record, and not built.
 - **Nothing reports totals owed** across stores.

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
@@ -95,8 +95,54 @@ class CreditView:
     entries: list[Entry]
 
 
+@dataclass(frozen=True, slots=True)
+class CustomerView:
+    """One customer's debts in a store: one phone, one customer (owner
+    decision, 2026-10-01), whatever name each sale was written under."""
+
+    phone_digits: str
+    # As the newest of these debts wrote them.
+    customer_name: str
+    customer_phone: str
+    owed: Decimal
+    open_debts: int
+    credits: list[CreditView]
+
+
+@dataclass(frozen=True, slots=True)
+class StoreDebts:
+    """What a store is owed now, across its open debts."""
+
+    owed: Decimal
+    customers: int
+    debts: int
+
+
 def digits(phone: str) -> str:
     return re.sub(r"\D", "", phone)
+
+
+def customer_key(phone_digits: str) -> str:
+    """Who a phone belongs to: one phone is one customer (owner decision,
+    2026-10-01), however it was written. «+38 (067) 123-45-67» and
+    «0671234567» are one number, so a Ukrainian number is kept in its own
+    ten digits."""
+    if len(phone_digits) == 12 and phone_digits.startswith("380"):
+        return phone_digits[2:]
+    return phone_digits
+
+
+# The same, in SQL, over what is stored: the stored digits stay as written.
+_CUSTOMER = case(
+    (
+        and_(
+            func.length(CustomerCredit.phone_digits) == 12,
+            CustomerCredit.phone_digits.startswith("380"),
+        ),
+        func.substr(CustomerCredit.phone_digits, 3),
+    ),
+    else_=CustomerCredit.phone_digits,
+)
 
 
 def terms(*, customer_name: str, customer_phone: str, paid_now: Decimal) -> CreditTerms:
@@ -553,6 +599,17 @@ async def credit_for_sale(session: AsyncSession, *, sale_id: uuid.UUID) -> Credi
     return None if credit is None else await view(session, credit)
 
 
+async def credited_sales(session: AsyncSession, *, sale_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+    """Which of these sales were paid in parts: a return of one lowers its
+    debt first, so the till cannot say up front what goes back in cash."""
+    if not sale_ids:
+        return set()
+    rows = await session.scalars(
+        select(CustomerCredit.sale_id).where(CustomerCredit.sale_id.in_(sale_ids))
+    )
+    return set(rows.all())
+
+
 async def list_credits(
     session: AsyncSession,
     *,
@@ -565,20 +622,10 @@ async def list_credits(
 ) -> tuple[list[CreditView], bool]:
     """A store's debts, newest first, found by the customer's name or phone."""
     scope.require(Permission.SALE_CREDIT, store_id)
-    statement: Select[tuple[CustomerCredit]] = select(CustomerCredit).where(
-        CustomerCredit.organization_id == scope.organization_id,
-        CustomerCredit.store_id == store_id,
-    )
-    if status is not None:
-        statement = statement.where(CustomerCredit.status == status.value)
+    statement = _in_store(select(CustomerCredit), scope, store_id, status)
     wanted = query.strip()
     if wanted:
-        conditions: list[Any] = [
-            func.lower(CustomerCredit.customer_name).contains(wanted.lower(), autoescape=True)
-        ]
-        if digits(wanted):
-            conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))
-        statement = statement.where(or_(*conditions))
+        statement = statement.where(_found_by(wanted))
     rows: Sequence[CustomerCredit] = (
         await session.scalars(
             statement.order_by(CustomerCredit.created_at.desc(), CustomerCredit.id)
@@ -589,19 +636,145 @@ async def list_credits(
     return [await view(session, credit) for credit in rows[:limit]], len(rows) > limit
 
 
+def _in_store(
+    statement: Select[Any], scope: RequestScope, store_id: uuid.UUID, status: CreditStatus | None
+) -> Select[Any]:
+    statement = statement.where(
+        CustomerCredit.organization_id == scope.organization_id,
+        CustomerCredit.store_id == store_id,
+    )
+    if status is not None:
+        statement = statement.where(CustomerCredit.status == status.value)
+    return statement
+
+
+# What a phone is written with: «+38 (067) 123-45-67».
+_PHONE_LIKE = re.compile(r"[\d\s()+\-]+")
+
+
+def _found_by(wanted: str) -> Any:
+    """The customer's name, or any spelling of their phone.
+
+    Only a query written as a phone is looked for among phones: the digits of
+    «Ірина 2» are part of a name, and would find whoever's number holds a 2.
+    """
+    conditions: list[Any] = [
+        func.lower(CustomerCredit.customer_name).contains(wanted.lower(), autoescape=True)
+    ]
+    if _PHONE_LIKE.fullmatch(wanted) and digits(wanted):
+        conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))
+        conditions.append(_CUSTOMER.contains(customer_key(digits(wanted)), autoescape=True))
+    return or_(*conditions)
+
+
+async def list_customers(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    store_id: uuid.UUID,
+    status: CreditStatus | None,
+    query: str,
+    limit: int,
+    offset: int,
+) -> tuple[list[CustomerView], bool]:
+    """A store's debts by customer, the one with the newest debt first.
+
+    A search finds customers by any of their debts, and then shows all of
+    them: «Коваль» finds the phone, and the same phone's debt written down as
+    «Ірина» is the same customer's. A payment is still taken on one debt the
+    seller chooses (owner decision, 2026-10-01).
+    """
+    scope.require(Permission.SALE_CREDIT, store_id)
+    customer = _CUSTOMER.label("customer")
+    latest = func.max(CustomerCredit.created_at).label("latest")
+    grouped = _in_store(select(customer, latest), scope, store_id, status)
+    wanted = query.strip()
+    if wanted:
+        grouped = grouped.where(
+            _CUSTOMER.in_(
+                _in_store(select(_CUSTOMER), scope, store_id, status).where(_found_by(wanted))
+            )
+        )
+    rows = (
+        await session.execute(
+            grouped.group_by(_CUSTOMER)
+            .order_by(latest.desc(), _CUSTOMER)
+            .limit(limit + 1)
+            .offset(offset)
+        )
+    ).all()
+    phones: list[str] = [row.customer for row in rows[:limit]]
+    debts: dict[str, list[CreditView]] = {phone: [] for phone in phones}
+    for credit in (
+        await session.scalars(
+            _in_store(select(CustomerCredit), scope, store_id, status)
+            .where(_CUSTOMER.in_(phones))
+            .order_by(CustomerCredit.created_at.desc(), CustomerCredit.id)
+        )
+    ).all():
+        debts[customer_key(credit.phone_digits)].append(await view(session, credit))
+    customers = [
+        CustomerView(
+            phone_digits=phone,
+            customer_name=debts[phone][0].customer_name,
+            customer_phone=debts[phone][0].customer_phone,
+            owed=money(sum((debt.owed for debt in debts[phone]), ZERO)),
+            open_debts=sum(1 for debt in debts[phone] if debt.status is CreditStatus.OPEN),
+            credits=debts[phone],
+        )
+        for phone in phones
+    ]
+    return customers, len(rows) > limit
+
+
+async def store_debts(
+    session: AsyncSession, *, scope: RequestScope, store_id: uuid.UUID
+) -> StoreDebts:
+    """What the store is owed now: the owner sees it by store only (owner
+    decision, 2026-10-01)."""
+    scope.require(Permission.SALE_CREDIT, store_id)
+    lowered = (
+        select(func.coalesce(func.sum(CreditEntry.amount), 0))
+        .where(CreditEntry.credit_id == CustomerCredit.id)
+        .correlate(CustomerCredit)
+        .scalar_subquery()
+    )
+    owed, customers, debts = (
+        await session.execute(
+            _in_store(
+                select(
+                    func.coalesce(func.sum(func.greatest(CustomerCredit.amount - lowered, 0)), 0),
+                    func.count(func.distinct(_CUSTOMER)),
+                    func.count(CustomerCredit.id),
+                ),
+                scope,
+                store_id,
+                CreditStatus.OPEN,
+            )
+        )
+    ).one()
+    return StoreDebts(owed=money(Decimal(owed)), customers=customers, debts=debts)
+
+
 __all__ = [
     "CreditTerms",
     "CreditView",
+    "CustomerView",
     "Entry",
     "ReturnSettlement",
+    "StoreDebts",
     "credit_for_sale",
+    "credited_sales",
+    "customer_key",
     "fingerprint_of",
     "list_credits",
+    "list_customers",
     "open_credit",
     "pay",
     "read_credit",
     "return_settlement",
     "settle_return",
+    "store_debts",
     "terms",
     "view",
     "write_off",
