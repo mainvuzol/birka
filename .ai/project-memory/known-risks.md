@@ -331,6 +331,8 @@ See the [report](returns-elsewhere-report.md).
 - **Money paid out by one store for another's sale is recorded, not
   settled.** Each return names the store that paid. Nothing yet adds up what
   one store paid out for another, and nothing settles it between them.
+  *By design (owner, 2026-10-01): stores of one network do not settle with
+  each other.*
 - **Goods may come back to a warehouse the selling store does not reach**,
   when the seller chooses one. It is recorded on the return and in the
   ledger.
@@ -356,6 +358,8 @@ See the [report](store-states-report.md).
 - **Money taken by one store for another's debt is recorded, not settled.**
   Each payment names the store that took it, as each return does. Nothing
   adds it up between stores yet.
+  *By design (owner, 2026-10-01): stores of one network do not settle with
+  each other.*
 - **The network's owner cannot see a blocked store's private warehouse.**
   A network-wide role never reaches a private warehouse (owner rule of
   2026-09-23), blocked or not. The archive's refusal names it and its units.
@@ -417,3 +421,22 @@ See the [report](order-shipping-report.md).
   so orders cannot be counted or found by country.
 - **A collected, cancelled or returned order is closed:** where it went is
   no longer corrected, as the owner chose.
+
+## Goods borrowed from another shop — 2026-10-01
+
+See the [report](borrowed-goods-report.md).
+
+- **The till does not know a borrowed jacket from the shop's own** of the
+  same model and size, as the owner chose. Until someone marks it sold, the
+  list shows it on hand though it is gone. Nothing reminds anyone to mark it.
+- **Goods borrowed and then sent back through a plain return** to the
+  supplier, not from «Позичене», still read as on hand there. Only a return
+  from the list names the lot.
+- **«Продано» needs the goods on hand in the list, not on the shelf.** A
+  return from the list needs them on the shelf too, so a jacket sold at the
+  till but not marked sold cannot be sent back: it is refused for stock.
+- **Goods borrowed before receipts named a supplier** are not on the list.
+  Nothing has run in production, so there are none yet.
+- **The price agreed is the lot's purchase price**, the one receiving
+  already kept. It is what the invoice charges; the selling price at the
+  till is separate, as always.

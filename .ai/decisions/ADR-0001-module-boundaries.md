@@ -153,3 +153,13 @@ supplier and the same returns, so it is no module of its own.
   does.
 - Contract "what a store owes its suppliers moves no goods" is in
   `backend/pyproject.toml` (25 in all).
+
+2026-10-01 amendment (goods borrowed from another shop): `suppliers.borrowed`
+counts what a store borrowed from a supplier, or took under consignment, per
+stock lot, and turns "sold" into an invoice and "unsold" into a return.
+- It reads lots and their deliveries (`inventory.models`), which module
+  `suppliers` already may, and calls the invoices and the returns.
+- `suppliers.invoices` still never reaches the ledger. An invoice names its
+  lot by id alone, and is told the lot's name.
+- Receiving records the supplier (`goods_receipt.supplier_id`); module
+  `inventory` still never imports `suppliers`.

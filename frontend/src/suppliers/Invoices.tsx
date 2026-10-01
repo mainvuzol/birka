@@ -28,10 +28,8 @@ type Command =
   | Omit<Extract<InvoiceBody, { kind: "invoice" }>, "command_id" | "store_id">
   | Omit<Extract<InvoiceBody, { kind: "payment" }>, "command_id" | "store_id">
   | Omit<Extract<InvoiceBody, { kind: "set-off" }>, "command_id" | "store_id">
-  | Omit<
-      Extract<InvoiceBody, { kind: "write-off" }>,
-      "command_id" | "store_id"
-    >;
+  | Omit<Extract<InvoiceBody, { kind: "write-off" }>, "command_id" | "store_id">
+  | Omit<Extract<InvoiceBody, { kind: "sold" }>, "command_id" | "store_id">;
 
 /**
  * What the store owes its suppliers (owner decisions, 2026-10-01).
@@ -149,7 +147,9 @@ export function Invoices({
             ? "оплату"
             : pending.body.kind === "set-off"
               ? "залік"
-              : "списання"}
+              : pending.body.kind === "sold"
+                ? "продаж позиченого"
+                : "списання"}
         . Перевірте результат — та сама операція не запишеться двічі.
       </p>
       <button
@@ -349,6 +349,12 @@ export function Invoices({
                   : `${statusLabels[invoice.status]} · ${money(invoice.amount)}`}
               </p>
               {invoice.note && <p className="hint">{invoice.note}</p>}
+              {invoice.sold && (
+                <p className="hint">
+                  За продане позичене: {invoice.sold.label} ×{" "}
+                  {invoice.sold.quantity}
+                </p>
+              )}
               <button
                 className="quiet"
                 onClick={() => {
@@ -579,6 +585,13 @@ function InvoiceDetail({
         Записано {when(invoice.at)} · {invoice.by}
         {invoice.note && ` · ${invoice.note}`}
       </p>
+      {invoice.sold && (
+        <p>
+          За продане позичене: {invoice.sold.label} × {invoice.sold.quantity}.
+          Якщо позначили помилково — скасуйте накладну, і товар знову буде «на
+          руках».
+        </p>
+      )}
       {elsewhere && (
         <p className="notice">
           Накладна магазину «{invoice.store_name}», який зараз{" "}
@@ -1092,6 +1105,8 @@ function doneText(invoice: Invoice, command: Command): string {
       return `Залік ${money(command.amount)} записано. ${rest}`;
     case "write-off":
       return `Списано ${money(invoice.written_off)}.`;
+    case "sold":
+      return `Продано з позиченого: ${invoice.sold?.label ?? ""} × ${String(command.quantity)}. Борг «${invoice.supplier.name}» ${money(invoice.amount)} — у «Накладних».`;
   }
 }
 

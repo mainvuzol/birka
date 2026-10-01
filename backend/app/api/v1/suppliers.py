@@ -10,6 +10,10 @@
   (`/damaged-units/{id}/cancel-supplier-return`).
 - `GET /supplier-returns`: this store's returns, newest first, each with
   what the supplier counts of it against the store's invoices now.
+- `GET /borrowed`: goods this store borrowed from a supplier, or took under
+  consignment, with how much was sold, returned or is still on hand (owner
+  decisions, 2026-10-01). A return naming `stock_lot_id` sends some back
+  unsold; `POST /supplier-invoices/sold` marks some sold.
 
 All of it needs `supplier:return` in the store: the owner's and managers'.
 The list of suppliers is also kept by whoever records what the store owes
@@ -21,7 +25,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,7 +33,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.deps import ScopeDep, SessionDep
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
-from app.modules.suppliers import service
+from app.modules.inventory.models import AcquisitionType
+from app.modules.suppliers import borrowed, service
 
 router = APIRouter(tags=["suppliers"])
 
@@ -66,6 +71,8 @@ class ReturnRequest(BaseModel):
     supplier_id: uuid.UUID
     lines: list[LineRequest] = Field(min_length=1, max_length=100)
     note: CleanText | None = Field(default=None, max_length=1000)
+    # Borrowed goods going back unsold: their lot, its model and size alone.
+    stock_lot_id: uuid.UUID | None = None
 
 
 class CancelRequest(BaseModel):
@@ -111,10 +118,37 @@ class ReturnResponse(BaseModel):
     # What the supplier counts of it against invoices now. While any stands,
     # the return is not cancelled.
     set_offs: list[SetOffResponse]
+    # Borrowed goods going back unsold: the lot they arrived as.
+    stock_lot_id: uuid.UUID | None = None
 
 
 class ReturnPage(BaseModel):
     items: list[ReturnResponse]
+    has_more: bool
+
+
+class BorrowedResponse(BaseModel):
+    stock_lot_id: uuid.UUID
+    acquisition_type: Literal["BORROWED", "CONSIGNMENT"]
+    supplier: SupplierResponse
+    location_id: uuid.UUID
+    location_name: str
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    display_name: str
+    size: str | None
+    # The price agreed for each, owed once sold.
+    unit_cost: Decimal | None
+    currency_code: str | None
+    received: int
+    sold: int
+    returned: int
+    on_hand: int
+    at: datetime
+
+
+class BorrowedPage(BaseModel):
+    items: list[BorrowedResponse]
     has_more: bool
 
 
@@ -154,6 +188,7 @@ def _return(view: service.ReturnView) -> ReturnResponse:
             )
             for item in view.set_offs
         ],
+        stock_lot_id=view.stock_lot_id,
     )
 
 
@@ -237,6 +272,7 @@ async def return_goods(
         ],
         note=payload.note,
         correlation_id=get_correlation_id(),
+        stock_lot_id=payload.stock_lot_id,
     )
     await session.commit()
     return _return(view)
@@ -255,6 +291,55 @@ async def cancel_return(
     )
     await session.commit()
     return _return(view)
+
+
+@router.get("/borrowed", response_model=BorrowedPage)
+async def list_borrowed(
+    store_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    supplier_id: uuid.UUID | None = None,
+    on_hand: bool = True,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
+) -> BorrowedPage:
+    """What this store borrowed, newest first; `on_hand=false` for all of
+    it, sold and returned too."""
+    views, has_more = await borrowed.list_borrowed(
+        session,
+        scope=scope,
+        store_id=store_id,
+        supplier_id=supplier_id,
+        on_hand_only=on_hand,
+        limit=limit,
+        offset=offset,
+    )
+    return BorrowedPage(
+        items=[
+            BorrowedResponse(
+                stock_lot_id=view.stock_lot_id,
+                acquisition_type="BORROWED"
+                if view.acquisition_type is AcquisitionType.BORROWED
+                else "CONSIGNMENT",
+                supplier=_supplier(view.supplier),
+                location_id=view.location_id,
+                location_name=view.location_name,
+                product_variant_id=view.product_variant_id,
+                size_id=view.size_id,
+                display_name=view.display_name,
+                size=view.size_label,
+                unit_cost=view.unit_cost,
+                currency_code=view.currency_code,
+                received=view.received,
+                sold=view.sold,
+                returned=view.returned,
+                on_hand=view.on_hand,
+                at=view.at,
+            )
+            for view in views
+        ],
+        has_more=has_more,
+    )
 
 
 __all__ = ["router"]

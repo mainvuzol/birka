@@ -5,9 +5,10 @@ import { api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
 import { SuggestedPrice } from "@/prices/SuggestedPrice";
+import { SupplierPicker } from "@/suppliers/Picker";
 import { CatalogPicker } from "./CatalogPicker";
 import { submitReceipt, useReceiptCommand } from "./receiptCommands";
-import { acquisitionLabels } from "./receiptTypes";
+import { acquisitionLabels, paidWhenSold } from "./receiptTypes";
 import type {
   Acquisition,
   Receipt,
@@ -40,6 +41,11 @@ interface Draft {
  * The model's selling price sits beside it, and whoever may set prices sets
  * it here as goods arrive (owner decision, 2026-10-01). It is saved on its
  * own, at once: it belongs to the model, not to this delivery.
+ *
+ * Borrowed goods, and goods under consignment, are owed for once sold: only
+ * whoever keeps the suppliers' debts takes them, from a supplier on the list,
+ * at a price agreed for each (owner decisions, 2026-10-01). They are marked
+ * sold, or sent back, from «Постачальникам».
  */
 export function Receive({
   store,
@@ -58,6 +64,9 @@ export function Receive({
   const [quantity, setQuantity] = useState("1");
   const [cost, setCost] = useState("");
   const [acquisition, setAcquisition] = useState<Acquisition>("PURCHASE");
+  // Whose goods, when any are borrowed or under consignment.
+  const [supplierId, setSupplierId] = useState("");
+  const keepsSuppliers = store.permissions.includes("supplier:debt");
   const [notes, setNotes] = useState("");
   const [draft, setDraft] = useState<Draft[]>([]);
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
@@ -124,6 +133,12 @@ export function Receive({
       );
       return;
     }
+    if (paidWhenSold(acquisition) && (cents === null || cents <= 0n)) {
+      setValidation(
+        "Вкажіть ціну за одиницю, домовлену з постачальником: її сплатять, коли товар продадуть.",
+      );
+      return;
+    }
     if (
       !variant ||
       !size ||
@@ -166,6 +181,11 @@ export function Receive({
 
   async function send(): Promise<void> {
     setRefusal(null);
+    const owed = draft.some((d) => paidWhenSold(d.line.acquisition_type));
+    if (owed && !supplierId) {
+      setValidation("Оберіть постачальника, чий це товар.");
+      return;
+    }
     const warehouse =
       locations.data?.find((location) => location.id === locationId)?.name ??
       "";
@@ -180,6 +200,8 @@ export function Receive({
         command_id: commandId,
         lines: draft.map((d) => d.line),
         notes: trimmed ? trimmed : null,
+        // Only when owed for once sold, so a purchase is sent as before.
+        ...(owed ? { supplier_id: supplierId } : {}),
       },
     });
     if (outcome.kind === "done") {
@@ -343,10 +365,14 @@ export function Receive({
             />
           </label>
           <label>
-            Закупівельна ціна за од., грн
+            {paidWhenSold(acquisition)
+              ? "Домовлена ціна за од., грн"
+              : "Закупівельна ціна за од., грн"}
             <input
               inputMode="decimal"
-              placeholder="не обов’язково"
+              placeholder={
+                paidWhenSold(acquisition) ? "обов’язково" : "не обов’язково"
+              }
               value={cost}
               onChange={(event) => {
                 setCost(event.target.value);
@@ -364,21 +390,44 @@ export function Receive({
             blocked={blocked}
           />
         )}
-        <label>
-          Як надійшов
-          <select
-            value={acquisition}
-            onChange={(event) => {
-              setAcquisition(event.target.value as Acquisition);
-            }}
-          >
-            {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
-              <option key={key} value={key}>
-                {acquisitionLabels[key]}
-              </option>
-            ))}
-          </select>
-        </label>
+        {keepsSuppliers && (
+          <label>
+            Як надійшов
+            <select
+              value={acquisition}
+              onChange={(event) => {
+                setAcquisition(event.target.value as Acquisition);
+              }}
+            >
+              {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
+                <option key={key} value={key}>
+                  {acquisitionLabels[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {(paidWhenSold(acquisition) ||
+          draft.some((d) => paidWhenSold(d.line.acquisition_type))) && (
+          <>
+            <SupplierPicker
+              store={store}
+              token={token}
+              value={supplierId}
+              change={(next) => {
+                setSupplierId(next);
+                // Another supplier's goods are another delivery.
+                setCommandId(crypto.randomUUID());
+              }}
+              disabled={blocked || working}
+            />
+            <p className="hint">
+              Позичене й під реалізацію сплачують, лише коли продадуть, за
+              домовленою ціною. Продане чи непродане позначають у
+              «Постачальникам».
+            </p>
+          </>
+        )}
         {sizes.error && (
           <Failure
             error={sizes.error}

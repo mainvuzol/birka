@@ -2,8 +2,9 @@ import { isId, journal } from "@/shared/journal";
 import type { Invoice, InvoiceBody } from "./types";
 
 /**
- * One invoice, payment, set-off or write-off, written down before it is
- * sent (`@/shared/journal`).
+ * One invoice, payment, set-off or write-off — or borrowed goods marked
+ * sold, which is an invoice too — written down before it is sent
+ * (`@/shared/journal`).
  *
  * Each carries a permanent `command_id`, so resending the identical attempt
  * returns what the first one did however late it arrives: money paid to a
@@ -15,13 +16,15 @@ const invoices = journal<InvoiceBody, Invoice>({
   path: (body) =>
     body.kind === "invoice"
       ? "/supplier-invoices"
-      : `/supplier-invoices/${body.invoice_id}/${
-          body.kind === "payment"
-            ? "payments"
-            : body.kind === "set-off"
-              ? "set-offs"
-              : "write-off"
-        }`,
+      : body.kind === "sold"
+        ? "/supplier-invoices/sold"
+        : `/supplier-invoices/${body.invoice_id}/${
+            body.kind === "payment"
+              ? "payments"
+              : body.kind === "set-off"
+                ? "set-offs"
+                : "write-off"
+          }`,
   payload: (body) => {
     switch (body.kind) {
       case "invoice":
@@ -49,6 +52,13 @@ const invoices = journal<InvoiceBody, Invoice>({
         };
       case "write-off":
         return { command_id: body.command_id, reason: body.reason };
+      case "sold":
+        return {
+          command_id: body.command_id,
+          store_id: body.store_id,
+          stock_lot_id: body.stock_lot_id,
+          quantity: body.quantity,
+        };
     }
   },
   scope: "supplier-invoice-pending",
@@ -60,6 +70,11 @@ const invoices = journal<InvoiceBody, Invoice>({
       typeof body.paid_now === "string" &&
       money.test(body.paid_now) &&
       (body.note === null || typeof body.note === "string")) ||
+    (body.kind === "sold" &&
+      isId(body.stock_lot_id) &&
+      typeof body.quantity === "number" &&
+      Number.isInteger(body.quantity) &&
+      body.quantity > 0) ||
     (isId(body.invoice_id) &&
       ((body.kind === "payment" &&
         typeof body.amount === "string" &&

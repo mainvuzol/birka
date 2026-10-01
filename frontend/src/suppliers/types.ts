@@ -32,6 +32,8 @@ export interface SupplierReturn {
   /** What the supplier counts of it against invoices now. While any
    * stands, the return is not cancelled (owner decision, 2026-10-01). */
   set_offs: SetOff[];
+  /** Borrowed goods going back unsold: the lot they arrived as. */
+  stock_lot_id?: string | null;
 }
 
 export interface Cancellation {
@@ -60,6 +62,35 @@ export interface ReturnBody {
   supplier_id: string;
   lines: { product_variant_id: string; size_id: string; quantity: number }[];
   note: string | null;
+  /** Borrowed goods going back unsold: their lot. */
+  stock_lot_id?: string;
+}
+
+/** `GET /borrowed`: goods this store borrowed or took under consignment
+ * (owner decisions, 2026-10-01). */
+export interface Borrowed {
+  stock_lot_id: string;
+  acquisition_type: "BORROWED" | "CONSIGNMENT";
+  supplier: Supplier;
+  location_id: string;
+  location_name: string;
+  product_variant_id: string;
+  size_id: string;
+  display_name: string;
+  size: string | null;
+  /** The price agreed for each, owed once sold. */
+  unit_cost: string | null;
+  currency_code: string | null;
+  received: number;
+  sold: number;
+  returned: number;
+  on_hand: number;
+  at: string;
+}
+
+export interface BorrowedPage {
+  items: Borrowed[];
+  has_more: boolean;
 }
 
 /**
@@ -108,6 +139,8 @@ export interface Invoice {
   closed_at: string | null;
   cancelled: Cancellation | null;
   entries: InvoiceEntry[];
+  /** Borrowed goods sold, which the invoice is for. */
+  sold?: { stock_lot_id: string; quantity: number; label: string } | null;
 }
 
 export interface InvoicePage {
@@ -159,4 +192,11 @@ export type InvoiceBody =
       store_id: string;
       invoice_id: string;
       reason: string;
+    }
+  | {
+      kind: "sold";
+      command_id: string;
+      store_id: string;
+      stock_lot_id: string;
+      quantity: number;
     };

@@ -26,7 +26,8 @@ const returns = journal<ReturnBody, SupplierReturn>({
         Number.isInteger(line.quantity) &&
         line.quantity > 0,
     ) &&
-    (body.note === null || typeof body.note === "string"),
+    (body.note === null || typeof body.note === "string") &&
+    (body.stock_lot_id === undefined || isId(body.stock_lot_id)),
   corrupt:
     "Некоректне збережене повернення постачальнику. Зверніться до менеджера.",
   unfinished: "Спершу завершіть збережене повернення постачальнику.",

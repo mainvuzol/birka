@@ -239,7 +239,8 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     own and has its «Брак»; «Старий» stopped trading and is archived, still
     owing a supplier for an invoice. Its owner holds the E2E role
     network-wide; «Ганна» works in «Центр» only, «Петро» in «Ринок» only;
-    «Марко» manages «Центр» with a manager's default rights."""
+    «Марко» manages «Центр» with a manager's default rights, and «Ліда» sells
+    there with a seller's."""
     org = Organization(name=f"e2e-states-{uuid.uuid4().hex}", currency_code="UAH")
     session.add(org)
     await session.flush()
@@ -292,10 +293,17 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     manager = Role(organization_id=org.id, code="E2E-MANAGER", name="Тестовий менеджер")
     session.add(manager)
     await session.flush()
+    cashier = Role(organization_id=org.id, code="E2E-SELLER", name="Тестова продавчиня")
+    session.add(cashier)
+    await session.flush()
     session.add_all(
         [
             RolePermission(role_id=manager.id, permission_code=p.value)
             for p in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
+        ]
+        + [
+            RolePermission(role_id=cashier.id, permission_code=p.value)
+            for p in DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
         ]
     )
     people: dict[str, str] = {}
@@ -304,6 +312,7 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
         ("network_centre_seller", "Ганна", centre, role),
         ("network_market_seller", "Петро", market, role),
         ("network_centre_manager", "Марко", centre, manager),
+        ("network_centre_cashier", "Ліда", centre, cashier),
     )
     staff_ids: dict[str, uuid.UUID] = {}
     for key, name, works_in, held in staff:

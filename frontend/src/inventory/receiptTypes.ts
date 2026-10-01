@@ -22,6 +22,13 @@ export interface ReceiptBody {
   command_id: string;
   lines: ReceiptLine[];
   notes: string | null;
+  /** Whose goods: sent when any are borrowed or under consignment. */
+  supplier_id?: string;
+}
+
+/** Goods owed for only once sold (owner decisions, 2026-10-01). */
+export function paidWhenSold(acquisition: Acquisition): boolean {
+  return acquisition === "BORROWED" || acquisition === "CONSIGNMENT";
 }
 
 export interface ReceivedLine {

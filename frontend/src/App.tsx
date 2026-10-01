@@ -1181,6 +1181,7 @@ function Workspace({
             store={store}
             token={token}
             journalKey={supplierKey}
+            invoiceJournalKey={invoiceKey}
             blocked={otherThanSuppliers}
           />
         ) : (
