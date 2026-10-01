@@ -43,6 +43,7 @@ from app.modules.tenancy.models import (
     Store,
     StoreKind,
     StoreLocationAccess,
+    StoreState,
 )
 
 
@@ -196,7 +197,8 @@ async def main() -> None:
             ]
         )
         owner = await seed_backups(session, organization_id=org.id, role_id=role.id)
-        data = {
+        network = await seed_network(session)
+        data = network | {
             "telegram_user_id": str(user.telegram_user_id),
             "owner_telegram_user_id": str(owner.telegram_user_id),
             "store_id": str(store.id),
@@ -226,6 +228,91 @@ async def main() -> None:
     )
     await engine.dispose()
     Path(os.environ["BIRKA_E2E_FIXTURE"]).write_text(json.dumps(data))
+
+
+async def seed_network(session: AsyncSession) -> dict[str, str]:
+    """A second network, for the store states (owner decisions, 2026-10-01):
+    blocking a store of the first would stop every journey that sells there.
+
+    «Центр» and «Ринок» share a warehouse, and «Ринок» manages one of its
+    own and has its «Брак»; «Старий» stopped trading and is archived. Its owner holds the E2E
+    role network-wide; «Ганна» works in «Центр» only, «Петро» in «Ринок»
+    only."""
+    org = Organization(name=f"e2e-states-{uuid.uuid4().hex}", currency_code="UAH")
+    session.add(org)
+    await session.flush()
+    centre = Store(organization_id=org.id, name="Центр", code="CENTRE", kind=StoreKind.PRIMARY)
+    market = Store(organization_id=org.id, name="Ринок", code="MARKET", kind=StoreKind.SECONDARY)
+    old = Store(
+        organization_id=org.id,
+        name="Старий",
+        code="OLD",
+        kind=StoreKind.SECONDARY,
+        state=StoreState.ARCHIVED.value,
+        state_since=datetime.now(UTC) - timedelta(days=30),
+    )
+    shared = StockLocation(organization_id=org.id, name="Склад мережі", code="NET-SHARED")
+    session.add_all([centre, market, old, shared])
+    await session.flush()
+    market_own = StockLocation(
+        organization_id=org.id,
+        name="Склад ринку",
+        code="NET-MARKET",
+        managing_store_id=market.id,
+    )
+    market_bin = StockLocation(organization_id=org.id, name="Брак ринку", code="NET-MARKET-BIN")
+    session.add_all([market_own, market_bin])
+    await session.flush()
+    session.add(
+        StoreLocationAccess(
+            organization_id=org.id,
+            store_id=market.id,
+            location_id=market_bin.id,
+            can_sell=False,
+            can_receive=True,
+            damaged_returns=True,
+        )
+    )
+    for shop, place in ((centre, shared), (market, shared), (market, market_own)):
+        session.add(
+            StoreLocationAccess(
+                organization_id=org.id,
+                store_id=shop.id,
+                location_id=place.id,
+                can_sell=True,
+                can_receive=True,
+            )
+        )
+    role = Role(organization_id=org.id, code="E2E", name="Тестовий продавець")
+    session.add(role)
+    await session.flush()
+    session.add_all([RolePermission(role_id=role.id, permission_code=p.value) for p in Permission])
+    people: dict[str, str] = {}
+    staff: tuple[tuple[str, str, Store | None], ...] = (
+        ("network_owner", "Власник мережі", None),
+        ("network_centre_seller", "Ганна", centre),
+        ("network_market_seller", "Петро", market),
+    )
+    for key, name, works_in in staff:
+        person = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name=name)
+        session.add(person)
+        await session.flush()
+        session.add(
+            Membership(
+                user_id=person.id,
+                organization_id=org.id,
+                store_id=works_in.id if works_in is not None else None,
+                role_id=role.id,
+            )
+        )
+        people[f"{key}_telegram_user_id"] = str(person.telegram_user_id)
+    return people | {
+        "network_centre_store_id": str(centre.id),
+        "network_market_store_id": str(market.id),
+        "network_old_store_id": str(old.id),
+        "network_shared_location_id": str(shared.id),
+        "network_market_location_id": str(market_own.id),
+    }
 
 
 async def seed_backups(

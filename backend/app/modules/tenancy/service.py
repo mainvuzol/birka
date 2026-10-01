@@ -9,8 +9,8 @@ from enum import StrEnum
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import LocationAccessDeniedError, NotFoundError
-from app.modules.tenancy.models import StockLocation, Store, StoreLocationAccess
+from app.core.errors import LocationAccessDeniedError, NotFoundError, StoreNotTradingError
+from app.modules.tenancy.models import StockLocation, Store, StoreLocationAccess, StoreState
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +37,10 @@ async def list_store_locations(
     The API checks the person's inventory:view permission first. These flags
     describe the store's grants, not the person's authority to execute a
     command; existing command checks still require both plus active locations.
+    A store that does not trade still has its places read (owner decision,
+    2026-10-01): the person's scope decides who may.
     """
-    await validate_active_stores(session, organization_id=organization_id, store_ids={store_id})
+    await validate_stores(session, organization_id=organization_id, store_ids={store_id})
     rows = await session.execute(
         select(
             StockLocation.id,
@@ -169,42 +171,96 @@ async def sold_from(
     ) is not None
 
 
-async def store_is_active(
+async def store_state(
     session: AsyncSession, *, organization_id: uuid.UUID, store_id: uuid.UUID
-) -> bool:
-    """Is this store open for business?
-
-    A question, not an assertion: a caller that wants to say something specific
-    about a closed store needs the answer, not `validate_active_stores`'
-    deliberately uninformative "Unknown store".
-    """
-    return (
-        await session.scalar(
-            select(Store.id).where(
-                Store.id == store_id,
-                Store.organization_id == organization_id,
-                Store.is_active.is_(True),
-            )
-        )
-    ) is not None
+) -> StoreState | None:
+    """Whether this store trades, is blocked or archived; None when it is no
+    store of this organization."""
+    state = await session.scalar(
+        select(Store.state).where(Store.id == store_id, Store.organization_id == organization_id)
+    )
+    return None if state is None else StoreState(state)
 
 
-async def validate_active_stores(
+async def validate_stores(
     session: AsyncSession, *, organization_id: uuid.UUID, store_ids: set[uuid.UUID]
 ) -> None:
+    """Every store must belong to this organization, trading or not: what a
+    read needs."""
     stores = set(
         (
             await session.scalars(
                 select(Store.id).where(
-                    Store.id.in_(store_ids),
-                    Store.organization_id == organization_id,
-                    Store.is_active.is_(True),
+                    Store.id.in_(store_ids), Store.organization_id == organization_id
                 )
             )
         ).all()
     )
     if stores != store_ids:
         raise NotFoundError("Unknown store")
+
+
+async def validate_active_stores(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_ids: set[uuid.UUID]
+) -> None:
+    """Every store must belong to this organization and trade.
+
+    Deliberately uninformative about a store that does not trade: the
+    person's scope has already refused one by name (`STORE_NOT_TRADING`), so
+    reaching this with one means a store this person was never shown.
+    """
+    stores = set(
+        (
+            await session.scalars(
+                select(Store.id).where(
+                    Store.id.in_(store_ids),
+                    Store.organization_id == organization_id,
+                    Store.state == StoreState.ACTIVE.value,
+                )
+            )
+        ).all()
+    )
+    if stores != store_ids:
+        raise NotFoundError("Unknown store")
+
+
+async def hold_stores(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, StoreState]:
+    """Every store must belong to this organization; each keeps the state
+    returned here until this transaction ends.
+
+    Each row is held `FOR KEY SHARE`, which a sale's own foreign key to its
+    store takes anyway, so commands never wait for each other here. A change
+    of state takes the row `FOR UPDATE` and waits for every command that got
+    here first; a command that comes after reads the new state (owner
+    decisions, 2026-10-01). Without it, goods received in the instant a store
+    is archived could land in a store that promised to be empty.
+    """
+    if not store_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(Store.id, Store.state)
+            .where(Store.id.in_(store_ids), Store.organization_id == organization_id)
+            .order_by(Store.id)
+            .with_for_update(key_share=True)
+        )
+    ).all()
+    if {row.id for row in rows} != store_ids:
+        raise NotFoundError("Unknown store")
+    return {row.id: StoreState(row.state) for row in rows}
+
+
+async def hold_trading_stores(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_ids: set[uuid.UUID]
+) -> None:
+    """Every store must belong to this organization and trade, and keeps
+    trading until this transaction ends (`hold_stores`)."""
+    states = await hold_stores(session, organization_id=organization_id, store_ids=store_ids)
+    for store_id in sorted(states):
+        if states[store_id] is not StoreState.ACTIVE:
+            raise StoreNotTradingError(store_id=str(store_id), state=states[store_id].value)
 
 
 class LocationCapability(StrEnum):

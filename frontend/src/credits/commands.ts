@@ -17,14 +17,21 @@ const credits = journal<CreditBody, Credit>({
       : `/credits/${body.credit_id}/write-off`,
   payload: (body) =>
     body.kind === "payment"
-      ? { command_id: body.command_id, amount: body.amount }
+      ? {
+          command_id: body.command_id,
+          amount: body.amount,
+          // Only for another store's debt: a payment where it was sold is
+          // sent exactly as before.
+          ...(body.elsewhere ? { store_id: body.store_id } : {}),
+        }
       : { command_id: body.command_id, reason: body.reason },
   scope: "credit-pending",
   isBody: (body) =>
     isId(body.credit_id) &&
     ((body.kind === "payment" &&
       typeof body.amount === "string" &&
-      money.test(body.amount)) ||
+      money.test(body.amount) &&
+      (body.elsewhere === undefined || typeof body.elsewhere === "boolean")) ||
       (body.kind === "write-off" &&
         typeof body.reason === "string" &&
         body.reason.trim() !== "")),

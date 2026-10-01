@@ -41,7 +41,14 @@ def _bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
+# Requests that only read. A store that does not trade is read by a role that
+# covers the whole network, and nothing else is done in it (owner decisions,
+# 2026-10-01); every command here is a POST, PUT, PATCH or DELETE.
+_READS = frozenset({"GET", "HEAD"})
+
+
 async def get_current_scope(
+    request: Request,
     session: SessionDep,
     settings: SettingsDep,
     authorization: Annotated[str | None, Header()] = None,
@@ -60,7 +67,7 @@ async def get_current_scope(
     # the token expires. Composed here rather than inside resolve_scope so the
     # authz module does not have to depend on identity.
     await assert_user_is_active(session, claims.user_id)
-    scope = await resolve_scope(session, claims.user_id)
+    scope = await resolve_scope(session, claims.user_id, reading=request.method in _READS)
     if scope.organization_id != claims.organization_id:
         # The user's organization changed after the token was issued.
         raise AuthenticationFailedError("Session no longer matches the user's organization")

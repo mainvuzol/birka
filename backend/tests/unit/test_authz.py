@@ -78,6 +78,9 @@ EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.BACKUP_VIEW,
     # Owner decision, 2026-10-01: the owner writes off a debt, with a reason.
     Permission.CREDIT_WRITE_OFF,
+    # Owner decision, 2026-10-01: the owner blocks, archives and reopens a
+    # store. Honoured network-wide only.
+    Permission.STORE_MANAGE,
 }
 
 

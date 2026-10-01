@@ -5,6 +5,12 @@ session and the user's memberships, and every authorization decision reads it.
 
 Invariant I12/I13: a store id supplied by the client is *data to validate*
 against this scope, never proof of access.
+
+A store that does not trade — blocked or archived — is read and never changed
+(owner decisions, 2026-10-01). Only someone whose role covers the whole
+network reads it, and only in a request that reads (`reading`). Its own
+people's grants give nothing there while it does not trade; they learn only
+that it is blocked or archived.
 """
 
 from __future__ import annotations
@@ -13,7 +19,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from app.core.errors import ForbiddenStoreError, PermissionDeniedError
+from app.core.errors import ForbiddenStoreError, PermissionDeniedError, StoreNotTradingError
 from app.modules.authz.permissions import Permission
 
 
@@ -23,32 +29,53 @@ class RequestScope:
     organization_id: uuid.UUID
     # Permissions granted organization-wide (membership with store_id IS NULL).
     org_permissions: frozenset[Permission] = field(default_factory=frozenset)
-    # Permissions granted for one specific store.
+    # Permissions granted for one specific store. Trading stores only.
     store_permissions: Mapping[uuid.UUID, frozenset[Permission]] = field(default_factory=dict)
+    # Every store this person is linked to that does not trade, with its state
+    # ("BLOCKED" or "ARCHIVED"): through a membership of its own, or through
+    # a role that covers the whole network.
+    closed_stores: Mapping[uuid.UUID, str] = field(default_factory=dict)
+    # Those of them this person may read: the ones a network-wide role covers.
+    readable_closed_stores: frozenset[uuid.UUID] = field(default_factory=frozenset)
+    # Whether this request only reads. Nothing else is done in a store that
+    # does not trade.
+    reading: bool = False
 
     @property
     def store_ids(self) -> frozenset[uuid.UUID]:
+        """The trading stores this person may act in."""
         return frozenset(self.store_permissions)
 
     def permissions_for(self, store_id: uuid.UUID | None) -> frozenset[Permission]:
         """Effective permissions, optionally within one store.
 
         An organization-wide membership applies in every store, so the store's
-        effective set is the union of both.
+        effective set is the union of both. In a store that does not trade it
+        applies only to a read, and the store's own grants not at all.
         """
         if store_id is None:
             return self.org_permissions
+        if store_id in self.closed_stores:
+            if self.reading and store_id in self.readable_closed_stores:
+                return self.org_permissions
+            return frozenset()
         return self.org_permissions | self.store_permissions.get(store_id, frozenset())
 
     def can(self, permission: Permission, store_id: uuid.UUID | None = None) -> bool:
         return permission in self.permissions_for(store_id)
 
     def require_store(self, store_id: uuid.UUID) -> None:
-        """Reject a store the user has no membership for.
+        """Reject a store the user has no membership for, or one that does
+        not trade, unless this only reads it and a network-wide role covers it.
 
         Organization-wide membership grants store access implicitly, but only
         to stores that were loaded into this scope.
         """
+        state = self.closed_stores.get(store_id)
+        if state is not None:
+            if self.reading and store_id in self.readable_closed_stores:
+                return
+            raise StoreNotTradingError(store_id=str(store_id), state=state)
         if store_id not in self.store_permissions:
             raise ForbiddenStoreError(store_id=str(store_id))
 

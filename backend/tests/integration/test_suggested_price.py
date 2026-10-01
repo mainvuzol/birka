@@ -29,7 +29,7 @@ from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, 
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import EntityStatus, ProductVariant
 from app.modules.catalog.prices import PriceScope, set_price
-from app.modules.tenancy.models import Store, StoreKind
+from app.modules.tenancy.models import Store, StoreKind, StoreState
 from tests.conftest import requires_database
 from tests.integration.test_shared_warehouse import TwoShops, api, make_two_shops, stock_a_coat
 
@@ -241,7 +241,7 @@ async def test_whoever_holds_the_price_in_every_store_sets_the_shared_one(maker)
                 name="На паузі",
                 code="PAUSED",
                 kind=StoreKind.SECONDARY,
-                is_active=False,
+                state=StoreState.BLOCKED,
             )
         )
         await session.commit()
@@ -511,10 +511,17 @@ async def test_the_migration_gives_the_price_to_whoever_corrects_balances():
     config = _alembic(name)
     try:
         await _run(config, "upgrade", "0020_damaged_units", database=name)
-        fresh = async_sessionmaker(engine, expire_on_commit=False)
-        shops = await make_two_shops(fresh)
         roles: dict[str, uuid.UUID] = {}
+        organization_id = uuid.uuid4()
         async with engine.begin() as connection:
+            # Written as 0020 knew it: today's models describe a later schema.
+            await connection.execute(
+                text(
+                    "INSERT INTO organization (id, name, currency_code, created_at) "
+                    "VALUES (:id, :name, 'UAH', now())"
+                ),
+                {"id": organization_id, "name": f"org-{name}"},
+            )
             for code, held in (("STOCKKEEPER", "inventory:adjust"), ("CASHIER", "sale:create")):
                 roles[code] = uuid.uuid4()
                 await connection.execute(
@@ -522,7 +529,7 @@ async def test_the_migration_gives_the_price_to_whoever_corrects_balances():
                         "INSERT INTO role (id, organization_id, code, name, is_system, "
                         "created_at) VALUES (:id, :org, :code, :code, false, now())"
                     ),
-                    {"id": roles[code], "org": shops.organization_id, "code": code},
+                    {"id": roles[code], "org": organization_id, "code": code},
                 )
                 await connection.execute(
                     text(

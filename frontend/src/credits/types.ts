@@ -1,3 +1,5 @@
+import type { StoreState } from "@/orders/types";
+
 /** `GET /credits`: a store's debts — sales paid in parts (owner decisions, 2026-10-01). */
 export type CreditStatus = "OPEN" | "SETTLED" | "WRITTEN_OFF";
 
@@ -11,12 +13,18 @@ export interface CreditEntry {
   at: string;
   by: string;
   note: string | null;
+  /** A payment another store took, because the one that sold did not trade. */
+  taken_at: string | null;
 }
 
 export interface Credit {
   id: string;
   sale_id: string;
   store_id: string;
+  /** The store that sold, and whether it trades: while it does not, any
+   * store of the network that trades takes the payments. */
+  store_name: string;
+  store_state: StoreState;
   customer_name: string;
   customer_phone: string;
   /** What was agreed: the sale's total. */
@@ -71,7 +79,8 @@ export interface StoreDebts {
 /**
  * What the journal keeps of a payment or a write-off. `store_id` and
  * `credit_id` are the journal's own: the server takes the debt from the path
- * and the store from the debt.
+ * and the store from the debt — except for a payment `elsewhere`, taken by
+ * this store for one that does not trade, which names it.
  */
 export type CreditBody =
   | {
@@ -80,6 +89,7 @@ export type CreditBody =
       credit_id: string;
       command_id: string;
       amount: string;
+      elsewhere?: boolean;
     }
   | {
       kind: "write-off";

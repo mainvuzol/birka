@@ -32,7 +32,7 @@ from app.modules.authz.service import resolve_scope
 from app.modules.identity import people
 from app.modules.identity.models import AppUser
 from app.modules.identity.service import authenticate_with_init_data
-from app.modules.tenancy.models import Store
+from app.modules.tenancy.models import Store, StoreState
 from tests.conftest import TEST_BOT_TOKEN, build_init_data, requires_database
 
 pytestmark = [pytest.mark.integration, requires_database()]
@@ -376,15 +376,15 @@ async def test_what_is_refused_names_what_is_wrong(shop: Shop, maker) -> None:
         await shop.remove(telegram_id(), "MAIN")
     with pytest.raises(NotFoundError, match="works here"):
         await shop.deactivate(telegram_id())
-    # A closed store takes nobody new.
+    # A store that does not trade takes nobody new.
     async with maker.begin() as session:
         org_id = await shop.organization_id(session)
         store = await session.scalar(
             select(Store).where(Store.organization_id == org_id, Store.code == "SECOND")
         )
         assert store is not None
-        store.is_active = False
-    with pytest.raises(ValidationFailedError, match="SECOND is closed"):
+        store.state = StoreState.BLOCKED
+    with pytest.raises(ValidationFailedError, match="SECOND is not trading"):
         await shop.grant(telegram_id(), "SECOND", "SELLER")
 
 

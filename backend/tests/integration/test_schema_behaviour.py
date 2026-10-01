@@ -19,7 +19,7 @@ from app.modules.authz.models import Membership, Role
 from app.modules.authz.permissions import RoleCode
 from app.modules.authz.service import resolve_scope, seed_default_roles
 from app.modules.identity.models import AppUser
-from app.modules.tenancy.models import Organization, Store, StoreKind
+from app.modules.tenancy.models import Organization, Store, StoreKind, StoreState
 from tests.conftest import requires_database
 
 pytestmark = [pytest.mark.integration, requires_database()]
@@ -208,7 +208,10 @@ async def test_membership_cannot_borrow_another_organizations_role(
 
 
 async def test_closing_a_store_revokes_its_sellers(session: AsyncSession) -> None:
-    """Store-scoped membership dies with the store, like the org-wide one."""
+    """A store-scoped membership grants nothing while its store does not
+    trade, not even a read. Its seller is told the state, and still signs in:
+    being in a blocked store is not having no access (owner decisions,
+    2026-10-01)."""
     org = await _organization(session)
     roles = await seed_default_roles(session, org.id)
     store = Store(organization_id=org.id, name="A", code="A", kind=StoreKind.PRIMARY)
@@ -227,13 +230,15 @@ async def test_closing_a_store_revokes_its_sellers(session: AsyncSession) -> Non
 
     assert store.id in (await resolve_scope(session, user.id)).store_permissions
 
-    store.is_active = False
+    store.state = StoreState.BLOCKED
     await session.flush()
 
-    from app.core.errors import AuthenticationFailedError
-
-    with pytest.raises(AuthenticationFailedError):
-        await resolve_scope(session, user.id)
+    for reading in (False, True):
+        scope = await resolve_scope(session, user.id, reading=reading)
+        assert store.id not in scope.store_permissions
+        assert scope.closed_stores == {store.id: "BLOCKED"}
+        assert scope.readable_closed_stores == frozenset()
+        assert scope.permissions_for(store.id) == frozenset()
 
 
 async def test_a_user_in_two_organizations_is_refused_not_guessed(

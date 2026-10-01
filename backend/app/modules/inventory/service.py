@@ -48,12 +48,13 @@ from app.modules.inventory.models import (
     StockAdjustment,
     StockLot,
 )
+from app.modules.tenancy.models import StockLocation
 from app.modules.tenancy.service import (
     accessible_locations,
     damaged_returns_locations,
+    hold_trading_stores,
     require_location_access,
     validate_active_locations,
-    validate_active_stores,
     validate_locations,
 )
 
@@ -349,7 +350,9 @@ async def lock_stock(
         session, organization_id=organization_id, location_ids={key[0] for key in ordered}
     )
     if acting_store_ids:
-        await validate_active_stores(
+        # Held, not only read: a store blocked or archived while this command
+        # runs must wait for it, or refuse it (owner decisions, 2026-10-01).
+        await hold_trading_stores(
             session, organization_id=organization_id, store_ids=acting_store_ids
         )
     await validate_stock_references(
@@ -743,6 +746,26 @@ async def readable_stock(
         )
         for row in rows
     ]
+
+
+async def units_held(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """How many units stand in each of these warehouses, for those holding
+    any. Only an empty store is archived (owner decision, 2026-10-01)."""
+    if not location_ids:
+        return {}
+    rows = await session.execute(
+        select(Inventory.location_id, func.sum(Inventory.quantity))
+        .join(StockLocation, StockLocation.id == Inventory.location_id)
+        .where(
+            StockLocation.organization_id == organization_id,
+            Inventory.location_id.in_(location_ids),
+            Inventory.quantity > 0,
+        )
+        .group_by(Inventory.location_id)
+    )
+    return {location_id: int(units) for location_id, units in rows}
 
 
 async def current_quantity(

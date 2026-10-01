@@ -259,13 +259,13 @@ async def test_store_queues_are_separate_within_one_organization(maker):
 
 async def test_inactive_store_history_is_readable_but_rejection_is_refused(maker):
     from app.core.errors import NotFoundError
-    from app.modules.tenancy.models import Store
+    from app.modules.tenancy.models import Store, StoreState
 
     async with maker() as session:
         shop = await make_shop(session)
         first = await proposal(session, shop)
         await session.execute(
-            update(Store).where(Store.id == shop.store_id).values(is_active=False)
+            update(Store).where(Store.id == shop.store_id).values(state=StoreState.BLOCKED)
         )
         await session.commit()
         page = await list_decisions(session, scope=scope(shop), store_id=shop.store_id)

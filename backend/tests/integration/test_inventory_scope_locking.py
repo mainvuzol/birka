@@ -11,10 +11,10 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-from app.core.errors import NotFoundError
+from app.core.errors import NotFoundError, StoreNotTradingError
 from app.modules.inventory.models import AcquisitionType, Inventory, MovementType, StockLot
 from app.modules.inventory.service import MovementRequest, apply_movements, lock_stock
-from app.modules.tenancy.models import StockLocation, Store
+from app.modules.tenancy.models import StockLocation, Store, StoreState
 from tests.conftest import provision_location, requires_database
 from tests.integration.test_sale_command import make_shop
 
@@ -60,7 +60,7 @@ async def test_stock_rejects_invalid_scope_before_creating_rows(
             # would have left the acting store unvalidated entirely.
             store = await session.get(Store, own.store_id)
             assert store is not None
-            store.is_active = False
+            store.state = StoreState.BLOCKED
             await session.flush()
         elif foreign_part.startswith("missing_"):
             i = {"missing_location": 0, "missing_variant": 1, "missing_size": 2}[foreign_part]
@@ -69,7 +69,10 @@ async def test_stock_rejects_invalid_scope_before_creating_rows(
             i = {"location": 0, "variant": 1, "size": 2}[foreign_part]
             key[i] = [foreign.location_id, foreign.variant_id, foreign.size_id][i]
         # Include a valid key first: validation must finish before ANY upsert.
-        with pytest.raises(NotFoundError):
+        # A store that does not trade is refused by name (owner decisions,
+        # 2026-10-01); everything else is no such thing.
+        refusal = StoreNotTradingError if foreign_part == "inactive_store" else NotFoundError
+        with pytest.raises(refusal):
             await lock_stock(
                 session,
                 organization_id=own.organization_id,

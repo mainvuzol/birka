@@ -1,8 +1,56 @@
+/**
+ * Whether a store trades (owner decisions, 2026-10-01). A blocked or archived
+ * one does nothing: the owner and the network's managers read it, and its
+ * own people learn only its state and since when.
+ */
+export type StoreState = "ACTIVE" | "BLOCKED" | "ARCHIVED";
+
 export interface Store {
   id: string;
   name: string;
   code: string;
+  state: StoreState;
+  /** When the state last changed; null when unknown. */
+  state_since: string | null;
+  /** In a store that does not trade: what this person may still read there. */
   permissions: string[];
+}
+
+/** What is read, never changed, by the permissions that open these screens. */
+const reads = new Set([
+  "sale:view",
+  "inventory:view",
+  "sale:credit",
+  "damaged:handle",
+  "report:view_financial",
+]);
+
+/**
+ * The store as its screens should see it: one that does not trade keeps only
+ * what opens a screen to read, so no button that changes anything is shown.
+ * The server refuses those anyway (`STORE_NOT_TRADING`).
+ */
+export function asShown(store: Store): Store {
+  return store.state === "ACTIVE"
+    ? store
+    : {
+        ...store,
+        permissions: store.permissions.filter((permission) =>
+          reads.has(permission),
+        ),
+      };
+}
+
+/** «Заблоковано власником з 01.10.2026», or «Закрито (архів) …». */
+export function stateText(store: Pick<Store, "state" | "state_since">): string {
+  const since = store.state_since
+    ? ` з ${new Date(store.state_since).toLocaleDateString("uk-UA")}`
+    : "";
+  return store.state === "BLOCKED"
+    ? `Заблоковано власником${since}`
+    : store.state === "ARCHIVED"
+      ? `Закрито, в архіві${since}`
+      : "Працює";
 }
 export interface Me {
   user_id: string;

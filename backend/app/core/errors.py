@@ -74,6 +74,19 @@ class ForbiddenStoreError(DomainError):
     message = "You do not have access to this store"
 
 
+class StoreNotTradingError(DomainError):
+    """The store is blocked or archived, and nothing is done in it.
+
+    Its own code so the app can say which, and since when (owner decisions,
+    2026-10-01): the owner and the network's managers still read it, and
+    nobody changes it until the owner lets it trade again.
+    """
+
+    code = "STORE_NOT_TRADING"
+    http_status = 403
+    message = "This store is not trading"
+
+
 class LocationAccessDeniedError(DomainError):
     """The person may act; their store may not act *here*.
 
@@ -286,6 +299,7 @@ __all__ = [
     "RefundExceedsSoldError",
     "SessionExpiredError",
     "SnapshotConflictError",
+    "StoreNotTradingError",
     "UnknownSizeStockError",
     "ValidationFailedError",
 ]

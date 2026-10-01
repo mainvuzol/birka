@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import IdempotencyConflictError, NotFoundError, ValidationFailedError
@@ -307,6 +307,30 @@ async def create_order(
     session.add_all(items)
     return await _save(
         session, scope, order, items, command_id, request_fingerprint, "created", None
+    )
+
+
+# An order not yet collected, cancelled or come back: its goods are still
+# held for the customer.
+OPEN_STATUSES = frozenset(
+    {OrderStatus.READY_TO_DISPATCH, OrderStatus.DISPATCHED, OrderStatus.ARRIVED}
+)
+
+
+async def open_order_count(
+    session: AsyncSession, *, organization_id: uuid.UUID, store_id: uuid.UUID
+) -> int:
+    """How many of this store's orders are still open. Only a store with
+    none is archived (owner decision, 2026-10-01)."""
+    return int(
+        await session.scalar(
+            select(func.count(CustomerOrder.id)).where(
+                CustomerOrder.organization_id == organization_id,
+                CustomerOrder.store_id == store_id,
+                CustomerOrder.status.in_([status.value for status in OPEN_STATUSES]),
+            )
+        )
+        or 0
     )
 
 

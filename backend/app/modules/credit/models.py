@@ -8,6 +8,9 @@ The owner decided on 2026-10-01 (business-rules.md, "paying in parts"):
 - there is no schedule: the customer pays when they can, and the shop sees
   what was paid, what is left, and when the last payment came;
 - a seller may sell this way and take a payment, in the store that sold;
+  while that store is blocked or archived, any store of the network that
+  trades takes it, and the debt stays the selling store's (owner decision,
+  2026-10-01, "store states");
 - goods returned first reduce what is owed; money goes back only when the
   customer has paid more than what they keep is worth;
 - the owner may write off a debt that will not be paid, with a reason.
@@ -72,7 +75,8 @@ class CustomerCredit(UUIDPrimaryKey, TimestampMixin, Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), nullable=False
     )
-    # The store that sold, and the only one that takes the payments.
+    # The store that sold, and the one that takes the payments while it
+    # trades.
     store_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
     sale_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("sale.id", ondelete="RESTRICT"), nullable=False
@@ -145,6 +149,13 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
     # A write-off's reason.
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # A payment taken by another store, because the one that sold was not
+    # trading: that store took the money. NULL for every other entry, so a
+    # payment taken where the goods were sold reads as it always has, and no
+    # row of this append-only ledger had to be rewritten to add it.
+    taken_at_store_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=True
+    )
 
     __table_args__ = (
         CheckConstraint("kind IN ('PAYMENT', 'RETURN', 'WRITE_OFF')", name="kind_known"),
@@ -158,6 +169,15 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
             name="command_names_payment",
         ),
         CheckConstraint("(kind = 'WRITE_OFF') = (note IS NOT NULL)", name="write_off_says_why"),
+        CheckConstraint(
+            "taken_at_store_id IS NULL OR kind = 'PAYMENT'", name="only_a_payment_is_taken"
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "taken_at_store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_credit_entry_org_taken_at_store",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint("organization_id", "command_id", name="uq_credit_entry_org_command"),
         UniqueConstraint("refund_id", name="uq_credit_entry_refund_id"),
         Index("ix_credit_entry_credit_id_created_at", "credit_id", "created_at"),

@@ -336,3 +336,29 @@ See the [report](returns-elsewhere-report.md).
   ledger.
 - **A closed store's own returns keep the old rule.** It may refund without
   restocking. Taking back another store's goods there is refused.
+  *Superseded by store states (2026-10-01): a blocked or archived store takes
+  nothing back.*
+
+## Store states — 2026-10-01
+
+See the [report](store-states-report.md).
+
+- **A command already running when a store is blocked finishes.** A command
+  that moves stock holds its store, so a change of state waits for it.
+  Anything else checked the store when the request arrived: a payment or an
+  order step sent in that instant may still land. A block stops what comes
+  after it, not what was already under way.
+- **Goods could reach an archived store's own warehouse through another
+  store,** if an owner ever grants that other store explicit access to it.
+  The archive counts the warehouse empty when it closes. Nothing yet stops
+  another store receiving into it later. No such grant exists in the shop
+  today.
+- **Money taken by one store for another's debt is recorded, not settled.**
+  Each payment names the store that took it, as each return does. Nothing
+  adds it up between stores yet.
+- **The network's owner cannot see a blocked store's private warehouse.**
+  A network-wide role never reaches a private warehouse (owner rule of
+  2026-09-23), blocked or not. The archive's refusal names it and its units.
+- **"Only reading" is decided by the HTTP method.** Every command is a POST;
+  a GET that changed something would be let through in a closed store. None
+  does today, and a review of every `GET` handler found none writing.

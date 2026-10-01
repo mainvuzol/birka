@@ -9,7 +9,14 @@ import {
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
-import { decimal, kopecks, money, statusLabels } from "@/orders/types";
+import {
+  asShown,
+  decimal,
+  kopecks,
+  money,
+  stateText,
+  statusLabels,
+} from "@/orders/types";
 import type {
   Me,
   Store,
@@ -49,6 +56,8 @@ import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
+import { Stores } from "@/stores/Stores";
+import { loadStateCommand, useStateCommand } from "@/stores/commands";
 import {
   loadReturn,
   resolveReturn,
@@ -159,18 +168,50 @@ export function App(): JSX.Element {
               >
                 {s.name}
                 <small>{s.code}</small>
+                {s.state !== "ACTIVE" && <small>{stateText(s)}</small>}
               </button>
             ))
           )}
         </section>
+      ) : store.state !== "ACTIVE" && store.permissions.length === 0 ? (
+        // Its own people learn the state and since when, never why (owner
+        // decision, 2026-10-01).
+        <section>
+          <div className="toolbar">
+            <h2>{store.name}</h2>
+            <button
+              className="quiet"
+              onClick={() => {
+                setStoreId("");
+              }}
+            >
+              Змінити магазин
+            </button>
+          </div>
+          <h3>{stateText(store)}</h3>
+          <p role="alert">
+            Роботу в цьому магазині зупинено: продажі, приймання, повернення й
+            оплати в ньому не проводяться. Зверніться до власника.
+          </p>
+          <button
+            onClick={() => {
+              void auth.refetch();
+            }}
+          >
+            Оновити
+          </button>
+        </section>
       ) : (
         <Workspace
           key={store.id}
-          store={store}
+          store={asShown(store)}
           token={auth.data.token}
           me={auth.data.me}
           changeStore={() => {
             setStoreId("");
+          }}
+          storesChanged={() => {
+            void auth.refetch();
           }}
         />
       )}
@@ -182,11 +223,14 @@ function Workspace({
   token,
   me,
   changeStore,
+  storesChanged,
 }: {
   store: Store;
   token: string;
   me: Me;
   changeStore: () => void;
+  /** The owner changed a store's state: what the app knows is read again. */
+  storesChanged: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
   const [tab, setTab] = useState<
@@ -201,7 +245,26 @@ function Workspace({
     | "openings"
     | "credits"
     | "backups"
+    | "stores"
   >("list");
+  // A store that does not trade is read, and nothing else is done in it
+  // (owner decisions, 2026-10-01). `store` already shows only what reads.
+  const trading = store.state === "ACTIVE";
+  // Blocking, archiving and reopening a store: the network's owner only.
+  const canManageStores = me.organization_permissions.includes("store:manage");
+  const storesKey = `birka:store-state-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [storesStorageError, setStoresStorageError] = useState(false);
+  const stateCommand = useStateCommand();
+  useEffect(() => {
+    if (!canManageStores) return;
+    try {
+      const saved = loadStateCommand(storesKey);
+      useStateCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("stores");
+    } catch {
+      setStoresStorageError(true);
+    }
+  }, [storesKey, canManageStores]);
   // The owner's section. A backup is of the whole server, so only a grant
   // held organization-wide opens it, never one for a store.
   const canSeeBackups = me.organization_permissions.includes("backup:view");
@@ -352,8 +415,11 @@ function Workspace({
     returnStorageError || returnCommand.busy || returnCommand.pending !== null;
   const creditUnsettled =
     creditStorageError || creditCommand.busy || creditCommand.pending !== null;
-  // Every journal but the stock correction's own, which its form reads itself.
-  const otherThanAdjustment =
+  const storesUnsettled =
+    storesStorageError || stateCommand.busy || stateCommand.pending !== null;
+  // Every journal but the stock correction's and the store states' own,
+  // which their screens read themselves.
+  const othersUnsettled =
     busy ||
     pending !== null ||
     storageError ||
@@ -368,10 +434,12 @@ function Workspace({
     receiptCommand.pending !== null ||
     returnUnsettled ||
     creditUnsettled;
+  const otherThanAdjustment = othersUnsettled || storesUnsettled;
   const adjustmentUnsettled =
     adjustmentStorageError ||
     adjustmentCommand.busy ||
     adjustmentCommand.pending !== null;
+  const otherThanStores = othersUnsettled || adjustmentUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
   return (
     <>
@@ -381,6 +449,12 @@ function Workspace({
           Змінити магазин
         </button>
       </div>
+      {!trading && (
+        <p className="notice" role="status">
+          {stateText(store)}. Лише перегляд: продажі, приймання, повернення й
+          оплати в цьому магазині зупинено.
+        </p>
+      )}
       <nav aria-label="Розділи">
         <button
           className={tab === "list" ? "active" : "quiet"}
@@ -504,11 +578,28 @@ function Workspace({
             Резервні копії{backupsNeedYou ? " ⚠" : ""}
           </button>
         )}
+        {canManageStores && (
+          <button
+            className={tab === "stores" ? "active" : "quiet"}
+            disabled={otherThanStores}
+            onClick={() => {
+              setTab("stores");
+            }}
+          >
+            Магазини
+          </button>
+        )}
       </nav>
       {catalogStorageError && (
         <p role="alert">
           Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
           застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {storesStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані
+          застосунку.
         </p>
       )}
       {storageError && (
@@ -921,6 +1012,10 @@ function Workspace({
             store={store}
             token={token}
             journalKey={creditKey}
+            readOnly={!trading}
+            networkOwner={me.organization_permissions.includes(
+              "credit:write_off",
+            )}
             blocked={
               storageError ||
               catalogStorageError ||
@@ -943,7 +1038,12 @@ function Workspace({
         )
       ) : tab === "damaged" ? (
         store.permissions.includes("damaged:handle") ? (
-          <Damaged store={store} token={token} blocked={blocked} />
+          <Damaged
+            store={store}
+            token={token}
+            blocked={blocked}
+            readOnly={!trading}
+          />
         ) : (
           <p role="alert">Немає доступу до розділу «Брак».</p>
         )
@@ -963,6 +1063,18 @@ function Workspace({
           <Backups token={token} scopeKey={backupsKey} />
         ) : (
           <p role="alert">Цей розділ бачить лише власник.</p>
+        )
+      ) : tab === "stores" ? (
+        canManageStores ? (
+          <Stores
+            storeId={store.id}
+            token={token}
+            journalKey={storesKey}
+            blocked={otherThanStores}
+            changed={storesChanged}
+          />
+        ) : (
+          <p role="alert">Цей розділ бачить лише власник мережі.</p>
         )
       ) : tab === "catalog" ? (
         store.permissions.includes("catalog:confirm") ? (
