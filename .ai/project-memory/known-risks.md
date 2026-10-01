@@ -299,3 +299,17 @@ See the [report](opening-stock-screen-report.md).
 - **A slow review is the price of no invented counts.** Hundreds of lines on
   a phone take time. Not measured with real notebooks.
 
+
+## Paying in parts — 2026-10-01
+
+See the [credit report](customer-credit-report.md).
+
+- **A return of a sale paid in parts must hand back `cash_back`, not
+  `total_amount`.** The returns screen does not know that yet. It will, with
+  the credit screens. No such sale can be made from the app before then.
+- **What is owed is the agreed amount less the ledger's rows.** A written-off
+  debt shows nothing owed whatever its rows add up to. A later return only
+  ever pays back cash actually paid.
+- **The customers' phones are personal data.** Everyone holding `sale:credit`
+  in the store sees them, as the owner chose, and so do the backups. They are
+  kept out of the audit log, the logs and the receipt.

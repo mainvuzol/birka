@@ -108,6 +108,15 @@ class RefundItemResponse(BaseModel):
     display_name: str
 
 
+class CreditSettlementResponse(BaseModel):
+    """A sale paid in parts: the returned goods' worth, split (owner decision,
+    2026-10-01). Hand the customer `cash_back`, not `total_amount`."""
+
+    debt_reduced: Decimal
+    cash_back: Decimal
+    owed_after: Decimal
+
+
 class RefundResponse(BaseModel):
     id: uuid.UUID
     sale_id: uuid.UUID
@@ -120,6 +129,8 @@ class RefundResponse(BaseModel):
         default_factory=list,
         description="REFUND_RETURN stock movements written for the restocked lines.",
     )
+    # None for a sale paid in full, whose `total_amount` goes back in cash.
+    credit: CreditSettlementResponse | None = None
 
 
 def _to_response(result: RefundResult) -> RefundResponse:
@@ -131,6 +142,15 @@ def _to_response(result: RefundResult) -> RefundResponse:
         total_amount=result.refund.total_amount,
         reason=result.refund.reason,
         movements=result.movements,
+        credit=(
+            CreditSettlementResponse(
+                debt_reduced=result.credit.debt_reduced,
+                cash_back=result.credit.cash_back,
+                owed_after=result.credit.owed_after,
+            )
+            if result.credit is not None
+            else None
+        ),
         items=[
             RefundItemResponse(
                 id=line.refund_item.id,

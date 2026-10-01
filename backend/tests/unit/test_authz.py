@@ -53,6 +53,8 @@ EXPECTED_SELLER = {
     Permission.CATALOG_CONFIRM,
     # Owner decision, 2026-10-01: whoever takes returns handles «Брак».
     Permission.DAMAGED_HANDLE,
+    # Owner decision, 2026-10-01: a seller sells in parts and takes payments.
+    Permission.SALE_CREDIT,
 }
 EXPECTED_MANAGER = EXPECTED_SELLER | {
     Permission.INVENTORY_ADJUST,
@@ -74,6 +76,8 @@ EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.USER_MANAGE,
     # Owner decision, 2026-09-30: backups are "a section only the owner sees".
     Permission.BACKUP_VIEW,
+    # Owner decision, 2026-10-01: the owner writes off a debt, with a reason.
+    Permission.CREDIT_WRITE_OFF,
 }
 
 
@@ -149,6 +153,15 @@ def test_the_owner_and_managers_set_prices_and_a_seller_does_not() -> None:
     assert Permission.CATALOG_SET_PRICE in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
     assert Permission.CATALOG_SET_PRICE in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
     assert Permission.CATALOG_SET_PRICE not in DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
+
+
+def test_a_seller_sells_in_parts_and_only_the_owner_writes_a_debt_off() -> None:
+    """Owner decisions, 2026-10-01: "a seller and above" sell in parts and
+    take payments; the owner alone writes off what will not be paid."""
+    for role in RoleCode:
+        assert Permission.SALE_CREDIT in DEFAULT_ROLE_PERMISSIONS[role]
+    assert Permission.CREDIT_WRITE_OFF in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
+    assert Permission.CREDIT_WRITE_OFF not in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
 
 
 def test_only_the_owner_sees_the_backups() -> None:

@@ -30,6 +30,7 @@ from app.modules.catalog.models import (
     SourceIdentity,
     VariantPrice,
 )
+from app.modules.credit.models import CreditEntry, CustomerCredit
 from app.modules.damaged.models import DamagedUnit
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import (
@@ -61,6 +62,8 @@ __all__ = [
     "BusinessCategory",
     "CanonicalConcept",
     "CatalogMatchDecision",
+    "CreditEntry",
+    "CustomerCredit",
     "CustomerOrder",
     "CustomerOrderItem",
     "DamagedUnit",

@@ -232,6 +232,25 @@ forbidden_modules = [
     "app.modules.snapshots",
 ]
 
+# A sale paid in parts (owner decisions, 2026-10-01): the credit module keeps
+# what is owed and moves no goods. Returns reach it through the refund, which
+# hands it the returned goods' worth; it never reaches back into a refund or
+# the ledger, so what is owed can never move stock or the other way round.
+[[tool.importlinter.contracts]]
+name = "credit keeps money owed and moves no stock"
+type = "forbidden"
+source_modules = ["app.modules.credit"]
+forbidden_modules = [
+    "app.modules.inventory",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+    "app.modules.damaged",
+]
+# Only DIRECT imports: the sale it reads necessarily sits on inventory.
+allow_indirect_imports = true
+
 [[tool.importlinter.contracts]]
 name = "inventory may read catalog but sales may not write stock directly"
 type = "forbidden"

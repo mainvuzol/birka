@@ -64,6 +64,13 @@ class Permission(StrEnum):
     # backup is of the whole server, not of one store.
     BACKUP_VIEW = "backup:view"
 
+    # A sale paid in parts (owner decision, 2026-10-01): selling that way,
+    # taking a later payment in the store that sold, and seeing the store's
+    # debts with the customers' names and phones. A seller holds it.
+    SALE_CREDIT = "sale:credit"
+    # Writing off what a customer will not pay, with a reason. The owner's.
+    CREDIT_WRITE_OFF = "credit:write_off"
+
 
 class RoleCode(StrEnum):
     OWNER = "OWNER"
@@ -96,6 +103,8 @@ _SELLER: frozenset[Permission] = frozenset(
         Permission.CATALOG_CONFIRM,
         # Owner decision, 2026-10-01: whoever takes returns handles «Брак».
         Permission.DAMAGED_HANDLE,
+        # Owner decision, 2026-10-01: a seller sells in parts and takes payments.
+        Permission.SALE_CREDIT,
     }
 )
 
@@ -121,6 +130,8 @@ _OWNER: frozenset[Permission] = _MANAGER | frozenset(
         Permission.SNAPSHOT_APPROVE,
         Permission.USER_MANAGE,
         Permission.BACKUP_VIEW,
+        # Owner decision, 2026-10-01: the owner writes off a debt, with a reason.
+        Permission.CREDIT_WRITE_OFF,
     }
 )
 
