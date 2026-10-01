@@ -478,3 +478,58 @@ How it is carried out, not decided by the owner:
 - **Cancelling twice changes nothing**: the second answers with the return
   as it is.
 
+
+## Owner decision — 2026-10-01 (the store's purchases in parts)
+
+Asked when the owner chose it as the next work, after returns to a
+supplier. It is the last part of the owner's decisions of 2026-09-15 that was
+still unbuilt: "record separately when the store purchased goods on
+installments".
+
+- **An invoice is recorded on its own, never with a delivery.** A supplier
+  from the network's list, the sum on the supplier's invoice, typed in, and a
+  note. Receiving goods stays as it is; the purchase prices on received
+  lines stay optional and separate, and need not add up to an invoice.
+- **Each invoice is its own debt.** A payment names the invoice, as a payment
+  of a customer's debt names the sale. The app also shows what the store owes
+  each supplier in all.
+- **Anything from nothing to the whole sum may be paid at once.** Paid in
+  full, the invoice is closed at once and stays in the history.
+- **No schedule.** The store sees what was paid, what is left, and when the
+  last payment was made.
+- **The owner and managers record invoices and payments:** the same people
+  who return goods to a supplier. A seller does not see these debts.
+- **Each store keeps its own invoices,** with its own total. The list of
+  suppliers is shared by the network.
+- **Goods returned to a supplier are set off against an invoice:** a
+  "set-off" on an invoice of the same supplier, for the sum the supplier
+  counted for the returned goods, naming that return. One return may be set
+  off against several invoices, in parts, when the supplier counted more
+  than one invoice still owes.
+- **A return set off against an invoice is not cancelled** while that
+  set-off stands. The app says which set-off to cancel first.
+- **What was recorded by mistake is cancelled, saying why:** a payment, a
+  set-off, or the whole invoice, which is then recorded again. What was
+  cancelled stays in the history. An invoice with a payment or a set-off
+  still standing is not cancelled: those are cancelled first, so no money
+  disappears by accident.
+- **Only the owner writes off what is left,** saying why: when the supplier
+  forgave it.
+- **While a store is blocked or archived, any store of the network that
+  trades pays its invoices,** as it takes payments of that store's
+  customers' debts. Open invoices do not keep a store from the archive.
+
+How it is carried out, not decided by the owner:
+- **Never more than is owed** is paid, set off, or paid at once.
+- **A write-off is final**, as a customer's debt's write-off is: neither it,
+  nor the payments before it, nor the invoice is cancelled afterwards.
+- **A set-off names a return of the same store and the same supplier** that
+  still stands.
+- **A payment made by another store, while the one that owes did not trade,
+  is cancelled there too**, under the same rule as paying it. A set-off and
+  the invoice itself are cancelled only in the store that owes, while it
+  trades.
+- **While a store does not trade, the network's owner writes off** what it
+  owes, as for its customers' debts.
+- **Cancelling twice changes nothing**: the second answers with the invoice
+  as it is.

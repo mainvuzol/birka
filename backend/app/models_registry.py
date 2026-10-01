@@ -51,6 +51,10 @@ from app.modules.snapshots.models import (
 )
 from app.modules.suppliers.models import (
     Supplier,
+    SupplierInvoice,
+    SupplierInvoiceCancel,
+    SupplierInvoiceEntry,
+    SupplierInvoiceEntryCancel,
     SupplierReturn,
     SupplierReturnCancel,
     SupplierReturnLine,
@@ -114,6 +118,10 @@ __all__ = [
     "StoreLocationAccess",
     "StoreStateChange",
     "Supplier",
+    "SupplierInvoice",
+    "SupplierInvoiceCancel",
+    "SupplierInvoiceEntry",
+    "SupplierInvoiceEntryCancel",
     "SupplierReturn",
     "SupplierReturnCancel",
     "SupplierReturnLine",

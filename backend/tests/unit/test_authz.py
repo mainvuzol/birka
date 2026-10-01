@@ -73,6 +73,9 @@ EXPECTED_MANAGER = EXPECTED_SELLER | {
     # Owner decision, 2026-10-01: the owner and managers return goods to a
     # supplier; a seller does not.
     Permission.SUPPLIER_RETURN,
+    # Owner decision, 2026-10-01: the same people keep what the store owes its
+    # suppliers; a seller never sees it.
+    Permission.SUPPLIER_DEBT,
 }
 EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.SNAPSHOT_APPROVE,
@@ -84,6 +87,9 @@ EXPECTED_OWNER = EXPECTED_MANAGER | {
     # Owner decision, 2026-10-01: the owner blocks, archives and reopens a
     # store. Honoured network-wide only.
     Permission.STORE_MANAGE,
+    # Owner decision, 2026-10-01: only the owner writes off what a supplier
+    # forgave.
+    Permission.SUPPLIER_WRITE_OFF,
 }
 
 

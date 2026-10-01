@@ -369,7 +369,9 @@ See the [report](supplier-returns-report.md).
 
 - **No money is recorded with a return.** The owner chose goods only: what
   the supplier pays back or sets off stays outside the system until the
-  store's purchase installments are built.
+  store's purchase installments are built. *Superseded (2026-10-01): what
+  the supplier counts for returned goods is a set-off on an invoice, see
+  below.*
 - **Receiving does not record a supplier.** A return names one, but nothing
   links it to the delivery the goods came in.
 - **A cancellation puts goods back where they left.** If that warehouse has
@@ -377,3 +379,24 @@ See the [report](supplier-returns-report.md).
 - **Acquisition costs are untouched.** A return does not say which lot went
   back; the ledger records the units only.
 
+
+## What a store owes its suppliers — 2026-10-01
+
+See the [report](supplier-invoices-report.md).
+
+- **An invoice is not linked to the goods it paid for.** The owner chose to
+  record it on its own. Nothing checks that the sum on it matches what was
+  received, or the purchase prices typed on received lines.
+- **A set-off's sum is what the person types.** Nothing ties it to the
+  returned goods' worth: no purchase price is known for them. One return may
+  be set off against several invoices, and nothing caps the total.
+- **A payment above what is owed is refused**, so an advance to a supplier,
+  or money the supplier owes back, has no place yet.
+- **A write-off is final.** A write-off by mistake can only be answered
+  outside the app; the owner did not ask for a way back, as for a customer's
+  debt.
+- **An archived store's invoices stay open until another store pays them or
+  the owner writes them off.** They do not keep it from the archive, as the
+  owner chose.
+- **A set-off of a store that does not trade cannot be cancelled** until it
+  trades again: only a payment is cancelled elsewhere.

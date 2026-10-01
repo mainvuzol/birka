@@ -145,8 +145,11 @@ async def test_a_sale_paid_in_part_leaves_the_rest_owed(maker):
             )
         )
     assert entry.after == {"sale_id": sale["id"], "amount": "3000.00", "paid_now": "1000.00"}
-    # The phone stays out of the audit log, and out of the receipt.
-    assert "067" not in str(entry.after)
+    # The phone stays out of the audit log, and out of the receipt. Looked for
+    # whole, in each spelling: three of its digits turn up in a random sale id
+    # now and then.
+    for spelling in ("+38 (067) 123-45-67", "0671234567", "123-45-67"):
+        assert spelling not in str(entry.after)
     assert "customer_phone" not in sale["credit"]
 
 

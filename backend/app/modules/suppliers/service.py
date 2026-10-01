@@ -17,6 +17,10 @@ Only goods free to sell leave: goods held for an order do not
 (I20): the same command is answered with the return, however late. A
 cancellation needs no name of its own: a return is cancelled once, and
 cancelling it again answers with it as it is.
+
+**A return set off against an invoice stands** until that set-off is
+cancelled (owner decision, 2026-10-01): its goods cannot come back while the
+supplier still counts them against what the store owes. See `invoices.py`.
 """
 
 from __future__ import annotations
@@ -34,7 +38,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import idempotency
 from app.core.errors import IdempotencyConflictError, NotFoundError, ValidationFailedError
 from app.core.logging import get_logger
-from app.core.text import is_storable
 from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
@@ -43,6 +46,15 @@ from app.modules.catalog.read import describe_variants, size_labels
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import MovementRequest, apply_movements
+from app.modules.suppliers import invoices
+from app.modules.suppliers.common import (
+    Cancellation,
+    SupplierView,
+    clean_note,
+    clean_reason,
+    clean_text,
+    supplier_view,
+)
 from app.modules.suppliers.models import (
     Supplier,
     SupplierReturn,
@@ -59,7 +71,6 @@ logger = get_logger(__name__)
 
 MAX_NAME = 200
 MAX_PHONE = 40
-MAX_TEXT = 1000
 MAX_LINES = 100
 MAX_QUANTITY = 10_000
 
@@ -72,26 +83,12 @@ class ReturnLine:
 
 
 @dataclass(frozen=True, slots=True)
-class SupplierView:
-    id: uuid.UUID
-    name: str
-    phone: str | None
-
-
-@dataclass(frozen=True, slots=True)
 class LineView:
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     quantity: int
     display_name: str
     size_label: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class Cancellation:
-    reason: str
-    by: str
-    at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,25 +105,21 @@ class ReturnView:
     at: datetime
     lines: list[LineView]
     cancelled: Cancellation | None
+    # What of it the supplier counts against the store's invoices now.
+    set_offs: list[invoices.SetOffView]
 
 
 def _normalized(name: str) -> str:
     return " ".join(name.split()).casefold()
 
 
-def _text(value: str | None, *, limit: int, reason: str, required: bool) -> str | None:
-    clean = " ".join((value or "").split()) if reason == "NAME" else (value or "").strip()
-    if not clean:
-        if required:
-            raise ValidationFailedError("Say it, please", reason=reason)
-        return None
-    if len(clean) > limit or not is_storable(clean):
-        raise ValidationFailedError(f"At most {limit} characters", reason=reason)
-    return clean
-
-
-def _view(supplier: Supplier) -> SupplierView:
-    return SupplierView(id=supplier.id, name=supplier.name, phone=supplier.phone)
+def _keeps_the_list(scope: RequestScope, store_id: uuid.UUID) -> None:
+    """Whoever returns goods here, or records what the store owes its
+    suppliers: both pick a supplier from the list, or add one."""
+    if scope.can(Permission.SUPPLIER_DEBT, store_id):
+        scope.require_store(store_id)
+        return
+    scope.require(Permission.SUPPLIER_RETURN, store_id)
 
 
 # --- the list ---------------------------------------------------------------
@@ -135,14 +128,15 @@ def _view(supplier: Supplier) -> SupplierView:
 async def list_suppliers(
     session: AsyncSession, *, scope: RequestScope, store_id: uuid.UUID
 ) -> list[SupplierView]:
-    """The network's suppliers, by name, for whoever returns goods here."""
-    scope.require(Permission.SUPPLIER_RETURN, store_id)
+    """The network's suppliers, by name, for whoever returns goods here or
+    records what the store owes them."""
+    _keeps_the_list(scope, store_id)
     rows = await session.scalars(
         select(Supplier)
         .where(Supplier.organization_id == scope.organization_id)
         .order_by(Supplier.normalized_name, Supplier.id)
     )
-    return [_view(row) for row in rows.all()]
+    return [supplier_view(row) for row in rows.all()]
 
 
 async def _same_name(
@@ -176,10 +170,10 @@ async def add_supplier(
 ) -> SupplierView:
     """A new supplier, added on the spot. A name already on the list, however
     spaced or capitalised, is refused with that supplier, to pick instead."""
-    scope.require(Permission.SUPPLIER_RETURN, store_id)
-    clean = _text(name, limit=MAX_NAME, reason="NAME", required=True)
+    _keeps_the_list(scope, store_id)
+    clean = clean_text(name, limit=MAX_NAME, reason="NAME", required=True)
     assert clean is not None
-    tel = _text(phone, limit=MAX_PHONE, reason="PHONE", required=False)
+    tel = clean_text(phone, limit=MAX_PHONE, reason="PHONE", required=False)
     normalized = _normalized(clean)
     existing = await _same_name(
         session, organization_id=scope.organization_id, normalized=normalized
@@ -213,7 +207,7 @@ async def add_supplier(
         entity_id=supplier.id,
         after={"name": clean, "phone": tel},
     )
-    return _view(supplier)
+    return supplier_view(supplier)
 
 
 async def edit_supplier(
@@ -225,8 +219,8 @@ async def edit_supplier(
     name: str,
     phone: str | None,
 ) -> SupplierView:
-    """A supplier's name or phone, corrected by whoever returns goods."""
-    scope.require(Permission.SUPPLIER_RETURN, store_id)
+    """A supplier's name or phone, corrected by whoever keeps the list."""
+    _keeps_the_list(scope, store_id)
     supplier = await session.scalar(
         select(Supplier)
         .where(Supplier.id == supplier_id, Supplier.organization_id == scope.organization_id)
@@ -234,9 +228,9 @@ async def edit_supplier(
     )
     if supplier is None:
         raise NotFoundError("Unknown supplier", supplier_id=str(supplier_id))
-    clean = _text(name, limit=MAX_NAME, reason="NAME", required=True)
+    clean = clean_text(name, limit=MAX_NAME, reason="NAME", required=True)
     assert clean is not None
-    tel = _text(phone, limit=MAX_PHONE, reason="PHONE", required=False)
+    tel = clean_text(phone, limit=MAX_PHONE, reason="PHONE", required=False)
     normalized = _normalized(clean)
     if normalized != supplier.normalized_name:
         existing = await _same_name(
@@ -246,7 +240,7 @@ async def edit_supplier(
             raise _duplicate(existing)
     before = {"name": supplier.name, "phone": supplier.phone}
     if before == {"name": clean, "phone": tel}:
-        return _view(supplier)
+        return supplier_view(supplier)
     supplier.name = clean
     supplier.normalized_name = normalized
     supplier.phone = tel
@@ -269,7 +263,7 @@ async def edit_supplier(
         before=before,
         after={"name": clean, "phone": tel},
     )
-    return _view(supplier)
+    return supplier_view(supplier)
 
 
 async def _supplier(
@@ -389,7 +383,21 @@ async def record_cancel(
     correlation_id: str | None,
 ) -> SupplierReturnCancel:
     """The whole return cancelled: its goods back where they were taken from.
-    The caller holds the return's row and has checked it stands."""
+    The caller holds the return's row and has checked it stands.
+
+    Refused while the supplier counts any of it against an invoice: that
+    set-off is cancelled first (owner decision, 2026-10-01). Holding the
+    return's row is what keeps a set-off from being added meanwhile."""
+    standing = await invoices.set_offs_of_return(session, supplier_return_id=supplier_return.id)
+    if standing:
+        raise ValidationFailedError(
+            "The supplier counts this return against an invoice: cancel that set-off first",
+            reason="SET_OFF",
+            set_offs=[
+                {"invoice_id": str(item.invoice_id), "amount": str(item.amount)}
+                for item in standing
+            ],
+        )
     lines = (
         await session.scalars(
             select(SupplierReturnLine).where(
@@ -468,16 +476,6 @@ async def is_cancelled(session: AsyncSession, *, supplier_return_id: uuid.UUID) 
             )
         )
     ) is not None
-
-
-def clean_reason(reason: str) -> str:
-    why = _text(reason, limit=MAX_TEXT, reason="NO_REASON", required=True)
-    assert why is not None
-    return why
-
-
-def clean_note(note: str | None) -> str | None:
-    return _text(note, limit=MAX_TEXT, reason="NOTE", required=False)
 
 
 async def returns_of_unit(session: AsyncSession, *, damaged_unit_id: uuid.UUID) -> int:
@@ -672,7 +670,7 @@ async def view(session: AsyncSession, row: SupplierReturn) -> ReturnView:
         store_id=row.store_id,
         location_id=row.location_id,
         location_name=places.get(row.location_id, ""),
-        supplier=_view(supplier),
+        supplier=supplier_view(supplier),
         damaged_unit_id=row.damaged_unit_id,
         note=row.note,
         by=by or "",
@@ -690,6 +688,7 @@ async def view(session: AsyncSession, row: SupplierReturn) -> ReturnView:
         cancelled=None
         if cancelled is None
         else Cancellation(reason=cancelled[0].reason, by=cancelled[1], at=cancelled[0].created_at),
+        set_offs=await invoices.set_offs_of_return(session, supplier_return_id=row.id),
     )
 
 

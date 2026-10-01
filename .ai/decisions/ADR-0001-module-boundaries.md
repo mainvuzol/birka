@@ -138,3 +138,18 @@ core` (+ audit).
   stock in «Брак» still changes only through returns and that section, and
   this module never imports `damaged`.
 - Contracts are in `backend/pyproject.toml`.
+
+2026-10-01 amendment (the store's purchases in parts): what a store owes its
+suppliers lives inside module `suppliers`, in `suppliers.invoices`
+(`supplier_invoice`, `supplier_invoice_entry`,
+`supplier_invoice_entry_cancel`, `supplier_invoice_cancel`). It is the same
+supplier and the same returns, so it is no module of its own.
+- It is money and moves no goods: `suppliers.invoices` and
+  `suppliers.common` never reach `inventory`, not even indirectly, and never
+  import the returns' service. A set-off only names a return that already
+  moved the goods.
+- The returns ask it whether a set-off of a return stands
+  (`suppliers.service → suppliers.invoices`), and refuse to cancel one that
+  does.
+- Contract "what a store owes its suppliers moves no goods" is in
+  `backend/pyproject.toml` (25 in all).
