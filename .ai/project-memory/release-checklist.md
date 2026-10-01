@@ -51,7 +51,7 @@ accepted.
 | **Store states** (blocked, archived), **payments and installments** | Owner decisions from 2026-09-15. They need the owner's rules before any code. |
 | **A return to the supplier** | Written off with a note until it has a step of its own. |
 | **Returns at another store** | An open owner question. A return goes through the store that sold. |
-| **Renaming a store** | No command yet. The seed names them «Основний магазин» and «Другий магазин». |
+| **Renaming a store** | Done on 2026-10-01 (owner decision): the seed takes the real names, and `scripts.stores rename` changes one on an owner's word. |
 | **Catalog: verified promotion and broader ambiguity resolution** (M1-021/022) | Needs human-confirmed evaluation data that does not exist yet. Review by a person works today. |
 | **Q5, confirming a transfer on arrival** | Transfers are single-step; nothing uses them yet. |
 | **A real device profile** (phone, mobile network, Telegram webview) | Row 21 is its practical form. |

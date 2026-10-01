@@ -108,11 +108,13 @@ Then:
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.seed_organization \
-  --telegram-user-id <the owner's number> --owner-name "<name>" --org-name "<shop>"
+  --telegram-user-id <the owner's number> --owner-name "<name>" --org-name "<shop>" \
+  --main-name "<the main store's name>" --second-name "<the second store's name>"
 ```
 
 This creates:
-- the stores `MAIN` («Основний магазин») and `SECOND` («Другий магазин»);
+- the stores `MAIN` and `SECOND`, with the names given (by default
+  «Основний магазин» and «Другий магазин»);
 - one warehouse both stores share;
 - each store's own «Брак»;
 - the default roles;
@@ -123,7 +125,12 @@ own. That warehouse is private to `SECOND`. Even the owner reaches it only
 with a role in `SECOND` itself (`scripts.people grant … --store SECOND`, step
 7). The seed is safe to run again: it keeps what exists.
 
-**No command renames a store yet.** The app shows the names above.
+**A name is changed later on the owner's word**, as people are:
+
+```sh
+docker compose run --rm --no-deps api python -m scripts.stores rename \
+  --approved-by <the owner's number> --store MAIN --name "<the new name>"
+```
 
 The owner presses «Спробувати ще раз» and is in.
 
