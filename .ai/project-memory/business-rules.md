@@ -282,6 +282,15 @@ Asked while drawing up the [release checklist](release-checklist.md).
 - **Moving goods between warehouses needs no screen at the start.** Both
   stores sell from one shared warehouse.
 
+## Owner decision — 2026-10-01 (store names)
+
+- **The stores carry their real names.** They are given when the server is
+  set up, and changed later on the server on an owner's word, as people
+  are. The app has no section for it.
+- **Who may rename a store:** whoever holds `user:manage` there. That is the
+  network's owner in any store, and a child store's owner in theirs.
+- **Each rename is recorded.**
+
 ## Owner decision — 2026-10-01 (paying in parts)
 
 Asked when the owner chose this as the next work. The 2026-09-15 decisions

@@ -101,7 +101,7 @@ async def _approver(session: AsyncSession, telegram_user_id: int) -> RequestScop
         raise refused from exc
 
 
-async def _authorize(session: AsyncSession, approved_by: int) -> RequestScope:
+async def authorize(session: AsyncSession, approved_by: int) -> RequestScope:
     """The owner on whose word a change is made, and their authority once the
     organization's changes are serialized — not before, when a change waiting
     for the lock could still be made on the word of an owner it removed."""
@@ -234,7 +234,7 @@ async def grant(
     yet: they are known by their Telegram number until they do, and Telegram's
     name for them replaces `name` the first time they sign in.
     """
-    scope = await _authorize(session, approved_by)
+    scope = await authorize(session, approved_by)
     store = await _store(session, scope.organization_id, store_code)
     if store is not None and not store.is_active:
         raise ValidationFailedError(f"Store {store.code} is closed", store_code=store.code)
@@ -313,7 +313,7 @@ async def remove(
     False when they were already out of it. A membership they hold elsewhere
     is untouched.
     """
-    scope = await _authorize(session, approved_by)
+    scope = await authorize(session, approved_by)
     store = await _store(session, scope.organization_id, store_code)
     user = await _person(session, telegram_user_id)
     membership = await _membership(
@@ -353,7 +353,7 @@ async def deactivate(session: AsyncSession, *, approved_by: int, telegram_user_i
     All or nothing: refused whole if any of it is beyond the approver. Returns
     how many memberships it ended; 0 when they had none left.
     """
-    scope = await _authorize(session, approved_by)
+    scope = await authorize(session, approved_by)
     user = await _person(session, telegram_user_id)
     memberships = (
         await session.scalars(
@@ -432,4 +432,4 @@ async def people(session: AsyncSession) -> list[Person]:
     ]
 
 
-__all__ = ["Access", "Person", "deactivate", "grant", "people", "remove"]
+__all__ = ["Access", "Person", "authorize", "deactivate", "grant", "people", "remove"]

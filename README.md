@@ -137,6 +137,10 @@ python -m scripts.people deactivate --approved-by <owner> --telegram-user-id <id
 
 See the [people report](.ai/project-memory/people-report.md).
 
+The stores' names are given at setup (`seed_organization --main-name …
+--second-name …`). Later, an owner's word changes one:
+`python -m scripts.stores rename --approved-by <owner> --store MAIN --name "…"`.
+
 ## Paying in parts
 
 A customer may take the goods, pay part now and owe the rest to the store
