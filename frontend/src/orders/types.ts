@@ -113,6 +113,46 @@ export interface Order {
   items: OrderItem[];
   /** A collected order paid in parts: what is paid and owed so far. */
   credit?: { credit_id: string; paid: string; owed: string } | null;
+  /** Where it goes (owner decisions, 2026-10-01); none on an order made
+   * before orders said so. */
+  destination?: Destination | null;
+  carrier?: Carrier | null;
+  waybill?: string | null;
+  abroad_note?: string | null;
+  /** One order only: every version of where it went. */
+  shipping_history?: ShippingChange[];
+  /** One order only: the store's other orders with the same waybill. */
+  same_waybill?: { id: string; status: Status }[];
+}
+export type Destination = "UKRAINE" | "ABROAD";
+export type Carrier = "NOVA_POSHTA" | "UKRPOSHTA" | "MEEST";
+export const carrierLabels: Record<Carrier, string> = {
+  NOVA_POSHTA: "Нова пошта",
+  UKRPOSHTA: "Укрпошта",
+  MEEST: "Міст",
+};
+export interface Shipping {
+  destination?: Destination | null;
+  carrier?: Carrier | null;
+  waybill?: string | null;
+  abroad_note?: string | null;
+}
+export interface ShippingChange extends Shipping {
+  kind: "CREATED" | "DISPATCHED" | "CORRECTED";
+  by: string;
+  at: string;
+}
+/** How an order goes, in a line: «Нова пошта · ТТН 2045…», «За кордон · …». */
+export function shippingText(shipping: Shipping): string {
+  if (!shipping.destination) return "Доставку не вказано";
+  if (shipping.destination === "ABROAD")
+    return shipping.abroad_note
+      ? `За кордон · ${shipping.abroad_note}`
+      : "За кордон";
+  const carrier = shipping.carrier ? carrierLabels[shipping.carrier] : "";
+  return shipping.waybill
+    ? `${carrier} · ТТН ${shipping.waybill}`
+    : `${carrier} · ТТН ще немає`;
 }
 export const statusLabels: Record<Status, string> = {
   READY_TO_DISPATCH: "До відправлення",

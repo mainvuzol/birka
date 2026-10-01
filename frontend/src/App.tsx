@@ -11,9 +11,11 @@ import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
 import {
   asShown,
+  carrierLabels,
   decimal,
   kopecks,
   money,
+  shippingText,
   stateText,
   statusLabels,
 } from "@/orders/types";
@@ -24,6 +26,9 @@ import type {
   StockOption,
   Line,
   Order,
+  Carrier,
+  Destination,
+  ShippingChange,
 } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { Catalog } from "@/catalog/Catalog";
@@ -322,6 +327,9 @@ function Workspace({
     backups.data !== undefined && backups.data.state !== "OK";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
+  // Orders found by their waybill (owner decision, 2026-10-01).
+  const [waybillQuery, setWaybillQuery] = useState("");
+  const [waybillSearch, setWaybillSearch] = useState("");
   const [storageError, setStorageError] = useState(false);
   const key = `birka:pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const catalogKey = `birka:catalog-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -430,10 +438,12 @@ function Workspace({
     }
   }, [key]);
   const list = useQuery({
-    queryKey: ["orders", store.id, offset],
+    queryKey: ["orders", store.id, offset, waybillSearch],
     queryFn: () =>
       api<{ orders: Order[]; has_more: boolean }>(
-        `/orders?store_id=${store.id}&limit=50&offset=${String(offset)}`,
+        `/orders?store_id=${store.id}&limit=50&offset=${String(offset)}${
+          waybillSearch ? `&waybill=${encodeURIComponent(waybillSearch)}` : ""
+        }`,
         token,
       ),
     enabled: store.permissions.includes("sale:view"),
@@ -1223,13 +1233,15 @@ function Workspace({
           store={store}
           token={token}
           blocked={blocked}
-          submit={(lines) => {
+          submit={(lines, destination, carrier) => {
             void run({
               path: "/orders",
               body: {
                 store_id: store.id,
                 command_id: crypto.randomUUID(),
                 lines,
+                destination,
+                ...(carrier ? { carrier } : {}),
               },
               label: "Резервування замовлення",
             });
@@ -1256,6 +1268,11 @@ function Workspace({
             />
           ) : (
             <OrderDetail
+              // Afresh once it moves on or says where it goes otherwise, so
+              // no form keeps what it showed before.
+              key={`${detail.data.id}:${detail.data.status}:${String(
+                detail.data.shipping_history?.length ?? 0,
+              )}`}
               order={detail.data}
               store={store}
               blocked={blocked}
@@ -1286,6 +1303,29 @@ function Workspace({
               Оновити
             </button>
           </div>
+          {store.permissions.includes("sale:view") && (
+            <form
+              className="search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setWaybillSearch(waybillQuery.trim());
+                setOffset(0);
+              }}
+            >
+              <label>
+                Пошук за номером накладної
+                <input
+                  type="search"
+                  value={waybillQuery}
+                  maxLength={64}
+                  onChange={(event) => {
+                    setWaybillQuery(event.target.value);
+                  }}
+                />
+              </label>
+              <button type="submit">Знайти</button>
+            </form>
+          )}
           {!store.permissions.includes("sale:view") ? (
             <p>Немає права переглядати замовлення.</p>
           ) : list.isPending ? (
@@ -1301,7 +1341,9 @@ function Workspace({
             <>
               {list.data.orders.length === 0 && (
                 <p>
-                  Поки немає замовлень. Створіть перше, щоб зарезервувати товар.
+                  {waybillSearch
+                    ? "Замовлень із такою накладною не знайдено."
+                    : "Поки немає замовлень. Створіть перше, щоб зарезервувати товар."}
                 </p>
               )}
               {list.data.orders.map((order) => (
@@ -1320,6 +1362,7 @@ function Workspace({
                     {order.items.reduce((n, item) => n + item.quantity, 0)} шт.
                     · {money(order.total)}
                   </span>
+                  <span>{shippingText(order)}</span>
                   <small>
                     № {order.id.slice(0, 8)} ·{" "}
                     {order.created_at
@@ -1370,6 +1413,7 @@ function Failure({
   );
 }
 const actionLabels: Record<string, string> = {
+  shipping: "Зміна доставки",
   dispatch: "Відправлено",
   arrive: "Прибув на пошту",
   collect: "Клієнт забрав",
@@ -1395,7 +1439,13 @@ function OrderDetail({
   // Collected and paid in parts, as at the till (owner decision, 2026-10-01).
   const [credit, setCredit] = useState<TermsInput>(noTerms);
   const [problem, setProblem] = useState("");
+  // The waybill, or abroad where and how it went, written as it is sent.
+  const [sentWith, setSentWith] = useState("");
+  const [changingShipping, setChangingShipping] = useState(false);
   const mayCredit = store.permissions.includes("sale:credit");
+  const open = ["READY_TO_DISPATCH", "DISPATCHED", "ARRIVED"].includes(
+    order.status,
+  );
   const next = {
     READY_TO_DISPATCH: "dispatch",
     DISPATCHED: "arrive",
@@ -1410,6 +1460,14 @@ function OrderDetail({
         </button>
       </div>
       <span className="badge">{statusLabels[order.status]}</span>
+      <p>Доставка: {shippingText(order)}</p>
+      {order.same_waybill && order.same_waybill.length > 0 && (
+        <p className="notice">
+          Ця накладна є також у замовленні №{" "}
+          {order.same_waybill.map((other) => other.id.slice(0, 8)).join(", № ")}
+          . Збережено — перевірте, чи це один пакунок.
+        </p>
+      )}
       {order.items.map((item) => (
         <div className="line" key={item.id}>
           <strong>{item.display_name}</strong>
@@ -1454,12 +1512,42 @@ function OrderDetail({
             />
           </fieldset>
         )}
+      {next === "dispatch" &&
+        order.destination &&
+        store.permissions.includes("sale:create") && (
+          <label>
+            {order.destination === "ABROAD"
+              ? "Куди і як відправили: місто, країна, спосіб"
+              : "Номер накладної"}{" "}
+            (можна дописати пізніше)
+            <input
+              value={sentWith}
+              maxLength={order.destination === "ABROAD" ? 1000 : 64}
+              disabled={blocked}
+              onChange={(event) => {
+                setSentWith(event.target.value);
+              }}
+            />
+          </label>
+        )}
       {problem && <p role="alert">{problem}</p>}
       <div className="actions">
         {next && store.permissions.includes("sale:create") && (
           <button
             disabled={blocked}
             onClick={() => {
+              if (next === "dispatch") {
+                const written = sentWith.trim();
+                action(
+                  "dispatch",
+                  written
+                    ? order.destination === "ABROAD"
+                      ? { abroad_note: written }
+                      : { waybill: written }
+                    : undefined,
+                );
+                return;
+              }
               if (next !== "collect" || !credit.inParts) {
                 action(next);
                 return;
@@ -1498,6 +1586,47 @@ function OrderDetail({
             </button>
           )}
       </div>
+      {open &&
+        store.permissions.includes("sale:create") &&
+        (changingShipping ? (
+          <ShippingForm
+            order={order}
+            blocked={blocked}
+            cancel={() => {
+              setChangingShipping(false);
+            }}
+            save={(shipping) => {
+              action("shipping", shipping);
+            }}
+          />
+        ) : (
+          <button
+            className="quiet"
+            disabled={blocked}
+            onClick={() => {
+              setChangingShipping(true);
+            }}
+          >
+            Змінити доставку
+          </button>
+        ))}
+      {order.shipping_history && order.shipping_history.length > 0 && (
+        <>
+          <h3>Історія доставки</h3>
+          <ul aria-label="Історія доставки">
+            {order.shipping_history.map((change, index) => (
+              <li key={`${change.at}:${String(index)}`}>
+                {new Date(change.at).toLocaleString("uk-UA", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}{" "}
+                · {shippingKinds[change.kind]} · {shippingText(change)} ·{" "}
+                {change.by}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {returning && ["DISPATCHED", "ARRIVED"].includes(order.status) && (
         <fieldset disabled={blocked}>
           <legend>Фізичне повернення всього замовлення</legend>
@@ -1553,7 +1682,11 @@ function NewOrder({
   store: Store;
   token: string;
   blocked: boolean;
-  submit: (lines: Line[]) => void;
+  submit: (
+    lines: Line[],
+    destination: Destination,
+    carrier: Carrier | null,
+  ) => void;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [offset, setOffset] = useState(0);
@@ -1562,6 +1695,10 @@ function NewOrder({
   const [price, setPrice] = useState("");
   const [draft, setDraft] = useState<DraftLine[]>([]);
   const [validation, setValidation] = useState("");
+  // Within Ukraine unless said otherwise, and then by a carrier, picked
+  // now; the waybill comes when it is sent (owner decisions, 2026-10-01).
+  const [destination, setDestination] = useState<Destination>("UKRAINE");
+  const [carrier, setCarrier] = useState<Carrier | "">("");
   const locations = useQuery({
     queryKey: ["locations", store.id],
     queryFn: () =>
@@ -1814,15 +1951,176 @@ function NewOrder({
         <p className="total">
           Разом <strong>{money(decimal(total))}</strong>
         </p>
+        <DestinationFields
+          destination={destination}
+          carrier={carrier}
+          change={(nextDestination, nextCarrier) => {
+            setDestination(nextDestination);
+            setCarrier(nextCarrier);
+            setValidation("");
+          }}
+        />
+        <p className="hint">
+          Номер накладної вписують, коли замовлення відправляють, або пізніше.
+        </p>
         <button
           disabled={draft.length === 0}
           onClick={() => {
-            submit(draft.map((d) => d.line));
+            if (destination === "UKRAINE" && carrier === "") {
+              setValidation("Оберіть перевізника.");
+              return;
+            }
+            submit(
+              draft.map((d) => d.line),
+              destination,
+              destination === "UKRAINE" && carrier !== "" ? carrier : null,
+            );
           }}
         >
           Замовити та зарезервувати
         </button>
       </fieldset>
     </section>
+  );
+}
+
+/** Within Ukraine by one of three carriers, or abroad. */
+function DestinationFields({
+  destination,
+  carrier,
+  change,
+}: {
+  destination: Destination;
+  carrier: Carrier | "";
+  change: (destination: Destination, carrier: Carrier | "") => void;
+}): JSX.Element {
+  return (
+    <div className="fields">
+      <label>
+        Куди
+        <select
+          value={destination}
+          onChange={(event) => {
+            const next = event.target.value as Destination;
+            change(next, next === "UKRAINE" ? carrier : "");
+          }}
+        >
+          <option value="UKRAINE">По Україні</option>
+          <option value="ABROAD">За кордон</option>
+        </select>
+      </label>
+      {destination === "UKRAINE" && (
+        <label>
+          Перевізник
+          <select
+            value={carrier}
+            onChange={(event) => {
+              change("UKRAINE", event.target.value as Carrier | "");
+            }}
+          >
+            <option value="">Оберіть перевізника</option>
+            {(Object.keys(carrierLabels) as Carrier[]).map((key) => (
+              <option key={key} value={key}>
+                {carrierLabels[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+const shippingKinds: Record<ShippingChange["kind"], string> = {
+  CREATED: "Вказано при створенні",
+  DISPATCHED: "Вписано при відправленні",
+  CORRECTED: "Змінено",
+};
+
+/** Where an open order goes, as it should stand: corrected or written later.
+ * Every earlier version stays in its history (owner decision, 2026-10-01). */
+function ShippingForm({
+  order,
+  blocked,
+  cancel,
+  save,
+}: {
+  order: Order;
+  blocked: boolean;
+  cancel: () => void;
+  save: (shipping: Record<string, unknown>) => void;
+}): JSX.Element {
+  const [destination, setDestination] = useState<Destination>(
+    order.destination ?? "UKRAINE",
+  );
+  const [carrier, setCarrier] = useState<Carrier | "">(order.carrier ?? "");
+  const [waybill, setWaybill] = useState(order.waybill ?? "");
+  const [note, setNote] = useState(order.abroad_note ?? "");
+  const [problem, setProblem] = useState("");
+  return (
+    <fieldset disabled={blocked}>
+      <legend>Доставка</legend>
+      <DestinationFields
+        destination={destination}
+        carrier={carrier}
+        change={(nextDestination, nextCarrier) => {
+          setDestination(nextDestination);
+          setCarrier(nextCarrier);
+          setProblem("");
+        }}
+      />
+      {destination === "UKRAINE" ? (
+        <label>
+          Номер накладної
+          <input
+            value={waybill}
+            maxLength={64}
+            onChange={(event) => {
+              setWaybill(event.target.value);
+            }}
+          />
+        </label>
+      ) : (
+        <label>
+          Куди і як відправили: місто, країна, спосіб
+          <textarea
+            value={note}
+            maxLength={1000}
+            onChange={(event) => {
+              setNote(event.target.value);
+            }}
+          />
+        </label>
+      )}
+      {problem && <p role="alert">{problem}</p>}
+      <div className="actions">
+        <button
+          type="button"
+          onClick={() => {
+            if (destination === "UKRAINE" && carrier === "") {
+              setProblem("Оберіть перевізника.");
+              return;
+            }
+            save(
+              destination === "UKRAINE"
+                ? {
+                    destination,
+                    carrier,
+                    ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
+                  }
+                : {
+                    destination,
+                    ...(note.trim() ? { abroad_note: note.trim() } : {}),
+                  },
+            );
+          }}
+        >
+          Зберегти доставку
+        </button>
+        <button type="button" className="quiet" onClick={cancel}>
+          Скасувати
+        </button>
+      </div>
+    </fieldset>
   );
 }

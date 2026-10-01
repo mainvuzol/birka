@@ -651,6 +651,7 @@ async function arrived(page: Page): Promise<Coat & { order: string }> {
     data: {
       store_id: fixture.store_id,
       command_id: randomUUID(),
+      carrier: "NOVA_POSHTA",
       lines: [
         {
           product_variant_id: coat.variant,

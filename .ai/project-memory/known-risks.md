@@ -400,3 +400,20 @@ See the [report](supplier-invoices-report.md).
   owner chose.
 - **A set-off of a store that does not trade cannot be cancelled** until it
   trades again: only a payment is cancelled elsewhere.
+
+## Where an order goes — 2026-10-01
+
+See the [report](order-shipping-report.md).
+
+- **A waybill is not checked.** A mistyped number is saved as typed; only a
+  number already on another order of the store is pointed out. Nothing asks
+  the carrier whether it exists.
+- **Orders made before have no destination.** They read «Доставку не
+  вказано» until someone states one; a waybill cannot be written for them
+  until then. Nothing fills them in on its own.
+- **A correction is open to whoever works with orders**, a seller included,
+  as the owner chose. Every version stays, with who made it and when.
+- **The note abroad is free text.** The country is not a field of its own,
+  so orders cannot be counted or found by country.
+- **A collected, cancelled or returned order is closed:** where it went is
+  no longer corrected, as the owner chose.

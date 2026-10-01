@@ -607,7 +607,8 @@ async def arrived_order(maker, shops: TwoShops) -> str:
         )
         created = await client.post(
             "/api/v1/orders",
-            json=sale_body(shops.primary_store, shops.shared_warehouse, variant, size, qty=2),
+            json=sale_body(shops.primary_store, shops.shared_warehouse, variant, size, qty=2)
+            | {"carrier": "NOVA_POSHTA"},
         )
         assert created.status_code == 201, created.text
         order = created.json()["id"]

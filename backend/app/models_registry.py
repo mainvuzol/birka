@@ -41,7 +41,12 @@ from app.modules.inventory.models import (
     StockMovement,
     StockReservation,
 )
-from app.modules.orders.models import CustomerOrder, CustomerOrderItem, OrderCommand
+from app.modules.orders.models import (
+    CustomerOrder,
+    CustomerOrderItem,
+    CustomerOrderShippingChange,
+    OrderCommand,
+)
 from app.modules.refunds.models import Refund, RefundItem
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.snapshots.models import (
@@ -82,6 +87,7 @@ __all__ = [
     "CustomerCredit",
     "CustomerOrder",
     "CustomerOrderItem",
+    "CustomerOrderShippingChange",
     "DamagedUnit",
     "GarmentType",
     "GoodsReceipt",

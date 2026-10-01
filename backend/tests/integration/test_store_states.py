@@ -396,6 +396,7 @@ async def test_open_orders_wait_while_the_store_is_blocked(maker):
             json={
                 "store_id": str(net.shops.child_store),
                 "command_id": str(uuid.uuid4()),
+                "carrier": "NOVA_POSHTA",
                 "lines": [
                     {
                         "product_variant_id": variant,

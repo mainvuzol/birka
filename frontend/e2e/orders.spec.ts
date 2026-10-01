@@ -45,6 +45,9 @@ async function draft(page: Page): Promise<void> {
     .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
   await page.getByLabel("Домовлена ціна за одиницю, грн").fill("1200,15");
   await page.getByRole("button", { name: "Додати товар", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Перевізник", exact: true })
+    .selectOption("NOVA_POSHTA");
 }
 test("reserve, dispatch, arrive, collect through real API", async ({
   page,
