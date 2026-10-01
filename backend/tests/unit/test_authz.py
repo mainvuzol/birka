@@ -51,6 +51,8 @@ EXPECTED_SELLER = {
     Permission.INVENTORY_CORRECT_DURING_SALE,
     Permission.CATALOG_CREATE,
     Permission.CATALOG_CONFIRM,
+    # Owner decision, 2026-10-01: whoever takes returns handles «Брак».
+    Permission.DAMAGED_HANDLE,
 }
 EXPECTED_MANAGER = EXPECTED_SELLER | {
     Permission.INVENTORY_ADJUST,
@@ -129,6 +131,14 @@ def test_only_owner_approves_snapshots_and_manages_users() -> None:
     assert Permission.SNAPSHOT_APPROVE not in manager
     assert Permission.SNAPSHOT_APPROVE in owner
     assert Permission.USER_MANAGE in owner
+
+
+def test_everyone_who_takes_returns_handles_the_damaged_goods() -> None:
+    """Owner decision, 2026-10-01: a seller, a manager and the owner alike."""
+    for role in RoleCode:
+        permissions = DEFAULT_ROLE_PERMISSIONS[role]
+        assert Permission.SALE_REFUND in permissions
+        assert Permission.DAMAGED_HANDLE in permissions
 
 
 def test_only_the_owner_sees_the_backups() -> None:

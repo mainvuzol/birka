@@ -191,8 +191,12 @@ See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
 store's list (`GET /sales?store_id=…&q=…`) and states, for each unit, whether
 it came back intact or damaged. Intact goes back to the warehouse it was sold
 from; damaged goes to the store's own «Брак», which `seed_organization`
-creates for every store and nothing sells from. See the
-[returns report](.ai/project-memory/till-returns-report.md).
+creates for every store and nothing sells from. In the «Брак» section,
+anyone who takes returns takes a unit for inspection. It then goes back on
+sale in the warehouse it was sold from, or is confirmed damaged and later
+written off. Stock in «Брак» changes through nothing else. See the
+[returns](.ai/project-memory/till-returns-report.md) and
+[«Брак»](.ai/project-memory/damaged-inspection-report.md) reports.
 
 Every Playwright journey also runs in CI (job `e2e`) on every push and pull
 request. It uses the real API and PostgreSQL 17 with the production locale,

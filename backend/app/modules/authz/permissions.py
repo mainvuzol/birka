@@ -32,6 +32,14 @@ class Permission(StrEnum):
     # no seller gets the run of the balances without being given it.
     INVENTORY_REPORT_MISSING_DURING_SALE = "inventory:report_missing_during_sale"
 
+    # The store's «Брак»: take a unit returned damaged for inspection, put it
+    # back on sale in the warehouse it was sold from, confirm it damaged, or
+    # write it off. The owner gave all of it to anyone who takes returns
+    # (2026-10-01): a seller, a manager, the owner. Separate from
+    # `inventory:adjust` and `transfer:create`, which stay with managers: this
+    # moves only units a return put in «Брак», and only where it says.
+    DAMAGED_HANDLE = "damaged:handle"
+
     TRANSFER_CREATE = "transfer:create"
     TRANSFER_RECEIVE = "transfer:receive"
 
@@ -81,6 +89,8 @@ _SELLER: frozenset[Permission] = frozenset(
         Permission.INVENTORY_CORRECT_DURING_SALE,
         Permission.CATALOG_CREATE,
         Permission.CATALOG_CONFIRM,
+        # Owner decision, 2026-10-01: whoever takes returns handles «Брак».
+        Permission.DAMAGED_HANDLE,
     }
 )
 

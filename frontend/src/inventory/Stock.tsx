@@ -64,8 +64,14 @@ export function Stock({
 
   // Adjusting a warehouse is receiving into it as far as access goes: the
   // server requires `can_receive` there, and refuses a paused one.
+  // «Брак» changes only through returns and its own section (owner decision,
+  // 2026-10-01); the server refuses a correction there too.
   const adjustable =
-    canAdjust && !!selected && selected.is_active && selected.can_receive;
+    canAdjust &&
+    !!selected &&
+    selected.is_active &&
+    selected.can_receive &&
+    !selected.damaged_returns;
 
   useEffect(() => {
     // Revocation clears the selection; later access never restores it implicitly.
@@ -169,6 +175,12 @@ export function Stock({
               {!selected.is_active && (
                 <p className="notice">
                   Склад на паузі. Залишки доступні для перегляду.
+                </p>
+              )}
+              {selected.damaged_returns && (
+                <p className="hint">
+                  Це склад «Брак»: тут лежить пошкоджений товар із повернень.
+                  Він змінюється лише через розділ «Брак».
                 </p>
               )}
               {canAdjust && selected.is_active && !selected.can_receive && (

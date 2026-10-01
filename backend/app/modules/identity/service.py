@@ -90,6 +90,19 @@ async def telegram_chats(
     return {row.id: row.telegram_user_id for row in rows}
 
 
+async def display_names(
+    session: AsyncSession, user_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """What the app calls each of these people, e.g. who is inspecting a unit."""
+    wanted = list(user_ids)
+    if not wanted:
+        return {}
+    rows = await session.execute(
+        select(AppUser.id, AppUser.display_name).where(AppUser.id.in_(wanted))
+    )
+    return {row.id: row.display_name for row in rows}
+
+
 async def authenticate_with_init_data(
     session: AsyncSession,
     *,
@@ -135,4 +148,9 @@ async def authenticate_with_init_data(
     return token, user, scope
 
 
-__all__ = ["assert_user_is_active", "authenticate_with_init_data", "telegram_chats"]
+__all__ = [
+    "assert_user_is_active",
+    "authenticate_with_init_data",
+    "display_names",
+    "telegram_chats",
+]

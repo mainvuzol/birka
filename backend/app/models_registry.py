@@ -30,6 +30,7 @@ from app.modules.catalog.models import (
     SourceIdentity,
     VariantPrice,
 )
+from app.modules.damaged.models import DamagedUnit
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import (
     GoodsReceipt,
@@ -62,6 +63,7 @@ __all__ = [
     "CatalogMatchDecision",
     "CustomerOrder",
     "CustomerOrderItem",
+    "DamagedUnit",
     "GarmentType",
     "GoodsReceipt",
     "IdempotencyRecord",

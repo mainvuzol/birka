@@ -337,6 +337,44 @@ async def create_transfer(
     if existing is not None:
         return existing
 
+    return await move_goods(
+        session,
+        organization_id=scope.organization_id,
+        actor_user_id=scope.user_id,
+        store_id=store_id,
+        command_id=command_id,
+        command_fingerprint=request_fingerprint,
+        from_location_id=from_location_id,
+        to_location_id=to_location_id,
+        lines=lines,
+        correlation_id=correlation_id,
+    )
+
+
+async def move_goods(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    store_id: uuid.UUID,
+    command_id: uuid.UUID,
+    command_fingerprint: str | None,
+    from_location_id: uuid.UUID,
+    to_location_id: uuid.UUID,
+    lines: list[TransferLineInput],
+    correlation_id: str | None = None,
+    damaged_stock: bool = False,
+    reason: str | None = None,
+) -> TransferResult:
+    """Write one transfer: both legs of every line, its rows and its audit.
+
+    The person's authority is the caller's to decide, before this is called:
+    `create_transfer` for a transfer someone asks for, and the «Брак» section
+    for a damaged unit going back on sale (owner decision, 2026-10-01), which
+    the owner lets anyone who takes returns do. Everything else — every key
+    locked in one order, the whole transfer decided before a row is written,
+    both legs in one call — is the same for both, because it is here.
+    """
     # Validate every product, size, warehouse and the acting store, and lock
     # every stock key in the one global order, before anything is written —
     # the order the sale command uses. Writing the lines first let the
@@ -345,7 +383,7 @@ async def create_transfer(
     # whether an id exists elsewhere (independent review, 2026-09-21).
     quantities = await lock_stock(
         session,
-        organization_id=scope.organization_id,
+        organization_id=organization_id,
         keys=[
             (location_id, line.product_variant_id, line.size_id)
             for line in lines
@@ -377,13 +415,13 @@ async def create_transfer(
     # transaction so it agrees with every other row this command writes.
     moved_at = await session.scalar(select(func.now()))
     transfer = Transfer(
-        organization_id=scope.organization_id,
+        organization_id=organization_id,
         from_location_id=from_location_id,
         to_location_id=to_location_id,
         initiating_store_id=store_id,
-        created_by_user_id=scope.user_id,
+        created_by_user_id=actor_user_id,
         command_id=command_id,
-        command_fingerprint=request_fingerprint,
+        command_fingerprint=command_fingerprint,
         status=TransferStatus.RECEIVED,
         sent_at=moved_at,
         received_at=moved_at,
@@ -425,10 +463,11 @@ async def create_transfer(
     # out above under the same locks, so this cannot fail on stock.
     applied = await apply_movements(
         session,
-        organization_id=scope.organization_id,
+        organization_id=organization_id,
         requests=legs,
-        actor_user_id=scope.user_id,
+        actor_user_id=actor_user_id,
         correlation_id=correlation_id,
+        damaged_stock=damaged_stock,
     )
     quantity_after = {
         (a.request.location_id, a.request.product_variant_id, a.request.size_id): a.quantity_after
@@ -451,8 +490,8 @@ async def create_transfer(
 
     await audit.record(
         session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
         action="inventory.transferred",
         entity_type="transfer",
         entity_id=transfer.id,
@@ -472,6 +511,7 @@ async def create_transfer(
             "to_location_id": str(to_location_id),
             "lines": [{**balances(line, moved=0), "quantity": line.quantity} for line in lines],
         },
+        reason=reason,
     )
 
     logger.info(
@@ -488,9 +528,9 @@ async def create_transfer(
         transfer,
         items,
         await transfer_movement_ids(
-            session, organization_id=scope.organization_id, transfer_id=transfer.id
+            session, organization_id=organization_id, transfer_id=transfer.id
         ),
     )
 
 
-__all__ = ["TransferLineInput", "TransferResult", "create_transfer"]
+__all__ = ["TransferLineInput", "TransferResult", "create_transfer", "move_goods"]

@@ -33,6 +33,7 @@ import {
 import type { Adjustment } from "@/inventory/adjustmentTypes";
 import { Backups, useBackups } from "@/backups/Backups";
 import { Returns } from "@/returns/Returns";
+import { Damaged } from "@/damaged/Damaged";
 import {
   loadReturn,
   resolveReturn,
@@ -157,6 +158,7 @@ function Workspace({
     | "sale"
     | "receive"
     | "returns"
+    | "damaged"
     | "backups"
   >("list");
   // The owner's section. A backup is of the whole server, so only a grant
@@ -382,6 +384,17 @@ function Workspace({
             }}
           >
             Повернення
+          </button>
+        )}
+        {store.permissions.includes("damaged:handle") && (
+          <button
+            className={tab === "damaged" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("damaged");
+            }}
+          >
+            Брак
           </button>
         )}
         {canSeeBackups && (
@@ -687,6 +700,12 @@ function Workspace({
           />
         ) : (
           <p role="alert">Немає права приймати повернення.</p>
+        )
+      ) : tab === "damaged" ? (
+        store.permissions.includes("damaged:handle") ? (
+          <Damaged store={store} token={token} blocked={blocked} />
+        ) : (
+          <p role="alert">Немає доступу до розділу «Брак».</p>
         )
       ) : tab === "backups" ? (
         canSeeBackups ? (

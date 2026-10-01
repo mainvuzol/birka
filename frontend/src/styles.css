@@ -353,3 +353,19 @@ nav {
 .line-return .fields label:first-child {
   flex: 1;
 }
+
+/* A unit in «Брак»: what it is, where it came from, who is looking. */
+.damaged-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid #edf0ea;
+}
+.damaged-unit:first-of-type {
+  border-top: 0;
+}
+.damaged-unit .actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
