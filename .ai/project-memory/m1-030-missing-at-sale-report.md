@@ -51,3 +51,14 @@ Isolated PostgreSQL 16.2, disposable database.
 - **A line where nothing is present is refused**, not dropped from the basket, so the "last coat, empty rack" case still records nothing. Reasoning and the alternative are in [`physically-absent-proposal.md`](physically-absent-proposal.md) §7. Owner's call; small change either way.
 - `POST /sales` p95 is still unmeasured against the 500 ms budget — unchanged by this work, and still owed from M1-029.
 - Transfers (M1-018) remain unimplemented and are still the next task.
+
+## Update — 2026-10-01: nothing on the shelf (Q-G)
+
+This report left one case open: a line with nothing present was refused
+(`physically-absent-proposal.md` §7). The owner answered it:
+- **A line with nothing present is dropped from the sale and its shortage
+  recorded.** The rest of the basket is sold.
+- **When nothing is left to sell, the shortage is recorded without a sale**,
+  by its own command under the basket's `command_id`.
+
+See the [empty shelf report](empty-shelf-report.md).

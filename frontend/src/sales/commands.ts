@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api, ApiError } from "@/shared/api";
-import type { Report, Sale, SaleLine, Shortfall } from "./types";
+import type { EmptyShelf, Report, Sale, SaleLine, Shortfall } from "./types";
 import { shortfallOf } from "./types";
 
 export interface SaleBody {
@@ -35,12 +35,20 @@ export interface SaleAttempt {
   key: string;
   body: SaleBody;
   saleId?: string;
+  /**
+   * Nothing in the basket was on the shelf, so this attempt records an empty
+   * shelf under the basket's `command_id` instead of selling (owner decision,
+   * 2026-10-01; Q-G). Every line then carries a «0 present» report.
+   */
+  emptyShelf?: boolean;
+  shelfId?: string;
   acknowledged?: boolean;
   ambiguous?: boolean;
 }
 
 export type Outcome =
   | { kind: "sold"; sale: Sale }
+  | { kind: "nothing-sold"; shelf: EmptyShelf }
   | { kind: "refused"; error: ApiError; shortfall: Shortfall | null }
   | { kind: "unknown" };
 
@@ -64,7 +72,8 @@ const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const isUuid = new RegExp(`^${uuid}$`);
 const scopeKey = new RegExp(`^birka:sale-pending:(${uuid}):(${uuid}):(${uuid})$`);
 
-function isReports(value: unknown, lines: number): boolean {
+/** `least` is 0 only for «present» counts: nothing on the shelf is an answer. */
+function isReports(value: unknown, lines: number, least = 1): boolean {
   return (
     Array.isArray(value) &&
     value.every(
@@ -75,7 +84,7 @@ function isReports(value: unknown, lines: number): boolean {
         (entry as Report).line_index >= 0 &&
         (entry as Report).line_index < lines &&
         Number.isInteger((entry as Report).quantity) &&
-        (entry as Report).quantity > 0,
+        (entry as Report).quantity >= least,
     )
   );
 }
@@ -100,7 +109,7 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
     !Array.isArray(lines) ||
     lines.length === 0 ||
     !isReports((body as SaleBody).found_in_store, lines.length) ||
-    !isReports((body as SaleBody).missing_in_store, lines.length) ||
+    !isReports((body as SaleBody).missing_in_store, lines.length, 0) ||
     ((body as SaleBody).size_clarified !== undefined &&
       !isReports((body as SaleBody).size_clarified, lines.length)) ||
     (attempt.acknowledged !== undefined &&
@@ -109,7 +118,19 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
       typeof attempt.ambiguous !== "boolean") ||
     (attempt.saleId !== undefined &&
       (typeof attempt.saleId !== "string" || !isUuid.test(attempt.saleId))) ||
-    (attempt.acknowledged === true && typeof attempt.saleId !== "string")
+    (attempt.shelfId !== undefined &&
+      (typeof attempt.shelfId !== "string" || !isUuid.test(attempt.shelfId))) ||
+    (attempt.emptyShelf !== undefined &&
+      typeof attempt.emptyShelf !== "boolean") ||
+    (attempt.emptyShelf === true &&
+      !lines.every((_, index) =>
+        (body as SaleBody).missing_in_store.some(
+          (report) => report.line_index === index && report.quantity === 0,
+        ),
+      )) ||
+    (attempt.acknowledged === true &&
+      typeof (attempt.emptyShelf ? attempt.shelfId : attempt.saleId) !==
+        "string")
   ) {
     throw new Error("Некоректний збережений продаж. Зверніться до менеджера.");
   }
@@ -165,6 +186,33 @@ export async function submitSale(
     useSaleCommand.setState({ pending: current });
     localStorage.setItem(storageKey, JSON.stringify(current));
 
+    if (current.emptyShelf) {
+      let shelf: EmptyShelf;
+      if (current.acknowledged && current.shelfId) {
+        shelf = await api<EmptyShelf>(
+          `/shelf-shortages/${current.shelfId}`,
+          token,
+        );
+      } else {
+        // The basket's own command_id: a retry is answered with what was
+        // recorded, and the basket can never also become a sale.
+        shelf = await api<EmptyShelf>("/shelf-shortages", token, {
+          store_id: current.body.store_id,
+          command_id: current.body.command_id,
+          lines: current.body.lines.map((line) => ({
+            source_location_id: line.source_location_id,
+            product_variant_id: line.product_variant_id,
+            size_id: line.size_id,
+            quantity: line.quantity,
+          })),
+        });
+        current = { ...current, shelfId: shelf.id, acknowledged: true };
+        localStorage.setItem(storageKey, JSON.stringify(current));
+      }
+      localStorage.removeItem(storageKey);
+      useSaleCommand.setState({ pending: null });
+      return { kind: "nothing-sold", shelf };
+    }
     let sale: Sale;
     if (current.acknowledged && current.saleId) {
       sale = await api<Sale>(`/sales/${current.saleId}`, token);

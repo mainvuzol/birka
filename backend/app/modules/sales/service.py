@@ -19,7 +19,11 @@ there.** A seller who goes for two coats and finds one sells the one, and the
 unit the system believed in is removed by a negative `ADJUSTMENT` with reason
 `MISSING_AT_SALE`. It is bounded twice over — by the line being sold, and by
 what the ledger already believed — so it can never become a stocktake, and it
-is not a write-off.
+is not a write-off. The owner then answered Q-G on 2026-10-01: a line with
+**nothing** on the shelf is dropped from the sale and its shortage recorded the
+same way, and the rest of the basket is sold. When nothing is left to sell at
+all, there is no sale: that is `shelf.report_empty_shelf`, which shares this
+command's identity.
 
 `size_clarified` is the owner's answer of 2026-09-29 to M1-023's fourth
 question: a legacy list may load a coat as "size not known" (F34), and the
@@ -70,7 +74,7 @@ from app.modules.inventory.service import (
     sale_reclassification_ids,
     sale_shortage_ids,
 )
-from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.models import Sale, SaleItem, ShelfShortage
 from app.modules.tenancy.service import LocationCapability
 
 logger = get_logger(__name__)
@@ -262,15 +266,9 @@ def _resolve_shortages(
             raise ValidationFailedError(
                 "A shortage report must state how many units are present, as an integer"
             )
-        if missing.quantity == 0:
-            # Deliberately refused rather than quietly dropping the line: the
-            # basket that comes back would no longer be the basket that was
-            # sent. Recording an empty shelf with nothing to sell is a
-            # stocktake, and `POST /inventory/adjustments` is where it lives.
-            raise ValidationFailedError(
-                "A line with nothing present cannot be sold; remove it from the basket",
-                line_index=missing.line_index,
-            )
+        # Zero present drops the line from the sale (owner decision,
+        # 2026-10-01; Q-G). Not quietly: the seller stated it for this line,
+        # the request carries it, and the receipt lists what was sold.
         if missing.quantity >= line.quantity:
             raise ValidationFailedError(
                 "Nothing is missing on this line: the confirmed count is not "
@@ -628,6 +626,22 @@ async def reclassification_ids(session: AsyncSession, sale: Sale) -> list[uuid.U
     )
 
 
+async def lock_command(
+    session: AsyncSession, *, organization_id: uuid.UUID, command_id: uuid.UUID
+) -> None:
+    """Serialize one till command before taking stock locks.
+
+    A sale and an empty shelf share their command ids, so both take this one
+    lock. Hash collisions only serialize unrelated commands; the exact UUID
+    pair still identifies the command."""
+    lock_key = int.from_bytes(
+        hashlib.sha256(organization_id.bytes + command_id.bytes).digest()[:8],
+        byteorder="big",
+        signed=True,
+    )
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+
+
 async def _existing_command(
     session: AsyncSession,
     *,
@@ -635,20 +649,24 @@ async def _existing_command(
     command_id: uuid.UUID,
     request_fingerprint: str,
 ) -> SaleResult | None:
-    # Serialize this permanent command before taking stock locks. Hash collisions
-    # only serialize unrelated commands; the exact UUID pair still identifies the sale.
-    lock_key = int.from_bytes(
-        hashlib.sha256(scope.organization_id.bytes + command_id.bytes).digest()[:8],
-        byteorder="big",
-        signed=True,
-    )
-    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    await lock_command(session, organization_id=scope.organization_id, command_id=command_id)
     existing = await session.scalar(
         select(Sale).where(
             Sale.organization_id == scope.organization_id, Sale.command_id == command_id
         )
     )
     if existing is None:
+        # The basket may already have been answered with an empty shelf: one
+        # command, one outcome, never a sale as well (I20).
+        if await session.scalar(
+            select(ShelfShortage.id).where(
+                ShelfShortage.organization_id == scope.organization_id,
+                ShelfShortage.command_id == command_id,
+            )
+        ):
+            raise IdempotencyConflictError(
+                "This command_id already recorded an empty shelf", command_id=str(command_id)
+            )
         return None
     if existing.command_fingerprint != request_fingerprint:
         # Older rows have no provable original payload. Never guess that a retry
@@ -721,6 +739,14 @@ async def create_sale(
         normalized.append(replace(line, unit_price=unit_price, discount_amount=discount_amount))
     lines = normalized
     _validate_reports(lines, corrections_requested, shortages_requested, clarifications_requested)
+    if {m.line_index for m in shortages_requested if m.quantity == 0} == set(range(len(lines))):
+        # Nothing on the shelf of anything in the basket: no sale to make. The
+        # shortage is the empty-shelf command's to record, under this command_id.
+        raise ValidationFailedError(
+            "Nothing in this basket is on the shelf, so there is nothing to sell; "
+            "report the empty shelf instead",
+            reason="NOTHING_TO_SELL",
+        )
     request_fingerprint = idempotency.fingerprint(
         {
             "currency_code": currency_code,
@@ -889,6 +915,10 @@ async def create_sale(
             corrections=corrections,
             leaving=leaving,
         )
+    # A line with nothing on the shelf has been answered by its shortage and
+    # leaves the sale here. Kept until now so every report's line_index above
+    # still pointed at the line it was written against.
+    lines = [line for line in lines if line.quantity > 0]
     subtotal = _amount(sum((line.unit_price * line.quantity for line in lines), Decimal("0")))
     discount_total = _amount(
         sum((line.discount_amount * line.quantity for line in lines), Decimal("0"))

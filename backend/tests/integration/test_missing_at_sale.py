@@ -225,14 +225,15 @@ async def test_a_shortage_report_can_never_add_stock(session: AsyncSession) -> N
     assert await movements(session, shop) == [("DELIVERY", 1, None)]
 
 
-async def test_a_line_with_nothing_present_is_refused(session: AsyncSession) -> None:
-    """Zero present means there is no sale to make on that line, and dropping
-    it silently would hand back a different basket than the one that was sent.
-    An empty shelf with no sale behind it is a stocktake."""
+async def test_a_basket_with_nothing_present_is_not_a_sale(session: AsyncSession) -> None:
+    """Owner decision, 2026-10-01 (Q-G): a line with nothing present is
+    dropped and the rest sold. With nothing else in the basket there is no sale
+    to make, so the sale command refuses and writes nothing; the empty shelf
+    is recorded by its own command (`test_empty_shelf.py`)."""
     shop = await make_shop(session)
     await give_stock(session, shop, 3)
 
-    with pytest.raises(ValidationFailedError, match="nothing present"):
+    with pytest.raises(ValidationFailedError, match="nothing to sell"):
         await sell(
             session,
             shop,

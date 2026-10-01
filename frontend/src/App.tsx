@@ -222,6 +222,8 @@ function Workspace({
   const catalogCommand = useCatalogCommand();
   const saleCommand = useSaleCommand();
   const [settled, setSettled] = useState<SaleReceipt | null>(null);
+  // A basket that turned out to have been recorded as an empty shelf.
+  const [shelfSettled, setShelfSettled] = useState(false);
   // Bumped to remount the till after a settled sale, so its basket and its
   // `command_id` do not survive an operation that turned out to be complete.
   const [saleEpoch, setSaleEpoch] = useState(0);
@@ -446,6 +448,10 @@ function Workspace({
                   setSettled(outcome.sale);
                   setSaleEpoch((epoch) => epoch + 1);
                   setTab("sale");
+                } else if (outcome.kind === "nothing-sold") {
+                  setShelfSettled(true);
+                  setSaleEpoch((epoch) => epoch + 1);
+                  setTab("sale");
                 }
               });
             }}
@@ -464,6 +470,22 @@ function Workspace({
           <button
             onClick={() => {
               setSettled(null);
+            }}
+          >
+            Зрозуміло
+          </button>
+        </section>
+      )}
+      {shelfSettled && (
+        <section className="notice" role="status">
+          <h3>Продажу не було</h3>
+          <p>
+            Нічого з кошика не було на полиці — нестачу записано. Повторно вона
+            не запишеться.
+          </p>
+          <button
+            onClick={() => {
+              setShelfSettled(false);
             }}
           >
             Зрозуміло

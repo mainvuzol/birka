@@ -189,5 +189,5 @@ permission question, not a technical one, so it is not being guessed.
 refusing the sale?** Carried over from M1-030 and now visible at the counter:
 the till offers to remove the line by hand, which is correct but is one more
 tap during the moment a customer is waiting.
-*Answered 2026-10-01: drop the line and record the shortage (business-rules.md).
-Not built yet.*
+*Answered and built 2026-10-01: see the
+[empty shelf report](empty-shelf-report.md).*

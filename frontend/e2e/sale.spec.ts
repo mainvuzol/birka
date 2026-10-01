@@ -255,7 +255,10 @@ test("«на місці лише стільки» sends the count present, not t
   await page.getByLabel("На місці фактично є, одиниць").fill("3");
   await page.getByRole("button", { name: "Продати стільки, скільки є" }).click();
   await expect(page.getByText(/Вкажіть від 1 до 2/)).toBeVisible();
-  await expect(page.getByText(/приберіть рядок із кошика/)).toBeVisible();
+  // None on the shelf has its own answer (owner decision, 2026-10-01; Q-G).
+  await expect(
+    page.getByText(/натисніть «На полиці немає жодної»/),
+  ).toBeVisible();
 
   await page.getByLabel("На місці фактично є, одиниць").fill("1");
   await page.getByRole("button", { name: "Продати стільки, скільки є" }).click();

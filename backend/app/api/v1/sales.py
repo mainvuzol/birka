@@ -27,7 +27,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
@@ -38,7 +38,7 @@ from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.refunds.service import refunded_quantities
-from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.models import Sale, SaleItem, ShelfShortage
 from app.modules.sales.read import MAX_QUERY, list_sales
 from app.modules.sales.service import (
     FoundInStore,
@@ -50,6 +50,7 @@ from app.modules.sales.service import (
     reclassification_ids,
     shortage_ids,
 )
+from app.modules.sales.shelf import ShelfLine, read_empty_shelf, report_empty_shelf
 from app.modules.tenancy.service import LocationCapability
 
 router = APIRouter(tags=["sales"])
@@ -81,13 +82,13 @@ class MissingInStorePayload(BaseModel):
 
     `quantity` is the count **present**, not the shortage: the sale is then
     made for that many, and the difference the system believed in is taken off
-    the shelf with reason `MISSING_AT_SALE`. `gt=0` because a line with
-    nothing to sell is not a sale — an empty shelf with no sale behind it is a
-    stocktake, and belongs to `POST /inventory/adjustments`.
+    the shelf with reason `MISSING_AT_SALE`. Zero drops the line from the sale
+    (owner decision, 2026-10-01; Q-G); a basket left with nothing to sell is
+    refused as `NOTHING_TO_SELL`, and `POST /shelf-shortages` records it.
     """
 
     line_index: int = Field(ge=0)
-    quantity: int = Field(gt=0, le=1000)
+    quantity: int = Field(ge=0, le=1000)
 
 
 class SizeClarifiedPayload(BaseModel):
@@ -301,6 +302,93 @@ async def create(
     )
     await session.commit()
     return body
+
+
+class EmptyShelfLinePayload(BaseModel):
+    source_location_id: uuid.UUID
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    # How many the seller went for, and found none of.
+    quantity: int = Field(gt=0, le=1000)
+
+
+class EmptyShelfRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: uuid.UUID
+    # The basket's own command_id — the one its sale attempts carried. A basket
+    # becomes a sale or an empty shelf, never both.
+    command_id: uuid.UUID
+    lines: list[EmptyShelfLinePayload] = Field(min_length=1, max_length=100)
+
+
+class EmptyShelfLineResponse(BaseModel):
+    source_location_id: uuid.UUID
+    product_variant_id: uuid.UUID
+    size_id: uuid.UUID
+    display_name: str
+    size: str | None
+    requested: int
+    # Taken off the ledger: what it believed in of `requested`, and no more.
+    removed: int
+
+
+class EmptyShelfResponse(BaseModel):
+    id: uuid.UUID
+    store_id: uuid.UUID
+    command_id: uuid.UUID
+    recorded_at: datetime
+    lines: list[EmptyShelfLineResponse]
+
+
+def _empty_shelf(shortage: ShelfShortage) -> EmptyShelfResponse:
+    return EmptyShelfResponse(
+        id=shortage.id,
+        store_id=shortage.store_id,
+        command_id=shortage.command_id,
+        recorded_at=shortage.created_at,
+        lines=[EmptyShelfLineResponse.model_validate(line) for line in shortage.lines],
+    )
+
+
+@router.post(
+    "/shelf-shortages", response_model=EmptyShelfResponse, status_code=status.HTTP_201_CREATED
+)
+async def record_empty_shelf(
+    payload: EmptyShelfRequest, scope: ScopeDep, session: SessionDep
+) -> EmptyShelfResponse:
+    """Nothing in the basket was on the shelf: no sale, and the shortage
+    recorded (owner decision, 2026-10-01; Q-G).
+
+    No Idempotency-Key: the basket's `command_id` is permanent, and a retry is
+    answered with what was recorded.
+    """
+    shortage = await report_empty_shelf(
+        session,
+        scope=scope,
+        store_id=payload.store_id,
+        command_id=payload.command_id,
+        lines=[
+            ShelfLine(
+                source_location_id=line.source_location_id,
+                product_variant_id=line.product_variant_id,
+                size_id=line.size_id,
+                quantity=line.quantity,
+            )
+            for line in payload.lines
+        ],
+        correlation_id=get_correlation_id(),
+    )
+    body = _empty_shelf(shortage)
+    await session.commit()
+    return body
+
+
+@router.get("/shelf-shortages/{shortage_id}", response_model=EmptyShelfResponse)
+async def read_empty_shelf_record(
+    shortage_id: uuid.UUID, scope: ScopeDep, session: SessionDep
+) -> EmptyShelfResponse:
+    return _empty_shelf(await read_empty_shelf(session, scope=scope, shortage_id=shortage_id))
 
 
 class SaleLineSummary(BaseModel):
