@@ -224,6 +224,7 @@ test("goods held for an order are not offered to go back", async ({ page }) => {
     data: {
       store_id: fixture.network_centre_store_id,
       command_id: randomUUID(),
+      carrier: "NOVA_POSHTA",
       lines: [
         {
           product_variant_id: coat.variant,

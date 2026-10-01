@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import Size
+from app.modules.orders.models import Carrier
 from app.modules.orders.service import OrderLineInput, create_order
 from app.modules.tenancy.models import StockLocation, StoreLocationAccess
 from tests.conftest import provision_location, requires_database
@@ -36,6 +37,7 @@ async def new_order(session, shop, locations):
         scope=shop.scope(),
         store_id=shop.store_id,
         command_id=uuid.uuid4(),
+        carrier=Carrier.NOVA_POSHTA,
         lines=[
             OrderLineInput(shop.variant_id, shop.size_id, location, 1, Decimal("10"))
             for location in locations

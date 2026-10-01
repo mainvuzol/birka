@@ -533,3 +533,36 @@ How it is carried out, not decided by the owner:
   owes, as for its customers' debts.
 - **Cancelling twice changes nothing**: the second answers with the invoice
   as it is.
+
+## Owner decision — 2026-10-01 (where an order goes)
+
+The owner asked for it, and set the rules the same day.
+
+- **An order goes within Ukraine, the default, or abroad.**
+- **Within Ukraine, by one of three carriers:** «Нова пошта», «Укрпошта» or
+  «Міст». One of them is always picked when the order is made. A new carrier
+  is added by the developer.
+- **Abroad, one free-text field** says it all together: the city, the
+  country and how it was sent.
+- **Where it goes, and the carrier, are stated when the order is made.** The
+  waybill number, or the text abroad, is written when the order is sent.
+- **An order may be marked sent without them**, and they are written later.
+- **Any of it is corrected while the order is open** — until the customer
+  collects it, or it is cancelled or comes back. What was there before stays
+  in the order's history, with who changed it and when.
+- **Whoever works with orders states and corrects it,** a seller included.
+- **The waybill is written as typed, and not checked.** If another order of
+  the store already has it, the app says so, and saves it anyway: several
+  orders may travel in one parcel.
+- **Nobody's name, phone or address is recorded** with an order. That is on
+  the carrier's waybill.
+- **The list of orders shows each one's carrier and waybill**, or "abroad",
+  and orders are found by their waybill.
+
+How it is carried out, not decided by the owner:
+- **An order made before this has no destination.** None is invented: it
+  reads «Доставку не вказано» until someone states one, and its waybill
+  waits for that.
+- **Two waybills are one** whatever their spaces, dashes or letter case.
+- **A correction states the whole of it** — where, the carrier, the waybill
+  or the text. Stating it again as it stands adds nothing to the history.

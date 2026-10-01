@@ -25,7 +25,7 @@ export const useCommand = create<CommandState>((set) => ({
 }));
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const commandPath = new RegExp(
-  `^/orders(?:/(${uuid})/(?:dispatch|arrive|collect|cancel|return))?$`,
+  `^/orders(?:/(${uuid})/(?:dispatch|arrive|collect|cancel|return|shipping))?$`,
 );
 const scopeKey = new RegExp(`^birka:pending:(${uuid}):(${uuid}):(${uuid})$`);
 function validatePending(key: string, value: unknown): Pending {

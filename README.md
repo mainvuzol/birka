@@ -23,7 +23,7 @@ updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 120 Playwright journeys on a phone profile, against the real API;
+- 125 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -186,6 +186,20 @@ paused warehouse. After dispatch, `/orders/{id}/return` requires `command_id`,
 original warehouse. After collection use the existing sale refund command.
 Collection does not record payment. Partial shipments, reservation expiry,
 customer/contact tracking and installment accounting remain out of scope. Migration rollback refuses existing order/reservation history.
+
+**Where an order goes** (owner decisions, 2026-10-01):
+- **When it is made:** `destination` is `UKRAINE` (the default) or `ABROAD`.
+  Within Ukraine a `carrier` is required: `NOVA_POSHTA`, `UKRPOSHTA` or
+  `MEEST`.
+- **When it is sent, or later:** `POST /orders/{id}/dispatch` may carry a
+  `waybill` within Ukraine, or an `abroad_note` (city, country and how it
+  went) abroad.
+- **Corrections:** `POST /orders/{id}/shipping` states all of it again while
+  the order is open. Every version is in `shipping_history`.
+- **One waybill on two orders** is saved; each order lists the other in
+  `same_waybill`. `GET /orders?waybill=` finds orders by it, however spaced.
+- No name, phone or address is recorded. See the
+  [report](.ai/project-memory/order-shipping-report.md).
 
 ## Checks
 

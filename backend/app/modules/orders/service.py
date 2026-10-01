@@ -2,11 +2,16 @@
 
 Postal arrival is not collection or payment. Only collection records a sale;
 its goods have already left via ORDER_DISPATCH and are never removed twice.
+
+Where an order goes is stated when it is made, its waybill written when it
+is sent or later, and any of it corrected while the order is open (owner
+decisions, 2026-10-01; see `models.py`). It moves no stock.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
@@ -24,6 +29,7 @@ from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import describe_variants, size_label
 from app.modules.credit import service as credit_service
+from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import (
     MovementRequest,
@@ -33,12 +39,25 @@ from app.modules.inventory.service import (
     release_stock,
     reserve_stock,
 )
-from app.modules.orders.models import CustomerOrder, CustomerOrderItem, OrderCommand, OrderStatus
+from app.modules.orders.models import (
+    Carrier,
+    CustomerOrder,
+    CustomerOrderItem,
+    CustomerOrderShippingChange,
+    Destination,
+    OrderCommand,
+    OrderStatus,
+    ShippingChangeKind,
+)
 from app.modules.sales.order_collection import CollectedSaleLine, record_collected_sale
 from app.modules.tenancy.models import StockLocation, StoreLocationAccess
 from app.modules.tenancy.service import LocationCapability
 
 MAX_MONEY = Decimal("9999999999.99")
+MAX_WAYBILL = 64
+MAX_NOTE = 1000
+# How many other orders sharing a waybill an order names.
+MAX_SAME_WAYBILL = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +68,157 @@ class OrderLineInput:
     quantity: int
     unit_price: Decimal
     discount_amount: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True, slots=True)
+class Shipping:
+    """Where an order goes, checked: what may stand together does."""
+
+    destination: Destination
+    carrier: Carrier | None
+    waybill: str | None
+    abroad_note: str | None
+
+
+def waybill_key(waybill: str) -> str:
+    """What makes two waybills one: «20 4500 1234 5678» and «20450012345678»
+    are one, and so are «rr123456789ua» and «RR123456789UA»."""
+    return re.sub(r"[^0-9A-Za-z]", "", waybill).upper()
+
+
+def _text(value: str | None, *, limit: int, reason: str) -> str | None:
+    clean = (value or "").strip()
+    if not clean:
+        return None
+    if len(clean) > limit or not is_storable(clean):
+        raise ValidationFailedError(f"At most {limit} characters", reason=reason)
+    return clean
+
+
+def check_shipping(
+    destination: Destination,
+    carrier: Carrier | None,
+    waybill: str | None = None,
+    abroad_note: str | None = None,
+) -> Shipping:
+    """Within Ukraine by one of the three carriers, always; a waybill only
+    there, and the free text only abroad (owner decisions, 2026-10-01)."""
+    number = _text(waybill, limit=MAX_WAYBILL, reason="WAYBILL")
+    note = _text(abroad_note, limit=MAX_NOTE, reason="NOTE")
+    if destination is Destination.UKRAINE:
+        if carrier is None:
+            raise ValidationFailedError(
+                "An order within Ukraine goes by a carrier: pick one", reason="CARRIER"
+            )
+        if note is not None:
+            raise ValidationFailedError(
+                "Within Ukraine the waybill says how it went", reason="NOTE_ABROAD_ONLY"
+            )
+        if number is not None and not waybill_key(number):
+            raise ValidationFailedError("A waybill has letters or digits", reason="WAYBILL")
+    else:
+        if carrier is not None:
+            raise ValidationFailedError(
+                "Abroad, the note says how it went", reason="CARRIER_WITHIN_UKRAINE"
+            )
+        if number is not None:
+            raise ValidationFailedError(
+                "Abroad, the note says how it went", reason="WAYBILL_WITHIN_UKRAINE"
+            )
+    return Shipping(destination=destination, carrier=carrier, waybill=number, abroad_note=note)
+
+
+def _shipping_of(order: CustomerOrder) -> Shipping | None:
+    if order.destination is None:
+        return None
+    return Shipping(
+        destination=Destination(order.destination),
+        carrier=Carrier(order.carrier) if order.carrier else None,
+        waybill=order.waybill,
+        abroad_note=order.abroad_note,
+    )
+
+
+def _ship(
+    session: AsyncSession,
+    scope: RequestScope,
+    order: CustomerOrder,
+    shipping: Shipping,
+    kind: ShippingChangeKind,
+) -> None:
+    """The order goes so now, and its history says so."""
+    order.destination = shipping.destination.value
+    order.carrier = shipping.carrier.value if shipping.carrier else None
+    order.waybill = shipping.waybill
+    order.waybill_key = waybill_key(shipping.waybill) if shipping.waybill else None
+    order.abroad_note = shipping.abroad_note
+    session.add(
+        CustomerOrderShippingChange(
+            organization_id=order.organization_id,
+            order_id=order.id,
+            kind=kind.value,
+            destination=order.destination,
+            carrier=order.carrier,
+            waybill=order.waybill,
+            abroad_note=order.abroad_note,
+            changed_by_user_id=scope.user_id,
+        )
+    )
+
+
+def _shipping_print(shipping: Shipping) -> dict[str, Any]:
+    return {
+        "destination": shipping.destination.value,
+        "carrier": shipping.carrier.value if shipping.carrier else None,
+        "waybill": shipping.waybill,
+        "abroad_note": shipping.abroad_note,
+    }
+
+
+async def _shipping_detail(session: AsyncSession, order: CustomerOrder) -> dict[str, Any]:
+    """Every version of where the order went, and the store's other orders
+    carrying the same waybill — saved anyway, since several orders may go in
+    one parcel (owner decision, 2026-10-01)."""
+    history = (
+        await session.execute(
+            select(CustomerOrderShippingChange, AppUser.display_name)
+            .join(AppUser, AppUser.id == CustomerOrderShippingChange.changed_by_user_id)
+            .where(CustomerOrderShippingChange.order_id == order.id)
+            .order_by(CustomerOrderShippingChange.created_at, CustomerOrderShippingChange.id)
+        )
+    ).all()
+    same = (
+        (
+            await session.execute(
+                select(CustomerOrder.id, CustomerOrder.status)
+                .where(
+                    CustomerOrder.organization_id == order.organization_id,
+                    CustomerOrder.store_id == order.store_id,
+                    CustomerOrder.waybill_key == order.waybill_key,
+                    CustomerOrder.id != order.id,
+                )
+                .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id)
+                .limit(MAX_SAME_WAYBILL)
+            )
+        ).all()
+        if order.waybill_key
+        else []
+    )
+    return {
+        "shipping_history": [
+            {
+                "kind": change.kind,
+                "destination": change.destination,
+                "carrier": change.carrier,
+                "waybill": change.waybill,
+                "abroad_note": change.abroad_note,
+                "by": name,
+                "at": change.created_at.isoformat(),
+            }
+            for change, name in history
+        ],
+        "same_waybill": [{"id": str(row.id), "status": row.status} for row in same],
+    }
 
 
 def validate_lines(lines: list[OrderLineInput]) -> None:
@@ -94,6 +264,8 @@ async def _authorize(
         if action == "return"
         else Permission.SALE_CREATE
     )
+    # "ship", where the order goes, needs what making it does, and no
+    # warehouse's right: no goods move.
     capability = (
         LocationCapability.RECEIVE
         if action == "return"
@@ -150,6 +322,10 @@ def _response(order: CustomerOrder, items: list[CustomerOrderItem]) -> dict[str,
         "created_at": order.created_at.isoformat(),
         "sale_id": str(order.sale_id) if order.sale_id else None,
         "currency_code": order.currency_code,
+        "destination": order.destination,
+        "carrier": order.carrier,
+        "waybill": order.waybill,
+        "abroad_note": order.abroad_note,
         "total": str(
             sum(
                 ((i.unit_price - i.discount_amount) * i.quantity for i in items), Decimal("0")
@@ -183,9 +359,10 @@ async def _save(
     before: str | None,
     reason: str | None = None,
     credit: credit_service.CreditView | None = None,
+    shipping_before: Shipping | None = None,
 ) -> dict[str, Any]:
     await session.flush()
-    body = _response(order, items) | _credit(credit)
+    body = _response(order, items) | _credit(credit) | await _shipping_detail(session, order)
     session.add(
         OrderCommand(
             organization_id=scope.organization_id,
@@ -202,13 +379,23 @@ async def _save(
         action=f"order.{action}",
         entity_type="customer_order",
         entity_id=order.id,
-        before={"status": before} if before else None,
+        before=(
+            {"status": before}
+            | ({"shipping": _shipping_print(shipping_before)} if shipping_before else {})
+            if before
+            else None
+        ),
         after={
             "status": order.status,
             "store_id": str(order.store_id),
             "reason": reason,
             "sale_id": body["sale_id"],
-        },
+        }
+        | (
+            {"shipping": _shipping_print(shipping)}
+            if (shipping := _shipping_of(order)) is not None
+            else {}
+        ),
     )
     await session.flush()
     return body
@@ -234,12 +421,24 @@ async def create_order(
     store_id: uuid.UUID,
     command_id: uuid.UUID,
     lines: list[OrderLineInput],
+    destination: Destination = Destination.UKRAINE,
+    carrier: Carrier | None = None,
 ) -> dict[str, Any]:
+    """An order, reserving its goods, and where it goes: within Ukraine by
+    a carrier, or abroad (owner decisions, 2026-10-01)."""
     validate_lines(lines)
     await _authorize(session, scope, store_id, lines, "create")
+    stated = carrier is not None or destination is not Destination.UKRAINE
     request_fingerprint = fingerprint(
         {
             "action": "create",
+            # Only when stated, so a command sent before orders said where
+            # they go keeps its print and is still answered with its order.
+            **(
+                {"destination": destination.value, "carrier": carrier.value if carrier else None}
+                if stated
+                else {}
+            ),
             "lines": [
                 {
                     "variant": str(i.product_variant_id),
@@ -258,6 +457,7 @@ async def create_order(
     replay = await _command(session, scope, command_id, request_fingerprint)
     if replay is not None:
         return replay
+    shipping = check_shipping(destination, carrier)
     order = CustomerOrder(
         id=uuid.uuid4(),
         organization_id=scope.organization_id,
@@ -305,6 +505,7 @@ async def create_order(
             )
         )
     session.add_all(items)
+    _ship(session, scope, order, shipping, ShippingChangeKind.CREATED)
     return await _save(
         session, scope, order, items, command_id, request_fingerprint, "created", None
     )
@@ -365,7 +566,7 @@ async def read_order(
         if order.sale_id is not None
         else None
     )
-    return _response(order, items) | _credit(credit)
+    return _response(order, items) | _credit(credit) | await _shipping_detail(session, order)
 
 
 async def list_orders(
@@ -375,8 +576,12 @@ async def list_orders(
     store_id: uuid.UUID,
     limit: int = 50,
     offset: int = 0,
+    waybill: str | None = None,
 ) -> dict[str, Any]:
-    """Filter every source's current permission before ordering and pagination."""
+    """Filter every source's current permission before ordering and pagination.
+
+    `waybill` finds the orders whose waybill holds it, however either is
+    spaced (owner decision, 2026-10-01)."""
     scope.require(Permission.SALE_VIEW, store_id)
     private_store = (
         store_id
@@ -404,6 +609,7 @@ async def list_orders(
         )
         .exists()
     )
+    wanted = waybill_key(waybill or "")
     orders = list(
         (
             await session.scalars(
@@ -412,6 +618,7 @@ async def list_orders(
                     CustomerOrder.organization_id == scope.organization_id,
                     CustomerOrder.store_id == store_id,
                     ~inaccessible_item,
+                    *([CustomerOrder.waybill_key.contains(wanted)] if wanted else []),
                 )
                 .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
                 .limit(limit + 1)
@@ -441,7 +648,12 @@ async def transition_order(
     action: str,
     reason: str | None = None,
     credit: credit_service.CreditTerms | None = None,
+    waybill: str | None = None,
+    abroad_note: str | None = None,
 ) -> dict[str, Any]:
+    """`waybill`, or `abroad_note` for an order going abroad, may come with
+    `dispatch`: written when the order is sent, or later (owner decision,
+    2026-10-01)."""
     transitions = {
         "dispatch": ({OrderStatus.READY_TO_DISPATCH}, OrderStatus.DISPATCHED),
         "arrive": ({OrderStatus.DISPATCHED}, OrderStatus.ARRIVED),
@@ -463,6 +675,11 @@ async def transition_order(
     # Command lock precedes order row lock, consistently across all actions.
     if credit is not None and action != "collect":
         raise ValidationFailedError("Only a collected order is paid in parts")
+    details = {
+        key: value for key, value in (("waybill", waybill), ("abroad_note", abroad_note)) if value
+    }
+    if details and action != "dispatch":
+        raise ValidationFailedError("A waybill is written when the order is sent")
     order, items = await _load(session, scope, order_id)
     await _authorize(session, scope, order.store_id, items, action)
     if credit is not None:
@@ -473,7 +690,9 @@ async def transition_order(
         {"action": action, "order_id": str(order_id), "reason": reason}
         # Only when paid in parts, so every earlier command keeps its print:
         # the same command with other terms is another operation.
-        | ({"credit": credit_service.fingerprint_of(credit)} if credit is not None else {}),
+        | ({"credit": credit_service.fingerprint_of(credit)} if credit is not None else {})
+        # The same for a waybill written when it was sent.
+        | details,
         actor_user_id=scope.user_id,
         store_id=order.store_id,
     )
@@ -487,6 +706,24 @@ async def transition_order(
     if order.status not in allowed:
         raise ValidationFailedError("Invalid order transition", status=order.status, action=action)
     before = order.status
+    shipped = _shipping_of(order)
+    if details:
+        if shipped is None:
+            raise ValidationFailedError(
+                "Say where the order goes before its waybill", reason="NO_DESTINATION"
+            )
+        _ship(
+            session,
+            scope,
+            order,
+            check_shipping(
+                shipped.destination,
+                shipped.carrier,
+                waybill if waybill else shipped.waybill,
+                abroad_note if abroad_note else shipped.abroad_note,
+            ),
+            ShippingChangeKind.DISPATCHED,
+        )
     if action == "dispatch":
         await dispatch_reserved_stock(
             session,
@@ -565,4 +802,59 @@ async def transition_order(
         before,
         reason,
         credit=opened,
+    )
+
+
+async def change_shipping(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    order_id: uuid.UUID,
+    command_id: uuid.UUID,
+    destination: Destination,
+    carrier: Carrier | None,
+    waybill: str | None,
+    abroad_note: str | None,
+) -> dict[str, Any]:
+    """Where an open order goes, corrected or written later, by whoever works
+    with orders; every earlier version stays (owner decisions, 2026-10-01).
+    Nothing changed, nothing is added to its history."""
+    order, items = await _load(session, scope, order_id)
+    await _authorize(session, scope, order.store_id, items, "ship")
+    request_fingerprint = fingerprint(
+        {
+            "action": "ship",
+            "order_id": str(order_id),
+            "destination": destination.value,
+            "carrier": carrier.value if carrier else None,
+            "waybill": waybill,
+            "abroad_note": abroad_note,
+        },
+        actor_user_id=scope.user_id,
+        store_id=order.store_id,
+    )
+    replay = await _command(session, scope, command_id, request_fingerprint)
+    if replay is not None:
+        return replay
+    await session.refresh(order, with_for_update=True)
+    if order.status not in OPEN_STATUSES:
+        raise ValidationFailedError(
+            "The order is closed: where it went stays as it was",
+            reason="ORDER_CLOSED",
+            status=order.status,
+        )
+    shipping = check_shipping(destination, carrier, waybill, abroad_note)
+    before = _shipping_of(order)
+    if shipping != before:
+        _ship(session, scope, order, shipping, ShippingChangeKind.CORRECTED)
+    return await _save(
+        session,
+        scope,
+        order,
+        items,
+        command_id,
+        request_fingerprint,
+        "shipping_changed",
+        order.status,
+        shipping_before=before,
     )

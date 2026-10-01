@@ -19,7 +19,7 @@ from app.core.errors import (
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.models import CanonicalConcept
 from app.modules.inventory.models import Inventory, MovementType, StockMovement
-from app.modules.orders.models import CustomerOrder
+from app.modules.orders.models import Carrier, CustomerOrder
 from app.modules.orders.service import OrderLineInput, create_order, read_order, transition_order
 from app.modules.sales.models import Sale, SaleItem
 from app.modules.tenancy.models import StoreLocationAccess
@@ -46,6 +46,7 @@ async def setup(maker):
             scope=shop.scope(),
             store_id=shop.store_id,
             command_id=uuid.uuid4(),
+            carrier=Carrier.NOVA_POSHTA,
             lines=[
                 OrderLineInput(
                     shop.variant_id,
@@ -271,6 +272,7 @@ async def test_concurrent_same_create_command_reserves_once(maker):
                 scope=shop.scope(),
                 store_id=shop.store_id,
                 command_id=command,
+                carrier=Carrier.NOVA_POSHTA,
                 lines=[
                     OrderLineInput(
                         shop.variant_id, shop.size_id, shop.location_id, 2, Decimal("300")
@@ -292,6 +294,7 @@ async def test_http_create_strict_quantity_and_no_client_status(maker):
     payload = {
         "store_id": str(shop.store_id),
         "command_id": str(uuid.uuid4()),
+        "carrier": "NOVA_POSHTA",
         "lines": [
             {
                 "product_variant_id": str(shop.variant_id),

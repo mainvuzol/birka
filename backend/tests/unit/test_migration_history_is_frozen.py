@@ -44,6 +44,9 @@ FROZEN: dict[str, str] = {
     "0026_supplier_returns.py": (
         "2165966917e851a417cab0c4a78d3f51b7f2b993eb1339370ae0e305c67fca1c"
     ),
+    "0027_supplier_invoices.py": (
+        "faa311a75da50170cd6c95d9167ba21e03bbe3d778549bca397ebcabc68af70a"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),

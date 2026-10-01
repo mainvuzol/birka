@@ -268,6 +268,7 @@ async def test_only_goods_free_to_sell_go_back(maker):
             json={
                 "store_id": str(shops.primary_store),
                 "command_id": str(uuid.uuid4()),
+                "carrier": "NOVA_POSHTA",
                 "lines": [
                     {
                         "product_variant_id": variant,
