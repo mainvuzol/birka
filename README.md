@@ -8,20 +8,34 @@ correct.
 
 ## Status
 
-**Milestone 1, gate M1A (platform foundation) — implemented and independently reviewed.**
-Gate M1B (first complete sale vertical slice) has not started.
+**Milestone 1 is not complete.**
+- **What a shop needs on day one is built and verified**, apart from a way for
+  the shops' existing stock to get in.
+- **The catalogue's verified promotion (M1-021/022) is still partial.** It
+  waits for human-confirmed data.
+- **The release is blocked** on the missing way in for existing stock, and on
+  steps only the server, the shop or the owner can take.
 
-Locally verified: lint, formatting, strict type checking, architecture contracts and
-95 tests. Not verified locally, because this machine has no Docker, no PostgreSQL and
-no Node: the database integration tests (15), `docker compose up`, and the frontend
-build. Those run in CI, and the first CI run on push is what proves them.
+See the
+[release checklist](.ai/project-memory/release-checklist.md); the
+[server runbook](.ai/project-memory/server-runbook.md) covers installing,
+updating and going back.
+
+CI verifies every push:
+- every backend test, on PostgreSQL 17 with the production locale;
+- 83 Playwright journeys on a phone profile, against the real API;
+- the nightly backup and its restore drill, from the `ops` image;
+- the hot-path budgets;
+- lint, strict types, the architecture contracts and the frontend build.
 
 The plan, the decisions and the current state live in [`.ai/`](.ai/):
 
 | Document | What it is |
 |---|---|
-| [`.ai/project-memory/milestone-1-plan.md`](.ai/project-memory/milestone-1-plan.md) | The plan: domain model, 22 invariants, 28 tasks, 4 gates |
+| [`.ai/project-memory/milestone-1-plan.md`](.ai/project-memory/milestone-1-plan.md) | The plan: domain model, 25 invariants, 30 tasks, 4 gates |
 | [`.ai/project-memory/current-milestone.md`](.ai/project-memory/current-milestone.md) | Where the work stands right now |
+| [`.ai/project-memory/release-checklist.md`](.ai/project-memory/release-checklist.md) | What stands between this and the shops |
+| [`.ai/project-memory/server-runbook.md`](.ai/project-memory/server-runbook.md) | Installing, updating and going back on a server |
 | [`.ai/decisions/`](.ai/decisions/) | Architecture decision records |
 | [`.ai/constitution.md`](.ai/constitution.md) | Engineering rules this repository is governed by |
 
@@ -29,7 +43,7 @@ The plan, the decisions and the current state live in [`.ai/`](.ai/):
 
 ```text
 backend/      FastAPI modular monolith, SQLAlchemy async, Alembic
-frontend/     React + TypeScript + Vite Telegram Mini App (scaffold; built in gate M1D)
+frontend/     React + TypeScript + Vite Telegram Mini App: the sellers' and owner's app
 infra/        Docker Compose, Caddy, environment template
 data/legacy/  private legacy shop documents — gitignored, never committed
 .ai/          engineering operating system and project memory

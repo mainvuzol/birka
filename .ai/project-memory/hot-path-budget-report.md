@@ -137,3 +137,49 @@ No typing at all. **The budget is met for a priced model.** A model nobody
 has priced is still 6 taps plus typing, so the budget holds only as far as
 the shop prices its models. A browser test sells with nothing typed and
 checks that the sent price is the suggested one.
+
+## Update — 2026-10-01: the release gate
+
+Measured again because three changes since put work on this path, and none
+was measured:
+- **PR #47:** the stock options read each model's suggested price;
+- **PR #48:** `POST /sales` takes an advisory lock on the basket's command
+  id, which it shares with the empty shelf;
+- **PR #49:** an account with no access is refused with its own error. It is
+  not on this path.
+
+Three runs, on the same laptop and PostgreSQL 16.2, with the same harness
+and settings. Evidence:
+[`output/verification/2026-10-01-hot-path/`](../../output/verification/2026-10-01-hot-path/).
+
+| Case | p95, 2026-09-29 (worst of 4) | **p95, 2026-10-01 (worst of 3)** | Budget |
+|---|---|---|---|
+| `GET /catalog/stock-options` | 7.6 | **6.8** | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 40.4 | **58.6** | 300 ms |
+| `POST /sales`, 1 line | 15.0 | **10.6** | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 95.2 | **39.8** | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 69.1 | **55.6** | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 60.8 | **74.0** | 500 ms |
+
+- **Every case passes with 5× headroom or more.**
+- **The one real change:** the catalogue read under six sellers rose from
+  ~39 to ~57 ms at p95. Its p50 is unchanged, at about 20 ms. The cause is
+  most likely the suggested-price lookup PR #47 added. Each run agrees, so
+  it is not noise.
+- **The sale's new command lock** costs nothing visible.
+
+**PostgreSQL 17 now has its own CI job**, `hot-path`. It runs on every push:
+- the same harness;
+- through one uvicorn process, as the server runs it;
+- on PostgreSQL 17 with the production locale.
+
+It fails the build on a breached budget and keeps the figures as an
+artifact. Read them as a shared runner's numbers, slower and noisier than
+the laptop's. That closes "PostgreSQL 17 numbers: this ran on 16.2", the
+open item above.
+
+**Still open:**
+- `time-to-sale ≤ 15 s`, which needs a person;
+- a real device profile.
+
+Both are rows of the [release checklist](release-checklist.md).

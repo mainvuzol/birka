@@ -265,3 +265,19 @@ on the server, on an owner's word.
 - **The last owner of every store cannot be removed or turned off.** This is
   a safety guard of our own, not an owner rule. If the only such owner
   leaves, `seed_organization` on the server is the way back.
+
+## Release gate — 2026-10-01
+
+See the [release checklist](release-checklist.md) and the
+[server runbook](server-runbook.md).
+
+- **The `hot-path` CI job measures on a shared runner.** A breached budget
+  fails the build. If it ever fails without a code change, read the
+  artifact before believing either the runner or the code.
+- **A rebuild picks up new minor versions** of `postgres:17-alpine` and
+  `caddy:2-alpine`, untested.
+- **The server's size is an estimate**, and public HTTPS issuance has never
+  run.
+- **Docker logs were unbounded** until this gate; they are now 5 × 10 MB per
+  service. The cron log of the nightly backup is not rotated: it grows by a
+  few lines a night.
