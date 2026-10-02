@@ -25,6 +25,7 @@ from app.modules.inventory.models import (
     Inventory,
     MovementReason,
     MovementType,
+    OpeningListHold,
     StockLot,
     StockMovement,
     StockReservation,
@@ -454,6 +455,36 @@ async def location_has_stock_history(
         .limit(1)
     )
     return balance is not None
+
+
+async def locations_awaiting_opening_list(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
+    """The warehouses among these that wait for their opening list: a list
+    holds them, and nothing has been recorded there yet (owner decision,
+    2026-10-02). A list typed for a warehouse that already has history can
+    never be approved (ADR-0005 §5), so it holds nothing."""
+    if not location_ids:
+        return set()
+    held = set(
+        (
+            await session.scalars(
+                select(OpeningListHold.location_id)
+                .where(
+                    OpeningListHold.organization_id == organization_id,
+                    OpeningListHold.location_id.in_(location_ids),
+                )
+                .distinct()
+            )
+        ).all()
+    )
+    return {
+        location_id
+        for location_id in held
+        if not await location_has_stock_history(
+            session, organization_id=organization_id, location_id=location_id
+        )
+    }
 
 
 async def opening_balance_movements(

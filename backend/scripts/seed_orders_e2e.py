@@ -83,6 +83,9 @@ async def main() -> None:
         # A sixth that nothing has ever moved in: the one warehouse a stock
         # list may still be approved into (ADR-0005 §5), once per seed.
         opening = StockLocation(organization_id=org.id, name="Новий склад", code="E2E-OPENING")
+        # A seventh, empty too: a list typed for it holds it, and nothing
+        # moves there until the list is decided (owner decision, 2026-10-02).
+        waiting = StockLocation(organization_id=org.id, name="Склад, що чекає", code="E2E-WAITING")
         # A second store of the network, with its own warehouse, that also
         # sells from the returns warehouse: where goods come from that are
         # taken back at the first (owner decisions, 2026-10-01).
@@ -111,6 +114,7 @@ async def main() -> None:
                 returns,
                 damaged,
                 opening,
+                waiting,
                 second,
                 second_own,
                 concept,
@@ -130,7 +134,7 @@ async def main() -> None:
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        for reachable in (location, till, counted, legacy, returns, opening):
+        for reachable in (location, till, counted, legacy, returns, opening, waiting):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -210,6 +214,7 @@ async def main() -> None:
             "returns_location_id": str(returns.id),
             "bin_location_id": str(damaged.id),
             "opening_location_id": str(opening.id),
+            "waiting_location_id": str(waiting.id),
             "second_store_id": str(second.id),
             "second_location_id": str(second_own.id),
             "variant_id": str(variant.id),

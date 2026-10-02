@@ -502,11 +502,47 @@ class StockMovement(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
 
+class OpeningListHold(TimestampMixin, Base):
+    """A warehouse waiting for its opening list (owner decision, 2026-10-02).
+
+    While a list typed for a warehouse with no stock history waits to be
+    approved or rejected, nothing moves there: its first movement would close
+    the warehouse to that list for good (ADR-0005 §5). The legacy list
+    workflow holds the warehouse when it keeps a list, and lets go when the
+    list is decided; the ledger reads only this, never the lists themselves,
+    which no module may import (ADR-0001).
+    """
+
+    __tablename__ = "opening_list_hold"
+
+    # The list holding the warehouse: one hold per list.
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("inventory_snapshot.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    location_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "location_id"],
+            ["stock_location.organization_id", "stock_location.id"],
+            name="fk_opening_list_hold_org_location",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_opening_list_hold_location_id", "location_id"),
+    )
+
+
 __all__ = [
     "AcquisitionType",
     "Inventory",
     "MovementReason",
     "MovementType",
+    "OpeningListHold",
     "StockLot",
     "StockMovement",
     "StockReservation",

@@ -49,6 +49,9 @@ export function errorText(error: unknown): string {
   if (!(error instanceof ApiError))
     return "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.";
   // Paying in parts, refused for what the seller stated.
+  // A warehouse waits for its opening list (owner decision, 2026-10-02).
+  if (error.code === "OPENING_LIST_PENDING")
+    return "На цьому складі чекає список початкових залишків. Спершу затвердіть або відхиліть його в «Початкових залишках».";
   // The sales report: one day to a year (owner decisions, 2026-10-02).
   if (error.details.reason === "PERIOD")
     return "Оберіть період від одного дня до року; перший день — не пізніше останнього.";

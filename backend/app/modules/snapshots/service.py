@@ -57,7 +57,9 @@ from app.modules.catalog.validation import require_active_variants, validate_sto
 from app.modules.inventory.service import (
     OpeningBalanceLine,
     apply_opening_balance,
+    hold_for_opening_list,
     opening_balance_movement_ids,
+    release_opening_list,
 )
 from app.modules.snapshots.models import (
     InventorySnapshot,
@@ -584,6 +586,14 @@ async def import_snapshot(
     )
     session.add(snapshot)
     await session.flush()
+    # Nothing moves in the warehouse until the list is decided, while it has
+    # no history (owner decision, 2026-10-02).
+    await hold_for_opening_list(
+        session,
+        organization_id=scope.organization_id,
+        location_id=location_id,
+        snapshot_id=snapshot.id,
+    )
 
     recorded = await record_lines(
         session,
@@ -1100,6 +1110,7 @@ async def reject_snapshot(
     snapshot.rejection_reason = clean
     snapshot.decided_at = _now()
     await session.flush()
+    await release_opening_list(session, snapshot_id=snapshot.id)
     await audit.record(
         session,
         organization_id=scope.organization_id,

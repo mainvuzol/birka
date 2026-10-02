@@ -196,6 +196,33 @@ The list of a store's lists leaves out a list at a warehouse the person may not 
 
 No migration: both reasons have existed since `0002`.
 
+### 12. A warehouse waits for its list (2026-10-02)
+
+The owner decided that the lists are approved before new deliveries are
+received, and chose that the app keep that order (business-rules.md, "the
+first days"). §5 alone let a receipt land while a list waited, and the list
+then could never be approved.
+
+- **Kept, a list holds its warehouse** (`opening_list_hold`, one row per
+  list). Approving or rejecting it lets go.
+- **While a list holds a warehouse with no stock history, nothing moves
+  there.** `_apply_movements` refuses every movement but the opening balance
+  itself with `409 OPENING_LIST_PENDING`, naming the warehouses. That covers
+  receipts, sales, «фізично є», corrections and transfers alike.
+- **A list typed for a warehouse that already has history holds nothing.**
+  It can never be approved (§5), and freezing a trading warehouse for it
+  would stop the shop over a mistake.
+- **Lock order.** A list takes the warehouse's advisory lock exclusively to
+  hold it, as the opening balance does (§10). A stock command there lands
+  wholly before the hold, and the list will find its history, or wholly
+  after it, and is refused.
+- **Module boundaries hold.** The hold table belongs to `inventory`, which
+  reads only it. `snapshots` writes it through `inventory.service`, an edge
+  it already had, and nothing imports `snapshots`.
+- **`0030`** creates the table and holds the lists already waiting. Its
+  downgrade drops the table and loses nothing, since a hold is derived from
+  a list that waits.
+
 ## Alternatives considered
 
 - **One `(variant, size)` per row.** Rejected. A line listing three sizes could then only become "size unknown × 3", or be split by hand into three lines, which rewrites the evidence.

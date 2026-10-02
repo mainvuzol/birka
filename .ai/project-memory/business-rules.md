@@ -83,7 +83,7 @@ Implemented behavior. The owner answered all five open questions on 2026-09-29; 
 - **Owner decision (Q4):** a seller may give a coat held as "size not known" its size at the counter, with an audit record (`size_clarified` on the sale). It is bounded like «фізично є»: only the units the sale is short of at that size, taken from the same model's size-not-known balance at that warehouse, as an audited pair of movements. It needs `inventory:correct_during_sale`, which the default seller holds. «Фізично є» itself stays refused while the same model will still be held there with size not known once the sale has taken what it takes from that balance. A reserved balance on either side refuses the clarification, as it refuses «фізично є»; the coat can still be sold as size not known.
 - *Default:* "size not known" stock enters only from a legacy list. «Фізично є» never adds it, receipts and positive adjustments refuse it, and the catalog reserves its code. Stock already held that way can still be sold, moved, written off, or given its size at the counter.
 - **Owner decision (Q5):** a list for a child store's private warehouse is approved by a user with admin rights to the child store — the owner's role granted in the child store itself. Not the organization-wide owner, and not the child manager, who lacks `snapshot:approve`.
-- Receipts record only purchased, consigned or borrowed goods. Opening balances, transfers, returns and adjustments each have their own command.
+- Receipts record only purchased, consigned or borrowed goods. Opening balances, transfers, returns and adjustments each have their own command. *Widened on 2026-10-02:* goods found after a warehouse's opening list go in through receipts too (owner decision, "the first days").
 
 ## Owner decision — 2026-09-30 (stock corrections)
 
@@ -657,4 +657,35 @@ How it is carried out, not decided by the owner:
   another store's sales: each changed its figures or its till.
 
 Built on 2026-10-02; see the [report](sales-report-report.md).
+
+## Owner decision — 2026-10-02 (the first days)
+
+Asked when the server runbook's cutover was rewritten: what to do with a
+delivery that arrives between the count and the opening list's approval, and
+how goods found later go in.
+
+- **Whoever enters the goods keeps the order.** The opening lists are
+  approved first; new deliveries are received only after that. Getting this
+  order right is the responsibility of the person entering them, not a rule
+  the app has to work out.
+- **These steps should be straightforward and simple in the app.** Asked
+  how, the owner chose that **the warehouse waits while its list does**:
+  while a list waits for approval or rejection, nothing is received, sold or
+  corrected in that warehouse.
+- **Goods found later go in through «Приймання»,** with their size: whoever
+  enters them knows it.
+
+How it is carried out, not decided by the owner:
+- **Only a warehouse with no stock history waits.** A list typed for one
+  that already records stock can never be approved, so it holds nothing
+  back, and a mistaken list never stops a trading warehouse.
+- **Every movement there is refused**, the opening balance aside:
+  receipts, sales, «фізично є», corrections and transfers alike
+  (`OPENING_LIST_PENDING`). The refusal says to approve or reject the list
+  first.
+- **A receipt of found goods is recorded as any receipt:** a delivery that
+  day, a purchase when a seller enters it, its cost left empty unless known.
+  Nothing marks it as found.
+- **A paper sale of goods from a delivery that came after the count** needs
+  that delivery received first, or the till finds the shelf short.
 

@@ -2,7 +2,9 @@
 
 How birka goes onto a server, is kept up to date, and is put back. Written
 on 2026-10-01 for the Milestone 1 release gate; see the
-[release checklist](release-checklist.md).
+[release checklist](release-checklist.md). Step 9 was rewritten on
+2026-10-02: as first written, its "receive the first real delivery" would
+have shut the shared warehouse to the shops' existing stock for good.
 
 **Not done yet:** none of this has been carried out on a production server.
 Each command is the one the repository's own checks run, or was run in the
@@ -161,15 +163,79 @@ Follow the [backup runbook](backup-restore-runbook.md#setting-it-up), steps
 **The release is not done until the owner's «Резервні копії» section shows
 a good night.**
 
-### 9. Check it, with nothing invented
+### 9. The shops' existing stock, before anything moves
+
+**Nothing is received, sold or corrected until this step is done.** A
+warehouse takes an opening balance only while nothing has ever been
+recorded in it (owner decision, 2026-09-29, Q1). Its first receipt, sale,
+«фізично є» or stock correction closes it to an opening list for good, and
+so does an approved list: each warehouse takes one. Both stores sell from
+the one shared warehouse, so a single delivery received there ends this way
+in for everything the shops already hold.
+
+On 2026-10-01 the owner allowed two ways in, and has not yet chosen between
+them (business rules, "going live"). Ask which, before anything else:
+- **lists with review**, which the app has: «Початкові залишки»;
+- **photos of the notebooks**, read by a separate parser into JSON. That
+  does not exist yet. If the owner picks it, the rules that stand keep each
+  warehouse untouched until its JSON goes in as its opening balance. The
+  JSON's shape, and whether its lines pass through review, are not decided.
+
+If the owner chooses lists, then for each warehouse, in this order:
+
+1. **The count.** Count the goods, or take the notebooks as they stand on
+   one day. The shop goes on selling on paper and keeps those sales.
+2. **The catalogue.** A line is answered by picking a model, so every model
+   the list names is created in «Каталог» first. Sellers may do this too.
+3. **The list.** The owner or a manager (`snapshot:import`) types or pastes
+   it in «Початкові залишки» for that warehouse, then answers every line:
+   - the model;
+   - the size, or «Розмір невідомий»;
+   - where the count came from;
+   - or «Це не товар», with a reason.
+
+   **A warehouse's stock fits in one list**, since it takes one:
+   - at most 1 000 lines and 100 000 characters;
+   - at most 5 000 answers of a model, a size and a count.
+4. **The approval.** The owner (`snapshot:approve`) approves the list, and
+   it becomes the warehouse's stock. It cannot be undone. A rejected list
+   changes nothing, and a new one may be typed.
+
+   **A child store's own warehouse** (`--with-child-warehouse`) is private
+   to `SECOND` (step 6). Its list is typed and answered by someone holding
+   `snapshot:import` in `SECOND` itself, and approved by whoever holds the
+   owner's role there (Q5). The network's owner and managers do not reach
+   it through their network-wide roles.
+5. **The paper sales.** Sales made on paper since the count are entered at
+   the till as ordinary sales, only after the approval (Q2). Each is dated
+   the day it is entered. One entered before the approval closes the
+   warehouse to its list.
+6. **Only then** are new deliveries received and sales made in the app.
+
+**While a list waits, the warehouse waits** (owner, 2026-10-02). The app
+refuses every receipt, sale and correction there until the list is approved
+or rejected, and says so. A list typed for a warehouse that already has
+history holds nothing back.
+
+**A delivery that arrives after the count** is received only after the
+approval (Q1). Keeping that order is the responsibility of whoever enters the
+goods (owner, 2026-10-02). A paper sale of goods from such a delivery needs
+the delivery received first, or the till finds the shelf short.
+
+**Goods found later go in through «Приймання», with their size**: whoever
+enters them knows it (owner, 2026-10-02). The warehouse takes no second
+list.
+
+### 10. Check it, with nothing invented
 
 Everything recorded in production is real, so do not test with made-up
 sales. The owner, from a phone:
 - signs in, and chooses a store;
-- opens «Залишки» and «Приймання»;
-- receives the first real delivery.
+- opens «Залишки», and finds there what the approved list said, less the
+  paper sales entered since.
 
-The first real sale then proves the till.
+Then the first real delivery proves «Приймання», and the first real sale
+proves the till.
 
 ## Keeping it running
 
