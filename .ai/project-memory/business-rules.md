@@ -668,12 +668,21 @@ how goods found later go in.
   approved first; new deliveries are received only after that. Getting this
   order right is the responsibility of the person entering them, not a rule
   the app has to work out.
-- **These steps should be straightforward and simple in the app.** How is
-  asked separately.
+- **These steps should be straightforward and simple in the app.** Asked
+  how, the owner chose that **the warehouse waits while its list does**:
+  while a list waits for approval or rejection, nothing is received, sold or
+  corrected in that warehouse.
 - **Goods found later go in through «Приймання»,** with their size: whoever
   enters them knows it.
 
 How it is carried out, not decided by the owner:
+- **Only a warehouse with no stock history waits.** A list typed for one
+  that already records stock can never be approved, so it holds nothing
+  back, and a mistaken list never stops a trading warehouse.
+- **Every movement there is refused**, the opening balance aside:
+  receipts, sales, «фізично є», corrections and transfers alike
+  (`OPENING_LIST_PENDING`). The refusal says to approve or reject the list
+  first.
 - **A receipt of found goods is recorded as any receipt:** a delivery that
   day, a purchase when a seller enters it, its cost left empty unless known.
   Nothing marks it as found.

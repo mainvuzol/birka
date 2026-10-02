@@ -66,6 +66,7 @@ from app.modules.inventory.models import (
     Inventory,
     MovementReason,
     MovementType,
+    OpeningListHold,
     StockLot,
     StockMovement,
 )
@@ -349,6 +350,27 @@ async def wait_until_blocked_by(engine: AsyncEngine, holder_pid: int) -> None:
                 return
             await asyncio.sleep(0.01)
     pytest.fail("nothing ever waited on the held transaction's locks")
+
+
+async def receive(client, w: World, *, location=None, store=None, variant=None) -> httpx.Response:
+    """One coat received through the API, into the shared warehouse unless
+    told otherwise."""
+    return await client.post(
+        "/api/v1/inventory/receipts",
+        headers=idempotent(),
+        json={
+            "store_id": str(store or w.main),
+            "location_id": str(location or w.shared),
+            "command_id": str(uuid.uuid4()),
+            "lines": [
+                {
+                    "product_variant_id": str(variant or w.bottega),
+                    "size_id": str(w.sizes["M"]),
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
 
 
 def delivery(w: World, variant, size, quantity=1) -> MovementRequest:
@@ -1347,26 +1369,13 @@ async def test_a_list_of_nothing_but_skips_has_nothing_to_apply(world):
 
 
 async def test_a_warehouse_with_stock_history_is_not_opened(world):
+    """A list typed for a warehouse that already records stock waits for
+    nothing (it holds no one back) and is never approved."""
     w = world
     async with w.client() as client:
-        view = await prepared(client, w)
-        receipt = await client.post(
-            "/api/v1/inventory/receipts",
-            headers=idempotent(),
-            json={
-                "store_id": str(w.main),
-                "location_id": str(w.shared),
-                "command_id": str(uuid.uuid4()),
-                "lines": [
-                    {
-                        "product_variant_id": str(w.bottega),
-                        "size_id": str(w.sizes["M"]),
-                        "quantity": 1,
-                    }
-                ],
-            },
-        )
+        receipt = await receive(client, w)
         assert receipt.status_code == 201, receipt.text
+        view = await prepared(client, w)
         response = await approve(client, view["snapshot_id"], view["review_revision"])
         after = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}")
 
@@ -1387,23 +1396,7 @@ async def test_a_warehouse_sold_back_to_empty_still_has_history(world):
     knows nothing about."""
     w = world
     async with w.client() as client:
-        view = await prepared(client, w)
-        receipt = await client.post(
-            "/api/v1/inventory/receipts",
-            headers=idempotent(),
-            json={
-                "store_id": str(w.main),
-                "location_id": str(w.shared),
-                "command_id": str(uuid.uuid4()),
-                "lines": [
-                    {
-                        "product_variant_id": str(w.bottega),
-                        "size_id": str(w.sizes["M"]),
-                        "quantity": 1,
-                    }
-                ],
-            },
-        )
+        receipt = await receive(client, w)
         assert receipt.status_code == 201, receipt.text
     async with w.client("seller") as client:
         sale = await client.post(
@@ -1426,6 +1419,7 @@ async def test_a_warehouse_sold_back_to_empty_still_has_history(world):
         assert sale.status_code == 201, sale.text
     assert await stock(w) == {}
     async with w.client() as client:
+        view = await prepared(client, w)
         response = await approve(client, view["snapshot_id"], view["review_revision"])
     assert (response.status_code, response.json()["code"]) == (409, "OPENING_BALANCE_CONFLICT")
     assert len(await movements(w)) == 2
@@ -1465,10 +1459,10 @@ async def test_stock_written_on_another_key_is_either_before_the_opening_or_afte
     on a key the list does not name. Every stock command holds the warehouse's
     shared lock while it writes; the opening balance takes it exclusively."""
     w = world
-    async with w.client() as client:
-        before = await prepared(client, w)
 
-    # 1. The receipt is in flight first: the approval waits, then sees it.
+    # 1. The receipt is in flight first: the list typed meanwhile waits for it
+    # (it holds the warehouse exclusively), then finds its history, and the
+    # approval is refused.
     async with w.maker() as receipt_session:
         await apply_movements(
             receipt_session,
@@ -1477,10 +1471,12 @@ async def test_stock_written_on_another_key_is_either_before_the_opening_or_afte
         )
         holder = await receipt_session.scalar(text("SELECT pg_backend_pid()"))
         async with w.client() as client:
-            approval = asyncio.create_task(approve(client, before["snapshot_id"], 3))
+            typing = asyncio.create_task(prepared(client, w))
             await wait_until_blocked_by(w.engine, holder)
             await receipt_session.commit()
-            refused = await approval
+            before = await typing
+    async with w.client() as client:
+        refused = await approve(client, before["snapshot_id"], 3)
     assert (refused.status_code, refused.json()["code"]) == (409, "OPENING_BALANCE_CONFLICT")
 
     # 2. The opening is in flight first: the receipt waits, then lands after it.
@@ -1543,6 +1539,124 @@ async def test_stock_written_on_another_key_is_either_before_the_opening_or_afte
     assert landed.status_code == 201, landed.text
     assert (await stock(other))[(other.bottega, other.sizes["M"])] == 1
     assert sum((await stock(other)).values()) == 6
+
+
+# ---------------------------------------------------------------------------
+# A warehouse waits for its list (owner decision, 2026-10-02)
+# ---------------------------------------------------------------------------
+
+
+async def test_nothing_moves_in_a_warehouse_while_its_list_waits(world):
+    """The owner chose that the lists are approved before new deliveries,
+    and that the app keep that order: while a list waits for a warehouse with
+    no history, nothing moves there — not a receipt, not a correction."""
+    w = world
+    async with w.client() as client:
+        view = await prepared(client, w)
+        receipt = await receive(client, w)
+    async with w.client("manager") as client:
+        correction = await client.post(
+            "/api/v1/inventory/adjustments",
+            headers=idempotent(),
+            json={
+                "store_id": str(w.main),
+                "location_id": str(w.shared),
+                "command_id": str(uuid.uuid4()),
+                "product_variant_id": str(w.bottega),
+                "size_id": str(w.sizes["M"]),
+                "quantity_delta": 1,
+                "expected_quantity": 0,
+                "reason_code": "STOCKTAKE",
+            },
+        )
+    async with w.client("child_manager") as client:
+        elsewhere = await receive(client, w, location=w.private, store=w.second)
+
+    for refused in (receipt, correction):
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "OPENING_LIST_PENDING"
+        assert refused.json()["details"] == {"location_ids": [str(w.shared)]}
+    assert all(movement.location_id != w.shared for movement in await movements(w))
+    # Another warehouse, with no list of its own, goes on as before.
+    assert elsewhere.status_code == 201, elsewhere.text
+
+    async with w.client() as client:
+        approved = await approve(client, view["snapshot_id"], 3)
+        after = await receive(client, w)
+    assert approved.status_code == 200, approved.text
+    assert after.status_code == 201, after.text
+    async with w.maker() as session:
+        # Approving the list let the warehouse go.
+        assert not await session.scalar(
+            select(func.count())
+            .select_from(OpeningListHold)
+            .where(OpeningListHold.snapshot_id == uuid.UUID(view["snapshot_id"]))
+        )
+
+
+async def test_a_rejected_list_lets_its_warehouse_go(world):
+    w = world
+    async with w.client() as client:
+        view = await imported(client, w)
+        waiting = await receive(client, w)
+        rejected = await client.post(
+            f"/api/v1/snapshots/{view['snapshot_id']}/reject", json={"reason": "не той зошит"}
+        )
+        received = await receive(client, w)
+    assert waiting.json()["code"] == "OPENING_LIST_PENDING"
+    assert rejected.status_code == 200, rejected.text
+    assert received.status_code == 201, received.text
+
+
+async def test_a_warehouse_waits_until_its_last_list_is_decided(world):
+    w = world
+    async with w.client() as client:
+        first = await imported(client, w)
+        second = await imported(client, w)
+        await client.post(
+            f"/api/v1/snapshots/{first['snapshot_id']}/reject", json={"reason": "дубль"}
+        )
+        still = await receive(client, w)
+        await client.post(
+            f"/api/v1/snapshots/{second['snapshot_id']}/reject", json={"reason": "перелічимо"}
+        )
+        free = await receive(client, w)
+    assert (still.status_code, still.json()["code"]) == (409, "OPENING_LIST_PENDING")
+    assert free.status_code == 201, free.text
+
+
+async def test_a_list_for_a_warehouse_with_history_holds_nothing_back(world):
+    """It can never be approved, so the warehouse goes on trading."""
+    w = world
+    async with w.client() as client:
+        assert (await receive(client, w)).status_code == 201
+        await imported(client, w)
+        again = await receive(client, w)
+    assert again.status_code == 201, again.text
+
+
+async def test_a_receipt_while_a_list_is_kept_waits_for_it_and_is_refused(world):
+    """The list holds the warehouse exclusively while it is kept: a receipt
+    in between waits, then finds the list and is refused."""
+    w = world
+    async with w.maker() as list_session:
+        scope = await resolve_scope(list_session, w.users["owner"])
+        await snapshot_service.import_snapshot(
+            list_session,
+            scope=scope,
+            command_id=uuid.uuid4(),
+            store_id=w.main,
+            location_id=w.shared,
+            lines=LIST,
+        )
+        holder = await list_session.scalar(text("SELECT pg_backend_pid()"))
+        async with w.client() as client:
+            receipt = asyncio.create_task(receive(client, w))
+            await wait_until_blocked_by(w.engine, holder)
+            await list_session.commit()
+            refused = await receipt
+    assert (refused.status_code, refused.json()["code"]) == (409, "OPENING_LIST_PENDING")
+    assert not await movements(w)
 
 
 async def test_a_paused_warehouse_is_not_opened(world):
@@ -2871,3 +2985,49 @@ async def test_a_list_row_keeps_the_quantity_its_line_stated(world):
             )
         )
         assert status is SnapshotStatus.IN_REVIEW
+
+
+async def test_the_migration_holds_the_lists_already_waiting():
+    """`0030` gives each list already waiting its hold, and a decided list
+    none. Its downgrade drops the holds and loses nothing: a hold is only
+    ever derived from a list that waits."""
+    from tests.integration.test_stock_rekey_migration import _admin, _alembic, _run, _url_for
+
+    name = f"birka_holds_{uuid.uuid4().hex[:10]}"
+    await _admin(f'CREATE DATABASE "{name}"')
+    engine = create_async_engine(_url_for(name))
+    config = _alembic(name)
+    try:
+        await _run(config, "upgrade", "head", database=name)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        seeded = await seed_world(maker)
+        lists = []
+        async with client_for(maker, seeded["users"]["owner"]) as client:
+            for _ in range(2):
+                response = await client.post(
+                    "/api/v1/snapshots",
+                    json={
+                        "command_id": str(uuid.uuid4()),
+                        "store_id": str(seeded["main"]),
+                        "location_id": str(seeded["shared"]),
+                        "lines": LIST,
+                    },
+                )
+                assert response.status_code == 201, response.text
+                lists.append(response.json()["snapshot_id"])
+            rejected = await client.post(
+                f"/api/v1/snapshots/{lists[1]}/reject", json={"reason": "дубль"}
+            )
+            assert rejected.status_code == 200, rejected.text
+
+        await _run(config, "downgrade", "0029_borrowed_goods", database=name)
+        async with engine.connect() as connection:
+            assert await connection.scalar(text("SELECT to_regclass('opening_list_hold')")) is None
+        await _run(config, "upgrade", "head", database=name)
+
+        async with maker() as session:
+            held = (await session.scalars(select(OpeningListHold.snapshot_id))).all()
+        assert held == [uuid.UUID(lists[0])]
+    finally:
+        await engine.dispose()
+        await _admin(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')

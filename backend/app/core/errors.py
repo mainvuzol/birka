@@ -242,6 +242,20 @@ class OpeningBalanceConflictError(DomainError):
     message = "This warehouse already has stock history; an opening balance cannot be added to it"
 
 
+class OpeningListPendingError(DomainError):
+    """A warehouse waits for its opening list (owner decision, 2026-10-02).
+
+    A list was typed for it, and nothing has been recorded there yet: its
+    first movement would close it to that list for good (ADR-0005 §5). So
+    nothing moves there until the list is approved or rejected.
+    `details.location_ids` names the warehouses that wait.
+    """
+
+    code = "OPENING_LIST_PENDING"
+    http_status = 409
+    message = "An opening list waits for this warehouse; approve or reject it first"
+
+
 class UnknownSizeStockError(DomainError):
     """«Фізично є» would count a coat twice (M1-023, ADR-0005).
 

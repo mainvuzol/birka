@@ -15,6 +15,7 @@ interface Fixture {
   store_id: string;
   location_id: string;
   opening_location_id: string;
+  waiting_location_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -341,4 +342,66 @@ test("approving is for whoever may approve, and the section for whoever handles 
   await expect(
     page.getByRole("button", { name: "Початкові залишки" }),
   ).toHaveCount(0);
+});
+
+test("nothing is received into a warehouse while its list waits, and it is once the list is rejected", async ({
+  page,
+}) => {
+  // The owner's answer of 2026-10-02: the lists are approved before new
+  // deliveries, and the app keeps that order.
+  const source = `Зошит ${word()}`;
+  await openings(page);
+  await typeList(page, fixture.waiting_location_id, source, ["Куртка 1 шт"]);
+  await page.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(
+    page.getByText(
+      "Поки список чекає рішення, на складі «Склад, що чекає», де ще не було руху товару, нічого не приймають, не продають і не виправляють.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+
+  async function receiveOne(): Promise<void> {
+    await page.getByRole("button", { name: "Приймання", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Склад", exact: true })
+      .selectOption(fixture.waiting_location_id);
+    await page.getByLabel("Пошук у каталозі").fill("лоран шоколад");
+    await page.getByRole("button", { name: "Знайти" }).click();
+    await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
+    await page
+      .getByRole("combobox", { name: "Розмір" })
+      .selectOption({ label: "M" });
+    await page.getByLabel("Кількість").fill("1");
+    await page.getByRole("button", { name: "Додати до поставки" }).click();
+    await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  }
+
+  await receiveOne();
+  await expect(
+    page.getByText(
+      "На цьому складі чекає список початкових залишків. Спершу затвердіть або відхиліть його в «Початкових залишках».",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await expect(page.getByText(/нічого не прийнято/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Початкові залишки" }).click();
+  await page
+    .getByRole("article", { name: `Список ${source}` })
+    .getByRole("button", { name: "Відкрити" })
+    .click();
+  const approval = page.getByLabel("Затвердження списку");
+  await approval.getByRole("button", { name: "Відхилити список" }).click();
+  await approval.getByLabel("Чому відхиляємо").fill("перелічимо заново");
+  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await expect(
+    page.getByText(
+      "Відхилено: перелічимо заново. Залишків цей список не змінив.",
+    ),
+  ).toBeVisible();
+
+  await receiveOne();
+  await expect(
+    page.getByRole("heading", { name: "Товар прийнято" }),
+  ).toBeVisible();
 });

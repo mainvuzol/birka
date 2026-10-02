@@ -22,13 +22,14 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import (
     DamagedStockClosedError,
     InsufficientStockError,
     OpeningBalanceConflictError,
+    OpeningListPendingError,
     PermissionDeniedError,
     ValidationFailedError,
 )
@@ -45,6 +46,7 @@ from app.modules.inventory.models import (
     Inventory,
     MovementReason,
     MovementType,
+    OpeningListHold,
     StockAdjustment,
     StockLot,
 )
@@ -477,6 +479,17 @@ async def _apply_movements(
         keys=[(r.location_id, r.product_variant_id, r.size_id) for r in requests],
         acting_store_ids={r.acting_store_id for r in requests if r.acting_store_id is not None},
     )
+    # Under the warehouses' shared locks, which a list takes exclusively to
+    # hold one: a list kept while this command runs waits for it, and finds
+    # the history it leaves.
+    if any(request.movement_type is not MovementType.OPENING_BALANCE for request in requests):
+        waiting = await repository.locations_awaiting_opening_list(
+            session,
+            organization_id=organization_id,
+            location_ids={request.location_id for request in requests},
+        )
+        if waiting:
+            raise OpeningListPendingError(location_ids=sorted(str(i) for i in waiting))
 
     reserved = await reserved_stock(
         session, keys=[(r.location_id, r.product_variant_id, r.size_id) for r in requests]
@@ -823,10 +836,12 @@ __all__ = [
     "apply_opening_balance",
     "current_quantity",
     "find_divergences",
+    "hold_for_opening_list",
     "lock_stock",
     "opening_balance_movement_ids",
     "readable_stock",
     "refund_return_movement_ids",
+    "release_opening_list",
     "sale_correction_ids",
     "sale_reclassification_ids",
     "sale_shortage_ids",
@@ -1203,11 +1218,43 @@ async def apply_opening_balance(
                 f"Opening balance does not reconcile at {key}: expected {quantity}, got {actual}"
             )
 
+    # The list is decided: the warehouse no longer waits for it.
+    await release_opening_list(session, snapshot_id=snapshot_id)
+
     by_lot = {entry.request.stock_lot_id: entry.movement_id for entry in applied}
     return [
         OpenedLine(line=line, stock_lot_id=lot.id, movement_id=by_lot[lot.id])
         for line, lot in zip(lines, lots, strict=True)
     ]
+
+
+async def hold_for_opening_list(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    location_id: uuid.UUID,
+    snapshot_id: uuid.UUID,
+) -> None:
+    """A list was typed for this warehouse: nothing moves there until the
+    list is approved or rejected, while the warehouse has no stock history
+    (owner decision, 2026-10-02).
+
+    Taken under the warehouse's advisory lock, exclusively, as an opening
+    balance is: a stock command there lands wholly before the hold (and the
+    list will find its history) or wholly after it (and is refused).
+    """
+    await session.execute(select(func.pg_advisory_xact_lock(_warehouse_lock_key(location_id))))
+    session.add(
+        OpeningListHold(
+            snapshot_id=snapshot_id, organization_id=organization_id, location_id=location_id
+        )
+    )
+    await session.flush()
+
+
+async def release_opening_list(session: AsyncSession, *, snapshot_id: uuid.UUID) -> None:
+    """The list is approved or rejected: it holds its warehouse no longer."""
+    await session.execute(delete(OpeningListHold).where(OpeningListHold.snapshot_id == snapshot_id))
 
 
 async def opening_balance_movement_ids(

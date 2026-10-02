@@ -212,8 +212,10 @@ If the owner chooses lists, then for each warehouse, in this order:
    warehouse to its list.
 6. **Only then** are new deliveries received and sales made in the app.
 
-**Nothing in the app stops a receipt or a sale while a list waits for its
-approval.** Tell everyone who works there to wait.
+**While a list waits, the warehouse waits** (owner, 2026-10-02). The app
+refuses every receipt, sale and correction there until the list is approved
+or rejected, and says so. A list typed for a warehouse that already has
+history holds nothing back.
 
 **A delivery that arrives after the count** is received only after the
 approval (Q1). Keeping that order is the responsibility of whoever enters the

@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 133 Playwright journeys on a phone profile, against the real API;
+- 134 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -444,6 +444,12 @@ Approve a warehouse's list before anything else is recorded there. Paper sales
 made between the count and the approval are entered afterwards, as ordinary
 sales (owner decision, 2026-09-29). Entering one first closes the warehouse to
 its list for good.
+
+**While a list waits, so does its warehouse** (owner decision, 2026-10-02):
+in a warehouse with no stock history, every movement but the opening balance
+is refused with `409 OPENING_LIST_PENDING` until the list is approved or
+rejected. A list for a warehouse that already has history holds nothing back.
+Goods found later go in through «Приймання», with their size.
 
 `GET /api/v1/snapshots?store_id=`, `GET /api/v1/snapshots/{id}` and
 `GET .../lines` read lists, their summary by basis, and each line's evidence and
