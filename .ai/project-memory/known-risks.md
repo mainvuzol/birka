@@ -293,6 +293,13 @@ See the [report](opening-stock-screen-report.md).
 - **A list goes only into a warehouse with no history.** Nothing says so
   before the approval. The screen's hint does, and the refusal explains
   itself. Approve the lists before the first receipt or sale there.
+- **Nothing in the app stops a receipt or a sale while a list waits for
+  approval** (2026-10-02). The owner made keeping the order the
+  responsibility of whoever enters the goods, and wants these steps
+  simpler in the app; until then it rests on people.
+- **Goods found later are received as ordinary receipts** (owner,
+  2026-10-02): a delivery that day, a purchase when a seller enters them.
+  Nothing tells them apart from goods bought that day.
 - **The photos → parser → JSON way does not exist yet.** Its JSON is not to
   be loaded as stock directly, or the review would be bypassed. Unless the
   owner decides otherwise, it becomes a list's lines and passes through the

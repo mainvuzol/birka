@@ -215,20 +215,14 @@ If the owner chooses lists, then for each warehouse, in this order:
 **Nothing in the app stops a receipt or a sale while a list waits for its
 approval.** Tell everyone who works there to wait.
 
-**A delivery that arrives after the count** waits for the approval too
-(Q1). The owner has not said whether it is received before or after the
-paper sales are entered; ask. A paper sale of goods from such a delivery,
-entered before the delivery is received, finds the shelf short. «Фізично є»
-would then record those goods as found, which they were not.
+**A delivery that arrives after the count** is received only after the
+approval (Q1). Keeping that order is the responsibility of whoever enters the
+goods (owner, 2026-10-02). A paper sale of goods from such a delivery needs
+the delivery received first, or the till finds the shelf short.
 
-**Whatever turns up later is added one by one** (owner, 2026-10-01). The
-owner has not said how; ask before the first one. What stands:
-- **the warehouse takes no second list**;
-- **«Приймання» records a delivery**: purchased, consigned or borrowed goods
-  (business rules, M1-023), which goods the shop already held are not;
-- **the nearest the app has** is a manager's correction in «Залишки»,
-  «Знайшли товар, якого немає в списку»;
-- **nothing done one by one adds «Розмір невідомий»**: only a list does.
+**Goods found later go in through «Приймання», with their size**: whoever
+enters them knows it (owner, 2026-10-02). The warehouse takes no second
+list.
 
 ### 10. Check it, with nothing invented
 
