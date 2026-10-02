@@ -9,17 +9,23 @@ correct.
 ## Status
 
 **Milestone 1 is not complete.**
-- **What a shop needs on day one is built and verified**, apart from a way for
-  the shops' existing stock to get in.
+- **What a shop needs on day one is built and verified**, including a way in
+  for the shops' existing stock: lists with review, «Початкові залишки».
 - **The catalogue's verified promotion (M1-021/022) is still partial.** It
   waits for human-confirmed data.
-- **The release is blocked** on the missing way in for existing stock, and on
-  steps only the server, the shop or the owner can take.
+- **The release is blocked** on steps only the owner, an administrator with a
+  server, or the shops can take: a server and the bot, the real organization
+  and its people, backups there, the shops' existing stock, a sale timed in
+  the shop, and the owner's sign-off. The agent still owes the hot path's
+  release reading, every case gated, since `POST /sales` changed.
+- **The shops' existing stock goes in before anything else moves** in a
+  warehouse. The first delivery or sale there closes it to an opening list
+  for good ([server runbook, step 9](.ai/project-memory/server-runbook.md#9-the-shops-existing-stock-before-anything-moves)).
 
 See the
 [release checklist](.ai/project-memory/release-checklist.md); the
 [server runbook](.ai/project-memory/server-runbook.md) covers installing,
-updating and going back.
+the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
@@ -184,8 +190,11 @@ Cancellation is allowed before dispatch and releases the hold, including on a
 paused warehouse. After dispatch, `/orders/{id}/return` requires `command_id`,
 `physically_received: true`, and a nonblank `reason`; it restores goods to their
 original warehouse. After collection use the existing sale refund command.
-Collection does not record payment. Partial shipments, reservation expiry,
-customer/contact tracking and installment accounting remain out of scope. Migration rollback refuses existing order/reservation history.
+Collection may be paid in parts (`credit`, as on a sale; see "Paying in
+parts"); the customer's name and phone are then kept on the debt. Otherwise
+an order records no name, phone or address (see "Where an order goes").
+Partial shipments and reservation expiry remain out of scope. Migration
+rollback refuses existing order/reservation history.
 
 **Where an order goes** (owner decisions, 2026-10-01):
 - **When it is made:** `destination` is `UKRAINE` (the default) or `ABROAD`.
@@ -267,8 +276,8 @@ there is no production test-login bypass.
 Pending commands are retained in browser local storage under organization/user/store
 keys, without auth tokens. Retry keeps the original command and refreshes the
 current order. Do not clear that journal to recover an uncertain operation;
-restore access/connectivity and retry. Payment tracking remains separate.
-See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
+restore access/connectivity and retry. Paying in parts has its own section
+above. See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
 
 **Returns at the till** («Повернення»): the seller finds the sale in the
 store's list (`GET /sales?store_id=…&q=…`) and states, for each unit, whether
@@ -400,8 +409,8 @@ A paper or PDF availability list becomes stock in three steps, never one
 ([ADR-0005](.ai/decisions/ADR-0005-legacy-snapshot-import.md)).
 
 **In the app,** «Початкові залишки» does all three:
-- a manager types the list;
-- a manager answers each line;
+- the owner or a manager types the list;
+- the owner or a manager answers each line;
 - the owner approves the list or rejects it.
 
 See the [opening stock report](.ai/project-memory/opening-stock-screen-report.md).
