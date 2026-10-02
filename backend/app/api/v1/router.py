@@ -34,6 +34,7 @@ from app.api.v1.inventory import router as inventory_router
 from app.api.v1.locations import router as locations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.refunds import router as refunds_router
+from app.api.v1.reports import router as reports_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.snapshots import router as snapshots_router
 from app.api.v1.stores import router as stores_router
@@ -60,6 +61,7 @@ router.include_router(damaged_router)
 router.include_router(stores_router)
 router.include_router(suppliers_router)
 router.include_router(supplier_invoices_router)
+router.include_router(reports_router)
 
 
 # --- schemas ---------------------------------------------------------------

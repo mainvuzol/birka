@@ -440,3 +440,25 @@ See the [report](borrowed-goods-report.md).
 - **The price agreed is the lot's purchase price**, the one receiving
   already kept. It is what the invoice charges; the selling price at the
   till is separate, as always.
+
+## The sales report — 2026-10-02
+
+See the [report](sales-report-report.md).
+
+- **«Разом у касі» is what the till should hold, not what it holds.** The app
+  does not ask cash or card, as the owner chose, so a card payment is in the
+  sum too. Nothing counts the till itself.
+- **Every figure is summed when asked for, never stored.** A year of a busy
+  network is read in one request; no index was added for it. It is a read
+  for the owner and managers, not the till's hot path, and has not been
+  measured.
+- **A sale paid in parts counts at its full price in «Продажі»**, though only
+  its first payment is in the till; the rest arrives as later payments, on
+  the days they are made.
+- **Debt payments are not in the «Продажі й повернення» list**, as the owner
+  chose its contents; their sum is in «Внески за борг».
+- **A model's name is the one its latest sale or return of those days
+  froze.** The report never reads the catalogue.
+- **A day is the store's own clock.** Every store is Europe/Kyiv today; a
+  network whose stores kept different clocks would add up days that do not
+  quite match.

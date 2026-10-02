@@ -380,3 +380,8 @@ nav {
   margin-top: 8px;
   flex-wrap: wrap;
 }
+
+/* The sales report's two days, side by side and as wide as each other. */
+.fields.period label:first-child {
+  flex: 1;
+}

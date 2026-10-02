@@ -63,6 +63,7 @@ import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import { Stores } from "@/stores/Stores";
 import { Invoices } from "@/suppliers/Invoices";
+import { SalesReport } from "@/reports/SalesReport";
 import {
   loadInvoiceCommand,
   useInvoiceCommand,
@@ -263,6 +264,7 @@ function Workspace({
     | "stores"
     | "suppliers"
     | "invoices"
+    | "report"
   >("list");
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
@@ -288,6 +290,10 @@ function Workspace({
       setSupplierStorageError(true);
     }
   }, [supplierKey, canReturnToSupplier]);
+  // The sales report: the owner's and managers' (owner decisions,
+  // 2026-10-02). It reads every store they hold it in, whichever is open.
+  const canSeeReport = store.permissions.includes("report:view_financial");
+  const reportKey = `${me.organization_id}:${me.user_id}`;
   // What the store owes its suppliers: the owner's and managers' (owner
   // decision, 2026-10-01); a seller never sees it.
   const canSeeInvoices = store.permissions.includes("supplier:debt");
@@ -675,6 +681,17 @@ function Workspace({
             }}
           >
             Накладні
+          </button>
+        )}
+        {canSeeReport && (
+          <button
+            className={tab === "report" ? "active" : "quiet"}
+            disabled={blocked}
+            onClick={() => {
+              setTab("report");
+            }}
+          >
+            Звіт
           </button>
         )}
         {canManageStores && (
@@ -1201,6 +1218,12 @@ function Workspace({
           />
         ) : (
           <p role="alert">Накладні ведуть власник і менеджери.</p>
+        )
+      ) : tab === "report" ? (
+        canSeeReport ? (
+          <SalesReport token={token} scopeKey={reportKey} />
+        ) : (
+          <p role="alert">Звіт бачать власник і менеджери.</p>
         )
       ) : tab === "stores" ? (
         canManageStores ? (

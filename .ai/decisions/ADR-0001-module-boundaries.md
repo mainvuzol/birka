@@ -163,3 +163,15 @@ stock lot, and turns "sold" into an invoice and "unsold" into a return.
   lot by id alone, and is told the lot's name.
 - Receiving records the supplier (`goods_receipt.supplier_id`); module
   `inventory` still never imports `suppliers`.
+
+2026-10-02 amendment (the sales report): module `reports` sums what the
+stores sold and returned and the money through their tills.
+Permitted edges: `reports → sales, refunds, credit, identity, authz, tenancy,
+core`.
+- It reads their models and writes nothing: no stock, no money, no audit
+  record. It never imports their services, so a figure cannot change what it
+  sums.
+- Nothing imports it; only the API does.
+- Contracts "a report only reads" and "nothing depends on the reports" are in
+  `backend/pyproject.toml` (27 in all).
+

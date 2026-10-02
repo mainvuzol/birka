@@ -574,3 +574,56 @@ forbidden_modules = ["app.modules.suppliers"]
 # Only DIRECT imports: a refund registers units in «Брак», which reaches this
 # module underneath, and that is the supported path.
 allow_indirect_imports = true
+
+# 2026-10-02 (ADR-0001 amendment): module `reports` sums what the stores sold
+# and returned and the money through their tills (owner decisions, the sales
+# report). `reports → sales, refunds, credit, identity, authz, tenancy, core`:
+# it reads their rows and writes nothing — no stock, no money, no audit — so
+# a figure can never change what it sums.
+[[tool.importlinter.contracts]]
+name = "a report only reads"
+type = "forbidden"
+source_modules = ["app.modules.reports"]
+forbidden_modules = [
+    "app.modules.inventory",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+    "app.modules.damaged",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.audit",
+    "app.modules.telegram",
+    "app.modules.sales.service",
+    "app.modules.refunds.service",
+    "app.modules.credit.service",
+]
+# Only DIRECT imports: the models it reads sit on the rest underneath.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "nothing depends on the reports"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.reports"]
