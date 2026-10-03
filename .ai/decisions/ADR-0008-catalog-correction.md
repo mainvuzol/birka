@@ -39,7 +39,8 @@ the three questions it raised went to the owner.
   store of the organization, paused ones included. It is the shared price's
   rule (`may_set_shared`), as the owner chose.
 
-`catalog_correction` is append-only. Each row records:
+`catalog_correction` is append-only: the database refuses to change or
+delete a row, as it does for the ledger. Each row records:
 - the kind (`RENAME`, `MERGE`, `RETIRE`, `RESTORE`);
 - the model and, for a merge, the model that stays;
 - the person and the store they acted in;
@@ -47,8 +48,9 @@ the three questions it raised went to the owner.
 - for a merge, the stock that moved and the prices carried over.
 
 Each correction is named by a permanent `command_id` (I20). The same command
-is answered with what it did; another request under the same id is
-`IDEMPOTENCY_CONFLICT`. Every command takes its command lock and looks its
+is answered with what it did, which the row keeps; another request under the
+same id is `IDEMPOTENCY_CONFLICT`. The person's right is decided before the
+7-day key is claimed, so a revoked grant is not handed a stored success (I13). Every command takes its command lock and looks its
 `command_id` up before anything else, so every refusal below comes after
 that lookup (§9). The audit log carries the same as the record.
 
@@ -77,11 +79,15 @@ Rules:
 - **A new concept or source finds its family as creation does** (ADR-0002,
   `_resolve_family`), under the same per-concept lock:
   - the candidates are that concept's families, not merged, whose source and
-    garment type are the same or not stated;
+    garment type are the same or not stated — but never the model's own
+    family, which is where it is, not a product it could be. So a source
+    added to a model whose family states none is never answered with that
+    family and dropped;
   - with none, a family is created with that concept and source and the
     model's garment type;
   - with any, the rename is refused (`CATALOG_AMBIGUOUS`, listing them)
-    unless the request names one of them, or says `new_model` with a
+    unless the request names one of them (a family that is not one is
+    refused, `NOT_A_CANDIDATE`), or says `new_model` with a
     `distinction_note`. This is creation's own answer: a family that could be
     the same is never chosen silently.
 - **If the corrected name is another model's** in that family, the rename is
@@ -113,9 +119,10 @@ shown only in warehouses the person may read.
   - An order that is not closed (`READY_TO_DISPATCH`, `DISPATCHED`,
     `ARRIVED`).
   - Borrowed goods on hand: a lot paid when sold, with units still on hand.
-  - A «Брак» unit not finished: in a «Брак» (`AWAITING`, `INSPECTING`,
-    `CONFIRMED`), or sent back to its supplier (`SUPPLIER`), since that
-    return can still be cancelled.
+  - A «Брак» unit in a «Брак» (`AWAITING`, `INSPECTING`, `CONFIRMED`): its
+    stock there. A unit sent back to its supplier is out of «Брак» while that
+    return stands, so it does not block; if the return is cancelled later,
+    the unit comes back as the model that stays (§5).
   - An opening list that waits: a line of a list not yet applied or
     rejected, resolved to the duplicate (`inventory_snapshot_allocation`).
 - **The owner's follow-up: stock out of reach.** Stock of the duplicate in a
@@ -169,6 +176,12 @@ nothing from what an order holds.
      in one step.
    - The database holds `merged_requires_target` on variants, as it already
      does on concepts and families.
+   - **A family left with no model that is not merged** is merged into the
+     family of the model that stays. A rename that moves a model out of its
+     family does the same. Otherwise the corrected typo would still be offered
+     in family search, where picking it types no word the similar-name check
+     could see. Creating a model in a family holds it `FOR KEY SHARE`, so the
+     two land one after the other.
 6. **The correction is recorded, and the audit log written.**
 
 There is no undo (§10). The preview and an explicit confirmation come first.
@@ -183,8 +196,9 @@ There is no undo (§10). The preview and an explicit confirmation come first.
   still take the right spelling.
 - **Creating a merged model's name gives the model that stays.** Both doors,
   `create_product` and creating from a match decision, answer with it
-  (`created = false`, `redirected_from`). This settles what `_require_active`
-  left "to the command that writes merges".
+  (`created = false`, `redirected_from`), whether the merged model's family
+  still lives or the merge emptied and merged it. This settles what
+  `_require_active` left "to the command that writes merges".
 - **Creating a retired model's name is refused** (`MODEL_RETIRED`, naming
   it). The app offers holders of `catalog:merge` to bring it back.
   `_require_active` names the real status instead of "merged".
@@ -207,13 +221,15 @@ always names one that is not merged, it is one step.
   `inventory.current_variants`, which holds the rows the same way and
   follows a merge until it holds a model that is not merged:
   - a return of an old sale;
-  - a supplier return cancelled, other than a «Брак» unit's;
-  - a borrowed lot sent back unsold.
+  - a supplier return cancelled, a «Брак» unit's included;
+  - a borrowed lot sent back unsold;
+  - every later step of a «Брак» unit: back on sale, written off, sent to a
+    supplier.
 
-  They restock as the model that stays. A return taken damaged registers its
-  «Брак» unit as the model that stays. Unit, lot, return and sale rows keep
-  naming what they named (frozen provenance). Refunds ask `inventory`, since
-  they may not read the catalogue (ADR-0001).
+  They move stock as the model that stays. A return taken damaged registers
+  its «Брак» unit as the model that stays. Unit, lot, return and sale rows
+  keep naming what they named (frozen provenance). Refunds and «Брак» ask
+  `inventory`, since they may not read the catalogue (ADR-0001).
 - **Borrowed lots.** `lot_to_return` takes the model that stays in place of
   the lot's own, and the lot keeps naming the duplicate. The owner lets an
   invoice or a return be cancelled at any time, so a lot can reopen after the
@@ -229,7 +245,8 @@ always names one that is not merged, it is one step.
   - Alias feedback counts a merged model's alias and the stays model's alias
     of the same phrase as one target. So confirming the old phrase for the
     model that stays is no conflict.
-- **Family search** lists only families with a model not merged.
+- **Family search** no longer lists a family a correction emptied, since it
+  is merged (§3). A family that never had a model is still listed, as before.
 - **Opening lists.**
   - Resolving a line holds its variants (`FOR KEY SHARE`) and refuses merged
     and retired ones.
@@ -286,17 +303,21 @@ The refusal names:
 or confirm with `similar_confirmed` that it is another.
 
 **Where it runs:** `create_product`, creating from a match decision, and a
-rename's new words.
+rename's new words. A rename leaves its own model out: the typo it fixes is
+its own, and so is a name a duplicate merged into it left.
 
 **The check reads without a lock.** Two shops typing two new spellings in
 the same instant can both pass; a merge puts that right (known risk).
 
 ### 8. Module boundaries (ADR-0001 amendment)
 
-- **Rename, retire, restore and the similar-name check live in `catalog`.**
-  They are identity, and `catalog` stays a leaf.
-- **The merge is a module of its own, `catalog_merge`.**
-  - `catalog_merge → catalog, inventory (service), orders (models),
+- **Rename and the similar-name check live in `catalog`.** They are
+  identity, and `catalog` stays a leaf. So do the primitives every correction
+  shares: its command identity, holding a model, the record.
+- **Merge, retire and restore are a module of their own,
+  `catalog_correction`.** Retiring must see the opening lists that wait, which
+  `catalog` may not read.
+  - `catalog_correction → catalog, inventory (service), orders (models),
     suppliers (borrowed lots, returns), snapshots (models), tenancy, authz,
     audit, core`.
   - It reads what blocks a merge. It moves stock only through
@@ -366,13 +387,13 @@ corrections. ADR-0002, the I14 row and the `EntityStatus` docstring say so.
   a new enum value cannot be used in the transaction that adds it.
 
 **The downgrade** refuses while any of these exist:
-- a variant that is `RETIRED` or `MERGED`;
+- a variant that is `RETIRED`;
 - a merge movement;
-- a recorded correction.
+- a recorded correction (every merge records one).
 
-Otherwise it restores the unique constraint, and rebuilds both enum types
-without the new values. That means dropping and restoring the defaults and
-CHECKs that name a status.
+Otherwise it restores the unique constraint and drops what this added. The
+enums' labels stay, as `0010`'s and `0026`'s do: PostgreSQL cannot drop them
+in place, and an unused label is harmless.
 
 ## Consequences
 

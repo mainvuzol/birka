@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError } from "@/shared/api";
+import { api, ApiError, recordedNothing } from "@/shared/api";
 import type { Order } from "./types";
 export interface Pending {
   path: string;
@@ -117,7 +117,7 @@ export async function submitPending(
     // Later authorization/validation failures precede durable replay lookup;
     // unlike a first-attempt rejection, they cannot disprove an earlier commit.
     if (
-      !previouslyAmbiguous &&
+      (!previouslyAmbiguous || recordedNothing(error)) &&
       !current.acknowledged &&
       error instanceof ApiError &&
       [400, 403, 404, 409, 422].includes(error.status)

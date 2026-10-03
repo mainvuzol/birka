@@ -758,11 +758,14 @@ How it is carried out, not decided by the owner:
   after a count.** The goods are still there; only taking new ones in stops.
 - **A model is not retired while an opening list that waits names it.** The
   list could then never be approved, and its warehouse would stay waiting.
-- **"Anything open" for «Брак»** includes a unit sent back to its supplier,
-  since that return can still be cancelled.
+- **"Units in «Брак»" are those still there.** A unit sent back to its
+  supplier is out of «Брак» while that return stands, so it does not stop a
+  merge.
 - **What reopens after a merge goes to the model that stays.** A borrowed
   lot whose invoice or return is cancelled later is sent back to the supplier
-  as the model that stays; the lot keeps naming the duplicate.
+  as the model that stays; the lot keeps naming the duplicate. A «Брак» unit
+  whose return to its supplier is cancelled comes back, and is written off or
+  put back on sale, as the model that stays; the unit keeps its name.
 - **A merge moves stock as the store the person acts in,** and only where
   that store may change stock.
 - **An order of the model that stays does not stop a merge.** Adding stock

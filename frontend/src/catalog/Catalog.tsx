@@ -14,6 +14,12 @@ import type { Decision } from "./types";
 import { CreateProduct } from "./CreateProduct";
 const base = "/catalog/match-decisions";
 function message(error: unknown): string {
+  // Correcting the catalogue (owner decision, 2026-10-03) says its own.
+  if (
+    error instanceof ApiError &&
+    ["CATALOG_SIMILAR", "MODEL_RETIRED", "MODEL_MERGED"].includes(error.code)
+  )
+    return errorText(error);
   if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
     return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; повторно зараховувати свідчення не потрібно.";
   if (error instanceof ApiError && error.code === "CATALOG_AMBIGUOUS")
@@ -317,6 +323,8 @@ function Detail({
   run: (c: Command) => Promise<void>;
   refresh: () => void;
 }): JSX.Element {
+  // The last refusal, so creating a product can answer a similar name.
+  const { error } = useCatalogCommand();
   const [variant, setVariant] = useState("");
   const [reason, setReason] = useState("");
   const [feedback, setFeedback] = useState(false);
@@ -368,7 +376,14 @@ function Detail({
           submit={(body) => {
             action("create-product", body);
           }}
+          refusal={error}
         />
+      )}
+      {decision.creation?.redirected_from && (
+        <p role="status">
+          Ця назва була в моделі, яку об’єднали з іншою, тож товар пов’язано з
+          моделлю, що лишилась.
+        </p>
       )}
       {decision.creation && (
         <p>

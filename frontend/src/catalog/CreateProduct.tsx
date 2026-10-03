@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { FamilySearch, familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
+import { Similar } from "./Similar";
+import { similarFrom } from "./modelTypes";
 import type { Decision } from "./types";
 
 export function CreateProduct({
@@ -10,12 +12,15 @@ export function CreateProduct({
   scopeKey,
   blocked,
   submit,
+  refusal,
 }: {
   decision: Decision;
   token: string;
   scopeKey: string;
   blocked: boolean;
   submit: (body: Record<string, unknown>) => void;
+  /** The last refusal of creating it; a similar name is answered here. */
+  refusal: unknown;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [family, setFamily] = useState("");
@@ -38,6 +43,40 @@ export function CreateProduct({
   const lengthValid =
     !length ||
     (/^\d{1,4}([.,]\d)?$/.test(length) && Number(length.replace(",", ".")) > 0);
+  // A name like one the catalogue uses is refused once (owner decision,
+  // 2026-10-03): take the spelling in use, or say this is another name.
+  const similar = similarFrom(refusal);
+  const ready =
+    !blocked &&
+    Boolean(system) &&
+    Boolean(size.trim()) &&
+    lengthValid &&
+    Boolean(family || (concept.trim() && (!separate || note.trim())));
+  function send(similarConfirmed: boolean): void {
+    if (!ready) return;
+    const variant: Record<string, string> = Object.fromEntries(
+      Object.entries(attributes)
+        .filter(([, value]) => value.trim())
+        .map(([key, value]) => [key, value.trim()]),
+    );
+    if (length) variant.length_cm = length.replace(",", ".");
+    submit({
+      store_id: decision.store_id,
+      ...(family
+        ? { product_family_id: family }
+        : {
+            concept: concept.trim(),
+            ...(source.trim() ? { source: source.trim() } : {}),
+            ...(category.trim() ? { business_category: category.trim() } : {}),
+            ...(garment.trim() ? { garment_type: garment.trim() } : {}),
+            new_model: separate,
+            ...(separate ? { distinction_note: note.trim() } : {}),
+          }),
+      variant,
+      sizes: [{ system, code: size.trim() }],
+      ...(similarConfirmed ? { similar_confirmed: true } : {}),
+    });
+  }
   return (
     <section>
       <button
@@ -53,37 +92,7 @@ export function CreateProduct({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (
-              blocked ||
-              !system ||
-              !size.trim() ||
-              !lengthValid ||
-              (!family && (!concept.trim() || (separate && !note.trim())))
-            )
-              return;
-            const variant: Record<string, string> = Object.fromEntries(
-              Object.entries(attributes)
-                .filter(([, value]) => value.trim())
-                .map(([key, value]) => [key, value.trim()]),
-            );
-            if (length) variant.length_cm = length.replace(",", ".");
-            submit({
-              store_id: decision.store_id,
-              ...(family
-                ? { product_family_id: family }
-                : {
-                    concept: concept.trim(),
-                    ...(source.trim() ? { source: source.trim() } : {}),
-                    ...(category.trim()
-                      ? { business_category: category.trim() }
-                      : {}),
-                    ...(garment.trim() ? { garment_type: garment.trim() } : {}),
-                    new_model: separate,
-                    ...(separate ? { distinction_note: note.trim() } : {}),
-                  }),
-              variant,
-              sizes: [{ system, code: size.trim() }],
-            });
+            send(false);
           }}
         >
           <fieldset disabled={blocked}>
@@ -263,15 +272,28 @@ export function CreateProduct({
               Порожні ознаки не вгадуємо. Перевірте модель, ознаки та розмір
               перед збереженням.
             </p>
-            <button
-              type="submit"
-              disabled={
-                !system ||
-                !size.trim() ||
-                !lengthValid ||
-                (!family && (!concept.trim() || (separate && !note.trim())))
-              }
-            >
+            {similar && (
+              <>
+                <Similar
+                  words={similar}
+                  take={(field, spelling) => {
+                    if (field === "concept") setConcept(spelling);
+                    else if (field === "source") setSource(spelling);
+                    else setAttributes({ ...attributes, [field]: spelling });
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!ready}
+                  onClick={() => {
+                    send(true);
+                  }}
+                >
+                  Це інша назва — створити як є
+                </button>
+              </>
+            )}
+            <button type="submit" disabled={!ready}>
               Створити та пов’язати товар
             </button>
           </fieldset>

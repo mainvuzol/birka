@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError } from "@/shared/api";
+import { api, ApiError, recordedNothing } from "@/shared/api";
 import type {
   CreditTerms,
   EmptyShelf,
@@ -79,7 +79,9 @@ export const useSaleCommand = create<SaleCommandState>((set) => ({
 
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const isUuid = new RegExp(`^${uuid}$`);
-const scopeKey = new RegExp(`^birka:sale-pending:(${uuid}):(${uuid}):(${uuid})$`);
+const scopeKey = new RegExp(
+  `^birka:sale-pending:(${uuid}):(${uuid}):(${uuid})$`,
+);
 
 /** `least` is 0 only for «present» counts: nothing on the shelf is an answer. */
 function isReports(value: unknown, lines: number, least = 1): boolean {
@@ -252,7 +254,7 @@ export async function submitSale(
     return { kind: "sold", sale };
   } catch (error) {
     const definite =
-      !previouslyAmbiguous &&
+      (!previouslyAmbiguous || recordedNothing(error)) &&
       !current.acknowledged &&
       error instanceof ApiError &&
       error.code !== "IDEMPOTENCY_IN_PROGRESS" &&

@@ -29,12 +29,14 @@ from sqlalchemy import (
     CheckConstraint,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -66,12 +68,17 @@ class EntityStatus(StrEnum):
     """Lifecycle shared by every catalog identity row.
 
     `MERGED` is never reached automatically — merging is an explicit,
-    permissioned, reversible operation (invariant I14).
+    permissioned operation, previewed and confirmed because it cannot be
+    undone (invariant I14; owner decision, 2026-10-03, ADR-0008).
+
+    `RETIRED` is a model's alone: no longer offered or received, its stock
+    still sold, returned and written off, and it can be brought back.
     """
 
     ACTIVE = "ACTIVE"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     MERGED = "MERGED"
+    RETIRED = "RETIRED"
 
 
 class SourceSemanticType(StrEnum):
@@ -347,12 +354,29 @@ def _term_fk(column_name: str) -> Mapped[uuid.UUID | None]:
     )
 
 
+# What makes a variant's name within its family: its unique key, and what a
+# rename restates (ADR-0008 §2).
+VARIANT_NAME_COLUMNS = (
+    "product_family_id",
+    "color_term_id",
+    "material_term_id",
+    "texture_term_id",
+    "fur_term_id",
+    "collar_term_id",
+    "length_cm",
+)
+
+
 class ProductVariant(UUIDPrimaryKey, TimestampMixin, Base):
     """A sellable configuration within a family.
 
     Unlike a family, a variant *is* its attribute combination — so here a
-    unique constraint is correct. `NULLS NOT DISTINCT` makes "attribute not
-    stated" collapse to one row instead of allowing unlimited near-duplicates.
+    unique key is correct. `NULLS NOT DISTINCT` makes "attribute not stated"
+    collapse to one row instead of allowing unlimited near-duplicates.
+
+    A merged variant keeps its attributes, for its lots and its history, but
+    gives up the name (ADR-0008 §4): the key covers only rows not merged, so
+    the model that stays may take the duplicate's spelling.
     """
 
     __tablename__ = "product_variant"
@@ -384,20 +408,97 @@ class ProductVariant(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "product_family_id",
-            "color_term_id",
-            "material_term_id",
-            "texture_term_id",
-            "fur_term_id",
-            "collar_term_id",
-            "length_cm",
-            name="uq_product_variant_attributes",
+        Index(
+            "uq_product_variant_attributes",
+            *VARIANT_NAME_COLUMNS,
+            unique=True,
             postgresql_nulls_not_distinct=True,
+            postgresql_where=text("status <> 'MERGED'"),
         ),
         Index("ix_product_variant_attributes_gin", "attributes", postgresql_using="gin"),
         CheckConstraint("length_cm IS NULL OR length_cm > 0", name="length_positive"),
+        CheckConstraint(
+            "(status = 'MERGED') = (merged_into_id IS NOT NULL)",
+            name="merged_requires_target",
+        ),
         CheckConstraint("merged_into_id IS NULL OR merged_into_id <> id", name="no_self_merge"),
+    )
+
+
+class CorrectionKind(StrEnum):
+    RENAME = "RENAME"
+    MERGE = "MERGE"
+    RETIRE = "RETIRE"
+    RESTORE = "RESTORE"
+
+
+class CatalogCorrection(UUIDPrimaryKey, TimestampMixin, Base):
+    """One correction of a model, as a fact with a permanent name (ADR-0008).
+
+    Append-only: a rename, a merge, a retirement or a bringing back is
+    recorded once, under its `command_id` (I20), and answered from here when
+    the same command comes again. It is the history the owner can be shown;
+    the audit log carries the same.
+
+    `details` holds what the kind needs: the words before and after for a
+    rename, and for a merge the stock that moved and the prices carried over.
+    """
+
+    __tablename__ = "catalog_correction"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    product_variant_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("product_variant.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    into_variant_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("product_variant.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    acting_store_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), nullable=False
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    command_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    name_before: Mapped[str] = mapped_column(Text, nullable=False)
+    name_after: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(
+        postgresql.JSONB, nullable=False, server_default="{}"
+    )
+    response_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        postgresql.JSONB, nullable=True
+    )
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "command_id", name="uq_catalog_correction_org_command"),
+        ForeignKeyConstraint(
+            ["organization_id", "acting_store_id"],
+            ["store.organization_id", "store.id"],
+            name="fk_catalog_correction_org_store",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("kind IN ('RENAME', 'MERGE', 'RETIRE', 'RESTORE')", name="kind_known"),
+        CheckConstraint(
+            "(kind = 'MERGE') = (into_variant_id IS NOT NULL)", name="merge_names_target"
+        ),
+        CheckConstraint(
+            "into_variant_id IS NULL OR into_variant_id <> product_variant_id",
+            name="no_self_merge",
+        ),
+        Index("ix_catalog_correction_variant", "product_variant_id"),
     )
 
 

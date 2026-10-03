@@ -80,6 +80,7 @@ from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import (
     MovementRequest,
     apply_movements,
+    current_variants,
     refund_return_movement_ids,
 )
 from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
@@ -708,6 +709,15 @@ async def create_refund(
     restocked = [
         (line, item) for line, item in zip(lines, refund_items, strict=True) if line.restock
     ]
+    # Goods come back as the model that stands now: an old sale of a model
+    # merged since comes back as the model that stays (owner decision,
+    # 2026-10-03). Held as a stock command holds a model, so a merge cannot
+    # take it away before the goods land. The sale line keeps its own.
+    leading = await current_variants(
+        session,
+        organization_id=scope.organization_id,
+        variant_ids={sale_items[line.sale_item_id].product_variant_id for line in lines},
+    )
     # Owner decision, 2026-09-17: goods go back to the warehouse the sale line
     # drew them from. Returning them anywhere else is a return plus a transfer,
     # and must be two explicit operations (invariant I16) — with the one
@@ -721,7 +731,7 @@ async def create_refund(
                 MovementRequest(
                     location_id=item.destination_location_id,
                     acting_store_id=taking,
-                    product_variant_id=sale_items[line.sale_item_id].product_variant_id,
+                    product_variant_id=leading[sale_items[line.sale_item_id].product_variant_id],
                     size_id=sale_items[line.sale_item_id].size_id,
                     quantity_delta=line.quantity,
                     movement_type=MovementType.REFUND_RETURN,
@@ -752,7 +762,7 @@ async def create_refund(
             parts=[
                 DamagedPart(
                     refund_item_id=item.id,
-                    product_variant_id=sale_items[item.sale_item_id].product_variant_id,
+                    product_variant_id=leading[sale_items[item.sale_item_id].product_variant_id],
                     size_id=sale_items[item.sale_item_id].size_id,
                     sold_from_location_id=sale_items[item.sale_item_id].source_location_id,
                     display_name=sale_items[item.sale_item_id].display_name_snapshot,

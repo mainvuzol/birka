@@ -40,6 +40,8 @@ from app.core.correlation import get_correlation_id
 from app.core.errors import (
     DomainError,
     IdempotencyConflictError,
+    ModelMergedError,
+    ModelRetiredError,
     NotFoundError,
     SnapshotConflictError,
     ValidationFailedError,
@@ -684,7 +686,12 @@ async def _normalize_allocations(
         variant_ids=variant_ids,
         size_ids={size_id for _, size_id in stated},
     )
-    await require_active_variants(session, organization_id=organization_id, variant_ids=variant_ids)
+    # Held as a stock command holds them, so a merge or a retirement running
+    # now lands wholly before this answer (and refuses it) or after it, and
+    # then finds this list waiting (ADR-0008 §5).
+    await require_active_variants(
+        session, organization_id=organization_id, variant_ids=variant_ids, hold=True
+    )
     return sorted(
         (variant_id, size_id, quantity) for (variant_id, size_id), quantity in stated.items()
     )
@@ -1007,12 +1014,34 @@ async def approve_snapshot(
             "Nothing in this stock list is stock", reason="NOTHING_TO_APPLY"
         )
     # Resolved against the catalog as it was; approved against the catalog as
-    # it is. A variant merged or retired in between needs its line re-resolved.
-    await require_active_variants(
-        session,
-        organization_id=scope.organization_id,
-        variant_ids={allocation.product_variant_id for allocation in allocations},
-    )
+    # it is. A variant merged or retired in between needs its line re-resolved,
+    # so the refusal names its lines. Held before the warehouse's lock, the
+    # one lock order of every command (ADR-0008 §9).
+    try:
+        await require_active_variants(
+            session,
+            organization_id=scope.organization_id,
+            variant_ids={allocation.product_variant_id for allocation in allocations},
+            hold=True,
+        )
+    except (ModelMergedError, ModelRetiredError) as refused:
+        named = uuid.UUID(refused.details["product_variant_id"])
+        refused.details["line_nos"] = sorted(
+            (
+                await session.scalars(
+                    select(InventorySnapshotRow.line_no).where(
+                        InventorySnapshotRow.id.in_(
+                            {
+                                allocation.snapshot_row_id
+                                for allocation in allocations
+                                if allocation.product_variant_id == named
+                            }
+                        )
+                    )
+                )
+            ).all()
+        )
+        raise
     opened = await apply_opening_balance(
         session,
         organization_id=scope.organization_id,

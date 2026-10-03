@@ -49,6 +49,9 @@ FROZEN: dict[str, str] = {
     ),
     "0028_order_shipping.py": ("80cf0a4f44857fa5b7fc3f0ff65a20ac09b033eb72cd69b07a5b99376342841d"),
     "0029_borrowed_goods.py": ("57a954632c9dcb00cd26691ae9ed8b847c6eb257fbdc81b123a346dad9a4d7b3"),
+    "0030_opening_list_hold.py": (
+        "426cf27459d702f7a8c9b7df1efaa75a9f71dbfcce1692555ab35ff114b40700"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),

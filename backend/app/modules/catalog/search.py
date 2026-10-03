@@ -149,8 +149,13 @@ async def search_receivable_variants(
         session, organization_id=scope.organization_id, store_ids={store_id}
     )
     colour = aliased(AttributeTerm)
-    statement = (
-        select(ProductVariant.id)
+    matched = (
+        # A match on a merged model's name leads to the model that stays
+        # (owner decision, 2026-10-03): searching the old name finds it.
+        select(
+            func.coalesce(ProductVariant.merged_into_id, ProductVariant.id).label("variant_id"),
+            CanonicalConcept.normalized_name.label("sort_name"),
+        )
         .join(ProductFamily, ProductFamily.id == ProductVariant.product_family_id)
         .join(CanonicalConcept, CanonicalConcept.id == ProductFamily.canonical_concept_id)
         .outerjoin(SourceIdentity, SourceIdentity.id == ProductFamily.source_identity_id)
@@ -158,14 +163,6 @@ async def search_receivable_variants(
         .where(
             ProductFamily.organization_id == scope.organization_id,
             CanonicalConcept.organization_id == scope.organization_id,
-            # Only a merged identity is gone; its goods belong to the survivor.
-            # NEEDS_REVIEW stays offered, by the rule product intake already
-            # follows: a product parked in review is the one most likely to be
-            # this coat, and it is physically in the seller's hands whether or
-            # not the catalogue has finished deciding what to call it.
-            ProductVariant.status != EntityStatus.MERGED,
-            ProductFamily.status != EntityStatus.MERGED,
-            CanonicalConcept.status != EntityStatus.MERGED,
             or_(
                 ProductFamily.source_identity_id.is_(None),
                 SourceIdentity.organization_id == scope.organization_id,
@@ -178,17 +175,42 @@ async def search_receivable_variants(
     )
     for word in query.casefold().split():
         pattern = _literal_pattern(word)
-        statement = statement.where(
+        matched = matched.where(
             or_(
                 CanonicalConcept.normalized_name.like(pattern, escape="\\"),
                 SourceIdentity.normalized_name.like(pattern, escape="\\"),
                 colour.normalized_name.like(pattern, escape="\\"),
             )
         )
+    found = matched.subquery()
+    offered = aliased(ProductVariant)
+    offered_family = aliased(ProductFamily)
+    offered_concept = aliased(CanonicalConcept)
+    statement = (
+        select(found.c.variant_id)
+        .join(offered, offered.id == found.c.variant_id)
+        .join(offered_family, offered_family.id == offered.product_family_id)
+        .join(offered_concept, offered_concept.id == offered_family.canonical_concept_id)
+        .where(
+            offered_family.organization_id == scope.organization_id,
+            # The family a merge emptied is merged itself (ADR-0008 §3); what
+            # is offered is the model that stays, in its own family.
+            offered_family.status != EntityStatus.MERGED,
+            offered_concept.status != EntityStatus.MERGED,
+            # Only a merged model is gone, its goods the survivor's; a retired
+            # one is no longer received (owner decision, 2026-10-03).
+            # NEEDS_REVIEW stays offered, by the rule product intake already
+            # follows: a product parked in review is the one most likely to be
+            # this coat, and it is physically in the seller's hands whether or
+            # not the catalogue has finished deciding what to call it.
+            offered.status.not_in([EntityStatus.MERGED, EntityStatus.RETIRED]),
+        )
+        .group_by(found.c.variant_id)
+    )
     ids = list(
         (
             await session.scalars(
-                statement.order_by(CanonicalConcept.normalized_name, ProductVariant.id)
+                statement.order_by(func.min(found.c.sort_name), found.c.variant_id)
                 .limit(limit + 1)
                 .offset(offset)
             )

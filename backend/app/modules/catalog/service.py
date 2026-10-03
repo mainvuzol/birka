@@ -40,14 +40,20 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Executable, Select, func, or_, select
+from sqlalchemy import Executable, Select, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import CatalogAmbiguousError, NotFoundError, ValidationFailedError
+from app.core.errors import (
+    CatalogAmbiguousError,
+    ModelRetiredError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from app.core.text import is_storable
 from app.modules.audit import service as audit
 from app.modules.catalog.models import (
+    VARIANT_NAME_COLUMNS,
     AttributeKind,
     AttributeTerm,
     BusinessCategory,
@@ -61,7 +67,8 @@ from app.modules.catalog.models import (
     SizeSystemCode,
     SourceIdentity,
 )
-from app.modules.catalog.read import describe_variants
+from app.modules.catalog.read import current_variants, describe_variants
+from app.modules.catalog.similar import TypedWord, refuse_similar
 
 # Display labels for the size systems. The code is the identity; neither the
 # label nor the system is ever inferred from the size a seller types.
@@ -184,6 +191,9 @@ class ProductResult:
     sizes: tuple[SizeResult, ...]
     family_created: bool
     variant_created: bool
+    # The merged model whose name this was: creating it gave the model that
+    # stays (ADR-0008 §4).
+    redirected_from: uuid.UUID | None = None
 
 
 async def _insert_or_select(
@@ -216,24 +226,25 @@ async def _insert_or_select(
 
 
 def _require_active(row: AttributeTerm | CanonicalConcept | ProductVariant, *, entity: str) -> None:
-    """Refuse a catalog row that has been merged away.
+    """Refuse a catalog row that is not active, saying why.
 
-    This deliberately does not follow `merged_into_id` to the row that replaced
-    it, even though that is the friendlier behaviour and the pointer means
-    exactly that. Two reasons. Nothing writes `merged_into_id` in this build —
-    merging is gate M1C — so a redirect here would be an unreachable, untested
-    path. And the pointer is a plain self-reference with no composite tenant
-    key, so a row whose target sits in another organization would quietly hand
-    one shop another shop's product and freeze its label onto their receipts.
-    The command that writes merges owns that decision, with its own tenant
-    check and its own tests.
+    A merged *model* never reaches here: `_resolve_variant` follows it to the
+    model that stays, within this organization (ADR-0008 §4). A retired model
+    is refused with `MODEL_RETIRED`, so the app can offer to bring it back.
+    Anything else — a row parked for review, or a merged word — is
+    `CATALOG_AMBIGUOUS`, naming its status.
     """
     if row.status is EntityStatus.ACTIVE:
         return
+    if row.status is EntityStatus.RETIRED:
+        raise ModelRetiredError(product_variant_id=str(row.id))
     raise CatalogAmbiguousError(
-        "This catalog entry was merged and needs review",
+        "This catalog entry was merged"
+        if row.status is EntityStatus.MERGED
+        else "This catalog entry needs review",
         entity=entity,
         entity_id=str(row.id),
+        status=row.status.value,
         merged_into_id=str(row.merged_into_id) if row.merged_into_id else None,
     )
 
@@ -428,11 +439,63 @@ async def _resolve_concept(
     return concept.id, concept.business_category_id
 
 
+async def lock_concept(session: AsyncSession, *, concept_id: uuid.UUID) -> None:
+    """Families of one concept are found and created one request at a time."""
+    await session.execute(select(func.pg_advisory_xact_lock(_concept_lock_key(concept_id))))
+
+
+async def family_candidates(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    concept_id: uuid.UUID,
+    source_id: uuid.UUID | None,
+    garment_type_id: uuid.UUID | None,
+    exclude: frozenset[uuid.UUID] = frozenset(),
+) -> list[uuid.UUID]:
+    """The families that could be this product (ADR-0002): the concept's, not
+    merged, whose source and garment type are the same or not stated. Taken
+    under `lock_concept`. `exclude` leaves out the family a rename moves a
+    model from: that is where it is, not a product it could be."""
+    conditions = [
+        ProductFamily.organization_id == organization_id,
+        ProductFamily.canonical_concept_id == concept_id,
+        # NEEDS_REVIEW is the status the M1C review queue produces. A family
+        # parked there is the one most likely to be this product, so it must
+        # not be the one the check cannot see. Only a merged family is gone.
+        ProductFamily.status != EntityStatus.MERGED,
+    ]
+    if source_id is not None:
+        conditions.append(
+            or_(
+                ProductFamily.source_identity_id.is_(None),
+                ProductFamily.source_identity_id == source_id,
+            )
+        )
+    if garment_type_id is not None:
+        conditions.append(
+            or_(
+                ProductFamily.garment_type_id.is_(None),
+                ProductFamily.garment_type_id == garment_type_id,
+            )
+        )
+    if exclude:
+        conditions.append(ProductFamily.id.not_in(exclude))
+    return list(
+        (
+            await session.scalars(
+                select(ProductFamily.id).where(*conditions).order_by(ProductFamily.id)
+            )
+        ).all()
+    )
+
+
 async def _resolve_family(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
-    draft: ProductDraft,
+    new_model: bool,
+    distinction_note: str | None,
     concept_id: uuid.UUID,
     source_id: uuid.UUID | None,
     garment_type_id: uuid.UUID | None,
@@ -468,33 +531,15 @@ async def _resolve_family(
     # An advisory lock held to commit closes that window without a schema
     # change; it is keyed per concept, so it only ever serializes two people
     # entering the same product name at the same moment.
-    await session.execute(select(func.pg_advisory_xact_lock(_concept_lock_key(concept_id))))
-
-    conditions = [
-        ProductFamily.organization_id == organization_id,
-        ProductFamily.canonical_concept_id == concept_id,
-        # NEEDS_REVIEW is the status the M1C review queue produces. A family
-        # parked there is the one most likely to be this product, so it must
-        # not be the one the check cannot see. Only a merged family is gone.
-        ProductFamily.status != EntityStatus.MERGED,
-    ]
-    if source_id is not None:
-        conditions.append(
-            or_(
-                ProductFamily.source_identity_id.is_(None),
-                ProductFamily.source_identity_id == source_id,
-            )
-        )
-    if garment_type_id is not None:
-        conditions.append(
-            or_(
-                ProductFamily.garment_type_id.is_(None),
-                ProductFamily.garment_type_id == garment_type_id,
-            )
-        )
-
-    candidates = list((await session.scalars(select(ProductFamily.id).where(*conditions))).all())
-    if candidates and not draft.new_model:
+    await lock_concept(session, concept_id=concept_id)
+    candidates = await family_candidates(
+        session,
+        organization_id=organization_id,
+        concept_id=concept_id,
+        source_id=source_id,
+        garment_type_id=garment_type_id,
+    )
+    if candidates and not new_model:
         raise CatalogAmbiguousError(
             "A product with this name could already exist",
             candidate_family_ids=[str(candidate) for candidate in candidates],
@@ -505,7 +550,7 @@ async def _resolve_family(
         canonical_concept_id=concept_id,
         source_identity_id=source_id,
         garment_type_id=garment_type_id,
-        distinction_note=draft.distinction_note,
+        distinction_note=distinction_note,
     )
     session.add(family)
     await session.flush()
@@ -515,7 +560,15 @@ async def _resolve_family(
 async def _existing_family(
     session: AsyncSession, *, organization_id: uuid.UUID, product_family_id: uuid.UUID
 ) -> ProductFamily:
-    family = await session.get(ProductFamily, product_family_id)
+    # Held `FOR KEY SHARE` and read under the hold, so a correction merging
+    # this family away (`merge_emptied_family`) lands wholly before — and is
+    # seen here — or after the model created in it, and then finds it.
+    family = await session.scalar(
+        select(ProductFamily)
+        .where(ProductFamily.id == product_family_id)
+        .with_for_update(read=True, key_share=True)
+        .execution_options(populate_existing=True)
+    )
     # A family in another organization is reported exactly like one that does
     # not exist: the answer must not confirm that it is out there somewhere.
     if family is None or family.organization_id != organization_id:
@@ -530,26 +583,10 @@ async def _existing_family(
     return family
 
 
-async def _resolve_variant(
-    session: AsyncSession,
-    *,
-    product_family_id: uuid.UUID,
-    terms: dict[str, uuid.UUID | None],
-    length_cm: Decimal | None,
-) -> tuple[uuid.UUID, bool]:
-    """Find or create the attribute combination inside the family.
-
-    Unlike a family, a variant *is* its attributes — the unique constraint says
-    so, with `NULLS NOT DISTINCT` so that "not stated" collapses to one row
-    instead of unlimited near-duplicates. Returning the existing row is
-    therefore not a merge; it is the identity the schema already declared.
-    """
-    values: dict[str, Any] = {
-        "id": uuid.uuid4(),
-        "product_family_id": product_family_id,
-        "length_cm": length_cm,
-        **terms,
-    }
+def same_name(
+    product_family_id: uuid.UUID, terms: dict[str, uuid.UUID | None], length_cm: Decimal | None
+) -> list[Any]:
+    """The conditions that find a variant by its name within a family."""
     lookup = [
         ProductVariant.product_family_id == product_family_id,
         ProductVariant.length_cm.is_not_distinct_from(length_cm),
@@ -558,22 +595,125 @@ async def _resolve_variant(
         getattr(ProductVariant, column).is_not_distinct_from(value)
         for column, value in terms.items()
     )
+    return lookup
+
+
+async def _resolve_variant(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    product_family_id: uuid.UUID,
+    terms: dict[str, uuid.UUID | None],
+    length_cm: Decimal | None,
+) -> tuple[uuid.UUID, bool, uuid.UUID | None]:
+    """Find or create the attribute combination inside the family.
+
+    Unlike a family, a variant *is* its attributes — the unique key says so,
+    with `NULLS NOT DISTINCT` so that "not stated" collapses to one row instead
+    of unlimited near-duplicates. Returning the existing row is therefore not
+    a merge; it is the identity the schema already declared.
+
+    A merged model gives up its name (ADR-0008 §4): the key covers only models
+    not merged. So when the name is held only by a merged model, this answers
+    with the model that stays, checked to be this organization's, and says
+    which merged model led there. It never creates the typo again beside it.
+    Returns `(variant, created, redirected_from)`.
+    """
+    lookup = same_name(product_family_id, terms, length_cm)
+    live = select(ProductVariant.id).where(*lookup, ProductVariant.status != EntityStatus.MERGED)
+    merged = (
+        await session.scalars(
+            select(ProductVariant.id)
+            .where(*lookup, ProductVariant.status == EntityStatus.MERGED)
+            .order_by(ProductVariant.id)
+        )
+    ).first()
+    redirected_from: uuid.UUID | None = None
+    if merged is not None and await session.scalar(live) is None:
+        leading = await current_variants(
+            session, organization_id=organization_id, variant_ids=[merged]
+        )
+        if merged in leading and leading[merged] != merged:
+            redirected_from = merged
+            variant = await session.get(ProductVariant, leading[merged])
+            if variant is None:  # pragma: no cover - just resolved above
+                raise NotFoundError("Unknown product variant")
+            await session.refresh(variant)
+            _require_active(variant, entity="product_variant")
+            return variant.id, False, redirected_from
+
+    values: dict[str, Any] = {
+        "id": uuid.uuid4(),
+        "product_family_id": product_family_id,
+        "length_cm": length_cm,
+        **terms,
+    }
     variant_id, created = await _insert_or_select(
         session,
         insert=pg_insert(ProductVariant)
         .values(**values)
-        .on_conflict_do_nothing(constraint="uq_product_variant_attributes")
+        .on_conflict_do_nothing(
+            index_elements=list(VARIANT_NAME_COLUMNS),
+            index_where=text("status <> 'MERGED'"),
+        )
         .returning(ProductVariant.id),
-        existing=select(ProductVariant.id).where(*lookup),
+        existing=live,
     )
     if created:
-        return variant_id, True
+        return variant_id, True, None
 
     variant = await session.get(ProductVariant, variant_id)
     if variant is None:  # pragma: no cover - just resolved above
         raise NotFoundError("Unknown product variant")
     _require_active(variant, entity="product_variant")
-    return variant.id, False
+    return variant.id, False, None
+
+
+async def _merged_namesake(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    concept_id: uuid.UUID,
+    source_id: uuid.UUID | None,
+    terms: dict[str, uuid.UUID | None],
+    length_cm: Decimal | None,
+) -> tuple[uuid.UUID, uuid.UUID] | None:
+    """A merged model with exactly this name, whose family a merge emptied and
+    merged too, and the one model it leads to: `(merged, stays)`.
+
+    Such a family is no candidate any more, so without this the concept's
+    path would create the typo again in a family of its own. A family still
+    alive is found the ordinary way, as a candidate (ADR-0002), and its merged
+    model by `_resolve_variant`.
+    """
+    merged = list(
+        (
+            await session.scalars(
+                select(ProductVariant.id)
+                .join(ProductFamily, ProductFamily.id == ProductVariant.product_family_id)
+                .where(
+                    ProductFamily.organization_id == organization_id,
+                    ProductFamily.canonical_concept_id == concept_id,
+                    ProductFamily.source_identity_id.is_not_distinct_from(source_id),
+                    ProductFamily.status == EntityStatus.MERGED,
+                    ProductVariant.status == EntityStatus.MERGED,
+                    ProductVariant.length_cm.is_not_distinct_from(length_cm),
+                    *(
+                        getattr(ProductVariant, column).is_not_distinct_from(value)
+                        for column, value in terms.items()
+                    ),
+                )
+                .order_by(ProductVariant.id)
+            )
+        ).all()
+    )
+    if not merged:
+        return None
+    leading = await current_variants(session, organization_id=organization_id, variant_ids=merged)
+    stays = {leading[model] for model in merged if model in leading}
+    if len(stays) != 1:
+        return None
+    return merged[0], next(iter(stays))
 
 
 async def _resolve_sizes(
@@ -661,14 +801,45 @@ async def _resolve_sizes(
     return tuple(resolved[(draft.system, draft.code)] for draft in ordered)
 
 
+def typed_words(
+    *,
+    concept: str | None,
+    source: str | None,
+    variant: VariantDraft,
+) -> list[TypedWord]:
+    """The words of a name as a person typed them, for the similar-name check."""
+    words: list[TypedWord] = []
+    for field_name, value, limit in (
+        ("concept", concept, NAME_LIMIT),
+        ("source", source, NAME_LIMIT),
+        ("color", variant.color, TERM_LIMIT),
+        ("material", variant.material, TERM_LIMIT),
+        ("texture", variant.texture, TERM_LIMIT),
+        ("fur", variant.fur, TERM_LIMIT),
+        ("collar", variant.collar, TERM_LIMIT),
+    ):
+        if value is not None:
+            words.append(
+                TypedWord(
+                    field=field_name, name=value, normalized=normalize_label(value, limit=limit)
+                )
+            )
+    return words
+
+
 async def create_product(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
     actor_user_id: uuid.UUID,
     draft: ProductDraft,
+    similar_confirmed: bool = False,
 ) -> ProductResult:
     """Turn one structured product statement into rows stock can be held against.
+
+    A word that looks like one the catalogue already uses is refused once
+    (`CATALOG_SIMILAR`), until the person takes the existing one or says
+    `similar_confirmed` (owner decision, 2026-10-03).
 
     Does not open or commit a transaction — the calling command owns the unit
     of work (`.ai/conventions.md`), so the audit entry commits with the rows it
@@ -687,49 +858,12 @@ async def create_product(
         raise ValidationFailedError("A new model needs a note saying how it is different")
     if not draft.sizes:
         raise ValidationFailedError("At least one size is required")
-
-    family_created = False
-    if draft.product_family_id is not None:
-        family = await _existing_family(
-            session, organization_id=organization_id, product_family_id=draft.product_family_id
-        )
-        family_id = family.id
-        concept_id = family.canonical_concept_id
-        source_id = family.source_identity_id
-        garment_type_id = family.garment_type_id
-        concept = await session.get(CanonicalConcept, concept_id)
-        if concept is None:  # pragma: no cover - RESTRICT forbids deleting it
-            raise NotFoundError("Unknown canonical concept")
-        category_id = concept.business_category_id
-    else:
-        if draft.concept is None:  # pragma: no cover - guarded above
-            raise ValidationFailedError("A product needs a name")
-        # The garment type is resolved either way: it is a dimension of the
-        # family signature (ADR-0002 §4.2), not a property of the concept.
-        garment_type_id = await _resolve_garment_type(
-            session, organization_id=organization_id, name=draft.garment_type
-        )
-        # `category_id` is what is actually in force, which is not necessarily
-        # what the caller typed: an existing concept keeps its own.
-        concept_id, category_id = await _resolve_concept(
+    if not similar_confirmed:
+        await refuse_similar(
             session,
             organization_id=organization_id,
-            name=draft.concept,
-            business_category=draft.business_category,
-            garment_type_id=garment_type_id,
+            words=typed_words(concept=draft.concept, source=draft.source, variant=draft.variant),
         )
-        source_id = await _resolve_source(
-            session, organization_id=organization_id, name=draft.source
-        )
-        family_id = await _resolve_family(
-            session,
-            organization_id=organization_id,
-            draft=draft,
-            concept_id=concept_id,
-            source_id=source_id,
-            garment_type_id=garment_type_id,
-        )
-        family_created = True
 
     terms = {
         "color_term_id": await _resolve_term(
@@ -763,12 +897,80 @@ async def create_product(
             name=draft.variant.collar,
         ),
     }
-    variant_id, variant_created = await _resolve_variant(
-        session,
-        product_family_id=family_id,
-        terms=terms,
-        length_cm=draft.variant.length_cm,
-    )
+    family_created = False
+    namesake: tuple[uuid.UUID, uuid.UUID] | None = None
+    if draft.product_family_id is not None:
+        family = await _existing_family(
+            session, organization_id=organization_id, product_family_id=draft.product_family_id
+        )
+        family_id = family.id
+        concept_id = family.canonical_concept_id
+        source_id = family.source_identity_id
+        garment_type_id = family.garment_type_id
+        concept = await session.get(CanonicalConcept, concept_id)
+        if concept is None:  # pragma: no cover - RESTRICT forbids deleting it
+            raise NotFoundError("Unknown canonical concept")
+        category_id = concept.business_category_id
+    else:
+        if draft.concept is None:  # pragma: no cover - guarded above
+            raise ValidationFailedError("A product needs a name")
+        # The garment type is resolved either way: it is a dimension of the
+        # family signature (ADR-0002 §4.2), not a property of the concept.
+        garment_type_id = await _resolve_garment_type(
+            session, organization_id=organization_id, name=draft.garment_type
+        )
+        # `category_id` is what is actually in force, which is not necessarily
+        # what the caller typed: an existing concept keeps its own.
+        concept_id, category_id = await _resolve_concept(
+            session,
+            organization_id=organization_id,
+            name=draft.concept,
+            business_category=draft.business_category,
+            garment_type_id=garment_type_id,
+        )
+        source_id = await _resolve_source(
+            session, organization_id=organization_id, name=draft.source
+        )
+        namesake = await _merged_namesake(
+            session,
+            organization_id=organization_id,
+            concept_id=concept_id,
+            source_id=source_id,
+            terms=terms,
+            length_cm=draft.variant.length_cm,
+        )
+        if namesake is None:
+            family_id = await _resolve_family(
+                session,
+                organization_id=organization_id,
+                new_model=draft.new_model,
+                distinction_note=draft.distinction_note,
+                concept_id=concept_id,
+                source_id=source_id,
+                garment_type_id=garment_type_id,
+            )
+            family_created = True
+
+    if draft.product_family_id is None and namesake is not None:
+        # Exactly the name of a merged model whose family went with it: the
+        # model that stays (ADR-0008 §4), not the typo made again.
+        merged_name, stays = namesake
+        redirected_from: uuid.UUID | None = merged_name
+        variant = await session.get(ProductVariant, stays)
+        if variant is None:  # pragma: no cover - just resolved
+            raise NotFoundError("Unknown product variant")
+        await session.refresh(variant)
+        _require_active(variant, entity="product_variant")
+        variant_id, variant_created = variant.id, False
+        family_id = variant.product_family_id
+    else:
+        variant_id, variant_created, redirected_from = await _resolve_variant(
+            session,
+            organization_id=organization_id,
+            product_family_id=family_id,
+            terms=terms,
+            length_cm=draft.variant.length_cm,
+        )
     sizes = await _resolve_sizes(session, organization_id=organization_id, drafts=draft.sizes)
 
     described = await describe_variants(session, [variant_id])
@@ -789,6 +991,7 @@ async def create_product(
             "family_created": family_created,
             "variant_created": variant_created,
             "size_ids": [str(size.size_id) for size in sizes],
+            **({"redirected_from": str(redirected_from)} if redirected_from else {}),
         },
         reason=draft.distinction_note,
     )
@@ -804,6 +1007,7 @@ async def create_product(
         sizes=sizes,
         family_created=family_created,
         variant_created=variant_created,
+        redirected_from=redirected_from,
     )
 
 

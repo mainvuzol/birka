@@ -45,6 +45,17 @@ export async function api<T>(
   }
   return (await response.json()) as T;
 }
+/**
+ * A refusal the server raised after looking the command up under its lock,
+ * so it proves the command recorded nothing (`details.recorded === false`):
+ * the model was merged into another, or retired, since (ADR-0008 §9). It
+ * settles even an attempt whose outcome was unknown, so a phone that sent a
+ * sale of a duplicate just before a merge is not left blocked.
+ */
+export function recordedNothing(error: unknown): boolean {
+  return error instanceof ApiError && error.details.recorded === false;
+}
+
 export function errorText(error: unknown): string {
   if (!(error instanceof ApiError))
     return "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.";
@@ -72,6 +83,17 @@ export function errorText(error: unknown): string {
     return "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.";
   if (error.status === 403)
     return "Немає доступу до цієї операції або складу. Зверніться до менеджера.";
+  // Correcting the catalogue (owner decision, 2026-10-03).
+  if (error.code === "MODEL_MERGED")
+    return "Цю модель об’єднано з іншою. Виберіть товар ще раз: стара назва тепер веде до моделі, що лишилась.";
+  if (error.code === "MODEL_RETIRED")
+    return "Цю модель прибрано: її залишок продають, але нового не приймають. Щоб приймати, поверніть її в «Моделях».";
+  if (error.code === "CATALOG_SIMILAR")
+    return "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.";
+  if (error.code === "SAME_AS")
+    return "Така назва вже є в іншої моделі. Об’єднайте їх у «Моделях».";
+  if (error.code === "MERGE_BLOCKED")
+    return "Моделі ще не можна об’єднати: спершу завершіть те, що показано.";
   if (error.code === "INSUFFICIENT_STOCK")
     return "Доступного товару вже недостатньо. Оновіть залишки та перевірте кількість.";
   if (error.code === "IDEMPOTENCY_IN_PROGRESS")

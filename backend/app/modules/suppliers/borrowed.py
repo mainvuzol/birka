@@ -44,6 +44,7 @@ from app.modules.inventory.models import (
     StockLot,
     StockMovement,
 )
+from app.modules.inventory.service import current_variants
 from app.modules.suppliers import invoices
 from app.modules.suppliers.common import SupplierView, require_keeper, supplier_view
 from app.modules.suppliers.models import (
@@ -163,6 +164,26 @@ async def on_hand(session: AsyncSession, lot: StockLot) -> int:
     return int(row[0]) - int(row[1]) - int(row[2])
 
 
+async def lots_on_hand(
+    session: AsyncSession, *, organization_id: uuid.UUID, product_variant_id: uuid.UUID
+) -> list[tuple[uuid.UUID, int]]:
+    """A model's borrowed or consignment lots with goods still on hand.
+
+    A merge waits for them (owner decision, 2026-10-03): those goods belong to
+    a supplier and go back from their own lot.
+    """
+    rows = await session.execute(
+        select(StockLot.id, _received() - _sold() - _returned())
+        .where(
+            StockLot.organization_id == organization_id,
+            StockLot.product_variant_id == product_variant_id,
+            StockLot.acquisition_type.in_(PAID_WHEN_SOLD),
+        )
+        .order_by(StockLot.id)
+    )
+    return [(lot_id, int(left)) for lot_id, left in rows.all() if int(left) > 0]
+
+
 async def ensure_on_hand(session: AsyncSession, lot: StockLot, *, quantity: int) -> None:
     """After a sale or a return is added for `quantity` of the lot: refused,
     and so undone, when it took more than was on hand."""
@@ -246,8 +267,15 @@ async def lot_to_return(
             reason="OTHER_SUPPLIER",
             supplier_id=str(receipt.supplier_id),
         )
+    # The lot keeps naming the model it arrived as. If that model was merged
+    # since, its goods are the model that stays now, and go back as it: a
+    # lot can reopen after a merge, since an invoice or a return may be
+    # cancelled at any time (ADR-0008 §5).
+    leading = await current_variants(
+        session, organization_id=organization_id, variant_ids={lot.product_variant_id}
+    )
     if lot.location_id != location_id or [line[:2] for line in lines] != [
-        (lot.product_variant_id, lot.size_id)
+        (leading[lot.product_variant_id], lot.size_id)
     ]:
         raise ValidationFailedError(
             "A return of borrowed goods is of their own model and size, from where they are",

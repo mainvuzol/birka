@@ -267,6 +267,7 @@ forbidden_modules = [
 name = "only the inventory module may write stock (invariant I3)"
 type = "forbidden"
 source_modules = [
+    "app.modules.catalog_correction",
     "app.modules.sales",
     "app.modules.refunds",
     "app.modules.transfers",
@@ -580,6 +581,9 @@ allow_indirect_imports = true
 # report). `reports → sales, refunds, credit, identity, authz, tenancy, core`:
 # it reads their rows and writes nothing — no stock, no money, no audit — so
 # a figure can never change what it sums.
+# 2026-10-03 (ADR-0008 §8): it may read `catalog.read` too, to count a merged
+# model with the model that stays and name each as it is named now. Nothing
+# else of the catalogue.
 [[tool.importlinter.contracts]]
 name = "a report only reads"
 type = "forbidden"
@@ -593,7 +597,23 @@ forbidden_modules = [
     "app.modules.stores",
     "app.modules.suppliers",
     "app.modules.backups",
-    "app.modules.catalog",
+    "app.modules.catalog.corrections",
+    "app.modules.catalog.decisions",
+    "app.modules.catalog.evidence",
+    "app.modules.catalog.feedback",
+    "app.modules.catalog.intake",
+    "app.modules.catalog.knowledge",
+    "app.modules.catalog.matching",
+    "app.modules.catalog.models",
+    "app.modules.catalog.parser",
+    "app.modules.catalog.prices",
+    "app.modules.catalog.raw_lines",
+    "app.modules.catalog.review",
+    "app.modules.catalog.search",
+    "app.modules.catalog.service",
+    "app.modules.catalog.similar",
+    "app.modules.catalog.validation",
+    "app.modules.catalog_correction",
     "app.modules.audit",
     "app.modules.telegram",
     "app.modules.sales.service",
@@ -627,3 +647,55 @@ source_modules = [
     "app.modules.transfers",
 ]
 forbidden_modules = ["app.modules.reports"]
+
+# 2026-10-03 (ADR-0001 amendment, ADR-0008 §8): module `catalog_correction`
+# merges a duplicate into the model that stays, and retires a model.
+# `catalog_correction → catalog, inventory, orders, suppliers, snapshots,
+# tenancy, authz, audit, core`: it reads what stops a merge — open orders,
+# borrowed lots, «Брак» units at a supplier, opening lists that wait — and
+# moves stock only through `inventory.apply_catalog_merge`. It reads «Брак»
+# units at a supplier through the supplier returns, never `damaged`.
+[[tool.importlinter.contracts]]
+name = "a merge moves stock only through the ledger's own door"
+type = "forbidden"
+source_modules = ["app.modules.catalog_correction"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.stores",
+    "app.modules.backups",
+    "app.modules.telegram",
+    "app.modules.identity",
+    "app.modules.reports",
+    "app.modules.inventory.repository",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "nothing depends on the catalogue corrections"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.reports",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.catalog_correction"]

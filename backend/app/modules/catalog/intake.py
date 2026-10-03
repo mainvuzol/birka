@@ -38,6 +38,7 @@ async def create_product_from_decision(
     decision_id: uuid.UUID,
     store_id: uuid.UUID,
     draft: ProductDraft,
+    similar_confirmed: bool = False,
 ) -> dict[str, Any]:
     """Create or reuse only the identity explicitly supplied by the reviewer.
 
@@ -83,6 +84,7 @@ async def create_product_from_decision(
         organization_id=scope.organization_id,
         actor_user_id=scope.user_id,
         draft=draft,
+        similar_confirmed=similar_confirmed,
     )
     # All catalog writes have finished. Protect the final FK, then freeze the
     # revision while validating: a fully reused variant may have made no writes

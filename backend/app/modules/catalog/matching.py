@@ -83,7 +83,7 @@ _TERM_GUARDS = " AND ".join(
 )
 _QUERY = text(f"""
 WITH labels AS (
- SELECT v.id AS variant_id, f.id AS family_id, c.name AS concept,
+ SELECT v.id AS variant_id, v.merged_into_id, f.id AS family_id, c.name AS concept,
         s.name AS source, g.name AS garment_type,
         bc.name AS category, f.distinction_note,
         v.status AS variant_status, f.status AS family_status, c.status AS concept_status,
@@ -104,22 +104,42 @@ WITH labels AS (
  LEFT JOIN garment_type g ON g.id = f.garment_type_id AND g.organization_id = :org
  LEFT JOIN business_category bc ON bc.id = c.business_category_id AND bc.organization_id = :org
  {_TERM_JOINS}
- WHERE v.status <> 'MERGED' AND f.status <> 'MERGED' AND c.status <> 'MERGED'
+ -- A merged model's family may be merged too, once the merge emptied it;
+ -- its name still leads to the model that stays.
+ WHERE (v.status = 'MERGED' OR (f.status <> 'MERGED' AND c.status <> 'MERGED'))
    AND (f.source_identity_id IS NULL OR s.id IS NOT NULL)
    AND (f.garment_type_id IS NULL OR g.id IS NOT NULL)
    AND (c.business_category_id IS NULL OR bc.id IS NOT NULL)
    AND {_TERM_GUARDS}
-   AND (CAST(:family AS uuid) IS NULL OR f.id = CAST(:family AS uuid))
 ), named AS (
  SELECT *, concat_ws(' ', concept, source, color, material, texture, fur, collar,
          CASE WHEN length_cm IS NOT NULL THEN trim(trailing '.' FROM
            trim(trailing '0' FROM length_cm::text)) || ' см' END) AS display_name
  FROM labels
-), ranked AS (
- SELECT *, similarity(lower(display_name), :query) AS lexical_score,
-        lower(regexp_replace(trim(display_name), '\\s+', ' ', 'g')) = :query AS exact_name,
-        jsonb_array_length(aliases) > 0 AS verified_alias
+), scored AS (
+ SELECT *, similarity(lower(display_name), :query) AS own_score,
+        lower(regexp_replace(trim(display_name), '\\s+', ' ', 'g')) = :query AS own_exact
  FROM named
+), formers AS (
+ -- A merged model's name, and a learned alias naming it, lead to the model
+ -- that stays (ADR-0008 §5). Alias rows are human evidence: read, not moved.
+ SELECT m.merged_into_id AS variant_id, max(m.own_score) AS score,
+        bool_or(m.own_exact) AS exact,
+        coalesce(jsonb_agg(alias) FILTER (WHERE alias IS NOT NULL), '[]'::jsonb) AS aliases
+ FROM scored m
+ LEFT JOIN LATERAL jsonb_array_elements(m.aliases) alias
+   ON alias->>'target_type' = 'VARIANT'
+ WHERE m.variant_status = 'MERGED'
+ GROUP BY m.merged_into_id
+), ranked AS (
+ SELECT n.*, greatest(n.own_score, coalesce(fm.score, 0)) AS lexical_score,
+        n.own_exact OR coalesce(fm.exact, false) AS exact_name,
+        jsonb_array_length(n.aliases) > 0
+          OR coalesce(jsonb_array_length(fm.aliases), 0) > 0 AS verified_alias
+ FROM scored n LEFT JOIN formers fm ON fm.variant_id = n.variant_id
+ -- A retired model is no longer offered (owner decision, 2026-10-03).
+ WHERE n.variant_status NOT IN ('MERGED', 'RETIRED')
+   AND (CAST(:family AS uuid) IS NULL OR n.family_id = CAST(:family AS uuid))
 ), pool AS (
  SELECT * FROM ranked ORDER BY verified_alias DESC, exact_name DESC,
  lexical_score DESC, variant_id LIMIT 201

@@ -200,6 +200,74 @@ class CatalogAmbiguousError(DomainError):
     message = "Catalog interpretation is ambiguous and needs review"
 
 
+class CatalogSimilarError(DomainError):
+    """A typed word looks like one the catalogue already uses (owner decision,
+    2026-10-03): Latin letters in place of Cyrillic, case, spaces.
+
+    Refused once. `details.similar` lists each such word with the spelling in
+    use and a few models that use it, so the person can take one; sending the
+    same request with `similar_confirmed` creates it as typed.
+    """
+
+    code = "CATALOG_SIMILAR"
+    http_status = 409
+    message = "A similar name is already in the catalogue; take it, or confirm this is another"
+
+
+class SameAsError(DomainError):
+    """The corrected name is another model's (ADR-0008 §2).
+
+    `details.same_as` names the model it leads to, so the app can offer to
+    merge the two. Nothing is changed.
+    """
+
+    code = "SAME_AS"
+    http_status = 409
+    message = "Another model already has this name; merge them instead"
+
+
+class ModelMergedError(DomainError):
+    """The model was merged into another (ADR-0008 §5).
+
+    `details.merged_into` names the model that stays. Raised after the
+    command's `command_id` was looked up under its lock, so it proves this
+    command recorded nothing: `details.recorded` is false, and a client may
+    treat it as final even after an attempt whose outcome it did not know.
+    """
+
+    code = "MODEL_MERGED"
+    http_status = 409
+    message = "This model was merged into another; use the model that stays"
+
+    def __init__(self, message: str | None = None, **details: Any) -> None:
+        super().__init__(message, **details, recorded=False)
+
+
+class ModelRetiredError(DomainError):
+    """The model is retired: its stock still sells, but nothing new is taken
+    in (owner decision, 2026-10-03). `details.product_variant_id` names it.
+    Final in the same way as `ModelMergedError`."""
+
+    code = "MODEL_RETIRED"
+    http_status = 409
+    message = "This model is retired; bring it back before taking new goods in"
+
+    def __init__(self, message: str | None = None, **details: Any) -> None:
+        super().__init__(message, **details, recorded=False)
+
+
+class MergeBlockedError(DomainError):
+    """Something of the duplicate is still open, or out of reach (ADR-0008 §3).
+
+    `details.reasons` lists each, with what to finish first. Nothing is
+    changed.
+    """
+
+    code = "MERGE_BLOCKED"
+    http_status = 409
+    message = "The models cannot be merged yet; finish what is listed first"
+
+
 class PriceChangedError(DomainError):
     """The suggested price is no longer the one the person saw.
 
@@ -294,6 +362,7 @@ class IdempotencyInProgressError(DomainError):
 __all__ = [
     "AuthenticationFailedError",
     "CatalogAmbiguousError",
+    "CatalogSimilarError",
     "CorrectionExceedsShortfallError",
     "DamagedReturnsUnavailableError",
     "DamagedStockClosedError",
@@ -305,12 +374,16 @@ __all__ = [
     "InsufficientStockError",
     "InvalidInitDataError",
     "LocationAccessDeniedError",
+    "MergeBlockedError",
+    "ModelMergedError",
+    "ModelRetiredError",
     "NoAccessError",
     "NotFoundError",
     "OpeningBalanceConflictError",
     "PermissionDeniedError",
     "PriceChangedError",
     "RefundExceedsSoldError",
+    "SameAsError",
     "SessionExpiredError",
     "SnapshotConflictError",
     "StoreNotTradingError",

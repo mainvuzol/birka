@@ -26,6 +26,7 @@ from sqlalchemy import select
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.api.v1.backups import router as backups_router
 from app.api.v1.catalog import router as catalog_router
+from app.api.v1.catalog_corrections import router as catalog_corrections_router
 from app.api.v1.catalog_decisions import router as catalog_decisions_router
 from app.api.v1.catalog_matching import router as catalog_matching_router
 from app.api.v1.credits import router as credits_router
@@ -46,6 +47,7 @@ from app.modules.tenancy.models import Store, StoreState
 
 router = APIRouter()
 router.include_router(catalog_router)
+router.include_router(catalog_corrections_router)
 router.include_router(catalog_matching_router)
 router.include_router(catalog_decisions_router)
 router.include_router(inventory_router)

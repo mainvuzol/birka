@@ -479,11 +479,12 @@ async def test_only_the_organizations_own_live_model_is_priced(maker):
     )
     assert response.status_code == 404
 
+    stays = await coat(maker, shops)
     async with maker() as session:
         await session.execute(
             update(ProductVariant)
             .where(ProductVariant.id == uuid.UUID(variant))
-            .values(status=EntityStatus.MERGED)
+            .values(status=EntityStatus.MERGED, merged_into_id=uuid.UUID(stays))
         )
         await session.commit()
     merged = await change(

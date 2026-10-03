@@ -210,6 +210,7 @@ async def create_reviewed_product(
                         SizeDraft(system=size.system, code=size.code) for size in payload.sizes
                     ),
                 ),
+                similar_confirmed=payload.similar_confirmed,
             )
             await session.commit()
             return result

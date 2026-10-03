@@ -28,6 +28,7 @@ from app.modules.catalog.evidence import (
     MatchDecisionStatus,
     ProductAlias,
 )
+from app.modules.catalog.read import current_variants
 from app.modules.tenancy.service import validate_active_stores
 
 
@@ -197,10 +198,29 @@ async def record_alias_feedback(
     else:
         alias.reject_count += 1
     # A verified mapping is positive evidence even if historical counts are zero.
-    positive_targets = {
-        (item.target_type, item.target_id)
+    # A model merged away and the model that stays are one target: confirming
+    # the old phrase for the model that stays is agreement, not a conflict
+    # (ADR-0008 §5). Alias rows themselves are left as they were written.
+    positive = [
+        item
         for item in aliases
         if item.confirm_count or item.status in (AliasStatus.VERIFIED, AliasStatus.AMBIGUOUS)
+    ]
+    leading = await current_variants(
+        session,
+        organization_id=scope.organization_id,
+        variant_ids=[
+            item.target_id for item in positive if item.target_type == AliasTargetType.VARIANT
+        ],
+    )
+    positive_targets = {
+        (
+            item.target_type,
+            leading.get(item.target_id, item.target_id)
+            if item.target_type == AliasTargetType.VARIANT
+            else item.target_id,
+        )
+        for item in positive
     }
     for item in aliases:
         item.status = _status(item, competing=len(positive_targets) > 1)

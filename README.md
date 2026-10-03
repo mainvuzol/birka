@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 134 Playwright journeys on a phone profile, against the real API;
+- 145 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -372,6 +372,28 @@ read it (`report:view_financial`), each for the stores they hold it in.
 - A sale and its returns are the store's that sold; money is the store's
   whose till it went through. A return counts on the day it was taken. See
   the [report](.ai/project-memory/sales-report-report.md).
+
+**Correcting the catalogue** (owner decision, 2026-10-03): the owner and
+managers (`catalog:merge`) put a typo right in «Моделі». See
+[ADR-0008](.ai/decisions/ADR-0008-catalog-correction.md).
+- **Finding a model:** `GET /catalog/models?store_id=&query=`, retired ones
+  too; `GET /catalog/models/{id}` is its card.
+- **Renaming one model:** `POST /catalog/models/{id}/rename` states its whole
+  name again. It keeps its id, stock and prices; old receipts keep their
+  name. A name another model has is refused (`SAME_AS`), to be merged.
+- **Merging a duplicate:** `GET /catalog/models/{id}/merge/{into}` previews
+  both models, the stock that would move and what stops it;
+  `POST /catalog/models/{id}/merge` does it, for good. Its stock moves to the
+  model that stays in every warehouse and size, as the merge's own ledger
+  movements; the duplicate's price fills only where the model that stays has
+  none. It needs the right in every store, and waits while the duplicate has
+  anything open (`MERGE_BLOCKED`). Afterwards the old name leads to the model
+  that stays: returns, «Звіт», search.
+- **Retiring:** `POST /catalog/models/{id}/retire` and `/restore`. A retired
+  model's stock still sells; nothing new is received (`MODEL_RETIRED`).
+- **A similar name at creation** (a Latin letter in a Cyrillic word) is
+  refused once with `CATALOG_SIMILAR`; `similar_confirmed` creates it as
+  typed. See the [report](.ai/project-memory/catalog-correction-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it
