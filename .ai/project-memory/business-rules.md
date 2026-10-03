@@ -781,3 +781,29 @@ How it is carried out, not decided by the owner:
   model, so a renamed model also shows its new name.
 - **The similar-name check** maps the Latin letters that look Cyrillic
   (a c e i o p x y k m t b h), ï and ё, and the different apostrophes.
+
+
+## Owner decision — 2026-10-03 (one size, one spelling)
+
+Asked when the owner chose it as the next work. A size was kept exactly as
+it was typed when a product was created, so `M` and `m` became two sizes
+with two separate balances, and two sizes cannot be put together afterwards.
+It had been open since M1B, and the shops are about to type their stock.
+
+- **Spellings that are one size:**
+  - **case does not matter:** `m` = `M`, `xl` = `XL`;
+  - **Cyrillic letters:** `М` = `M`, `Л` = `L`, `С` = `S`, `ХС` = `XS`,
+    `ХЛ` = `XL`, `ХХЛ` = `XXL`, as the parser already reads them in a
+    notebook line;
+  - **a count of X's:** `2XL` = `XXL`, `3XL` = `XXXL`, `4XL` = `XXXXL`, and
+    for every size with a count: `2XS` = `XXS`, `5XL` = `XXXXXL`.
+- **A double size:** spaces and the kind of dash do not matter: `46-48` =
+  `46 - 48` = `46–48`. `46/48` is another size, since a slash is written
+  differently.
+- **A size is shown in one spelling** everywhere (lists, the till, reports):
+  capital Latin letters, `M`, `XL`, `46-48`, however it was typed. With
+  several X's it is written out: `XXL`, `XXXL`. Whoever types `м` sees that
+  the existing `M` was chosen.
+- **The size system does not separate sizes.** `M` is one size whichever
+  system was picked (letter, EU numeric or «Інша»). The system stays only for
+  the order of the list.
