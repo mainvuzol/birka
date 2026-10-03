@@ -636,7 +636,8 @@ figures of any kind for a day or a period.
   sales of the store that sold, and its money leaves the till of the store
   that took it. A debt paid at another store is that store's money.
 - **One sum of money.** The app does not ask whether a customer paid in
-  cash or by card; that can be split later, as separate work.
+  cash or by card; that can be split later, as separate work. *Replaced on
+  2026-10-04 by "cash and card, the day's close".*
 - **What the store pays its suppliers is not the till's.** It stays in
   «Накладні».
 - **Beside the figures:** the models sold, with how many and for how much,
@@ -945,3 +946,69 @@ same day:
   responsibility, and the check may be improved later.
 - **The watcher lives on the server it watches.** Confirmed: the outside
   service is what notices that server dying whole.
+
+## Owner decision — 2026-10-04 (cash and card, the day's close)
+
+Asked when the owner chose this work. The app did not know how a customer
+paid, so nobody could count the drawer against it:
+- «Разом у касі» in the sales report took every sale, debt payment and
+  return as cash;
+- an order's whole price counted as cash on the day «Забрав» was pressed,
+  though every order comes by a carrier.
+
+This replaces "one sum of money" in the sales report (2026-10-02).
+
+- **Three ways of paying:** cash, card on the terminal, and a transfer to
+  the shop's card or account. One list for every store.
+- **One way for each payment.** A sale is paid one way, and so is each
+  payment toward a debt. A sale is never split between cash and card.
+- **The seller gives the way with the button that sells.**
+  - «Продати» becomes «Готівка», «Картка» and «Переказ», so a sale still
+    takes five taps and nothing is guessed.
+  - The seller presses in Birka first, then charges the terminal for the sum
+    Birka shows: the sum can change after the press, when a coat is not on
+    the shelf.
+- **An order at «Забрав».**
+  - The seller says how it was paid: in advance by transfer, cash on
+    delivery through the carrier, or at the counter.
+  - Only cash paid at the counter is the drawer's.
+  - Checking that the carrier paid out the cash on delivery is separate,
+    later work.
+- **Money handed back on a return** goes the way the sale was paid, unless
+  the seller changes it, for example a card sale returned in cash.
+  - Money returned to a card does not leave the drawer.
+  - The same holds for a return taken at another store, and for cash handed
+    back on a sale paid in parts.
+- **The day's close.**
+  - One drawer per store, closed once a day.
+  - The seller on duty counts the cash and types it without seeing what the
+    drawer should hold, then sees the difference.
+  - What was counted is the next day's cash for change.
+  - Card and transfer are not counted. Their sums are shown, to compare by
+    eye with the terminal's end-of-day slip.
+- **Cash taken out of the drawer** is recorded with who took it and why:
+  for the owner, for expenses, for a supplier's courier.
+  - The owner and managers record any.
+  - A seller records only expenses.
+- **A difference** is recorded with a reason, which is required. The bot
+  tells the owner, **silently** at any hour, as with backups.
+- **After the close.**
+  - Selling goes on, and what is sold after the close goes into the next
+    one.
+  - A closed day is never reopened. The owner or a manager fixes a mistake,
+    such as a wrong way of paying or cash taken out and forgotten, with a
+    correction dated the day it is made.
+  - Before the close, a seller may fix the way of paying on their own sale.
+    The fix is recorded.
+  - A day nobody closed goes into the next close, and shows as not closed.
+- **A blocked store** can only be read, with one exception: the owner may
+  still count and close its day.
+- **Who sees the split by way of paying, and the closes:** the owner and
+  managers, as with the sales report. A seller sees only the result of
+  their own close.
+- **Fiscal receipts (ПРРО) are not part of this.** Birka stays the shop's
+  own record. Whether the shops must issue them is for the owner or the
+  accountant.
+
+Not asked, because nothing is live: sales recorded before this change are
+test data. Their way of paying reads «не вказано», and is never guessed.
