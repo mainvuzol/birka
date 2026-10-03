@@ -17,6 +17,14 @@ The owner answered four questions on 2026-10-01 (business-rules.md,
 - **Each seller works from their own Telegram**, so every sale names who made
   it. Nothing here shares an account.
 
+And on 2026-10-03 (business-rules.md, "before the public domain"):
+
+- **A lost phone:** on the owner's word, every sign-in of that person is
+  ended here, and they keep their access: they open the app again on the new
+  phone. Turning a person off, or taking them out of their last store, ends
+  their sign-ins too, so a later grant lets them sign in again and does not
+  bring back a token issued before.
+
 A change is never deleted: a membership is turned off, and turned on again by
 the next grant. Changes are rare, so all of one organization's are serialized
 under one lock. That is what lets the one guard of our own hold under
@@ -31,7 +39,7 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import (
@@ -227,6 +235,46 @@ def _state(membership: Membership, role: Role, store: Store | None) -> dict[str,
     }
 
 
+async def _active_memberships(
+    session: AsyncSession, *, user_id: uuid.UUID, organization_id: uuid.UUID
+) -> list[tuple[Membership, Role, frozenset[Permission], Store | None]]:
+    memberships = (
+        await session.scalars(
+            select(Membership).where(
+                Membership.user_id == user_id,
+                Membership.organization_id == organization_id,
+                Membership.is_active.is_(True),
+            )
+        )
+    ).all()
+    found: list[tuple[Membership, Role, frozenset[Permission], Store | None]] = []
+    for membership in memberships:
+        store = (
+            await session.get(Store, membership.store_id)
+            if membership.store_id is not None
+            else None
+        )
+        role, permissions = await _role(session, organization_id, role_id=membership.role_id)
+        found.append((membership, role, permissions, store))
+    return found
+
+
+async def _end_sign_ins(session: AsyncSession, user: AppUser) -> tuple[int, int]:
+    """Raise the person's session epoch: every token they hold is refused from
+    its next request, in every store (`identity/session.py`). One statement,
+    so two changes at once both count. Returns the epoch before and after."""
+    after: int = (
+        await session.execute(
+            update(AppUser)
+            .where(AppUser.id == user.id)
+            .values(session_epoch=AppUser.session_epoch + 1)
+            .returning(AppUser.session_epoch)
+            .execution_options(synchronize_session="fetch")
+        )
+    ).scalar_one()
+    return after - 1, after
+
+
 async def grant(
     session: AsyncSession,
     *,
@@ -323,7 +371,7 @@ async def remove(
     """Take a person out of one store, or out of their role in every store.
 
     False when they were already out of it. A membership they hold elsewhere
-    is untouched.
+    is untouched, and so are their sign-ins, unless this was the last.
     """
     scope = await authorize(session, approved_by)
     store = await _store(session, scope.organization_id, store_code)
@@ -345,6 +393,22 @@ async def remove(
     await session.flush()
     if store is None:
         await _require_someone_manages(session, scope.organization_id)
+    # Out of one store, the others keep working, signed in as they are (owner
+    # decision, 2026-10-01). Out of the last, they are turned off: their
+    # sign-ins end with it.
+    last = (
+        await session.scalar(
+            select(Membership.id)
+            .where(
+                Membership.user_id == user.id,
+                Membership.organization_id == scope.organization_id,
+                Membership.is_active.is_(True),
+            )
+            .limit(1)
+        )
+    ) is None
+    if last:
+        await _end_sign_ins(session, user)
     await audit.record(
         session,
         organization_id=scope.organization_id,
@@ -355,43 +419,35 @@ async def remove(
         before=before,
         after={"telegram_user_id": telegram_user_id, **_state(membership, role, store)},
     )
-    logger.info("people.removed", membership_id=str(membership.id))
+    logger.info("people.removed", membership_id=str(membership.id), sign_ins_ended=last)
     return True
 
 
 async def deactivate(session: AsyncSession, *, approved_by: int, telegram_user_id: int) -> int:
-    """Turn a person off in every store of the organization at once.
+    """Turn a person off in every store of the organization at once, and end
+    their sign-ins.
 
     All or nothing: refused whole if any of it is beyond the approver. Returns
-    how many memberships it ended; 0 when they had none left.
+    how many memberships it ended; 0 when they had none left, and then
+    nothing changes.
     """
     scope = await authorize(session, approved_by)
     user = await _person(session, telegram_user_id)
-    memberships = (
-        await session.scalars(
-            select(Membership).where(
-                Membership.user_id == user.id,
-                Membership.organization_id == scope.organization_id,
-                Membership.is_active.is_(True),
-            )
-        )
-    ).all()
-    ended: list[tuple[Membership, Role, Store | None]] = []
-    for membership in memberships:
-        store = (
-            await session.get(Store, membership.store_id)
-            if membership.store_id is not None
-            else None
-        )
-        role, permissions = await _role(session, scope.organization_id, role_id=membership.role_id)
+    ended = await _active_memberships(
+        session, user_id=user.id, organization_id=scope.organization_id
+    )
+    for _, _, permissions, store in ended:
         _require_authority(scope, store, permissions)
-        ended.append((membership, role, store))
-    for membership, _, _ in ended:
+    for membership, _, _, _ in ended:
         membership.is_active = False
     await session.flush()
-    if any(store is None for _, _, store in ended):
+    if any(store is None for _, _, _, store in ended):
         await _require_someone_manages(session, scope.organization_id)
-    for membership, role, store in ended:
+    if ended:
+        # Their sign-ins end with them, so a later grant does not bring back
+        # a token issued before.
+        await _end_sign_ins(session, user)
+    for membership, role, _, store in ended:
         await audit.record(
             session,
             organization_id=scope.organization_id,
@@ -404,6 +460,44 @@ async def deactivate(session: AsyncSession, *, approved_by: int, telegram_user_i
         )
     logger.info("people.deactivated", user_id=str(user.id), memberships=len(ended))
     return len(ended)
+
+
+async def sign_out(session: AsyncSession, *, approved_by: int, telegram_user_id: int) -> int:
+    """End every sign-in of a person, and keep their access.
+
+    For a lost phone (owner decision, 2026-10-03): each token the person holds
+    is refused from its next request, and they sign in again from the new
+    phone with the access they had. It reaches every store they work in at
+    once, so it is approved as taking them out of all of them would be: all
+    or nothing, refused whole if any of it is beyond the approver. Returns
+    how many roles they keep.
+    """
+    scope = await authorize(session, approved_by)
+    user = await _person(session, telegram_user_id)
+    kept = await _active_memberships(
+        session, user_id=user.id, organization_id=scope.organization_id
+    )
+    if not kept:
+        # Not one of this organization's people now: their sign-ins are
+        # refused already, and they are not this owner's to end.
+        raise NotFoundError(
+            "Nobody with this Telegram account works here", telegram_user_id=telegram_user_id
+        )
+    for _, _, permissions, store in kept:
+        _require_authority(scope, store, permissions)
+    before, after = await _end_sign_ins(session, user)
+    await audit.record(
+        session,
+        organization_id=scope.organization_id,
+        actor_user_id=scope.user_id,
+        action="people.signed_out",
+        entity_type="app_user",
+        entity_id=user.id,
+        before={"session_epoch": before},
+        after={"telegram_user_id": telegram_user_id, "session_epoch": after},
+    )
+    logger.info("people.signed_out", user_id=str(user.id), session_epoch=after)
+    return len(kept)
 
 
 async def people(session: AsyncSession) -> list[Person]:
@@ -444,4 +538,13 @@ async def people(session: AsyncSession) -> list[Person]:
     ]
 
 
-__all__ = ["Access", "Person", "authorize", "deactivate", "grant", "people", "remove"]
+__all__ = [
+    "Access",
+    "Person",
+    "authorize",
+    "deactivate",
+    "grant",
+    "people",
+    "remove",
+    "sign_out",
+]

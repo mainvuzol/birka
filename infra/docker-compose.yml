@@ -25,6 +25,10 @@ services:
       # matcher silently misses. initdb locale cannot be changed later without
       # dumping and reloading the database, so it has to be right now.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8"
+    # Terse errors: a refused row's DETAIL ("Failing row contains …", "Key
+    # (…)=(…)") would write a customer's name and phone into this container's
+    # log. The app hides the same values from its own logs and Sentry.
+    command: ["postgres", "-c", "log_error_verbosity=terse"]
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,7 +37,9 @@ services:
       timeout: 5s
       retries: 20
     # Not published to the host in production; the api reaches it over the
-    # compose network. Override in docker-compose.override.yml for local psql.
+    # compose network. For psql on a laptop use docker-compose.dev.yml. Never
+    # publish it on a server, not even in an override: Docker opens published
+    # ports ahead of ufw (CI checks that only Caddy publishes any).
     expose:
       - "5432"
 
@@ -47,12 +53,19 @@ services:
       db:
         condition: service_healthy
     environment:
-      BIRKA_APP_ENV: ${BIRKA_APP_ENV:-local}
+      # `production` unless .env says otherwise: then the API refuses to start
+      # without the bot token or with a session secret under 32 bytes. A
+      # server whose .env forgot the line is still guarded; only a laptop
+      # sets `local`.
+      BIRKA_APP_ENV: ${BIRKA_APP_ENV:-production}
       BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
       BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN:?bot token is required}
       BIRKA_SESSION_SECRET: ${BIRKA_SESSION_SECRET:?session secret is required}
       BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
       BIRKA_LOG_JSON: "true"
+    # Reached by Caddy over the compose network, and NEVER published: the API
+    # believes the X-Forwarded-For of whoever reaches this port, which is
+    # safe only while that is Caddy alone (backend/Dockerfile).
     expose:
       - "8000"
 
@@ -102,9 +115,13 @@ services:
         condition: service_healthy
     command: ["python", "-m", "scripts.backup_watch"]
     environment:
-      BIRKA_APP_ENV: ${BIRKA_APP_ENV:-local}
+      BIRKA_APP_ENV: ${BIRKA_APP_ENV:-production}
       BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
       BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN:?bot token is required}
+      # The site whose certificate it watches (owner decision, 2026-10-03:
+      # the bot tells the owner a week before it runs out). It asks Caddy on
+      # the compose network for that name, as a browser would.
+      BIRKA_PUBLIC_DOMAIN: ${BIRKA_DOMAIN:-localhost}
       BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
       BIRKA_LOG_JSON: "true"
 
@@ -126,9 +143,13 @@ services:
         condition: service_started
       web:
         condition: service_completed_successfully
+    # 443 over UDP too: Caddy speaks HTTP/3 and tells every browser so, and a
+    # phone on mobile data then tries it. Caddy's own Docker example publishes
+    # it; `ufw allow 443` opens both. Only Caddy publishes anything.
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"
     environment:
       BIRKA_DOMAIN: ${BIRKA_DOMAIN:-localhost}
     volumes:

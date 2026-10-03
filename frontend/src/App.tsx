@@ -87,7 +87,14 @@ import {
 import type { Sale as SaleReceipt } from "@/sales/types";
 import "./styles.css";
 
-async function authenticate(): Promise<{ token: string; me: Me }> {
+/**
+ * Signs in with the launch data Telegram signed, once. The token it gives is
+ * what every later request carries: a seller stays signed in for 12 hours
+ * after opening the app (owner decision, 2026-10-03). The launch data itself
+ * is taken for an hour only, so sending it again later would end a session
+ * that still has hours to run.
+ */
+async function signIn(): Promise<string> {
   const initData = telegramInitData();
   if (!initData) throw new Error("TELEGRAM_REQUIRED");
   const auth = await api<{ access_token: string }>(
@@ -95,29 +102,43 @@ async function authenticate(): Promise<{ token: string; me: Me }> {
     undefined,
     { init_data: initData },
   );
-  return {
-    token: auth.access_token,
-    me: await api<Me>("/me", auth.access_token),
-  };
+  return auth.access_token;
 }
 export function App(): JSX.Element {
   useEffect(connectTelegram, []);
-  const auth = useQuery({
+  const session = useQuery({
     queryKey: ["session"],
-    queryFn: authenticate,
+    queryFn: signIn,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+  const token = session.data;
+  // Who this person is, and what each store lets them do: read with the
+  // token, and read again whenever that may have changed.
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api<Me>("/me", token),
+    enabled: token !== undefined,
     retry: false,
     staleTime: Infinity,
     gcTime: 0,
   });
   const [storeId, setStoreId] = useState("");
-  if (auth.isPending)
-    return (
-      <main>
-        <h1>birka</h1>
-        <p role="status">Входимо в магазин…</p>
-      </main>
-    );
-  if (auth.error instanceof ApiError && auth.error.code === "NO_ACCESS")
+  /**
+   * Read again what the app knows of this person. Once there is a token, that
+   * is /me with it. The launch data is sent again only while there is no
+   * token yet — the sign-in failed, or found no access. A token the server no
+   * longer takes is never replaced by it: the administrator may have ended
+   * this person's sign-ins (owner decision, 2026-10-03). A new launch from
+   * Telegram signs them in again, and so does reloading the page within its
+   * launch data's hour; ending the lost phone's Telegram session stops both.
+   */
+  function readAgain(): void {
+    void (token === undefined ? session.refetch() : me.refetch());
+  }
+  const failure = session.error ?? me.error;
+  if (failure instanceof ApiError && failure.code === "NO_ACCESS")
     return (
       <main>
         <h1>birka</h1>
@@ -132,35 +153,30 @@ export function App(): JSX.Element {
           Передайте його власнику магазину. Коли вас додадуть, натисніть
           «Спробувати ще раз».
         </p>
-        <button
-          onClick={() => {
-            void auth.refetch();
-          }}
-        >
-          Спробувати ще раз
-        </button>
+        <button onClick={readAgain}>Спробувати ще раз</button>
       </main>
     );
-  if (auth.error)
+  if (failure)
     return (
       <main>
         <h1>birka</h1>
         <h2>Вхід через Telegram</h2>
         <p role="alert">
-          {auth.error.message === "TELEGRAM_REQUIRED"
+          {failure.message === "TELEGRAM_REQUIRED"
             ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
-            : errorText(auth.error)}
+            : errorText(failure)}
         </p>
-        <button
-          onClick={() => {
-            void auth.refetch();
-          }}
-        >
-          Спробувати ще раз
-        </button>
+        <button onClick={readAgain}>Спробувати ще раз</button>
       </main>
     );
-  const store = auth.data.me.stores.find((s) => s.id === storeId);
+  if (token === undefined || me.data === undefined)
+    return (
+      <main>
+        <h1>birka</h1>
+        <p role="status">Входимо в магазин…</p>
+      </main>
+    );
+  const store = me.data.stores.find((s) => s.id === storeId);
   return (
     <main>
       <header>
@@ -170,16 +186,16 @@ export function App(): JSX.Element {
             birka <span> / магазин</span>
           </h1>
         </div>
-        <span>{auth.data.me.display_name}</span>
+        <span>{me.data.display_name}</span>
       </header>
       {!store ? (
         <section>
           <h2>Оберіть магазин</h2>
           <p>Продаж буде записано на обраний магазин. Склад оберете окремо.</p>
-          {auth.data.me.stores.length === 0 ? (
+          {me.data.stores.length === 0 ? (
             <p>Доступних магазинів немає. Зверніться до адміністратора.</p>
           ) : (
-            auth.data.me.stores.map((s) => (
+            me.data.stores.map((s) => (
               <button
                 className="store"
                 key={s.id}
@@ -214,26 +230,18 @@ export function App(): JSX.Element {
             Роботу в цьому магазині зупинено: продажі, приймання, повернення й
             оплати в ньому не проводяться. Зверніться до власника.
           </p>
-          <button
-            onClick={() => {
-              void auth.refetch();
-            }}
-          >
-            Оновити
-          </button>
+          <button onClick={readAgain}>Оновити</button>
         </section>
       ) : (
         <Workspace
           key={store.id}
           store={asShown(store)}
-          token={auth.data.token}
-          me={auth.data.me}
+          token={token}
+          me={me.data}
           changeStore={() => {
             setStoreId("");
           }}
-          storesChanged={() => {
-            void auth.refetch();
-          }}
+          storesChanged={readAgain}
         />
       )}
     </main>
@@ -874,8 +882,8 @@ function Workspace({
       )}
       {receiptStorageError && (
         <p role="alert">
-          Не вдалося прочитати збережене приймання. Не очищайте дані
-          застосунку; зверніться до менеджера.
+          Не вдалося прочитати збережене приймання. Не очищайте дані застосунку;
+          зверніться до менеджера.
         </p>
       )}
       {receiptCommand.pending && (

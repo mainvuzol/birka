@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
-from app.core.errors import AuthenticationFailedError
+from app.core.errors import AuthenticationFailedError, SessionExpiredError
 from app.modules.authz.scope import RequestScope
 from app.modules.authz.service import resolve_scope
 from app.modules.identity.service import assert_user_is_active
@@ -57,8 +57,9 @@ async def get_current_scope(
 
     Scope is rebuilt from the database on every request rather than trusted
     from the token, so disabling an account or a membership takes effect on the
-    next request. The token itself cannot be revoked — there is no session
-    store — so it stays cryptographically valid until it expires.
+    next request. One token cannot be revoked — there is no session store —
+    but every token of a person is ended at once by raising their session
+    epoch, which is checked here too.
     """
     claims = decode_session_token(
         _bearer_token(authorization), secret=settings.session_secret.get_secret_value()
@@ -66,11 +67,17 @@ async def get_current_scope(
     # Deactivating an account must take effect on the next request, not when
     # the token expires. Composed here rather than inside resolve_scope so the
     # authz module does not have to depend on identity.
-    await assert_user_is_active(session, claims.user_id)
+    user = await assert_user_is_active(session, claims.user_id)
     scope = await resolve_scope(session, claims.user_id, reading=request.method in _READS)
     if scope.organization_id != claims.organization_id:
         # The user's organization changed after the token was issued.
         raise AuthenticationFailedError("Session no longer matches the user's organization")
+    if claims.session_epoch < user.session_epoch:
+        # Every sign-in of this person was ended on the server, on the owner's
+        # word (owner decision, 2026-10-03: a lost phone). Checked after the
+        # scope, so that someone turned off, whose sign-ins end too, is told
+        # they have no access rather than to sign in again.
+        raise SessionExpiredError("This session was ended; sign in again")
     return scope
 
 

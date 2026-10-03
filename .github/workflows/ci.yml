@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job reads the repository and writes nothing to it. The token a job
+# gets is the token the packages it installs could use: no more than this.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: backend (lint, types, contracts, tests)
@@ -46,12 +51,18 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/requirements-dev.lock
 
       - name: Install
+        # The locked versions, the ones the server's image installs
+        # (requirements.lock): a fresh resolution here would test something
+        # the server never runs. tests/unit/test_dependency_lock.py then
+        # checks that what got installed is what is locked.
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -c requirements-dev.lock -e ".[dev]"
+          pip check
 
       - name: Lint
         run: |
@@ -156,6 +167,24 @@ jobs:
       - name: The API image is still the default target
         run: docker run --rm birka-api sh -c 'test -z "${BIRKA_PG_BIN:-}" && python -c "import app.main"'
 
+      - name: The API image holds exactly the locked packages
+        # What the server builds is what the backend job tested: the pins of
+        # requirements.lock, nothing missing and nothing added.
+        run: |
+          docker run --rm birka-api python -c '
+          import re, sys
+          from importlib.metadata import distributions
+          def norm(name):
+              return re.sub(r"[-_.]+", "-", name).lower()
+          installed = {norm(d.metadata["Name"]): d.version for d in distributions()}
+          for tool in ("pip", "setuptools", "wheel"):
+              installed.pop(tool, None)
+          pins = re.findall(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==(\S+)", open("requirements.lock").read(), re.M)
+          locked = {norm(name): version for name, version in pins}
+          if installed != locked:
+              sys.exit(f"the image differs from requirements.lock: {sorted(set(installed.items()) ^ set(locked.items()))}")
+          print(len(locked), "packages, exactly as locked")'
+
       - name: Migrate, seed, and run the nightly backup as the schedule would
         run: |
           mkdir -p backups keys && chmod 777 backups keys
@@ -193,7 +222,8 @@ jobs:
           echo "$logs"
           echo "$logs" | grep -q backup_watch.started
           echo "$logs" | grep -q backup_watch.stopped
-          ! echo "$logs" | grep -q backup_watch.failed
+          # Not `! grep`: bash -e ignores a negated command, so that could never fail.
+          if grep -q backup_watch.failed <<<"$logs"; then exit 1; fi
           test "$(docker inspect -f '{{.State.ExitCode}}' watch)" = 0
 
       - name: Only the owner's key opens the copy, and it is the archive that was drilled
@@ -267,12 +297,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/requirements-dev.lock
 
       - name: Install
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -c requirements-dev.lock -e ".[dev]"
+          pip check
 
       - name: Migrate, and start the API as the server runs it
         run: |
@@ -335,6 +367,10 @@ jobs:
       BIRKA_TELEGRAM_BOT_TOKEN: "123456:TEST-TOKEN-not-a-real-secret"
       BIRKA_SESSION_SECRET: ci-e2e-session-secret-long-enough-32
       BIRKA_LOG_JSON: "false"
+      # Every journey signs in from this one address, far more often than
+      # people do; a server keeps the limit of 30 a minute (rate_limit.py).
+      BIRKA_SIGN_INS_PER_MINUTE: "100000"
+      BIRKA_SIGN_IN_BURST: "100000"
 
     steps:
       - uses: actions/checkout@v4
@@ -343,13 +379,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/requirements.lock
 
       - name: Install the API
         working-directory: backend
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
+          pip install -c requirements.lock -e .
+          pip check
 
       - name: Migrate and seed the synthetic shop
         working-directory: backend
@@ -419,3 +457,196 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+
+  python-audit:
+    # The backend's side of the frontend's `npm audit`: fail on a known
+    # vulnerability in any package the server's image installs. It reads
+    # requirements.lock as it stands, pinned, so the answer is about exactly
+    # those versions. An exception goes in as `--ignore-vuln <ID>`, with a
+    # comment saying why and until when, and never silently.
+    name: backend (known vulnerabilities in the locked packages)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Audit requirements.lock
+        run: |
+          pip install pip-audit==2.9.0
+          pip-audit --strict --no-deps --disable-pip --progress-spinner off -r requirements.lock
+
+  edge:
+    # The server's front door, as the server runs it: Caddy with
+    # infra/Caddyfile, the bundle the `web` image publishes, and the API image
+    # behind them, from the server's own compose file. Nothing else reads the
+    # Caddyfile or builds the web image before a server does. Plain HTTP on
+    # :80 (an address with a scheme gets no certificate); the rest is as on
+    # the server, the API starting as `production`, compose's default.
+    name: edge (Caddy, the published bundle, headers and limits)
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-edge
+      BIRKA_TELEGRAM_BOT_TOKEN: "123456:ci-not-a-real-token"
+      # 32 bytes or more, or the API refuses to start as `production`.
+      BIRKA_SESSION_SECRET: ci-edge-session-secret-that-is-long-enough-32
+      BIRKA_DOMAIN: http://localhost
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Caddy accepts the Caddyfile, as a server with a real domain reads it
+        run: |
+          docker run --rm -e BIRKA_DOMAIN=birka.example.com \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Only Caddy publishes a port
+        # The API believes the X-Forwarded-For of whoever reaches it
+        # (backend/Dockerfile), and Docker opens a published port ahead of
+        # the server's firewall: the database or the API must never be one.
+        run: |
+          published=$(docker compose --profile ops config --format json \
+            | jq -c '[.services | to_entries[] | select((.value.ports // []) | length > 0) | .key]')
+          echo "services that publish ports: $published"
+          test "$published" = '["caddy"]'
+
+      - name: Build the images and start the stack
+        run: |
+          docker compose up -d --build caddy
+          for attempt in $(seq 60); do
+            curl -fsS http://localhost/api/v1/health && exit 0
+            sleep 2
+          done
+          docker compose ps -a
+          docker compose logs --no-color
+          exit 1
+
+      - name: What the edge sends
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          headers_of() { curl -fsS -o /dev/null -D - "$@" | tr -d '\r'; }
+          status_of() { curl -s -o /dev/null -w '%{http_code}' "$@" || true; }
+          base=http://localhost
+
+          # The page: asked again on every open, framed only by Telegram.
+          page=$(headers_of "$base/")
+          echo "$page"
+          grep -qix 'cache-control: no-cache' <<<"$page" || fail "the page is not revalidated on every open"
+          grep -qi '^content-security-policy:.*frame-ancestors https://web.telegram.org' <<<"$page" \
+            || fail "no frame-ancestors for Telegram"
+          grep -qix 'x-content-type-options: nosniff' <<<"$page" || fail "nosniff is missing"
+
+          # The script it names: kept for a year and never asked again.
+          js=$(curl -fsS "$base/" | grep -o -m1 '/assets/[^"]*\.js' || true)
+          test -n "$js" || fail "the page names no script"
+          asset=$(headers_of "$base$js")
+          echo "$asset"
+          grep -qix 'cache-control: public, max-age=31536000, immutable' <<<"$asset" \
+            || fail "the bundle is not cached as immutable"
+
+          # A file that is not there is an honest 404, not the page, and not
+          # cached for a year.
+          test "$(status_of "$base/assets/not-there-0.js")" = 404 || fail "a missing file is not a 404"
+          missing=$(curl -s -o /dev/null -D - "$base/assets/not-there-0.js" | tr -d '\r')
+          if grep -qi '^cache-control:.*immutable' <<<"$missing"; then fail "a 404 is cached as immutable"; fi
+
+          # No source maps: none named, none served, none on the volume.
+          curl -fsS -o /tmp/bundle.js "$base$js"
+          if grep -q sourceMappingURL /tmp/bundle.js; then fail "the bundle names a source map"; fi
+          test "$(status_of "$base$js.map")" = 404 || fail "a source map is served"
+          maps=$(docker compose exec -T caddy find /srv/web -name '*.map')
+          test -z "$maps" || fail "source maps on the volume: $maps"
+
+          # The API: never stored, production by default, and the request id
+          # is the server's own, whatever a client sends.
+          api=$(headers_of "$base/api/v1/health")
+          echo "$api"
+          grep -qix 'cache-control: no-store' <<<"$api" || fail "API answers may be stored"
+          health=$(curl -fsS "$base/api/v1/health")
+          grep -Eq '"environment": ?"production"' <<<"$health" || fail "the API is not production by default: $health"
+          rid=$(headers_of -H 'X-Request-ID: chosen-by-the-client' "$base/api/v1/health" \
+            | grep -i '^x-request-id:' | cut -d' ' -f2 || true)
+          test -n "$rid" || fail "the API sent no request id"
+          test "$rid" != chosen-by-the-client || fail "a client chose the request id"
+
+          # Bodies: more than the largest list anyone sends (0.4 MB) still
+          # reaches the API, which refuses this one as malformed; over 1 MB is
+          # refused at the edge. Expect: is cleared so curl sends at once.
+          post() {
+            head -c "$1" /dev/zero | status_of -H 'Expect:' -H 'Content-Type: application/json' \
+              --data-binary @- "$base/api/v1/auth/telegram"
+          }
+          code=$(post 500000)
+          case "$code" in 4??) test "$code" != 413 ;; *) false ;; esac \
+            || fail "a 0.5 MB body did not reach the API (got $code)"
+          code=$(post 2000000)
+          test "$code" = 413 || fail "a 2 MB body was not refused at the edge (got $code)"
+          echo "the edge sends what the server must send"
+
+      - name: Sign-ins are counted per real address, whatever a client claims
+        # The API believes X-Forwarded-For (backend/Dockerfile); Caddy writes
+        # it from the address it was reached from. A client naming a new
+        # address each time must still run out after 30 (rate_limit.py).
+        run: |
+          limited=0
+          for n in $(seq 31); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Forwarded-For: 198.51.100.$n" \
+              -H 'Content-Type: application/json' --data '{"init_data": "x"}' \
+              http://localhost/api/v1/auth/telegram || true)
+            if [ "$code" = 429 ]; then limited=1; break; fi
+          done
+          test "$limited" = 1 || { echo "::error::31 sign-ins with made-up addresses were never limited"; exit 1; }
+
+      - name: The edge's own log keeps no query string
+        # With the API down, Caddy logs the failed request itself.
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          docker compose stop api
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "http://localhost/api/v1/credits/customers?store_id=00000000-0000-0000-0000-000000000000&query=0671234567" || true)
+          test "$code" = 502 || fail "expected 502 with the API down (got $code)"
+          logs=$(docker compose logs --no-color caddy)
+          grep -q 'credits/customers' <<<"$logs" || fail "Caddy did not log the failed request"
+          if grep -q 0671234567 <<<"$logs"; then fail "Caddy's log keeps the search"; fi
+          docker compose start api
+          for attempt in $(seq 60); do
+            curl -fsS http://localhost/api/v1/health >/dev/null && exit 0
+            sleep 2
+          done
+          fail "the API did not come back"
+
+      - name: A new bundle keeps the previous one's files and drops month-old ones
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          status_of() { curl -s -o /dev/null -w '%{http_code}' "$@" || true; }
+          # What earlier builds left on the volume: a file one published a
+          # moment ago, and one not published since 2000.
+          # And a page live since 2000 whose script is that old: it counts
+          # from the moment it is replaced, not from when it was published.
+          docker compose run --rm --no-deps --entrypoint sh web -c '
+            set -e
+            echo "export {}" > /output/assets/previous-build.js
+            echo "export {}" > /output/assets/long-gone.js
+            echo "export {}" > /output/assets/live-since-2000.js
+            touch -d "2000-01-01 00:00:00" /output/assets/long-gone.js /output/assets/live-since-2000.js
+            echo "<script type=\"module\" src=\"/assets/live-since-2000.js\"></script>" > /output/index.html'
+          docker compose run --rm --no-deps web
+          test "$(status_of http://localhost/assets/previous-build.js)" = 200 \
+            || fail "a previous bundle's file was deleted"
+          test "$(status_of http://localhost/assets/live-since-2000.js)" = 200 \
+            || fail "the bundle just replaced was deleted"
+          test "$(status_of http://localhost/assets/long-gone.js)" = 404 \
+            || fail "a file not published for 30 days was kept"
+          test "$(status_of http://localhost/)" = 200 || fail "the page is gone after a republish"
+
+      - name: The stack, when something failed
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color

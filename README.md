@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 152 Playwright journeys on a phone profile, against the real API;
+- 156 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -67,8 +67,11 @@ py -3.12 -m venv .venv
 ```
 
 ```bash
-backend/.venv/Scripts/python.exe -m pip install -e ".[dev]"
+backend/.venv/Scripts/python.exe -m pip install -c requirements-dev.lock -e ".[dev]"
 ```
+
+`-c requirements-dev.lock` installs the versions CI tests and the server runs
+(`backend/requirements.lock`); without it pip takes whatever is newest.
 
 Set the environment (copy `infra/.env.example`), then apply migrations and start the API:
 
@@ -404,6 +407,23 @@ spelling with what was `typed`, and «Створити товар з опису�
 «м» — це розмір «M»». See
 [ADR-0009](.ai/decisions/ADR-0009-one-size-one-spelling.md) and the
 [report](.ai/project-memory/size-spelling-report.md).
+
+**Before the public domain** (owner decisions, 2026-10-03; see
+[ADR-0010](.ai/decisions/ADR-0010-before-the-public-domain.md)):
+- **No customer's name or phone** reaches the API's log, Caddy's log or
+  Sentry: query strings and a refused row's values are cut.
+- **Limits:** Caddy refuses a body over 1 MB; the API takes 30 sign-ins a
+  minute from one address (`RATE_LIMITED`).
+- **Sessions** last 12 hours. `scripts.people sign-out` ends every sign-in of
+  a person, on the owner's word, and keeps their access; turning someone off
+  ends them too. The app sends its launch data once.
+- **Updates** happen while the shops are closed. The page is never cached,
+  the previous bundle stays for 30 days, and no source maps are shipped.
+- **The server installs exactly the tested libraries**
+  (`backend/requirements.lock`), audited in CI.
+- **The bot tells the owner** a week before the site's certificate runs out.
+
+See the [report](.ai/project-memory/public-hardening-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

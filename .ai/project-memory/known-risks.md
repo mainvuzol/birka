@@ -65,7 +65,7 @@ See the [report](m1-023-snapshot-import-report.md) and [ADR-0005](../decisions/A
 Found by the independent code reviews (2026-09-28). The fixes are in the report; these remain.
 
 - **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a list) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
-- **No request-size limit or rate limit in front of the API.** `infra/Caddyfile` sets no body limit, and nothing limits requests per user. This predates M1-023 and applies to every endpoint.
+- **No request-size limit or rate limit in front of the API.** Closed on 2026-10-03: Caddy refuses a body over 1 MB, and the API limits sign-ins per address ([before the public domain](#before-the-public-domain--2026-10-03)). Signed-in requests are still not limited per person.
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
 - **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`, and it is not measured. By definition nothing else has written to that warehouse yet.
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
@@ -329,7 +329,9 @@ See the [credit report](customer-credit-report.md).
   ever pays back cash actually paid.
 - **The customers' phones are personal data.** Everyone holding `sale:credit`
   in the store sees them, as the owner chose, and so do the backups. They are
-  kept out of the audit log, the logs and the receipt.
+  kept out of the audit log, the logs and the receipt. Since 2026-10-03 that
+  holds for a debt search's query string, a refused row's values and Sentry
+  too (`test_log_privacy.py`, `test_sentry_privacy.py`).
 
 ## Returns at another store — 2026-10-01
 
@@ -561,3 +563,44 @@ See the [report](size-spelling-report.md) and
   spellings** (`_SIZES`). It names a size nowhere a size is made, so `ххл` or
   `3XL` in a notebook line changes nothing; a broader vocabulary needs a parser
   version and the evaluation gate.
+
+## Before the public domain — 2026-10-03
+
+See the [report](public-hardening-report.md) and
+[ADR-0010](../decisions/ADR-0010-before-the-public-domain.md).
+
+- **A captured launch payload still mints a session within its hour** (R4).
+  The app now sends it once, and a sign-out ends what it minted, but a copy
+  of it used before the hour is out signs in again. Making it one-time would
+  break a reload inside Telegram.
+- **A sign-out does not end the lost phone's Telegram session.** Whoever
+  holds the phone opens the app again through the person's Telegram until
+  that session is ended (Telegram → Settings → Devices); the runbook and the
+  command's own output say so.
+- **Signed-in requests are not limited per person.** One seller's token can
+  still keep the API busy (the catalogue parser runs on the only event loop,
+  and the database has no statement timeout).
+- **The API connects to PostgreSQL as the owner of every table.** The
+  append-only triggers do not stop a compromised API. A separate role with
+  only what the app needs is a change of its own.
+- **Containers run with Docker's defaults:** a writable root filesystem, the
+  default capabilities, no memory limits.
+- **The content security policy names only `frame-ancestors`.** A strict one
+  needs the app opened in each Telegram client first (row 21's real device).
+- **The seller's address is in the API's log now**, since the sign-in limit
+  counts by it. It stays on the server, 5 × 10 MB.
+- **IPv6:** the domain must have no `AAAA` record, or every IPv6 client
+  shares one sign-in limit (compose gives its network no IPv6).
+- **The images `node:24-alpine`, `caddy:2-alpine` and `postgres:17-alpine`
+  float**, and GitHub Actions are pinned by tag. The Python lock has no
+  hashes yet.
+- **The certificate warning is stored as a backup alert** (kind `FAILED`,
+  key `certificate:<date>`), so «Резервні копії» may show it as the last
+  message sent. The bot says nothing when the certificate is renewed, and an
+  edge it cannot reach at all is only logged; both are questions for the
+  owner if they come up.
+- **A debt search of two characters, paged,** can list another store's
+  debtors one page at a time; the owner's "never listed whole" holds only
+  per page.
+- **A customer's name and phone are kept on one line**: a line break or a
+  run of spaces in them becomes one space.

@@ -49,8 +49,11 @@ migrations first. From `backend/`, with its test dependencies installed:
 export BIRKA_TEST_DATABASE_URL=postgresql+asyncpg://birka_review@127.0.0.1:55442/birka_orders_ui
 export BIRKA_E2E_FIXTURE=/tmp/birka-orders-ui-fixture.json
 python -m scripts.seed_orders_e2e
-BIRKA_DATABASE_URL="$BIRKA_TEST_DATABASE_URL" BIRKA_TELEGRAM_BOT_TOKEN=123456:TEST-TOKEN-not-a-real-secret BIRKA_SESSION_SECRET=birka-e2e-only-not-a-real-secret-20260924 uvicorn app.main:create_app --factory --host 127.0.0.1 --port 58042
+BIRKA_DATABASE_URL="$BIRKA_TEST_DATABASE_URL" BIRKA_TELEGRAM_BOT_TOKEN=123456:TEST-TOKEN-not-a-real-secret BIRKA_SESSION_SECRET=birka-e2e-only-not-a-real-secret-20260924 BIRKA_SIGN_INS_PER_MINUTE=100000 BIRKA_SIGN_IN_BURST=100000 uvicorn app.main:create_app --factory --host 127.0.0.1 --port 58042
 ```
+
+The two `BIRKA_SIGN_IN…` values lift the sign-in limit, since every journey
+signs in from this one address; a server keeps 30 a minute.
 
 In another terminal, from `frontend/`:
 

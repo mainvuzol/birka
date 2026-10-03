@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -42,6 +42,7 @@ from app.api.v1.stores import router as stores_router
 from app.api.v1.supplier_invoices import router as supplier_invoices_router
 from app.api.v1.suppliers import router as suppliers_router
 from app.api.v1.transfers import router as transfers_router
+from app.core.rate_limit import limit_sign_ins
 from app.modules.identity.service import authenticate_with_init_data
 from app.modules.tenancy.models import Store, StoreState
 
@@ -121,7 +122,14 @@ async def health(settings: SettingsDep) -> HealthResponse:
     return HealthResponse(status="ok", environment=settings.app_env)
 
 
-@router.post("/auth/telegram", response_model=TelegramAuthResponse, tags=["auth"])
+# Limited per address before the payload is checked: it is the one request
+# anyone may make without a session (`app/core/rate_limit.py`).
+@router.post(
+    "/auth/telegram",
+    response_model=TelegramAuthResponse,
+    tags=["auth"],
+    dependencies=[Depends(limit_sign_ins)],
+)
 async def auth_telegram(
     payload: TelegramAuthRequest, session: SessionDep, settings: SettingsDep
 ) -> TelegramAuthResponse:

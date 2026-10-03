@@ -4,11 +4,20 @@ Telegram `initData` proves *who* the person is; it is not used as a session
 credential on every request. We exchange it once for a short-lived signed token
 of our own, so request authorization never depends on replaying Telegram data.
 
-There is no session store, so a token cannot be revoked before it expires: the
-`jti` claim identifies a session for logging, it is not a revocation handle.
-What *is* re-checked on every request is the user's active flag and their
-memberships, so disabling an account or a membership takes effect immediately
-even though the token itself stays cryptographically valid.
+There is no session store, so one token cannot be revoked before it expires:
+the `jti` claim identifies a session for logging, it is not a revocation
+handle. What *is* re-checked on every request is the user's active flag, their
+memberships and their session epoch, so disabling an account or a membership
+takes effect immediately even though the token itself stays cryptographically
+valid.
+
+The epoch (`ep`) ends every sign-in of one person at once. The owner decided on
+2026-10-03 that when a phone is lost, the administrator ends every sign-in of
+that person on the server, and the person keeps their access (business-rules.md,
+"before the public domain"). Every token carries the person's epoch at the
+time it was issued; raising it refuses each of them as an expired session, and
+the next sign-in takes the new number. A token issued before the claim existed
+carries none and counts as 0, so deploying it signs nobody out.
 """
 
 from __future__ import annotations
@@ -32,6 +41,9 @@ class SessionClaims:
     session_id: uuid.UUID
     issued_at: datetime
     expires_at: datetime
+    # The person's session epoch when the token was issued; see the module
+    # docstring.
+    session_epoch: int = 0
 
 
 def issue_session_token(
@@ -42,6 +54,7 @@ def issue_session_token(
     ttl_seconds: int,
     now: datetime | None = None,
     session_id: uuid.UUID | None = None,
+    session_epoch: int = 0,
 ) -> tuple[str, SessionClaims]:
     if not secret:
         raise RuntimeError("session secret is not configured")
@@ -54,6 +67,7 @@ def issue_session_token(
         session_id=session_id or uuid.uuid4(),
         issued_at=issued_at,
         expires_at=expires_at,
+        session_epoch=session_epoch,
     )
     token = jwt.encode(
         {
@@ -63,6 +77,7 @@ def issue_session_token(
             "jti": str(claims.session_id),
             "iat": int(issued_at.timestamp()),
             "exp": int(expires_at.timestamp()),
+            "ep": claims.session_epoch,
         },
         secret,
         algorithm=_ALGORITHM,
@@ -92,6 +107,10 @@ def decode_session_token(token: str, *, secret: str, leeway_seconds: int = 0) ->
     except jwt.InvalidTokenError as exc:
         raise AuthenticationFailedError("Session token is invalid") from exc
 
+    # Not required: a token issued before the claim existed counts as 0.
+    epoch = payload.get("ep", 0)
+    if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 0:
+        raise AuthenticationFailedError("Session token payload is malformed")
     try:
         return SessionClaims(
             user_id=uuid.UUID(payload["sub"]),
@@ -99,6 +118,7 @@ def decode_session_token(token: str, *, secret: str, leeway_seconds: int = 0) ->
             session_id=uuid.UUID(payload["jti"]),
             issued_at=datetime.fromtimestamp(int(payload["iat"]), tz=UTC),
             expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
+            session_epoch=epoch,
         )
     except (KeyError, ValueError, TypeError) as exc:
         raise AuthenticationFailedError("Session token payload is malformed") from exc

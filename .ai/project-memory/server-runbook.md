@@ -19,8 +19,8 @@ to it at the step where it belongs.
 | | |
 |---|---|
 | A server | Linux with Docker Engine and the Compose plugin. 2 vCPU, 2 GB RAM and 20 GB of disk is an estimate for two shops. The CPU part rests on CI: a two-CPU runner served six sellers asking back to back within budget, while also running the load ([figures](hot-path-budget-report.md#update--2026-10-01-the-first-postgresql-17-figures-and-what-ci-fails-on)). The nightly drill restores a full copy beside the database, so leave room for two. |
-| A domain name | its DNS `A` record pointing at the server. Telegram opens a Mini App only over HTTPS; Caddy gets the certificate itself. |
-| Open ports | 22 (SSH), 80 and 443. Nothing else: the database is never published. |
+| A domain name | its DNS `A` record pointing at the server, and no `AAAA` record: compose gives its network no IPv6, so every IPv6 client would reach the API as one address and share one sign-in limit. Telegram opens a Mini App only over HTTPS; Caddy gets the certificate itself. |
+| Open ports | 22 (SSH), 80, and 443 over TCP and UDP (UDP for HTTP/3). Nothing else: the database and the API are never published. |
 | The clock | synchronized (`timedatectl` says `System clock synchronized: yes`). Telegram's sign-in data is refused when its time is in the future, or more than an hour old. |
 | A Telegram bot | made with @BotFather. Its token signs every sign-in; the server must have the same one. |
 | The owner's age key | made on the owner's computer ([backup runbook, step 1](backup-restore-runbook.md#1-the-owners-key-on-the-owners-computer)). Only the public half goes to the server. |
@@ -55,7 +55,7 @@ In `.env`:
 
 | | |
 |---|---|
-| `BIRKA_APP_ENV` | `production`. The API then refuses to start without the bot token and a session secret of at least 32 bytes, and hides its API docs. |
+| `BIRKA_APP_ENV` | `production`, the default since 2026-10-03. The API then refuses to start without the bot token and a session secret of at least 32 bytes, and hides its API docs. |
 | `BIRKA_DOMAIN` | the domain, e.g. `shop.example.com` |
 | `POSTGRES_PASSWORD` | long and random: `openssl rand -base64 32` |
 | `BIRKA_TELEGRAM_BOT_TOKEN` | from @BotFather |
@@ -151,6 +151,20 @@ docker compose run --rm --no-deps api python -m scripts.people list
 See the [people report](people-report.md) for removing someone, or turning
 them off in every store.
 
+**A lost phone** (owner decision, 2026-10-03): on the owner's word, end
+every sign-in of that person. They keep their stores and roles, and open the
+app again on the new phone.
+
+```sh
+docker compose run --rm --no-deps api python -m scripts.people sign-out \
+  --approved-by <the owner's number> --telegram-user-id <their number>
+```
+
+Whoever holds the lost phone could still open the app through the person's
+Telegram: the person must also end that phone's Telegram session
+(Telegram → Settings → Devices). Turning someone off in every store ends
+their sign-ins too, and a later grant does not bring the old ones back.
+
 ### 8. Backups
 
 Follow the [backup runbook](backup-restore-runbook.md#setting-it-up), steps
@@ -230,7 +244,8 @@ list.
 
 Everything recorded in production is real, so do not test with made-up
 sales. The owner, from a phone:
-- signs in, and chooses a store;
+- signs in, and chooses a store. Its address in `docker compose logs api` is
+  the phone's, not a `172.…` one: the sign-in limit counts by it;
 - opens «Залишки», and finds there what the approved list said, less the
   paper sales entered since.
 
@@ -242,15 +257,20 @@ proves the till.
 | | |
 |---|---|
 | Is it up? | `docker compose ps`, and `curl -fsS https://<domain>/api/v1/health` |
-| The API's log | `docker compose logs --since 1h api`. Each service keeps at most 5 × 10 MB. |
+| The API's log | `docker compose logs --since 1h api`. Each service keeps at most 5 × 10 MB. A request is logged without its query string, so a debt search by name or phone never reaches it; it shows the seller's address. |
 | Last night's backup | `docker compose run --rm backup-watch python -m scripts.backup_watch --status` (exit 0 only if OK). The owner sees the same in the app. |
 | Disk | `df -h /`. The database, the server's ~10 backups and the nightly scratch copy share it. |
-| Errors | Sentry, if `BIRKA_SENTRY_DSN` is set. Request bodies, sign-in data and tokens are scrubbed before anything leaves. |
+| Errors | Sentry, if `BIRKA_SENTRY_DSN` is set. Request bodies, query strings, sign-in data, tokens and the values a refused database row repeats are scrubbed before anything leaves; an event is tagged with its request id. |
+| The site's certificate | `backup-watch` asks Caddy for it on every look. A week before it runs out the owner hears from the bot, at most once a day (owner decision, 2026-10-03). `backup_watch.certificate_unread` in its log is expected before the first certificate is issued, or while Caddy restarts. |
 
 **Never run `docker compose down -v`.** `-v` deletes the database's volume,
 and with it everything since last night's backup.
 
 ## A new version
+
+**While the shops are closed,** in the evening or at night (owner decision,
+2026-10-03): an app left open keeps the old version until it is opened
+again. An urgent security fix is the exception.
 
 ```sh
 cd /srv/birka/infra
@@ -265,10 +285,17 @@ curl -fsS https://<domain>/api/v1/health
 Read the release's reports first. A migration that changes how stock or
 money is recorded says so, and says what its downgrade refuses.
 
+The build installs exactly the library versions CI tested
+(`backend/requirements.lock`). The new app's page is never cached, and the
+previous version's files stay for 30 days after they are replaced, so a
+phone that opens the app during or after the update gets a working page.
+
 ## Going back
 
 1. **The code alone.**
-   - Check out the previous commit, build, and `up -d`.
+   - Check out the previous commit, build, and `up -d`. The build installs
+     that commit's `requirements.lock`, so its library versions come back
+     too.
    - Safe while the new version's migrations only added things; most do.
    - A migration's own report says when an older build is unsafe beside
      its data.
@@ -284,12 +311,22 @@ money is recorded says so, and says what its downgrade refuses.
 ## Security
 
 - **SSH:** keys only. Run `ufw` or the provider's firewall with 22, 80 and
-  443 open.
+  443 open (`ufw allow 443`, which covers TCP and UDP).
 - **The database** listens only on the compose network.
 - **`.env`** is `chmod 600`. The bot token and session secret are in it,
   and nowhere in the repository.
-- **The app only opens inside Telegram.** Caddy sends `frame-ancestors`
-  for Telegram only.
+- **Only Telegram may show the app in a frame** (`frame-ancestors`). The
+  API is reachable by anyone on the domain; what keeps it to the shop's
+  people is Telegram's signed sign-in data and their roles.
+- **What anyone may send:** a request body of at most 1 MB (Caddy), and 30
+  sign-ins a minute from one address (the API). Neither is near what a shop
+  sends.
+- **A secret leaked:**
+  - the session secret: put a new `BIRKA_SESSION_SECRET` in `.env` and
+    `docker compose up -d api`. Everyone is signed out and opens the app
+    again;
+  - the bot token: revoke it in @BotFather, put the new one in `.env`, and
+    `docker compose up -d api backup-watch` (both hold it).
 - **People are added on the server** (`scripts.people`). Whoever can run it
   can name any owner, so access to the server is access to the shop.
 
@@ -298,8 +335,10 @@ money is recorded says so, and says what its downgrade refuses.
 - **Nothing here has run on a production server.** Public HTTPS issuance
   has never been tried. The 2026-09-16 run used Caddy's own local
   certificate.
-- **The images use `postgres:17-alpine` and `caddy:2-alpine`.** A build
-  picks up their newest minor versions.
+- **The images `postgres:17-alpine`, `caddy:2-alpine` and `node:24-alpine`
+  float.** A build picks up their newest minor versions. The API's Python
+  is pinned (`python:3.12.14-slim`) and its libraries are locked, without
+  hashes yet.
 - **The server size is an estimate.** The hot-path budgets are measured on
   a laptop and on a two-CPU CI runner, not on the server or on a phone in a
   shop.

@@ -11,8 +11,14 @@ their Telegram account, and only on an owner's word (business-rules.md,
         --all-stores --role MANAGER
     python -m scripts.people remove --approved-by OWNER --telegram-user-id ID --store MAIN
     python -m scripts.people deactivate --approved-by OWNER --telegram-user-id ID
+    python -m scripts.people sign-out --approved-by OWNER --telegram-user-id ID
 
 OWNER and ID are Telegram account numbers.
+
+`sign-out` is for a lost phone (owner decision, 2026-10-03): it ends every
+sign-in of the person, and they keep their access, so they open the app again
+on the new phone. Turning a person off, or taking them out of their last
+store, ends their sign-ins as well.
 
 A person with no access sees their Telegram number in the app, to pass on.
 On the server: `docker compose run --rm --no-deps api python -m scripts.people …`.
@@ -74,6 +80,15 @@ async def run(args: argparse.Namespace) -> str:
                 )
                 done = "removed" if changed else "already removed"
                 return f"{done}: {args.telegram_user_id} from {_where(store)}"
+            if args.command == "sign-out":
+                kept = await people.sign_out(
+                    session, approved_by=args.approved_by, telegram_user_id=args.telegram_user_id
+                )
+                return (
+                    f"signed out: {args.telegram_user_id}, every sign-in ended, {kept} role(s) kept"
+                    "; for a lost phone, also end its Telegram session"
+                    " (Telegram > Settings > Devices)"
+                )
             ended = await people.deactivate(
                 session, approved_by=args.approved_by, telegram_user_id=args.telegram_user_id
             )
@@ -136,6 +151,11 @@ def parser() -> argparse.ArgumentParser:
         where=True,
     )
     change("deactivate", "turn a person off in every store at once", where=False)
+    change(
+        "sign-out",
+        "end every sign-in of a person, keeping their access (a lost phone)",
+        where=False,
+    )
     return root
 
 

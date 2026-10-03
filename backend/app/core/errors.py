@@ -18,6 +18,8 @@ class DomainError(Exception):
     code: str = "INTERNAL_ERROR"
     http_status: int = 500
     message: str = "Unexpected error"
+    # Headers the response carries, e.g. `Retry-After`. Most errors carry none.
+    headers: dict[str, str] | None = None
 
     def __init__(self, message: str | None = None, **details: Any) -> None:
         self.message = message or self.message
@@ -60,6 +62,23 @@ class NoAccessError(AuthenticationFailedError):
 
     code = "NO_ACCESS"
     message = "This Telegram account has no access to any store"
+
+
+class RateLimitedError(DomainError):
+    """Too many sign-ins from one address (`app/core/rate_limit.py`).
+
+    A technical limit, not an owner rule: it is set so that a whole shop
+    behind one address never meets it. `details.retry_after` and the
+    `Retry-After` header say in how many seconds the next sign-in is taken.
+    """
+
+    code = "RATE_LIMITED"
+    http_status = 429
+    message = "Too many sign-in attempts from this address; wait and try again"
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(retry_after=retry_after)
+        self.headers = {"Retry-After": str(retry_after)}
 
 
 class PermissionDeniedError(DomainError):
@@ -382,6 +401,7 @@ __all__ = [
     "OpeningBalanceConflictError",
     "PermissionDeniedError",
     "PriceChangedError",
+    "RateLimitedError",
     "RefundExceedsSoldError",
     "SameAsError",
     "SessionExpiredError",

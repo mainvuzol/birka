@@ -1,0 +1,64 @@
+# The server's Python packages: every package that pyproject.toml's
+# dependencies reach on Linux, each at the one version CI tests.
+# backend/Dockerfile installs exactly this file, with --no-deps, so the image
+# the server builds holds what the tests ran against, not whatever PyPI offers
+# on the day of the build (the SQLAlchemy 2.1 typing break of 2026-09-25 came
+# in that way). Checking out an earlier commit to go back restores that
+# commit's versions too.
+#
+# CI and developers install with it as constraints:
+#   pip install -c requirements.lock -e .
+# requirements-dev.lock is the same set plus the test and lint tools.
+#
+# A version changes on purpose, never by accident: change the pin here and in
+# requirements-dev.lock, install from them, and let the full CI run decide. A
+# new dependency comes with everything it pulls in. With network, this prints
+# the new set (keep this header):
+#   uv pip compile pyproject.toml --python-version 3.12 --python-platform linux --upgrade-package <name>
+# tests/unit/test_dependency_lock.py fails when a file drifts from
+# pyproject.toml, from the other file, or from the installed packages. Nothing
+# pyproject.toml does not ask for belongs here (the local PostgreSQL tool
+# pgserver, for one).
+aiofiles==25.1.0
+aiogram==3.31.0
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+alembic==1.20.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+asyncpg==0.31.0
+attrs==26.1.0
+certifi==2026.7.22
+click==8.5.0
+fastapi==0.142.2
+frozenlist==1.8.0
+greenlet==3.5.6
+h11==0.16.0
+httptools==0.8.0
+idna==3.20
+magic-filter==1.0.12
+mako==1.4.3
+markupsafe==3.0.3
+multidict==6.9.1
+opentelemetry-api==1.45.0
+propcache==0.5.4
+pydantic==2.13.5
+pydantic-core==2.46.5
+pydantic-settings==2.15.0
+pyjwt==2.15.1
+python-dotenv==1.2.4
+pyyaml==6.0.3
+sentry-sdk==2.71.0
+sqlalchemy==2.0.54
+starlette==1.7.0
+structlog==26.1.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+urllib3==2.8.0
+uvicorn==0.54.0
+uvloop==0.23.0
+watchfiles==1.3.0
+websockets==17.1
+yarl==1.25.1
