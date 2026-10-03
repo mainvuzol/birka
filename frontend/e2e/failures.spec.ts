@@ -503,9 +503,18 @@ test("a server error gives its request's number; a server out of reach says to t
 test.describe("trouble on the server, in «Резервні копії»", () => {
   const minute = 60_000;
 
-  async function serve(page: Page, server: () => object): Promise<void> {
+  /** `server` gets times counted back from the very moment the answer says it
+   * was checked (`checked_at`), so a minute is never lost between the two. */
+  type Ago = (minutes: number) => string;
+
+  async function serve(
+    page: Page,
+    server: (ago: Ago) => object,
+  ): Promise<void> {
     await page.route("**/api/v1/backups", async (route) => {
       const now = Date.now();
+      const ago: Ago = (minutes) =>
+        new Date(now - minutes * minute).toISOString();
       const night = new Date(now - 5 * 60 * minute).toISOString();
       const good = {
         started_at: night,
@@ -526,14 +535,11 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
           last_good: good,
           nights: [good],
           your_last_message: null,
-          server: server(),
+          server: server(ago),
         },
       });
     });
   }
-
-  const ago = (minutes: number): string =>
-    new Date(Date.now() - minutes * minute).toISOString();
 
   function tab(page: Page) {
     return page.getByRole("button", { name: /^Резервні копії/ });
@@ -548,7 +554,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
   test("the owner sees what is wrong now and since when, what was wrong this week, and that the watcher looks", async ({
     page,
   }) => {
-    await serve(page, () => ({
+    await serve(page, (ago) => ({
       looked_at: ago(2),
       open: [
         {
@@ -605,8 +611,12 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
   test("a watcher that went quiet, or never looked, is called out; a live one says all is well", async ({
     page,
   }) => {
-    let lookedAt: string | null = ago(0.3);
-    await serve(page, () => ({ looked_at: lookedAt, open: [], recent: [] }));
+    let lookedMinutesAgo: number | null = 0.3;
+    await serve(page, (ago) => ({
+      looked_at: lookedMinutesAgo === null ? null : ago(lookedMinutesAgo),
+      open: [],
+      recent: [],
+    }));
     await open(page);
     const watcher = page.locator("[data-watcher]");
     await expect(page.locator('[data-server="OK"]')).toBeVisible();
@@ -616,14 +626,14 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     await expect(tab(page)).toHaveText("Резервні копії");
 
     const refresh = page.getByRole("button", { name: "Оновити" });
-    lookedAt = ago(40);
+    lookedMinutesAgo = 40;
     await refresh.click();
     await expect(page.locator('[data-server="SILENT"]')).toBeVisible();
     await expect(watcher).toHaveText(
       "Сторож перевіряв 40 хв тому. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
     );
 
-    lookedAt = null;
+    lookedMinutesAgo = null;
     await refresh.click();
     await expect(watcher).toHaveText(
       "Сторож ще не перевіряв сервер. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
