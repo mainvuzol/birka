@@ -834,3 +834,23 @@ How it is carried out, not decided by the owner:
 - **An upgrade over two existing sizes that are now one stops** and names
   them. Joining two sizes would move stock between balances, which no rule
   covers. No shop database exists yet.
+
+
+## Owner decision — 2026-10-03 (before the public domain)
+
+Asked when the owner chose to make the app safe to put on a public domain.
+Personal data leaving the server, limits on what anyone may send, a blank app
+after an update and the server's library versions are technical; these four
+are about how the shops work.
+
+- **A seller stays signed in for 12 hours** after opening the app, as now.
+  Then the app is closed and opened again in Telegram; an unfinished
+  operation is kept.
+- **A lost phone:** on the owner's word, the administrator ends every
+  sign-in of that person on the server, as people are added. The person
+  keeps their access and opens the app again on the new phone.
+- **The server is updated while the shops are closed**, in the evening or at
+  night, so in the morning everyone opens the new version. An urgent
+  security fix is the exception.
+- **If the site's certificate cannot be renewed,** the owner is told by the
+  bot a week before it runs out, as about a failed backup.
