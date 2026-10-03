@@ -1,4 +1,9 @@
-"""The owner's «Резервні копії» section (owner decision, 2026-09-30)."""
+"""The owner's «Резервні копії» section (owner decision, 2026-09-30).
+
+Since 2026-10-03 ("failures are visible") it also shows trouble on the server,
+as the backups are: when the watcher last looked, what is wrong now, and what
+was wrong in the last week.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ from pydantic import BaseModel
 from app.api.deps import ScopeDep, SessionDep
 from app.modules.authz.permissions import Permission
 from app.modules.backups.models import BackupAlert, BackupRun
+from app.modules.backups.server import server_overview
 from app.modules.backups.service import overview
 from app.modules.backups.status import DUE, reasons
 
@@ -36,6 +42,31 @@ class MessageResponse(BaseModel):
     error: str | None
 
 
+class OpenTroubleResponse(BaseModel):
+    kind: str
+    # The sentence the bot used.
+    reason: str
+    started_at: datetime
+    # When the bot's message reached its first chat; None while nobody has.
+    told_at: datetime | None
+
+
+class EndedTroubleResponse(BaseModel):
+    kind: str
+    reason: str
+    started_at: datetime
+    ended_at: datetime
+
+
+class ServerResponse(BaseModel):
+    # The watcher's last completed look, so a watcher that stopped shows.
+    looked_at: datetime | None
+    # Not ended, oldest first.
+    open: list[OpenTroubleResponse]
+    # Ended in the last 7 days, newest first, at most 10.
+    recent: list[EndedTroubleResponse]
+
+
 class BackupsResponse(BaseModel):
     state: str
     checked_at: datetime
@@ -44,6 +75,7 @@ class BackupsResponse(BaseModel):
     last_good: NightResponse | None
     nights: list[NightResponse]
     your_last_message: MessageResponse | None
+    server: ServerResponse
 
 
 def _night(night: BackupRun | None) -> NightResponse | None:
@@ -80,6 +112,7 @@ async def read_backups(scope: ScopeDep, session: SessionDep) -> BackupsResponse:
     scope.require(Permission.BACKUP_VIEW)
     now = datetime.now(UTC)
     seen = await overview(session, user_id=scope.user_id, now=now)
+    server = await server_overview(session, now=now)
     nights = [_night(night) for night in seen.nights]
     return BackupsResponse(
         state=seen.state.value,
@@ -89,4 +122,26 @@ async def read_backups(scope: ScopeDep, session: SessionDep) -> BackupsResponse:
         last_good=_night(seen.last_good),
         nights=[night for night in nights if night is not None],
         your_last_message=_message(seen.your_last_message),
+        server=ServerResponse(
+            looked_at=server.looked_at,
+            open=[
+                OpenTroubleResponse(
+                    kind=trouble.kind,
+                    reason=trouble.reason,
+                    started_at=trouble.started_at,
+                    told_at=trouble.told_at,
+                )
+                for trouble in server.open
+            ],
+            recent=[
+                EndedTroubleResponse(
+                    kind=trouble.kind,
+                    reason=trouble.reason,
+                    started_at=trouble.started_at,
+                    ended_at=trouble.ended_at,
+                )
+                for trouble in server.recent
+                if trouble.ended_at is not None
+            ],
+        ),
     )

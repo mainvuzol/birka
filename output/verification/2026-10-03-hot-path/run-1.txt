@@ -1,0 +1,120 @@
+working tree of feat/failures-visible on c19a1dc, before its commit; PostgreSQL 16.2 on the laptop, migrations to 0034
+gate: all; 10 CPUs; harness, API and database on one machine
+python: 3.12.14 (CPython)
+postgresql: PostgreSQL 16.2 on aarch64-apple-darwin23.5.0, compiled by Apple clang version 15.0.0 (clang-1500.0.40.1), 64-bit; fsync on, synchronous_commit on
+api: http://127.0.0.1:58043, environment ci
+seeding 400 variants × 6 sizes …
+2026-10-03 17:42:27 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=40ca5770-e050-47be-88ea-bf1e136607a7 types=['DELIVERY']
+2026-10-03 17:42:27 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=40ca5770-e050-47be-88ea-bf1e136607a7 types=['DELIVERY']
+2026-10-03 17:42:27 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=40ca5770-e050-47be-88ea-bf1e136607a7 types=['DELIVERY']
+2026-10-03 17:42:28 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=40ca5770-e050-47be-88ea-bf1e136607a7 types=['DELIVERY']
+2026-10-03 17:42:28 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=400 organization_id=40ca5770-e050-47be-88ea-bf1e136607a7 types=['DELIVERY']
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=    5.5  p95=    6.0  p99=    6.4  max=   49.8  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   21.0  p95=   28.3  p99=   72.1  max=   74.3  pass
+POST /sales · 1 line                     n=200  p50=    9.4  p95=   10.3  p99=   11.6  max=   61.1  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   39.6  p95=   47.4  p99=   93.9  max=   93.9  pass
+POST /sales · 4 lines (6 sellers)        n=200  p50=   63.5  p95=  107.0  p99=  114.8  max=  124.1  pass
+POST /sales · same coat, 6 sellers       n=120  p50=   40.9  p95=   51.0  p99=   53.2  max=   73.5  pass
+POST /sales · paid in parts              n=200  p50=    9.7  p95=   10.6  p99=   11.3  max=   11.8  pass
+POST /sales · paid in parts (6 sellers)  n=300  p50=   49.1  p95=   50.6  p99=  119.7  max=  142.3  pass
+
+[
+  {
+    "case": "GET /catalog/stock-options",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 5.501937528606504,
+    "p95": 6.008708034642041,
+    "p99": 6.43491605296731,
+    "max": 49.81925000902265,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 20.987374999094754,
+    "p95": 28.305749990977347,
+    "p99": 72.131208027713,
+    "max": 74.26699995994568,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 1 line",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 9.416437475010753,
+    "p95": 10.288082994520664,
+    "p99": 11.565375025384128,
+    "max": 61.06791598722339,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 1 line (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 39.6238545072265,
+    "p95": 47.40554199088365,
+    "p99": 93.8954169396311,
+    "max": 93.9432920422405,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 4 lines (6 sellers)",
+    "concurrency": 6,
+    "n": 200,
+    "p50": 63.52856301236898,
+    "p95": 106.95249994751066,
+    "p99": 114.76745805703104,
+    "max": 124.12637495435774,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 same coat, 6 sellers",
+    "concurrency": 6,
+    "n": 120,
+    "p50": 40.927166992332786,
+    "p95": 50.9755410021171,
+    "p99": 53.219208028167486,
+    "max": 73.49612493999302,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 paid in parts",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 9.672187035903335,
+    "p95": 10.596917010843754,
+    "p99": 11.304582934826612,
+    "max": 11.84120902325958,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 paid in parts (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 49.11091650137678,
+    "p95": 50.63645902555436,
+    "p99": 119.69654203858227,
+    "max": 142.25779194384813,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  }
+]
+run 1 exit 0

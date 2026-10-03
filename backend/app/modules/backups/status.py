@@ -78,6 +78,10 @@ def reasons(problems: Iterable[Mapping[str, Any]]) -> list[str]:
             said.append("Копію не вдалося зашифрувати, і вона лишилася на сервері незашифрованою.")
         elif step == "key":
             said.append("На сервері не задано ключ власника, тож копію не зашифровано.")
+        elif step == "still_running":
+            # The previous night still held the lock: two nights never run
+            # side by side on a small disk.
+            said.append("Попередня нічна копія ще не завершилась: нову не почато.")
         else:
             said.append(f"Не вдався крок «{step}».")
     return said

@@ -8,7 +8,7 @@ migrations. Import this module — never rely on import side effects elsewhere.
 from app.core.idempotency import IdempotencyRecord
 from app.modules.audit.models import AuditLog
 from app.modules.authz.models import Membership, Role, RolePermission
-from app.modules.backups.models import BackupAlert, BackupRun
+from app.modules.backups.models import BackupAlert, BackupRun, ServerIncident, ServerWatch
 from app.modules.catalog.evidence import (
     AliasEvidence,
     CatalogMatchDecision,
@@ -111,6 +111,8 @@ __all__ = [
     "RolePermission",
     "Sale",
     "SaleItem",
+    "ServerIncident",
+    "ServerWatch",
     "Size",
     "SizeAlias",
     "SizeSystem",

@@ -26,6 +26,17 @@ Every night ends with `last-run.json` in the directory, and with one row in
 the database's `backup_run` — the only thing it ever writes there — which is
 how the owner's «Резервні копії» section and the Telegram warning learn of it
 (`scripts.backup_watch`). Exit status 0 only if everything above held.
+
+A night that goes wrong must still end, and say so:
+
+- every tool runs under a time limit (`scripts.postgres_tools.run`): a hung
+  `pg_dump`, `pg_restore` or `age` is stopped, and its step fails in words;
+- two nights never overlap. Each holds a lock in the backup directory for
+  its whole run; a night that finds the lock held starts nothing and is
+  recorded as failed (`still_running`), so the owner hears that the night
+  before has not finished instead of a day's silence;
+- under that lock, before its drill, a night drops the scratch copies an
+  earlier drill was stopped before dropping (`scripts.restore_drill`).
 """
 
 from __future__ import annotations
@@ -33,11 +44,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import calendar
+import contextlib
+import fcntl
 import json
 import os
 import re
+import secrets
 import shutil
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -49,13 +64,17 @@ from sqlalchemy.pool import NullPool
 from app.modules.backups.service import record_night
 from scripts.backup_database import back_up, sha256
 from scripts.postgres_tools import Database, ToolError, run
-from scripts.restore_drill import drill
+from scripts.restore_drill import drill, drop_leftovers
 
 DAILY_DAYS = 7
 MONTHLY_MONTHS = 3
 STAMP = re.compile(r"^birka-(\d{8}T\d{6}Z)\.")
 # An age X25519 recipient: "age1" and 58 bech32 characters.
 RECIPIENT = re.compile(r"^age1[02-9ac-hj-np-z]{58}$")
+# Held by the night running, in the backup directory: the one place every
+# night shares, whichever container runs it. Not a night's file, so neither
+# retention nor the owner's collection ever touches it.
+LOCK_NAME = ".nightly.lock"
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +171,15 @@ async def encrypt(archive: Path, recipients: list[str]) -> Path:
     partial = archive.with_name(f".{archive.name}.age.partial")
     arguments = [argument for recipient in recipients for argument in ("--recipient", recipient)]
     try:
-        await run(tool_age(), "--encrypt", *arguments, "--output", str(partial), str(archive))
+        await run(
+            tool_age(),
+            "--encrypt",
+            *arguments,
+            "--output",
+            str(partial),
+            str(archive),
+            step="age",
+        )
     except BaseException:
         partial.unlink(missing_ok=True)
         raise
@@ -173,6 +200,41 @@ def tool_age() -> Path:
     return Path(configured)
 
 
+class StillRunningError(Exception):
+    """The night before still holds the lock: it has not finished."""
+
+
+@contextlib.contextmanager
+def night_lock(out: Path, started: datetime) -> Iterator[None]:
+    """Hold the backup directory's lock for one night, or raise `StillRunningError`.
+
+    `flock`: the kernel lets go of it when the process ends, however it ends,
+    so a night that was killed never blocks the next one. The holder writes
+    when it started into the file, for the night it turns away to say.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / LOCK_NAME
+    # Opened for appending, so opening it never wipes what the holder wrote.
+    with path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.seek(0)
+            holder = handle.read().strip()[:64]
+            raise StillRunningError(
+                f"the night started at {holder or 'an unknown time'} has not finished "
+                f"and still holds {path.name}; this night did not start"
+            ) from None
+        handle.seek(0)
+        handle.truncate()
+        handle.write(started.isoformat())
+        handle.flush()
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 async def nightly(
     source: Database,
     scratch: Database,
@@ -185,11 +247,47 @@ async def nightly(
     started = (now or datetime.now(UTC)).astimezone(UTC)
     result: dict[str, Any] = {"started_at": started.isoformat(), "ok": False, "problems": []}
     # One `{"step", "detail"}` for each step that failed, in the order they
-    # ran: `backup`, `drill` (with the failed `checks`), `encrypt`, `key`,
-    # and `record` when the night could not be written to the database.
+    # ran: `still_running` when the night before had not finished, `backup`,
+    # `drill` (with the failed `checks`), `encrypt`, `key`, and `record` when
+    # the night could not be written to the database.
     problems: list[dict[str, Any]] = result["problems"]
     # Every failure below is reported in last-run.json; none is hidden, and
     # none is raised past it, so the night always leaves its record.
+    with contextlib.ExitStack() as held:
+        try:
+            held.enter_context(night_lock(out, started))
+        except StillRunningError as running:
+            # Nothing is started beside a night still running: two dumps and
+            # two scratch copies at once could fill the disk, and the night
+            # running is not disturbed. Recorded, so the owner hears of it.
+            problems.append({"step": "still_running", "detail": str(running)})
+            return await _record(source, out, result)
+        except OSError as error:
+            problems.append({"step": "backup", "detail": f"the night's lock: {error}"})
+            return await _record(source, out, result)
+        return await _night(
+            source,
+            scratch,
+            out,
+            result,
+            started=started,
+            recipients=recipients,
+            allow_plaintext=allow_plaintext,
+        )
+
+
+async def _night(
+    source: Database,
+    scratch: Database,
+    out: Path,
+    result: dict[str, Any],
+    *,
+    started: datetime,
+    recipients: list[str],
+    allow_plaintext: bool,
+) -> dict[str, Any]:
+    """The night itself, run under its lock."""
+    problems: list[dict[str, Any]] = result["problems"]
     try:
         manifest = await back_up(source, out, now=started)
     except Exception as error:
@@ -201,16 +299,24 @@ async def nightly(
     result["bytes"] = manifest["archive_bytes"]
     result["rows"] = sum(manifest["tables"].values())
 
+    dropped: list[str] = []
     try:
+        # A drill stopped before it could drop its scratch copy — at its time
+        # limit, or with its container — left a whole copy of the shop's data
+        # on the server's disk. Dropped before this night makes another.
+        dropped = await drop_leftovers(scratch)
         report = await drill(archive, scratch)
     except Exception as error:
         report = {"ok": False, "checks": [], "error": str(error)}
+    if dropped:
+        report["dropped_leftovers"] = dropped
     (out / f"{stem}.drill.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
     failed = [check for check in report.get("checks", []) if not check["ok"]]
     result["drill"] = {
         "ok": report["ok"],
         "restore_seconds": report.get("restore_seconds"),
         "failed": [check["name"] for check in failed],
+        "dropped_leftovers": dropped,
     }
     if not report["ok"]:
         problems.append(
@@ -277,7 +383,9 @@ async def _record(source: Database, out: Path, result: dict[str, Any]) -> dict[s
         # overdue one.
         result["problems"].append({"step": "record", "detail": str(error)})
         result["ok"] = False
-    written = out / ".last-run.json.partial"
+    # A name of its own: a night turned away writes its record while the
+    # night still running may be finishing its own.
+    written = out / f".last-run.{secrets.token_hex(4)}.partial"
     written.write_text(json.dumps(result, ensure_ascii=False, indent=2))
     written.rename(out / "last-run.json")
     return result

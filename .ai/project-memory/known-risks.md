@@ -201,6 +201,10 @@ daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
   - **The watcher lives on the same server.** If the whole server or its
     database is down, nobody sends anything. The shop sees the app down, and
     the owner's collection script finds nothing new, but no message says why.
+    Since 2026-10-03 ([ADR-0011](../decisions/ADR-0011-failures-are-visible.md)),
+    the watcher tells of a database that stopped from the owners' chats it
+    remembers, and an outside service hears its check-ins stop when the
+    whole server dies, once someone has set that service up.
   - **The bot reaches only an owner who pressed «Start» in its chat.**
     Until then Telegram refuses; the section shows that, but only to an
     owner who opens it.
@@ -283,8 +287,8 @@ See the [release checklist](release-checklist.md) and the
 - **The server's size is an estimate**, and public HTTPS issuance has never
   run.
 - **Docker logs were unbounded** until this gate; they are now 5 × 10 MB per
-  service. The cron log of the nightly backup is not rotated: it grows by a
-  few lines a night.
+  service. The cron log of the nightly backup was not rotated; since
+  2026-10-03 the backup runbook rotates it monthly.
 
 ## «Початкові залишки» — 2026-10-01
 
@@ -578,8 +582,9 @@ See the [report](public-hardening-report.md) and
   that session is ended (Telegram → Settings → Devices); the runbook and the
   command's own output say so.
 - **Signed-in requests are not limited per person.** One seller's token can
-  still keep the API busy (the catalogue parser runs on the only event loop,
-  and the database has no statement timeout).
+  still keep the API busy: the catalogue parser runs on the only event loop.
+  Since 2026-10-03 a statement is cancelled after 30 seconds, so the
+  database is not held for long.
 - **The API connects to PostgreSQL as the owner of every table.** The
   append-only triggers do not stop a compromised API. A separate role with
   only what the app needs is a change of its own.
@@ -604,3 +609,52 @@ See the [report](public-hardening-report.md) and
   per page.
 - **A customer's name and phone are kept on one line**: a line break or a
   run of spaces in them becomes one space.
+
+## Failures are visible — 2026-10-03
+
+See the [report](failures-visible-report.md) and
+[ADR-0011](../decisions/ADR-0011-failures-are-visible.md).
+
+- **Nobody hears of a server that dies whole until the outside service is
+  set up**, in the owner's name, and no administrator is named yet
+  (runbook, step 8a). Until then the bot tells the owner of what the
+  watcher sees, and only the sellers notice a dead server.
+- **The watcher lives on the server it watches.**
+  - With the database down, it tells the owners from the chats it
+    remembers.
+  - Restarted while the database is down, it knows only the administrators.
+    Its outbox is in memory, so a restart drops a message not yet sent.
+- **The sign-in alarm can still be faked** by someone who knows the Telegram
+  ids of two active people of the shop and sends forged launch data in their
+  names. Checking the payload's Ed25519 `signature` against Telegram's
+  public key would close it.
+  - Launch data that expired or is dated in the future counts for any
+    Telegram user it names, since Telegram signed it.
+  - The counts live in the API's memory: one process on the server, reset
+    when it restarts.
+- **The disk measured is the one the watcher's containers see**: the backups
+  directory and Docker's own root. Both are normally the server's main disk,
+  with the database's volume; check that on the server (`df -h /`
+  `/var/lib/docker`).
+- **A wedged API is told, not restarted.** Docker restarts a process that
+  exits; one that hangs is reported after 5 minutes, and a person restarts
+  it.
+- **A broken screen's note is open to anyone.** It is limited per address
+  (10 a minute, 4 KB) and kept only in the log, which keeps 5 × 10 MB. A
+  flood from many addresses pushes older lines out.
+- **A basket still being filled is lost when a screen breaks.** Only a
+  command sent without an answer is kept, and the crash screen says which.
+  This is the owner's to change (business rules, "carried out").
+  - A command waiting in another store, or for another person on the same
+    phone, makes the screen say a command is kept.
+- **One narrow case writes an ended trouble twice** in the «Резервні копії»
+  list. It takes three things together:
+  - the watcher restarted while the database was down;
+  - the trouble ended before the database came back;
+  - the first write after that lost its confirmation.
+- **Error details are in the server's log only** (owner, 2026-10-03), and
+  nobody reads that log unless something is reported. Sentry is ready but
+  off.
+- **The new edge probes have never run against Docker or Caddy.** That
+  covers `/ready` through Caddy, `/internal` answered 404, the API's
+  healthcheck and the release tag. CI's `edge` job is their first run.

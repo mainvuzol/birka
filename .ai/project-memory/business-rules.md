@@ -907,3 +907,27 @@ often is the owner's to decide:
 - **The hot path's release reading (release checklist row 22) gates every
   case,** six sellers at once included, as it is written. It is taken on the
   laptop as before. A reading on the real server is an optional step.
+
+**Carried out, 2026-10-03.** The owner's answers did not cover these; the
+build takes the readings below. Each is the owner's to change:
+- **"Works again" sounds by the same hours** as the trouble it ends.
+- **An unsent sale.**
+  - A sale sent whose answer never arrived is kept on the phone, and is
+    checked after «Перезапустити», as before.
+  - A basket still being filled lives only on the screen, and a broken
+    screen loses it.
+  - The crash screen says which of the two it is. It never claims a basket
+    was kept.
+- **"While people kept trying"** means refusals from people, not strangers.
+  The sign-in endpoint is open to anyone, so a refusal counts only when it
+  comes from:
+  - a Telegram user it could verify;
+  - or, for a refused signature, someone the app knows.
+
+  A refusal counts toward the alarm only when:
+  - it is the third such refusal in 10 minutes;
+  - the last one came in the last 5 minutes;
+  - at least two people were refused. One is enough when their launch data
+    was dated in the future, which only a wrong clock does.
+- **The administrator hears of trouble on the server, not of backups.**
+  Backups stay the owner's.

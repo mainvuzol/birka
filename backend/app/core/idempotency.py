@@ -17,6 +17,10 @@ the same key blocks on the unique index until the first transaction ends:
 * first commits  -> second sees COMPLETED and replays the stored response;
 * first rolls back -> the claim disappears and the second proceeds normally,
   which is what a client retrying after a failure should get.
+
+Records are deleted once they expire (`purge_expired`, run hourly by the
+watcher, `scripts.backup_watch`). A retry that comes later is answered by its
+command's permanent `command_id` instead, from the business row.
 """
 
 from __future__ import annotations
@@ -29,7 +33,17 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, select
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    delete,
+    select,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -195,6 +209,40 @@ async def complete(
     record.http_status = http_status
 
 
+async def purge_expired(session: AsyncSession, *, now: datetime, batch: int = 1000) -> int:
+    """Delete the records that expired before `now`, `batch` at a time, and
+    return how many went.
+
+    Each batch is its own committed transaction, found through the index on
+    `expires_at`, so a long backlog never holds one long lock or one large
+    transaction. A record a request holds at that moment is skipped, never
+    waited for; the next run takes it. Deleting is safe at any time: every
+    command keeps its answer on its business row under its permanent
+    `command_id` (invariant I20), so a later retry is answered from there.
+    """
+    if batch < 1:
+        raise ValueError("a purge needs a positive batch size")
+    expired = (
+        select(IdempotencyRecord.id)
+        .where(IdempotencyRecord.expires_at < now)
+        .order_by(IdempotencyRecord.expires_at)
+        .limit(batch)
+        .with_for_update(skip_locked=True)
+    )
+    purged = 0
+    while True:
+        result = await session.execute(
+            delete(IdempotencyRecord)
+            .where(IdempotencyRecord.id.in_(expired.scalar_subquery()))
+            .execution_options(synchronize_session=False)
+        )
+        await session.commit()
+        deleted = result.rowcount or 0  # type: ignore[attr-defined]
+        purged += deleted
+        if deleted < batch:
+            return purged
+
+
 __all__ = [
     "RETENTION",
     "Claim",
@@ -204,4 +252,5 @@ __all__ = [
     "claim",
     "complete",
     "fingerprint",
+    "purge_expired",
 ]

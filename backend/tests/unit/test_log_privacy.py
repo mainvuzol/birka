@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import logging
 import uuid
 from collections.abc import Callable, Iterator
@@ -26,11 +27,13 @@ from sqlalchemy.dialects.postgresql.asyncpg import AsyncAdapt_asyncpg_dbapi
 from uvicorn.server import ServerState
 
 from app.core.config import Settings
+from app.core.correlation import set_correlation_id
 from app.core.db import create_engine
 from app.core.logging import (
     configure_logging,
     get_logger,
     redact_database_values,
+    without_bot_token,
     without_query_strings,
 )
 
@@ -288,6 +291,41 @@ async def test_a_traceback_structlog_writes_leaves_out_the_refused_row(
     assert_no_customer(out)
 
 
+# Made at import, as every module of the app makes its logger: before the
+# server's logging is configured.
+_MODULE_LOGGER = get_logger("tests.privacy.module")
+
+
+async def test_a_logger_made_at_import_writes_as_configured(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A module's logger obeys the configuration made after it: the level, JSON,
+    the request id, and the cut of a refused row's values. Bound at import, it
+    used to keep structlog's defaults and print the customer's name."""
+    error = refused_debt(hide_parameters=await engine_hides_parameters())
+
+    with logging_as_on_the_server(Settings(log_json=True, log_level="WARNING")):
+        set_correlation_id("req-module-logger")
+        try:
+            _MODULE_LOGGER.info("below.the.level")
+            try:
+                raise error from error.orig
+            except sa_exc.IntegrityError:
+                _MODULE_LOGGER.exception("credit.open_failed")
+            _MODULE_LOGGER.bind(step="after").warning("bound.later")
+        finally:
+            set_correlation_id("")
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line]
+    assert [line["event"] for line in lines] == ["credit.open_failed", "bound.later"]
+    failed, bound = lines
+    assert failed["logger"] == "tests.privacy.module"
+    assert failed["request_id"] == "req-module-logger"
+    assert "Failing row contains (values hidden)" in failed["exception"]
+    assert_no_customer(json.dumps(lines, ensure_ascii=False))
+    assert bound["step"] == "after"
+
+
 async def test_the_engine_leaves_statement_values_out_of_its_errors() -> None:
     """The values sent with a statement never reach a database error's text.
 
@@ -379,3 +417,78 @@ def test_postgresql_detail_values_are_hidden(text: str, expected: str) -> None:
 )
 def test_query_strings_are_cut_from_free_text(text: str, expected: str) -> None:
     assert without_query_strings(text) == expected
+
+
+# A bot's token as Telegram shapes it, and the address it is part of.
+BOT_TOKEN = "123456:AAHsecretTOKEN-b0t_5ecret"
+TELEGRAM_CALL = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (TELEGRAM_CALL, "https://api.telegram.org/bot(token hidden)/getMe"),
+        (
+            f"TelegramNetworkError: HTTP Client says - InvalidURL: {TELEGRAM_CALL}",
+            "TelegramNetworkError: HTTP Client says - InvalidURL: "
+            "https://api.telegram.org/bot(token hidden)/getMe",
+        ),
+        # An address encoded inside another.
+        (
+            "next=https%3A%2F%2Fapi.telegram.org%2Fbot123456%3AAAHsecret%2FgetMe",
+            "next=https%3A%2F%2Fapi.telegram.org%2Fbot(token hidden)%2FgetMe",
+        ),
+        # Anything else is left as it was.
+        ("looked at 10:00:05, bot 2 of 3", "looked at 10:00:05, bot 2 of 3"),
+        ("https://api.telegram.org/bot/sendMessage", "https://api.telegram.org/bot/sendMessage"),
+    ],
+)
+def test_the_bot_token_is_cut_from_free_text(text: str, expected: str) -> None:
+    assert without_bot_token(text) == expected
+
+
+def _telegram_failed() -> RuntimeError:
+    """An error that repeats Telegram's address, token and all."""
+    try:
+        raise RuntimeError(f"Cannot reach {TELEGRAM_CALL}")
+    except RuntimeError as error:
+        return error
+
+
+def test_a_traceback_on_stdout_leaves_out_the_bot_token(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A line from any stdlib logger — aiogram's, uvicorn's — with an error
+    that repeats the bot's address."""
+    with logging_as_on_the_server(Settings(log_json=True)):
+        logging.getLogger("tests.privacy.telegram").error(
+            "Request to %s failed", TELEGRAM_CALL, exc_info=_telegram_failed()
+        )
+
+    out = capsys.readouterr().out
+    assert "Request to https://api.telegram.org/bot(token hidden)/getMe failed" in out
+    assert "RuntimeError: Cannot reach https://api.telegram.org/bot(token hidden)/getMe" in out
+    assert BOT_TOKEN not in out
+    assert "AAHsecret" not in out
+
+
+@pytest.mark.parametrize("log_json", [True, False])
+def test_a_line_structlog_writes_leaves_out_the_bot_token(
+    log_json: bool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In any field, and in the traceback: the watcher logs a failed call to
+    Telegram as `error=…`."""
+    with logging_as_on_the_server(Settings(log_json=log_json)):
+        logger = get_logger("tests.privacy.bot")
+        logger.warning("telegram.unreachable", error=f"RuntimeError: {TELEGRAM_CALL}")
+        logger.warning("telegram.unreachable", tried=[TELEGRAM_CALL])
+        try:
+            raise _telegram_failed()
+        except RuntimeError:
+            logger.exception("telegram.failed")
+
+    out = capsys.readouterr().out
+    assert out.count("bot(token hidden)") >= 3
+    assert "telegram.failed" in out
+    assert BOT_TOKEN not in out
+    assert "AAHsecret" not in out

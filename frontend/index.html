@@ -2,11 +2,36 @@
 <html lang="uk">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <title>birka</title>
+    <style>
+      /* Shown only when the app's code never arrives: hidden for its first
+         seconds, so a normal open never flashes it. React replaces it. */
+      .not-loaded {
+        visibility: hidden;
+        animation: not-loaded-show 0s linear 8s forwards;
+        max-width: 780px;
+        margin: auto;
+        padding: 24px 18px;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        line-height: 1.55;
+      }
+      @keyframes not-loaded-show {
+        to {
+          visibility: visible;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <p class="not-loaded">
+        Застосунок не завантажився. Перевірте зв’язок і відкрийте його ще раз.
+      </p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

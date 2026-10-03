@@ -7,6 +7,11 @@ RUN npm ci --no-audit --no-fund
 # .dockerignore keeps a developer's node_modules, dist and test output out of
 # this copy, so it cannot land on top of the tree npm ci just installed.
 COPY . .
+# The build's version, its git commit (infra/docker-compose.yml passes it):
+# Vite writes it into the bundle, which names it on the crash screen and in
+# the note a broken screen sends. Only this stage needs it, and only after
+# `npm ci`, so a new commit does not reinstall the packages.
+ARG BIRKA_RELEASE=dev
 RUN npm run build
 
 # Alpine 3.20's support ended in spring 2026; 3.22 is supported until 2027.

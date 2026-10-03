@@ -19,16 +19,19 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
+from app.api.internal import database_state, sign_in_outcomes
 from app.api.v1.backups import router as backups_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.catalog_corrections import router as catalog_corrections_router
 from app.api.v1.catalog_decisions import router as catalog_decisions_router
 from app.api.v1.catalog_matching import router as catalog_matching_router
+from app.api.v1.client_errors import router as client_errors_router
 from app.api.v1.credits import router as credits_router
 from app.api.v1.damaged import router as damaged_router
 from app.api.v1.inventory import router as inventory_router
@@ -65,6 +68,7 @@ router.include_router(stores_router)
 router.include_router(suppliers_router)
 router.include_router(supplier_invoices_router)
 router.include_router(reports_router)
+router.include_router(client_errors_router)
 
 
 # --- schemas ---------------------------------------------------------------
@@ -122,6 +126,31 @@ async def health(settings: SettingsDep) -> HealthResponse:
     return HealthResponse(status="ok", environment=settings.app_env)
 
 
+@router.get(
+    "/ready",
+    tags=["ops"],
+    responses={503: {"description": "The database does not answer, or its schema is behind"}},
+)
+async def ready(session: SessionDep) -> JSONResponse:
+    """Readiness: whether this process can serve requests now.
+
+    200 when the database answers within 3 seconds and its schema is not
+    behind this code (`app/api/internal.py`); 503 with the `reason`,
+    `database` or `schema`, otherwise. Unlike `/health`, it touches the
+    database, so it is what an outside check or Docker asks.
+    """
+    state = await database_state(session)
+    if state == "ok":
+        return JSONResponse({"status": "ready"})
+    reason = "schema" if state == "behind" else "database"
+    return JSONResponse({"status": "not_ready", "reason": reason}, status_code=503)
+
+
+# HEAD too: an outside uptime check may ask with HEAD, and would otherwise
+# read 405 as the site being down.
+router.add_api_route("/ready", ready, methods=["HEAD"], include_in_schema=False)
+
+
 # Limited per address before the payload is checked: it is the one request
 # anyone may make without a session (`app/core/rate_limit.py`).
 @router.post(
@@ -131,10 +160,15 @@ async def health(settings: SettingsDep) -> HealthResponse:
     dependencies=[Depends(limit_sign_ins)],
 )
 async def auth_telegram(
-    payload: TelegramAuthRequest, session: SessionDep, settings: SettingsDep
+    payload: TelegramAuthRequest, request: Request, session: SessionDep, settings: SettingsDep
 ) -> TelegramAuthResponse:
     token, user, scope = await authenticate_with_init_data(
-        session, init_data=payload.init_data, settings=settings
+        session,
+        init_data=payload.init_data,
+        settings=settings,
+        # Counted for the watcher, which tells the owner when nobody can sign
+        # in (`GET /internal/status`).
+        outcomes=sign_in_outcomes(request.app),
     )
     return TelegramAuthResponse(
         access_token=token,

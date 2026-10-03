@@ -238,3 +238,59 @@ estimate. A two-CPU machine also running the load generator served six
 sellers asking back to back within budget. The shops will ask about a
 hundredth as often.
 
+
+## Update — 2026-10-03: the release reading, every case gated
+
+Release checklist row 22 asked for the reading that gates every case, after
+the last change to `POST /sales`. It was last taken before PR #54. The owner
+decided on 2026-10-03 that **every case gates the release, six sellers at once
+included**, and that the reading is taken on the laptop, as before.
+
+Six changes since then put work on this path, and none was measured with
+every case gated:
+- **PR #54:** a sale may be paid in parts;
+- **PR #57:** store states, the store locked `FOR KEY SHARE`;
+- **PR #63:** one more read per stock command, for a list that waits;
+- **PR #64:** models held `FOR KEY SHARE` first;
+- **PR #65:** sizes;
+- **PR #66:** the session epoch, read from the person's row already fetched.
+
+**The harness gained two cases:**
+- **The sale paid in parts**, by one seller and by six. Each is a new
+  customer paying 400.00 of a 1200.00 coat, so no sale paid in parts went
+  unmeasured.
+- **Each run now names what it ran on:** Python, PostgreSQL with `fsync` and
+  `synchronous_commit`, and the API's environment.
+
+The six earlier cases are unchanged, in name, count, body and order.
+
+Three runs, each on a fresh database, on the laptop and PostgreSQL 16.2.
+The API ran as CI runs it: one process, no access log, `WARNING`. Evidence:
+[`output/verification/2026-10-03-hot-path/`](../../output/verification/2026-10-03-hot-path/).
+
+| Case | p95, 2026-10-01 (worst of 3) | **p95, 2026-10-03 (worst of 3)** | p50 now | Budget |
+|---|---|---|---|---|
+| `GET /catalog/stock-options` | 6.8 | **6.3** | 5.5–5.8 | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 58.6 | **72.0** | 21.0–21.4 | 300 ms |
+| `POST /sales`, 1 line | 10.6 | **12.1** | 9.4–10.3 | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 39.8 | **192.0** | 39.6–42.9 | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 55.6 | **107.0** | 63.5–64.7 | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 74.0 | **65.3** | 40.2–40.9 | 500 ms |
+| `POST /sales`, paid in parts | — | **13.6** | 9.7–11.0 | 500 ms |
+| `POST /sales`, paid in parts, 6 sellers | — | **90.2** | 49.1–50.1 | 500 ms |
+
+- **Every case passes in every run, gated.** The worst p95 is 192 ms against
+  500, which is 2.6× headroom.
+- **One seller is unchanged:** about 10 ms for a sale and 6 ms for the
+  catalogue read.
+- **Six sellers at once are slower than on 2026-10-01.** At p50, a one-line
+  sale takes about 40 ms against 33, and a four-line sale about 64 ms
+  against 49.
+  - The changes above add a read and two row locks to every stock command.
+    That fits, but no profile separated them.
+- **The 192 ms is one run's tail.** That run's p99 was 236 ms; the other two
+  runs gave 47 and 45 ms for the same case.
+- **A sale paid in parts costs about what a sale paid in full does.**
+
+This closes row 22 for the laptop. A reading on the real server is an
+optional step in the [server runbook](server-runbook.md#the-hot-path-on-this-server-optional).

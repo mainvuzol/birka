@@ -12,10 +12,21 @@ in a shop: no phone, no mobile network, no Telegram webview, no production
 hardware. Treat a pass as "nothing here is an order of magnitude wrong" and a
 failure as real.
 
+A sale paid in parts is measured too, alone and by six sellers at once. PR #54
+put it on `POST /sales`: a debt, its first payment and an audit row written in
+the sale's own transaction. No reading had measured it. Its two cases run
+after the first six, so those six still measure what they always have.
+
+The run prints how it ran before any figure: the gate, the CPUs, Python, the
+PostgreSQL server and the API's environment. The evidence file then says what
+made it.
+
 Run it against a disposable database only; it writes thousands of sales.
 
     BIRKA_PERF_DATABASE_URL=postgresql+asyncpg://…/birka_perf \
     BIRKA_PERF_API_URL=http://127.0.0.1:58043 \
+    BIRKA_TELEGRAM_BOT_TOKEN=<the API's own> \
+    BIRKA_PERF_GATE=all \
     python -m scripts.measure_hot_path
 """
 
@@ -24,8 +35,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import itertools
 import json
 import os
+import platform
 import statistics
 import time
 import uuid
@@ -67,11 +80,9 @@ from app.modules.tenancy.models import (
 # then sells thousands of times, and must never meet a real database.
 ALLOWED_DATABASES = frozenset({"birka_perf"})
 
-# The same token the API under test is configured with; there is no default,
-# because signing with the wrong one fails as an opaque 401.
-BOT_TOKEN = os.environ["BIRKA_TELEGRAM_BOT_TOKEN"]
-
 RequestBuilder = Callable[[httpx.AsyncClient, int], Awaitable[httpx.Response]]
+# Name, request, how many, sellers at once.
+Case = tuple[str, RequestBuilder, int, int]
 
 # Two shops of women's outerwear. Deliberately generous: a few hundred models
 # in a handful of colours each, six sizes, which is well past what the owner
@@ -82,13 +93,21 @@ STOCK_PER_KEY = 200
 
 BUDGETS_MS = {"GET /catalog/stock-options": 300.0, "POST /sales": 500.0}
 
+# Every sale is of coats at this price; a sale paid in parts pays a third of
+# one now and owes the rest: above nothing and below the total, as the owner
+# set it (owner decision, 2026-10-01, "paying in parts").
+UNIT_PRICE = "1200.00"
+PAID_NOW = "400.00"
+
 # Which breaches fail the run. `all`, the default, is the release gate's own
-# reading. CI sets `one-seller`, where a breach under concurrency is printed
-# and not fatal. On a shared two-CPU runner the harness, the API and the
-# database share the same CPUs. Six sellers asking back to back, some hundred
-# times the two shops' rate, put the runner as much as the code under test:
-# its first two runs came within 3 % of a budget (hot-path-budget-report.md,
-# 2026-10-01). One seller still has ten times headroom there.
+# reading, and gates every case, six sellers at once included (owner decision,
+# 2026-10-03, release checklist row 22). CI sets `one-seller`, where a breach
+# under concurrency is printed and not fatal. On a shared two-CPU runner the
+# harness, the API and the database share the same CPUs. Six sellers asking
+# back to back, some hundred times the two shops' rate, put the runner as much
+# as the code under test: its first two runs came within 3 % of a budget
+# (hot-path-budget-report.md, 2026-10-01). One seller still has ten times
+# headroom there.
 GATES = ("all", "one-seller")
 GATE = os.environ.get("BIRKA_PERF_GATE", "all")
 
@@ -101,14 +120,14 @@ class World:
     keys: list[tuple[uuid.UUID, uuid.UUID]]
 
 
-def init_data_for(telegram_user_id: int) -> str:
+def init_data_for(telegram_user_id: int, bot_token: str) -> str:
     fields = {
         "auth_date": str(int(datetime.now(tz=UTC).timestamp())),
         "query_id": "AAEperf",
         "user": json.dumps({"id": telegram_user_id, "first_name": "Перф"}, separators=(",", ":")),
     }
     check = "\n".join(f"{key}={fields[key]}" for key in sorted(fields))
-    secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
     return urlencode(fields)
 
@@ -221,12 +240,124 @@ def summarise(name: str, concurrency: int, samples: list[float]) -> dict[str, ob
     }
 
 
-async def token_for(client: httpx.AsyncClient, world: World) -> str:
+async def token_for(client: httpx.AsyncClient, world: World, bot_token: str) -> str:
     response = await client.post(
-        "/api/v1/auth/telegram", json={"init_data": init_data_for(world.telegram_user_id)}
+        "/api/v1/auth/telegram",
+        json={"init_data": init_data_for(world.telegram_user_id, bot_token)},
     )
     response.raise_for_status()
     return str(response.json()["access_token"])
+
+
+async def postgres_described(url: str) -> str:
+    """The server's version, and the two settings that most change what a
+    committed sale costs: a run with either off reads far faster than a shop
+    would see."""
+    engine = create_async_engine(url)
+    try:
+        async with engine.connect() as connection:
+            version = await connection.scalar(text("SELECT version()"))
+            fsync = await connection.scalar(text("SHOW fsync"))
+            synchronous_commit = await connection.scalar(text("SHOW synchronous_commit"))
+    finally:
+        await engine.dispose()
+    return f"{version}; fsync {fsync}, synchronous_commit {synchronous_commit}"
+
+
+async def api_environment(client: httpx.AsyncClient) -> str:
+    """The environment the API under test says it runs as, from the same
+    `/api/v1/health` CI and the runbook ask. Asked before seeding, so an API
+    that is not up stops the run before it writes anything."""
+    response = await client.get("/api/v1/health")
+    response.raise_for_status()
+    return str(response.json()["environment"])
+
+
+def customer(number: int) -> dict[str, str]:
+    """The `number`th customer of a run who pays in parts.
+
+    Each such sale is a new customer, with a phone of their own. One phone is
+    one customer, and one customer may owe on several sales (owner decisions,
+    2026-10-01), so one phone for every sale would be accepted. But hundreds of
+    debts on one person in an hour is no shop's day. The phone is written the
+    way a seller types it, and the server compares its digits."""
+    digits = f"{number:07d}"
+    return {
+        "customer_name": f"Покупниця {number}",
+        "customer_phone": f"+38 (067) {digits[:3]}-{digits[3:5]}-{digits[5:]}",
+        "paid_now": PAID_NOW,
+    }
+
+
+def cases(world: World, headers: dict[str, str]) -> list[Case]:
+    """Every case, in the order it runs.
+
+    The first six are the ones every earlier reading measured, unchanged, so
+    their figures still compare with the evidence of 2026-09-29 and
+    2026-10-01. The sales paid in parts come after them."""
+    # One count across both cases paid in parts, warm-ups included: no
+    # customer of a run comes back.
+    customers = itertools.count(1)
+
+    def sale(lines: int, *, contended: bool, in_parts: bool = False) -> RequestBuilder:
+        def build(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
+            chosen = [
+                world.keys[0 if contended else (index * lines + offset) % len(world.keys)]
+                for offset in range(lines)
+            ]
+            body: dict[str, object] = {
+                "store_id": str(world.store_id),
+                "command_id": str(uuid.uuid4()),
+                "lines": [
+                    {
+                        "product_variant_id": str(variant_id),
+                        "size_id": str(size_id),
+                        "source_location_id": str(world.location_id),
+                        "quantity": 1,
+                        "unit_price": UNIT_PRICE,
+                    }
+                    # One line per distinct key: a basket may not name the
+                    # same key twice.
+                    for variant_id, size_id in dict.fromkeys(chosen)
+                ],
+            }
+            if in_parts:
+                body["credit"] = customer(next(customers))
+            return client.post(
+                "/api/v1/sales",
+                headers={**headers, "Idempotency-Key": str(uuid.uuid4())},
+                json=body,
+            )
+
+        return build
+
+    def options(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
+        return client.get(
+            "/api/v1/catalog/stock-options",
+            headers=headers,
+            params={
+                "store_id": str(world.store_id),
+                "location_id": str(world.location_id),
+                "limit": 100,
+                "offset": (index % 20) * 100,
+            },
+        )
+
+    return [
+        ("GET /catalog/stock-options", options, 200, 1),
+        ("GET /catalog/stock-options (6 sellers)", options, 300, 6),
+        ("POST /sales · 1 line", sale(1, contended=False), 200, 1),
+        ("POST /sales · 1 line (6 sellers)", sale(1, contended=False), 300, 6),
+        ("POST /sales · 4 lines (6 sellers)", sale(4, contended=False), 200, 6),
+        ("POST /sales · same coat, 6 sellers", sale(1, contended=True), 120, 6),
+        ("POST /sales · paid in parts", sale(1, contended=False, in_parts=True), 200, 1),
+        (
+            "POST /sales · paid in parts (6 sellers)",
+            sale(1, contended=False, in_parts=True),
+            300,
+            6,
+        ),
+    ]
 
 
 async def drive(
@@ -260,69 +391,27 @@ async def drive(
 async def main() -> None:
     url = os.environ["BIRKA_PERF_DATABASE_URL"]
     api = os.environ.get("BIRKA_PERF_API_URL", "http://127.0.0.1:58043")
+    # The same token the API under test is configured with; there is no
+    # default, because signing with the wrong one fails as an opaque 401. Read
+    # here, before anything is seeded, so the module imports without it.
+    bot_token = os.environ["BIRKA_TELEGRAM_BOT_TOKEN"]
     if GATE not in GATES:
         raise SystemExit(f"BIRKA_PERF_GATE must be one of {', '.join(GATES)}, not {GATE!r}")
     # The figures mean little without the machine that made them.
     print(f"gate: {GATE}; {os.cpu_count()} CPUs; harness, API and database on one machine")
+    print(f"python: {platform.python_version()} ({platform.python_implementation()})")
+    print(f"postgresql: {await postgres_described(url)}")
+    async with httpx.AsyncClient(base_url=api, timeout=10.0) as probe:
+        print(f"api: {api}, environment {await api_environment(probe)}", flush=True)
     print(f"seeding {VARIANTS} variants × {len(SIZES)} sizes …", flush=True)
     world = await seed(url)
     print(f"seeded {len(world.keys)} stock keys", flush=True)
 
     rows: list[dict[str, object]] = []
     async with httpx.AsyncClient(base_url=api, timeout=60.0) as client:
-        token = await token_for(client, world)
+        token = await token_for(client, world, bot_token)
         headers = {"Authorization": f"Bearer {token}"}
-
-        def sale(lines: int, *, contended: bool) -> RequestBuilder:
-            def build(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
-                chosen = [
-                    world.keys[0 if contended else (index * lines + offset) % len(world.keys)]
-                    for offset in range(lines)
-                ]
-                return client.post(
-                    "/api/v1/sales",
-                    headers={**headers, "Idempotency-Key": str(uuid.uuid4())},
-                    json={
-                        "store_id": str(world.store_id),
-                        "command_id": str(uuid.uuid4()),
-                        "lines": [
-                            {
-                                "product_variant_id": str(variant_id),
-                                "size_id": str(size_id),
-                                "source_location_id": str(world.location_id),
-                                "quantity": 1,
-                                "unit_price": "1200.00",
-                            }
-                            # One line per distinct key: a basket may not name
-                            # the same key twice.
-                            for variant_id, size_id in dict.fromkeys(chosen)
-                        ],
-                    },
-                )
-
-            return build
-
-        def options(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
-            return client.get(
-                "/api/v1/catalog/stock-options",
-                headers=headers,
-                params={
-                    "store_id": str(world.store_id),
-                    "location_id": str(world.location_id),
-                    "limit": 100,
-                    "offset": (index % 20) * 100,
-                },
-            )
-
-        cases: list[tuple[str, RequestBuilder, int, int]] = [
-            ("GET /catalog/stock-options", options, 200, 1),
-            ("GET /catalog/stock-options (6 sellers)", options, 300, 6),
-            ("POST /sales · 1 line", sale(1, contended=False), 200, 1),
-            ("POST /sales · 1 line (6 sellers)", sale(1, contended=False), 300, 6),
-            ("POST /sales · 4 lines (6 sellers)", sale(4, contended=False), 200, 6),
-            ("POST /sales · same coat, 6 sellers", sale(1, contended=True), 120, 6),
-        ]
-        for name, builder, count, concurrency in cases:
+        for name, builder, count, concurrency in cases(world, headers):
             await drive(client, builder, count=20, concurrency=concurrency)  # warm up
             samples = await drive(client, builder, count=count, concurrency=concurrency)
             row = summarise(name, concurrency, samples)

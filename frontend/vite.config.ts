@@ -4,6 +4,11 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
+  // The build's version, passed to the image build as `BIRKA_RELEASE` (the
+  // git commit). Declared in src/release.d.ts.
+  define: {
+    __BIRKA_RELEASE__: JSON.stringify(process.env.BIRKA_RELEASE ?? "dev"),
+  },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

@@ -2,7 +2,15 @@ import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
-import type { Backups as State, Message, Night } from "./types";
+import type {
+  Backups as State,
+  Message,
+  Night,
+  PastTrouble,
+  Server as ServerState,
+  Trouble,
+  TroubleKind,
+} from "./types";
 
 /**
  * The server's backups, read for whoever holds `backup:view`
@@ -28,6 +36,30 @@ function when(iso: string): string {
     dateStyle: "short",
     timeStyle: "short",
   });
+}
+
+const minute = 60_000;
+
+/** How long from one moment to another, in the largest unit that fits. */
+function span(from: string, to: string): string {
+  const minutes = Math.max(
+    0,
+    Math.floor((Date.parse(to) - Date.parse(from)) / minute),
+  );
+  if (minutes < 60) return `${String(Math.max(minutes, 1))} хв`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${String(hours)} год`;
+  return `${String(Math.floor(hours / 24))} дн.`;
+}
+
+/**
+ * How long ago, by the server's clock (`checked_at`), never the phone's: a
+ * phone whose clock is off would otherwise make a live watcher look silent.
+ */
+function ago(iso: string, now: string): string {
+  return Date.parse(now) - Date.parse(iso) < minute
+    ? "щойно"
+    : `${span(iso, now)} тому`;
 }
 
 function size(bytes: number | null): string {
@@ -70,6 +102,12 @@ export function Backups({
       ) : (
         <>
           <Verdict backups={backups.data} />
+          {backups.data.server && (
+            <Server
+              server={backups.data.server}
+              now={backups.data.checked_at}
+            />
+          )}
           <Telegram message={backups.data.your_last_message} />
           <Nights nights={backups.data.nights} />
         </>
@@ -144,6 +182,101 @@ function Verdict({ backups }: { backups: State }): JSX.Element {
           ? ""
           : ` Розмір: ${size(latest.archive_bytes)}.`}
       </p>
+    </div>
+  );
+}
+
+// The watcher looks at the server every minute; a quarter of an hour without
+// a look means it has stopped, and with it every message of the bot.
+const SILENT_AFTER = 15 * minute;
+
+const troubleNow: Record<TroubleKind, string> = {
+  NOT_ANSWERING: "Сервер не відповідає",
+  DISK_LOW: "Закінчується місце на диску",
+  SIGN_IN_FAILING: "Ніхто не може увійти",
+};
+const troubleThen: Record<TroubleKind, string> = {
+  NOT_ANSWERING: "Сервер не відповідав",
+  DISK_LOW: "Закінчувалося місце на диску",
+  SIGN_IN_FAILING: "Ніхто не міг увійти",
+};
+
+/** A kind this app does not know yet still shows, as trouble. */
+function label(words: Record<TroubleKind, string>, kind: TroubleKind): string {
+  return (words as Partial<Record<string, string>>)[kind] ?? "Проблема";
+}
+
+/**
+ * Trouble on the server, shown here as the backups are (owner decision,
+ * 2026-10-03): what is wrong now and since when, what was wrong this week,
+ * and whether the watcher that tells the bot is still looking.
+ */
+function Server({
+  server,
+  now,
+}: {
+  server: ServerState;
+  now: string;
+}): JSX.Element {
+  const silent =
+    server.looked_at === null ||
+    Date.parse(now) - Date.parse(server.looked_at) > SILENT_AFTER;
+  const state = server.open.length > 0 ? "TROUBLE" : silent ? "SILENT" : "OK";
+  return (
+    <div
+      className={state === "OK" ? "section-block" : "section-block notice"}
+      data-server={state}
+    >
+      <h3>
+        {server.open.length === 0
+          ? "Стан сервера"
+          : server.open.length === 1
+            ? "Проблема на сервері"
+            : "Проблеми на сервері"}
+      </h3>
+      {server.open.length > 0 && (
+        <ul className="troubles" data-troubles="open">
+          {server.open.map((trouble: Trouble) => (
+            <li key={`${trouble.kind}:${trouble.started_at}`}>
+              <strong>{label(troubleNow, trouble.kind)}</strong>{" "}
+              <small>
+                з {when(trouble.started_at)}, уже{" "}
+                {span(trouble.started_at, now)}
+              </small>
+              <br />
+              {trouble.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p data-watcher="">
+        {server.looked_at === null
+          ? "Сторож ще не перевіряв сервер."
+          : `Сторож перевіряв ${ago(server.looked_at, now)}.`}
+        {silent
+          ? " Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера."
+          : server.open.length === 0
+            ? " Проблем не помічено."
+            : ""}
+      </p>
+      {server.recent.length > 0 && (
+        <>
+          <p>Минулі проблеми за 7 днів:</p>
+          <ul className="troubles" data-troubles="recent">
+            {server.recent.map((trouble: PastTrouble) => (
+              <li key={`${trouble.kind}:${trouble.started_at}`}>
+                <span>{label(troubleThen, trouble.kind)}</span>{" "}
+                <small>
+                  {when(trouble.started_at)}, тривало{" "}
+                  {span(trouble.started_at, trouble.ended_at)}
+                </small>
+                <br />
+                <small>{trouble.reason}</small>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import AuthenticationFailedError
+from app.core.errors import AuthenticationFailedError, InvalidInitDataError
 from app.core.logging import get_logger
 from app.modules.authz.scope import RequestScope
 from app.modules.authz.service import resolve_scope
 from app.modules.identity.models import AppUser
 from app.modules.identity.session import issue_session_token
+from app.modules.identity.sign_ins import SignInOutcomes
 from app.modules.identity.telegram_init_data import TelegramUser, verify_init_data
 
 logger = get_logger(__name__)
@@ -104,24 +105,80 @@ async def display_names(
     return {row.id: row.display_name for row in rows}
 
 
+async def _is_active_person(session: AsyncSession, telegram_user_id: int) -> bool:
+    """Whether `telegram_user_id` is an active person of the shop.
+
+    Asked of a refusal's merely claimed sender (`sign_ins.py`). A database
+    that does not answer answers no: the sign-in is refused either way, and
+    its refusal must not turn into a 500.
+    """
+    try:
+        found = await session.scalar(
+            select(AppUser.id).where(
+                AppUser.telegram_user_id == telegram_user_id, AppUser.is_active.is_(True)
+            )
+        )
+    except Exception as error:
+        logger.warning("identity.sign_in_sender_unchecked", error=type(error).__name__)
+        return False
+    return found is not None
+
+
+async def _refusal_sender(session: AsyncSession, refused: InvalidInitDataError) -> int | None:
+    """Who a refusal counts against, or None when it does not count
+    (`sign_ins.py`): the signed sender of an expired or future launch; the
+    claimed sender of a bad signature when that is one of the shop's people;
+    nobody for malformed launch data."""
+    if refused.reason in ("expired", "future"):
+        return refused.sender
+    if (
+        refused.reason == "signature"
+        and refused.claimed_sender is not None
+        and await _is_active_person(session, refused.claimed_sender)
+    ):
+        return refused.claimed_sender
+    return None
+
+
 async def authenticate_with_init_data(
     session: AsyncSession,
     *,
     init_data: str,
     settings: Settings,
     now: datetime | None = None,
+    outcomes: SignInOutcomes | None = None,
 ) -> tuple[str, AppUser, RequestScope]:
     """Verify Telegram init data and issue a session token.
 
     Owns its transaction: it commits, or the request fails and nothing is
     written.
+
+    A refusal of the launch data is logged by its reason and whether it
+    counted (`identity.sign_in_refused`), never with the payload or who sent
+    it, and counted in `outcomes` when it has a sender, as a success is
+    counted (`sign_ins.py`): that is how the server can tell a wrong clock
+    from a wrong bot token when nobody can sign in, and a stranger's junk
+    from either.
     """
-    verified = verify_init_data(
-        init_data,
-        settings.telegram_bot_token.get_secret_value(),
-        max_age_seconds=settings.telegram_init_data_max_age_seconds,
-        now=now,
-    )
+    try:
+        verified = verify_init_data(
+            init_data,
+            settings.telegram_bot_token.get_secret_value(),
+            max_age_seconds=settings.telegram_init_data_max_age_seconds,
+            now=now,
+        )
+    except InvalidInitDataError as refused:
+        counted = False
+        if outcomes is not None:
+            counted = outcomes.refused(
+                refused.reason,
+                at=now or datetime.now(tz=UTC),
+                sender=await _refusal_sender(session, refused),
+            )
+        logger.warning("identity.sign_in_refused", reason=refused.reason, counted=counted)
+        raise
+    if outcomes is not None:
+        outcomes.succeeded(at=now or datetime.now(tz=UTC))
 
     user = await _upsert_user(session, verified.user)
     if not user.is_active:

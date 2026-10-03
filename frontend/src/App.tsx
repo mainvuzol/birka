@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
+import { setScreen } from "@/shared/report";
 import {
   connectTelegram,
   telegramInitData,
@@ -138,6 +139,9 @@ export function App(): JSX.Element {
     void (token === undefined ? session.refetch() : me.refetch());
   }
   const failure = session.error ?? me.error;
+  // Named while drawn, before anything below can throw: a note of a broken
+  // screen says which. A store's own screens name themselves.
+  setScreen(me.data === undefined ? "sign-in" : "store-choice");
   if (failure instanceof ApiError && failure.code === "NO_ACCESS")
     return (
       <main>
@@ -360,8 +364,12 @@ function Workspace({
     store.permissions.includes("snapshot:approve");
   const backupsKey = `${me.organization_id}:${me.user_id}`;
   const backups = useBackups(token, backupsKey, canSeeBackups);
+  // Trouble on the server is shown here as the backups are (owner decision,
+  // 2026-10-03).
   const backupsNeedYou =
-    backups.data !== undefined && backups.data.state !== "OK";
+    backups.data !== undefined &&
+    (backups.data.state !== "OK" ||
+      (backups.data.server?.open.length ?? 0) > 0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   // Orders found by their waybill (owner decision, 2026-10-01).
@@ -566,6 +574,7 @@ function Workspace({
     supplierUnsettled ||
     invoiceUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
+  setScreen(tab);
   return (
     <>
       <div className="toolbar">

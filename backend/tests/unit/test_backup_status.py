@@ -67,6 +67,16 @@ def test_every_step_is_worded_for_the_owner():
     ]
 
 
+def test_a_night_that_found_the_previous_one_still_running_says_so():
+    """The nightly job does not start beside a night that still holds its
+    lock; that night is a failed one, and the owner hears why."""
+    still = {"step": "still_running", "detail": "the previous night holds the lock"}
+    assert reasons([still]) == ["Попередня нічна копія ще не завершилась: нову не почато."]
+    alert = alert_for(night(problems=[still]), NOW, None)
+    assert alert is not None
+    assert "Попередня нічна копія ще не завершилась: нову не почато." in alert.text
+
+
 def test_an_unknown_check_is_named_rather_than_dropped():
     assert reasons([{"step": "drill", "checks": ["rows", "newcheck"]}]) == [
         "Копію зроблено, але перевірка відновленням не пройшла: "

@@ -324,6 +324,60 @@ jobs:
           set -o pipefail
           python -m scripts.measure_hot_path 2>&1 | tee /tmp/hot-path.txt
 
+      - name: Breaches that do not fail the run, where they are seen
+        # A case over its budget that this run does not gate (six sellers at
+        # once, on a shared two-CPU runner) is printed "(not gated)" above,
+        # and was seen only by whoever opened the artifact. It becomes a
+        # warning on the run and a line in its summary. What fails is
+        # unchanged: this step reads the harness's JSON and never fails.
+        if: always()
+        continue-on-error: true
+        shell: python
+        env:
+          HOT_PATH_OUTPUT: /tmp/hot-path.txt
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["HOT_PATH_OUTPUT"])
+          text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+          # The harness ends with its rows, one JSON list.
+          rows = []
+          decoder = json.JSONDecoder()
+          at = len(text)
+          while not rows and at > 0:
+              at = text.rfind("\n[", 0, at)
+              if at < 0:
+                  break
+              try:
+                  found, _ = decoder.raw_decode(text, at + 1)
+              except ValueError:
+                  continue
+              if isinstance(found, list) and all(isinstance(row, dict) for row in found):
+                  rows = found
+          if not rows:
+              print("no figures to read")
+
+          def ms(value):
+              return f"{value:.1f}" if isinstance(value, (int, float)) else str(value)
+
+          breached = [row for row in rows if row.get("verdict") == "FAIL" and not row.get("gated")]
+          said = []
+          for row in breached:
+              line = (
+                  f"{row.get('case')}: p95 {ms(row.get('p95'))} ms, "
+                  f"over its {ms(row.get('budget'))} ms budget (not gated)"
+              )
+              escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::warning title=Hot path over budget (not gated)::{escaped}")
+              said.append(f"- {line}")
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary and said:
+              with open(summary, "a", encoding="utf-8") as out:
+                  out.write("### Hot path: over budget, not gated\n\n" + "\n".join(said) + "\n")
+          print(f"{len(breached)} case(s) over budget and not gated")
+
       - name: Preserve the figures
         if: always()
         uses: actions/upload-artifact@v4
@@ -494,6 +548,9 @@ jobs:
       # 32 bytes or more, or the API refuses to start as `production`.
       BIRKA_SESSION_SECRET: ci-edge-session-secret-that-is-long-enough-32
       BIRKA_DOMAIN: http://localhost
+      # The build's version, as the server's runbook gives it (compose passes
+      # it to every image it builds).
+      BIRKA_RELEASE: ${{ github.sha }}
     defaults:
       run:
         working-directory: infra
@@ -526,6 +583,50 @@ jobs:
           docker compose ps -a
           docker compose logs --no-color
           exit 1
+
+      - name: The API is ready behind the edge, healthy to Docker, and keeps its internals in
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          status_of() { curl -s -o /dev/null -w '%{http_code}' "$@" || true; }
+          base=http://localhost
+
+          # Ready means migrated too, so the schema first, as the runbook does.
+          docker compose run --rm --no-deps api alembic upgrade head
+          for attempt in $(seq 15); do
+            code=$(status_of "$base/api/v1/ready")
+            if [ "$code" = 200 ]; then break; fi
+            sleep 2
+          done
+          test "$code" = 200 || fail "/api/v1/ready answered $code through Caddy, not 200"
+
+          # The API's own status is for backup-watch on the compose network:
+          # it answers there, and never through Caddy.
+          code=$(status_of "$base/internal/status")
+          test "$code" = 404 || fail "/internal/status answered $code through Caddy, not 404"
+          inside=$(docker compose exec -T api python -c \
+            "import urllib.request; print(urllib.request.urlopen('http://api:8000/internal/status', timeout=5).read().decode())") \
+            || fail "/internal/status does not answer on the compose network"
+          echo "$inside"
+          grep -q "\"release\": *\"$BIRKA_RELEASE\"" <<<"$inside" || fail "/internal/status does not name this build"
+
+          # A broken screen's note: no session needed, nothing in return.
+          code=$(status_of -H 'Content-Type: application/json' \
+            --data '{"kind": "render", "screen": "sale", "name": "TypeError", "message": "ci probe", "release": "ci", "request_id": null}' \
+            "$base/api/v1/client-errors")
+          test "$code" = 204 || fail "POST /api/v1/client-errors answered $code, not 204"
+
+          # The image knows its build.
+          release=$(docker compose exec -T api printenv BIRKA_RELEASE || true)
+          test "$release" = "$BIRKA_RELEASE" || fail "the API says it is build '$release', not $BIRKA_RELEASE"
+
+          # Docker's own view, from the healthcheck in the compose file.
+          for attempt in $(seq 60); do
+            health=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q api)")
+            if [ "$health" = healthy ]; then docker compose ps; exit 0; fi
+            sleep 3
+          done
+          docker compose ps -a
+          fail "the API is not healthy to Docker after 3 minutes (last: $health)"
 
       - name: What the edge sends
         run: |
