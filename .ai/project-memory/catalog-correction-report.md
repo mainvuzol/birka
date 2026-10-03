@@ -135,7 +135,7 @@ correction is recorded. The `0030` digest is frozen.
 
 ## Evidence
 
-**Backend: 1364 passed, 1 skipped** (the `age` test, which CI runs); 1230
+**Backend: 1368 passed, 1 skipped** (the `age` test, which CI runs); 1230
 before.
 - **New test files (4).** The catalogue tests were written by four agents in
   parallel, each against the owner's rules and ADR-0008, then reviewed:
@@ -161,25 +161,55 @@ before.
 - an exact merged name in a merged family was created again;
 - the catalogue's journal refused to keep `similar_confirmed`.
 
+**An adversarial review of the code** (three lenses, each finding checked by
+a skeptic) confirmed 12 more; all but one are fixed, each with a test:
+- **a creation of a duplicate's exact name** that waited on its merge made
+  the typo again (the merged row leaves the key); it now looks again once
+  it lands;
+- **a correction's own refusals** (`CATALOG_SIMILAR`, `SAME_AS`,
+  `MERGE_BLOCKED`, …) did not say they proved nothing was recorded, so a
+  lost answer would have blocked the phone for good; they do now, and so
+  does creating from a decision, whose journal settles them too;
+- **a merge reached a warehouse** the acting store only sells from; it now
+  needs the right to take goods in there, as a stock correction does;
+- **«Позичене» sent a reopened lot back** as the merged model and was
+  refused; the list now says which model a lot goes back as;
+- **the merge was offered** to a manager of one store; the model's card
+  now says whether this person may merge;
+- **smaller ones:**
+  - a retirement refused for a waiting list now says so;
+  - a word a merge left offers the spelling in use;
+  - the acute accent is folded before NFKC splits it;
+  - a refusal after the preview shows the preview afresh;
+  - the preview shows the model that stays's stock too.
+
+Not fixed: **while a store is blocked or archived, a manager holding the
+right store by store cannot merge** (only the owner, organization-wide,
+can). The shared price works the same way; the risk register says so.
+
 **Gates:**
 - ruff, format and mypy are clean;
 - 29 import contracts are kept;
 - `alembic check` is clean;
 - migrations round-trip on an empty database.
 
-**E2E: 134 → 145, all passing on a fresh database.** `e2e/models.spec.ts`
-(11 journeys) covers:
-- a merge after a preview, with a lost answer resolved once;
+**E2E: 134 → 149, all passing on a fresh database.** `e2e/models.spec.ts`
+(15 journeys) covers:
+- a merge after a preview of both models' stock, with a lost answer
+  resolved once;
+- something opening after the preview, shown afresh;
 - no merge into a retired model;
 - the rename warning, taken and kept;
 - retire and restore;
 - the till and «Приймання» clearing a lost attempt whose model was merged or
-  retired meanwhile;
+  retired meanwhile, and a lost rename or creation refused as a similar
+  name;
+- a retirement an opening list stops;
 - the creation warning, taken and kept;
 - who sees the tab and the merge.
 
-**Mutation testing: 61 mutants, all caught (backend 44, frontend 17).** Six
-backend mutants survived the first run. Each one showed a gap, and each gap
+**Mutation testing: 74 mutants, all caught (backend 52, frontend 22),** run
+again in full on the final code. Six backend mutants survived the first run. Each one showed a gap, and each gap
 now has a test:
 - a mutant whose text no longer matched;
 - the exact merged name in a merged family;
@@ -222,7 +252,10 @@ What the mutants cover:
   - retired models marked;
   - the preview's quantities.
 
-Each frontend mutant ran on a freshly seeded database.
+Each frontend mutant ran on a freshly seeded database. One backend mutant was
+equivalent once the review's fix landed (a creation looks for a merged
+namesake after its insert, which covers the check before it), so that check
+was removed rather than kept untestable.
 
 ## Not covered here
 

@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import NotFoundError, ValidationFailedError
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.catalog.read import current_variants as catalog_current_variants
 from app.modules.catalog.read import describe_variants, size_labels
 from app.modules.inventory.models import (
     AcquisitionType,
@@ -73,6 +74,9 @@ class BorrowedView:
     location_id: uuid.UUID
     location_name: str
     product_variant_id: uuid.UUID
+    # The model its goods are held under now: its own, or the model that
+    # stays if it was merged since. They go back to the supplier as it.
+    held_as_variant_id: uuid.UUID
     size_id: uuid.UUID
     display_name: str
     size_label: str | None
@@ -323,6 +327,11 @@ async def list_borrowed(
     page = rows[:limit]
     lots = [row[0] for row in page]
     names = await describe_variants(session, list({lot.product_variant_id for lot in lots}))
+    held_as = await catalog_current_variants(
+        session,
+        organization_id=scope.organization_id,
+        variant_ids=list({lot.product_variant_id for lot in lots}),
+    )
     sizes = await size_labels(session, list({lot.size_id for lot in lots}))
     places = await location_names(
         session,
@@ -350,6 +359,7 @@ async def list_borrowed(
                 location_id=lot.location_id,
                 location_name=places.get(lot.location_id, ""),
                 product_variant_id=lot.product_variant_id,
+                held_as_variant_id=held_as.get(lot.product_variant_id, lot.product_variant_id),
                 size_id=lot.size_id,
                 display_name=names[lot.product_variant_id].display_name,
                 size_label=sizes.get(lot.size_id),

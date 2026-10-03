@@ -300,14 +300,10 @@ function Workspace({
   // 2026-10-02). It reads every store they hold it in, whichever is open.
   const canSeeReport = store.permissions.includes("report:view_financial");
   const reportKey = `${me.organization_id}:${me.user_id}`;
-  // What the store owes its suppliers: the owner's and managers' (owner
-  // decision, 2026-10-01); a seller never sees it.
   // Correcting the catalogue: the owner's and managers' (owner decision,
-  // 2026-10-03). A merge needs the right in every store, as the shared price.
+  // 2026-10-03). Whether this person may merge, which needs the right in
+  // every store, the server says on each model's card.
   const canCorrect = store.permissions.includes("catalog:merge");
-  const canMerge =
-    me.organization_permissions.includes("catalog:merge") ||
-    me.stores.every((s) => s.permissions.includes("catalog:merge"));
   const correctionKey = `birka:catalog-correction-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [correctionStorageError, setCorrectionStorageError] = useState(false);
   const correctionCommand = useCorrectionCommand();
@@ -321,6 +317,8 @@ function Workspace({
       setCorrectionStorageError(true);
     }
   }, [correctionKey, canCorrect]);
+  // What the store owes its suppliers: the owner's and managers' (owner
+  // decision, 2026-10-01); a seller never sees it.
   const canSeeInvoices = store.permissions.includes("supplier:debt");
   const invoiceKey = `birka:supplier-invoice-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [invoiceStorageError, setInvoiceStorageError] = useState(false);
@@ -1294,7 +1292,6 @@ function Workspace({
             token={token}
             journalKey={correctionKey}
             blocked={otherThanCorrections}
-            canMerge={canMerge}
           />
         ) : (
           <p role="alert">Каталог виправляють власник і менеджери.</p>

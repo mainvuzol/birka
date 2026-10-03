@@ -134,6 +134,9 @@ class BorrowedResponse(BaseModel):
     location_id: uuid.UUID
     location_name: str
     product_variant_id: uuid.UUID
+    # The model its goods are held under now, which they go back as: the
+    # lot's own, or the model that stays if it was merged (ADR-0008 §5).
+    held_as_variant_id: uuid.UUID
     size_id: uuid.UUID
     display_name: str
     size: str | None
@@ -325,6 +328,7 @@ async def list_borrowed(
                 location_id=view.location_id,
                 location_name=view.location_name,
                 product_variant_id=view.product_variant_id,
+                held_as_variant_id=view.held_as_variant_id,
                 size_id=view.size_id,
                 display_name=view.display_name,
                 size=view.size_label,

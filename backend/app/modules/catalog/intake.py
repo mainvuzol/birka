@@ -18,6 +18,7 @@ from app.core.errors import CatalogAmbiguousError, IdempotencyConflictError
 from app.modules.audit import service as audit
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.catalog.corrections import nothing_recorded
 from app.modules.catalog.decisions import _load, _lock_variant_key, _response, _validate_variant
 from app.modules.catalog.evidence import (
     MatchDecisionStatus,
@@ -79,13 +80,16 @@ async def create_product_from_decision(
 
     # Do not take a SHARE knowledge lock: catalog writes increment the revision
     # themselves. This is a manual draft, not acceptance of the stale preview.
-    result = await create_product(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        draft=draft,
-        similar_confirmed=similar_confirmed,
-    )
+    # Under the decision's lock, and it is not applied: a refusal now proves
+    # nothing was recorded, so a lost answer can be settled (ADR-0008 §9).
+    with nothing_recorded():
+        result = await create_product(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            draft=draft,
+            similar_confirmed=similar_confirmed,
+        )
     # All catalog writes have finished. Protect the final FK, then freeze the
     # revision while validating: a fully reused variant may have made no writes
     # and therefore acquired no revision lock of its own.

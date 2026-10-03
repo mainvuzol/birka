@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -29,6 +31,7 @@ from sqlalchemy.orm import aliased
 
 from app.core.errors import (
     CatalogAmbiguousError,
+    DomainError,
     IdempotencyConflictError,
     ModelMergedError,
     NotFoundError,
@@ -187,6 +190,19 @@ def refuse_merged(model: HeldModel) -> None:
         raise ModelMergedError(
             product_variant_id=str(model.id), merged_into=str(model.merged_into_id)
         )
+
+
+@contextmanager
+def nothing_recorded() -> Iterator[None]:
+    """Every refusal raised after a correction's `command_id` was looked up,
+    under its lock, proves the command recorded nothing (ADR-0008 §9): it
+    says so (`details.recorded = false`), so a phone whose answer was lost
+    can settle the attempt instead of being left blocked by it."""
+    try:
+        yield
+    except DomainError as refusal:
+        refusal.details.setdefault("recorded", False)
+        raise
 
 
 def _command_lock_key(organization_id: uuid.UUID, command_id: uuid.UUID) -> int:
@@ -496,142 +512,146 @@ async def rename_model(
     if replay is not None:
         return result_from_snapshot(replay)
 
-    model = (
-        await hold_models(
-            session, organization_id=scope.organization_id, variant_ids={product_variant_id}
-        )
-    )[product_variant_id]
-    refuse_merged(model)
-    before = (await describe_variants(session, [model.id]))[model.id]
-
-    if not draft.similar_confirmed:
-        # Only the words this rename changes: a word the model already carries
-        # was answered when it was typed.
-        current = {
-            "concept": before.snapshot["concept"],
-            "source": before.snapshot["source"],
-            **{name: before.snapshot["colour" if name == "color" else name] for name, _ in _TERMS},
-        }
-        changed = [
-            word
-            for word in typed_words(
-                concept=draft.concept, source=draft.source, variant=draft.variant
+    with nothing_recorded():
+        model = (
+            await hold_models(
+                session, organization_id=scope.organization_id, variant_ids={product_variant_id}
             )
-            if current.get(word.field) is None
-            or normalize_label(str(current[word.field]), limit=NAME_LIMIT) != word.normalized
-        ]
-        await refuse_similar(
+        )[product_variant_id]
+        refuse_merged(model)
+        before = (await describe_variants(session, [model.id]))[model.id]
+
+        if not draft.similar_confirmed:
+            # Only the words this rename changes: a word the model already carries
+            # was answered when it was typed.
+            current = {
+                "concept": before.snapshot["concept"],
+                "source": before.snapshot["source"],
+                **{
+                    name: before.snapshot["colour" if name == "color" else name]
+                    for name, _ in _TERMS
+                },
+            }
+            changed = [
+                word
+                for word in typed_words(
+                    concept=draft.concept, source=draft.source, variant=draft.variant
+                )
+                if current.get(word.field) is None
+                or normalize_label(str(current[word.field]), limit=NAME_LIMIT) != word.normalized
+            ]
+            await refuse_similar(
+                session,
+                organization_id=scope.organization_id,
+                words=changed,
+                # The typo this rename fixes is the model's own, and so is a name
+                # a duplicate merged into it left behind.
+                ignore=frozenset({model.id}),
+            )
+
+        family_id, family_created = await _family_for(
             session,
             organization_id=scope.organization_id,
-            words=changed,
-            # The typo this rename fixes is the model's own, and so is a name
-            # a duplicate merged into it left behind.
-            ignore=frozenset({model.id}),
+            model=model,
+            draft=RenameDraft(
+                concept=draft.concept,
+                source=draft.source,
+                variant=draft.variant,
+                business_category=draft.business_category,
+                garment_type=draft.garment_type,
+                product_family_id=draft.product_family_id,
+                new_model=draft.new_model,
+                distinction_note=note,
+            ),
         )
+        terms: dict[str, uuid.UUID | None] = {}
+        for name, kind in _TERMS:
+            terms[f"{name}_term_id"] = await _resolve_term(
+                session,
+                organization_id=scope.organization_id,
+                kind=kind,
+                name=getattr(draft.variant, name),
+            )
+        length_cm = draft.variant.length_cm
 
-    family_id, family_created = await _family_for(
-        session,
-        organization_id=scope.organization_id,
-        model=model,
-        draft=RenameDraft(
-            concept=draft.concept,
-            source=draft.source,
-            variant=draft.variant,
-            business_category=draft.business_category,
-            garment_type=draft.garment_type,
-            product_family_id=draft.product_family_id,
-            new_model=draft.new_model,
-            distinction_note=note,
-        ),
-    )
-    terms: dict[str, uuid.UUID | None] = {}
-    for name, kind in _TERMS:
-        terms[f"{name}_term_id"] = await _resolve_term(
+        if (
+            family_id == model.product_family_id
+            and terms == model.terms
+            and length_cm == model.length_cm
+        ):
+            # A name that changes nothing is answered as it is, and recorded nowhere.
+            return CorrectionResult(
+                correction_id=None,
+                kind=CorrectionKind.RENAME,
+                product_variant_id=model.id,
+                into_variant_id=None,
+                name_before=before.display_name,
+                name_after=before.display_name,
+                status=model.status,
+            )
+
+        await _same_as(
             session,
             organization_id=scope.organization_id,
-            kind=kind,
-            name=getattr(draft.variant, name),
+            model=model,
+            family_id=family_id,
+            terms=terms,
+            length_cm=length_cm,
         )
-    length_cm = draft.variant.length_cm
+        variant = await session.get(ProductVariant, model.id)
+        if variant is None:  # pragma: no cover - held above
+            raise NotFoundError("Unknown product variant")
+        try:
+            # A model given this name at the same moment surfaces here as the
+            # unique key's violation, and is answered as `SAME_AS` too.
+            async with session.begin_nested():
+                variant.product_family_id = family_id
+                for column, value in terms.items():
+                    setattr(variant, column, value)
+                variant.length_cm = length_cm
+                await session.flush()
+        except IntegrityError as exc:
+            if "uq_product_variant_attributes" not in str(exc.orig):
+                raise
+            holder = await session.scalar(
+                select(ProductVariant.id).where(
+                    *same_name(family_id, terms, length_cm),
+                    ProductVariant.status != EntityStatus.MERGED,
+                    ProductVariant.id != model.id,
+                )
+            )
+            raise SameAsError(same_as=str(holder) if holder else None) from exc
 
-    if (
-        family_id == model.product_family_id
-        and terms == model.terms
-        and length_cm == model.length_cm
-    ):
-        # A name that changes nothing is answered as it is, and recorded nowhere.
-        return CorrectionResult(
-            correction_id=None,
+        after = (await describe_variants(session, [model.id]))[model.id]
+        family_merged = await merge_emptied_family(
+            session, family_id=model.product_family_id, into_family_id=family_id
+        )
+        details = {
+            "before": _words(model.product_family_id, model.terms, model.length_cm),
+            "after": _words(family_id, terms, length_cm),
+            "family_created": family_created,
+            "family_merged": family_merged,
+        }
+        result = CorrectionResult(
+            correction_id=uuid.uuid4(),
             kind=CorrectionKind.RENAME,
             product_variant_id=model.id,
             into_variant_id=None,
             name_before=before.display_name,
-            name_after=before.display_name,
+            name_after=after.display_name,
             status=model.status,
+            details=details,
         )
-
-    await _same_as(
-        session,
-        organization_id=scope.organization_id,
-        model=model,
-        family_id=family_id,
-        terms=terms,
-        length_cm=length_cm,
-    )
-    variant = await session.get(ProductVariant, model.id)
-    if variant is None:  # pragma: no cover - held above
-        raise NotFoundError("Unknown product variant")
-    try:
-        # A model given this name at the same moment surfaces here as the
-        # unique key's violation, and is answered as `SAME_AS` too.
-        async with session.begin_nested():
-            variant.product_family_id = family_id
-            for column, value in terms.items():
-                setattr(variant, column, value)
-            variant.length_cm = length_cm
-            await session.flush()
-    except IntegrityError as exc:
-        if "uq_product_variant_attributes" not in str(exc.orig):
-            raise
-        holder = await session.scalar(
-            select(ProductVariant.id).where(
-                *same_name(family_id, terms, length_cm),
-                ProductVariant.status != EntityStatus.MERGED,
-                ProductVariant.id != model.id,
-            )
+        await record_correction(
+            session,
+            scope=scope,
+            store_id=store_id,
+            result=result,
+            command_id=command_id,
+            fingerprint=fingerprint,
+            correlation_id=correlation_id,
         )
-        raise SameAsError(same_as=str(holder) if holder else None) from exc
-
-    after = (await describe_variants(session, [model.id]))[model.id]
-    family_merged = await merge_emptied_family(
-        session, family_id=model.product_family_id, into_family_id=family_id
-    )
-    details = {
-        "before": _words(model.product_family_id, model.terms, model.length_cm),
-        "after": _words(family_id, terms, length_cm),
-        "family_created": family_created,
-        "family_merged": family_merged,
-    }
-    result = CorrectionResult(
-        correction_id=uuid.uuid4(),
-        kind=CorrectionKind.RENAME,
-        product_variant_id=model.id,
-        into_variant_id=None,
-        name_before=before.display_name,
-        name_after=after.display_name,
-        status=model.status,
-        details=details,
-    )
-    await record_correction(
-        session,
-        scope=scope,
-        store_id=store_id,
-        result=result,
-        command_id=command_id,
-        fingerprint=fingerprint,
-        correlation_id=correlation_id,
-    )
-    return result
+        return result
 
 
 def _words(
@@ -804,6 +824,7 @@ __all__ = [
     "hold_models",
     "merge_emptied_family",
     "model_card",
+    "nothing_recorded",
     "record_correction",
     "refuse_merged",
     "rename_model",

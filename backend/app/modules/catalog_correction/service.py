@@ -47,6 +47,7 @@ from app.modules.catalog.corrections import (
     existing_correction,
     hold_models,
     merge_emptied_family,
+    nothing_recorded,
     record_correction,
     refuse_merged,
     result_from_snapshot,
@@ -68,7 +69,11 @@ from app.modules.snapshots.models import (
 )
 from app.modules.suppliers.borrowed import lots_on_hand
 from app.modules.tenancy.models import StockLocation, Store
-from app.modules.tenancy.service import damaged_returns_locations, validate_active_stores
+from app.modules.tenancy.service import (
+    LocationCapability,
+    damaged_returns_locations,
+    validate_active_stores,
+)
 
 logger = get_logger(__name__)
 
@@ -177,15 +182,17 @@ async def _location_names(
 async def _reach(
     session: AsyncSession, *, scope: RequestScope, store_id: uuid.UUID, location_id: uuid.UUID
 ) -> bool:
-    """Whether the acting store may change stock here: it has access, and a
-    store's own warehouse only with the person's right granted there."""
+    """Whether the acting store may change stock here: it may take goods in
+    there, as a stock correction must, and a store's own warehouse only with
+    the person's right granted there. A store that only reads or sells there
+    does not change its stock."""
     try:
         await require_stock_access(
             session,
             scope=scope,
             store_id=store_id,
             location_ids={location_id},
-            capability=None,
+            capability=LocationCapability.RECEIVE,
             permission=Permission.CATALOG_MERGE,
         )
     except (PermissionDeniedError, LocationAccessDeniedError):
@@ -298,7 +305,12 @@ async def preview_merge(
         into=into,
         balances=balances,
     )
-    places = {balance.location_id for balance in balances}
+    # What the model that stays holds too: the owner asked that both models
+    # be shown with their stock before a merge.
+    staying = await variant_balances(
+        session, organization_id=scope.organization_id, product_variant_id=into_id
+    )
+    places = {balance.location_id for balance in balances + staying}
     readable = await readable_location_ids(
         session,
         organization_id=scope.organization_id,
@@ -309,7 +321,21 @@ async def preview_merge(
     names = await _location_names(
         session, organization_id=scope.organization_id, location_ids=places
     )
-    sizes = await size_labels(session, list({balance.size_id for balance in balances}))
+    sizes = await size_labels(session, list({balance.size_id for balance in balances + staying}))
+
+    def stock(held: list[VariantBalance]) -> list[dict[str, Any]]:
+        return [
+            {
+                "location_id": balance.location_id,
+                "location_name": names.get(balance.location_id, ("", False))[0],
+                "size_id": balance.size_id,
+                "size_label": sizes.get(balance.size_id),
+                "quantity": balance.quantity if balance.location_id in readable else None,
+            }
+            for balance in held
+            if balance.quantity > 0
+        ]
+
     described = await describe_variants(session, [duplicate_id, into_id])
     prices = await suggested_prices(
         session,
@@ -320,17 +346,8 @@ async def preview_merge(
     return {
         "duplicate": _model_view(duplicate, described, prices),
         "into": _model_view(into, described, prices),
-        "stock": [
-            {
-                "location_id": balance.location_id,
-                "location_name": names.get(balance.location_id, ("", False))[0],
-                "size_id": balance.size_id,
-                "size_label": sizes.get(balance.size_id),
-                "quantity": balance.quantity if balance.location_id in readable else None,
-            }
-            for balance in balances
-            if balance.quantity > 0
-        ],
+        "stock": stock(balances),
+        "stock_into": stock(staying),
         "blockers": found,
     }
 
@@ -402,101 +419,102 @@ async def merge_models(
     if replay is not None:
         return result_from_snapshot(replay)
 
-    duplicate, into = await _models(
-        session,
-        organization_id=scope.organization_id,
-        duplicate_id=duplicate_id,
-        into_id=into_id,
-        hold=True,
-    )
-    balances = await variant_balances(
-        session, organization_id=scope.organization_id, product_variant_id=duplicate_id
-    )
-    found = await blockers(
-        session,
-        scope=scope,
-        store_id=store_id,
-        duplicate_id=duplicate_id,
-        into=into,
-        balances=balances,
-    )
-    if found:
-        raise MergeBlockedError(reasons=found)
+    with nothing_recorded():
+        duplicate, into = await _models(
+            session,
+            organization_id=scope.organization_id,
+            duplicate_id=duplicate_id,
+            into_id=into_id,
+            hold=True,
+        )
+        balances = await variant_balances(
+            session, organization_id=scope.organization_id, product_variant_id=duplicate_id
+        )
+        found = await blockers(
+            session,
+            scope=scope,
+            store_id=store_id,
+            duplicate_id=duplicate_id,
+            into=into,
+            balances=balances,
+        )
+        if found:
+            raise MergeBlockedError(reasons=found)
 
-    described = await describe_variants(session, [duplicate_id, into_id])
-    correction_id = uuid.uuid4()
-    moved = await apply_catalog_merge(
-        session,
-        organization_id=scope.organization_id,
-        correction_id=correction_id,
-        duplicate_id=duplicate_id,
-        into_id=into_id,
-        acting_store_id=store_id,
-        actor_user_id=scope.user_id,
-        correlation_id=correlation_id,
-    )
-    carried = await carry_prices(
-        session,
-        organization_id=scope.organization_id,
-        from_variant_id=duplicate_id,
-        into_variant_id=into_id,
-        actor_user_id=scope.user_id,
-    )
-    await session.execute(
-        update(ProductVariant)
-        .where(ProductVariant.id == duplicate_id)
-        .values(status=EntityStatus.MERGED, merged_into_id=into_id)
-        .execution_options(synchronize_session="fetch")
-    )
-    family_merged = await merge_emptied_family(
-        session, family_id=duplicate.product_family_id, into_family_id=into.product_family_id
-    )
-    # Models merged into the duplicate before now lead to the model that
-    # stays too, so `merged_into_id` always names a model not merged.
-    await session.execute(
-        update(ProductVariant)
-        .where(ProductVariant.merged_into_id == duplicate_id)
-        .values(merged_into_id=into_id)
-        .execution_options(synchronize_session="fetch")
-    )
-    details = {
-        "moved": [
-            {
-                "location_id": str(entry.location_id),
-                "size_id": str(entry.size_id),
-                "quantity": entry.quantity,
-            }
-            for entry in moved
-        ],
-        "prices": carried,
-        "family_merged": family_merged,
-    }
-    result = CorrectionResult(
-        correction_id=correction_id,
-        kind=CorrectionKind.MERGE,
-        product_variant_id=duplicate_id,
-        into_variant_id=into_id,
-        name_before=described[duplicate_id].display_name,
-        name_after=described[into_id].display_name,
-        status=EntityStatus.MERGED,
-        details=details,
-    )
-    await record_correction(
-        session,
-        scope=scope,
-        store_id=store_id,
-        result=result,
-        command_id=command_id,
-        fingerprint=fingerprint,
-        correlation_id=correlation_id,
-    )
-    logger.info(
-        "catalog.model_merged",
-        product_variant_id=str(duplicate_id),
-        into_variant_id=str(into_id),
-        keys_moved=len(moved),
-    )
-    return result
+        described = await describe_variants(session, [duplicate_id, into_id])
+        correction_id = uuid.uuid4()
+        moved = await apply_catalog_merge(
+            session,
+            organization_id=scope.organization_id,
+            correction_id=correction_id,
+            duplicate_id=duplicate_id,
+            into_id=into_id,
+            acting_store_id=store_id,
+            actor_user_id=scope.user_id,
+            correlation_id=correlation_id,
+        )
+        carried = await carry_prices(
+            session,
+            organization_id=scope.organization_id,
+            from_variant_id=duplicate_id,
+            into_variant_id=into_id,
+            actor_user_id=scope.user_id,
+        )
+        await session.execute(
+            update(ProductVariant)
+            .where(ProductVariant.id == duplicate_id)
+            .values(status=EntityStatus.MERGED, merged_into_id=into_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        family_merged = await merge_emptied_family(
+            session, family_id=duplicate.product_family_id, into_family_id=into.product_family_id
+        )
+        # Models merged into the duplicate before now lead to the model that
+        # stays too, so `merged_into_id` always names a model not merged.
+        await session.execute(
+            update(ProductVariant)
+            .where(ProductVariant.merged_into_id == duplicate_id)
+            .values(merged_into_id=into_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        details = {
+            "moved": [
+                {
+                    "location_id": str(entry.location_id),
+                    "size_id": str(entry.size_id),
+                    "quantity": entry.quantity,
+                }
+                for entry in moved
+            ],
+            "prices": carried,
+            "family_merged": family_merged,
+        }
+        result = CorrectionResult(
+            correction_id=correction_id,
+            kind=CorrectionKind.MERGE,
+            product_variant_id=duplicate_id,
+            into_variant_id=into_id,
+            name_before=described[duplicate_id].display_name,
+            name_after=described[into_id].display_name,
+            status=EntityStatus.MERGED,
+            details=details,
+        )
+        await record_correction(
+            session,
+            scope=scope,
+            store_id=store_id,
+            result=result,
+            command_id=command_id,
+            fingerprint=fingerprint,
+            correlation_id=correlation_id,
+        )
+        logger.info(
+            "catalog.model_merged",
+            product_variant_id=str(duplicate_id),
+            into_variant_id=str(into_id),
+            keys_moved=len(moved),
+        )
+        return result
 
 
 async def _set_status(
@@ -522,65 +540,67 @@ async def _set_status(
     )
     if replay is not None:
         return result_from_snapshot(replay)
-    model = (
-        await hold_models(
-            session, organization_id=scope.organization_id, variant_ids={product_variant_id}
+
+    with nothing_recorded():
+        model = (
+            await hold_models(
+                session, organization_id=scope.organization_id, variant_ids={product_variant_id}
+            )
+        )[product_variant_id]
+        refuse_merged(model)
+        name = (await describe_variants(session, [model.id]))[model.id].display_name
+        retiring = kind is CorrectionKind.RETIRE
+        target = EntityStatus.RETIRED if retiring else EntityStatus.ACTIVE
+        if (model.status is EntityStatus.RETIRED) == retiring:
+            # Already so: answered as it is, recorded nowhere.
+            return CorrectionResult(
+                correction_id=None,
+                kind=kind,
+                product_variant_id=model.id,
+                into_variant_id=None,
+                name_before=name,
+                name_after=name,
+                status=model.status,
+            )
+        if retiring:
+            lists = await waiting_lists(
+                session, organization_id=scope.organization_id, product_variant_id=model.id
+            )
+            if lists:
+                # The list could never be approved with a retired model in it,
+                # and its warehouse would stay waiting.
+                raise ValidationFailedError(
+                    "An opening list that waits names this model; approve or reject it first",
+                    reason="OPENING_LIST_WAITING",
+                    snapshot_ids=[str(snapshot) for snapshot in lists],
+                )
+        await session.execute(
+            update(ProductVariant)
+            .where(ProductVariant.id == model.id)
+            .values(status=target)
+            .execution_options(synchronize_session="fetch")
         )
-    )[product_variant_id]
-    refuse_merged(model)
-    name = (await describe_variants(session, [model.id]))[model.id].display_name
-    retiring = kind is CorrectionKind.RETIRE
-    target = EntityStatus.RETIRED if retiring else EntityStatus.ACTIVE
-    if (model.status is EntityStatus.RETIRED) == retiring:
-        # Already so: answered as it is, recorded nowhere.
-        return CorrectionResult(
-            correction_id=None,
+        details = {"status_before": model.status.value, "status_after": target.value}
+        result = CorrectionResult(
+            correction_id=uuid.uuid4(),
             kind=kind,
             product_variant_id=model.id,
             into_variant_id=None,
             name_before=name,
             name_after=name,
-            status=model.status,
+            status=target,
+            details=details,
         )
-    if retiring:
-        lists = await waiting_lists(
-            session, organization_id=scope.organization_id, product_variant_id=model.id
+        await record_correction(
+            session,
+            scope=scope,
+            store_id=store_id,
+            result=result,
+            command_id=command_id,
+            fingerprint=fingerprint,
+            correlation_id=correlation_id,
         )
-        if lists:
-            # The list could never be approved with a retired model in it,
-            # and its warehouse would stay waiting.
-            raise ValidationFailedError(
-                "An opening list that waits names this model; approve or reject it first",
-                reason="OPENING_LIST_WAITING",
-                snapshot_ids=[str(snapshot) for snapshot in lists],
-            )
-    await session.execute(
-        update(ProductVariant)
-        .where(ProductVariant.id == model.id)
-        .values(status=target)
-        .execution_options(synchronize_session="fetch")
-    )
-    details = {"status_before": model.status.value, "status_after": target.value}
-    result = CorrectionResult(
-        correction_id=uuid.uuid4(),
-        kind=kind,
-        product_variant_id=model.id,
-        into_variant_id=None,
-        name_before=name,
-        name_after=name,
-        status=target,
-        details=details,
-    )
-    await record_correction(
-        session,
-        scope=scope,
-        store_id=store_id,
-        result=result,
-        command_id=command_id,
-        fingerprint=fingerprint,
-        correlation_id=correlation_id,
-    )
-    return result
+        return result
 
 
 async def retire_model(

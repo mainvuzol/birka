@@ -40,6 +40,7 @@ from app.modules.catalog.corrections import (
 )
 from app.modules.catalog.service import VariantDraft
 from app.modules.catalog_correction.service import (
+    may_merge,
     merge_models,
     preview_merge,
     require_merge_right,
@@ -94,6 +95,9 @@ class ModelCardResponse(BaseModel):
     business_category: str | None
     garment_type: str | None
     distinction_note: str | None
+    # Whether this person may merge: the right in every store (owner
+    # decision, 2026-10-03). The app offers a merge only then.
+    may_merge: bool
 
 
 class CorrectionResponse(BaseModel):
@@ -160,7 +164,10 @@ class MergeStockLine(BaseModel):
 class MergePreviewResponse(BaseModel):
     duplicate: MergeModelView
     into: MergeModelView
+    # What would move from the duplicate.
     stock: list[MergeStockLine]
+    # What the model that stays holds already.
+    stock_into: list[MergeStockLine]
     blockers: list[dict[str, Any]]
 
 
@@ -244,9 +251,10 @@ async def find_models(
 async def get_model(
     product_variant_id: uuid.UUID, store_id: uuid.UUID, scope: ScopeDep, session: SessionDep
 ) -> dict[str, Any]:
-    return await model_card(
+    card = await model_card(
         session, scope=scope, store_id=store_id, product_variant_id=product_variant_id
     )
+    return card | {"may_merge": await may_merge(session, scope=scope)}
 
 
 @router.post("/{product_variant_id}/rename", response_model=CorrectionResponse)

@@ -581,6 +581,8 @@ async def test_a_rename_to_another_live_models_name_is_refused_same_as_and_chang
     assert refused.status_code == 409, refused.text
     assert refused.json()["code"] == "SAME_AS"
     assert refused.json()["details"]["same_as"] == second["product_variant_id"]
+    # Refused after the command was looked up: proof nothing was recorded.
+    assert refused.json()["details"]["recorded"] is False
     assert await card(maker, shops, first["product_variant_id"]) == first_card
     assert (await card(maker, shops, second["product_variant_id"]))["color"] == "чорний"
     assert await catalogue_counts(maker, shops) == before
@@ -1266,6 +1268,8 @@ async def test_a_similar_name_is_warned_when_created_from_a_match_decision(maker
         refused = await client.post(endpoint, json=body)
         assert refused.status_code == 409, refused.text
         assert refused.json()["code"] == "CATALOG_SIMILAR"
+        # Under the decision's lock, not applied: nothing was recorded.
+        assert refused.json()["details"]["recorded"] is False
         [similar] = refused.json()["details"]["similar"]
         assert (similar["field"], similar["typed"], similar["existing"]) == (
             "concept",
@@ -1305,7 +1309,8 @@ async def test_a_word_left_only_by_a_merged_model_is_warned_and_offers_the_model
         {
             "field": "color",
             "typed": "шокалад",
-            "existing": [],
+            # The spelling the model that stays uses, to take it.
+            "existing": ["шоколад"],
             "left_by_merge": True,
             "models": [
                 {"product_variant_id": stays["product_variant_id"], "display_name": "Лоран шоколад"}
@@ -1536,6 +1541,7 @@ async def test_a_source_stated_in_a_rename_is_never_silently_dropped(maker):
         ("п’ятнистий", "п'ятнистий"),  # right single quotation mark
         ("пʼятнистий", "п'ятнистий"),  # modifier letter apostrophe
         ("п`ятнистий", "п'ятнистий"),  # grave accent
+        ("п´ятнистий", "п'ятнистий"),  # acute accent: before NFKC splits it
         ("BEPOHA", "верона"),  # upper-case Latin B, E, P, O, H, A
         ("TEMHO", "темно"),  # upper-case Latin T, M
         ("сxid", "схіd"),  # c and x, i; d has no Cyrillic twin

@@ -628,6 +628,10 @@ async def test_a_borrowed_lot_reopened_after_the_merge_goes_back_as_the_model_th
         ).json()["items"]
         assert (reopened["received"], reopened["sold"], reopened["returned"]) == (3, 0, 0)
         assert reopened["on_hand"] == 3
+        # The list names the lot as it arrived, and says which model its
+        # goods go back as now: «Позичене» sends that one.
+        assert reopened["product_variant_id"] == pair.duplicate
+        assert reopened["held_as_variant_id"] == pair.stay
 
         def back(variant: str, qty: int = 1) -> dict[str, Any]:
             return {
@@ -641,7 +645,9 @@ async def test_a_borrowed_lot_reopened_after_the_merge_goes_back_as_the_model_th
             }
 
         as_duplicate = await client.post("/api/v1/supplier-returns", json=back(pair.duplicate))
-        as_stay = await client.post("/api/v1/supplier-returns", json=back(pair.stay))
+        as_stay = await client.post(
+            "/api/v1/supplier-returns", json=back(reopened["held_as_variant_id"])
+        )
         [after] = (
             await client.get("/api/v1/borrowed", params={"store_id": str(shops.primary_store)})
         ).json()["items"]
@@ -889,6 +895,7 @@ async def test_a_typo_in_its_own_family_leads_to_the_model_that_stays_once_merge
     assert again.json()["code"] == "CATALOG_SIMILAR"
     reports = {report["field"]: report for report in again.json()["details"]["similar"]}
     assert reports["concept"]["left_by_merge"] is True
+    assert reports["concept"]["existing"] == [right]
     assert [m["product_variant_id"] for m in reports["concept"]["models"]] == [stay_id]
 
     # Typed again exactly and confirmed, the merged model's name is still the

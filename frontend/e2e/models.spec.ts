@@ -201,7 +201,10 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await expect(page.getByRole("definition").first()).toHaveText(
     `${name} ${colour.typo}`,
   );
+  // What moves, and what the model that stays holds already.
   await expect(page.getByText("Склад повернень · M · 3 шт.")).toBeVisible();
+  await expect(page.getByText("Залишок моделі, що лишається")).toBeVisible();
+  await expect(page.getByText("Склад повернень · M · 2 шт.")).toBeVisible();
   const merge = page.getByRole("button", { name: "Об’єднати", exact: true });
   await expect(merge).toBeDisabled();
   await page.getByLabel("Розумію: об’єднання не можна скасувати.").check();
@@ -495,18 +498,11 @@ test("only a person with the right in every store is offered a merge", async ({
   const bearer = await token(page);
   const name = `Право ${randomUUID().slice(0, 8)}`;
   await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
-  // «Оля» keeps `catalog:merge` in this store only: a manager of one store.
-  await page.route("**/api/v1/me", async (route) => {
+  // The server says this person may not merge: a manager of one store.
+  await page.route("**/api/v1/catalog/models/*?store_id=*", async (route) => {
     const response = await route.fetch();
-    const body = (await response.json()) as {
-      stores: { id: string; permissions: string[] }[];
-    };
-    for (const store of body.stores)
-      if (store.id !== fixture.store_id)
-        store.permissions = store.permissions.filter(
-          (permission) => permission !== "catalog:merge",
-        );
-    await route.fulfill({ response, json: body });
+    const body = (await response.json()) as Record<string, unknown>;
+    await route.fulfill({ response, json: { ...body, may_merge: false } });
   });
   await enter(page, "Моделі");
   await open(page, name, /графіт/);
@@ -662,4 +658,165 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
   ).toBeEnabled();
   expect(attempts).toBe(2);
   expect(await held(page, bearer, made.variant)).toBe(0);
+});
+
+test("what opened after the preview is shown, and the merge waits for it", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Пізніше ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  const { stays } = await duplicate(page, bearer, name, colour);
+  await enter(page, "Моделі");
+  await open(page, name, new RegExp(colour.typo));
+  await page.getByRole("button", { name: "Об’єднати з іншою" }).click();
+  await page.getByLabel("Модель, що лишиться").fill(name);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await page
+    .getByRole("button", { name: `${name} ${colour.right}`, exact: true })
+    .click();
+  await page.getByLabel("Розумію: об’єднання не можна скасувати.").check();
+  // Meanwhile someone retires the model that stays.
+  const retired = await page.request.post(
+    `/api/v1/catalog/models/${stays.variant}/retire`,
+    {
+      headers: {
+        Authorization: `Bearer ${bearer}`,
+        "Idempotency-Key": randomUUID(),
+      },
+      data: { store_id: fixture.store_id, command_id: randomUUID() },
+    },
+  );
+  expect(retired.status()).toBe(200);
+  await page.getByRole("button", { name: "Об’єднати", exact: true }).click();
+  await expect(
+    page.getByText("Модель, що лишається, прибрана. Спершу поверніть її."),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Розумію: об’єднання не можна скасувати."),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "Об’єднати", exact: true }),
+  ).toBeDisabled();
+});
+
+test("a rename whose answer was lost settles when it was refused", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Втрачена ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await model(
+    page,
+    bearer,
+    { concept: `${name} вже`, variant: { color: colour.right } },
+    0,
+  );
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  // The first attempt never reaches the server; asked again, it is refused
+  // as a similar name, which proves nothing was recorded.
+  let attempts = 0;
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    attempts += 1;
+    if (attempts === 1) await route.abort("connectionfailed");
+    else await route.continue();
+  });
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  await page.getByRole("button", { name: "Перейменувати" }).click();
+  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
+  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Перевірити результат зміни" })
+    .click();
+  await expect(page.getByText("Незавершена зміна каталогу")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeEnabled();
+  expect(attempts).toBe(2);
+});
+
+test("a product whose creation answer was lost settles when it was refused", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Загублена ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await model(
+    page,
+    bearer,
+    { concept: `${name} вже`, variant: { color: colour.right } },
+    0,
+  );
+  let attempts = 0;
+  await page.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      attempts += 1;
+      if (attempts === 1) await route.abort("connectionfailed");
+      else await route.continue();
+    },
+  );
+  await enter(page, "Каталог");
+  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
+  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
+  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("S");
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .click();
+  await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+    ),
+  ).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
+test("a retirement an opening list stops says so", async ({ page }) => {
+  const bearer = await token(page);
+  const name = `Список ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  // The server's refusal while a waiting list names the model (its shape is
+  // the backend's to prove); what matters here is what the person reads.
+  await page.route("**/api/v1/catalog/models/*/retire", async (route) => {
+    await route.fulfill({
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "An opening list that waits names this model",
+        details: {
+          reason: "OPENING_LIST_WAITING",
+          snapshot_ids: [randomUUID()],
+          recorded: false,
+        },
+      },
+    });
+  });
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  await page.getByRole("button", { name: "Прибрати модель" }).click();
+  await expect(
+    page.getByText(
+      "Модель є в списку початкових залишків, що чекає. Спершу затвердіть або відхиліть його в «Початкових залишках».",
+    ),
+  ).toBeVisible();
 });

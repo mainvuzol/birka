@@ -868,6 +868,8 @@ async def test_a_model_a_waiting_opening_list_names_is_not_retired(world: World)
     assert refused.json()["details"] == {
         "reason": "OPENING_LIST_WAITING",
         "snapshot_ids": [snapshot["snapshot_id"]],
+        # Refused after the command was looked up: nothing was recorded.
+        "recorded": False,
     }
     # A model the list does not name is not held back by it.
     assert unnamed.status_code == 200, unnamed.text

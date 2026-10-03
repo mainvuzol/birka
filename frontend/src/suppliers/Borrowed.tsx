@@ -145,7 +145,7 @@ export function Borrowed({
                       supplier_id: lot.supplier.id,
                       lines: [
                         {
-                          product_variant_id: lot.product_variant_id,
+                          product_variant_id: lot.held_as_variant_id,
                           size_id: lot.size_id,
                           quantity,
                         },

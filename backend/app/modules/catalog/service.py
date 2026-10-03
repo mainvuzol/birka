@@ -621,26 +621,27 @@ async def _resolve_variant(
     """
     lookup = same_name(product_family_id, terms, length_cm)
     live = select(ProductVariant.id).where(*lookup, ProductVariant.status != EntityStatus.MERGED)
-    merged = (
-        await session.scalars(
-            select(ProductVariant.id)
-            .where(*lookup, ProductVariant.status == EntityStatus.MERGED)
-            .order_by(ProductVariant.id)
-        )
-    ).first()
-    redirected_from: uuid.UUID | None = None
-    if merged is not None and await session.scalar(live) is None:
+    merged_namesake = (
+        select(ProductVariant.id)
+        .where(*lookup, ProductVariant.status == EntityStatus.MERGED)
+        .order_by(ProductVariant.id)
+    )
+
+    async def stays_for(merged: uuid.UUID) -> uuid.UUID | None:
+        """The model a merged namesake leads to, within this organization."""
         leading = await current_variants(
             session, organization_id=organization_id, variant_ids=[merged]
         )
-        if merged in leading and leading[merged] != merged:
-            redirected_from = merged
-            variant = await session.get(ProductVariant, leading[merged])
-            if variant is None:  # pragma: no cover - just resolved above
-                raise NotFoundError("Unknown product variant")
-            await session.refresh(variant)
-            _require_active(variant, entity="product_variant")
-            return variant.id, False, redirected_from
+        target = leading.get(merged)
+        return target if target is not None and target != merged else None
+
+    async def redirect(stays: uuid.UUID) -> uuid.UUID:
+        variant = await session.get(ProductVariant, stays)
+        if variant is None:  # pragma: no cover - just resolved
+            raise NotFoundError("Unknown product variant")
+        await session.refresh(variant)
+        _require_active(variant, entity="product_variant")
+        return variant.id
 
     values: dict[str, Any] = {
         "id": uuid.uuid4(),
@@ -648,6 +649,7 @@ async def _resolve_variant(
         "length_cm": length_cm,
         **terms,
     }
+    savepoint = await session.begin_nested()
     variant_id, created = await _insert_or_select(
         session,
         insert=pg_insert(ProductVariant)
@@ -660,7 +662,19 @@ async def _resolve_variant(
         existing=live,
     )
     if created:
+        # The name is held by no live model, so the insert went in. If a
+        # merged model holds it — merged long ago, or by a merge this insert
+        # waited on, whose row then left the key — the name is the model that
+        # stays, not the typo made again (ADR-0008 §4). This statement sees
+        # a merge that committed while the insert waited.
+        late = (await session.scalars(merged_namesake)).first()
+        stays = await stays_for(late) if late is not None else None
+        if late is not None and stays is not None and stays != variant_id:
+            await savepoint.rollback()
+            return await redirect(stays), False, late
+        await savepoint.commit()
         return variant_id, True, None
+    await savepoint.commit()
 
     variant = await session.get(ProductVariant, variant_id)
     if variant is None:  # pragma: no cover - just resolved above

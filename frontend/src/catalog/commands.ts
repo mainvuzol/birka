@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError } from "@/shared/api";
+import { api, ApiError, recordedNothing } from "@/shared/api";
 import type { Decision } from "./types";
 export interface Command {
   path: string;
@@ -257,7 +257,9 @@ export async function submitCatalogCommand(
     return latest;
   } catch (error) {
     if (
-      !ambiguous &&
+      // A refusal proving nothing was recorded settles even an attempt
+      // whose outcome was unknown (ADR-0008 §9).
+      (!ambiguous || recordedNothing(error)) &&
       !acknowledged &&
       error instanceof ApiError &&
       [400, 403, 404, 409, 422].includes(error.status)

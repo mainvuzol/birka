@@ -92,6 +92,8 @@ export function errorText(error: unknown): string {
     return "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.";
   if (error.code === "SAME_AS")
     return "Така назва вже є в іншої моделі. Об’єднайте їх у «Моделях».";
+  if (error.details.reason === "OPENING_LIST_WAITING")
+    return "Модель є в списку початкових залишків, що чекає. Спершу затвердіть або відхиліть його в «Початкових залишках».";
   if (error.code === "MERGE_BLOCKED")
     return "Моделі ще не можна об’єднати: спершу завершіть те, що показано.";
   if (error.code === "INSUFFICIENT_STOCK")

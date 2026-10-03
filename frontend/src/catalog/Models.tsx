@@ -19,6 +19,7 @@ import type {
   ModelItem,
   ModelPage,
   MergePreview,
+  StockLine,
 } from "./modelTypes";
 
 const pageSize = 20;
@@ -332,15 +333,24 @@ function RenameForm({
         )}
         {sameAs && (
           <section className="notice" role="alert">
-            <p>Така назва вже є в іншої моделі. Об’єднати їх?</p>
-            <button
-              type="button"
-              onClick={() => {
-                mergeInto(sameAs);
-              }}
-            >
-              Об’єднати з тією моделлю
-            </button>
+            {card.may_merge ? (
+              <>
+                <p>Така назва вже є в іншої моделі. Об’єднати їх?</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    mergeInto(sameAs);
+                  }}
+                >
+                  Об’єднати з тією моделлю
+                </button>
+              </>
+            ) : (
+              <p>
+                Така назва вже є в іншої моделі. Об’єднати їх може той, хто має
+                це право в усіх магазинах мережі.
+              </p>
+            )}
           </section>
         )}
         {candidates.length > 0 && (
@@ -413,6 +423,23 @@ function RenameForm({
   );
 }
 
+/** Stock by warehouse and size, as the preview shows it. */
+function Stock({ lines }: { lines: StockLine[] }): JSX.Element {
+  if (lines.length === 0) return <p>Залишку немає.</p>;
+  return (
+    <ul>
+      {lines.map((line) => (
+        <li key={`${line.location_id}:${line.size_id}`}>
+          {line.location_name} · {line.size_label ?? "розмір"} ·{" "}
+          {line.quantity === null
+            ? "є залишок (кількість не видно)"
+            : `${String(line.quantity)} шт.`}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Merge({
   store,
   token,
@@ -479,20 +506,9 @@ function Merge({
             </dd>
           </dl>
           <h4>Залишок, що перейде</h4>
-          {preview.data.stock.length === 0 ? (
-            <p>Залишку немає.</p>
-          ) : (
-            <ul>
-              {preview.data.stock.map((line) => (
-                <li key={`${line.location_id}:${line.size_id}`}>
-                  {line.location_name} · {line.size_label ?? "розмір"} ·{" "}
-                  {line.quantity === null
-                    ? "є залишок (кількість не видно)"
-                    : `${String(line.quantity)} шт.`}
-                </li>
-              ))}
-            </ul>
-          )}
+          <Stock lines={preview.data.stock} />
+          <h4>Залишок моделі, що лишається</h4>
+          <Stock lines={preview.data.stock_into} />
           <p className="hint">
             Ціна моделі, що лишається, зберігається; якщо її немає — береться
             ціна дубліката. Так само з ціною кожного магазину.
@@ -548,7 +564,15 @@ function Merge({
                 kind: "merge",
                 product_variant_id: from,
                 into: to,
-              }).then(setRefusal);
+              }).then((error) => {
+                setRefusal(error);
+                if (error?.code === "MERGE_BLOCKED") {
+                  // Something opened since the preview: show it afresh, and
+                  // ask again once it is finished.
+                  setSure(false);
+                  void preview.refetch();
+                }
+              });
             }}
           >
             Об’єднати
@@ -564,15 +588,12 @@ export function Models({
   token,
   journalKey,
   blocked,
-  canMerge,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
-  /** A merge needs the right in every store (owner decision, 2026-10-03). */
-  canMerge: boolean;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending } = useCorrectionCommand();
@@ -711,7 +732,7 @@ export function Models({
               >
                 Перейменувати
               </button>
-              {canMerge && (
+              {card.data.may_merge && (
                 <button
                   className={mode === "merge" ? "active" : "quiet"}
                   disabled={working}
@@ -778,7 +799,7 @@ export function Models({
             />
           )}
           {mode === "merge" &&
-            (canMerge ? (
+            (card.data.may_merge ? (
               <Merge
                 key={`${card.data.product_variant_id}:${mergeTarget ?? ""}`}
                 store={store}

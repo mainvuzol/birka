@@ -36,6 +36,8 @@ export interface ModelCard {
   business_category: string | null;
   garment_type: string | null;
   distinction_note: string | null;
+  /** Whether this person may merge: the right in every store. */
+  may_merge: boolean;
 }
 
 export interface Correction {
@@ -57,17 +59,22 @@ export interface MergeModel {
   store_price: string | null;
 }
 
+export interface StockLine {
+  location_id: string;
+  location_name: string;
+  size_id: string;
+  size_label: string | null;
+  /** Null where this person may not read that warehouse's stock. */
+  quantity: number | null;
+}
+
 export interface MergePreview {
   duplicate: MergeModel;
   into: MergeModel;
-  stock: {
-    location_id: string;
-    location_name: string;
-    size_id: string;
-    size_label: string | null;
-    /** Null where this person may not read that warehouse's stock. */
-    quantity: number | null;
-  }[];
+  /** What would move from the duplicate. */
+  stock: StockLine[];
+  /** What the model that stays holds already. */
+  stock_into: StockLine[];
   blockers: Blocker[];
 }
 
@@ -176,7 +183,9 @@ export function similarFrom(error: unknown): SimilarWord[] | null {
 /** One line per similar word: what was typed, and what is in use. */
 export function similarText(word: SimilarWord): string {
   const label = wordLabels[word.field] ?? word.field;
+  if (word.left_by_merge)
+    return `${label}: «${word.typed}» лишилося від моделі, яку об’єднали з іншою.`;
   if (word.existing.length)
     return `${label}: «${word.typed}» схоже на «${word.existing.join("», «")}», що вже є в каталозі.`;
-  return `${label}: «${word.typed}» лишилося від моделі, яку об’єднали з іншою.`;
+  return `${label}: «${word.typed}» схоже на назву, що вже є в каталозі.`;
 }

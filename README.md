@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 145 Playwright journeys on a phone profile, against the real API;
+- 149 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.

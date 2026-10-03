@@ -34,6 +34,7 @@ All data is synthetic.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -43,7 +44,7 @@ from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 
@@ -58,6 +59,7 @@ from app.modules.catalog.models import (
     VariantPrice,
 )
 from app.modules.catalog.read import current_variants as catalog_current_variants
+from app.modules.catalog_correction.service import merge_models
 from app.modules.inventory.models import (
     Inventory,
     MovementReason,
@@ -411,6 +413,9 @@ async def refused_with(
     refused = await merge(maker, scope, store=store, duplicate=duplicate, into=into)
     assert refused.status_code == 409, refused.text
     assert refused.json()["code"] == "MERGE_BLOCKED", refused.text
+    # Refused after the command was looked up: proof nothing was recorded,
+    # so a phone that lost the answer can settle the attempt (ADR-0008 §9).
+    assert refused.json()["details"]["recorded"] is False
     found: list[dict[str, Any]] = refused.json()["details"]["reasons"]
     assert [blocker["reason"] for blocker in found] == reasons, refused.text
     # The preview and the merge make the same checks.
@@ -836,6 +841,11 @@ async def test_the_preview_shows_both_models_their_stock_and_nothing_blocking(ma
         ]
     )
     assert {line["size_id"] for line in body["stock"]} == set(duplicate.sizes.values())
+    # And what the model that stays holds: the owner asked to see both models
+    # with their stock before deciding.
+    assert [
+        (line["location_id"], line["size_label"], line["quantity"]) for line in body["stock_into"]
+    ] == [(str(shops.shared_warehouse), "M", 5)]
     assert body["blockers"] == []
     assert await state(maker, shops.organization_id) == before
 
@@ -1829,3 +1839,111 @@ async def test_a_family_left_with_only_merged_models_leads_to_the_family_that_st
     assert await families_listed(maker, shops, tag) == {stays.family, other.family}
     # The model left in the family that was not emptied is untouched.
     assert await variant_row(maker, other) == (EntityStatus.ACTIVE, None)
+
+
+async def test_creating_the_duplicate_s_name_while_its_merge_commits_gives_the_model_that_stays(
+    maker, engine
+):
+    """ADR-0008 §4: creating a merged model's name gives the model that stays.
+
+    The race a review found: a creation of the duplicate's exact name, in the
+    family both models share, reads the duplicate as live and waits on the
+    merge's open transaction; the merged row leaves the name's key when the
+    merge commits, so nothing conflicts. The creation must still answer with
+    the model that stays, and make nothing."""
+    from tests.integration.test_catalog_merge_after import wait_until_blocked_by
+
+    shops = await make_two_shops(maker)
+    stays, duplicate = await a_pair(maker, shops)
+    async with maker() as holding:
+        await merge_models(
+            holding,
+            scope=every_store(shops),
+            store_id=shops.primary_store,
+            duplicate_id=duplicate.id,
+            into_id=stays.id,
+            command_id=uuid.uuid4(),
+            fingerprint=uuid.uuid4().hex,
+            correlation_id=None,
+        )
+        holder = await holding.scalar(text("SELECT pg_backend_pid()"))
+        async with api(maker, shops.scope(shops.primary_store, MANAGER)) as client:
+            in_flight = asyncio.create_task(
+                client.post(
+                    "/api/v1/catalog/products",
+                    json={
+                        "store_id": str(shops.primary_store),
+                        "product_family_id": stays.family,
+                        "variant": {"color": "шокалад"},
+                        "sizes": [{"system": "ALPHA", "code": "M"}],
+                    },
+                    headers=key(),
+                )
+            )
+            await wait_until_blocked_by(engine, holder)
+            await holding.commit()
+            created = await asyncio.wait_for(in_flight, timeout=20)
+
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["product_variant_id"] == stays.variant
+    assert body["variant_created"] is False
+    assert body["redirected_from"] == duplicate.variant
+    async with maker() as session:
+        family = (
+            await session.scalars(
+                select(ProductVariant.id).where(
+                    ProductVariant.product_family_id == uuid.UUID(stays.family)
+                )
+            )
+        ).all()
+    assert sorted(family) == sorted([stays.id, duplicate.id])
+
+
+async def test_a_warehouse_the_acting_store_only_sells_from_is_out_of_reach(maker):
+    """How it is carried out (2026-10-03): "a merge moves stock as the store
+    the person acts in, and only where that store may change stock". Changing
+    stock outside a sale needs the right to take goods in there, as a stock
+    correction does; selling from a warehouse is not enough."""
+    shops = await make_two_shops(maker, child_may_receive_shared=False)
+    stays, duplicate = await a_pair(maker, shops)
+    await stocked(maker, shops, duplicate, warehouse=shops.shared_warehouse, qty=2)
+
+    found = await refused_with(
+        maker,
+        every_store(shops),
+        store=shops.child_store,
+        duplicate=duplicate,
+        into=stays,
+        reasons=["STOCK_OUT_OF_REACH"],
+    )
+    assert found[0]["locations"] == [
+        {"location_id": str(shops.shared_warehouse), "name": "Основний склад"}
+    ]
+    # Acting in the store that receives there, the same person merges.
+    body = await merged(
+        maker, every_store(shops), store=shops.primary_store, duplicate=duplicate, into=stays
+    )
+    assert body["details"]["moved"][0]["quantity"] == 2
+
+
+async def test_the_model_card_says_whether_this_person_may_merge(maker):
+    """The app offers a merge only to whoever the server lets merge: the
+    right in every store, or organization-wide (owner decision,
+    2026-10-03). The card says so, rather than the app guessing from the
+    stores the person happens to belong to."""
+    shops = await make_two_shops(maker)
+    stays, _duplicate = await a_pair(maker, shops)
+
+    async def may(scope: RequestScope, store: uuid.UUID) -> bool:
+        async with api(maker, scope) as client:
+            answer = await client.get(
+                f"/api/v1/catalog/models/{stays.variant}", params={"store_id": str(store)}
+            )
+        assert answer.status_code == 200, answer.text
+        verdict: bool = answer.json()["may_merge"]
+        return verdict
+
+    assert await may(every_store(shops), shops.primary_store) is True
+    assert await may(owner(shops), shops.primary_store) is True
+    assert await may(shops.scope(shops.primary_store, MANAGER), shops.primary_store) is False

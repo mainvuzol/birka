@@ -37,7 +37,8 @@ the three questions it raised went to the owner.
   acts in. Like creating a model, the change is seen by every store.
 - **Merge, and its preview:** `catalog:merge` organization-wide, or in every
   store of the organization, paused ones included. It is the shared price's
-  rule (`may_set_shared`), as the owner chose.
+  rule (`may_set_shared`), as the owner chose. The model's card says whether
+  this person may merge, so the app offers it only then.
 
 `catalog_correction` is append-only: the database refuses to change or
 delete a row, as it does for the ledger. Each row records:
@@ -111,7 +112,9 @@ Rules:
 - anything that blocks the merge.
 
 The preview runs the merge's own checks without its locks. What it allows,
-the confirmation does, unless something changed in between. Quantities are
+the confirmation does, unless something changed in between; then the refusal
+lists it and the app shows the preview afresh. It also shows what the model
+that stays holds, so both models are seen with their stock. Quantities are
 shown only in warehouses the person may read.
 
 **Refused** (`MERGE_BLOCKED`, each reason listed with what to finish first):
@@ -126,9 +129,10 @@ shown only in warehouses the person may read.
   - An opening list that waits: a line of a list not yet applied or
     rejected, resolved to the duplicate (`inventory_snapshot_allocation`).
 - **The owner's follow-up: stock out of reach.** Stock of the duplicate in a
-  warehouse where the acting store may not change stock: one it has no
-  access to, or a store's own (private) warehouse without the person's own
-  right granted there (`require_stock_access`). A blocked or archived acting
+  warehouse where the acting store may not change stock: one it may not take
+  goods into, as a stock correction needs (only reading or selling there is
+  not enough), or a store's own (private) warehouse without the person's own
+  right granted there (`require_stock_access`, `RECEIVE`). A blocked or archived acting
   store is refused, as every stock command is. Each such warehouse is named.
 - **A closed warehouse** holding the duplicate's stock: nothing moves there
   (ADR-0004).
@@ -197,7 +201,9 @@ There is no undo (§10). The preview and an explicit confirmation come first.
 - **Creating a merged model's name gives the model that stays.** Both doors,
   `create_product` and creating from a match decision, answer with it
   (`created = false`, `redirected_from`), whether the merged model's family
-  still lives or the merge emptied and merged it. This settles what
+  still lives or the merge emptied and merged it. A creation that waited on a
+  merge of that very name looks again once it lands, and is the model that
+  stays too. This settles what
   `_require_active` left "to the command that writes merges".
 - **Creating a retired model's name is refused** (`MODEL_RETIRED`, naming
   it). The app offers holders of `catalog:merge` to bring it back.
@@ -358,11 +364,14 @@ on a deadlock or serialization failure, as `create_reviewed_product` is.
 
 **Commands in flight.** Every stock command reaches `lock_stock` only after
 its idempotency claim and its `command_id` lookup. So `MODEL_MERGED` and
-`MODEL_RETIRED` there prove the command recorded nothing. They carry
-`details.recorded = false`, and every journal treats such a refusal as final,
-even after an attempt whose outcome was unknown: the attempt is cleared and
-the basket handed back. A seller whose phone sent a sale of the duplicate
-just before a merge is not left blocked.
+`MODEL_RETIRED` there prove the command recorded nothing. So does every
+refusal a correction raises after its own lookup (`CATALOG_SIMILAR`,
+`SAME_AS`, `MERGE_BLOCKED`, …), and a creation's refusal under its decision's
+lock. They carry `details.recorded = false`, and every journal treats such a
+refusal as final, even after an attempt whose outcome was unknown: the
+attempt is cleared and the basket handed back. A seller whose phone sent a
+sale of the duplicate just before a merge is not left blocked, and nor is a
+manager whose rename's answer was lost.
 
 **Reconciliation** reports any stock or reservation under a merged model.
 

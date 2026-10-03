@@ -22,7 +22,7 @@ export function Similar({
           <p>{similarText(word)}</p>
           {word.models.length > 0 && (
             <p>
-              Моделі з нею:{" "}
+              {word.left_by_merge ? "Тепер це модель:" : "Моделі з нею:"}{" "}
               {word.models.map((model) => model.display_name).join("; ")}
             </p>
           )}

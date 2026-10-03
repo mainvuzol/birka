@@ -36,22 +36,25 @@ _EXTRA_TO = "їе"
 _APOSTROPHES_FROM = "’ʼ`´‘"
 _APOSTROPHES_TO = "'''''"
 
-_FOLD = str.maketrans(
-    _LATIN + _EXTRA_FROM + _APOSTROPHES_FROM, _CYRILLIC + _EXTRA_TO + _APOSTROPHES_TO
-)
+# The apostrophes first, before NFKC, which would turn the acute accent ´
+# into a space and a combining mark the table below never sees.
+_APOSTROPHES = str.maketrans(_APOSTROPHES_FROM, _APOSTROPHES_TO)
+_FOLD = str.maketrans(_LATIN + _EXTRA_FROM, _CYRILLIC + _EXTRA_TO)
 # The same fold in SQL, applied to a stored `normalized_name` (already
 # casefolded, its whitespace collapsed). Kept beside the Python one so the two
 # cannot drift apart.
 _FOLD_SQL = (
-    "translate(lower(normalize({column}, NFKC)), "
-    f"'{_LATIN + _EXTRA_FROM + _APOSTROPHES_FROM}', "
-    f"'{_CYRILLIC + _EXTRA_TO + _APOSTROPHES_TO.replace(chr(39), chr(39) * 2)}')"
+    "translate(lower(normalize(translate({column}, "
+    f"'{_APOSTROPHES_FROM}', '{_APOSTROPHES_TO.replace(chr(39), chr(39) * 2)}'), NFKC)), "
+    f"'{_LATIN + _EXTRA_FROM}', '{_CYRILLIC + _EXTRA_TO}')"
 )
 
 
 def fold(normalized: str) -> str:
     """Fold an already normalized label (`normalize_label`) for comparison."""
-    folded = unicodedata.normalize("NFKC", normalized).lower().translate(_FOLD)
+    folded = (
+        unicodedata.normalize("NFKC", normalized.translate(_APOSTROPHES)).lower().translate(_FOLD)
+    )
     return " ".join(folded.split())
 
 
@@ -63,6 +66,17 @@ class TypedWord:
     name: str
     normalized: str
 
+
+# Where `describe_variants` keeps each word of a model's name.
+_SNAPSHOT_KEYS = {
+    "concept": "concept",
+    "source": "source",
+    "color": "colour",
+    "material": "material",
+    "texture": "texture",
+    "fur": "fur",
+    "collar": "collar",
+}
 
 _TERM_FIELDS = {
     "color": AttributeKind.COLOR,
@@ -194,11 +208,19 @@ async def refuse_similar(
     similar = []
     for report in reports:
         models = list(dict.fromkeys(leading[model_id] for model_id in report["model_ids"]))
+        existing = list(report["existing"])
+        if report["left_by_merge"]:
+            # The spelling the model that stays uses for this word, so the
+            # person can take it, as the owner asked.
+            for model in models:
+                spelling = names[model].snapshot.get(_SNAPSHOT_KEYS[report["field"]])
+                if spelling and spelling not in existing and spelling != report["typed"]:
+                    existing.append(spelling)
         similar.append(
             {
                 "field": report["field"],
                 "typed": report["typed"],
-                "existing": report["existing"],
+                "existing": existing,
                 "left_by_merge": report["left_by_merge"],
                 "models": [
                     {"product_variant_id": str(model), "display_name": names[model].display_name}

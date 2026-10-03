@@ -75,6 +75,9 @@ export interface Borrowed {
   location_id: string;
   location_name: string;
   product_variant_id: string;
+  /** The model its goods are held under now, which they go back as: the
+   * lot's own, or the model that stays if it was merged since. */
+  held_as_variant_id: string;
   size_id: string;
   display_name: string;
   size: string | null;

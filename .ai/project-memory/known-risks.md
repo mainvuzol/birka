@@ -490,8 +490,9 @@ See the [report](catalog-correction-report.md) and
   is still owed (checklist row 22).
 - **A refusal that proves nothing was recorded** (`details.recorded = false`)
   settles a phone's unknown attempt. It is true because every stock command
-  looks its `command_id` up before it locks stock; a new stock command must
-  keep that order, or a merged model would clear an attempt that did commit.
+  looks its `command_id` up before it locks stock, and every correction
+  before it decides; a new command must keep that order, or a refusal would
+  clear an attempt that did commit.
 - **The similar-name check reads without a lock.** Two shops typing two new
   spellings of one word in the same instant both pass; a merge puts it right.
 - **The check is symmetric.** Once a typo is in the catalogue and in use,
@@ -504,8 +505,12 @@ See the [report](catalog-correction-report.md) and
   own warehouse) or in a blocked store, as the owner chose. The goods are
   moved to the shared warehouse by their store first.
 - **Only someone with `catalog:merge` in every store merges.** While any
-  store is blocked, a manager holding it store by store cannot merge; the
-  owner of the network, whose membership is organization-wide, still can.
+  store is blocked or archived, a manager holding it store by store cannot
+  merge, even one who is a manager there too: a store that does not trade
+  gives its people's grants nothing, so the right cannot be seen. The owner
+  of the network, whose membership is organization-wide, still can. The
+  shared price works the same way. Whether an archived store should count
+  as "every store" is a question for the owner if it comes up.
 - **A family a correction emptied is merged** into the family its model went
   to, so family search does not offer the typo. A family that never had a
   model is still listed, as before.
