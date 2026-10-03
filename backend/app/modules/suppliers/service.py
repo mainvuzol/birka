@@ -45,7 +45,7 @@ from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import describe_variants, size_labels
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementType
-from app.modules.inventory.service import MovementRequest, apply_movements
+from app.modules.inventory.service import MovementRequest, apply_movements, current_variants
 from app.modules.suppliers import borrowed, invoices
 from app.modules.suppliers.common import (
     Cancellation,
@@ -409,6 +409,15 @@ async def record_cancel(
     )
     session.add(cancel)
     await session.flush()
+    # Goods come back as the model that stands now: a model merged since the
+    # return went out leads to the model that stays (ADR-0008 §5). A «Брак»
+    # unit too: it keeps the name it was taken back as, and its stock is the
+    # model that stays.
+    leading = await current_variants(
+        session,
+        organization_id=organization_id,
+        variant_ids={line.product_variant_id for line in lines},
+    )
     await apply_movements(
         session,
         organization_id=organization_id,
@@ -416,7 +425,7 @@ async def record_cancel(
             MovementRequest(
                 location_id=supplier_return.location_id,
                 acting_store_id=supplier_return.store_id,
-                product_variant_id=line.product_variant_id,
+                product_variant_id=leading[line.product_variant_id],
                 size_id=line.size_id,
                 quantity_delta=line.quantity,
                 movement_type=MovementType.SUPPLIER_RETURN_CANCEL,

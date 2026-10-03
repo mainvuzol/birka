@@ -293,9 +293,70 @@ async def set_price(
     return prices[variant_id]
 
 
+async def carry_prices(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    from_variant_id: uuid.UUID,
+    into_variant_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> list[dict[str, str | None]]:
+    """A merge keeps the price of the model that stays; where it has none, the
+    duplicate's is taken. A store's own price follows the same rule (owner
+    decision, 2026-10-03). Returns what was carried over, scope by scope.
+
+    Each scope is decided under that price's own lock, in a fixed order, so a
+    price set at the same moment is decided one after the other with this.
+    The caller holds both models, so neither can be merged meanwhile.
+    """
+    rows = (
+        await session.execute(
+            select(
+                VariantPrice.store_id,
+                VariantPrice.product_variant_id,
+                VariantPrice.suggested_price,
+                VariantPrice.currency_code,
+            ).where(
+                VariantPrice.organization_id == organization_id,
+                VariantPrice.product_variant_id.in_({from_variant_id, into_variant_id}),
+            )
+        )
+    ).all()
+    duplicate = {
+        store_id: (price, code)
+        for store_id, variant, price, code in rows
+        if variant == from_variant_id
+    }
+    stays = {store_id for store_id, variant, _, _ in rows if variant == into_variant_id}
+    carried: list[dict[str, str | None]] = []
+    for store_id in sorted(
+        set(duplicate) - stays, key=lambda value: (value is not None, str(value))
+    ):
+        await _lock(
+            session, organization_id=organization_id, store_id=store_id, variant_id=into_variant_id
+        )
+        price, code = duplicate[store_id]
+        session.add(
+            VariantPrice(
+                organization_id=organization_id,
+                store_id=store_id,
+                product_variant_id=into_variant_id,
+                suggested_price=price,
+                currency_code=code,
+                updated_by_user_id=actor_user_id,
+            )
+        )
+        carried.append(
+            {"store_id": None if store_id is None else str(store_id), "suggested_price": str(price)}
+        )
+    await session.flush()
+    return carried
+
+
 __all__ = [
     "PriceScope",
     "SuggestedPrice",
+    "carry_prices",
     "currency",
     "may_set_shared",
     "prices_of",

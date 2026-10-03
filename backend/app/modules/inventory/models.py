@@ -95,6 +95,10 @@ class MovementReason(StrEnum):
     SIZE_RECLASSIFICATION_OUT = "SIZE_RECLASSIFICATION_OUT"
     CORRECTION = "CORRECTION"
     OTHER = "OTHER"
+    # The two halves of moving a duplicate's stock to the model that stays
+    # (ADR-0008 §3). Only `apply_catalog_merge` writes them, in pairs.
+    CATALOG_MERGE_OUT = "CATALOG_MERGE_OUT"
+    CATALOG_MERGE_IN = "CATALOG_MERGE_IN"
 
 
 class GoodsReceipt(UUIDPrimaryKey, TimestampMixin, Base):
@@ -498,6 +502,16 @@ class StockMovement(UUIDPrimaryKey, TimestampMixin, Base):
             "reference_type = 'inventory_snapshot'"
             " AND reference_id IS NOT NULL AND stock_lot_id IS NOT NULL)",
             name="opening_balance_names_its_list",
+        ),
+        # ADR-0008 §3: a merge's movement is an adjustment that names its
+        # correction. Compared as text, because `0031` adds the two values in
+        # the same transaction that creates this, where they cannot be used.
+        CheckConstraint(
+            "reason_code IS NULL"
+            " OR reason_code::text NOT IN ('CATALOG_MERGE_OUT', 'CATALOG_MERGE_IN')"
+            " OR (movement_type = 'ADJUSTMENT'"
+            " AND reference_type = 'catalog_correction' AND reference_id IS NOT NULL)",
+            name="catalog_merge_names_its_correction",
         ),
     )
 

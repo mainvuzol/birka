@@ -63,6 +63,11 @@ import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import { Stores } from "@/stores/Stores";
 import { Invoices } from "@/suppliers/Invoices";
+import { Models } from "@/catalog/Models";
+import {
+  loadCorrectionCommand,
+  useCorrectionCommand,
+} from "@/catalog/modelCommands";
 import { SalesReport } from "@/reports/SalesReport";
 import {
   loadInvoiceCommand,
@@ -265,6 +270,7 @@ function Workspace({
     | "suppliers"
     | "invoices"
     | "report"
+    | "models"
   >("list");
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
@@ -294,6 +300,23 @@ function Workspace({
   // 2026-10-02). It reads every store they hold it in, whichever is open.
   const canSeeReport = store.permissions.includes("report:view_financial");
   const reportKey = `${me.organization_id}:${me.user_id}`;
+  // Correcting the catalogue: the owner's and managers' (owner decision,
+  // 2026-10-03). Whether this person may merge, which needs the right in
+  // every store, the server says on each model's card.
+  const canCorrect = store.permissions.includes("catalog:merge");
+  const correctionKey = `birka:catalog-correction-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [correctionStorageError, setCorrectionStorageError] = useState(false);
+  const correctionCommand = useCorrectionCommand();
+  useEffect(() => {
+    if (!canCorrect) return;
+    try {
+      const saved = loadCorrectionCommand(correctionKey);
+      useCorrectionCommand.setState({ pending: saved, error: null });
+      if (saved) setTab("models");
+    } catch {
+      setCorrectionStorageError(true);
+    }
+  }, [correctionKey, canCorrect]);
   // What the store owes its suppliers: the owner's and managers' (owner
   // decision, 2026-10-01); a seller never sees it.
   const canSeeInvoices = store.permissions.includes("supplier:debt");
@@ -487,7 +510,11 @@ function Workspace({
     invoiceCommand.pending !== null;
   // Every journal but the stock correction's and the store states' own,
   // which their screens read themselves.
-  const othersUnsettled =
+  const correctionUnsettled =
+    correctionStorageError ||
+    correctionCommand.busy ||
+    correctionCommand.pending !== null;
+  const othersExceptCorrections =
     busy ||
     pending !== null ||
     storageError ||
@@ -502,6 +529,7 @@ function Workspace({
     receiptCommand.pending !== null ||
     returnUnsettled ||
     creditUnsettled;
+  const othersUnsettled = othersExceptCorrections || correctionUnsettled;
   const otherThanAdjustment =
     othersUnsettled || storesUnsettled || supplierUnsettled || invoiceUnsettled;
   const adjustmentUnsettled =
@@ -523,6 +551,12 @@ function Workspace({
     adjustmentUnsettled ||
     storesUnsettled ||
     supplierUnsettled;
+  const otherThanCorrections =
+    othersExceptCorrections ||
+    adjustmentUnsettled ||
+    storesUnsettled ||
+    supplierUnsettled ||
+    invoiceUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
   return (
     <>
@@ -683,6 +717,17 @@ function Workspace({
             Накладні
           </button>
         )}
+        {canCorrect && (
+          <button
+            className={tab === "models" ? "active" : "quiet"}
+            disabled={otherThanCorrections}
+            onClick={() => {
+              setTab("models");
+            }}
+          >
+            Моделі
+          </button>
+        )}
         {canSeeReport && (
           <button
             className={tab === "report" ? "active" : "quiet"}
@@ -709,6 +754,12 @@ function Workspace({
       {catalogStorageError && (
         <p role="alert">
           Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
+          застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {correctionStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережену зміну каталогу. Не очищайте дані
           застосунку; зверніться до менеджера.
         </p>
       )}
@@ -763,6 +814,13 @@ function Workspace({
                   setTab("sale");
                 } else if (outcome.kind === "nothing-sold") {
                   setShelfSettled(true);
+                  setSaleEpoch((epoch) => epoch + 1);
+                  setTab("sale");
+                } else if (outcome.kind === "refused") {
+                  // Proven to have recorded nothing (a model merged or
+                  // retired since): the basket is the seller's again, and
+                  // the refusal says why.
+                  useSaleCommand.setState({ error: outcome.error });
                   setSaleEpoch((epoch) => epoch + 1);
                   setTab("sale");
                 }
@@ -835,7 +893,15 @@ function Workspace({
             disabled={receiptCommand.busy}
             onClick={() => {
               const attempt = receiptCommand.pending;
-              if (attempt) void resolveReceipt(receiptKey, token, attempt);
+              if (!attempt) return;
+              void resolveReceipt(receiptKey, token, attempt).then(
+                (outcome) => {
+                  // Proven to have recorded nothing (a model merged or
+                  // retired since): say why the delivery was not taken.
+                  if (outcome.kind === "refused")
+                    useReceiptCommand.setState({ error: outcome.error });
+                },
+              );
             }}
           >
             Перевірити результат приймання
@@ -1218,6 +1284,17 @@ function Workspace({
           />
         ) : (
           <p role="alert">Накладні ведуть власник і менеджери.</p>
+        )
+      ) : tab === "models" ? (
+        canCorrect && trading ? (
+          <Models
+            store={store}
+            token={token}
+            journalKey={correctionKey}
+            blocked={otherThanCorrections}
+          />
+        ) : (
+          <p role="alert">Каталог виправляють власник і менеджери.</p>
         )
       ) : tab === "report" ? (
         canSeeReport ? (

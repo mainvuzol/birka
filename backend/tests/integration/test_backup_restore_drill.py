@@ -211,6 +211,39 @@ async def test_a_ledger_that_does_not_reconcile_fails_the_drill(source, tmp_path
     assert "1 balances disagree" in failed(report)["ledger"]
 
 
+async def test_stock_left_under_a_merged_model_fails_the_drill(source, tmp_path):
+    """A merge moves all of a duplicate's stock, and nothing may move it there
+    afterwards (ADR-0008 §9). Stock found under a merged model could never be
+    sold or moved again; its ledger still agrees with it, so only this check
+    sees it."""
+    database, shop = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    engine = create_async_engine(database.url, poolclass=NullPool)
+    async with engine.begin() as connection:
+        stays = await connection.scalar(
+            text(
+                "INSERT INTO product_variant (id, product_family_id, length_cm) "
+                "SELECT gen_random_uuid(), product_family_id, 999 FROM product_variant "
+                "WHERE id = :v RETURNING id"
+            ),
+            {"v": shop.variant_id},
+        )
+        await connection.execute(
+            text(
+                "UPDATE product_variant SET status = 'MERGED', merged_into_id = :stays "
+                "WHERE id = :v"
+            ),
+            {"v": shop.variant_id, "stays": stays},
+        )
+    await engine.dispose()
+
+    manifest = await back_up(database, tmp_path)
+    report = await drill(tmp_path / manifest["archive"], server)
+
+    assert set(failed(report)) == {"ledger"}
+    assert "stock under a merged model" in failed(report)["ledger"]
+
+
 async def test_kept_copies_stay_for_inspection_and_are_never_the_source(source, tmp_path):
     database, _ = source
     server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])

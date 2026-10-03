@@ -155,8 +155,10 @@ async def test_wildcards_typed_by_a_person_are_literal(maker):
     assert underscore.json()["items"] == []
 
 
-async def test_a_merged_variant_is_gone_but_one_in_review_is_not(maker):
-    """Only a merged identity is gone — the rule product intake already follows.
+async def test_a_merged_variant_leads_to_the_model_that_stays_and_one_in_review_stays(maker):
+    """A merged model is gone, and its name finds the model that stays (owner
+    decision, 2026-10-03: "searching the old name finds the model that
+    stays"). A retired one is no longer offered.
 
     A coat whose catalogue entry is parked in review is still in the seller's
     hands at the back door; refusing to receive it until review finishes would
@@ -166,11 +168,14 @@ async def test_a_merged_variant_is_gone_but_one_in_review_is_not(maker):
         shop = await make_shop(session)
     await add_variant(maker, shop, "сірий", status=EntityStatus.MERGED, merged_into=shop.variant_id)
     in_review = await add_variant(maker, shop, "пудра", status=EntityStatus.NEEDS_REVIEW)
+    await add_variant(maker, shop, "оливка", status=EntityStatus.RETIRED)
     async with client_for(maker, shop) as client:
         merged = await search(client, shop, "сір")
         reviewed = await search(client, shop, "пудр")
-    assert merged.json()["items"] == []
+        retired = await search(client, shop, "олив")
+    assert [item["product_variant_id"] for item in merged.json()["items"]] == [str(shop.variant_id)]
     assert [item["product_variant_id"] for item in reviewed.json()["items"]] == [str(in_review)]
+    assert retired.json()["items"] == []
 
 
 async def test_another_organization_s_catalogue_is_invisible(maker):

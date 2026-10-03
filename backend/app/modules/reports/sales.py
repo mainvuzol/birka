@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ValidationFailedError
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.catalog.read import current_variants, describe_variants
 from app.modules.credit.models import CreditEntry, CustomerCredit, EntryKind
 from app.modules.identity.models import AppUser
 from app.modules.refunds.models import Refund, RefundItem
@@ -132,7 +133,8 @@ class SalesReport:
 @dataclass(frozen=True, slots=True)
 class ModelFigures:
     product_variant_id: uuid.UUID
-    # As the latest sale or return of these days named it.
+    # The model's name now: a model merged since is counted with, and named
+    # as, the model that stays (owner decision, 2026-10-03).
     display_name: str
     units: int
     sold: Decimal
@@ -418,21 +420,31 @@ async def models_sold(
             .group_by(SaleItem.product_variant_id, SaleItem.display_name_snapshot)
         )
     ).all()
-    # A model renamed between two sales is still one model, named as it was
-    # named last.
-    names: dict[uuid.UUID, tuple[datetime, str]] = {}
+    # A duplicate merged since counts with the model that stays, as one
+    # model (owner decision, 2026-10-03), and each line is named as its model
+    # is named now. The figures stay the frozen lines' own.
+    leading = await current_variants(
+        session,
+        organization_id=scope.organization_id,
+        variant_ids=list({row[0] for rows in (sold, returned) for row in rows}),
+    )
+    frozen: dict[uuid.UUID, tuple[datetime, str]] = {}
     counts: dict[uuid.UUID, list[Any]] = {}
     for rows, offset in ((sold, 0), (returned, 2)):
         for variant, name, quantity, amount, at in rows:
-            if variant not in names or names[variant][0] < at:
-                names[variant] = (at, name)
-            tally = counts.setdefault(variant, [0, ZERO, 0, ZERO])
+            model = leading.get(variant, variant)
+            if model not in frozen or frozen[model][0] < at:
+                frozen[model] = (at, name)
+            tally = counts.setdefault(model, [0, ZERO, 0, ZERO])
             tally[offset] += int(quantity)
             tally[offset + 1] += _money(amount)
+    described = await describe_variants(session, list(counts))
     models = [
         ModelFigures(
             product_variant_id=variant,
-            display_name=names[variant][1],
+            display_name=(
+                described[variant].display_name if variant in described else frozen[variant][1]
+            ),
             units=tally[0],
             sold=tally[1],
             returned_units=tally[2],

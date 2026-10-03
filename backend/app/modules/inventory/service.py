@@ -38,8 +38,13 @@ from app.modules.audit import service as audit
 from app.modules.authz.locations import readable_location_ids, require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.catalog.models import EntityStatus, ProductVariant
 from app.modules.catalog.read import unknown_size_ids
-from app.modules.catalog.validation import validate_stock_references
+from app.modules.catalog.validation import (
+    hold_current_variants,
+    hold_stock_variants,
+    validate_stock_references,
+)
 from app.modules.inventory import repository
 from app.modules.inventory.models import (
     AcquisitionType,
@@ -184,6 +189,14 @@ SIZE_RECLASSIFICATION_REASONS = frozenset(
     {MovementReason.SIZE_RECLASSIFICATION_OUT, MovementReason.SIZE_RECLASSIFICATION_IN}
 )
 
+# What a merge's two legs point back at, and their reasons (ADR-0008 §3).
+# Defined here because the ledger is the one that has to recognise a pair, and
+# inventory may not import the merge.
+CATALOG_CORRECTION_REFERENCE = "catalog_correction"
+CATALOG_MERGE_REASONS = frozenset(
+    {MovementReason.CATALOG_MERGE_OUT, MovementReason.CATALOG_MERGE_IN}
+)
+
 
 def validate_location_flows(requests: list[MovementRequest]) -> None:
     """Invariant I24: a transfer is always a pair.
@@ -324,12 +337,75 @@ def validate_size_reclassifications(requests: list[MovementRequest]) -> None:
             )
 
 
+def validate_catalog_merges(requests: list[MovementRequest]) -> None:
+    """A merge moves a duplicate's stock to the model that stays, and nothing else.
+
+    Checked at the door, as transfers and size reclassifications are, so
+    "totals never change" does not rest on the caller (ADR-0008 §3):
+    - a basket with a merge reason is a merge's alone, each line an
+      `ADJUSTMENT` naming one and the same correction, with no lot;
+    - OUT takes stock away and IN puts it in;
+    - per warehouse and size, exactly one OUT and one IN, equal and opposite;
+    - every OUT is of one model and every IN of another.
+    """
+    merges = [r for r in requests if r.reason_code in CATALOG_MERGE_REASONS]
+    if not merges:
+        return
+    if len(merges) != len(requests):
+        raise ValidationFailedError("A merge's basket holds only the merge's own movements")
+    for request in merges:
+        if (
+            request.movement_type is not MovementType.ADJUSTMENT
+            or request.reference_type != CATALOG_CORRECTION_REFERENCE
+            or request.reference_id is None
+            or request.stock_lot_id is not None
+        ):
+            raise ValidationFailedError(
+                "A merge's movement is an adjustment that names its correction",
+                reason_code=request.reason_code.value if request.reason_code else None,
+            )
+        if (request.reason_code is MovementReason.CATALOG_MERGE_OUT) != (
+            request.quantity_delta < 0
+        ):
+            raise ValidationFailedError(
+                "A merge takes stock out of the duplicate and puts it into the model that stays",
+                reason_code=request.reason_code.value if request.reason_code else None,
+                quantity_delta=request.quantity_delta,
+            )
+    if len({request.reference_id for request in merges}) != 1:
+        raise ValidationFailedError("A merge's movements name one correction")
+    outs: dict[tuple[uuid.UUID, uuid.UUID], list[MovementRequest]] = {}
+    ins: dict[tuple[uuid.UUID, uuid.UUID], list[MovementRequest]] = {}
+    for request in merges:
+        side = outs if request.reason_code is MovementReason.CATALOG_MERGE_OUT else ins
+        side.setdefault((request.location_id, request.size_id), []).append(request)
+    if set(outs) != set(ins) or any(
+        len(legs) != 1 for side in (outs, ins) for legs in side.values()
+    ):
+        raise ValidationFailedError("A merge moves each warehouse and size as one pair, out and in")
+    for key, (out,) in outs.items():
+        (into,) = ins[key]
+        if out.quantity_delta != -into.quantity_delta:
+            raise ValidationFailedError(
+                "A merge must put in exactly what it takes out",
+                location_id=str(key[0]),
+                size_id=str(key[1]),
+                taken_out=-out.quantity_delta,
+                put_in=into.quantity_delta,
+            )
+    duplicates = {request.product_variant_id for leg in outs.values() for request in leg}
+    stays = {request.product_variant_id for leg in ins.values() for request in leg}
+    if len(duplicates) != 1 or len(stays) != 1 or duplicates == stays:
+        raise ValidationFailedError("A merge moves one model's stock to another model")
+
+
 async def lock_stock(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
     keys: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]],
     acting_store_ids: set[uuid.UUID],
+    retired_refused: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], int]:
     """Validate then lock the complete command basket before making decisions.
 
@@ -346,6 +422,18 @@ async def lock_stock(
     ordered = sorted(set(keys))
     if not ordered:
         return {}
+    # The models first, before any other lock (ADR-0008 §9). A merge holds its
+    # two models before it touches stock; holding them here first too means a
+    # command lands wholly before a merge (whose stock it then moves) or waits
+    # for it and is refused under the merged model. A plain read here let a
+    # command write after the merge, under a model nothing can move again.
+    # `retired_refused` names the models this command takes goods in for.
+    await hold_stock_variants(
+        session,
+        organization_id=organization_id,
+        variant_ids={key[1] for key in ordered},
+        retired_refused=retired_refused,
+    )
     # Both questions, not one. Before the re-key `key[0]` was the store, and
     # this single call proved the tenant and the store's activity on every
     # command. Moving the key to the location would have silently turned it
@@ -362,7 +450,7 @@ async def lock_stock(
     await validate_stock_references(
         session,
         organization_id=organization_id,
-        variant_ids={key[1] for key in ordered},
+        variant_ids=set(),
         size_ids={key[2] for key in ordered},
     )
     # An opening balance must see a ledger nobody else is writing (ADR-0005
@@ -411,6 +499,17 @@ async def apply_movements(
             "An opening balance is written only by approving a stock list",
             movement_type=MovementType.OPENING_BALANCE.value,
         )
+    if any(request.reason_code in CATALOG_MERGE_REASONS for request in requests):
+        # As the opening balance: only `apply_catalog_merge` writes these,
+        # under the merge's hold on both models (ADR-0008 §3).
+        raise ValidationFailedError(
+            "A merge's movements are written only by merging two models",
+            reason_code=next(
+                r.reason_code.value
+                for r in requests
+                if r.reason_code is not None and r.reason_code in CATALOG_MERGE_REASONS
+            ),
+        )
     return await _apply_movements(
         session,
         organization_id=organization_id,
@@ -438,6 +537,7 @@ async def _apply_movements(
         validate_movement(request)
     validate_location_flows(requests)
     validate_size_reclassifications(requests)
+    validate_catalog_merges(requests)
     reclassified = [r for r in requests if r.reason_code in SIZE_RECLASSIFICATION_REASONS]
     if reclassified:
         unknown = await unknown_size_ids(session, organization_id=organization_id)
@@ -478,6 +578,11 @@ async def _apply_movements(
         organization_id=organization_id,
         keys=[(r.location_id, r.product_variant_id, r.size_id) for r in requests],
         acting_store_ids={r.acting_store_id for r in requests if r.acting_store_id is not None},
+        # A retired model's stock still sells, returns and moves; nothing new
+        # is taken in for it (owner decision, 2026-10-03).
+        retired_refused={
+            r.product_variant_id for r in requests if r.movement_type is MovementType.DELIVERY
+        },
     )
     # Under the warehouses' shared locks, which a list takes exclusively to
     # hold one: a list kept while this command runs waits for it, and finds
@@ -496,10 +601,13 @@ async def _apply_movements(
     )
     for request in requests:
         key = (request.location_id, request.product_variant_id, request.size_id)
-        if request.movement_type in {
-            MovementType.ADJUSTMENT,
-            MovementType.STOCKTAKE_CORRECTION,
-        } and reserved.get(key, 0):
+        if (
+            request.movement_type in {MovementType.ADJUSTMENT, MovementType.STOCKTAKE_CORRECTION}
+            # A merge's IN leg only adds stock to the model that stays, which
+            # takes nothing from what an order holds there (ADR-0008 §3).
+            and request.reason_code is not MovementReason.CATALOG_MERGE_IN
+            and reserved.get(key, 0)
+        ):
             # Shaped as the till's refusal is, so a client can say which
             # order holds the stock rather than only this sentence.
             raise ValidationFailedError(
@@ -822,19 +930,25 @@ async def find_divergences(
 
 
 __all__ = [
+    "CATALOG_CORRECTION_REFERENCE",
+    "CATALOG_MERGE_REASONS",
     "DIRECTION",
     "OPENING_BALANCE_REFERENCE",
     "SIZE_RECLASSIFICATION_REASONS",
     "TRANSFER_REFERENCE",
     "TRANSFER_TYPES",
     "AppliedMovement",
+    "MergedStock",
     "MovementRequest",
     "OpenedLine",
     "OpeningBalanceLine",
     "StockRow",
+    "VariantBalance",
+    "apply_catalog_merge",
     "apply_movements",
     "apply_opening_balance",
     "current_quantity",
+    "current_variants",
     "find_divergences",
     "hold_for_opening_list",
     "lock_stock",
@@ -845,10 +959,13 @@ __all__ = [
     "sale_correction_ids",
     "sale_reclassification_ids",
     "sale_shortage_ids",
+    "stock_under_merged_models",
     "transfer_movement_ids",
+    "validate_catalog_merges",
     "validate_location_flows",
     "validate_movement",
     "validate_size_reclassifications",
+    "variant_balances",
 ]
 
 
@@ -1157,6 +1274,16 @@ async def apply_opening_balance(
         if type(line.quantity) is not int or line.quantity <= 0:
             raise ValidationFailedError("An opening balance quantity must be a positive integer")
 
+    # The models before the warehouse's exclusive lock: the one lock order of
+    # every command (ADR-0008 §9). A merge holds its models first and then
+    # the warehouse's shared lock, so taking them the other way round here
+    # could deadlock with it.
+    await hold_stock_variants(
+        session,
+        organization_id=organization_id,
+        variant_ids={line.product_variant_id for line in lines},
+        retired_refused={line.product_variant_id for line in lines},
+    )
     await session.execute(select(func.pg_advisory_xact_lock(_warehouse_lock_key(location_id))))
     keys = [(location_id, line.product_variant_id, line.size_id) for line in lines]
     await lock_stock(
@@ -1225,6 +1352,183 @@ async def apply_opening_balance(
     return [
         OpenedLine(line=line, stock_lot_id=lot.id, movement_id=by_lot[lot.id])
         for line, lot in zip(lines, lots, strict=True)
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class VariantBalance:
+    """What one model holds at one warehouse and size."""
+
+    location_id: uuid.UUID
+    size_id: uuid.UUID
+    quantity: int
+    reserved_quantity: int
+
+
+async def variant_balances(
+    session: AsyncSession, *, organization_id: uuid.UUID, product_variant_id: uuid.UUID
+) -> list[VariantBalance]:
+    """Every warehouse and size where a model holds or reserves stock.
+
+    A read: a merge asks it under its own hold on the model, so nothing can
+    change the answer before it moves what is listed (ADR-0008 §3).
+    """
+    rows = await session.execute(
+        select(
+            Inventory.location_id,
+            Inventory.size_id,
+            Inventory.quantity,
+            Inventory.reserved_quantity,
+        )
+        .join(StockLocation, StockLocation.id == Inventory.location_id)
+        .where(
+            StockLocation.organization_id == organization_id,
+            Inventory.product_variant_id == product_variant_id,
+            (Inventory.quantity > 0) | (Inventory.reserved_quantity > 0),
+        )
+        .order_by(Inventory.location_id, Inventory.size_id)
+    )
+    return [
+        VariantBalance(
+            location_id=location_id,
+            size_id=size_id,
+            quantity=quantity,
+            reserved_quantity=reserved_quantity,
+        )
+        for location_id, size_id, quantity, reserved_quantity in rows.all()
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class MergedStock:
+    """Stock a merge moved from the duplicate to the model that stays."""
+
+    location_id: uuid.UUID
+    size_id: uuid.UUID
+    quantity: int
+
+
+async def apply_catalog_merge(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    correction_id: uuid.UUID,
+    duplicate_id: uuid.UUID,
+    into_id: uuid.UUID,
+    acting_store_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    correlation_id: str | None = None,
+) -> list[MergedStock]:
+    """Move all of a duplicate's stock to the model that stays (ADR-0008 §3).
+
+    The only writer of `CATALOG_MERGE_OUT` and `CATALOG_MERGE_IN`. For each
+    warehouse and size the duplicate holds, a pair of adjustments: −n on the
+    duplicate, +n on the model that stays, both naming the correction. Totals
+    never change, and lots stay with the duplicate as provenance.
+
+    The caller holds both models `FOR UPDATE` first, so no command can change
+    the duplicate's stock between the listing below and its move: each one
+    needs the model `FOR KEY SHARE` before it touches stock. `n` is the
+    quantity read under the stock lock, never the listing's.
+    """
+    balances = await variant_balances(
+        session, organization_id=organization_id, product_variant_id=duplicate_id
+    )
+    if not balances:
+        return []
+    places = [(balance.location_id, balance.size_id) for balance in balances]
+    held = await lock_stock(
+        session,
+        organization_id=organization_id,
+        keys=[
+            (location_id, variant_id, size_id)
+            for location_id, size_id in places
+            for variant_id in (duplicate_id, into_id)
+        ],
+        acting_store_ids={acting_store_id},
+    )
+    moved = [
+        MergedStock(location_id=location_id, size_id=size_id, quantity=quantity)
+        for location_id, size_id in places
+        if (quantity := held[(location_id, duplicate_id, size_id)]) > 0
+    ]
+    if not moved:
+        return []
+    requests = [
+        MovementRequest(
+            location_id=entry.location_id,
+            acting_store_id=acting_store_id,
+            product_variant_id=variant_id,
+            size_id=entry.size_id,
+            quantity_delta=delta,
+            movement_type=MovementType.ADJUSTMENT,
+            reason_code=reason,
+            reference_type=CATALOG_CORRECTION_REFERENCE,
+            reference_id=correction_id,
+        )
+        for entry in moved
+        for variant_id, delta, reason in (
+            (duplicate_id, -entry.quantity, MovementReason.CATALOG_MERGE_OUT),
+            (into_id, entry.quantity, MovementReason.CATALOG_MERGE_IN),
+        )
+    ]
+    await _apply_movements(
+        session,
+        organization_id=organization_id,
+        requests=requests,
+        actor_user_id=actor_user_id,
+        correlation_id=correlation_id,
+    )
+    return moved
+
+
+async def current_variants(
+    session: AsyncSession, *, organization_id: uuid.UUID, variant_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID]:
+    """The model each one leads to now, held as a stock command holds it.
+
+    For the commands that put goods back under a model a merge may have taken
+    away (ADR-0008 §5). Refunds ask here because they may not read the
+    catalogue themselves (ADR-0001).
+    """
+    return await hold_current_variants(
+        session, organization_id=organization_id, variant_ids=variant_ids
+    )
+
+
+async def stock_under_merged_models(
+    session: AsyncSession, *, organization_id: uuid.UUID
+) -> list[VariantBalance]:
+    """Stock or reservations left under a merged model. Empty is the evidence.
+
+    A merge moves all of a duplicate's stock, and every command is refused
+    under a merged model afterwards (ADR-0008 §9). Anything found here could
+    never be sold or moved again, so reconciliation reports it.
+    """
+    rows = await session.execute(
+        select(
+            Inventory.location_id,
+            Inventory.size_id,
+            Inventory.quantity,
+            Inventory.reserved_quantity,
+        )
+        .join(StockLocation, StockLocation.id == Inventory.location_id)
+        .join(ProductVariant, ProductVariant.id == Inventory.product_variant_id)
+        .where(
+            StockLocation.organization_id == organization_id,
+            ProductVariant.status == EntityStatus.MERGED,
+            (Inventory.quantity > 0) | (Inventory.reserved_quantity > 0),
+        )
+        .order_by(Inventory.location_id, Inventory.size_id)
+    )
+    return [
+        VariantBalance(
+            location_id=location_id,
+            size_id=size_id,
+            quantity=quantity,
+            reserved_quantity=reserved_quantity,
+        )
+        for location_id, size_id, quantity, reserved_quantity in rows.all()
     ]
 
 

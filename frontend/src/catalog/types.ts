@@ -21,6 +21,8 @@ export interface Decision {
   creation: {
     display_name: string;
     sizes: { system: string; code: string }[];
+    /** A merged model's name: the product is the model that stays. */
+    redirected_from?: string | null;
   } | null;
 }
 export const statusLabels: Record<Decision["status"], string> = {

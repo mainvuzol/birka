@@ -175,3 +175,25 @@ core`.
 - Contracts "a report only reads" and "nothing depends on the reports" are in
   `backend/pyproject.toml` (27 in all).
 
+
+2026-10-03 amendment (correcting the catalogue, [ADR-0008](ADR-0008-catalog-correction.md)):
+module `catalog_correction` merges a duplicate into the model that stays, and
+retires a model and brings it back.
+Permitted edges: `catalog_correction → catalog, inventory (service), orders
+(models), suppliers (borrowed lots), snapshots (models), tenancy, authz,
+audit, core`.
+- It reads what stops a merge: open orders, borrowed lots on hand, stock in
+  «Брак», opening lists that wait. It never reaches `damaged`.
+- It moves stock only through `inventory.apply_catalog_merge`, the one writer
+  of the merge's two reasons.
+- Nothing imports it; only the API does.
+- Renaming stays in `catalog`, which stays a leaf, with the primitives every
+  correction shares (`catalog.corrections`).
+- `reports` may now read `catalog.read`, to count a merged model with the
+  model that stays and name each line as its model is named now.
+- `refunds`, `damaged` and `suppliers` ask `inventory.current_variants` which
+  model goods come back as; `refunds` and `damaged` still never read the
+  catalogue themselves.
+- Contracts "a merge moves stock only through the ledger's own door" and
+  "nothing depends on the catalogue corrections" are in
+  `backend/pyproject.toml` (29 in all).

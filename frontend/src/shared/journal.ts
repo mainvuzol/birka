@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
-import { api, ApiError } from "@/shared/api";
+import { api, ApiError, recordedNothing } from "@/shared/api";
 
 /**
  * One stock command, written down before it is sent.
@@ -128,6 +128,8 @@ export function journal<
    *
    * A definite refusal to an attempt that was never in doubt proves nothing
    * was written, so the journal is cleared and the screen is theirs again.
+   * So does a refusal the server marks as proving it (`recordedNothing`),
+   * even after an unknown outcome.
    * Anything else keeps the attempt on disk, marked ambiguous, and blocks the
    * app until the identical attempt is resent.
    */
@@ -167,7 +169,7 @@ export function journal<
       return { kind: "done", result };
     } catch (error) {
       const definite =
-        !previouslyAmbiguous &&
+        (!previouslyAmbiguous || recordedNothing(error)) &&
         error instanceof ApiError &&
         error.code !== "IDEMPOTENCY_IN_PROGRESS" &&
         [400, 403, 404, 409, 422].includes(error.status);

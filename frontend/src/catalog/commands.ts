@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError } from "@/shared/api";
+import { api, ApiError, recordedNothing } from "@/shared/api";
 import type { Decision } from "./types";
 export interface Command {
   path: string;
@@ -73,6 +73,9 @@ function valid(key: string, value: unknown): Command {
       "distinction_note",
       "variant",
       "sizes",
+      // The person saw a similar name and said this is another (owner
+      // decision, 2026-10-03).
+      "similar_confirmed",
     ];
     const label = (v: unknown, max: number): boolean =>
       typeof v === "string" && !!v.trim() && v.length <= max;
@@ -99,6 +102,8 @@ function valid(key: string, value: unknown): Command {
           ),
       ) ||
       (body.new_model !== undefined && typeof body.new_model !== "boolean") ||
+      (body.similar_confirmed !== undefined &&
+        body.similar_confirmed !== true) ||
       (body.new_model === true && !label(body.distinction_note, 1000)) ||
       !body.variant ||
       typeof body.variant !== "object" ||
@@ -252,7 +257,9 @@ export async function submitCatalogCommand(
     return latest;
   } catch (error) {
     if (
-      !ambiguous &&
+      // A refusal proving nothing was recorded settles even an attempt
+      // whose outcome was unknown (ADR-0008 §9).
+      (!ambiguous || recordedNothing(error)) &&
       !acknowledged &&
       error instanceof ApiError &&
       [400, 403, 404, 409, 422].includes(error.status)

@@ -19,7 +19,8 @@ A backup that has never been restored is not a backup
   number of rows in each, the same triggers in the same state, and the same
   locale — including lowercasing Cyrillic, which the catalog relies on;
 - the stock ledger reconciles for every organization in the copy
-  (invariant I3), with the app's own reconciliation query.
+  (invariant I3), with the app's own reconciliation query, and no stock is
+  left under a merged model (ADR-0008 §9).
 
 The report says how long the restore took: evidence for the recovery time.
 Exit status 0 means every check passed.
@@ -47,7 +48,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.modules.inventory.service import find_divergences
+from app.modules.inventory.service import find_divergences, stock_under_merged_models
 from scripts.backup_database import sha256
 from scripts.postgres_tools import (
     CYRILLIC_LOWER,
@@ -178,10 +179,15 @@ async def ledger(scratch: Database) -> Check:
             count = 0
             for organization_id in organizations.all():
                 count += 1
-                for divergence in await find_divergences(
-                    session, organization_id=uuid.UUID(str(organization_id))
-                ):
+                organization = uuid.UUID(str(organization_id))
+                for divergence in await find_divergences(session, organization_id=organization):
                     divergent.append(str(divergence))
+                # A merge leaves nothing under the duplicate, and nothing can
+                # move stock there afterwards (ADR-0008 §9).
+                for stranded in await stock_under_merged_models(
+                    session, organization_id=organization
+                ):
+                    divergent.append(f"stock under a merged model: {stranded}")
     finally:
         await engine.dispose()
     return Check(

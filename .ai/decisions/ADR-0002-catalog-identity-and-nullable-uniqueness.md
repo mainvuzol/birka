@@ -36,7 +36,7 @@ CREATE INDEX ix_family_signature ON product_family
 
 - Several families may share the signature.
 - Creating a second family with an identical signature is allowed but never automatic: it requires a `NEW_MODEL` decision confirmed by a human, and `distinction_note` becomes mandatory on the new row.
-- Automatic merge is forbidden. Merge is explicit, permissioned (`catalog:merge`), reversible via `merged_into_id`, audited, and never rewrites historical `SaleItem` snapshots.
+- Automatic merge is forbidden. Merge is explicit, permissioned (`catalog:merge`), writes `merged_into_id`, is audited, and never rewrites historical `SaleItem` snapshots. *Amended by [ADR-0008](ADR-0008-catalog-correction.md) §10 (owner, 2026-10-03): a merge cannot be undone; it is previewed and confirmed instead.*
 
 ### 2. Sentinel rows only for genuine domain states
 
@@ -85,7 +85,7 @@ Positive:
 
 Negative — and this is the real cost:
 
-- **The database can no longer prevent accidental duplicate families.** Invariant I14 ("uncertain interpretation never merges products") drops from an accidental `DB_ENFORCED` backstop to `SERVICE_ENFORCED` + `RECONCILIATION_DETECTED`. Mitigations, all in task M1-021: the matcher must return `AMBIGUOUS` rather than creating a family when the signature already exists; `NEW_MODEL` requires human confirmation and a `distinction_note`; a duplicate-signature report lists families sharing a signature for periodic review; merge is reversible when a duplicate is confirmed.
+- **The database can no longer prevent accidental duplicate families.** Invariant I14 ("uncertain interpretation never merges products") drops from an accidental `DB_ENFORCED` backstop to `SERVICE_ENFORCED` + `RECONCILIATION_DETECTED`. Mitigations, all in task M1-021: the matcher must return `AMBIGUOUS` rather than creating a family when the signature already exists; `NEW_MODEL` requires human confirmation and a `distinction_note`; a duplicate-signature report lists families sharing a signature for periodic review; a confirmed duplicate is merged, after a preview and an explicit confirmation (a merge cannot be undone — ADR-0008 §10).
 - `NULLS NOT DISTINCT` is unfamiliar to many developers and must be commented in the migration, or someone will "fix" it later.
 - Pinning PostgreSQL ≥ 15 rules out older managed instances. Acceptable — nothing is deployed yet.
 

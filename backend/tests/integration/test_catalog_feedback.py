@@ -19,7 +19,7 @@ from app.modules.catalog.evidence import (
 )
 from app.modules.catalog.feedback import record_alias_feedback
 from app.modules.catalog.matching import preview_match
-from app.modules.catalog.models import ProductVariant
+from app.modules.catalog.models import EntityStatus, ProductVariant
 from tests.conftest import requires_database
 from tests.integration.test_catalog_decisions import confirm, proposal, scope
 from tests.integration.test_catalog_matching import make_alias
@@ -130,6 +130,32 @@ async def test_conflicting_targets_disable_existing_verified_alias(maker):
             session, organization_id=shop.organization_id, raw_text="мій виріб"
         )
         assert all("VERIFIED_ALIAS" not in c["reasons"] for c in preview.candidates)
+
+
+async def test_a_phrase_learned_for_a_merged_model_agrees_with_the_model_that_stays(maker):
+    """ADR-0008 §5: a model merged away and the model that stays are one
+    target. Confirming the old phrase for the model that stays is agreement,
+    not a conflict, and neither alias turns `AMBIGUOUS`. The alias rows stay
+    as they were written."""
+    async with maker() as session:
+        shop = await make_shop(session)
+        original = await session.get(ProductVariant, shop.variant_id)
+        stays = ProductVariant(product_family_id=original.product_family_id, length_cm=71)
+        session.add(stays)
+        await session.flush()
+        existing = await make_alias(session, shop)
+        existing.confirm_count = 3
+        await session.flush()
+        # The model the phrase was learned for is merged into the other one.
+        original.status = EntityStatus.MERGED
+        original.merged_into_id = stays.id
+        await session.flush()
+        decision = await applied(session, shop, variant_id=stays.id)
+        result = await feedback(session, shop, decision, variant_id=stays.id)
+        assert result["status"] != "AMBIGUOUS"
+        await session.refresh(existing)
+        assert existing.status != AliasStatus.AMBIGUOUS
+        assert existing.target_id == shop.variant_id
 
 
 async def test_only_reviewed_explicit_targets_are_accepted(maker):

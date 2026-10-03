@@ -689,3 +689,95 @@ How it is carried out, not decided by the owner:
 - **A paper sale of goods from a delivery that came after the count** needs
   that delivery received first, or the till finds the shelf short.
 
+
+## Owner decision — 2026-10-03 (correcting the catalogue)
+
+Asked when the owner chose it as the next work. A model in the catalogue
+could not be renamed, merged with a duplicate or retired, so a typo made
+while the shops type their stock would stay for good. The owner had never
+given a rule on any of it.
+
+- **Four things:** rename a model; merge a duplicate into the model that
+  stays; retire a model, and bring it back; and warn about a similar name
+  when a new model is created.
+- **The owner and managers correct the catalogue** (`catalog:merge`). A
+  seller creates models but does not correct them.
+- **A rename corrects one model**, the one opened: not every model that
+  shares the word. Everything in its name may be corrected: the model's
+  name, the factory or brand label, colour, material, texture, fur, collar
+  and length. If the corrected model is one that already exists, the app
+  offers to merge them.
+- **Old receipts keep the name they were sold under.** (A rule of the
+  system since M1, invariant I8.)
+- **Merging:**
+  - **The duplicate's stock moves to the model that stays**, in every
+    warehouse and size, recorded in the stock history as a move by the
+    merge. Nothing is added or lost.
+  - **The price of the model that stays is kept**; when it has none, the
+    duplicate's is taken. A store's own price follows the same rule.
+  - **A merge cannot be undone.** Before it, the app shows both models with
+    their stock and asks for confirmation. A mistake is put right with the
+    ordinary steps: a new model and a stock correction.
+  - **Not while the duplicate has anything open:** an order holding goods,
+    borrowed goods, units in «Брак», or an opening list waiting. The app
+    lists what to finish first.
+  - **Afterwards the duplicate leads to the model that stays everywhere:**
+    goods from an old sale of the duplicate come back as the model that
+    stays; «Звіт» counts the two as one; searching the old name finds the
+    model that stays.
+- **Retiring:**
+  - **A retired model is no longer offered** in «Приймання», the
+    catalogue search and the opening lists. What is in stock may still be
+    sold, returned or written off.
+  - **It can be brought back**, and is offered again as before.
+- **A similar name at creation** (Latin letters in place of Cyrillic, case,
+  extra spaces): the app shows the similar model and offers to take it. If
+  the person confirms it is another model, it is still created.
+
+Asked the same day, when a review of the design found what the answers above
+left open:
+- **Only a person with the right over every store merges:** the owner of the
+  network, or a manager in every one of its stores, paused ones included. It
+  is the shared price's rule, since a merge moves stock and prices in every
+  store. Renaming, retiring and bringing back stay with a manager of any
+  store, as creating a model does.
+- **A merge does not reach into another store's own warehouse, or into a
+  blocked one.** While the duplicate has stock there, the merge is refused
+  and the app shows where. A store's own warehouse is changed only by that
+  store, and nothing is done in a blocked store: the goods are moved to the
+  shared warehouse first, or the store unblocked, and then they are merged.
+- **Nothing is merged into a retired model.** The app offers to bring it
+  back first; otherwise a duplicate still received would quietly stop being
+  received.
+
+How it is carried out, not decided by the owner:
+- **"Not received" is a refusal.** A receipt or an opening list's line that
+  names a retired model is refused (`MODEL_RETIRED`), and so is creating a
+  model whose name is a retired model's; the app offers to bring it back.
+- **A retired model's stock also moves between warehouses and is corrected
+  after a count.** The goods are still there; only taking new ones in stops.
+- **A model is not retired while an opening list that waits names it.** The
+  list could then never be approved, and its warehouse would stay waiting.
+- **"Units in «Брак»" are those still there.** A unit sent back to its
+  supplier is out of «Брак» while that return stands, so it does not stop a
+  merge.
+- **What reopens after a merge goes to the model that stays.** A borrowed
+  lot whose invoice or return is cancelled later is sent back to the supplier
+  as the model that stays; the lot keeps naming the duplicate. A «Брак» unit
+  whose return to its supplier is cancelled comes back, and is written off or
+  put back on sale, as the model that stays; the unit keeps its name.
+- **A merge moves stock as the store the person acts in,** and only where
+  that store may change stock.
+- **An order of the model that stays does not stop a merge.** Adding stock
+  takes nothing from what an order holds.
+- **The words of a renamed or merged model stay.** Typing a word now used
+  only by merged models warns, as a similar name does, and offers the model
+  that stays.
+- **A rename that moves a model to another family** finds it as creating a
+  model does: a family that could be the same is offered, never chosen
+  silently.
+- **«Звіт» names a merged model's line by the current name** of the model
+  that stays. This replaces "named as it was last" (2026-10-02) for every
+  model, so a renamed model also shows its new name.
+- **The similar-name check** maps the Latin letters that look Cyrillic
+  (a c e i o p x y k m t b h), ï and ё, and the different apostrophes.

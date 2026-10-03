@@ -55,7 +55,7 @@ from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.damaged.models import IN_BIN, DamagedStatus, DamagedUnit
 from app.modules.inventory.models import MovementReason
-from app.modules.inventory.service import record_adjustment
+from app.modules.inventory.service import current_variants, record_adjustment
 from app.modules.suppliers import service as suppliers
 from app.modules.tenancy.service import LocationCapability, back_on_sale_locations
 from app.modules.transfers.service import TransferLineInput, move_goods
@@ -241,6 +241,17 @@ async def confirm(
     )
 
 
+async def _model_now(session: AsyncSession, *, scope: RequestScope, unit: DamagedUnit) -> uuid.UUID:
+    """The model a unit's stock is held under now. A unit keeps the name it
+    was taken back as, as a sale line does; if that model was merged since,
+    its stock is the model that stays (owner decision, 2026-10-03), held as a
+    stock command holds a model."""
+    leading = await current_variants(
+        session, organization_id=scope.organization_id, variant_ids={unit.product_variant_id}
+    )
+    return leading[unit.product_variant_id]
+
+
 async def return_to_sale(
     session: AsyncSession,
     *,
@@ -295,7 +306,9 @@ async def return_to_sale(
         to_location_id=destination_location_id,
         lines=[
             TransferLineInput(
-                product_variant_id=unit.product_variant_id, size_id=unit.size_id, quantity=1
+                product_variant_id=await _model_now(session, scope=scope, unit=unit),
+                size_id=unit.size_id,
+                quantity=1,
             )
         ],
         correlation_id=correlation_id,
@@ -343,7 +356,7 @@ async def write_off(
         command_id=uuid.uuid5(STEPS, f"{unit.id}:written-off"),
         command_fingerprint=None,
         location_id=unit.location_id,
-        product_variant_id=unit.product_variant_id,
+        product_variant_id=await _model_now(session, scope=scope, unit=unit),
         size_id=unit.size_id,
         quantity_delta=-1,
         reason_code=MovementReason.DAMAGED,
@@ -408,7 +421,9 @@ async def return_to_supplier(
         supplier_id=supplier_id,
         lines=[
             suppliers.ReturnLine(
-                product_variant_id=unit.product_variant_id, size_id=unit.size_id, quantity=1
+                product_variant_id=await _model_now(session, scope=scope, unit=unit),
+                size_id=unit.size_id,
+                quantity=1,
             )
         ],
         note=remark,

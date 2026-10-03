@@ -163,8 +163,54 @@ async def unknown_size_ids(session: AsyncSession, *, organization_id: uuid.UUID)
     )
 
 
+async def current_variants(
+    session: AsyncSession, *, organization_id: uuid.UUID, variant_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID]:
+    """The model each one leads to now: itself, or the model a merge kept.
+
+    `merged_into_id` always names a model that is not merged, since a merge
+    points the models merged into its duplicate at the model that stays too
+    (ADR-0008 §3), so this is one step. The step is still taken within this
+    organization only: an id that is unknown or foreign leads nowhere and is
+    left out, rather than handing one shop another's model.
+
+    Reads without a lock, for search, the report and naming. A command that
+    moves stock resolves under a lock instead (`hold_current_variants`).
+    """
+    if not variant_ids:
+        return {}
+    rows = await session.execute(
+        select(ProductVariant.id, ProductVariant.merged_into_id)
+        .join(ProductFamily, ProductFamily.id == ProductVariant.product_family_id)
+        .where(
+            ProductVariant.id.in_(set(variant_ids)),
+            ProductFamily.organization_id == organization_id,
+        )
+    )
+    leading = {variant_id: merged_into or variant_id for variant_id, merged_into in rows.all()}
+    targets = {target for source, target in leading.items() if target != source}
+    if targets:
+        # The target must be this organization's too; a pointer is a plain
+        # self-reference with no tenant key of its own.
+        own = set(
+            (
+                await session.scalars(
+                    select(ProductVariant.id)
+                    .join(ProductFamily, ProductFamily.id == ProductVariant.product_family_id)
+                    .where(
+                        ProductVariant.id.in_(targets),
+                        ProductFamily.organization_id == organization_id,
+                    )
+                )
+            ).all()
+        )
+        leading = {source: target for source, target in leading.items() if target in own}
+    return leading
+
+
 __all__ = [
     "VariantDescription",
+    "current_variants",
     "describe_variants",
     "size_label",
     "size_labels",

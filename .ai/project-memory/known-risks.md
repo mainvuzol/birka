@@ -68,7 +68,7 @@ Found by the independent code reviews (2026-09-28). The fixes are in the report;
 - **No request-size limit or rate limit in front of the API.** `infra/Caddyfile` sets no body limit, and nothing limits requests per user. This predates M1-023 and applies to every endpoint.
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
 - **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`, and it is not measured. By definition nothing else has written to that warehouse yet.
-- **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval.
+- **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
 - **Lines are stored verbatim, including bidirectional and zero-width characters.** Nothing renders them today. A future review screen must neutralise them.
 - **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
 
@@ -468,8 +468,59 @@ See the [report](sales-report-report.md).
   the days they are made.
 - **Debt payments are not in the «Продажі й повернення» list**, as the owner
   chose its contents; their sum is in «Внески за борг».
-- **A model's name is the one its latest sale or return of those days
-  froze.** The report never reads the catalogue.
+- **A model's name is its current one** since 2026-10-03 (ADR-0008): the
+  report reads `catalog.read` to count a merged model with the model that
+  stays. Its figures still come from the frozen lines.
 - **A day is the store's own clock.** Every store is Europe/Kyiv today; a
   network whose stores kept different clocks would add up days that do not
   quite match.
+
+## Correcting the catalogue — 2026-10-03
+
+See the [report](catalog-correction-report.md) and
+[ADR-0008](../decisions/ADR-0008-catalog-correction.md).
+
+- **A merge cannot be undone,** as the owner decided. A wrong one is put
+  right with a new model and stock corrections; nothing in the app helps
+  with that beyond the preview before it.
+- **Every stock command holds its models first** (`FOR KEY SHARE`), so a
+  merge, a rename or a retirement and a command on the same model run one
+  after the other. A sale of a model being merged waits for the merge: a few
+  milliseconds per stock key, on the till's hot path, whose release reading
+  is still owed (checklist row 22).
+- **A refusal that proves nothing was recorded** (`details.recorded = false`)
+  settles a phone's unknown attempt. It is true because every stock command
+  looks its `command_id` up before it locks stock, and every correction
+  before it decides; a new command must keep that order, or a refusal would
+  clear an attempt that did commit.
+- **The similar-name check reads without a lock.** Two shops typing two new
+  spellings of one word in the same instant both pass; a merge puts it right.
+- **The check is symmetric.** Once a typo is in the catalogue and in use,
+  typing the right spelling warns too, naming the typo. That is the moment to
+  merge the typo away; until then the person confirms the right spelling.
+- **The fold also maps b, h, m and t,** which look Cyrillic only in capitals.
+  A Latin word may be warned about against a Cyrillic one it does not look
+  like; it costs one confirmation.
+- **A merge refuses while the duplicate has stock another store keeps** (its
+  own warehouse) or in a blocked store, as the owner chose. The goods are
+  moved to the shared warehouse by their store first.
+- **Only someone with `catalog:merge` in every store merges.** While any
+  store is blocked or archived, a manager holding it store by store cannot
+  merge, even one who is a manager there too: a store that does not trade
+  gives its people's grants nothing, so the right cannot be seen. The owner
+  of the network, whose membership is organization-wide, still can. The
+  shared price works the same way. Whether an archived store should count
+  as "every store" is a question for the owner if it comes up.
+- **A family a correction emptied is merged** into the family its model went
+  to, so family search does not offer the typo. A family that never had a
+  model is still listed, as before.
+- **A rename that moves a model to another family** asks, as creating a model
+  does, when a family could be the same one. Adding a source to a model whose
+  family states none offers that very family as a candidate: keeping it keeps
+  the name without the source, so the separate-model answer is the way to add
+  it.
+- **A merged model's lots stay its own.** The lot list names the duplicate;
+  goods sent back from it go as the model that stays.
+- **Stock left under a merged model is reported only by the restore drill**
+  (`inventory.stock_under_merged_models`, beside the ledger's reconciliation).
+  No screen shows it.

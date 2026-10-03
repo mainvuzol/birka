@@ -145,6 +145,10 @@ class ProductRequest(BaseModel):
     variant: VariantPayload = Field(default_factory=VariantPayload)
     sizes: list[SizePayload] = Field(min_length=1, max_length=50)
 
+    # The person saw a similar name and says this is another one (owner
+    # decision, 2026-10-03). Without it, a similar name is refused once.
+    similar_confirmed: bool = False
+
     @model_validator(mode="after")
     def _identity_is_stated_once(self) -> ProductRequest:
         named = self.concept is not None
@@ -183,6 +187,9 @@ class ProductResponse(BaseModel):
     sizes: list[SizeResponse]
     family_created: bool
     variant_created: bool
+    # The merged model whose name this was: the answer is the model that
+    # stays (ADR-0008 §4).
+    redirected_from: uuid.UUID | None = None
 
 
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
@@ -244,6 +251,7 @@ async def create(
             ),
             sizes=tuple(SizeDraft(system=size.system, code=size.code) for size in payload.sizes),
         ),
+        similar_confirmed=payload.similar_confirmed,
     )
 
     body = ProductResponse(
@@ -262,6 +270,7 @@ async def create(
         ],
         family_created=result.family_created,
         variant_created=result.variant_created,
+        redirected_from=result.redirected_from,
     )
     await idempotency.complete(
         session,
