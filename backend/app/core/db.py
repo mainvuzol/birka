@@ -52,6 +52,11 @@ def create_engine(settings: Settings) -> AsyncEngine:
         max_overflow=settings.db_max_overflow,
         pool_pre_ping=True,
         future=True,
+        # A database error's text otherwise ends with the statement's values,
+        # `[parameters: ('Ірина Коваль', '+38 (067) 123-45-67')]` for a debt or
+        # the search text for a debt search, and that text reaches the log and
+        # Sentry with the traceback. The statement itself stays, for debugging.
+        hide_parameters=True,
     )
 
 

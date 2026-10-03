@@ -15,5 +15,7 @@ export default defineConfig({
       },
     },
   },
-  build: { outDir: "dist", sourcemap: true },
+  // No source maps: served from the public domain they would hand anyone the
+  // app's whole source with its comments, and no error tracker reads them.
+  build: { outDir: "dist", sourcemap: false },
 });

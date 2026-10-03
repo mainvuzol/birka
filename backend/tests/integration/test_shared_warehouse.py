@@ -30,7 +30,7 @@ from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import func, insert, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -103,8 +103,16 @@ async def make_two_shops(
         child = Store(
             organization_id=org.id, name="Дочірній", code="CHILD", kind=StoreKind.SECONDARY
         )
-        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Оля")
-        session.add_all([primary, child, user])
+        session.add_all([primary, child])
+        # The person through the table, naming only the columns every
+        # revision has: migration tests build their shops before upgrading,
+        # and the ORM would also ask back for columns added since.
+        user_id = uuid.uuid4()
+        await session.execute(
+            insert(AppUser.__table__).values(
+                id=user_id, telegram_user_id=uuid.uuid4().int % 2**62, display_name="Оля"
+            )
+        )
         await session.flush()
 
         shared = await provision_location(
@@ -142,7 +150,7 @@ async def make_two_shops(
             child_store=child.id,
             shared_warehouse=shared,
             child_warehouse=child_warehouse,
-            user_id=user.id,
+            user_id=user_id,
         )
 
 

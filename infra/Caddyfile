@@ -1,22 +1,81 @@
-# Telegram requires HTTPS for a Mini App. Caddy obtains and renews the
-# certificate automatically for a real domain; on localhost it serves HTTP.
+# Telegram requires HTTPS for a Mini App. For a real domain Caddy obtains and
+# renews the certificate itself. On `localhost` it serves HTTPS too, with its
+# own local certificate authority, which nothing else trusts. CI sets the
+# address to `http://localhost` to talk to it in plain HTTP.
+{
+	# Caddy's own log (an error, such as the API being unreachable, is logged
+	# with its request) never keeps a query string or a Referer: a debt search
+	# carries a customer's name or phone in its query (`credits/customers`).
+	log default {
+		format filter {
+			request>uri regexp "[?].*" ""
+			request>headers>Referer delete
+		}
+	}
+}
+
 {$BIRKA_DOMAIN} {
 	encode gzip
 
 	# API
 	handle /api/* {
+		# The request id is the server's to mint: it is written into the
+		# audit log, so a client must not choose it (the API makes one
+		# when none arrives, app/core/correlation.py).
+		request_header -X-Request-ID
+
+		# The largest body anything legitimate sends is an opening stock
+		# list: at most 1 000 lines and 100 000 characters (api/v1/snapshots.py),
+		# under 0.4 MB even at four bytes a character. A bigger body is
+		# refused here with 413, before the API holds it in memory.
+		request_body {
+			max_size 1MB
+		}
+
+		# Answers carry customers' names, phones and debts: never kept
+		# by a browser or anything in between. Deferred, so it is the
+		# only Cache-Control an answer leaves with.
+		header {
+			Cache-Control "no-store"
+			defer
+		}
+
+		# Caddy trusts no proxy in front of it, so the X-Forwarded-For
+		# the API reads is the address Caddy was reached from, never one
+		# a client wrote (backend/Dockerfile).
 		reverse_proxy api:8000
 	}
 
-	# Mini App static build
+	# The bundle's files. Their names carry a hash of their content, so a
+	# name never changes meaning: kept for a year and never asked again. The
+	# previous bundles' files stay for a month after they were last
+	# published (frontend/Dockerfile), so an app opened before an update
+	# still finds its own. Only a file that exists is marked so: a missing
+	# one is an honest 404, not the page, and is not cached.
+	handle /assets/* {
+		root * /srv/web
+		@exists {
+			file
+			not path */
+		}
+		header @exists Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# The page itself names the bundle it needs, so every open asks whether
+	# it changed (a cheap 304 when it did not). Without this a phone could
+	# keep an old page for hours after an update.
 	handle {
 		root * /srv/web
+		header Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
 
 	header {
-		# The Mini App is embedded by Telegram; everything else is denied.
+		# Only Telegram may embed the Mini App; no other site can frame
+		# it. Who may sign in is decided by Telegram's signed launch
+		# data, not by this header.
 		Content-Security-Policy "frame-ancestors https://web.telegram.org https://telegram.org"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"

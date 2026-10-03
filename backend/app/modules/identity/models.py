@@ -7,7 +7,7 @@ it (`.ai/architecture.md`, state ownership).
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Boolean, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -22,6 +22,9 @@ class AppUser(UUIDPrimaryKey, TimestampMixin, Base):
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # Raised by one whenever this person's sign-ins are ended (owner decision,
+    # 2026-10-03): a session token issued under a lower number is refused.
+    session_epoch: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     __table_args__ = (UniqueConstraint("telegram_user_id", name="uq_app_user_telegram_user_id"),)
 

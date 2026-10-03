@@ -79,6 +79,18 @@ class Shop:
                 session, approved_by=by or self.owner, telegram_user_id=telegram_user_id
             )
 
+    async def sign_out(self, telegram_user_id: int, *, by: int | None = None) -> int:
+        async with self.maker.begin() as session:
+            return await people.sign_out(
+                session, approved_by=by or self.owner, telegram_user_id=telegram_user_id
+            )
+
+    async def epoch(self, telegram_user_id: int) -> int | None:
+        async with self.maker() as session:
+            return await session.scalar(
+                select(AppUser.session_epoch).where(AppUser.telegram_user_id == telegram_user_id)
+            )
+
     async def stores_of(self, telegram_user_id: int) -> dict[str, frozenset[Permission]]:
         """What this person may do where, as their next request would see it."""
         async with self.maker() as session:
@@ -401,6 +413,88 @@ async def test_one_organization_per_person(shop: Shop, maker) -> None:
     assert set(await other.stores_of(seller)) == {"MAIN"}
 
 
+async def test_sign_ins_are_ended_on_an_owners_word_and_access_is_kept(shop: Shop) -> None:
+    """A lost phone (owner decision, 2026-10-03). What a token then gets is in
+    `test_session_epoch.py`."""
+    seller = telegram_id()
+    await shop.grant(seller, "MAIN", "SELLER")
+    await shop.grant(seller, None, "MANAGER")
+
+    assert await shop.sign_out(seller) == 2
+    assert await shop.sign_out(seller) == 2
+
+    assert await shop.epoch(seller) == 2
+    assert set(await shop.stores_of(seller)) == {"MAIN", "SECOND"}
+    first, second = await shop.audit("people.signed_out")
+    assert first.actor_user_id == await shop.user_id(shop.owner)
+    assert (first.entity_type, first.entity_id) == ("app_user", await shop.user_id(seller))
+    assert (first.before, first.after) == (
+        {"session_epoch": 0},
+        {"telegram_user_id": seller, "session_epoch": 1},
+    )
+    assert second.after["session_epoch"] == 2
+    # Their memberships are untouched: nothing was granted or removed.
+    assert await shop.audit("people.removed") == []
+
+
+async def test_ending_sign_ins_is_approved_as_removing_the_person(shop: Shop) -> None:
+    """It reaches every store the person works in, so the approver must be
+    able to take them out of each: all or nothing."""
+    manager = telegram_id()
+    await shop.grant(manager, None, "MANAGER")
+    child_owner = telegram_id()
+    await shop.grant(child_owner, "SECOND", "OWNER")
+    hers = telegram_id()
+    await shop.grant(hers, "SECOND", "SELLER")
+    both = telegram_id()
+    await shop.grant(both, "SECOND", "SELLER")
+    await shop.grant(both, "MAIN", "SELLER")
+
+    with pytest.raises(PermissionDeniedError, match="Only an owner"):
+        await shop.sign_out(hers, by=manager)
+    with pytest.raises(PermissionDeniedError, match="may approve"):
+        await shop.sign_out(hers, by=telegram_id())
+    with pytest.raises(PermissionDeniedError, match="in MAIN"):
+        await shop.sign_out(both, by=child_owner)
+    with pytest.raises(PermissionDeniedError, match="every store"):
+        await shop.sign_out(manager, by=child_owner)
+    assert await shop.sign_out(hers, by=child_owner) == 1
+
+    assert (await shop.epoch(hers), await shop.epoch(both), await shop.epoch(manager)) == (1, 0, 0)
+    assert len(await shop.audit("people.signed_out")) == 1
+
+
+async def test_only_this_organizations_people_are_signed_out(shop: Shop, maker) -> None:
+    with pytest.raises(NotFoundError, match="works here"):
+        await shop.sign_out(telegram_id())
+    gone = telegram_id()
+    await shop.grant(gone, "MAIN", "SELLER")
+    await shop.remove(gone, "MAIN")
+    with pytest.raises(NotFoundError, match="works here"):
+        await shop.sign_out(gone)
+    # Nor does one organization's owner reach into the other.
+    other = await open_shop(maker)
+    theirs = telegram_id()
+    await other.grant(theirs, "MAIN", "SELLER")
+    with pytest.raises(NotFoundError, match="works here"):
+        await shop.sign_out(theirs)
+    assert await other.epoch(theirs) == 0
+
+
+async def test_turning_off_ends_sign_ins_once_and_leaving_one_store_does_not(shop: Shop) -> None:
+    seller = telegram_id()
+    await shop.grant(seller, "MAIN", "SELLER")
+    await shop.grant(seller, "SECOND", "SELLER")
+
+    await shop.remove(seller, "MAIN")
+    assert await shop.epoch(seller) == 0
+    assert await shop.deactivate(seller) == 1
+    assert await shop.epoch(seller) == 1
+    # Already off: nothing changes.
+    assert await shop.deactivate(seller) == 0
+    assert await shop.epoch(seller) == 1
+
+
 def run_people(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 — fixed module, current test interpreter
         [sys.executable, "-m", "scripts.people", *args],
@@ -430,6 +524,10 @@ async def test_the_server_command(shop: Shop) -> None:
         "grant", "--approved-by", str(seller), "--telegram-user-id", str(telegram_id()),
         "--all-stores", "--role", "SELLER",
     )  # fmt: skip
+    signed_out = run_people("sign-out", "--approved-by", owner, "--telegram-user-id", str(seller))
+    not_signed_out = run_people(
+        "sign-out", "--approved-by", str(seller), "--telegram-user-id", owner
+    )
     removed = run_people(
         "remove", "--approved-by", owner, "--telegram-user-id", str(seller), "--store", "MAIN"
     )
@@ -441,9 +539,19 @@ async def test_the_server_command(shop: Shop) -> None:
     assert refused.returncode == 2
     assert refused.stderr.endswith("refused: Only an owner may change who works in every store\n")
     assert refused.stdout == ""
+    assert signed_out.stdout == (
+        f"signed out: {seller}, every sign-in ended, 1 role(s) kept; for a lost phone,"
+        " also end its Telegram session (Telegram > Settings > Devices)\n"
+    )
+    assert not_signed_out.returncode == 2
+    assert not_signed_out.stderr.endswith(
+        "refused: Only an owner may change who works in every store\n"
+    )
     assert removed.stdout == f"removed: {seller} from MAIN\n"
     assert turned_off.stdout == f"deactivated: {seller}, 0 role(s) ended\n"
     assert not await _has_access(shop, seller)
+    # Signed out once, and once more as they left their last store.
+    assert await shop.epoch(seller) == 2
 
 
 async def _people(maker) -> list[people.Person]:

@@ -81,6 +81,14 @@ export function errorText(error: unknown): string {
       : "Магазин заблоковано власником: операції в ньому зупинено.";
   if (error.status === 401)
     return "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.";
+  // Too many sign-ins from one address are refused for a while, so that the
+  // public address cannot be flooded with them.
+  if (error.code === "RATE_LIMITED")
+    return "Забагато спроб входу. Зачекайте хвилину й спробуйте ще раз.";
+  // The edge refuses a body larger than anything the app sends, before the
+  // API reads it, and without a body of its own to explain.
+  if (error.status === 413)
+    return "Запит завеликий: сервер його не прийняв. Зверніться до адміністратора.";
   if (error.status === 403)
     return "Немає доступу до цієї операції або складу. Зверніться до менеджера.";
   // Correcting the catalogue (owner decision, 2026-10-03).

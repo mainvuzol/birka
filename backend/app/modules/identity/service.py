@@ -61,7 +61,8 @@ async def assert_user_is_active(session: AsyncSession, user_id: uuid.UUID) -> Ap
 
     Checked on every authenticated request, not only at login: an owner who
     disables an account expects it to stop working now, not when a 12-hour
-    session token happens to expire.
+    session token happens to expire. The account it returns carries the
+    session epoch the token is then held to (`session.py`).
     """
     user = (
         await session.execute(select(AppUser).where(AppUser.id == user_id))
@@ -135,6 +136,7 @@ async def authenticate_with_init_data(
         secret=settings.session_secret.get_secret_value(),
         ttl_seconds=settings.session_ttl_seconds,
         now=now,
+        session_epoch=user.session_epoch,
     )
     await session.commit()
 

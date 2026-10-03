@@ -5,7 +5,7 @@ Three callers, one per function group:
 - `scripts.nightly_backup` records each night with `record_night`;
 - `GET /api/v1/backups` reads `overview`;
 - `scripts.backup_watch` calls `queue_alerts`, then `deliver`, every few
-  minutes.
+  minutes — and `queue_alert` for the site's certificate in between.
 
 A message is written as `PENDING` for each owner before anything is sent,
 under a key that names its news, so looking twice queues nothing twice. It is
@@ -28,8 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.authz.permissions import Permission
 from app.modules.authz.service import organization_wide_holders
+from app.modules.backups.certificate import KEY_PREFIX as CERTIFICATE
 from app.modules.backups.models import AlertKind, AlertStatus, BackupAlert, BackupRun
-from app.modules.backups.status import State, alert_for, state_of
+from app.modules.backups.status import Alert, State, alert_for, state_of
 from app.modules.identity.service import telegram_chats
 from app.modules.telegram.messages import UndeliverableError
 
@@ -118,14 +119,28 @@ async def overview(
 
 
 async def queue_alerts(session: AsyncSession, *, now: datetime) -> int:
-    """Queue what the owners must hear now, once per owner. Returns how many
-    messages were queued. Commits."""
+    """Queue what the owners must hear now about the backups, once per owner.
+    Returns how many messages were queued. Commits."""
     last_told = await session.scalar(
-        select(BackupAlert.kind).order_by(BackupAlert.created_at.desc(), BackupAlert.id).limit(1)
+        select(BackupAlert.kind)
+        # A warning about the site's certificate shares the queue, not the
+        # story: it must not make a good night say the backups "work again".
+        .where(~BackupAlert.key.startswith(CERTIFICATE, autoescape=True))
+        .order_by(BackupAlert.created_at.desc(), BackupAlert.id)
+        .limit(1)
     )
     alert = alert_for(await latest_night(session), now, AlertKind(last_told) if last_told else None)
     if alert is None:
         return 0
+    return await queue_alert(session, alert, now=now)
+
+
+async def queue_alert(session: AsyncSession, alert: Alert, *, now: datetime) -> int:
+    """Queue `alert` once for each owner: everyone holding `backup:view`
+    organization-wide, in their chat with the bot. The site's certificate
+    (`certificate.certificate_alert`) is told to the same people, the owner
+    decided on 2026-10-03, "as about a failed backup". Returns how many
+    messages were queued. Commits."""
     owners = await organization_wide_holders(session, Permission.BACKUP_VIEW)
     chats = await telegram_chats(session, owners)
     if not chats:
@@ -200,6 +215,7 @@ __all__ = [
     "deliver",
     "latest_night",
     "overview",
+    "queue_alert",
     "queue_alerts",
     "record_night",
 ]

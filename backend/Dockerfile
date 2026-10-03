@@ -1,14 +1,21 @@
-FROM python:3.12-slim AS base
+# The Python CI and the local checks run on, to the patch release: a floating
+# `3.12-slim` would change it under the server at its next build, untested.
+FROM python:3.12.14-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# Dependencies first so a code change does not reinstall the world.
-COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .
+# Dependencies first so a code change does not reinstall the world. Exactly
+# the versions CI tested (requirements.lock), and nothing they did not ask
+# for: --no-deps, so a package missing from the lock fails `pip check` here
+# rather than arriving at whatever version PyPI has that day. The project
+# itself is not installed: the code is copied below and imported from /app.
+COPY requirements.lock ./
+RUN pip install --no-deps -r requirements.lock && pip check
 
 COPY app ./app
 COPY migrations ./migrations
@@ -24,7 +31,16 @@ EXPOSE 8000
 
 # Migrations are NOT run automatically on boot: a production migration is a
 # human-approved step (.ai/policies/tool-permissions.md, level 3).
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+#
+# Behind Caddy every request arrives from Caddy's address. The proxy headers
+# give the app the address Caddy was reached from, which the sign-in limit
+# counts by. Trusting them from any sender ('*') is safe only because nothing
+# but Caddy can reach this port: infra/docker-compose.yml exposes 8000 on the
+# compose network and never publishes it, and Caddy, which trusts no proxy in
+# front of it, replaces any X-Forwarded-For a client sends with the address
+# it saw.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]
 
 # Backups and restore drills (.ai/project-memory/backup-restore-runbook.md).
 # The same code, plus the PostgreSQL client tools of the server's major

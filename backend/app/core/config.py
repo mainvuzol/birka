@@ -47,7 +47,25 @@ class Settings(BaseSettings):
 
     # --- session -----------------------------------------------------------
     session_secret: SecretStr = SecretStr("")
+    # Owner decision, 2026-10-03: a seller stays signed in 12 hours.
     session_ttl_seconds: int = 12 * 3600
+    # Sign-ins one address may make (`app.core.rate_limit`): a burst, then so
+    # many a minute. Raised only for the end-to-end journeys, which sign in
+    # from one address far more often than people do.
+    sign_ins_per_minute: int = Field(default=30, gt=0)
+    sign_in_burst: int = Field(default=30, gt=0)
+
+    # --- the site's certificate ---------------------------------------------
+    # The domain the Mini App is served on, as Caddy serves it (BIRKA_DOMAIN
+    # in compose). The owner decided on 2026-10-03 that the bot tells them a
+    # week before its certificate runs out; `scripts.backup_watch` looks.
+    # Unset, localhost or a bare address: there is no public certificate, and
+    # nothing is looked at.
+    public_domain: str | None = None
+    # Where the watcher asks for that certificate: Caddy, on the compose
+    # network, asked for `public_domain` as a browser would ask for it.
+    edge_host: str = "caddy"
+    edge_port: int = 443
 
     # --- observability -----------------------------------------------------
     log_level: str = "INFO"

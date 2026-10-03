@@ -160,13 +160,18 @@ _CUSTOMER = case(
 
 
 def terms(*, customer_name: str, customer_phone: str, paid_now: Decimal) -> CreditTerms:
-    """The seller's statement, checked and in the form the ledger keeps."""
-    name = customer_name.strip()
+    """The seller's statement, checked and in the form the ledger keeps.
+
+    A name and a phone are one line each: every run of whitespace, a line
+    break included, becomes one space. The Mini App's fields cannot type a
+    line break anyway, and a value split over lines would slip past what
+    hides a refused row's values from the logs (`core.logging`)."""
+    name = " ".join(customer_name.split())
     if not name or len(name) > MAX_NAME or not is_storable(name):
         raise ValidationFailedError(
             f"The customer's name is 1 to {MAX_NAME} characters", reason="CUSTOMER_NAME"
         )
-    phone = customer_phone.strip()
+    phone = " ".join(customer_phone.split())
     if len(phone) > MAX_PHONE or len(digits(phone)) not in PHONE_DIGITS or not is_storable(phone):
         raise ValidationFailedError(
             "The customer's phone has 10 to 15 digits", reason="CUSTOMER_PHONE"

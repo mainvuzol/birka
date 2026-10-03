@@ -1,0 +1,17 @@
+# What the image build must not take from the checkout it runs in. The build
+# installs its own node_modules with npm ci and makes its own dist; a copy from
+# a developer's machine (another OS's native binaries, an old build, a stale
+# TypeScript build record) would land on top of them. Local .env files are left
+# out too: the bundle is built from the commit, nothing else.
+node_modules
+dist
+test-results
+playwright-report
+blob-report
+.vite
+*.tsbuildinfo
+.env
+.env.*
+npm-debug.log*
+Dockerfile
+.dockerignore
