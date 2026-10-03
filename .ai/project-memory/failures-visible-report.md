@@ -198,10 +198,13 @@ A fourteenth claim was refuted.
 - **Nobody is set up to hear yet.** No administrator is named and no outside
   service exists, so a dead server is noticed only by the sellers until
   then (runbook, step 8a).
-- **The owner's to change** (business rules, "carried out"):
-  - a basket still being filled is lost when a screen breaks;
+- **Confirmed by the owner the same day** (business rules, "carried
+  out"):
+  - a basket still being filled is lost when a screen breaks, which is fine
+    for now;
   - "works again" sounds by the same hours as the trouble;
-  - the administrator hears of the server, not of backups.
+  - the administrator hears of the server, not of backups, for now.
+- **Who hears is set up at publication or a test,** when the owner says so.
 - **What stays open is in the risk register,** "failures are visible":
   - the sign-in alarm faked with two staff ids;
   - the watcher on the server it watches;

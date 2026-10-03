@@ -909,8 +909,10 @@ often is the owner's to decide:
   laptop as before. A reading on the real server is an optional step.
 
 **Carried out, 2026-10-03.** The owner's answers did not cover these; the
-build takes the readings below. Each is the owner's to change:
+build took the readings below. The owner then confirmed three of them the
+same day:
 - **"Works again" sounds by the same hours** as the trouble it ends.
+  Confirmed: "it fits".
 - **An unsent sale.**
   - A sale sent whose answer never arrived is kept on the phone, and is
     checked after «Перезапустити», as before.
@@ -918,6 +920,8 @@ build takes the readings below. Each is the owner's to change:
     screen loses it.
   - The crash screen says which of the two it is. It never claims a basket
     was kept.
+  - Confirmed: if something happens to the app, the basket is emptied, and
+    that is fine for now.
 - **"While people kept trying"** means refusals from people, not strangers.
   The sign-in endpoint is open to anyone, so a refusal counts only when it
   comes from:
@@ -930,4 +934,14 @@ build takes the readings below. Each is the owner's to change:
   - at least two people were refused. One is enough when their launch data
     was dated in the future, which only a wrong clock does.
 - **The administrator hears of trouble on the server, not of backups.**
-  Backups stay the owner's.
+  Backups stay the owner's. Confirmed, for now.
+
+**Also answered on 2026-10-03:**
+- **Who is set up to hear.** The administrator's rights, and with them their
+  Telegram id, are given when the app is published or tested. The owner
+  says when; nothing is set up before that.
+- **A sign-in alarm faked** with the Telegram ids of two of the shop's
+  people is accepted for now. Keeping their phones is the people's own
+  responsibility, and the check may be improved later.
+- **The watcher lives on the server it watches.** Confirmed: the outside
+  service is what notices that server dying whole.

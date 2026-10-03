@@ -618,7 +618,9 @@ See the [report](failures-visible-report.md) and
 - **Nobody hears of a server that dies whole until the outside service is
   set up**, in the owner's name, and no administrator is named yet
   (runbook, step 8a). Until then the bot tells the owner of what the
-  watcher sees, and only the sellers notice a dead server.
+  watcher sees, and only the sellers notice a dead server. The owner
+  decided on 2026-10-03 to give the rights when the app is published or
+  tested, and will say when.
 - **The watcher lives on the server it watches.**
   - With the database down, it tells the owners from the chats it
     remembers.
@@ -627,7 +629,9 @@ See the [report](failures-visible-report.md) and
 - **The sign-in alarm can still be faked** by someone who knows the Telegram
   ids of two active people of the shop and sends forged launch data in their
   names. Checking the payload's Ed25519 `signature` against Telegram's
-  public key would close it.
+  public key would close it. Accepted by the owner on 2026-10-03: keeping
+  their phones is the people's responsibility, and the check may be
+  improved later.
   - Launch data that expired or is dated in the future counts for any
     Telegram user it names, since Telegram signed it.
   - The counts live in the API's memory: one process on the server, reset
@@ -644,7 +648,8 @@ See the [report](failures-visible-report.md) and
   flood from many addresses pushes older lines out.
 - **A basket still being filled is lost when a screen breaks.** Only a
   command sent without an answer is kept, and the crash screen says which.
-  This is the owner's to change (business rules, "carried out").
+  The owner confirmed this on 2026-10-03: the basket is emptied, and that
+  is fine for now.
   - A command waiting in another store, or for another person on the same
     phone, makes the screen say a command is kept.
 - **One narrow case writes an ended trouble twice** in the «Резервні копії»
