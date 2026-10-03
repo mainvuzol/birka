@@ -660,6 +660,7 @@ See the [report](failures-visible-report.md) and
 - **Error details are in the server's log only** (owner, 2026-10-03), and
   nobody reads that log unless something is reported. Sentry is ready but
   off.
-- **The new edge probes have never run against Docker or Caddy.** That
-  covers `/ready` through Caddy, `/internal` answered 404, the API's
-  healthcheck and the release tag. CI's `edge` job is their first run.
+- **The new edge probes ran on a local Docker only** (2026-10-03, CI's own
+  steps). That covers `/ready` through Caddy, `/internal` answered 404, the
+  API's healthcheck and the release tag. The watcher's messages have not
+  reached a real Telegram.

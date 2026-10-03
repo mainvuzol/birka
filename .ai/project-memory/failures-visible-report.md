@@ -1,7 +1,8 @@
 # Failures are visible — 2026-10-03
 
 Baseline: `e10f0fd` (before the public domain, merged as PR #66).
-Status: implemented and verified locally. The edge is first proven by CI.
+Status: implemented and verified locally, the edge included: CI's `edge`
+job ran on a local Docker on 2026-10-03.
 Migration `0034`.
 Branch: `feat/failures-visible`.
 Design: [ADR-0011](../decisions/ADR-0011-failures-are-visible.md).
@@ -147,6 +148,33 @@ includes the sale paid in parts, measured for the first time. The worst p95
 was 192 ms against 500. See the
 [hot path report](hot-path-budget-report.md#update--2026-10-03-the-release-reading-every-case-gated).
 
+**The edge, on Docker** (Docker Desktop 29.8.1, Compose v5.5.1, an
+isolated compose project with Caddy on other ports). CI's `edge` job's
+steps ran as written, and every step passed:
+- the Caddyfile validated;
+- only Caddy publishes a port;
+- the images built: `python:3.12.14-slim`, `alpine:3.22` and the bundle;
+- `/api/v1/ready` through Caddy;
+- `/internal/status` answered 404 by Caddy, and naming the build inside;
+- the note's 204;
+- the API healthy to Docker;
+- the headers and limits, and the sign-in limit with made-up addresses;
+- Caddy's log with the API down;
+- a republish.
+
+Evidence: [`output/verification/2026-10-03-edge/`](../../output/verification/2026-10-03-edge/).
+
+**The watcher beside the real API**, in the same stack. The API was stopped
+for six minutes:
+- the watcher noted the first failed look at 16:01:14 UTC;
+- it started `NOT_ANSWERING`, «Сервер застосунку не відповідає.», exactly
+  five minutes later;
+- it ended the trouble at the first look after the API came back, as
+  lasting 6 minutes.
+
+With nobody to tell, it said so in its log and sent nothing. Its log lines
+were JSON, as configured.
+
 **Built by five agents in parallel,** each on its own files and its own test
 database, then joined. The build found an existing defect in how loggers
 were bound, and a transaction the new idle limit would have cut; both are
@@ -192,9 +220,9 @@ A fourteenth claim was refuted.
 
 ## Not covered here
 
-- **The edge's new probes have never run:** no Docker or Caddy here. CI's
-  `edge` job runs `/ready` through Caddy, `/internal` answered 404, the
-  note's 204, the API's healthcheck and the version for the first time.
+- **Telegram itself was not reached.** The watcher's messages, its
+  check-in, and `getMe` are tested against Telegram's answers played back,
+  and on Docker it had nobody to tell.
 - **Nobody is set up to hear yet.** No administrator is named and no outside
   service exists, so a dead server is noticed only by the sellers until
   then (runbook, step 8a).
