@@ -9,22 +9,31 @@ from unittest.mock import AsyncMock
 
 import pytest
 import sentry_sdk
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
+from aiohttp import web
+from scripts.backup_watch import ping
 from sentry_sdk.envelope import Envelope
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from sentry_sdk.transport import Transport
 
 from app.api.deps import get_current_scope
 from app.core import db
 from app.core.config import Settings
-from app.main import _install_sentry, create_app
+from app.core.sentry import install_sentry
+from app.main import create_app
 from app.modules.identity.service import authenticate_with_init_data
+from app.modules.telegram.messages import check_bot
 from tests.conftest import TEST_BOT_TOKEN, build_init_data
 from tests.unit.test_log_privacy import (
+    BOT_TOKEN,
     DIGITS,
     HTTP_PROTOCOLS,
     NAME,
     PHONE,
     SEARCH,
     STORE_ID,
+    TELEGRAM_CALL,
     assert_no_customer,
     engine_hides_parameters,
     logging_as_on_the_server,
@@ -65,7 +74,7 @@ async def test_auth_exception_event_does_not_expose_credentials(
         telegram_bot_token=TEST_BOT_TOKEN,
         session_secret="privacy-test-session-secret-at-least-32-bytes",
     )
-    _install_sentry(settings)
+    install_sentry(settings, component="api")
     client = sentry_sdk.get_client()
     try:
         with sentry_sdk.isolation_scope() as scope:
@@ -111,7 +120,7 @@ def _install_memory_sentry(monkeypatch: pytest.MonkeyPatch, settings: Settings) 
         return real_init(**kwargs, transport=transport)
 
     monkeypatch.setattr(sentry_sdk, "init", init_with_memory_transport)
-    _install_sentry(settings)
+    install_sentry(settings, component="api")
     return transport
 
 
@@ -190,9 +199,9 @@ async def test_a_failed_debt_search_reaches_sentry_and_the_log_without_the_custo
 
 
 def test_breadcrumbs_lose_their_query_strings() -> None:
-    from app.main import _scrub_breadcrumb
+    from app.core.sentry import scrub_breadcrumb
 
-    logged = _scrub_breadcrumb(
+    logged = scrub_breadcrumb(
         {
             "category": "app",
             "message": f"retrying /api/v1/credits/customers?{SEARCH}",
@@ -200,7 +209,7 @@ def test_breadcrumbs_lose_their_query_strings() -> None:
         },
         {},
     )
-    called = _scrub_breadcrumb(
+    called = scrub_breadcrumb(
         {
             "category": "httplib",
             "data": {
@@ -215,14 +224,140 @@ def test_breadcrumbs_lose_their_query_strings() -> None:
 
     assert logged["message"] == "retrying /api/v1/credits/customers"
     assert logged["data"] == {"note": "/api/v1/credits"}
-    assert called["data"] == {
-        "url": "https://api.telegram.org/bot/sendMessage",
-        "http.method": "POST",
+    assert called["data"] == {"url": "https://api.telegram.org", "http.method": "POST"}
+
+
+def test_a_breadcrumb_keeps_only_the_scheme_and_host_of_an_address() -> None:
+    """An address's path can be a secret: the bot's token in Telegram's, the
+    whole of the check-in's (`BIRKA_HEARTBEAT_URL`)."""
+    from app.core.sentry import scrub_breadcrumb
+
+    called = scrub_breadcrumb(
+        {
+            "type": "http",
+            "category": "httplib",
+            "message": f"POST {TELEGRAM_CALL}",
+            "data": {
+                "url": TELEGRAM_CALL,
+                "heartbeat": "https://hc-ping.com/0b0b5e1c-secret",
+                "database": "postgresql+asyncpg://birka:pa55word@db:5432/birka",
+                "path": f"/bot{BOT_TOKEN}/getMe?offset=1",
+                "status_code": 200,
+            },
+        },
+        {},
+    )
+    relative = scrub_breadcrumb({"data": {"url": f"/bot{BOT_TOKEN}/getMe?offset=1"}}, {})
+
+    assert called == {
+        "type": "http",
+        "category": "httplib",
+        "message": "POST https://api.telegram.org/bot(token hidden)/getMe",
+        "data": {
+            "url": "https://api.telegram.org",
+            "heartbeat": "https://hc-ping.com",
+            "database": "postgresql+asyncpg://db:5432",
+            "path": "/bot(token hidden)/getMe",
+            "status_code": 200,
+        },
     }
+    assert relative["data"] == {"url": "/bot(token hidden)/getMe"}
+
+
+def test_the_event_scrubber_cuts_the_bot_token() -> None:
+    from app.core.sentry import scrub_event
+
+    scrubbed = scrub_event(
+        {
+            "message": f"giving up on {TELEGRAM_CALL}",
+            "exception": {
+                "values": [
+                    {"type": "TelegramNetworkError", "value": f"InvalidURL: {TELEGRAM_CALL}"}
+                ]
+            },
+            "logentry": {"message": "%s failed", "formatted": f"{TELEGRAM_CALL} failed"},
+        },
+        {},
+    )
+
+    assert BOT_TOKEN not in json.dumps(scrubbed)
+    assert scrubbed["exception"]["values"][0]["value"] == (
+        "InvalidURL: https://api.telegram.org/bot(token hidden)/getMe"
+    )
+
+
+async def test_the_watchers_calls_reach_sentry_without_the_bot_token_or_the_check_in_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The watcher as on the server: Sentry with every default integration,
+    the bot asking Telegram `getMe`, a check-in, then an error. Neither the
+    token nor the check-in's address is anywhere in the event."""
+    secret = "0b0b5e1c-7d2a-4f3e-9c1b-secret"
+    paths: list[str] = []
+
+    async def answer(request: web.Request) -> web.Response:
+        paths.append(request.path)
+        if request.path.endswith("/getMe"):
+            bot = {"id": 123456, "is_bot": True, "first_name": "Birka"}
+            return web.json_response({"ok": True, "result": bot})
+        return web.Response(text="OK")
+
+    app = web.Application()
+    app.router.add_route("*", "/{tail:.*}", answer)
+    # The test's own server logs no access lines: on the server the watcher
+    # only calls out.
+    runner = web.AppRunner(app, access_log=None)
+    await runner.setup()
+    await web.TCPSite(runner, "127.0.0.1", 0).start()
+    base = f"http://127.0.0.1:{runner.addresses[0][1]}"
+
+    transport = MemoryTransport()
+    given: dict[str, Any] = {}
+    real_init = sentry_sdk.init
+
+    def init_with_memory_transport(**kwargs: Any) -> Any:
+        given.update(kwargs)
+        return real_init(**kwargs, transport=transport)
+
+    monkeypatch.setattr(sentry_sdk, "init", init_with_memory_transport)
+    previous_client = sentry_sdk.get_global_scope().client
+    install_sentry(
+        Settings(sentry_dsn="https://public@example.invalid/1"), component="backup-watch"
+    )
+    client = sentry_sdk.get_client()
+    try:
+        with sentry_sdk.isolation_scope():
+            telegram = AiohttpSession(api=TelegramAPIServer.from_base(base))
+            await check_bot(BOT_TOKEN, session=telegram)
+            await ping(f"{base}/{secret}")
+            logging.getLogger("tests.privacy.watch").warning("asked %s", TELEGRAM_CALL)
+            try:
+                raise RuntimeError(f"Telegram unreachable: {base}/bot{BOT_TOKEN}/sendMessage")
+            except RuntimeError:
+                sentry_sdk.capture_exception()
+        sentry_sdk.flush()
+    finally:
+        client.close()
+        sentry_sdk.get_global_scope().set_client(previous_client)
+        await runner.cleanup()
+
+    assert paths == [f"/bot{BOT_TOKEN}/getMe", f"/{secret}"]
+    assert AioHttpIntegration in given["disabled_integrations"]
+    (event,) = transport.events
+    serialized = json.dumps(event, ensure_ascii=False)
+    assert event["tags"]["component"] == "backup-watch"
+    assert BOT_TOKEN not in serialized
+    assert "AAHsecret" not in serialized
+    assert secret not in serialized
+    assert event["exception"]["values"][-1]["value"] == (
+        f"Telegram unreachable: {base}/bot(token hidden)/sendMessage"
+    )
+    trail = [crumb.get("message") for crumb in event["breadcrumbs"]["values"]]
+    assert "asked https://api.telegram.org/bot(token hidden)/getMe" in trail
 
 
 def test_the_event_scrubber_cuts_queries_and_database_values() -> None:
-    from app.main import _scrub_event
+    from app.core.sentry import scrub_event
 
     event = {
         "request": {
@@ -245,7 +380,7 @@ def test_the_event_scrubber_cuts_queries_and_database_values() -> None:
         },
     }
 
-    scrubbed = _scrub_event(event, {})
+    scrubbed = scrub_event(event, {})
 
     assert scrubbed["request"] == {
         "url": "https://birka.test/api/v1/credits/customers",

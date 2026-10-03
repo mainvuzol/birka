@@ -29,10 +29,16 @@ from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.authz.scope import RequestScope
 from app.modules.backups.models import AlertKind, AlertStatus, BackupAlert, BackupRun
-from app.modules.backups.service import MAX_ATTEMPTS, deliver, overview, queue_alerts, record_night
+from app.modules.backups.service import (
+    GIVE_UP_AFTER,
+    deliver,
+    overview,
+    queue_alerts,
+    record_night,
+)
 from app.modules.backups.status import DUE, State
 from app.modules.identity.models import AppUser
-from app.modules.telegram.messages import UndeliverableError
+from app.modules.telegram.messages import BotTokenRefusedError, UndeliverableError
 from app.modules.tenancy.models import Organization, Store, StoreKind
 from tests.conftest import requires_database
 from tests.integration.test_product_lifecycle_api import api
@@ -257,20 +263,68 @@ async def test_a_chat_telegram_refuses_is_not_tried_again(maker):
     assert "initiate conversation" in (told.last_error or "")
 
 
-async def test_telegram_unreachable_is_tried_again_then_given_up(maker):
+async def test_telegram_unreachable_is_tried_for_a_day_then_given_up(maker):
+    """A failed night must reach the owner (2026-09-30): a Telegram outage of
+    hours no longer loses it. Only a day after it was queued is it given up."""
     await person(maker)
     await queue(maker)
     bot = Bot(ConnectionError("network is unreachable"))
 
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    looks = [NOW + timedelta(minutes=10 * n) for n in range(10)]
+    looks.append(NOW + GIVE_UP_AFTER - timedelta(seconds=1))
+    for attempt, at in enumerate(looks, start=1):
         async with maker() as session:
-            await deliver(session, send=bot, now=NOW)
+            await deliver(session, send=bot, now=at)
         [told] = await messages(maker)
-        assert told.attempts == attempt
-        assert told.status == (
-            AlertStatus.FAILED if attempt == MAX_ATTEMPTS else AlertStatus.PENDING
-        )
+        assert (told.attempts, told.status) == (attempt, AlertStatus.PENDING)
     assert told.last_error == "ConnectionError: network is unreachable"
+
+    async with maker() as session:
+        await deliver(session, send=bot, now=NOW + GIVE_UP_AFTER)
+    [told] = await messages(maker)
+    assert (told.attempts, told.status) == (len(looks) + 1, AlertStatus.FAILED)
+
+
+async def test_telegram_back_within_the_day_delivers_the_night(maker):
+    owner = await person(maker)
+    await queue(maker)
+    async with maker() as session:
+        await deliver(session, send=Bot(ConnectionError("unreachable")), now=NOW)
+    bot = Bot()
+
+    async with maker() as session:
+        await deliver(session, send=bot, now=NOW + timedelta(hours=23))
+    [told] = await messages(maker)
+    assert (told.status, told.attempts) == (AlertStatus.SENT, 2)
+    assert bot.sent == [(owner.chat, told.text)]
+
+
+async def test_a_refused_bot_token_keeps_every_message_waiting_without_counting(maker):
+    """Revoked or replaced in @BotFather: no chat is to blame and no attempt
+    is spent, however long it lasts; once the token is fixed, they go."""
+    await person(maker)
+    await person(maker)
+    await queue(maker)
+    asked = 0
+
+    async def refused(chat: int, text: str) -> None:
+        nonlocal asked
+        asked += 1
+        raise BotTokenRefusedError
+
+    for at in [NOW, NOW + timedelta(days=2)]:
+        async with maker() as session:
+            assert await deliver(session, send=refused, now=at) == 0
+    # Once a look: the same token cannot get the next one through either.
+    assert asked == 2
+    told = await messages(maker)
+    assert [(m.status, m.attempts, m.last_error) for m in told] == [
+        (AlertStatus.PENDING, 0, "токен бота не приймається")
+    ] * 2
+
+    async with maker() as session:
+        assert await deliver(session, send=Bot(), now=NOW + timedelta(days=2, minutes=10)) == 2
+    assert {(m.status, m.attempts) for m in await messages(maker)} == {(AlertStatus.SENT, 1)}
 
 
 async def test_an_account_disabled_after_queuing_is_not_messaged(maker):
@@ -302,6 +356,29 @@ async def test_two_watchers_never_send_the_same_message_at_once(maker):
 
     assert sum(await asyncio.gather(watcher(), watcher())) == 2
     assert len(bot.sent) == 2
+    assert {m.status for m in await messages(maker)} == {AlertStatus.SENT}
+
+
+async def test_slow_telegram_never_outlasts_the_databases_idle_limit(maker):
+    """The database ends a transaction left idle for a minute on the server
+    (`db_idle_in_transaction_timeout_seconds`). Sends that are slow together
+    must not hold one transaction across them, or the record of the ones
+    already sent is lost with it, and they go out again. Here the limit is a
+    second, and three sends take half a second each."""
+    for _ in range(3):
+        await person(maker)
+    await queue(maker)
+    async with maker() as session:
+        database = await session.scalar(text("SELECT current_database()"))
+        await session.execute(
+            text(f'ALTER DATABASE "{database}" SET idle_in_transaction_session_timeout = 1000')
+        )
+        await session.commit()
+    bot = Bot(pause=0.5)
+
+    async with maker() as session:
+        assert await deliver(session, send=bot, now=NOW) == 3
+    assert len(bot.sent) == 3
     assert {m.status for m in await messages(maker)} == {AlertStatus.SENT}
 
 

@@ -9,7 +9,14 @@ Error codes are part of the client contract. Renaming one is a breaking change.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
+
+# Why launch data was refused, as a fixed word the log and the API's status
+# (`GET /internal/status`) carry instead of anything from the payload. The
+# watcher reads them to say what is wrong when nobody can sign in: launch data
+# expired or dated in the future points at the server's clock, a signature
+# that does not match at the bot token.
+InitDataRefusal = Literal["expired", "future", "signature", "malformed"]
 
 
 class DomainError(Exception):
@@ -43,8 +50,38 @@ class AuthenticationFailedError(DomainError):
 
 
 class InvalidInitDataError(AuthenticationFailedError):
+    """Launch data that is not a currently valid, correctly signed payload.
+
+    `reason` says which check refused it (`InitDataRefusal`). It is for the
+    server's log and status only, not the client: the answer stays the same
+    for every reason.
+
+    Who sent it, for the server's count of refused sign-ins
+    (`identity/sign_ins.py`) and nothing else; neither is logged or sent:
+
+    - `sender`: the Telegram user id a payload that passed its signature
+      names (refused as `expired` or `future`). Telegram signed it, so it is
+      that person's launch.
+    - `claimed_sender`: the id a payload whose signature failed claims
+      (`signature`). Anyone can write it: it is trusted for nothing but
+      asking whether it names one of the shop's people.
+    """
+
     code = "INVALID_INIT_DATA"
     message = "Telegram init data could not be verified"
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        reason: InitDataRefusal,
+        sender: int | None = None,
+        claimed_sender: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason: InitDataRefusal = reason
+        self.sender = sender
+        self.claimed_sender = claimed_sender
 
 
 class SessionExpiredError(AuthenticationFailedError):
@@ -76,9 +113,18 @@ class RateLimitedError(DomainError):
     http_status = 429
     message = "Too many sign-in attempts from this address; wait and try again"
 
-    def __init__(self, retry_after: int) -> None:
-        super().__init__(retry_after=retry_after)
+    def __init__(self, retry_after: int, message: str | None = None) -> None:
+        super().__init__(message, retry_after=retry_after)
         self.headers = {"Retry-After": str(retry_after)}
+
+
+class PayloadTooLargeError(DomainError):
+    """A body larger than the endpoint takes, refused before it is read
+    whole (`POST /client-errors`)."""
+
+    code = "PAYLOAD_TOO_LARGE"
+    http_status = 413
+    message = "The request body is too large"
 
 
 class PermissionDeniedError(DomainError):
@@ -390,6 +436,7 @@ __all__ = [
     "ForbiddenStoreError",
     "IdempotencyConflictError",
     "IdempotencyInProgressError",
+    "InitDataRefusal",
     "InsufficientStockError",
     "InvalidInitDataError",
     "LocationAccessDeniedError",
@@ -399,6 +446,7 @@ __all__ = [
     "NoAccessError",
     "NotFoundError",
     "OpeningBalanceConflictError",
+    "PayloadTooLargeError",
     "PermissionDeniedError",
     "PriceChangedError",
     "RateLimitedError",

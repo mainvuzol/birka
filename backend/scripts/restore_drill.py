@@ -6,8 +6,16 @@
 The scratch URL names a server and a maintenance database to connect to.
 The drill creates a new database there, `birka_restore_drill_<time>_<random>`,
 restores into it, compares it with the manifest written beside the archive,
-and drops it again (`--keep` leaves it for inspection). It never writes to
-any other database, so it may run on the production server itself.
+and drops it again (`--keep` leaves it for inspection, named with `_kept` at
+the end). It never writes to any other database, so it may run on the
+production server itself.
+
+A drill stopped before it drops its copy — `pg_restore` killed at its time
+limit, the container stopped — leaves a whole copy of the shop's data on the
+server's disk. The nightly run drops such leftovers before its own drill
+(`drop_leftovers`): only names a drill gives a copy it did not mean to keep,
+and only once no drill could still be using them. A kept copy is never
+dropped; whoever kept it drops it.
 
 A backup that has never been restored is not a backup
 (`.ai/skills/disaster-recovery.md`). The drill passes only if:
@@ -38,7 +46,7 @@ import sys
 import time
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -57,11 +65,19 @@ from scripts.postgres_tools import (
     describe,
     require_compatible,
     run,
+    timeout_for,
     tool,
     tool_major,
 )
 
 SCRATCH_PREFIX = "birka_restore_drill_"
+# What a drill names a copy it will drop: the prefix, the UTC time it was
+# made, and six random hex digits. A kept copy ends in `_kept` instead.
+SCRATCH_NAME = re.compile(rf"^{SCRATCH_PREFIX}(\d{{14}})_[0-9a-f]{{6}}$")
+KEPT_SUFFIX = "_kept"
+# A copy is left over once no drill can still be using it: past the
+# restore's own time limit, with an hour to spare for the checks after it.
+LEFTOVER_MARGIN = timedelta(hours=1)
 BACKEND = Path(__file__).resolve().parents[1]
 # A locale name from a manifest goes into CREATE DATABASE, so it is held to
 # the characters locale names are made of before it goes anywhere near SQL.
@@ -104,6 +120,53 @@ def create_statement(name: str, locale: dict[str, Any]) -> str:
         raise ValueError(f"Unknown locale provider {provider!r}")
     parts.append(f"LC_COLLATE {collate} LC_CTYPE {ctype}")
     return " ".join(parts)
+
+
+def scratch_name(now: datetime, *, keep: bool = False) -> str:
+    name = f"{SCRATCH_PREFIX}{now.astimezone(UTC):%Y%m%d%H%M%S}_{secrets.token_hex(3)}"
+    return name + KEPT_SUFFIX if keep else name
+
+
+def is_leftover(name: str, *, now: datetime, older_than: timedelta) -> bool:
+    """Whether `name` is a drill's scratch copy, not one kept, made more than
+    `older_than` ago. Anything else — the shop's database, a kept copy, a
+    name merely alike — is never one."""
+    found = SCRATCH_NAME.fullmatch(name)
+    if not found:
+        return False
+    try:
+        made = datetime.strptime(found.group(1), "%Y%m%d%H%M%S").replace(tzinfo=UTC)
+    except ValueError:
+        return False
+    return made < now - older_than
+
+
+async def drop_leftovers(server: Database, *, now: datetime | None = None) -> list[str]:
+    """Drop the scratch copies earlier drills left behind; return their names.
+
+    The nightly run calls this under its lock, so no other night's drill is
+    running. A drill run by hand might be: only copies older than the
+    restore's time limit and a margin go, which no drill still uses.
+    """
+    older_than = timedelta(seconds=timeout_for("pg_restore")) + LEFTOVER_MARGIN
+    moment = (now or datetime.now(UTC)).astimezone(UTC)
+    admin = create_async_engine(server.url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
+    dropped: list[str] = []
+    try:
+        async with admin.connect() as connection:
+            names = (
+                await connection.execute(
+                    text("SELECT datname FROM pg_database WHERE starts_with(datname, :prefix)"),
+                    {"prefix": SCRATCH_PREFIX},
+                )
+            ).scalars()
+            for name in sorted(names.all()):
+                if is_leftover(name, now=moment, older_than=older_than):
+                    await connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+                    dropped.append(name)
+    finally:
+        await admin.dispose()
+    return dropped
 
 
 def compare(manifest: dict[str, Any], restored: dict[str, Any]) -> list[Check]:
@@ -232,7 +295,7 @@ async def drill(archive: Path, server: Database, *, keep: bool = False) -> dict[
     pg_restore = tool("pg_restore")
     require_compatible("pg_restore", await tool_major(pg_restore), manifest["server_major"])
 
-    name = f"{SCRATCH_PREFIX}{datetime.now(UTC):%Y%m%d%H%M%S}_{secrets.token_hex(3)}"
+    name = scratch_name(datetime.now(UTC), keep=keep)
     scratch = server.on(name)
     admin = create_async_engine(server.url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
     created = False

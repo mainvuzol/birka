@@ -320,8 +320,9 @@ nav {
   margin: 12px 0;
 }
 
-/* The owner's backups: one block for the verdict, one for Telegram, one for
-   the recent nights. A block that needs the owner is the notice colour. */
+/* The owner's backups: one block for the verdict, one for the server's own
+   trouble, one for Telegram, one for the recent nights. A block that needs
+   the owner is the notice colour. */
 .section-block {
   border: 1px solid #dce1da;
   border-radius: 12px;
@@ -335,16 +336,19 @@ nav {
   background: #fff0ec;
   color: #943b27;
 }
-.nights {
+.nights,
+.troubles {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-.nights > li {
+.nights > li,
+.troubles > li {
   padding: 8px 0;
   border-top: 1px solid #edf0ea;
 }
-.nights > li:first-child {
+.nights > li:first-child,
+.troubles > li:first-child {
   border-top: 0;
 }
 

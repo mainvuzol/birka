@@ -1,0 +1,42 @@
+The watcher beside the real API, in the same stack: the API stopped for 6 minutes, then started.
+No owner, no administrator, no check-in address: nothing was sent anywhere. 2026-10-03, times UTC (stop/start lines are Kyiv).
+
+== start backup-watch
+ Container birka-edge-check-backup-watch-1 Started 
+== after 80 s
+api	Up 2 minutes (healthy)
+backup-watch	Up About a minute
+caddy	Up 2 minutes
+db	Up 2 minutes (healthy)
+looked_at|2026-10-03 16:00:13.898716+00
+backup-watch-1  | {"logger": "__main__", "every_seconds": 600, "certificate": null, "administrators": 0, "check_in": false, "event": "backup_watch.started", "level": "info", "timestamp": "2026-10-03T15:59:13.791865Z"}
+backup-watch-1  | {"logger": "__main__", "deleted": 0, "event": "backup_watch.idempotency_purged", "level": "info", "timestamp": "2026-10-03T15:59:13.839352Z"}
+== stop api at 19:00:32
+ Container birka-edge-check-api-1 Stopped 
+== after 6m20s without the api
+NOT_ANSWERING|Сервер застосунку не відповідає.|2026-10-03 16:01:13.994865+00|
+backup-watch-1  | {"logger": "__main__", "error": "ClientConnectorDNSError: Cannot connect to host api:8000 ssl:default [Name or service not known]", "event": "backup_watch.api_unanswered", "level": "warning", "timestamp": "2026-10-03T16:03:14.152737Z"}
+backup-watch-1  | {"logger": "__main__", "error": "ClientConnectorDNSError: Cannot connect to host api:8000 ssl:default [Name or service not known]", "event": "backup_watch.api_unanswered", "level": "warning", "timestamp": "2026-10-03T16:04:14.186425Z"}
+backup-watch-1  | {"logger": "__main__", "error": "ClientConnectorDNSError: Cannot connect to host api:8000 ssl:default [Name or service not known]", "event": "backup_watch.api_unanswered", "level": "warning", "timestamp": "2026-10-03T16:05:14.214718Z"}
+backup-watch-1  | {"logger": "__main__", "error": "ClientConnectorDNSError: Cannot connect to host api:8000 ssl:default [Name or service not known]", "event": "backup_watch.api_unanswered", "level": "warning", "timestamp": "2026-10-03T16:06:14.241426Z"}
+backup-watch-1  | {"logger": "__main__", "kind": "NOT_ANSWERING", "moment": "START", "event": "backup_watch.server_trouble", "level": "warning", "timestamp": "2026-10-03T16:06:14.242224Z"}
+backup-watch-1  | {"logger": "__main__", "kind": "NOT_ANSWERING", "moment": "START", "event": "backup_watch.nobody_to_tell", "level": "warning", "timestamp": "2026-10-03T16:06:14.242371Z"}
+== start api at 19:06:53
+ Container birka-edge-check-api-1 Started 
+== after 2 min with the api back
+api	Up 2 minutes (healthy)
+backup-watch	Up 9 minutes
+caddy	Up 10 minutes
+db	Up 10 minutes (healthy)
+NOT_ANSWERING|Сервер застосунку не відповідає.|2026-10-03 16:01:13.994865+00|2026-10-03 16:07:14.313925+00|00:06:00.31906
+looked_at|2026-10-03 16:08:14.418882+00|00:00:40.318348
+backup-watch-1  | {"logger": "__main__", "kind": "NOT_ANSWERING", "moment": "START", "event": "backup_watch.server_trouble", "level": "warning", "timestamp": "2026-10-03T16:06:14.242224Z"}
+backup-watch-1  | {"logger": "__main__", "kind": "NOT_ANSWERING", "moment": "START", "event": "backup_watch.nobody_to_tell", "level": "warning", "timestamp": "2026-10-03T16:06:14.242371Z"}
+backup-watch-1  | {"logger": "__main__", "kind": "NOT_ANSWERING", "moment": "AGAIN", "event": "backup_watch.server_trouble", "level": "info", "timestamp": "2026-10-03T16:07:14.341534Z"}
+backup-watch-1  | {"logger": "__main__", "kind": "NOT_ANSWERING", "moment": "AGAIN", "event": "backup_watch.nobody_to_tell", "level": "warning", "timestamp": "2026-10-03T16:07:14.341933Z"}
+== disk as the watcher sees it
+/backups usage(total=994610155520, used=326307356672, free=668302798848)
+/ usage(total=977843695616, used=2549686272, free=925546786816)
+== release
+{"status":"ready"}
+eee0e9203d571ef04e45a577b43504ef84c134ed

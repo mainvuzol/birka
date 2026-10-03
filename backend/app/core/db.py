@@ -44,12 +44,29 @@ _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
+def _milliseconds(seconds: float) -> str:
+    # A positive limit never rounds down to 0, which PostgreSQL reads as off.
+    return str(max(1, round(seconds * 1000)) if seconds > 0 else 0)
+
+
 def create_engine(settings: Settings) -> AsyncEngine:
+    """The engine of the API and of the scripts that share its settings.
+
+    Each connection is opened with two limits, so one stuck request cannot
+    hold a connection, or the locks it took, for good: a statement that runs
+    longer than `db_statement_timeout_seconds` is cancelled by PostgreSQL
+    itself, and a transaction left open and idle for
+    `db_idle_in_transaction_timeout_seconds` is ended with its connection.
+    0 turns either off. Waiting for a free connection gives up after
+    `db_pool_timeout_seconds`, before the phone gives up on the answer.
+    Migrations open their own engine (migrations/env.py) and are not limited.
+    """
     return create_async_engine(
         settings.database_url,
         echo=settings.db_echo,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
+        pool_timeout=settings.db_pool_timeout_seconds,
         pool_pre_ping=True,
         future=True,
         # A database error's text otherwise ends with the statement's values,
@@ -57,6 +74,15 @@ def create_engine(settings: Settings) -> AsyncEngine:
         # the search text for a debt search, and that text reaches the log and
         # Sentry with the traceback. The statement itself stays, for debugging.
         hide_parameters=True,
+        # Sent by asyncpg when each connection opens, in milliseconds.
+        connect_args={
+            "server_settings": {
+                "statement_timeout": _milliseconds(settings.db_statement_timeout_seconds),
+                "idle_in_transaction_session_timeout": _milliseconds(
+                    settings.db_idle_in_transaction_timeout_seconds
+                ),
+            }
+        },
     )
 
 

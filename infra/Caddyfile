@@ -62,6 +62,14 @@
 		file_server
 	}
 
+	# The API's own status (`/internal/status`) is for backup-watch on the
+	# compose network, and is never proxied. Said here, before the catch-all
+	# below, which would otherwise answer it with the page.
+	@internal path /internal /internal/*
+	handle @internal {
+		respond 404
+	}
+
 	# The page itself names the bundle it needs, so every open asks whether
 	# it changed (a cheap 304 when it did not). Without this a phone could
 	# keep an old page for hours after an update.

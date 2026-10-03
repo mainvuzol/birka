@@ -1,4 +1,4 @@
-"""How often one address may sign in.
+"""How often one address may sign in, or report a broken screen.
 
 `POST /auth/telegram` is the one request anyone on the internet can make
 without a session. A payload that fails its signature costs only an HMAC, but
@@ -14,6 +14,12 @@ address too; a handful of people opening the app together at opening time,
 each reloading or retrying once or twice, takes a few of the 30, and a token
 then lasts 12 hours. A flood from one address is held to one sign-in every
 two seconds.
+
+`POST /client-errors` is the other request anyone may make without a
+session: a screen can break before its sign-in. It writes one log line, and
+its own bucket per address (**10 at once, refilled at 10 a minute**, also a
+technical default) keeps one phone stuck in a crash loop, or anyone else,
+from filling the server's log.
 
 The buckets live in this process's memory. One uvicorn process serves the API
 (`backend/Dockerfile`), so every request sees the same buckets and nothing
@@ -131,20 +137,49 @@ def client_address(request: Request) -> str:
     return str(address)
 
 
-def _sign_in_bucket(request: Request) -> TokenBucket:
-    """The app's own buckets, made on its first sign-in: each app built by
+def _app_bucket(
+    request: Request, name: str, make: Callable[[Settings], TokenBucket]
+) -> TokenBucket:
+    """The app's own buckets, made on first use: each app built by
     `create_app` (a test's, too) counts on its own."""
     state = request.app.state
-    bucket: TokenBucket | None = getattr(state, "sign_in_bucket", None)
+    bucket: TokenBucket | None = getattr(state, name, None)
     if bucket is None:
-        # Settings raise the numbers (BIRKA_SIGN_INS_PER_MINUTE,
-        # BIRKA_SIGN_IN_BURST) only for a run that signs in from one address
-        # far more often than people do: the end-to-end journeys. A server
-        # keeps the defaults.
         settings: Settings = getattr(state, "settings", None) or get_settings()
-        bucket = TokenBucket(per_minute=settings.sign_ins_per_minute, burst=settings.sign_in_burst)
-        state.sign_in_bucket = bucket
+        bucket = make(settings)
+        setattr(state, name, bucket)
     return bucket
+
+
+def _sign_in_bucket(request: Request) -> TokenBucket:
+    # Settings raise the numbers (BIRKA_SIGN_INS_PER_MINUTE,
+    # BIRKA_SIGN_IN_BURST) only for a run that signs in from one address far
+    # more often than people do: the end-to-end journeys. A server keeps the
+    # defaults.
+    return _app_bucket(
+        request,
+        "sign_in_bucket",
+        lambda settings: TokenBucket(
+            per_minute=settings.sign_ins_per_minute, burst=settings.sign_in_burst
+        ),
+    )
+
+
+def _client_error_bucket(request: Request) -> TokenBucket:
+    return _app_bucket(
+        request,
+        "client_error_bucket",
+        lambda settings: TokenBucket(
+            per_minute=settings.client_errors_per_minute, burst=settings.client_error_burst
+        ),
+    )
+
+
+def _refuse_past(bucket: TokenBucket, request: Request, message: str | None = None) -> None:
+    """`Retry-After` is rounded up to whole seconds, as the header requires."""
+    wait = bucket.take(client_address(request))
+    if wait is not None:
+        raise RateLimitedError(retry_after=max(1, math.ceil(wait)), message=message)
 
 
 async def limit_sign_ins(request: Request) -> None:
@@ -152,11 +187,18 @@ async def limit_sign_ins(request: Request) -> None:
 
     A coroutine on purpose: FastAPI runs a plain function dependency in a
     worker thread, where two requests could meet inside the buckets.
-    `Retry-After` is rounded up to whole seconds, as the header requires.
     """
-    wait = _sign_in_bucket(request).take(client_address(request))
-    if wait is not None:
-        raise RateLimitedError(retry_after=max(1, math.ceil(wait)))
+    _refuse_past(_sign_in_bucket(request), request)
+
+
+async def limit_client_errors(request: Request) -> None:
+    """Refuse a broken screen's note past the address's bucket, before its
+    body is read. A coroutine for the same reason as `limit_sign_ins`."""
+    _refuse_past(
+        _client_error_bucket(request),
+        request,
+        "Too many error reports from this address; wait and try again",
+    )
 
 
 __all__ = [
@@ -164,5 +206,6 @@ __all__ = [
     "SIGN_IN_BURST",
     "TokenBucket",
     "client_address",
+    "limit_client_errors",
     "limit_sign_ins",
 ]

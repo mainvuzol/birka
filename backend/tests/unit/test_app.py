@@ -132,7 +132,7 @@ def test_sentry_scrubber_removes_the_request_body() -> None:
     sentry-sdk 2.x attaches request bodies regardless of send_default_pii, so
     this scrubber — not that flag — is what protects the login payload.
     """
-    from app.main import _scrub_request_body
+    from app.core.sentry import scrub_request_body
 
     event = {
         "request": {
@@ -143,7 +143,7 @@ def test_sentry_scrubber_removes_the_request_body() -> None:
         }
     }
 
-    scrubbed = _scrub_request_body(event, {})
+    scrubbed = scrub_request_body(event, {})
 
     assert "data" not in scrubbed["request"]
     assert "cookies" not in scrubbed["request"]
@@ -152,9 +152,9 @@ def test_sentry_scrubber_removes_the_request_body() -> None:
 
 
 def test_sentry_scrubber_tolerates_an_event_without_a_request() -> None:
-    from app.main import _scrub_request_body
+    from app.core.sentry import scrub_request_body
 
-    assert _scrub_request_body({"message": "boom"}, {}) == {"message": "boom"}
+    assert scrub_request_body({"message": "boom"}, {}) == {"message": "boom"}
 
 
 @pytest.mark.parametrize(

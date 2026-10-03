@@ -7,11 +7,12 @@ application refuses to start without them.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 AppEnv = Literal["local", "ci", "staging", "production"]
 
@@ -39,6 +40,14 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 5
     db_echo: bool = False
+    # A statement that runs longer is cancelled, and a transaction left open
+    # and idle is ended, so one stuck request cannot hold a connection, or a
+    # lock, for good (0 turns either off). Waiting for a free connection gives
+    # up before the phone does (20 s, frontend/src/shared/api.ts), so the
+    # seller is told the server is busy rather than that it never answered.
+    db_statement_timeout_seconds: float = Field(default=30, ge=0)
+    db_idle_in_transaction_timeout_seconds: float = Field(default=60, ge=0)
+    db_pool_timeout_seconds: float = Field(default=10, gt=0)
 
     # --- telegram ----------------------------------------------------------
     telegram_bot_token: SecretStr = SecretStr("")
@@ -67,10 +76,33 @@ class Settings(BaseSettings):
     edge_host: str = "caddy"
     edge_port: int = 443
 
+    # --- watching the server --------------------------------------------------
+    # Owner decision, 2026-10-03: trouble on the server is told by the bot to
+    # the owner (whoever hears about backups) and to an administrator. The
+    # administrator is not an account in the app: their Telegram user id,
+    # comma-separated if there are several, after they press «Start» in the
+    # bot (BIRKA_ADMIN_TELEGRAM_IDS="123456789").
+    admin_telegram_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
+    # Where the watcher checks in every 10 minutes with the outside service
+    # that notices a server dead whole (owner decision, 2026-10-03). Unset:
+    # nothing is sent anywhere.
+    heartbeat_url: str | None = None
+    # Where the watcher asks the API about itself, on the compose network.
+    api_url: str = "http://api:8000"
+
     # --- observability -----------------------------------------------------
     log_level: str = "INFO"
     log_json: bool = True
+    # Owner decision, 2026-10-03: unset for now, so error details stay in the
+    # server's log; setting it turns Sentry on (app/core/sentry.py).
     sentry_dsn: str | None = None
+    # The build: its git commit, given when the images are built. It names
+    # the version in error reports and on the app's crash screen.
+    release: str = Field(default="dev", max_length=40)
+    # Notes about a broken screen that one address may send
+    # (`POST /api/v1/client-errors`): a burst, then so many a minute.
+    client_errors_per_minute: int = Field(default=10, gt=0)
+    client_error_burst: int = Field(default=10, gt=0)
 
     # --- money -------------------------------------------------------------
     # Confirmed business fact F33. Stored explicitly on every monetary row so
@@ -85,6 +117,28 @@ class Settings(BaseSettings):
                 "database_url must use the postgresql+asyncpg driver; "
                 f"got {value.split('://', 1)[0]!r}"
             )
+        return value
+
+    @field_validator("heartbeat_url", "sentry_dsn", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # Compose passes an unset variable as an empty string (`${VAR:-}`).
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("admin_telegram_ids", mode="before")
+    @classmethod
+    def _split_telegram_ids(cls, value: object) -> object:
+        # Lenient on purpose: a refused setting stops the watcher, and with
+        # it every alert, backups included. A part that is not a number is
+        # dropped; the watcher's start line says how many administrators it
+        # has (server runbook, step 8a).
+        if isinstance(value, str):
+            parts = re.split(r"[\s,;]+", value)
+            return [part for part in parts if part.isascii() and part.isdigit()]
+        if isinstance(value, int):
+            return [value]
         return value
 
     @property

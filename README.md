@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 156 Playwright journeys on a phone profile, against the real API;
+- 168 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -424,6 +424,33 @@ spelling with what was `typed`, and «Створити товар з опису�
 - **The bot tells the owner** a week before the site's certificate runs out.
 
 See the [report](.ai/project-memory/public-hardening-report.md).
+
+**Failures are visible** (owner decisions, 2026-10-03; see
+[ADR-0011](.ai/decisions/ADR-0011-failures-are-visible.md)):
+- **`backup-watch` also watches the server**, every minute:
+  - the API and its database (`/internal/status`, on the compose network
+    only);
+  - the disk;
+  - whether people can sign in.
+- **The bot tells the owner and the administrators**
+  (`BIRKA_ADMIN_TELEGRAM_IDS`) when the app has not answered for 5 minutes,
+  the disk is nearly full, or nobody could sign in for 10 minutes.
+  - It writes once, then daily, then when it works again.
+  - Messages have a sound from 9:00 to 20:00, Kyiv time, and are silent
+    otherwise.
+  - The «Резервні копії» section shows the same.
+- **A server that dies whole** is noticed by an outside service, which the
+  watcher checks in with every 10 minutes (`BIRKA_HEARTBEAT_URL`).
+- **`GET /api/v1/ready`** answers only when the database does and its schema
+  is current. Compose checks the API's health with it.
+- **A broken screen** shows «Щось пішло не так» and «Перезапустити»
+  instead of a blank page, and leaves a note in the server's log with no
+  personal data.
+- **A server error** shows its «Номер запиту».
+- **Sentry** is ready for the API and the watcher, and stays off until a
+  DSN is set.
+
+See the [report](.ai/project-memory/failures-visible-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

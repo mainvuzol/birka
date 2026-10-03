@@ -854,3 +854,94 @@ are about how the shops work.
   security fix is the exception.
 - **If the site's certificate cannot be renewed,** the owner is told by the
   bot a week before it runs out, as about a failed backup.
+
+## Owner decision — 2026-10-03 (failures are visible)
+
+Asked when the owner chose this work before the app goes on a server.
+Until now nobody heard when something failed:
+- a seller's screen that breaks goes blank;
+- the server, its database or its disk can stop with nobody told.
+
+How each failure is caught is technical. Who hears about it, how and how
+often is the owner's to decide:
+
+- **Trouble on the server is told to the owner and to an administrator,
+  by the bot.**
+  - Trouble means:
+    - the app does not answer;
+    - its database has stopped;
+    - the disk is nearly full;
+    - nobody can sign in.
+  - The owner here means the people who hear about backups.
+  - The administrator is not named yet. Their Telegram is added on the
+    server once there is one.
+  - Trouble is also shown in the «Резервні копії» section, as backups are.
+- **With a sound in the shops' hours, 9:00–20:00 every day, Kyiv time;
+  silently outside them.** Backup messages stay silent at any hour (owner
+  decision, 2026-10-01).
+- **A message once when trouble starts, once a day while it lasts, and once
+  when it works again,** as with backups. The owner accepted the proposed
+  thresholds:
+  - the app has not answered for 5 minutes in a row;
+  - less than 15 % or less than 3 GB of the disk is free;
+  - for 10 minutes no sign-in has succeeded, while people kept trying.
+- **A server that dies whole is noticed from outside.**
+  - Every 10 minutes the server checks in with an outside service.
+  - The service also checks that the site answers.
+  - When the check-ins stop or the site does not answer, the service writes
+    to the owner in Telegram or by email.
+  - It learns only the site's address, never the shop's data.
+  - The account is the owner's.
+- **Error details do not go to Sentry yet.**
+  - They stay in the server's log.
+  - Sentry is prepared, and one setting turns it on once someone will read
+    it.
+- **A broken screen:**
+  - the seller sees «Щось пішло не так» and «Перезапустити» instead of a
+    blank screen, and an unsent sale is not lost;
+  - a short note goes to the server's log only: which screen, which error,
+    the app's version and the request's number;
+  - the note never holds a name, a phone, what was typed, or the Telegram
+    number;
+  - the bot does not write about it.
+- **The hot path's release reading (release checklist row 22) gates every
+  case,** six sellers at once included, as it is written. It is taken on the
+  laptop as before. A reading on the real server is an optional step.
+
+**Carried out, 2026-10-03.** The owner's answers did not cover these; the
+build took the readings below. The owner then confirmed three of them the
+same day:
+- **"Works again" sounds by the same hours** as the trouble it ends.
+  Confirmed: "it fits".
+- **An unsent sale.**
+  - A sale sent whose answer never arrived is kept on the phone, and is
+    checked after «Перезапустити», as before.
+  - A basket still being filled lives only on the screen, and a broken
+    screen loses it.
+  - The crash screen says which of the two it is. It never claims a basket
+    was kept.
+  - Confirmed: if something happens to the app, the basket is emptied, and
+    that is fine for now.
+- **"While people kept trying"** means refusals from people, not strangers.
+  The sign-in endpoint is open to anyone, so a refusal counts only when it
+  comes from:
+  - a Telegram user it could verify;
+  - or, for a refused signature, someone the app knows.
+
+  A refusal counts toward the alarm only when:
+  - it is the third such refusal in 10 minutes;
+  - the last one came in the last 5 minutes;
+  - at least two people were refused. One is enough when their launch data
+    was dated in the future, which only a wrong clock does.
+- **The administrator hears of trouble on the server, not of backups.**
+  Backups stay the owner's. Confirmed, for now.
+
+**Also answered on 2026-10-03:**
+- **Who is set up to hear.** The administrator's rights, and with them their
+  Telegram id, are given when the app is published or tested. The owner
+  says when; nothing is set up before that.
+- **A sign-in alarm faked** with the Telegram ids of two of the shop's
+  people is accepted for now. Keeping their phones is the people's own
+  responsibility, and the check may be improved later.
+- **The watcher lives on the server it watches.** Confirmed: the outside
+  service is what notices that server dying whole.

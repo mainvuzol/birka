@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -32,12 +32,14 @@ from app.modules.backups.certificate import KEY_PREFIX as CERTIFICATE
 from app.modules.backups.models import AlertKind, AlertStatus, BackupAlert, BackupRun
 from app.modules.backups.status import Alert, State, alert_for, state_of
 from app.modules.identity.service import telegram_chats
-from app.modules.telegram.messages import UndeliverableError
+from app.modules.telegram.messages import BotTokenRefusedError, UndeliverableError
 
-# How many times a message is tried before it is given up as `FAILED`. The
-# watcher looks every few minutes, so this is under an hour of Telegram
-# being unreachable.
-MAX_ATTEMPTS = 5
+# A message Telegram cannot be reached for is tried at every look until a day
+# after it was queued, then given up as `FAILED`. It used to be given up
+# after five looks, about 40 minutes, and a longer Telegram outage lost a
+# failed night for good — against the owner's rule that a failed night must
+# reach them (2026-09-30).
+GIVE_UP_AFTER = timedelta(hours=24)
 
 Send = Callable[[int, str], Awaitable[None]]
 
@@ -168,48 +170,77 @@ async def queue_alert(session: AsyncSession, alert: Alert, *, now: datetime) -> 
 
 
 async def deliver(session: AsyncSession, *, send: Send, now: datetime) -> int:
-    """Send every `PENDING` message; returns how many were sent. Each is
-    locked while it is sent, so two watchers never send the same one at the
-    same time. Commits."""
-    pending = list(
+    """Send every `PENDING` message; returns how many were sent.
+
+    Each message is locked, sent and committed on its own, so two watchers
+    never send the same one at the same time, and no transaction stays open
+    across more than one call to Telegram: the database ends a transaction
+    left idle for a minute (`db_idle_in_transaction_timeout_seconds`), and a
+    batch held open across slow sends would lose the record of the ones that
+    went, and send them again.
+
+    A bot token Telegram refuses is nobody's chat and no attempt: every
+    message stays `PENDING`, untried after the first, saying why, and goes
+    out once the token is fixed — however long that takes."""
+    waiting = list(
         (
             await session.scalars(
-                select(BackupAlert)
+                select(BackupAlert.id)
                 .where(BackupAlert.status == AlertStatus.PENDING.value)
                 .order_by(BackupAlert.created_at, BackupAlert.id)
-                .with_for_update(skip_locked=True)
             )
         ).all()
     )
-    chats = await telegram_chats(session, {message.user_id for message in pending})
+    await session.commit()
     sent = 0
-    for message in pending:
-        chat = chats.get(message.user_id)
-        message.attempts += 1
+    token_refused: BotTokenRefusedError | None = None
+    for message_id in waiting:
+        message = await session.scalar(
+            select(BackupAlert)
+            .where(
+                BackupAlert.id == message_id,
+                BackupAlert.status == AlertStatus.PENDING.value,
+            )
+            .with_for_update(skip_locked=True)
+        )
+        if message is None:
+            # Sent meanwhile, or another watcher holds it now.
+            await session.commit()
+            continue
+        chat = (await telegram_chats(session, {message.user_id})).get(message.user_id)
         if chat is None:
+            message.attempts += 1
             message.status = AlertStatus.FAILED.value
             message.last_error = "the account is disabled"
-            continue
-        try:
-            await send(chat, message.text)
-        except UndeliverableError as refusal:
-            message.status = AlertStatus.REFUSED.value
-            message.last_error = str(refusal)[:300]
-        except Exception as error:
-            message.last_error = f"{type(error).__name__}: {error}"[:300]
-            if message.attempts >= MAX_ATTEMPTS:
-                message.status = AlertStatus.FAILED.value
+        elif token_refused is not None:
+            message.last_error = str(token_refused)
         else:
-            message.status = AlertStatus.SENT.value
-            message.sent_at = now
-            message.last_error = None
-            sent += 1
-    await session.commit()
+            try:
+                await send(chat, message.text)
+            except BotTokenRefusedError as refusal:
+                token_refused = refusal
+                message.last_error = str(refusal)
+            except UndeliverableError as refusal:
+                message.attempts += 1
+                message.status = AlertStatus.REFUSED.value
+                message.last_error = str(refusal)[:300]
+            except Exception as error:
+                message.attempts += 1
+                message.last_error = f"{type(error).__name__}: {error}"[:300]
+                if now - message.created_at >= GIVE_UP_AFTER:
+                    message.status = AlertStatus.FAILED.value
+            else:
+                message.attempts += 1
+                message.status = AlertStatus.SENT.value
+                message.sent_at = now
+                message.last_error = None
+                sent += 1
+        await session.commit()
     return sent
 
 
 __all__ = [
-    "MAX_ATTEMPTS",
+    "GIVE_UP_AFTER",
     "Overview",
     "Send",
     "deliver",

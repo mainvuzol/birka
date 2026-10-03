@@ -1,0 +1,112 @@
+CI's edge job (.github/workflows/ci.yml), its steps run as written on Docker Desktop 29.8.1 / Compose v5.5.1,
+compose project birka-edge-check, Caddy on 58080/58443, at eee0e92 (feat/failures-visible). 2026-10-03.
+
+===== Caddy accepts the Caddyfile, as a server with a real domain reads it
+{"level":"info","ts":1791043067.8227453,"msg":"using config from file","file":"/etc/caddy/Caddyfile"}
+{"level":"info","ts":1791043067.824082,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"info","ts":1791043067.8243315,"logger":"http.auto_https","msg":"server is listening only on the HTTPS port but has no TLS connection policies; adding one to enable TLS","server_name":"srv0","https_port":443}
+{"level":"info","ts":1791043067.8243434,"logger":"http.auto_https","msg":"enabling automatic HTTP->HTTPS redirects","server_name":"srv0"}
+{"level":"info","ts":1791043067.8245049,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0x30cfacc6ce80"}
+{"level":"info","ts":1791043067.8246105,"logger":"http","msg":"servers shutting down with eternal grace period"}
+{"level":"info","ts":1791043067.8246462,"logger":"tls.cache.maintenance","msg":"stopped background certificate maintenance","cache":"0x30cfacc6ce80"}
+Valid configuration
+===== ok: Caddy accepts the Caddyfile, as a server with a real domain reads it
+===== Only Caddy publishes a port
+services that publish ports: ["caddy"]
+===== ok: Only Caddy publishes a port
+===== Build the images and start the stack
+curl: (22) The requested URL returned error: 502
+{"status":"ok","environment":"production"}===== ok: Build the images and start the stack
+===== The API is ready behind the edge, healthy to Docker, and keeps its internals in
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+{"started_at":"2026-10-03T15:58:16+00:00","release":"eee0e9203d571ef04e45a577b43504ef84c134ed","database":"ok","sign_ins":{"last_success_at":null,"failing_since":null,"last_failure_at":null,"failures":0,"senders":0,"reasons":{"expired":0,"future":0,"signature":0,"malformed":0}}}
+NAME                       IMAGE                  COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+birka-edge-check-api-1     birka-edge-check-api   "uvicorn app.main:ap…"   api       13 seconds ago   Up 7 seconds (healthy)    8000/tcp
+birka-edge-check-caddy-1   caddy:2-alpine         "caddy run --config …"   caddy     13 seconds ago   Up 6 seconds              0.0.0.0:58080->80/tcp, [::]:58080->80/tcp, 0.0.0.0:58443->443/tcp, 0.0.0.0:58443->443/udp, [::]:58443->443/tcp, [::]:58443->443/udp
+birka-edge-check-db-1      postgres:17-alpine     "docker-entrypoint.s…"   db        13 seconds ago   Up 12 seconds (healthy)   5432/tcp
+===== ok: The API is ready behind the edge, healthy to Docker, and keeps its internals in
+===== What the edge sends
+HTTP/1.1 200 OK
+Accept-Ranges: bytes
+Cache-Control: no-cache
+Content-Length: 866
+Content-Security-Policy: frame-ancestors https://web.telegram.org https://telegram.org
+Content-Type: text/html; charset=utf-8
+Etag: "dlvbscb5hj8o-o2"
+Last-Modified: Sat, 03 Oct 2026 15:58:09 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000
+Vary: Accept-Encoding
+X-Content-Type-Options: nosniff
+Date: Sat, 03 Oct 2026 15:58:21 GMT
+HTTP/1.1 200 OK
+Accept-Ranges: bytes
+Cache-Control: public, max-age=31536000, immutable
+Content-Length: 475598
+Content-Security-Policy: frame-ancestors https://web.telegram.org https://telegram.org
+Content-Type: text/javascript; charset=utf-8
+Etag: "dlvbscb4ao14-a6z2"
+Last-Modified: Sat, 03 Oct 2026 15:58:09 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000
+Vary: Accept-Encoding
+X-Content-Type-Options: nosniff
+Date: Sat, 03 Oct 2026 15:58:21 GMT
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Length: 42
+Content-Security-Policy: frame-ancestors https://web.telegram.org https://telegram.org
+Content-Type: application/json
+Date: Sat, 03 Oct 2026 15:58:21 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+X-Request-Id: 7d42cbdd-3d54-441f-aeed-2b3f219302b9
+the edge sends what the server must send
+===== ok: What the edge sends
+===== Sign-ins are counted per real address, whatever a client claims
+===== ok: Sign-ins are counted per real address, whatever a client claims
+===== The edge's own log keeps no query string
+curl: (22) The requested URL returned error: 502
+===== ok: The edge's own log keeps no query string
+===== A new bundle keeps the previous one's files and drops month-old ones
+web bundle published
+===== ok: A new bundle keeps the previous one's files and drops month-old ones
+ALL EDGE STEPS PASSED
+exit 0

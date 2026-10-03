@@ -6,6 +6,10 @@ export class ApiError extends Error {
     // needs them: `INSUFFICIENT_STOCK` names the stock key that is short and
     // whether a correction may be offered for it.
     public details: Record<string, unknown> = {},
+    // The server's number for the request (`X-Request-ID`), or null when the
+    // answer carried none (the edge's own 502). A seller quotes it when a
+    // server error is shown, so the log line can be found.
+    public requestId: string | null = null,
   ) {
     super(code);
   }
@@ -41,6 +45,7 @@ export async function api<T>(
       response.status,
       data?.code ?? data?.error?.code ?? "HTTP_ERROR",
       data?.details ?? {},
+      response.headers.get("X-Request-ID"),
     );
   }
   return (await response.json()) as T;
@@ -112,5 +117,13 @@ export function errorText(error: unknown): string {
     return "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
   if (error.status === 422)
     return "Перевірте дані та поточний статус замовлення.";
+  // The edge answered for a server that did not: the phone's own connection
+  // works, and asking again at once would not help.
+  if (error.status === 502 || error.status === 503 || error.status === 504)
+    return "Сервер зараз недоступний. Спробуйте ще раз за хвилину.";
+  // A server error is logged under the request's number: the seller can
+  // quote its start to whoever reads the log.
+  if (error.status >= 500 && error.requestId)
+    return `Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: ${error.requestId.slice(0, 8)}.`;
   return "Не вдалося виконати операцію. Спробуйте ще раз.";
 }

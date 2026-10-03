@@ -1,0 +1,660 @@
+import { test, expect } from "./fixtures";
+import type { Page, Request } from "@playwright/test";
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+/**
+ * Failures are visible (owner decision, 2026-10-03).
+ *
+ * - A broken screen shows «Щось пішло не так» and «Перезапустити» instead of
+ *   a blank page, and an unsent sale is not lost. It says which case it is:
+ *   a sale sent without an answer is kept, a basket still being filled is
+ *   not (carried out, 2026-10-03). A short note goes to the server's log:
+ *   which screen, which error, the version, the request's number — never a
+ *   name, a phone, what was typed, or the Telegram number.
+ * - A server error tells the seller its request's number; a server the edge
+ *   cannot reach is told as such.
+ * - Trouble on the server is shown in «Резервні копії», as backups are.
+ *
+ * The server's side of each is played with stubs: the API's note endpoint,
+ * its error body and the watcher's report are another part's work.
+ */
+interface Fixture {
+  owner_telegram_user_id: string;
+}
+const fixture = JSON.parse(
+  readFileSync(
+    process.env.BIRKA_E2E_FIXTURE ?? "/tmp/birka-orders-ui-fixture.json",
+    "utf8",
+  ),
+) as Fixture;
+
+const release = process.env.BIRKA_RELEASE ?? "dev";
+
+// A person nobody else's journey knows, signed in by stubs alone.
+const telegramId = "777000111";
+const firstName = "Тетяна";
+const ids = {
+  organization: "0b8f3c1e-7a51-4c0e-9d0f-0d6a3c1b2a01",
+  user: "0b8f3c1e-7a51-4c0e-9d0f-0d6a3c1b2a02",
+  store: "0b8f3c1e-7a51-4c0e-9d0f-0d6a3c1b2a03",
+};
+const me = {
+  user_id: ids.user,
+  organization_id: ids.organization,
+  display_name: `${firstName} Коваль`,
+  organization_permissions: [],
+  stores: [
+    {
+      id: ids.store,
+      name: "Подільський",
+      code: "POD",
+      state: "ACTIVE",
+      state_since: null,
+      permissions: [],
+    },
+  ],
+};
+
+/** The app opened from Telegram by the stubbed person; nothing is checked. */
+function stubbedLaunch(): string {
+  const fields = new URLSearchParams({
+    auth_date: String(Math.floor(Date.now() / 1000)),
+    user: `{"id":${telegramId},"first_name":"${firstName}"}`,
+    hash: "0".repeat(64),
+  });
+  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+}
+
+/** The app opened from Telegram by a person the seed knows, signed. */
+function signedLaunch(telegramUserId: string): string {
+  const fields = new URLSearchParams({
+    auth_date: String(Math.floor(Date.now() / 1000)),
+    user: `{"id":${telegramUserId},"first_name":"Власниця"}`,
+  });
+  const check = [...fields]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n");
+  const secret = createHmac("sha256", "WebAppData")
+    .update("123456:TEST-TOKEN-not-a-real-secret")
+    .digest();
+  fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
+  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+}
+
+async function signInStubbed(page: Page): Promise<void> {
+  await page.route("**/api/v1/auth/telegram", async (route) => {
+    await route.fulfill({ json: { access_token: "stubbed-session" } });
+  });
+}
+
+/** Every note of a broken screen the page sends, answered as the API does. */
+async function collectNotes(page: Page): Promise<Request[]> {
+  const notes: Request[] = [];
+  await page.route("**/api/v1/client-errors", async (route) => {
+    notes.push(route.request());
+    await route.fulfill({ status: 204 });
+  });
+  return notes;
+}
+
+function noteOf(request: Request): Record<string, unknown> {
+  return request.postDataJSON() as Record<string, unknown>;
+}
+
+/** Puts entries in the phone's storage, as an earlier visit left them. */
+async function seed(
+  page: Page,
+  entries: Record<string, string>,
+): Promise<void> {
+  // Outside Telegram the app only asks to be opened from the bot.
+  await page.goto("/");
+  await page.evaluate((saved) => {
+    for (const [key, value] of Object.entries(saved))
+      localStorage.setItem(key, value);
+  }, entries);
+  await page.goto("about:blank");
+}
+
+/** Opens the app on a store list that is not one: its screen throws. */
+async function openBroken(page: Page): Promise<void> {
+  await collectNotes(page);
+  await signInStubbed(page);
+  await page.route("**/api/v1/me", async (route) => {
+    await route.fulfill({ json: { ...me, stores: null } });
+  });
+  await page.goto(stubbedLaunch());
+  await expect(
+    page.getByRole("heading", { name: "Щось пішло не так" }),
+  ).toBeVisible();
+}
+
+test.describe("a screen that breaks", () => {
+  test.use({ pageErrorsExpected: true });
+
+  // A sale sent with no answer, paid in parts: the customer's name and phone
+  // are on the phone, and must stay there.
+  const saleKey = `birka:sale-pending:${ids.organization}:${ids.user}:${ids.store}`;
+  const saved = JSON.stringify({
+    key: "5f0c2b8e-3a41-4d2c-9f61-1e2d3c4b5a60",
+    body: {
+      command_id: "5f0c2b8e-3a41-4d2c-9f61-1e2d3c4b5a61",
+      store_id: ids.store,
+      lines: [{ size_id: "5f0c2b8e-3a41-4d2c-9f61-1e2d3c4b5a62" }],
+      found_in_store: [],
+      missing_in_store: [],
+      credit: {
+        customer_name: "Оксана Петренко",
+        customer_phone: "+380 67 123 45 67",
+        paid_now: "100.00",
+      },
+    },
+    ambiguous: true,
+  });
+  const keptSaid =
+    "Операцію, на яку сервер ще не відповів, збережено: після перезапуску застосунок покаже її для перевірки.";
+  const nothingKeptSaid =
+    "Якщо ви щойно провели операцію, перевірте, чи її записано, перш ніж повторювати. Кошик, який ви ще не надіслали, доведеться скласти заново.";
+
+  test("shows «Щось пішло не так», keeps the sale sent without an answer, notes it without the person, and comes back on «Перезапустити»", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: saved });
+
+    const notes = await collectNotes(page);
+    await signInStubbed(page);
+    // What the server says of this person, broken: a store list that is not
+    // one. The screen that lists the stores throws on it.
+    let broken = true;
+    await page.route("**/api/v1/me", async (route) => {
+      await route.fulfill({ json: broken ? { ...me, stores: null } : me });
+    });
+    await page.goto(stubbedLaunch());
+
+    await expect(
+      page.getByRole("heading", { name: "Щось пішло не так" }),
+    ).toBeVisible();
+    await expect(page.locator("[data-crashed]")).toContainText(keptSaid);
+    await expect(page.locator("[data-crashed]")).not.toContainText(
+      nothingKeptSaid,
+    );
+    await expect(page.locator("[data-crashed]")).toContainText(
+      `Версія ${release}`,
+    );
+    // Nothing of the phone's storage was cleared.
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), saleKey),
+    ).toBe(saved);
+
+    // One note, though React drew the screen twice and its development build
+    // throws the error once more for the console.
+    await expect.poll(() => notes.length).toBe(1);
+    await page.waitForTimeout(500);
+    expect(notes).toHaveLength(1);
+    const [request] = notes;
+    if (!request) throw new Error("no note");
+    const note = noteOf(request);
+    expect(Object.keys(note).sort()).toEqual([
+      "kind",
+      "message",
+      "name",
+      "release",
+      "request_id",
+      "screen",
+    ]);
+    expect(note).toMatchObject({
+      kind: "render",
+      screen: "store-choice",
+      name: "TypeError",
+      release,
+      request_id: null,
+    });
+    expect(String(note.message)).toContain("find");
+    const headers = await request.allHeaders();
+    expect(headers.authorization).toBeUndefined();
+    expect(headers.referer).toBeUndefined();
+    expect(headers["content-type"]).toBe("application/json");
+    const sent = request.postData() ?? "";
+    for (const secret of [
+      telegramId,
+      firstName,
+      "tgWebAppData",
+      "Оксана",
+      "123 45 67",
+      "stubbed-session",
+    ])
+      expect(sent).not.toContain(secret);
+
+    // Started again, the app signs in from the same launch data and finds
+    // the sale it had sent, to check — never to send anew.
+    broken = false;
+    await Promise.all([
+      page.waitForEvent("load"),
+      page.getByRole("button", { name: "Перезапустити" }).click(),
+    ]);
+    expect(page.url()).toContain("#tgWebAppData=");
+    await page.getByRole("button", { name: /Подільський/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Незавершений продаж" }),
+    ).toBeVisible();
+    expect(notes).toHaveLength(1);
+  });
+
+  test("with no sale sent awaiting its answer, promises nothing and says to check before repeating", async ({
+    page,
+  }) => {
+    // A count being typed is kept on the phone too, but it was never sent:
+    // there is no answer to wait for.
+    const draftKey = `birka:stock-list-draft:${ids.store}`;
+    await seed(page, { [draftKey]: '{"lines":[]}' });
+    await openBroken(page);
+
+    const crashed = page.locator("[data-crashed]");
+    await expect(crashed).toContainText(nothingKeptSaid);
+    await expect(crashed).not.toContainText("збережено");
+    await expect(crashed).toContainText(`Версія ${release}`);
+    await expect(
+      page.getByRole("button", { name: "Перезапустити" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), draftKey),
+    ).toBe('{"lines":[]}');
+  });
+
+  test("with storage it cannot read, it still shows, and promises nothing", async ({
+    page,
+  }) => {
+    // Some phones' web views refuse storage outright. The screen that tells
+    // of a failure must not fail in turn.
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "localStorage", {
+        get() {
+          throw new DOMException("Storage is off.", "SecurityError");
+        },
+      });
+    });
+    await openBroken(page);
+
+    const crashed = page.locator("[data-crashed]");
+    await expect(crashed).toContainText(nothingKeptSaid);
+    await expect(
+      page.getByRole("button", { name: "Перезапустити" }),
+    ).toBeVisible();
+  });
+
+  test("a sale answered after the screen broke is no longer promised, and no saved value is read", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: saved });
+    // Every key whose value the page reads: the crash screen may look at the
+    // names only, for the values hold the customer's name and phone.
+    await page.addInitScript(() => {
+      const reads: string[] = [];
+      Object.assign(window, { storageReads: reads });
+      const original = Object.getOwnPropertyDescriptor(
+        Storage.prototype,
+        "getItem",
+      )?.value as (this: Storage, key: string) => string | null;
+      Storage.prototype.getItem = function (this: Storage, key: string) {
+        reads.push(key);
+        return original.call(this, key);
+      };
+    });
+    await openBroken(page);
+
+    // Sent just before the screen broke, its journal is on the phone.
+    const crashed = page.locator("[data-crashed]");
+    await expect(crashed).toContainText(keptSaid);
+    // Then the answer arrives: the sale went through, and its journal is
+    // removed. A reload would show nothing, so nothing may be promised.
+    await page.evaluate((key) => {
+      localStorage.removeItem(key);
+    }, saleKey);
+    await expect(crashed).toContainText(nothingKeptSaid);
+    await expect(crashed).not.toContainText(keptSaid);
+    const reads = await page.evaluate(
+      () => (window as unknown as { storageReads: string[] }).storageReads,
+    );
+    expect(reads.filter((key) => key.startsWith("birka:"))).toEqual([]);
+  });
+
+  test("an error outside drawing is noted but leaves the screen; each once, five at most", async ({
+    page,
+  }) => {
+    const notes = await collectNotes(page);
+    await signInStubbed(page);
+    await page.route("**/api/v1/me", async (route) => {
+      await route.fulfill({ json: me });
+    });
+    await page.goto(stubbedLaunch());
+    const store = page.getByRole("button", { name: /Подільський/ });
+    await expect(store).toBeVisible();
+
+    // A server error nobody awaited carries its request's number. The class
+    // is the app's own: the development server hands out the same module.
+    await page.evaluate(async (path) => {
+      const { ApiError } = (await import(
+        path
+      )) as typeof import("../src/shared/api");
+      void Promise.reject(
+        new ApiError(500, "INTERNAL_ERROR", {}, "3f9c2a7e-1b2c-4d5e-8f90"),
+      );
+    }, "/src/shared/api.ts");
+    await expect.poll(() => notes.length).toBe(1);
+    expect(noteOf(notes[0] as Request)).toMatchObject({
+      kind: "rejection",
+      screen: "store-choice",
+      name: "ApiError",
+      message: "500 INTERNAL_ERROR",
+      request_id: "3f9c2a7e-1b2c-4d5e-8f90",
+    });
+
+    // A thrown value that is not an error is never quoted: it may be anything.
+    await page.evaluate(() => {
+      setTimeout(() => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
+        throw { customer_phone: "+380671234567" };
+      }, 0);
+    });
+    await expect.poll(() => notes.length).toBe(2);
+    expect(noteOf(notes[1] as Request)).toMatchObject({
+      kind: "error",
+      name: "NonError",
+    });
+    expect(notes[1]?.postData()).not.toContain("380671234567");
+
+    // The same error again is not noted again; seven new ones make five.
+    await page.evaluate(() => {
+      for (const n of [1, 1, 2, 3, 4, 5, 6, 7])
+        setTimeout(() => {
+          throw new RangeError(`broken ${String(n)}`);
+        }, 0);
+    });
+    await expect.poll(() => notes.length).toBe(5);
+    await page.waitForTimeout(500);
+    expect(notes).toHaveLength(5);
+    expect(notes.slice(2).map((n) => noteOf(n).message)).toEqual([
+      "broken 1",
+      "broken 2",
+      "broken 3",
+    ]);
+
+    // None of it replaced the screen.
+    await expect(store).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Щось пішло не так" }),
+    ).toHaveCount(0);
+  });
+
+  test("a note that cannot be sent is dropped without a word", async ({
+    page,
+  }) => {
+    await page.route("**/api/v1/client-errors", async (route) => {
+      await route.abort("connectionrefused");
+    });
+    await signInStubbed(page);
+    await page.route("**/api/v1/me", async (route) => {
+      await route.fulfill({ json: { ...me, stores: null } });
+    });
+    // The crash is expected here; what must not follow is a second failure,
+    // which would surface as an error nothing caught.
+    const thrown: string[] = [];
+    page.on("pageerror", (error) => thrown.push(error.message));
+    await page.goto(stubbedLaunch());
+    await expect(
+      page.getByRole("heading", { name: "Щось пішло не так" }),
+    ).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(thrown.every((message) => message.includes("find"))).toBe(true);
+    await expect(
+      page.getByRole("button", { name: "Перезапустити" }),
+    ).toBeVisible();
+  });
+});
+
+test("the app's code that never arrives is said so, but only after a wait", async ({
+  page,
+}) => {
+  await page.route("**/src/main.tsx", async (route) => {
+    await route.abort("connectionreset");
+  });
+  await page.goto(stubbedLaunch());
+  const fallback = page.getByText(
+    "Застосунок не завантажився. Перевірте зв’язок і відкрийте його ще раз.",
+  );
+  // A normal open never flashes it.
+  await expect(fallback).toBeHidden();
+  await page.waitForTimeout(3000);
+  await expect(fallback).toBeHidden();
+  await expect(fallback).toBeVisible({ timeout: 10_000 });
+});
+
+test("an app that opens replaces the waiting text at once", async ({
+  page,
+}) => {
+  await signInStubbed(page);
+  await page.route("**/api/v1/me", async (route) => {
+    await route.fulfill({ json: me });
+  });
+  await page.goto(stubbedLaunch());
+  await expect(page.getByRole("button", { name: /Подільський/ })).toBeVisible();
+  await expect(page.locator(".not-loaded")).toHaveCount(0);
+});
+
+test("a server error gives its request's number; a server out of reach says to try in a minute", async ({
+  page,
+}) => {
+  const notes = await collectNotes(page);
+  let answer: "500" | "500-bare" | "502" | "503" | "504" | "lost" = "500";
+  await page.route("**/api/v1/auth/telegram", async (route) => {
+    if (answer === "lost") {
+      await route.abort("connectionreset");
+      return;
+    }
+    if (answer === "500") {
+      await route.fulfill({
+        status: 500,
+        headers: { "X-Request-ID": "3f9c2a7e-1b2c-4d5e-8f90-a1b2c3d4e5f6" },
+        json: {
+          code: "INTERNAL_ERROR",
+          message: "Внутрішня помилка сервера.",
+          details: {},
+        },
+      });
+      return;
+    }
+    // The edge's own answer: no body, no number.
+    await route.fulfill({
+      status: answer === "500-bare" ? 500 : Number(answer),
+    });
+  });
+  const said = page.getByRole("alert");
+  const again = page.getByRole("button", { name: "Спробувати ще раз" });
+  await page.goto(stubbedLaunch());
+  await expect(said).toHaveText(
+    "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 3f9c2a7e.",
+  );
+
+  for (const status of ["502", "503", "504"] as const) {
+    answer = status;
+    await again.click();
+    await expect(said).toHaveText(
+      "Сервер зараз недоступний. Спробуйте ще раз за хвилину.",
+    );
+  }
+
+  // A server error without a number reads as it always did, and so does no
+  // answer at all.
+  answer = "500-bare";
+  await again.click();
+  await expect(said).toHaveText(
+    "Не вдалося виконати операцію. Спробуйте ще раз.",
+  );
+  answer = "lost";
+  await again.click();
+  await expect(said).toHaveText(
+    "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.",
+  );
+  // A refusal the screen shows is not a broken screen: nothing is noted.
+  expect(notes).toHaveLength(0);
+});
+
+test.describe("trouble on the server, in «Резервні копії»", () => {
+  const minute = 60_000;
+
+  /** `server` gets times counted back from the very moment the answer says it
+   * was checked (`checked_at`), so a minute is never lost between the two. */
+  type Ago = (minutes: number) => string;
+
+  async function serve(
+    page: Page,
+    server: (ago: Ago) => object,
+  ): Promise<void> {
+    await page.route("**/api/v1/backups", async (route) => {
+      const now = Date.now();
+      const ago: Ago = (minutes) =>
+        new Date(now - minutes * minute).toISOString();
+      const night = new Date(now - 5 * 60 * minute).toISOString();
+      const good = {
+        started_at: night,
+        finished_at: night,
+        ok: true,
+        archive: "birka-20261003T031500Z.dump.age",
+        archive_bytes: 2_500_000,
+        drill_ok: true,
+        restore_seconds: 0.42,
+        reasons: [],
+      };
+      await route.fulfill({
+        json: {
+          state: "OK",
+          checked_at: new Date(now).toISOString(),
+          due_hours: 26,
+          latest: good,
+          last_good: good,
+          nights: [good],
+          your_last_message: null,
+          server: server(ago),
+        },
+      });
+    });
+  }
+
+  function tab(page: Page) {
+    return page.getByRole("button", { name: /^Резервні копії/ });
+  }
+
+  async function open(page: Page): Promise<void> {
+    await page.goto(signedLaunch(fixture.owner_telegram_user_id));
+    await page.getByRole("button", { name: "Основний MAIN" }).click();
+    await tab(page).click();
+  }
+
+  test("the owner sees what is wrong now and since when, what was wrong this week, and that the watcher looks", async ({
+    page,
+  }) => {
+    await serve(page, (ago) => ({
+      looked_at: ago(2),
+      open: [
+        {
+          kind: "NOT_ANSWERING",
+          reason:
+            "Продавці зараз не можуть продавати: база даних не відповідає.",
+          started_at: ago(25),
+          told_at: ago(25),
+        },
+      ],
+      recent: [
+        {
+          kind: "DISK_LOW",
+          reason: "На диску сервера лишилося 9 % місця.",
+          started_at: ago(30 * 60),
+          ended_at: ago(27 * 60),
+        },
+      ],
+    }));
+    await open(page);
+    // Marked as backups are while something needs the owner.
+    await expect(tab(page)).toHaveText("Резервні копії ⚠");
+
+    const block = page.locator('[data-server="TROUBLE"]');
+    await expect(block.getByRole("heading")).toHaveText("Проблема на сервері");
+    const now = block.locator('[data-troubles="open"] > li');
+    await expect(now).toHaveCount(1);
+    await expect(now).toContainText("Сервер не відповідає");
+    await expect(now).toContainText("уже 25 хв");
+    await expect(now).toContainText(
+      "Продавці зараз не можуть продавати: база даних не відповідає.",
+    );
+    await expect(block.locator("[data-watcher]")).toHaveText(
+      "Сторож перевіряв 2 хв тому.",
+    );
+    const past = block.locator('[data-troubles="recent"] > li');
+    await expect(past).toHaveCount(1);
+    await expect(past).toContainText("Закінчувалося місце на диску");
+    await expect(past).toContainText("тривало 3 год");
+    await expect(past).toContainText("На диску сервера лишилося 9 % місця.");
+    // The backups' own verdict is untouched.
+    await expect(
+      page.locator('[data-state="OK"]').getByRole("heading"),
+    ).toHaveText("Копії в порядку");
+
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("a watcher that went quiet, or never looked, is called out; a live one says all is well", async ({
+    page,
+  }) => {
+    let lookedMinutesAgo: number | null = 0.3;
+    await serve(page, (ago) => ({
+      looked_at: lookedMinutesAgo === null ? null : ago(lookedMinutesAgo),
+      open: [],
+      recent: [],
+    }));
+    await open(page);
+    const watcher = page.locator("[data-watcher]");
+    await expect(page.locator('[data-server="OK"]')).toBeVisible();
+    await expect(watcher).toHaveText(
+      "Сторож перевіряв щойно. Проблем не помічено.",
+    );
+    await expect(tab(page)).toHaveText("Резервні копії");
+
+    const refresh = page.getByRole("button", { name: "Оновити" });
+    lookedMinutesAgo = 40;
+    await refresh.click();
+    await expect(page.locator('[data-server="SILENT"]')).toBeVisible();
+    await expect(watcher).toHaveText(
+      "Сторож перевіряв 40 хв тому. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
+    );
+
+    lookedMinutesAgo = null;
+    await refresh.click();
+    await expect(watcher).toHaveText(
+      "Сторож ще не перевіряв сервер. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
+    );
+    // The section shows the quiet watcher; the tab is marked for trouble only.
+    await expect(tab(page)).toHaveText("Резервні копії");
+  });
+});
+
+test("an error nothing caught fails a journey that expected none", async ({
+  page,
+}) => {
+  // The fixture's own check, proven: this journey must end failed.
+  test.fail();
+  await page.goto("about:blank");
+  await Promise.all([
+    page.waitForEvent("pageerror"),
+    page.evaluate(() => {
+      setTimeout(() => {
+        throw new Error("thrown on purpose");
+      }, 0);
+    }),
+  ]);
+});

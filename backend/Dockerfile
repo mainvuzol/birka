@@ -57,8 +57,18 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 ENV BIRKA_PG_BIN=/usr/lib/postgresql/17/bin
 USER birka
+# The build's version, its git commit (infra/docker-compose.yml passes it).
+# Declared in each final stage, after the slow layers: a commit that changes
+# nothing in this directory rebuilds none of them.
+ARG BIRKA_RELEASE=dev
+ENV BIRKA_RELEASE=$BIRKA_RELEASE
 # What the schedule runs: back up, drill, encrypt, keep what the owner keeps.
 CMD ["python", "-m", "scripts.nightly_backup", "--out", "/backups"]
 
-# The API. Last, so it stays the target a plain `docker build` produces.
+# The API, and backup-watch, which runs from the same image. Last, so it
+# stays the target a plain `docker build` produces.
 FROM base AS api
+# The build's version, as in `ops`: it names the version in the server's log
+# and error reports (app.core.config `release`).
+ARG BIRKA_RELEASE=dev
+ENV BIRKA_RELEASE=$BIRKA_RELEASE

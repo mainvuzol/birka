@@ -4,11 +4,19 @@ one description of a database that both sides can be compared by.
 `describe` is read twice — from the source, inside the very snapshot
 `pg_dump` copies, and from the restored copy — so every fact in a backup's
 manifest is a fact the restored copy must reproduce exactly.
+
+Every tool runs under a time limit (`run`). A step that hangs — `pg_dump`
+waiting behind a lock, a connection that stalls — would otherwise keep the
+night, its scratch copy and its container alive with nothing said, and the
+owner would hear only "overdue" a day later. The limits are generous, far
+beyond what the shops' database takes, and each can be changed by its
+variable (`STEP_TIMEOUTS`).
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import re
 import shutil
@@ -28,6 +36,48 @@ CYRILLIC_LOWER = "оля"
 
 class ToolError(RuntimeError):
     """A PostgreSQL client tool is missing, too old, or failed."""
+
+
+# How long each step may run before it is stopped, in seconds, and the
+# variable that changes it. By the tool's name, so a step is limited however
+# it is called (`scripts.backup_database` runs `pg_dump` itself).
+STEP_TIMEOUTS: dict[str, tuple[str, float]] = {
+    "pg_dump": ("BIRKA_BACKUP_DUMP_TIMEOUT_SECONDS", 2 * 3600),
+    "pg_restore": ("BIRKA_BACKUP_RESTORE_TIMEOUT_SECONDS", 2 * 3600),
+    "age": ("BIRKA_BACKUP_ENCRYPT_TIMEOUT_SECONDS", 30 * 60),
+}
+# Any other tool run here.
+OTHER_TIMEOUT_SECONDS = 30 * 60
+# Asking a tool its version takes a moment; one that cannot say in a minute
+# will not do the night's work either.
+VERSION_TIMEOUT_SECONDS = 60
+
+
+def timeout_for(name: str) -> float:
+    """The limit for the tool called `name`: its variable when set, or its
+    default. A variable that is not a positive number fails the step that
+    reads it, in words, rather than running it without a limit."""
+    if name not in STEP_TIMEOUTS:
+        return OTHER_TIMEOUT_SECONDS
+    variable, default = STEP_TIMEOUTS[name]
+    value = os.environ.get(variable, "").strip()
+    if not value:
+        return default
+    try:
+        seconds = float(value)
+    except ValueError:
+        seconds = 0.0
+    if not 0 < seconds < float("inf"):
+        raise ToolError(f"{variable} must be a number of seconds above 0, not {value!r}")
+    return seconds
+
+
+def _duration(seconds: float) -> str:
+    if seconds >= 3600 and seconds % 3600 == 0:
+        return f"{seconds / 3600:g} h"
+    if seconds >= 60 and seconds % 60 == 0:
+        return f"{seconds / 60:g} min"
+    return f"{seconds:g} s"
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +125,22 @@ def tool(name: str) -> Path:
     return found
 
 
-async def run(executable: Path, *args: str, env: dict[str, str] | None = None) -> str:
+async def run(
+    executable: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    step: str | None = None,
+    timeout: float | None = None,
+) -> str:
+    """Run a tool to the end and return what it printed.
+
+    It is stopped (SIGKILL) once it has run `timeout` seconds — by default
+    the limit of its `step`, named after the tool (`timeout_for`) — and the
+    step fails saying so. It is stopped too when the night itself is
+    cancelled: a tool is never left running behind it.
+    """
+    step = step or executable.name
+    limit = timeout_for(step) if timeout is None else timeout
     process = await asyncio.create_subprocess_exec(
         str(executable),
         *args,
@@ -83,15 +148,33 @@ async def run(executable: Path, *args: str, env: dict[str, str] | None = None) -
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    out, err = await process.communicate()
+    try:
+        out, err = await asyncio.wait_for(process.communicate(), limit)
+    except TimeoutError:
+        await _stop(process)
+        variable = STEP_TIMEOUTS.get(step, ("", 0))[0]
+        raise ToolError(
+            f"{executable.name} did not finish within {_duration(limit)} and was stopped"
+            + (f"; {variable} gives it longer" if variable and timeout is None else "")
+        ) from None
+    except BaseException:
+        await _stop(process)
+        raise
     if process.returncode != 0:
         tail = err.decode(errors="replace").strip()[-2000:]
         raise ToolError(f"{executable.name} exited with {process.returncode}: {tail}")
     return out.decode(errors="replace")
 
 
+async def _stop(process: asyncio.subprocess.Process) -> None:
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        await process.wait()
+
+
 async def tool_major(executable: Path) -> int:
-    version = await run(executable, "--version")
+    version = await run(executable, "--version", timeout=VERSION_TIMEOUT_SECONDS)
     found = re.search(r"\(PostgreSQL\)\s+(\d+)", version)
     if not found:
         raise ToolError(f"Cannot read the version of {executable}: {version.strip()}")

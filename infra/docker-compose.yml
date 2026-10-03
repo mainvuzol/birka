@@ -11,6 +11,13 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
+# The build's version, its git commit, baked into every image it builds:
+#   export BIRKA_RELEASE=$(git rev-parse --short HEAD)   # before building
+# It names the version in the server's log and error reports and on the
+# app's crash screen. Unset, the images say `dev`.
+x-release: &release
+  BIRKA_RELEASE: ${BIRKA_RELEASE:-dev}
+
 services:
   db:
     image: postgres:17-alpine
@@ -47,6 +54,7 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args: *release
     restart: unless-stopped
     logging: *logging
     depends_on:
@@ -63,11 +71,28 @@ services:
       BIRKA_SESSION_SECRET: ${BIRKA_SESSION_SECRET:?session secret is required}
       BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
       BIRKA_LOG_JSON: "true"
+      # No value here: the shell's, when it exported one, and otherwise the
+      # one the image was built with — never a `dev` that hides the build.
+      BIRKA_RELEASE:
     # Reached by Caddy over the compose network, and NEVER published: the API
     # believes the X-Forwarded-For of whoever reaches this port, which is
     # safe only while that is Caddy alone (backend/Dockerfile).
     expose:
       - "8000"
+    # Ready: its database answers and holds the schema this code expects
+    # (`/api/v1/ready`). Shown by `docker compose ps`; Docker does not restart
+    # a container for it, and backup-watch tells the owner (it asks the API
+    # itself). The image is python:slim, without curl: Python asks.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # The nightly backup, and restore drills (backup-restore-runbook.md):
   #   docker compose --profile ops run --rm ops          # what cron runs daily
@@ -77,13 +102,16 @@ services:
   # night it writes one row, its own record, to `backup_run`, which is all
   # `backup-watch` and the owner's section read.
   # The drill restores into a new scratch database on the same server and
-  # drops it afterwards; it writes to no other database.
+  # drops it afterwards; it writes to no other database. Each step has a time
+  # limit, and a night that finds the previous one still running (its lock in
+  # the backup directory) starts nothing and is recorded as failed.
   ops:
     profiles: ["ops"]
     build:
       context: ../backend
       dockerfile: Dockerfile
       target: ops
+      args: *release
     logging: *logging
     depends_on:
       db:
@@ -108,6 +136,7 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args: *release
     restart: unless-stopped
     logging: *logging
     depends_on:
@@ -124,6 +153,19 @@ services:
       BIRKA_PUBLIC_DOMAIN: ${BIRKA_DOMAIN:-localhost}
       BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
       BIRKA_LOG_JSON: "true"
+      # Trouble on the server goes to the owner and to these administrators
+      # (owner decision, 2026-10-03): Telegram user ids, comma-separated.
+      BIRKA_ADMIN_TELEGRAM_IDS: ${BIRKA_ADMIN_TELEGRAM_IDS:-}
+      # The outside service it checks in with every 10 minutes; empty, none.
+      BIRKA_HEARTBEAT_URL: ${BIRKA_HEARTBEAT_URL:-}
+      # It asks the API about itself on the compose network, where Caddy
+      # never sends anyone (`/internal/status`).
+      BIRKA_API_URL: http://api:8000
+      BIRKA_RELEASE:
+    # The backups' disk, read only: how full it is (a full disk stops the
+    # database and the night's copy alike).
+    volumes:
+      - ${BIRKA_BACKUP_DIR:-./backups}:/backups:ro
 
   # Builds the Mini App and hands the static bundle to Caddy through a shared
   # volume. It exits once the build is copied; it is not a long-running service.
@@ -131,6 +173,8 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args: *release
+    logging: *logging
     volumes:
       - web_dist:/output
 
@@ -138,6 +182,8 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     logging: *logging
+    # Started, not healthy: an API not yet ready (its migration not run) must
+    # not keep the whole site down with it.
     depends_on:
       api:
         condition: service_started

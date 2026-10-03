@@ -24,6 +24,8 @@ to it at the step where it belongs.
 | The clock | synchronized (`timedatectl` says `System clock synchronized: yes`). Telegram's sign-in data is refused when its time is in the future, or more than an hour old. |
 | A Telegram bot | made with @BotFather. Its token signs every sign-in; the server must have the same one. |
 | The owner's age key | made on the owner's computer ([backup runbook, step 1](backup-restore-runbook.md#1-the-owners-key-on-the-owners-computer)). Only the public half goes to the server. |
+| Who hears of trouble | the owner, through the bot, and an administrator: their Telegram user id (owner decision, 2026-10-03). Not named yet. |
+| An outside check-in service | in the owner's name, so a server that dies whole is noticed ([step 8a](#8a-being-told-when-something-fails)). |
 
 Set the server's time zone to Kyiv, so the backup schedule's 03:15 is the
 shop's night:
@@ -61,13 +63,16 @@ In `.env`:
 | `BIRKA_TELEGRAM_BOT_TOKEN` | from @BotFather |
 | `BIRKA_SESSION_SECRET` | `openssl rand -base64 48` |
 | `BIRKA_BACKUP_AGE_RECIPIENTS` | the owner's public key, `age1…` |
-| `BIRKA_SENTRY_DSN` | optional |
+| `BIRKA_ADMIN_TELEGRAM_IDS` | the administrator's Telegram user id, comma-separated if there are several ([step 8a](#8a-being-told-when-something-fails)) |
+| `BIRKA_HEARTBEAT_URL` | the outside service's check-in address ([step 8a](#8a-being-told-when-something-fails)). Anyone holding it could check in on the server's behalf, so it stays in `.env` |
+| `BIRKA_SENTRY_DSN` | empty: error details stay in the server's log (owner decision, 2026-10-03). Setting it turns Sentry on, scrubbed as ADR-0010 says |
 
 **Keep a copy of `.env` in the password manager.** It is in no backup.
 
 ### 3. Build, and the database
 
 ```sh
+export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)   # the version the app and its errors name
 docker compose build
 docker compose --profile ops build ops
 docker compose up -d --wait db
@@ -83,6 +88,8 @@ a person takes.
 ```sh
 docker compose up -d
 curl -fsS https://<domain>/api/v1/health    # {"status":"ok","environment":"production"}
+curl -fsS https://<domain>/api/v1/ready     # {"status":"ready"}: the database answers and its schema is current
+docker compose ps                           # the api says (healthy) within a minute or two
 ```
 
 `up -d` starts five things:
@@ -177,6 +184,59 @@ Follow the [backup runbook](backup-restore-runbook.md#setting-it-up), steps
 **The release is not done until the owner's «Резервні копії» section shows
 a good night.**
 
+### 8a. Being told when something fails
+
+The owner decided on 2026-10-03 who hears of trouble on the server, and how
+([ADR-0011](../decisions/ADR-0011-failures-are-visible.md)). `backup-watch`
+looks every minute. When the app has not answered for 5 minutes, the disk is
+nearly full, or nobody has managed to sign in for 10 minutes, the bot tells:
+- the owner;
+- the administrators in `BIRKA_ADMIN_TELEGRAM_IDS`.
+
+It writes once when the trouble starts, once a day while it lasts, and once
+when it works again. From 9:00 to 20:00, Kyiv time, its messages arrive with
+a sound; at other hours, silently. The «Резервні копії» section shows the
+same troubles, and when the watcher last looked.
+
+1. **The administrator** opens the shop's bot and presses «Start», then
+   opens the app from it: «Доступу ще немає» shows their Telegram number. Put
+   it in `BIRKA_ADMIN_TELEGRAM_IDS`, and `docker compose up -d backup-watch`.
+   `docker compose logs backup-watch | grep backup_watch.started` shows how
+   many administrators it has: a part of the setting that is not a number is
+   dropped, rather than stopping the watcher and every alert with it.
+2. **The outside service.** A dead server cannot say so, so the owner opens an
+   account with a service that waits for check-ins, for example
+   Healthchecks.io or UptimeRobot:
+   - **a check-in check** ("heartbeat" or "cron job"): every 10 minutes,
+     with 10 minutes' grace. Its URL goes in `BIRKA_HEARTBEAT_URL`, then
+     `docker compose up -d backup-watch`. The watcher checks in only while
+     it is looking, the bot works, and someone can be told, so the
+     service also hears of a hung watcher or a revoked bot token;
+   - **an address check** of `https://<domain>/api/v1/ready`, every 5
+     minutes, if the service offers one;
+   - its alerts go to the owner's Telegram or e-mail.
+
+   The service learns the site's address and that the server is alive,
+   nothing of the shop's.
+3. **Try it, before the shops use the app:**
+   ```sh
+   docker compose stop api       # wait 6 minutes: the bot says the app is not answering
+   docker compose start api      # within a minute: it works again
+   docker compose stop backup-watch   # wait 25 minutes: the outside service writes to the owner
+   docker compose start backup-watch
+   ```
+
+What each message means, for whoever looks after the server:
+
+| The bot says | Look at |
+|---|---|
+| the app's server does not answer | `docker compose ps` and `docker compose logs --since 15m api`: a setting the API refuses to start with is named in its last lines |
+| the database does not answer | `docker compose ps db`, `docker compose logs --since 15m db`, and the disk (`df -h /`) |
+| the database is not updated for this version | the migration was not run, or failed: [a new version](#a-new-version) |
+| the disk is running out | `docker system df`, then `docker image prune -f && docker builder prune -f --filter until=720h`; the backups directory; a night that kept failing keeps every copy (backup runbook) |
+| nobody can sign in, maybe the clock | `timedatectl`: `System clock synchronized: yes` |
+| nobody can sign in, maybe the bot token | the token in `.env` against @BotFather; after changing it, `docker compose up -d api backup-watch` |
+
 ### 9. The shops' existing stock, before anything moves
 
 **Nothing is received, sold or corrected until this step is done.** A
@@ -256,11 +316,14 @@ proves the till.
 
 | | |
 |---|---|
-| Is it up? | `docker compose ps`, and `curl -fsS https://<domain>/api/v1/health` |
-| The API's log | `docker compose logs --since 1h api`. Each service keeps at most 5 × 10 MB. A request is logged without its query string, so a debt search by name or phone never reaches it; it shows the seller's address. |
+| Is it up? | `docker compose ps` (the api says `healthy`), and `curl -fsS https://<domain>/api/v1/ready`. `backup-watch` asks the same every minute and the bot tells the owner and the administrators ([step 8a](#8a-being-told-when-something-fails)). |
+| The API's log | `docker compose logs --since 1h api`. Each service keeps at most 5 × 10 MB. A request is logged without its query string, so a debt search by name or phone never reaches it; it shows the seller's address. Every line of a request carries its `request_id`. |
+| A seller's «Номер запиту» | the first 8 characters of a `request_id`: `docker compose logs api \| grep <them>` finds the request and its error. |
+| A broken screen | the app notes it in the API's log as `client.error`: which screen, which error, the version and the request's number, nothing about the person. `docker compose logs api \| grep client.error`. |
+| The watcher | `docker compose logs --since 1h backup-watch`. `backup_watch.server_trouble` is a trouble told; `checked_in` / `check_in_withheld` the outside check-in; `bot_token_refused` a bot token Telegram no longer accepts; `idempotency_purged` the hourly cleanup. |
 | Last night's backup | `docker compose run --rm backup-watch python -m scripts.backup_watch --status` (exit 0 only if OK). The owner sees the same in the app. |
-| Disk | `df -h /`. The database, the server's ~10 backups and the nightly scratch copy share it. |
-| Errors | Sentry, if `BIRKA_SENTRY_DSN` is set. Request bodies, query strings, sign-in data, tokens and the values a refused database row repeats are scrubbed before anything leaves; an event is tagged with its request id. |
+| Disk | `df -h /`. The database, the server's ~10 backups and the nightly scratch copy share it. Under 15 % or 3 GB free, the bot says so. Old images build up with each update: see [a new version](#a-new-version). |
+| Errors | In the API's log (owner decision, 2026-10-03: not Sentry yet). Setting `BIRKA_SENTRY_DSN` turns Sentry on for the API and `backup-watch`. Request bodies, query strings, sign-in data, tokens and the values a refused database row repeats are scrubbed before anything leaves; an event is tagged with its request id, the build (`BIRKA_RELEASE`) and the process. |
 | The site's certificate | `backup-watch` asks Caddy for it on every look. A week before it runs out the owner hears from the bot, at most once a day (owner decision, 2026-10-03). `backup_watch.certificate_unread` in its log is expected before the first certificate is issued, or while Caddy restarts. |
 
 **Never run `docker compose down -v`.** `-v` deletes the database's volume,
@@ -276,11 +339,19 @@ again. An urgent security fix is the exception.
 cd /srv/birka/infra
 docker compose --profile ops run --rm ops                 # a backup now, before anything changes
 git -C /srv/birka fetch && git -C /srv/birka checkout <the new release commit>
+export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)
 docker compose build && docker compose --profile ops build ops
-docker compose run --rm --no-deps api alembic upgrade head
+docker compose run --rm --no-deps api alembic upgrade head   # if this fails, stop here: see below
 docker compose up -d
-curl -fsS https://<domain>/api/v1/health
+curl -fsS https://<domain>/api/v1/ready
+docker image prune -f && docker builder prune -f --filter until=720h   # what the old images left
 ```
+
+**If `alembic upgrade head` fails, do not run `up -d`.** The running version
+still matches the database. New code on a schema not brought up to date
+fails every request; `/api/v1/ready` would then answer `schema`, and the bot
+would tell the owner within 5 minutes. Read the error, and go back (below)
+if it cannot be fixed.
 
 Read the release's reports first. A migration that changes how stock or
 money is recorded says so, and says what its downgrade refuses.
@@ -293,7 +364,8 @@ phone that opens the app during or after the update gets a working page.
 ## Going back
 
 1. **The code alone.**
-   - Check out the previous commit, build, and `up -d`. The build installs
+   - Check out the previous commit, `export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)`,
+     build, and `up -d`. The build installs
      that commit's `requirements.lock`, so its library versions come back
      too.
    - Safe while the new version's migrations only added things; most do.
@@ -307,6 +379,32 @@ phone that opens the app during or after the update gets a working page.
    - Follow [restoring for real](backup-restore-runbook.md#restoring-for-real).
    - Whatever was recorded since that backup is lost: minutes, if it was
      taken as above.
+
+## The hot path on this server (optional)
+
+The release reading (checklist row 22) is taken on a laptop. Before the
+shops start, it can be repeated on the server itself, in a database of its
+own that is dropped afterwards, while nobody uses the app. Untried on a
+server; the commands are those of the
+[hot path report](hot-path-budget-report.md):
+
+```sh
+docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" birka_perf'
+docker compose run -d --name birka-perf-api --no-deps \
+  -e BIRKA_APP_ENV=ci -e BIRKA_LOG_LEVEL=WARNING \
+  -e BIRKA_DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/birka_perf \
+  api sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 58043 --no-access-log"
+docker compose run --rm --no-deps \
+  -e BIRKA_PERF_DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/birka_perf \
+  -e BIRKA_PERF_API_URL=http://birka-perf-api:58043 -e BIRKA_PERF_GATE=all \
+  api python -m scripts.measure_hot_path
+docker rm -f birka-perf-api
+docker compose exec db sh -c 'dropdb -U "$POSTGRES_USER" birka_perf'
+```
+
+`<user>` and `<password>` are `POSTGRES_USER` and `POSTGRES_PASSWORD` from
+`.env`. Both containers run with the server's own bot token, which the
+harness signs its launch data with. Every case must pass (owner, 2026-10-03).
 
 ## Security
 
@@ -332,6 +430,9 @@ phone that opens the app during or after the update gets a working page.
 
 ## Not covered
 
+- **Nobody is named to hear of trouble yet**, and no outside check-in
+  service exists: until both are set up ([step 8a](#8a-being-told-when-something-fails)),
+  a server that dies whole is noticed only by the sellers.
 - **Nothing here has run on a production server.** Public HTTPS issuance
   has never been tried. The 2026-09-16 run used Caddy's own local
   certificate.

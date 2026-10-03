@@ -137,6 +137,24 @@ Schedule it, in root's crontab:
 15 3 * * * cd /srv/birka/infra && docker compose --profile ops run --rm ops >> /var/log/birka-backup.log 2>&1
 ```
 
+That log grows by a few kilobytes a night, forever, unless it is rotated.
+Rotate it monthly, keeping a year, in `/etc/logrotate.d/birka-backup`:
+
+```
+/var/log/birka-backup.log {
+    monthly
+    rotate 12
+    compress
+    missingok
+    notifempty
+}
+```
+
+A night that finds the previous one still running does not start a second
+copy beside it: it records a failed night, `still_running`, and the owner
+hears of it as of any failed night. Every step has a time limit, so a
+night that hangs ends as a failed night too.
+
 ### 3. Read-only access for the owner's computer
 
 On the server, a user that can do nothing but read the backup directory.

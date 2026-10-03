@@ -16,19 +16,21 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
+import time
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 import scripts.backup_database as backup_module
 import scripts.nightly_backup as nightly_module
 from scripts.backup_database import back_up, sha256
-from scripts.nightly_backup import nightly
+from scripts.nightly_backup import LOCK_NAME, night_lock, nightly
 from scripts.postgres_tools import Database, ToolError, run, tool
-from scripts.restore_drill import SCRATCH_PREFIX, drill
+from scripts.restore_drill import KEPT_SUFFIX, SCRATCH_PREFIX, drill, drop_leftovers
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -461,3 +463,174 @@ async def test_an_encrypted_night_can_only_be_read_with_the_owners_key(source, t
     opened = tmp_path / "opened.dump"
     await run(age, "--decrypt", "-i", str(identity), "-o", str(opened), str(sealed))
     assert sha256(opened) == manifest["archive_sha256"]
+
+
+# --- a night that hangs, overlaps, or finds a drill's leftovers ---------------
+
+
+def _fake_bin(tmp_path: Path, *, hangs: str) -> Path:
+    """The real PostgreSQL tools, except `hangs`: it tells its version and
+    then never finishes. `BIRKA_PG_BIN` points here."""
+    directory = tmp_path / "bin"
+    directory.mkdir()
+    for name in ("pg_dump", "pg_restore"):
+        if name != hangs:
+            (directory / name).symlink_to(tool(name))
+    fake = directory / hangs
+    fake.write_text(
+        "#!/bin/sh\n"
+        f'if [ "$1" = --version ]; then echo "{hangs} (PostgreSQL) 99.0"; exit 0; fi\n'
+        "exec sleep 60\n"
+    )
+    fake.chmod(0o755)
+    return directory
+
+
+async def _create(server: Database, *names: str) -> None:
+    admin = create_async_engine(server.url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
+    try:
+        async with admin.connect() as connection:
+            for name in names:
+                await connection.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        await admin.dispose()
+
+
+async def _drop(server: Database, *names: str) -> None:
+    admin = create_async_engine(server.url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
+    try:
+        async with admin.connect() as connection:
+            for name in names:
+                await connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+    finally:
+        await admin.dispose()
+
+
+def _leftover_name(made: datetime) -> str:
+    """Named as a drill names a copy it means to drop."""
+    return f"{SCRATCH_PREFIX}{made:%Y%m%d%H%M%S}_{secrets.token_hex(3)}"
+
+
+async def test_a_night_finding_the_last_one_still_running_starts_nothing(source, tmp_path):
+    """Two dumps and two scratch copies at once could fill the disk; the
+    night turned away is recorded, so the owner hears the last one has not
+    finished instead of a day's silence."""
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    earlier = datetime(2026, 10, 3, 3, 15, tzinfo=UTC)
+    before = await scratch_databases(server)
+
+    with night_lock(tmp_path, earlier):
+        result = await nightly(database, server, tmp_path, recipients=[], allow_plaintext=True)
+
+    assert result["ok"] is False
+    [problem] = result["problems"]
+    assert problem["step"] == "still_running"
+    assert earlier.isoformat() in problem["detail"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [LOCK_NAME, "last-run.json"]
+    assert json.loads((tmp_path / "last-run.json").read_text()) == result
+    assert await scratch_databases(server) == before
+    assert await recorded(database) == [
+        {
+            "ok": False,
+            "archive": None,
+            "archive_bytes": None,
+            "drill_ok": None,
+            "problems": result["problems"],
+        }
+    ]
+    # Once the night before lets go, the next one runs.
+    following = await nightly(database, server, tmp_path, recipients=[], allow_plaintext=True)
+    assert following["ok"], following["problems"]
+
+
+async def test_a_dump_that_hangs_is_stopped_and_the_night_says_so(source, tmp_path, monkeypatch):
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    monkeypatch.setenv("BIRKA_PG_BIN", str(_fake_bin(tmp_path, hangs="pg_dump")))
+    monkeypatch.setenv("BIRKA_BACKUP_DUMP_TIMEOUT_SECONDS", "1")
+    out = tmp_path / "backups"
+    started = time.monotonic()
+
+    result = await nightly(database, server, out, recipients=[], allow_plaintext=True)
+
+    assert time.monotonic() - started < 30
+    assert result["ok"] is False
+    assert result["problems"] == [
+        {
+            "step": "backup",
+            "detail": "pg_dump did not finish within 1 s and was stopped; "
+            "BIRKA_BACKUP_DUMP_TIMEOUT_SECONDS gives it longer",
+        }
+    ]
+    assert sorted(path.name for path in out.iterdir()) == [LOCK_NAME, "last-run.json"], (
+        "no half-written dump is left"
+    )
+    [night] = await recorded(database)
+    assert night["problems"] == result["problems"]
+    with night_lock(out, datetime.now(UTC)):
+        pass  # the night let go of its lock
+
+
+async def test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy(
+    source, tmp_path, monkeypatch
+):
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    monkeypatch.setenv("BIRKA_PG_BIN", str(_fake_bin(tmp_path, hangs="pg_restore")))
+    monkeypatch.setenv("BIRKA_BACKUP_RESTORE_TIMEOUT_SECONDS", "1")
+    out = tmp_path / "backups"
+    out.mkdir()
+    old = _old_night(out)
+
+    result = await nightly(database, server, out, recipients=[], allow_plaintext=True)
+
+    assert result["ok"] is False
+    [problem] = result["problems"]
+    assert problem["step"] == "drill"
+    assert problem["checks"] == ["restore"]
+    assert "pg_restore did not finish within 1 s and was stopped" in problem["detail"]
+    stem = result["archive"].removesuffix(".dump")
+    report = json.loads((out / f"{stem}.drill.json").read_text())
+    assert report["scratch_database"].startswith(SCRATCH_PREFIX)
+    assert report["scratch_database"] not in await scratch_databases(server), (
+        "the copy the stopped restore was filling is dropped"
+    )
+    assert (out / result["archive"]).exists(), "the night's backup is still kept"
+    assert old.exists(), "a failed night deletes nothing"
+
+
+async def test_only_a_drills_forgotten_copies_are_dropped(tmp_path):
+    """Old enough, named as a drill names a copy it drops: gone. A copy a
+    drill may still be using, or one kept on purpose: still there."""
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    now = datetime.now(UTC)
+    forgotten = _leftover_name(now - timedelta(days=1))
+    in_use = _leftover_name(now - timedelta(minutes=5))
+    kept = _leftover_name(now - timedelta(days=1)) + KEPT_SUFFIX
+    await _create(server, forgotten, in_use, kept)
+    try:
+        dropped = await drop_leftovers(server, now=now)
+
+        assert forgotten in dropped
+        assert in_use not in dropped and kept not in dropped
+        remaining = await scratch_databases(server)
+        assert forgotten not in remaining
+        assert in_use in remaining and kept in remaining
+    finally:
+        await _drop(server, forgotten, in_use, kept)
+
+
+async def test_a_night_first_drops_what_a_stopped_drill_left(source, tmp_path):
+    database, _ = source
+    server = Database(os.environ["BIRKA_TEST_DATABASE_URL"])
+    forgotten = _leftover_name(datetime.now(UTC) - timedelta(days=1))
+    await _create(server, forgotten)
+    try:
+        result = await nightly(database, server, tmp_path, recipients=[], allow_plaintext=True)
+
+        assert result["ok"], result["problems"]
+        assert forgotten in result["drill"]["dropped_leftovers"]
+        assert forgotten not in await scratch_databases(server)
+    finally:
+        await _drop(server, forgotten)

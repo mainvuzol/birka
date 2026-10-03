@@ -73,3 +73,35 @@ def test_secrets_are_not_rendered_in_repr() -> None:
     settings = Settings(_env_file=None, app_env="local", session_secret="super-secret-value")
 
     assert "super-secret-value" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("raw", "ids"),
+    [
+        ("", []),
+        ("123456789", [123456789]),
+        ("123, 456", [123, 456]),
+        ("123;456 789", [123, 456, 789]),
+        # A typo drops that part rather than refusing the setting: a refused
+        # setting would stop the watcher and every alert with it.
+        ("123,@admin,45x6", [123]),
+        ("１２３", []),
+    ],
+)
+def test_administrators_telegram_ids_are_read_leniently(
+    monkeypatch: pytest.MonkeyPatch, raw: str, ids: list[int]
+) -> None:
+    monkeypatch.setenv("BIRKA_ADMIN_TELEGRAM_IDS", raw)
+    assert Settings(_env_file=None).admin_telegram_ids == ids
+
+
+@pytest.mark.parametrize("raw", ["", "   "])
+def test_an_empty_heartbeat_or_sentry_setting_is_unset(
+    monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    """Compose passes an unset variable as an empty string (`${VAR:-}`)."""
+    monkeypatch.setenv("BIRKA_HEARTBEAT_URL", raw)
+    monkeypatch.setenv("BIRKA_SENTRY_DSN", raw)
+    settings = Settings(_env_file=None)
+    assert settings.heartbeat_url is None
+    assert settings.sentry_dsn is None

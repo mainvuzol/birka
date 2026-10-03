@@ -19,6 +19,36 @@ export interface Message {
   error: string | null;
 }
 
+/**
+ * Trouble on the server, as the watcher saw it (owner decision, 2026-10-03):
+ * the app not answering, the disk nearly full, nobody able to sign in.
+ */
+export type TroubleKind = "NOT_ANSWERING" | "DISK_LOW" | "SIGN_IN_FAILING";
+
+export interface Trouble {
+  kind: TroubleKind;
+  /** What is wrong, worded as the bot's message words it. */
+  reason: string;
+  started_at: string;
+  told_at: string | null;
+}
+
+export interface PastTrouble {
+  kind: TroubleKind;
+  reason: string;
+  started_at: string;
+  ended_at: string;
+}
+
+export interface Server {
+  /** The watcher's last finished look at the server; null when never. */
+  looked_at: string | null;
+  /** Not over yet, oldest first. */
+  open: Trouble[];
+  /** Over within the last 7 days, newest first, 10 at most. */
+  recent: PastTrouble[];
+}
+
 export interface Backups {
   state: "OK" | "FAILED" | "OVERDUE" | "NOT_SET_UP";
   checked_at: string;
@@ -27,4 +57,6 @@ export interface Backups {
   last_good: Night | null;
   nights: Night[];
   your_last_message: Message | null;
+  /** Absent from a server older than this app. */
+  server?: Server;
 }

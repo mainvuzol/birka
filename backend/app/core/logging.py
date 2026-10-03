@@ -9,6 +9,12 @@ paths that no call site chooses: the query string of a debt search
 (`GET /credits/customers?query=<name or phone>`), which uvicorn's access line
 repeats, and the values PostgreSQL repeats in an error's DETAIL, which a
 traceback carries. Both are cut here, where every line passes.
+
+So is the bot's token. Telegram's address for a bot holds it
+(`https://api.telegram.org/bot<token>/<method>`), and an error from a call
+to Telegram can repeat that address. The token controls the bot and is the
+key that signs every launch of the app, so whoever reads a log holding it
+could sign in as anyone (found on 2026-10-03, making failures visible).
 """
 
 from __future__ import annotations
@@ -43,6 +49,18 @@ _HIDDEN = r"\1(values hidden)"
 # space or quote. A "?" ending an ordinary sentence has no path before it and is
 # left alone.
 _QUERY_AFTER_PATH = re.compile(r"(/[^\s?\"']*)\?[^\s\"']*")
+
+
+# A bot's token, `<bot id>:<secret>`, where Telegram's address names the bot:
+# `/bot<token>/`. The "bot" before it keeps times such as 10:00 untouched.
+# Nothing is asked of what precedes "bot", and the colon may be %3A: an
+# address encoded inside another writes its slash as %2F and its colon so.
+_BOT_TOKEN = re.compile(r"bot\d+(?::|%3[Aa])[A-Za-z0-9_-]+")
+
+
+def without_bot_token(text: str) -> str:
+    """`text` with any bot token in it cut, the word "bot" kept."""
+    return _BOT_TOKEN.sub("bot(token hidden)", text)
 
 
 def redact_database_values(text: str) -> str:
@@ -86,14 +104,16 @@ class _AccessLineWithoutQuery(logging.Filter):
 
 
 class _RedactingFormatter(logging.Formatter):
-    """The stdout format, with PostgreSQL's repeated values cut.
+    """The stdout format, with PostgreSQL's repeated values and any bot token
+    cut.
 
     An unhandled error is written by uvicorn with its whole traceback, and a
-    database error's text carries PostgreSQL's DETAIL.
+    database error's text carries PostgreSQL's DETAIL; a failed call to
+    Telegram may name its address, token and all.
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        return redact_database_values(super().format(record))
+        return without_bot_token(redact_database_values(super().format(record)))
 
 
 def _add_correlation_id(
@@ -114,6 +134,21 @@ def _redact_exception(
     if isinstance(exception, str):
         event_dict["exception"] = redact_database_values(exception)
     return event_dict
+
+
+class _WithoutBotToken:
+    """structlog's last step: the line as rendered, any bot token in it cut.
+
+    After rendering, so no field escapes it: an `error=` string, a traceback,
+    a value nested in a list.
+    """
+
+    def __init__(self, render: structlog.types.Processor) -> None:
+        self._render = render
+
+    def __call__(self, logger: Any, method: str, event_dict: structlog.types.EventDict) -> Any:
+        line = self._render(logger, method, event_dict)
+        return without_bot_token(line) if isinstance(line, str) else line
 
 
 def configure_logging(settings: Settings) -> None:
@@ -151,9 +186,11 @@ def configure_logging(settings: Settings) -> None:
         _redact_exception,
     ]
     processors.append(
-        structlog.processors.JSONRenderer()
-        if settings.log_json
-        else structlog.dev.ConsoleRenderer(colors=False)
+        _WithoutBotToken(
+            structlog.processors.JSONRenderer()
+            if settings.log_json
+            else structlog.dev.ConsoleRenderer(colors=False)
+        )
     )
 
     structlog.configure(
@@ -164,15 +201,36 @@ def configure_logging(settings: Settings) -> None:
     )
 
 
+class _ModuleLogger:
+    """A module's logger that takes the configuration in force when it writes.
+
+    Modules make their logger at import (`logger = get_logger(__name__)`),
+    before `configure_logging` runs. A logger bound then keeps structlog's
+    defaults for good: its lines ignored the level, were not JSON, carried no
+    request id, and wrote a traceback with locals and with a refused row's
+    values (a customer's name and phone) unredacted. Found on 2026-10-03,
+    while making failures visible. So the binding is made for each line.
+    """
+
+    __slots__ = ("_name",)
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __getattr__(self, method: str) -> Any:
+        return getattr(structlog.get_logger().bind(logger=self._name), method)
+
+
 def get_logger(name: str) -> Any:
-    """Logger bound to the calling module's name."""
-    return structlog.get_logger().bind(logger=name)
+    """Logger bound to the calling module's name, configured as of each line."""
+    return _ModuleLogger(name)
 
 
 __all__ = [
     "configure_logging",
     "get_logger",
     "redact_database_values",
+    "without_bot_token",
     "without_query",
     "without_query_strings",
 ]
