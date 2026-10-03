@@ -524,3 +524,40 @@ See the [report](catalog-correction-report.md) and
 - **Stock left under a merged model is reported only by the restore drill**
   (`inventory.stock_under_merged_models`, beside the ledger's reconciliation).
   No screen shows it.
+
+## One size, one spelling — 2026-10-03
+
+See the [report](size-spelling-report.md) and
+[ADR-0009](../decisions/ADR-0009-one-size-one-spelling.md).
+
+- **Two sizes cannot be joined.** The spelling stops a second one from being
+  made; nothing puts two existing ones together. The upgrade to `0032` stops,
+  naming them, if a database already holds two sizes that are now one. No shop
+  database exists yet, so this can only happen to a database made for a test.
+- **Spaces count everywhere except around a dash or a slash.** `46 48` and
+  `46-48`, or `48 (M)` and `48(M)`, are two sizes. The owner's rule spoke of a
+  dash; a bracketed size has never been seen in the shops' notebooks.
+- **A letter glued to digits is not spelt.** `48М` and `48M` are two sizes,
+  as are `OС` (Cyrillic С) and `OS`: a letter size is spelt only when it is a
+  word of its own (`48 (м)` is `48 (M)`), as the parser reads one. Whether a
+  glued size is one size is a question for the owner if it comes up.
+- **`1XL` is `XL`,** as the owner decided, even where a brand means a size of
+  its own by it.
+- **A size typed under another system silently becomes the existing one.**
+  «Створити товар з опису» says so only when the spelling differs; `M` typed
+  under «Інша» when the shop's `M` is a letter size shows `M (ALPHA)` without a
+  word.
+- **A Cyrillic word size is case-blind through the database's `lower()`.** It
+  needs a database whose locale lowers Cyrillic (CI's and the server's are
+  `uk-UA` ICU and `C.UTF-8`). Characters that cannot be seen (zero-width
+  spaces) are not removed, as they are not in names.
+- **The app's spelling is frozen into `0032`.** A test compares the two; a
+  change to `spell_size` needs a new revision that respells the stored sizes.
+- **A rendered (`--sql`) upgrade refuses** to run over a database holding any
+  ordinary size, since sizes are respelt row by row.
+- **A size system may be created with no size of its own,** when its only size
+  turned out to exist under another system. Nothing reads one.
+- **The notebook parser still reads only `xs s m l xl xxl` and their Cyrillic
+  spellings** (`_SIZES`). It names a size nowhere a size is made, so `ххл` or
+  `3XL` in a notebook line changes nothing; a broader vocabulary needs a parser
+  version and the evaluation gate.

@@ -69,6 +69,7 @@ from app.modules.catalog.models import (
 )
 from app.modules.catalog.read import current_variants, describe_variants
 from app.modules.catalog.similar import TypedWord, refuse_similar
+from app.modules.catalog.sizes import SIZE_CODE_LIMIT, spell_size
 
 # Display labels for the size systems. The code is the identity; neither the
 # label nor the system is ever inferred from the size a seller types.
@@ -171,10 +172,14 @@ class ProductDraft:
 
 @dataclass(frozen=True, slots=True)
 class SizeResult:
+    """The size a typed one is: its own spelling and system (ADR-0009)."""
+
     size_id: uuid.UUID
     system: SizeSystemCode
     code: str
     created: bool
+    # As the request typed it, so the person sees which size `м` is.
+    typed: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -733,86 +738,118 @@ async def _merged_namesake(
 async def _resolve_sizes(
     session: AsyncSession, *, organization_id: uuid.UUID, drafts: tuple[SizeDraft, ...]
 ) -> tuple[SizeResult, ...]:
-    """Find or create each size, keeping the shop's own spelling.
+    """Find or create each size by its one spelling (owner decision,
+    2026-10-03; ADR-0009).
 
-    The code is stored verbatim. "46-48" and "L/XL" are single sizes here, not
-    ranges to be expanded: splitting them would invent stock that nobody
-    counted (invariant I15).
+    A size is stored as `spell_size` writes it: `m`, `м` and `M` are one size,
+    `2XL` is `XXL`, and `46 – 48` is `46-48`. An organization has one size per
+    spelling whatever system it was typed under, so a size typed under another
+    system is the existing one, in its own system. "46-48" and "L/XL" are
+    single sizes, not ranges to be expanded: splitting them would invent
+    stock that nobody counted (invariant I15).
 
     `is_unknown` is not settable through this path. The "size not known" state
     is real (business fact F34) but it belongs to the legacy snapshot import
-    (M1-023), where the evidence for it exists. So its code is reserved here
-    too: naming it would either hand out the "size not known" row as an
-    ordinary size or, before that row exists, take its name for good and
-    leave `ensure_unknown_size` refusing for the whole organization.
+    (M1-023), where the evidence for it exists. So its spelling is reserved
+    here, in every system: naming it would either hand out the "size not
+    known" row as an ordinary size or, before that row exists, take its name
+    for good and leave `ensure_unknown_size` refusing for the whole
+    organization.
 
-    Sizes are *inserted* in a total order rather than the order they were
-    listed. Two requests naming the same two new sizes in opposite orders would
-    otherwise each hold the other's speculative insert and deadlock — the loser
-    getting a 500, the winner paying a second of `deadlock_timeout`. Same
-    reasoning, and the same fix, as the global sort in `inventory/service.py`.
-    The response is still built in the caller's own order.
+    One lock order: every size system the request names first, in their
+    code's order, then the sizes in the order of their spelling. Two requests
+    naming the same new sizes in opposite orders would otherwise each hold the
+    other's speculative insert and deadlock — the loser getting a 500, the
+    winner paying a second of `deadlock_timeout`. Same reasoning, and the same
+    fix, as the global sort in `inventory/service.py`. The response is still
+    built in the caller's own order.
     """
-    ordered: list[SizeDraft] = []
-    seen: set[tuple[SizeSystemCode, str]] = set()
+    ordered: list[tuple[SizeDraft, str]] = []
+    seen: set[str] = set()
     for draft in drafts:
         if not is_storable(draft.code):
-            # A size code is stored verbatim by design (invariant I15), so it
-            # never passes through `normalize_label` and needs its own check.
+            # A size code never passes through `normalize_label`, so it needs
+            # its own check.
             raise ValidationFailedError("A size code contains characters that cannot be stored")
-        if (
-            draft.system is SizeSystemCode.UNSPECIFIED
-            and draft.code.casefold() == UNKNOWN_SIZE_CODE.casefold()
-        ):
+        spelling = spell_size(draft.code)
+        if spelling.casefold() == UNKNOWN_SIZE_CODE.casefold():
             raise ValidationFailedError(
                 "UNKNOWN is reserved for a size nobody knows; only a legacy stock list states it",
                 system=draft.system.value,
                 code=draft.code,
             )
-        key = (draft.system, draft.code)
-        if key in seen:
-            # The same size twice in one request is a slip, not two sizes.
+        if len(spelling) > SIZE_CODE_LIMIT:
+            raise ValidationFailedError(
+                f"Written out, this size is longer than {SIZE_CODE_LIMIT} characters",
+                system=draft.system.value,
+                code=draft.code,
+            )
+        if spelling.lower() in seen:
+            # One size twice in one request is a slip, not two sizes.
             continue
-        seen.add(key)
-        ordered.append(draft)
+        seen.add(spelling.lower())
+        ordered.append((draft, spelling))
 
-    resolved: dict[tuple[SizeSystemCode, str], SizeResult] = {}
     systems: dict[SizeSystemCode, uuid.UUID] = {}
+    for system in sorted({draft.system for draft, _ in ordered}, key=lambda code: code.value):
+        systems[system], _ = await _insert_or_select(
+            session,
+            insert=pg_insert(SizeSystem)
+            .values(
+                id=uuid.uuid4(),
+                organization_id=organization_id,
+                code=system,
+                name=SIZE_SYSTEM_NAMES[system],
+            )
+            .on_conflict_do_nothing(constraint="uq_size_system_org_code")
+            .returning(SizeSystem.id),
+            existing=select(SizeSystem.id).where(
+                SizeSystem.organization_id == organization_id,
+                SizeSystem.code == system,
+            ),
+        )
 
-    for draft in sorted(ordered, key=lambda size: (size.system.value, size.code)):
-        if draft.system not in systems:
-            system_id, _ = await _insert_or_select(
-                session,
-                insert=pg_insert(SizeSystem)
+    resolved: dict[str, SizeResult] = {}
+    for draft, spelling in sorted(ordered, key=lambda item: item[1].lower()):
+        # No conflict target: a collision on either key, the spelling's or
+        # the system's own, does nothing rather than raise.
+        created = (
+            await session.execute(
+                pg_insert(Size)
                 .values(
                     id=uuid.uuid4(),
                     organization_id=organization_id,
-                    code=draft.system,
-                    name=SIZE_SYSTEM_NAMES[draft.system],
+                    size_system_id=systems[draft.system],
+                    code=spelling,
                 )
-                .on_conflict_do_nothing(constraint="uq_size_system_org_code")
-                .returning(SizeSystem.id),
-                existing=select(SizeSystem.id).where(
-                    SizeSystem.organization_id == organization_id,
-                    SizeSystem.code == draft.system,
-                ),
+                .on_conflict_do_nothing()
+                .returning(Size.id)
             )
-            systems[draft.system] = system_id
-
-        size_id, created = await _insert_or_select(
-            session,
-            insert=pg_insert(Size)
-            .values(id=uuid.uuid4(), size_system_id=systems[draft.system], code=draft.code)
-            .on_conflict_do_nothing(constraint="uq_size_system_code")
-            .returning(Size.id),
-            existing=select(Size.id).where(
-                Size.size_system_id == systems[draft.system], Size.code == draft.code
-            ),
-        )
-        resolved[(draft.system, draft.code)] = SizeResult(
-            size_id=size_id, system=draft.system, code=draft.code, created=created
-        )
-    return tuple(resolved[(draft.system, draft.code)] for draft in ordered)
+        ).scalar_one_or_none()
+        if created is not None:
+            result = SizeResult(
+                size_id=created, system=draft.system, code=spelling, created=True, typed=draft.code
+            )
+        else:
+            found = (
+                await session.execute(
+                    select(Size.id, Size.code, SizeSystem.code)
+                    .join(SizeSystem, SizeSystem.id == Size.size_system_id)
+                    .where(
+                        Size.organization_id == organization_id,
+                        func.lower(Size.code) == func.lower(spelling),
+                        Size.is_unknown.is_(False),
+                    )
+                )
+            ).one_or_none()
+            if found is None:  # pragma: no cover - only if the row is deleted mid-request
+                raise NotFoundError("Catalog row disappeared while it was being created")
+            size_id, code, system = found
+            result = SizeResult(
+                size_id=size_id, system=system, code=code, created=False, typed=draft.code
+            )
+        resolved[spelling.lower()] = result
+    return tuple(resolved[spelling.lower()] for _, spelling in ordered)
 
 
 def typed_words(

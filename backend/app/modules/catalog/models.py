@@ -28,6 +28,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Enum,
+    FetchedValue,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -36,6 +37,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects import postgresql
@@ -532,6 +534,10 @@ class Size(UUIDPrimaryKey, TimestampMixin, Base):
     stock really is held without a known size and must still be countable,
     sellable and reconcilable. It is NOT a placeholder invented to avoid NULL
     in the inventory key — that is why it carries a flag and a rule of its own.
+
+    `code` is the size's one spelling (`catalog.sizes.spell_size`), and an
+    organization has one size per spelling whatever its system
+    (`uq_size_org_spelling`, ADR-0009). The system only orders the list.
     """
 
     __tablename__ = "size"
@@ -541,11 +547,31 @@ class Size(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("size_system.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    # The size system's, filled and kept by the trigger
+    # `birka_size_organization` (migration 0032), so the spelling's key can
+    # span every system of the organization.
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        nullable=False,
+        server_default=FetchedValue(),
+    )
     code: Mapped[str] = mapped_column(String(20), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     is_unknown: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
-    __table_args__ = (UniqueConstraint("size_system_id", "code", name="uq_size_system_code"),)
+    __table_args__ = (
+        # Still keeps the one "size not known" row per system, which the
+        # spelling's key leaves out.
+        UniqueConstraint("size_system_id", "code", name="uq_size_system_code"),
+        Index(
+            "uq_size_org_spelling",
+            "organization_id",
+            func.lower(text("code")),
+            unique=True,
+            postgresql_where=text("NOT is_unknown"),
+        ),
+    )
 
 
 class SizeAlias(UUIDPrimaryKey, TimestampMixin, Base):

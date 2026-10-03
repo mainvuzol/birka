@@ -52,6 +52,9 @@ FROZEN: dict[str, str] = {
     "0030_opening_list_hold.py": (
         "426cf27459d702f7a8c9b7df1efaa75a9f71dbfcce1692555ab35ff114b40700"
     ),
+    "0031_catalog_correction.py": (
+        "3d7a94b4124771d31de5ee623313489e726b71344dcb5b569ffa7855fe7ac0c2"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),

@@ -1614,7 +1614,8 @@ async def _shape(database: str) -> dict[str, Any]:
     }
 
 
-AT_HEAD = {
+# At `0031` itself, whatever revision is newest: these test what it does.
+AT_CORRECTION = {
     "version": CORRECTION,
     "table": True,
     "merge_check": 1,
@@ -1630,8 +1631,8 @@ async def test_0031_goes_up_down_and_up_again_on_an_empty_database(scratch):
     """ADR-0008 §11. Down, it restores the unique constraint and drops what it
     added; the enum labels stay, as `0010`'s and `0026`'s do."""
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
-    assert await _shape(scratch) == AT_HEAD
+    await _run(config, "upgrade", CORRECTION, database=scratch)
+    assert await _shape(scratch) == AT_CORRECTION
 
     await _run(config, "downgrade", BEFORE, database=scratch)
     assert await _shape(scratch) == {
@@ -1645,8 +1646,8 @@ async def test_0031_goes_up_down_and_up_again_on_an_empty_database(scratch):
         "retired_label": 1,
     }
 
-    await _run(config, "upgrade", "head", database=scratch)
-    assert await _shape(scratch) == AT_HEAD
+    await _run(config, "upgrade", CORRECTION, database=scratch)
+    assert await _shape(scratch) == AT_CORRECTION
 
 
 async def _seed_model(database: str) -> dict:
@@ -1723,19 +1724,19 @@ async def test_0031_does_not_go_down_over_a_retired_model_or_a_recorded_correcti
     rollback must never quietly forget a retirement or a merge. Refused, the
     schema stays at `0031` with its record intact."""
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", CORRECTION, database=scratch)
     ids = await _seed_model(scratch)
 
     await _correction(scratch, ids, "retire")
     with pytest.raises(Exception, match=r">: Cannot downgrade: a model is retired"):
         await _run(config, "downgrade", BEFORE, database=scratch)
-    assert await _shape(scratch) == AT_HEAD
+    assert await _shape(scratch) == AT_CORRECTION
 
     # Brought back, nothing is retired; the two corrections still stand.
     await _correction(scratch, ids, "restore")
     with pytest.raises(Exception, match=r">: Cannot downgrade: corrections of the catalogue"):
         await _run(config, "downgrade", BEFORE, database=scratch)
-    assert await _shape(scratch) == AT_HEAD
+    assert await _shape(scratch) == AT_CORRECTION
     assert await _sql(
         scratch,
         ("SELECT string_agg(kind, ',' ORDER BY created_at, kind) FROM catalog_correction", {}),
@@ -1748,7 +1749,7 @@ async def test_a_recorded_correction_is_never_changed_or_deleted(scratch):
     the audit log are: the database refuses to change or delete a row, the
     answer it gave included."""
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", CORRECTION, database=scratch)
     ids = await _seed_model(scratch)
     await _correction(scratch, ids, "retire")
     for statement in (
@@ -1766,7 +1767,7 @@ async def test_0031_does_not_go_down_over_a_merge_in_the_ledger(scratch):
     movement — "no other reason means the same thing" — even with no model
     retired and no correction left to point at it."""
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", CORRECTION, database=scratch)
     ids = await _seed_model(scratch)
     ids |= {name: uuid.uuid4() for name in ("location", "system", "size", "movement")}
     await _sql(
@@ -1794,7 +1795,7 @@ async def test_0031_does_not_go_down_over_a_merge_in_the_ledger(scratch):
 
     with pytest.raises(Exception, match=r">: Cannot downgrade: the ledger records a merge"):
         await _run(config, "downgrade", BEFORE, database=scratch)
-    assert await _shape(scratch) == AT_HEAD
+    assert await _shape(scratch) == AT_CORRECTION
 
 
 @pytest.mark.parametrize(
@@ -1824,7 +1825,7 @@ async def test_0031_does_not_go_up_over_a_model_merged_by_hand(scratch, hand_wri
     )
 
     with pytest.raises(Exception, match=r">: Cannot upgrade: a model is marked merged"):
-        await _run(config, "upgrade", "head", database=scratch)
+        await _run(config, "upgrade", CORRECTION, database=scratch)
     assert (await _shape(scratch))["version"] == BEFORE
     assert (await _shape(scratch))["table"] is False
 
@@ -1836,5 +1837,5 @@ async def test_0031_does_not_go_up_over_a_model_merged_by_hand(scratch, hand_wri
             ids,
         ),
     )
-    await _run(config, "upgrade", "head", database=scratch)
-    assert await _shape(scratch) == AT_HEAD
+    await _run(config, "upgrade", CORRECTION, database=scratch)
+    assert await _shape(scratch) == AT_CORRECTION

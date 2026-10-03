@@ -20,7 +20,9 @@ export interface Decision {
   rejection: { reason: string } | null;
   creation: {
     display_name: string;
-    sizes: { system: string; code: string }[];
+    /** `code` is the size's one spelling; `typed`, how it was typed
+     * (owner decision, 2026-10-03). Absent from creations made before. */
+    sizes: { system: string; code: string; typed?: string | null }[];
     /** A merged model's name: the product is the model that stays. */
     redirected_from?: string | null;
   } | null;

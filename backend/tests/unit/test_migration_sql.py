@@ -93,3 +93,13 @@ def test_membership_is_bound_to_its_organization(migration_sql: str) -> None:
 def test_membership_lookup_is_indexed(migration_sql: str) -> None:
     """resolve_scope hits this on every authenticated request."""
     assert "ix_membership_user_id" in migration_sql
+
+
+def test_a_rendered_script_does_not_skip_respelling_sizes(migration_sql: str) -> None:
+    """`0032` respells sizes row by row, which a rendered script cannot do: it
+    refuses instead of leaving two spellings of one size (ADR-0009 §4)."""
+    assert "Cannot upgrade from a rendered script: sizes are respelt row by row" in migration_sql
+    assert (
+        "CREATE UNIQUE INDEX uq_size_org_spelling ON size (organization_id, lower(code)) "
+        "WHERE NOT is_unknown" in migration_sql
+    )

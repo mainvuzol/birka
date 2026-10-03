@@ -32,7 +32,8 @@ The owner decided:
 - the size system does not separate sizes; it orders the list.
 
 A first draft of this ADR was reviewed against the code. What it found is
-built in below; one question (`1XL`) went to the owner.
+built in below; one question (`1XL`) went to the owner. A review of the
+built code found seven more, also built in.
 
 ## Decision
 
@@ -58,6 +59,12 @@ place that decides how a size is written. It is pure and has no database.
      (`os` → `OS`, `one size` → `ONE SIZE`). A Cyrillic word, such as
      «єдиний», keeps its letters: capital Latin is not a spelling it can take.
 4. What lies between words (spaces, brackets, `-`, `/`) stays.
+5. NFKC once more: a Cyrillic `Л` made `L` may now compose with a mark after
+   it, and a spelling must be its own spelling.
+
+A count is written out at most one past the column (`X` × 20): a longer
+size is refused for its length either way, and `999999999XL` must not build
+a gigabyte of X's first.
 
 So `л / хл` → `L/XL`, `46 – 48` → `46-48`, `s-m` → `S-M`, `48 (м)` →
 `48 (M)`. A Latin `C` is not an `S`, and nothing else is transliterated:
@@ -91,7 +98,8 @@ notebook line (`_SIZES`).
   as its target.
 - **A word size keeps the spelling first typed,** under the case-blind key.
 - **A spelling longer than 20 characters is refused** (422), as a name that
-  grows when normalized is: `9XL-9XL` is 21.
+  grows when normalized is: `9XL-9XL` is 21. The refusal names what was
+  typed, not the spelling.
 - **`UNKNOWN` is reserved in every system, by spelling:**
   `spell_size(typed).casefold() == "unknown"`. It was reserved only under
   «Інша», and on the typed text, so a full-width `ＵＮＫＮＯＷＮ` passed.
@@ -103,6 +111,11 @@ notebook line (`_SIZES`).
   system between two sizes would let two requests wait on each other. A
   system may be created for a size that turns out to exist under another
   system; nothing reads a system without its sizes.
+- **A deadlock is retried whole.** Creating from a decision already retried
+  one; `POST /catalog/products` now does too, its idempotency claim
+  included, since two spellings or two systems now meet on one key and a
+  creation can wait on another that waits on it through the catalogue's
+  knowledge revision.
 
 ### 3. What the person sees
 
@@ -115,7 +128,8 @@ notebook line (`_SIZES`).
   whoever types `м` sees that the existing `M` was chosen.
 - **The list of sizes:** letter sizes come first, ranked by their X's (`XXS
   XS S M L XL XXL XXXL …`), in whichever system they were first typed; then
-  every other size by system, numbers in their order, the rest as written.
+  every other size by system, numbers in their order (decimal digits only:
+  `int()` cannot read `፩`), the rest as written.
   A seller who picked «Інша» for `M` does not put the shop's `M` after the
   numbers for good.
 - Old records keep the spelling they froze: a sale's receipt, a supplier
@@ -133,8 +147,10 @@ notebook line (`_SIZES`).
    there are no rows to read, so the rendered script instead refuses to run
    over a database that holds any ordinary size.
 3. **Before writing, refuses, naming them,** when two sizes of one
-   organization would become one (by `lower()` of the new spelling), or a
-   spelling grows past 20 characters. Joining two sizes moves stock between
+   organization would become one (by `lower()` of the new spelling), a
+   spelling grows past 20 characters, or a size would be spelt `UNKNOWN`
+   (before, it was reserved only under «Інша» and only as typed). The names
+   are listed in one order whatever the database's collation. Joining two sizes moves stock between
    balances, which no rule covers and nothing records, and there is no shop
    database yet. The message says which sizes, so a person can decide.
 4. Writes the new spellings, then creates `uq_size_org_spelling`.

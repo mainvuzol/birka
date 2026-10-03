@@ -26,6 +26,7 @@ from app.modules.catalog.models import (
     SizeSystemCode,
     SourceIdentity,
 )
+from app.modules.catalog.sizes import letter_rank
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,21 +229,25 @@ class SizeOption:
     sort_order: int
 
 
-# The order a seller reads alpha sizes in. Presentation only — nothing stored
-# changes — and `sort_order`, which nothing sets today, still wins if an owner
-# ever sets it. Without this the list reads L, M, S, XL, XS.
-_ALPHA_SEQUENCE = ("XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL")
+def _reading_order(option: SizeOption) -> tuple[int, str, int, int, int, str]:
+    """The order a seller reads sizes in. Presentation only — nothing stored
+    changes — and `sort_order`, which nothing sets today, still wins if an
+    owner ever sets it. Without it the list reads L, M, S, XL, XS.
 
-
-def _reading_order(option: SizeOption) -> tuple[str, int, int, int, str]:
-    code = option.code.strip().upper()
-    if option.system is SizeSystemCode.ALPHA and code in _ALPHA_SEQUENCE:
-        return (option.system.value, option.sort_order, 0, _ALPHA_SEQUENCE.index(code), code)
-    if code.isdigit():
-        return (option.system.value, option.sort_order, 0, int(code), code)
-    # "46-48" and "L/XL" are single sizes stored verbatim; they follow the
+    Letter sizes come first, ranked by their X's (`XXS XS S M L XL XXL …`),
+    whichever system they were first typed in: a size system does not
+    separate sizes (ADR-0009 §3). Then every other size by its system,
+    numbers in their order, and the rest as written."""
+    code = option.code
+    rank = letter_rank(code)
+    if rank is not None:
+        return (0, "", option.sort_order, 0, rank, code)
+    # Decimal digits only: `int()` refuses other digits, such as `፩`.
+    if code.isdecimal():
+        return (1, option.system.value, option.sort_order, 0, int(code), code)
+    # "46-48" and "L/XL" are single sizes, never split; they follow the
     # sizes that have a natural place, in the order they are written.
-    return (option.system.value, option.sort_order, 1, 0, code)
+    return (1, option.system.value, option.sort_order, 1, 0, code)
 
 
 async def real_sizes(session: AsyncSession, *, organization_id: uuid.UUID) -> list[SizeOption]:

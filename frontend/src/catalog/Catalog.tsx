@@ -393,6 +393,15 @@ function Detail({
             .join(", ")}
         </p>
       )}
+      {/* One size, one spelling (owner decision, 2026-10-03): whoever typed
+          «м» sees that it is the size «M». */}
+      {decision.creation?.sizes
+        .filter((s) => s.typed && s.typed !== s.code)
+        .map((s) => (
+          <p key={s.code} role="status">
+            Набрано «{s.typed}» — це розмір «{s.code}».
+          </p>
+        ))}
       {open ? (
         <fieldset disabled={blocked}>
           <legend>Оберіть товар після перевірки</legend>
