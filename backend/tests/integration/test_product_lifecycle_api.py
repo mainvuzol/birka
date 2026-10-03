@@ -1051,18 +1051,26 @@ async def test_sizes_are_inserted_in_a_total_order_whatever_was_listed(maker, en
     deadlock: each would hold the other's speculative insert, the loser getting
     a 500 and the winner paying a second of `deadlock_timeout`.
 
+    Sizes of two systems can collide since a system no longer separates them
+    (ADR-0009 §2), so every size system is resolved first, in one order, and
+    then the sizes in the order of their spelling.
+
     The guarantee is that insertion order does not depend on the caller, so
     that is what is asserted — by watching the statements the request actually
     issues. Racing two requests and hoping to observe the deadlock is not a
     guard: whether they collide is a coin flip, and a test that only sometimes
     exercises the window would pass happily with the ordering removed.
     """
-    inserted: list[str] = []
-    codes = {"3XL", "4XL", "5XL"}
+    statements: list[tuple[str, str]] = []
+    spellings = {"XXXL", "XXXXL", "XXXXXL", "46", "єдиний"}
+    systems = {"ALPHA", "NUMERIC_EU", "UNSPECIFIED"}
 
     def record(conn, cursor, statement, parameters, context, executemany):
-        if statement.lstrip().upper().startswith("INSERT INTO SIZE "):
-            inserted.extend(str(value) for value in parameters if str(value) in codes)
+        head = statement.lstrip().upper()
+        if head.startswith("INSERT INTO SIZE_SYSTEM "):
+            statements.extend(("system", str(v)) for v in parameters if str(v) in systems)
+        elif head.startswith("INSERT INTO SIZE "):
+            statements.extend(("size", str(v)) for v in parameters if str(v) in spellings)
 
     event.listen(engine.sync_engine, "before_cursor_execute", record)
     try:
@@ -1074,7 +1082,9 @@ async def test_sizes_are_inserted_in_a_total_order_whatever_was_listed(maker, en
                     shop,
                     sizes=[
                         {"system": "ALPHA", "code": "5XL"},
+                        {"system": "UNSPECIFIED", "code": "єдиний"},
                         {"system": "ALPHA", "code": "3XL"},
+                        {"system": "NUMERIC_EU", "code": "46"},
                         {"system": "ALPHA", "code": "4XL"},
                     ],
                 ),
@@ -1083,9 +1093,25 @@ async def test_sizes_are_inserted_in_a_total_order_whatever_was_listed(maker, en
         event.remove(engine.sync_engine, "before_cursor_execute", record)
 
     assert created.status_code == 201, created.text
-    assert inserted == ["3XL", "4XL", "5XL"], inserted
-    # The response still lists them the way the person asked for them.
-    assert [size["code"] for size in created.json()["sizes"]] == ["5XL", "3XL", "4XL"]
+    # A new shop has no size systems: all three are created, in their code's
+    # order, before any size.
+    assert statements[:3] == [
+        ("system", "ALPHA"),
+        ("system", "NUMERIC_EU"),
+        ("system", "UNSPECIFIED"),
+    ], statements
+    assert [value for kind, value in statements if kind == "size"] == [
+        "46",
+        "XXXL",
+        "XXXXL",
+        "XXXXXL",
+        "єдиний",
+    ], statements
+    # The response still lists them the way the person asked for them, each
+    # in its one spelling, with what was typed.
+    sizes = created.json()["sizes"]
+    assert [size["code"] for size in sizes] == ["XXXXXL", "єдиний", "XXXL", "46", "XXXXL"]
+    assert [size["typed"] for size in sizes] == ["5XL", "єдиний", "3XL", "46", "4XL"]
 
 
 async def test_a_replay_is_refused_once_the_grant_is_gone(maker):

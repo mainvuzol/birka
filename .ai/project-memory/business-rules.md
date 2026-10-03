@@ -781,3 +781,56 @@ How it is carried out, not decided by the owner:
   model, so a renamed model also shows its new name.
 - **The similar-name check** maps the Latin letters that look Cyrillic
   (a c e i o p x y k m t b h), ï and ё, and the different apostrophes.
+
+
+## Owner decision — 2026-10-03 (one size, one spelling)
+
+Asked when the owner chose it as the next work. A size was kept exactly as
+it was typed when a product was created, so `M` and `m` became two sizes
+with two separate balances, and two sizes cannot be put together afterwards.
+It had been open since M1B, and the shops are about to type their stock.
+
+- **Spellings that are one size:**
+  - **case does not matter:** `m` = `M`, `xl` = `XL`;
+  - **Cyrillic letters:** `М` = `M`, `Л` = `L`, `С` = `S`, `ХС` = `XS`,
+    `ХЛ` = `XL`, `ХХЛ` = `XXL`, as the parser already reads them in a
+    notebook line;
+  - **a count of X's:** `2XL` = `XXL`, `3XL` = `XXXL`, `4XL` = `XXXXL`, and
+    for every size with a count: `2XS` = `XXS`, `5XL` = `XXXXXL`.
+- **A double size:** spaces and the kind of dash do not matter: `46-48` =
+  `46 - 48` = `46–48`. `46/48` is another size, since a slash is written
+  differently.
+- **A size is shown in one spelling** everywhere (lists, the till, reports):
+  capital Latin letters, `M`, `XL`, `46-48`, however it was typed. With
+  several X's it is written out: `XXL`, `XXXL`. Whoever types `м` sees that
+  the existing `M` was chosen.
+- **The size system does not separate sizes.** `M` is one size whichever
+  system was picked (letter, EU numeric or «Інша»). The system stays only for
+  the order of the list.
+
+Asked the same day, when a review of the design found it open: **`1XL` is
+`XL`, and `1XS` is `XS`**, by the same rule, although some brands write
+`1XL` for a size of their own.
+
+How it is carried out, not decided by the owner:
+- **A letter size inside a longer size is spelt too:** `48 (м)` is
+  `48 (M)`, so a Cyrillic `м` there does not make a second size.
+- **Latin letters are capitals in every size,** `os` → `OS`, `one size` →
+  `ONE SIZE`. A Cyrillic word, such as «єдиний», keeps the letters it was
+  first typed with; its case does not matter either.
+- **Spaces matter only around a dash or a slash.** `46 48` is not `46-48`,
+  and `2 XL` is not `XXL`: in a size field the `2` may be a count.
+- **A size typed under another system is the existing one,** in its own
+  system. Letter sizes read first in the list, by their X's, whichever
+  system they were first typed in.
+- **`UNKNOWN` is reserved in every system,** since a system no longer
+  separates sizes: it is the "size not known" that only a legacy stock list
+  states.
+- **A spelling longer than 20 characters is refused,** as a name that grows
+  when normalized is.
+- **Records keep the spelling they froze:** a sale's receipt, a supplier
+  return, a «Брак» unit. There is no shop database yet, so none holds an
+  old spelling.
+- **An upgrade over two existing sizes that are now one stops** and names
+  them. Joining two sizes would move stock between balances, which no rule
+  covers. No shop database exists yet.

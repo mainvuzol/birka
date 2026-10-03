@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 149 Playwright journeys on a phone profile, against the real API;
+- 152 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -394,6 +394,16 @@ managers (`catalog:merge`) put a typo right in «Моделі». See
 - **A similar name at creation** (a Latin letter in a Cyrillic word) is
   refused once with `CATALOG_SIMILAR`; `similar_confirmed` creates it as
   typed. See the [report](.ai/project-memory/catalog-correction-report.md).
+
+**One size, one spelling** (owner decision, 2026-10-03): `m`, `м` and `M`
+are one size, `2XL` is `XXL` (and `1XL` is `XL`), and `46 – 48` is `46-48`;
+`46/48` stays another size. A size is shown in one spelling, capital Latin
+with the X's written out, and the size system does not separate sizes: `M`
+typed under «Інша» is the shop's `M`. A product's answer gives each size's
+spelling with what was `typed`, and «Створити товар з опису» says «Набрано
+«м» — це розмір «M»». See
+[ADR-0009](.ai/decisions/ADR-0009-one-size-one-spelling.md) and the
+[report](.ai/project-memory/size-spelling-report.md).
 
 **Suggested selling price:** the till prefills it when a model is picked, and
 the seller may still agree another. The owner and managers set it

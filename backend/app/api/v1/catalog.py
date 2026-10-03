@@ -31,11 +31,15 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep
 from app.core import idempotency
+from app.core.errors import CatalogAmbiguousError
 from app.core.text import CleanText, reject_unstorable
 from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import SizeSystemCode
 from app.modules.catalog.prices import (
     PriceScope,
@@ -105,9 +109,9 @@ class VariantPayload(BaseModel):
 class SizePayload(BaseModel):
     """One size, in the system the person says it belongs to.
 
-    `system` is required rather than guessed: "46" is a numeric size in one
-    shop's notebook and could be an alpha label in another, and picking for
-    them would put stock under a size they did not mean.
+    `system` is required rather than guessed: it places a new size in the
+    list. It does not separate sizes (owner decision, 2026-10-03): a size
+    spelt as an existing one is that size, in that size's own system.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -170,9 +174,13 @@ class ProductRequest(BaseModel):
 
 class SizeResponse(BaseModel):
     size_id: uuid.UUID
+    # The size's own system and its one spelling: a size typed under another
+    # system, or spelt another way, is the existing one (ADR-0009).
     system: SizeSystemCode
     code: str
     created: bool
+    # As the request typed it. Absent from answers given before 0032.
+    typed: str | None = None
 
 
 class ProductResponse(BaseModel):
@@ -214,11 +222,41 @@ async def create(
     """
     scope.require(Permission.CATALOG_CREATE, payload.store_id)
 
+    # Retry the whole command, its claim and commit included, as creating
+    # from a decision does: a deadlock victim has no durable effects. Sizes
+    # of two systems, or two spellings, now meet on one key (ADR-0009), so a
+    # creation can wait on another one that waits on it.
+    for attempt in range(3):
+        try:
+            return await _create_once(
+                payload, scope=scope, session=session, response=response, key=idempotency_key
+            )
+        except DBAPIError as exc:
+            code = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+            if code not in {"40P01", "40001"}:
+                raise
+            await session.rollback()
+            if attempt == 2:
+                raise CatalogAmbiguousError(
+                    "Catalog changed concurrently; retry this same product request",
+                    retryable=True,
+                ) from exc
+    raise AssertionError("Unreachable retry state")
+
+
+async def _create_once(
+    payload: ProductRequest,
+    *,
+    scope: RequestScope,
+    session: AsyncSession,
+    response: Response,
+    key: str,
+) -> ProductResponse:
     outcome = await idempotency.claim(
         session,
         organization_id=scope.organization_id,
         endpoint=PRODUCTS_ENDPOINT,
-        key=idempotency_key,
+        key=key,
         request_fingerprint=idempotency.fingerprint(
             payload.model_dump(mode="json"),
             actor_user_id=scope.user_id,
@@ -264,7 +302,11 @@ async def create(
         display_name=result.display_name,
         sizes=[
             SizeResponse(
-                size_id=size.size_id, system=size.system, code=size.code, created=size.created
+                size_id=size.size_id,
+                system=size.system,
+                code=size.code,
+                created=size.created,
+                typed=size.typed,
             )
             for size in result.sizes
         ],
