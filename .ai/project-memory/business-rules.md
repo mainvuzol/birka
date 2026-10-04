@@ -1012,3 +1012,37 @@ This replaces "one sum of money" in the sales report (2026-10-02).
 
 Not asked, because nothing is live: sales recorded before this change are
 test data. Their way of paying reads «не вказано», and is never guessed.
+
+**Also answered on 2026-10-04,** when the design raised what the answers
+above did not settle:
+- **The first close of a store** only records what is in the drawer, with
+  no difference, and that sum is where the next day starts. The same holds
+  after a store comes back from the archive.
+- **A correction of a closed day explains that day's difference.** It is
+  dated the day it is made and shows in that day's report, but it does not
+  change what the drawer should hold now: that money was already counted.
+  The closed day then shows its difference as explained. The same holds for
+  cash taken out and forgotten.
+- **A close before 6:00 belongs to the evening before,** so a drawer closed
+  at 00:10 can be closed again that evening. One close per such day.
+- **Cash put into the drawer** (change brought in) is recorded as «Внесено в
+  касу» by the owner or a manager, so the evening's count does not show it
+  as a surplus.
+- **The bot tells the network's owner only,** and not when the owner closed
+  the drawer themselves.
+- **The reason is enforced on the phone.** Until whoever counted writes the
+  reason, only «Каса» stays open on their phone, and only they may write
+  it. The bot waits up to 15 minutes for it, then writes without it.
+- **An order paid at the counter** may be paid in cash, by card or by
+  transfer. «Клієнт забрав» offers five choices: in advance by transfer,
+  cash on delivery, or cash, card or transfer now. The counter money is paid
+  when the customer collects.
+- **Cash taken out** is of three kinds: for the owner, for expenses, for a
+  supplier's courier. There is no «Інше», and the note is optional.
+- **A difference under 1 грн** is recorded but needs no reason, and the bot
+  does not write about it.
+- **Before the close, a seller may fix the way of paying on any of their own
+  operations:** sales, debt payments and returns.
+- **A count that reaches the server more than 10 minutes late** is not
+  recorded. The phone says to close the drawer as usual in the evening, and
+  that day goes into that close.
