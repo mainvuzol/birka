@@ -245,6 +245,7 @@ async def test_a_blocked_store_does_nothing_and_the_network_reads_it(maker):
                         "condition": "DAMAGED",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -360,6 +361,7 @@ async def test_a_blocked_stores_sale_comes_back_at_a_store_that_trades(maker):
                     "condition": "INTACT",
                 }
             ],
+            "payment_method": "CASH",
         }
 
     async with as_(maker, net, net.child_seller) as client:
@@ -467,6 +469,7 @@ async def test_only_an_empty_store_is_archived_and_it_opens_again(maker):
                         "condition": "DAMAGED",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -591,9 +594,11 @@ async def test_debts_of_a_store_that_does_not_trade_are_paid_at_one_that_does(ma
     credit_id = sale.json()["credit"]["credit_id"]
 
     def payment(amount: str, store: uuid.UUID | None = None, command: str | None = None) -> dict:
-        return {"command_id": command or str(uuid.uuid4()), "amount": amount} | (
-            {"store_id": str(store)} if store else {}
-        )
+        return {
+            "command_id": command or str(uuid.uuid4()),
+            "amount": amount,
+            "payment_method": "CASH",
+        } | ({"store_id": str(store)} if store else {})
 
     # While the store that sold trades, its debts are its own business.
     async with as_(maker, net, net.seller) as client:

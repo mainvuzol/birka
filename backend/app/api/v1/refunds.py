@@ -20,6 +20,12 @@ to the «Брак» of the store taking it (owner decisions, 2026-10-01). The on
 exception: taken back at a store that does not reach the warehouse it was
 sold from, an intact part goes to one of that store's own, which the seller
 chooses.
+
+How the money goes back is the client's to say: the way the sale was paid
+unless the seller changes it (owner decisions, 2026-10-04), one of «Готівкою»,
+«На картку», «Переказом». Optional here, so a return a phone kept from before
+the way was asked still replays; the service requires it of a new one, and
+of a sale paid in parts only when money goes back (ADR-0012, B13, G35).
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.deps import ScopeDep, SessionDep
+from app.api.v1.sales import TillMethodValue, method_of
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
@@ -96,6 +103,10 @@ class RefundRequest(BaseModel):
     reason: CleanText | None = Field(default=None, max_length=1000)
     # The store taking the goods back, when it is not the one that sold.
     store_id: uuid.UUID | None = None
+    # How the money goes back, one of the till's three ways. Absent from a
+    # return a phone kept from before it was asked, and allowed absent for a
+    # sale paid in parts whose return only lowers the debt.
+    payment_method: TillMethodValue | None = None
 
     def fingerprinted(self) -> dict[str, object]:
         """The body as its idempotency fingerprint reads it: what a request
@@ -104,6 +115,8 @@ class RefundRequest(BaseModel):
         body = self.model_dump(mode="json")
         if body["store_id"] is None:
             del body["store_id"]
+        if body["payment_method"] is None:
+            del body["payment_method"]
         for line in body["lines"]:
             if line["location_id"] is None:
                 del line["location_id"]
@@ -153,12 +166,17 @@ class RefundResponse(BaseModel):
         default_factory=list,
         description="REFUND_RETURN stock movements written for the restocked lines.",
     )
-    # None for a sale paid in full, whose `total_amount` goes back in cash.
+    # None for a sale paid in full, whose `total_amount` goes back.
     credit: CreditSettlementResponse | None = None
+    # How the money went back. None when none did (a sale paid in parts
+    # whose return only lowered the debt), and on answers given before the
+    # way was asked.
+    payment_method: str | None = None
 
 
 def _to_response(result: RefundResult) -> RefundResponse:
     return RefundResponse(
+        payment_method=result.refund.payment_method,
         id=result.refund.id,
         sale_id=result.refund.sale_id,
         store_id=result.refund.store_id,
@@ -280,6 +298,7 @@ async def create(
         reason=payload.reason,
         correlation_id=get_correlation_id(),
         at_store_id=store_id,
+        payment_method=method_of(payload.payment_method),
     )
 
     body = (

@@ -1,4 +1,5 @@
 import { isId, journal } from "@/shared/journal";
+import { isTillMethod } from "@/shared/payment";
 import type { Credit, CreditBody } from "./types";
 
 /**
@@ -20,6 +21,11 @@ const credits = journal<CreditBody, Credit>({
       ? {
           command_id: body.command_id,
           amount: body.amount,
+          // Only when the attempt has it: one saved before the way was asked
+          // is resent byte for byte (ADR-0012 §B12).
+          ...(body.payment_method
+            ? { payment_method: body.payment_method }
+            : {}),
           // Only for another store's debt: a payment where it was sold is
           // sent exactly as before.
           ...(body.elsewhere ? { store_id: body.store_id } : {}),
@@ -31,7 +37,9 @@ const credits = journal<CreditBody, Credit>({
     ((body.kind === "payment" &&
       typeof body.amount === "string" &&
       money.test(body.amount) &&
-      (body.elsewhere === undefined || typeof body.elsewhere === "boolean")) ||
+      (body.elsewhere === undefined || typeof body.elsewhere === "boolean") &&
+      (body.payment_method === undefined ||
+        isTillMethod(body.payment_method))) ||
       (body.kind === "write-off" &&
         typeof body.reason === "string" &&
         body.reason.trim() !== "")),

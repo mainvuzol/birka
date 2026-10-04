@@ -246,6 +246,7 @@ async def test_create_receive_and_sell_a_product(maker):
                         "discount_amount": "100.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -319,6 +320,7 @@ async def test_found_during_sale_corrects_exactly_the_shortfall(maker):
                         "unit_price": "1200.00",
                     }
                 ],
+                "payment_method": "CASH",
                 **extra,
             }
 
@@ -619,6 +621,7 @@ async def test_a_retried_sale_sells_once(maker):
                     "unit_price": "1200.00",
                 }
             ],
+            "payment_method": "CASH",
         }
         headers = key()
         first = await client.post("/api/v1/sales", json=sale_body, headers=headers)
@@ -747,6 +750,7 @@ async def test_stock_and_sales_stay_inside_the_organization(maker):
                         "unit_price": "1200.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -871,6 +875,7 @@ async def test_a_price_beyond_the_column_is_refused_not_a_crash(maker):
                         "unit_price": "99999999999.99",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )

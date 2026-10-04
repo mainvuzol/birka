@@ -1,5 +1,27 @@
+import type { PaymentMethod } from "@/shared/payment";
+
 // The sales report (owner decisions, 2026-10-02), as `/reports/sales` and its
-// two lists answer it. Money is a decimal string, as everywhere.
+// two lists answer it. Money is a decimal string, as everywhere. Since
+// 2026-10-04 the money is split by the way it was paid (ADR-0012 §B11).
+
+// One of the till's ways. «Не вказано» is money recorded before the way was
+// asked: never guessed (owner decision, 2026-10-04).
+export interface WayFigures {
+  method: "CASH" | "CARD" | "TRANSFER" | "NOT_STATED";
+  came_in: string;
+  went_out: string;
+  // Moved to this way by corrections made in these days, less moved from it.
+  corrected: string;
+  net: string;
+}
+
+// An order paid off the till: in advance by transfer, or cash on delivery.
+// Nothing is ever handed back this way.
+export interface OffTillFigures {
+  came_in: string;
+  corrected: string;
+  net: string;
+}
 
 export interface Figures {
   sales: number;
@@ -10,11 +32,19 @@ export interface Figures {
   returned: string;
   // Sold, less what came back.
   net: string;
+  // The till's money: an order paid off the till is in none of these.
   paid_in_full: string;
   debt_payments: string;
   paid_back: string;
-  // What the till should hold from these days.
-  cash: string;
+  // What corrections moved into the till from an order's ways, less out.
+  corrected_into_till: string;
+  // What went through the till in these days, «Разом»: the four ways' net add
+  // up to it.
+  money: string;
+  // Cash, card, transfer and «не вказано»: always these four, in this order.
+  ways: WayFigures[];
+  // Outside «Разом» (owner decision, 2026-10-04).
+  off_till: { prepaid_transfer: OffTillFigures; carrier_cod: OffTillFigures };
 }
 
 export interface StoreFigures extends Figures {
@@ -63,8 +93,13 @@ export interface Entry {
   by: string;
   units: number;
   amount: string;
-  // Into the till for a sale, out of it for a return.
-  cash: string;
+  // The money it moved: in for a sale, out for a return.
+  money: string;
+  // As stated when the money moved; null for «не вказано», and for a return
+  // that only lowered a debt.
+  payment_method: PaymentMethod | null;
+  // The way now, when a correction changed it; null when none did.
+  method_now: PaymentMethod | null;
   paid_in_parts: boolean;
   goods: string[];
 }

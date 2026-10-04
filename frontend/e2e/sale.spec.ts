@@ -108,32 +108,56 @@ test("a seller sells stock the ledger agrees with, and the sale is recorded once
   await addToBasket(page, 2);
   await expect(page.getByText("2 × 150,00 грн")).toBeVisible();
   await expect(page.getByText("Разом 300,00 грн")).toBeVisible();
+  // «Продати» is the way the customer pays (owner decision, 2026-10-04): the
+  // press comes first, then the terminal, for the sum the receipt shows.
+  const ways = page.getByRole("group", {
+    name: "Продати — як платить покупець",
+  });
+  await expect(ways.getByRole("button")).toHaveText([
+    "Готівка",
+    "Картка",
+    "Переказ",
+  ]);
+  await expect(
+    page.getByText(
+      "Спершу натисніть тут, потім проведіть на терміналі суму, яку покаже чек нижче: вона може змінитися, якщо товару не виявиться на полиці.",
+    ),
+  ).toBeVisible();
   const posted = page.waitForResponse(
     (r) => r.url().endsWith("/api/v1/sales") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   const response = await posted;
   expect(response.status()).toBe(201);
   // The command carries both identifiers, and the transport key is a header.
   expect(await response.request().headerValue("Idempotency-Key")).toMatch(
     /^[0-9a-f-]{36}$/,
   );
+  // The way travels at the top of the body, one per sale.
+  expect(
+    (response.request().postDataJSON() as { payment_method?: string })
+      .payment_method,
+  ).toBe("CASH");
   const receipt = (await response.json()) as {
     total: string;
     corrections: string[];
     shortages: string[];
+    payment_method: string | null;
   };
   expect(receipt.total).toBe("300.00");
   expect(receipt.corrections).toEqual([]);
   expect(receipt.shortages).toEqual([]);
+  expect(receipt.payment_method).toBe("CASH");
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(page.getByText("Разом 300,00 грн")).toBeVisible();
+  await expect(page.getByText("Готівка · Разом 300,00 грн")).toBeVisible();
   // Nothing is left in the journal to recover.
   await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
   expect(
-    await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
   ).toBe(false);
   await page.screenshot({
     path: "test-results/sale-mobile.png",
@@ -151,7 +175,7 @@ test("«товар на місці» answers a real refusal and completes the sa
   const refused = page.waitForResponse(
     (r) => r.url().endsWith("/api/v1/sales") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Картка", exact: true }).click();
   expect((await refused).status()).toBe(409);
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
   await expect(
@@ -165,19 +189,32 @@ test("«товар на місці» answers a real refusal and completes the sa
       r.request().method() === "POST" &&
       r.status() === 201,
   );
+  // The answer resends the same sale the same way, and says which.
   await page
     .getByRole("button", {
-      name: `Товар на місці — продати ${String(available + 1)}`,
+      name: `Товар на місці — продати ${String(available + 1)} · Картка`,
+      exact: true,
     })
     .click();
-  const receipt = (await (await sold).json()) as {
+  const answered = await sold;
+  expect(
+    (answered.request().postDataJSON() as { payment_method?: string })
+      .payment_method,
+  ).toBe("CARD");
+  const receipt = (await answered.json()) as {
     items: { quantity: number }[];
     corrections: string[];
+    total: string;
   };
   expect(receipt.items[0]?.quantity).toBe(available + 1);
   expect(receipt.corrections).toHaveLength(1);
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      `Картка · Проведіть на терміналі ${receipt.total.replace(".", ",")} грн`,
+    ),
   ).toBeVisible();
   await expect(
     page.getByText(/Оприходовано знайдене на місці: 1 рух/),
@@ -190,11 +227,14 @@ test("«на місці лише стільки» sends the count present, not t
   // The one number in this flow that is easy to invert, so it is asserted on
   // the wire. The server's own bounds are covered by the backend suite; what
   // is proven here is that the till states what the seller actually saw.
-  let sent: { missing_in_store: { line_index: number; quantity: number }[] }[] =
-    [];
+  let sent: {
+    missing_in_store: { line_index: number; quantity: number }[];
+    payment_method?: string;
+  }[] = [];
   await page.route("**/api/v1/sales", async (route) => {
     const body = route.request().postDataJSON() as {
       missing_in_store: { line_index: number; quantity: number }[];
+      payment_method?: string;
     };
     sent = [...sent, body];
     if (body.missing_in_store.length === 0) {
@@ -241,6 +281,7 @@ test("«на місці лише стільки» sends the count present, not t
         corrections: [],
         shortages: ["33333333-3333-4333-8333-333333333333"],
         size_reclassifications: [],
+        payment_method: body.payment_method,
       },
     });
   });
@@ -248,12 +289,17 @@ test("«на місці лише стільки» sends the count present, not t
   await enter(page);
   await pickFirstProduct(page);
   await addToBasket(page, 3);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Переказ", exact: true }).click();
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
 
   // Refuses a count that is not a shortage at all, and names the zero case.
   await page.getByLabel("На місці фактично є, одиниць").fill("3");
-  await page.getByRole("button", { name: "Продати стільки, скільки є" }).click();
+  await page
+    .getByRole("button", {
+      name: "Продати стільки, скільки є · Переказ",
+      exact: true,
+    })
+    .click();
   await expect(page.getByText(/Вкажіть від 1 до 2/)).toBeVisible();
   // None on the shelf has its own answer (owner decision, 2026-10-01; Q-G).
   await expect(
@@ -261,17 +307,99 @@ test("«на місці лише стільки» sends the count present, not t
   ).toBeVisible();
 
   await page.getByLabel("На місці фактично є, одиниць").fill("1");
-  await page.getByRole("button", { name: "Продати стільки, скільки є" }).click();
+  await page
+    .getByRole("button", {
+      name: "Продати стільки, скільки є · Переказ",
+      exact: true,
+    })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   await expect(
     page.getByText(/Списано як фізично відсутнє: 1 рух/),
   ).toBeVisible();
+  // A transfer is checked before the goods go (ADR-0012 G38).
+  await expect(
+    page.getByText(
+      "Переказ · Разом 150,00 грн — перевірте, що переказ надійшов, перш ніж віддати товар",
+    ),
+  ).toBeVisible();
   expect(sent.map((body) => body.missing_in_store)).toEqual([
     [],
     [{ line_index: 0, quantity: 1 }],
   ]);
+  // The answer kept the way the seller pressed.
+  expect(sent.map((body) => body.payment_method)).toEqual([
+    "TRANSFER",
+    "TRANSFER",
+  ]);
+});
+
+test("the three ways wait for a basket, and an answer recorded without a way names none", async ({
+  page,
+}) => {
+  // The server's answer is played back: with the way the till sent, and then
+  // as an attempt saved before the way was asked was answered, without it.
+  let echo = true;
+  const sent: { payment_method?: string; lines: unknown[] }[] = [];
+  await page.route("**/api/v1/sales", async (route) => {
+    const body = route.request().postDataJSON() as {
+      payment_method?: string;
+      lines: unknown[];
+    };
+    sent.push(body);
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: "66666666-6666-4666-8666-666666666666",
+        store_id: fixture.store_id,
+        currency_code: "UAH",
+        subtotal: "150.00",
+        discount_total: "0.00",
+        total: "150.00",
+        items: [],
+        corrections: [],
+        shortages: [],
+        size_reclassifications: [],
+        ...(echo ? { payment_method: body.payment_method } : {}),
+      },
+    });
+  });
+  await stubStock(page, 5);
+  await enter(page);
+  const ways = page.getByRole("group", {
+    name: "Продати — як платить покупець",
+  });
+  // Nothing to sell yet: none of the three.
+  for (const way of ["Готівка", "Картка", "Переказ"])
+    await expect(
+      ways.getByRole("button", { name: way, exact: true }),
+    ).toBeDisabled();
+  await pickFirstProduct(page);
+  await addToBasket(page, 1);
+  await page.getByRole("button", { name: "Картка", exact: true }).click();
+  await expect(
+    page.getByText("Картка · Проведіть на терміналі 150,00 грн"),
+  ).toBeVisible();
+  expect(sent[0]?.payment_method).toBe("CARD");
+
+  echo = false;
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+  // The warehouse stays chosen; only the product is picked again.
+  await page
+    .getByRole("combobox", { name: "Товар і розмір", exact: true })
+    .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
+  await addToBasket(page, 1);
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Разом 150,00 грн", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Готівка ·|Картка ·|Переказ ·/)).toHaveCount(0);
+  expect(sent[1]?.payment_method).toBe("CASH");
 });
 
 test("a seller without the correction permissions is offered neither", async ({
@@ -311,7 +439,7 @@ test("a seller without the correction permissions is offered neither", async ({
   await enter(page);
   const available = await pickFirstProduct(page);
   await addToBasket(page, available + 1);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Товар на місці/ }),
@@ -348,7 +476,7 @@ test("a reserved shortfall is not offered as correctable", async ({ page }) => {
   await enter(page);
   await pickFirstProduct(page);
   await addToBasket(page, 2);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByText(/частина одиниць у резерві замовлення/),
   ).toBeVisible();
@@ -402,10 +530,12 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   await enter(page);
   await pickFirstProduct(page);
   await addToBasket(page, 1);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Незавершений продаж")).toBeVisible();
   // Everything else is locked while one sale's outcome is unknown.
-  await expect(page.getByRole("button", { name: "Змінити магазин" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Змінити магазин" }),
+  ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeDisabled();
@@ -439,10 +569,14 @@ test("a store that reaches one sellable warehouse does not ask which", async ({
   await expect(warehouse).toHaveValue(fixture.till_location_id);
   // No empty choice is offered, because there is no choice to make.
   await expect(warehouse.locator("option")).toHaveCount(1);
-  await expect(page.getByRole("combobox", { name: "Товар і розмір" })).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Товар і розмір" }),
+  ).toBeVisible();
 });
 
-test("two sellable warehouses are still chosen explicitly", async ({ page }) => {
+test("two sellable warehouses are still chosen explicitly", async ({
+  page,
+}) => {
   // Exactly two, whatever else the fixture provisions for other specs.
   await page.route("**/api/v1/stock-locations?**", async (route) => {
     const response = await route.fetch();

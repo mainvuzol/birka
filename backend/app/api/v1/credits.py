@@ -13,6 +13,12 @@ owner may still write it off (owner decisions, 2026-10-01).
 
 Payments and write-offs are named by a client `command_id`, as a sale is:
 the same command is answered with what it did, however late it is retried.
+
+A payment says how it was paid: «Готівка», «Картка» or «Переказ» (owner
+decisions, 2026-10-04). Optional in the request, so a payment a phone kept
+from before the way was asked still replays; the service requires it of a
+new one (ADR-0012, B13). The history shows each payment's way, and each
+return's, as they stand after corrections (ADR-0012, B10).
 """
 
 from __future__ import annotations
@@ -24,10 +30,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep
+from app.api.v1.sales import TillMethodValue, method_of
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
+from app.modules.cash.current import CurrentMethod, entry_methods, refund_methods
 from app.modules.credit import service
 from app.modules.credit.models import CreditStatus, EntryKind
 from app.modules.tenancy.models import StoreState
@@ -44,6 +53,11 @@ class EntryResponse(BaseModel):
     note: str | None
     # The store that took this payment, when the one that sold did not trade.
     taken_at: str | None
+    # A payment: how it was paid. A return: how its money went back, None
+    # when it only lowered the debt. Both as they stand after corrections;
+    # None too for one recorded before the way was asked («не вказано»).
+    payment_method: str | None = None
+    corrected: bool = False
 
 
 class CreditResponse(BaseModel):
@@ -110,6 +124,9 @@ class PaymentRequest(BaseModel):
     # The store taking the payment, when it is not the one that sold: only
     # while that one does not trade.
     store_id: uuid.UUID | None = None
+    # One of the till's three ways. Absent only from a payment a phone kept
+    # from before it was asked.
+    payment_method: TillMethodValue | None = None
 
 
 class WriteOffRequest(BaseModel):
@@ -119,7 +136,34 @@ class WriteOffRequest(BaseModel):
     reason: CleanText = Field(min_length=1, max_length=1000)
 
 
-def _response(view: service.CreditView) -> CreditResponse:
+async def _ways(
+    session: AsyncSession, views: list[service.CreditView]
+) -> dict[uuid.UUID, CurrentMethod]:
+    """Each entry's way, by entry id: a payment's own, a return's refund's.
+    Read here because the debts' module reads neither the corrections nor
+    the refunds (ADR-0012, B10, B15)."""
+    entries = [entry for view in views for entry in view.entries]
+    payments = await entry_methods(
+        session, [entry.id for entry in entries if entry.kind is EntryKind.PAYMENT]
+    )
+    refunds = await refund_methods(
+        session, [entry.refund_id for entry in entries if entry.refund_id is not None]
+    )
+    ways = dict(payments)
+    for entry in entries:
+        if entry.refund_id is not None and entry.refund_id in refunds:
+            ways[entry.id] = refunds[entry.refund_id]
+    return ways
+
+
+async def _responses(
+    session: AsyncSession, views: list[service.CreditView]
+) -> list[CreditResponse]:
+    ways = await _ways(session, views)
+    return [_response(view, ways) for view in views]
+
+
+def _response(view: service.CreditView, ways: dict[uuid.UUID, CurrentMethod]) -> CreditResponse:
     return CreditResponse(
         id=view.id,
         sale_id=view.sale_id,
@@ -149,6 +193,12 @@ def _response(view: service.CreditView) -> CreditResponse:
                 by=entry.by,
                 note=entry.note,
                 taken_at=entry.taken_at,
+                payment_method=(
+                    way.value
+                    if entry.id in ways and (way := ways[entry.id].method) is not None
+                    else None
+                ),
+                corrected=entry.id in ways and ways[entry.id].corrected,
             )
             for entry in view.entries
         ],
@@ -175,7 +225,7 @@ async def list_debts(
         limit=limit,
         offset=offset,
     )
-    return CreditPage(items=[_response(view) for view in views], has_more=has_more)
+    return CreditPage(items=await _responses(session, views), has_more=has_more)
 
 
 # Before `/{credit_id}`, which would otherwise take these names for an id.
@@ -205,6 +255,7 @@ async def list_customers(
         offset=offset,
         elsewhere=elsewhere,
     )
+    ways = await _ways(session, [view for customer in customers for view in customer.credits])
     return CustomerPage(
         items=[
             CustomerResponse(
@@ -213,7 +264,7 @@ async def list_customers(
                 customer_phone=customer.customer_phone,
                 owed=customer.owed,
                 open_debts=customer.open_debts,
-                credits=[_response(view) for view in customer.credits],
+                credits=[_response(view, ways) for view in customer.credits],
             )
             for customer in customers
         ],
@@ -237,9 +288,10 @@ async def read_debt(
 ) -> CreditResponse:
     """One debt. `store_id` is the store reading it, when it is not the one
     that sold: only while that one does not trade."""
-    return _response(
-        await service.read_credit(session, scope=scope, credit_id=credit_id, at_store_id=store_id)
+    view = await service.read_credit(
+        session, scope=scope, credit_id=credit_id, at_store_id=store_id
     )
+    return (await _responses(session, [view]))[0]
 
 
 @router.post(
@@ -256,9 +308,11 @@ async def pay(
         amount=payload.amount,
         at_store_id=payload.store_id,
         correlation_id=get_correlation_id(),
+        payment_method=method_of(payload.payment_method),
     )
+    body = (await _responses(session, [view]))[0]
     await session.commit()
-    return _response(view)
+    return body
 
 
 @router.post("/{credit_id}/write-off", response_model=CreditResponse)
@@ -273,8 +327,9 @@ async def write_off(
         reason=payload.reason,
         correlation_id=get_correlation_id(),
     )
+    body = (await _responses(session, [view]))[0]
     await session.commit()
-    return _response(view)
+    return body
 
 
 __all__ = ["router"]

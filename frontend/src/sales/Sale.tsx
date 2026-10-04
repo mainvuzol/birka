@@ -10,6 +10,8 @@ import { asInput } from "@/prices/SuggestedPrice";
 import { sizeLabel } from "@/returns/types";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
+import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
+import type { TillMethod } from "@/shared/payment";
 import { submitSale, useSaleCommand } from "./commands";
 import type {
   EmptyShelf,
@@ -49,17 +51,31 @@ interface Draft {
  * refuses it, because the coat could be counted twice. A coat held that way
  * whose size is on its label can also be sold with that size from the start,
  * which is how an M the system holds none of is sold at all.
+ *
+ * The seller sells with the way the customer pays: «Готівка», «Картка» or
+ * «Переказ» in place of «Продати», so a sale still takes five taps and
+ * nothing is guessed (owner decision, 2026-10-04; ADR-0012 §B12). The press
+ * comes first, then the terminal is charged the sum the receipt shows: it may
+ * still change when a coat is not on the shelf.
  */
 export function Sale({
   store,
   token,
   journalKey,
   blocked,
+  fixMethod,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   blocked: boolean;
+  /**
+   * Opens «Каса»'s step that changes how this one sale was paid. Given, the
+   * receipt offers «Змінити спосіб оплати»: a card the terminal refused, and
+   * the customer paid another way (owner decision, 2026-10-04; ADR-0012
+   * §B6.4).
+   */
+  fixMethod?: (sale: SaleReceipt) => void;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [offset, setOffset] = useState(0);
@@ -88,6 +104,9 @@ export function Sale({
   // Paying in parts (owner decisions, 2026-10-01): the customer takes the
   // goods now, pays part and owes the rest to this store.
   const [credit, setCredit] = useState<TermsInput>(noTerms);
+  // The way the seller pressed. A shortfall's answers resend the same sale,
+  // so they keep it and say it (ADR-0012 §B12); a changed basket forgets it.
+  const [method, setMethod] = useState<TillMethod | null>(null);
   const { busy, pending } = useSaleCommand();
 
   const mayCorrect = store.permissions.includes(
@@ -139,6 +158,7 @@ export function Sale({
     setClarified({});
     setShortfall(null);
     setPresent("");
+    setMethod(null);
   }
 
   useEffect(() => {
@@ -221,6 +241,7 @@ export function Sale({
   }
 
   async function send(
+    way: TillMethod,
     nextFound: Record<number, number>,
     nextMissing: Record<number, number>,
     nextClarified: Record<number, number>,
@@ -245,6 +266,7 @@ export function Sale({
       return;
     }
     const asked = shortfall;
+    setMethod(way);
     setShortfall(null);
     setRefusal(null);
     setValidation("");
@@ -271,6 +293,7 @@ export function Sale({
           quantity: value,
         })),
         ...(terms ? { credit: terms } : {}),
+        payment_method: way,
       },
     });
     if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
@@ -286,6 +309,7 @@ export function Sale({
       setClarified({});
       setCommandId(crypto.randomUUID());
       setPresent("");
+      setMethod(null);
       // The next customer is someone else.
       setCredit(noTerms);
       await stock.refetch();
@@ -327,6 +351,15 @@ export function Sale({
     }
   }
 
+  /** A shortfall's answer: the same sale, the same way, one answer more. */
+  function answer(
+    nextFound: Record<number, number>,
+    nextMissing: Record<number, number>,
+    nextClarified: Record<number, number>,
+  ): void {
+    if (method) void send(method, nextFound, nextMissing, nextClarified);
+  }
+
   function indexOf(short: Shortfall): number {
     return draft.findIndex(
       (d) =>
@@ -363,6 +396,8 @@ export function Sale({
             item.available_quantity > 0,
         )));
   const working = busy || pending !== null;
+  // Named on every answer that sells: «… · Картка».
+  const how = method ? ` · ${methodLabels[method]}` : "";
 
   if (nothingSold)
     return (
@@ -383,6 +418,7 @@ export function Sale({
           setReceipt(null);
           setDropped([]);
         }}
+        fixMethod={fixMethod}
       />
     );
 
@@ -640,15 +676,28 @@ export function Sale({
             hint="Покупець забирає товар зараз, решту доплачує, коли зможе. Внески приймає лише цей магазин, у розділі «Борги»."
           />
         )}
-        <button
-          type="button"
-          disabled={draft.length === 0}
-          onClick={() => {
-            void send(found, missing, clarified);
-          }}
+        <div
+          className="actions"
+          role="group"
+          aria-label="Продати — як платить покупець"
         >
-          Продати
-        </button>
+          {tillMethods.map((way) => (
+            <button
+              key={way}
+              type="button"
+              disabled={draft.length === 0}
+              onClick={() => {
+                void send(way, found, missing, clarified);
+              }}
+            >
+              {methodLabels[way]}
+            </button>
+          ))}
+        </div>
+        <p className="hint">
+          Спершу натисніть тут, потім проведіть на терміналі суму, яку покаже
+          чек нижче: вона може змінитися, якщо товару не виявиться на полиці.
+        </p>
       </fieldset>
       {refusal !== null && (
         <p role="alert">
@@ -694,10 +743,11 @@ export function Sale({
                               shortfall.requested - shortfall.available,
                           };
                           setClarified(next);
-                          void send(found, missing, next);
+                          answer(found, missing, next);
                         }}
                       >
                         Це товар без розміру — продати як {shortDraft.size}
+                        {how}
                       </button>
                     </>
                   )}
@@ -712,10 +762,11 @@ export function Sale({
                             shortfall.requested - shortfall.available,
                         };
                         setFound(next);
-                        void send(next, missing, clarified);
+                        answer(next, missing, clarified);
                       }}
                     >
                       Товар на місці — продати {shortfall.requested}
+                      {how}
                     </button>
                   )}
                   {mayReportMissing && (
@@ -725,15 +776,16 @@ export function Sale({
                       onClick={() => {
                         const next = { ...missing, [shortIndex]: 0 };
                         setMissing(next);
-                        void send(found, next, clarified);
+                        answer(found, next, clarified);
                       }}
                     >
+                      {/* Recording an empty shelf takes no money: no way. */}
                       {draft.every(
                         (_, index) =>
                           index === shortIndex || missing[index] === 0,
                       )
                         ? "На полиці немає жодної — записати нестачу"
-                        : "На полиці немає жодної — продати решту"}
+                        : `На полиці немає жодної — продати решту${how}`}
                     </button>
                   )}
                   {mayReportMissing && shortfall.requested > 1 && (
@@ -765,10 +817,10 @@ export function Sale({
                           }
                           const next = { ...missing, [shortIndex]: count };
                           setMissing(next);
-                          void send(found, next, clarified);
+                          answer(found, next, clarified);
                         }}
                       >
-                        Продати стільки, скільки є
+                        Продати стільки, скільки є{how}
                       </button>
                     </>
                   )}
@@ -801,22 +853,46 @@ function Receipt({
   receipt,
   dropped,
   next,
+  fixMethod,
 }: {
   receipt: SaleReceipt;
   dropped: string[];
   next: () => void;
+  fixMethod: ((sale: SaleReceipt) => void) | undefined;
 }): JSX.Element {
+  // An answer recorded before the way was asked names none (ADR-0012 §B12).
+  const way = receipt.payment_method ?? null;
   return (
     <section>
       <h2>Продаж записано</h2>
-      <p className="total">
-        Разом <strong>{money(receipt.total)}</strong>
-      </p>
+      {way === null || receipt.credit ? (
+        <p className="total">
+          Разом <strong>{money(receipt.total)}</strong>
+        </p>
+      ) : way === "TRANSFER" ? (
+        // Checked before the goods are handed over (ADR-0012 G38). One
+        // sentence, so it wraps as one rather than splitting the total's row.
+        <p className="total">
+          <span>
+            {methodLabels[way]} · Разом <strong>{money(receipt.total)}</strong>{" "}
+            — перевірте, що переказ надійшов, перш ніж віддати товар
+          </span>
+        </p>
+      ) : (
+        // The terminal is charged after the press, for the sum the receipt
+        // shows (owner decision, 2026-10-04).
+        <p className="total">
+          {methodLabels[way]} ·{" "}
+          {way === "CARD" ? "Проведіть на терміналі" : "Разом"}{" "}
+          <strong>{money(receipt.total)}</strong>
+        </p>
+      )}
       {receipt.credit && (
         <div className="section-block">
           <h3>Оплата частинами</h3>
           <p>
             Сплачено зараз <strong>{money(receipt.credit.paid_now)}</strong>
+            {way !== null && ` ${methodHow[way]}`}
           </p>
           <p>
             Покупець винен <strong>{money(receipt.credit.owed)}</strong>
@@ -853,6 +929,17 @@ function Receipt({
           Уточнено розмір: {receipt.size_reclassifications.length} рух(и)
           складу.
         </p>
+      )}
+      {fixMethod && way !== null && (
+        <button
+          type="button"
+          className="quiet"
+          onClick={() => {
+            fixMethod(receipt);
+          }}
+        >
+          Змінити спосіб оплати
+        </button>
       )}
       <button type="button" onClick={next}>
         Новий продаж
@@ -903,7 +990,7 @@ function refusalText(error: unknown): string {
     case "SIZE_NOT_KNOWN_SHORT":
       return `Одиниць цієї моделі без розміру на складі менше, ніж треба уточнити (є ${String(details.available)}). Зменшіть кількість або продайте товар без розміру.`;
     case "SIZE_CLARIFIED":
-      return "Облік змінився, поки ви відповідали. Натисніть «Продати» ще раз, щоб побачити, чого бракує тепер.";
+      return "Облік змінився, поки ви відповідали. Натисніть «Готівка», «Картка» або «Переказ» ще раз, щоб побачити, чого бракує тепер.";
     case "SIZE_NOT_KNOWN_AMBIGUOUS":
       return "Ця модель записана на складі під кількома невідомими розмірами, тож уточнити розмір не можна. Зверніться до менеджера.";
     case "NOTHING_TO_SELL":

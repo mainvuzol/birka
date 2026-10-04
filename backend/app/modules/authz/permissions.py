@@ -88,6 +88,25 @@ class Permission(StrEnum):
     # owner of a child store does not change her own store's state.
     STORE_MANAGE = "store:manage"
 
+    # The day's close (owner decisions, 2026-10-04): counting the store's
+    # drawer blind and closing it, and writing the reason for one's own
+    # close's difference. The seller on duty does it.
+    CASH_CLOSE = "cash:close"
+    # Cash taken out of the drawer for expenses or for a supplier's courier:
+    # the owner's own example of a seller's expense is «пакети, кур’єр»
+    # (ADR-0012, G34). A seller holds it.
+    CASH_EXPENSE = "cash:expense"
+    # Cash taken out of the drawer of any kind, for the owner included, and
+    # cash put in for change (owner decisions, 2026-10-04: the owner and
+    # managers record any).
+    CASH_TAKE_OUT = "cash:take_out"
+    # Correcting the way any sale, payment or return was paid, and recording
+    # cash taken out and forgotten against the close it belongs to (owner
+    # decisions, 2026-10-04: the owner or a manager fixes a closed day). A
+    # seller fixes only their own operations, and only before the close,
+    # without it (ADR-0012, B6.2).
+    CASH_CORRECT = "cash:correct"
+
 
 class RoleCode(StrEnum):
     OWNER = "OWNER"
@@ -122,6 +141,10 @@ _SELLER: frozenset[Permission] = frozenset(
         Permission.DAMAGED_HANDLE,
         # Owner decision, 2026-10-01: a seller sells in parts and takes payments.
         Permission.SALE_CREDIT,
+        # Owner decisions, 2026-10-04: the seller on duty closes the drawer,
+        # and records the cash they take out for expenses.
+        Permission.CASH_CLOSE,
+        Permission.CASH_EXPENSE,
     }
 )
 
@@ -143,6 +166,10 @@ _MANAGER: frozenset[Permission] = _SELLER | frozenset(
         # a supplier, and keep what the store owes its suppliers.
         Permission.SUPPLIER_RETURN,
         Permission.SUPPLIER_DEBT,
+        # Owner decisions, 2026-10-04: the owner and managers record any cash
+        # taken out or put in, and correct a way of paying after the close.
+        Permission.CASH_TAKE_OUT,
+        Permission.CASH_CORRECT,
     }
 )
 

@@ -99,6 +99,7 @@ async def take_back(
                 "command_id": command_id or str(uuid.uuid4()),
                 "lines": list(lines),
                 "store_id": str(store_id or at),
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -284,6 +285,7 @@ async def test_the_store_taking_it_back_decides_by_its_own_authority(maker):
                 "command_id": str(uuid.uuid4()),
                 "lines": [part(sale, 1, "INTACT")],
                 "store_id": str(shops.child_store),
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -387,6 +389,7 @@ async def test_a_unit_handed_back_elsewhere_goes_back_on_sale_in_that_stores_war
 
 
 async def test_the_downgrade_refuses_while_a_return_was_taken_elsewhere():
+    from tests.integration.test_cash_schema import forget_the_ways
     from tests.integration.test_stock_rekey_migration import _admin, _alembic, _run, _url_for
 
     name = f"birka_elsewhere_{uuid.uuid4().hex[:10]}"
@@ -401,6 +404,7 @@ async def test_the_downgrade_refuses_while_a_return_was_taken_elsewhere():
         # Taken where it was sold: the column says nothing 0023 could not.
         here = await take_back(fresh, shops, sale, part(sale, 1, "INTACT"), at=shops.primary_store)
         assert here.status_code == 201, here.text
+        await forget_the_ways(engine)
         await _run(config, "downgrade", "0023_customer_credit", database=name)
         await _run(config, "upgrade", "head", database=name)
         async with fresh() as session:
@@ -408,6 +412,7 @@ async def test_the_downgrade_refuses_while_a_return_was_taken_elsewhere():
             assert refund is not None and refund.taken_at_store_id == shops.primary_store
         there = await take_back(fresh, shops, sale, part(sale, 1, "INTACT"), at=shops.child_store)
         assert there.status_code == 201, there.text
+        await forget_the_ways(engine)
         with pytest.raises(Exception, match="taken at another store"):
             await _run(config, "downgrade", "0023_customer_credit", database=name)
     finally:

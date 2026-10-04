@@ -54,6 +54,7 @@ from app.modules.identity.models import AppUser
 from app.modules.inventory.models import Inventory, MovementType, StockMovement
 from app.modules.inventory.service import find_divergences
 from app.modules.sales.models import Sale
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import (
     Organization,
     Store,
@@ -1730,6 +1731,7 @@ async def test_a_transfer_and_a_sale_racing_for_the_last_coat_let_exactly_one_th
                             "unit_price": "1500.00",
                         }
                     ],
+                    "payment_method": "CASH",
                 },
                 headers=key(),
             )
@@ -1804,6 +1806,7 @@ async def test_a_sale_holding_the_last_coat_leaves_the_transfer_nothing_to_move(
                     unit_price=Decimal("1500.00"),
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         holder_pid = await holder.scalar(text("SELECT pg_backend_pid()"))
         assert holder_pid is not None

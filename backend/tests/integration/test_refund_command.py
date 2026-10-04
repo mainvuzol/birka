@@ -43,6 +43,7 @@ from app.modules.inventory.service import find_divergences
 from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
 from app.modules.refunds.service import RefundLineInput, create_refund
 from app.modules.sales.models import Sale, SaleStatus
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import Store, StoreKind, StoreState
 from tests.conftest import requires_database
 from tests.integration.test_product_lifecycle_api import (
@@ -156,6 +157,7 @@ async def sell(
             "store_id": str(shop.store_id),
             "command_id": str(uuid.uuid4()),
             "lines": sale_lines,
+            "payment_method": "CASH",
         },
         headers=key(),
     )
@@ -178,6 +180,9 @@ def refund_body(
             }
             for sale_item_id, quantity, restock in lines
         ],
+        # The money goes back the way the sale was paid (owner decisions,
+        # 2026-10-04): every sale here is paid in cash.
+        "payment_method": "CASH",
     }
     payload.update(extra)
     return payload
@@ -311,12 +316,15 @@ async def test_a_refund_is_capped_by_what_was_sold(maker):
         assert response.status_code == 409, response.text
         detail = response.json()
         assert detail["code"] == "REFUND_EXCEEDS_SOLD"
+        # Decided after the command's lock and lookup, so it says nothing was
+        # recorded (ADR-0008 §9).
         assert detail["details"] == {
             "sale_item_id": sold.line()["id"],
             "requested": 3,
             "sold": 2,
             "already_refunded": 0,
             "refundable": 2,
+            "recorded": False,
         }
 
     async with maker() as session:
@@ -655,6 +663,7 @@ async def test_one_refund_may_mix_restocked_and_written_off_lines(maker):
                         "discount_amount": "500.00",
                     },
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -911,6 +920,7 @@ async def test_a_refund_that_fails_halfway_leaves_nothing_behind(maker):
                             "unit_price": "1200.00",
                         },
                     ],
+                    "payment_method": "CASH",
                 },
                 headers=key(),
             )
@@ -997,6 +1007,7 @@ async def test_two_simultaneous_refunds_of_one_line_cannot_both_succeed(
                             condition=ReturnCondition.INTACT,
                         )
                     ],
+                    payment_method=PaymentMethod.CASH,
                 )
             except RefundExceedsSoldError:
                 await session.rollback()
@@ -1015,6 +1026,7 @@ async def test_two_simultaneous_refunds_of_one_line_cannot_both_succeed(
                     sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         task = asyncio.create_task(contender())
         try:
@@ -1064,6 +1076,7 @@ async def test_many_racing_refunds_return_exactly_what_was_sold(
                             condition=ReturnCondition.INTACT,
                         )
                     ],
+                    payment_method=PaymentMethod.CASH,
                 )
             except RefundExceedsSoldError:
                 await session.rollback()
@@ -1118,6 +1131,7 @@ async def test_a_refund_and_a_sale_of_the_same_item_agree_on_the_ledger(
                             condition=ReturnCondition.INTACT,
                         )
                     ],
+                    payment_method=PaymentMethod.CASH,
                 )
                 await session.commit()
 
@@ -1136,6 +1150,7 @@ async def test_a_refund_and_a_sale_of_the_same_item_agree_on_the_ledger(
                             "unit_price": "1500.00",
                         }
                     ],
+                    "payment_method": "CASH",
                 },
                 headers=key(),
             )
@@ -1172,7 +1187,12 @@ async def test_the_service_refuses_what_the_schema_refuses(
     async with maker() as session:
         with pytest.raises(ValidationFailedError):
             await create_refund(
-                session, scope=shop.scope(), sale_id=sale_id, command_id=uuid.uuid4(), lines=[]
+                session,
+                scope=shop.scope(),
+                sale_id=sale_id,
+                command_id=uuid.uuid4(),
+                lines=[],
+                payment_method=PaymentMethod.CASH,
             )
         with pytest.raises(ValidationFailedError):
             await create_refund(
@@ -1188,6 +1208,7 @@ async def test_the_service_refuses_what_the_schema_refuses(
                         condition=ReturnCondition.INTACT,
                     )
                 ],
+                payment_method=PaymentMethod.CASH,
             )
         with pytest.raises(ValidationFailedError):
             await create_refund(
@@ -1204,6 +1225,7 @@ async def test_the_service_refuses_what_the_schema_refuses(
                     )
                 ],
                 reason="x" * 1001,
+                payment_method=PaymentMethod.CASH,
             )
         with pytest.raises(PermissionDeniedError):
             await create_refund(
@@ -1219,6 +1241,7 @@ async def test_the_service_refuses_what_the_schema_refuses(
                         condition=ReturnCondition.INTACT,
                     )
                 ],
+                payment_method=PaymentMethod.CASH,
             )
         await session.rollback()
 
@@ -1392,6 +1415,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
                         }
                         for s in (size_m, size_l)
                     ],
+                    "payment_method": "CASH",
                 },
                 headers=key(),
             )
@@ -1420,6 +1444,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
                         condition=ReturnCondition.INTACT,
                     )
                 ],
+                payment_method=PaymentMethod.CASH,
             )
             await session.commit()
 
@@ -1437,6 +1462,7 @@ async def test_the_sale_line_lock_covers_the_whole_receipt(
                     condition=ReturnCondition.INTACT,
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         task = asyncio.create_task(other_line())
         try:
@@ -1491,6 +1517,7 @@ async def test_the_same_command_arriving_twice_at_once_is_serialized(
                     sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
 
     async def retry() -> str:
@@ -1579,6 +1606,7 @@ async def test_a_rebuilt_multi_line_replay_matches_the_original_exactly(
                         }
                         for size, price in zip(sizes, ["1500.00", "1200.00"], strict=True)
                     ],
+                    "payment_method": "CASH",
                 },
                 headers=key(),
             )
@@ -1746,6 +1774,7 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                     )
                     for _ in range(101)
                 ],
+                payment_method=PaymentMethod.CASH,
             )
         # `restock` stated as something that is not a decision.
         with pytest.raises(ValidationFailedError):
@@ -1755,6 +1784,7 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                 sale_id=sale_id,
                 command_id=uuid.uuid4(),
                 lines=[RefundLineInput(sale_item_id=item_id, quantity=1, restock="yes")],  # type: ignore[arg-type]
+                payment_method=PaymentMethod.CASH,
             )
         await session.rollback()
 
@@ -1771,6 +1801,7 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                     sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         await session.commit()
 
@@ -1789,6 +1820,7 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                         condition=ReturnCondition.INTACT,
                     )
                 ],
+                payment_method=PaymentMethod.CASH,
             )
         await session.rollback()
 
@@ -1805,6 +1837,7 @@ async def test_the_service_guards_that_http_never_reaches_still_hold(
                     sale_item_id=item_id, quantity=1, restock=True, condition=ReturnCondition.INTACT
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         assert replayed.refund.command_id == command_id
         await session.rollback()

@@ -1,3 +1,5 @@
+import type { PaymentMethod } from "@/shared/payment";
+
 /**
  * Whether a store trades (owner decisions, 2026-10-01). A blocked or archived
  * one does nothing: the owner and the network's managers read it, and its
@@ -28,7 +30,10 @@ const reads = new Set([
 /**
  * The store as its screens should see it: one that does not trade keeps only
  * what opens a screen to read, so no button that changes anything is shown.
- * The server refuses those anyway (`STORE_NOT_TRADING`).
+ * The server refuses those anyway (`STORE_NOT_TRADING`). The one write left
+ * there, the network owner's close of its drawer (owner decision,
+ * 2026-10-04), is offered from what they hold network-wide, never from
+ * these.
  */
 export function asShown(store: Store): Store {
   return store.state === "ACTIVE"
@@ -123,7 +128,33 @@ export interface Order {
   shipping_history?: ShippingChange[];
   /** One order only: the store's other orders with the same waybill. */
   same_waybill?: { id: string; status: Status }[];
+  /** How a collected order was paid, said at «Клієнт забрав» (owner
+   * decision, 2026-10-04); none before it was asked. */
+  payment_method?: PaymentMethod | null;
 }
+
+/**
+ * How an order was paid, chosen at «Клієнт забрав» (owner decisions,
+ * 2026-10-04; ADR-0012, B12): in advance by transfer, cash on delivery
+ * through the carrier, or at the counter — cash, card or transfer handed
+ * over now, as «Клієнт забрав» is pressed (G1, G33). Nothing is chosen for
+ * the seller. Only the cash given now goes into the drawer.
+ */
+export const collectMethods: readonly {
+  method: PaymentMethod;
+  label: string;
+}[] = [
+  { method: "PREPAID_TRANSFER", label: "Переказом наперед" },
+  { method: "CARRIER_COD", label: "Накладеним платежем" },
+  { method: "CASH", label: "Готівкою — зараз, на касі" },
+  { method: "CARD", label: "Карткою — зараз, на терміналі" },
+  { method: "TRANSFER", label: "Переказом — зараз" },
+];
+
+/** What collecting records, and what it does not: the carrier's cash on
+ * delivery is checked separately, later. */
+export const collectHint =
+  "Продаж фіксуємо, коли клієнт забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.";
 export type Destination = "UKRAINE" | "ABROAD";
 export type Carrier = "NOVA_POSHTA" | "UKRPOSHTA" | "MEEST";
 export const carrierLabels: Record<Carrier, string> = {

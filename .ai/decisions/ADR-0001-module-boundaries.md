@@ -197,3 +197,43 @@ audit, core`.
 - Contracts "a merge moves stock only through the ledger's own door" and
   "nothing depends on the catalogue corrections" are in
   `backend/pyproject.toml` (29 in all).
+
+2026-10-04 amendment (cash and card, the day's close,
+[ADR-0012](ADR-0012-cash-and-card.md)): module `cash` counts the drawer: the
+day's close and its reason, cash taken out and put in, corrections of a way
+of paying, and the bot's messages of a difference (`cash_close`,
+`cash_close_reason`, `cash_movement`, `payment_correction`, `cash_message`).
+Permitted edges: `cash → sales (models, payment), credit (models), refunds
+(models), orders (models), identity (models, telegram_chats), authz,
+tenancy (models, hold_stores), audit, telegram, core`.
+- It reads the money rows and moves no goods. It never records a sale, a
+  payment or a refund: it reaches only their models, never their services,
+  `sales.order_collection` or `sales.shelf`.
+- The way of paying is not a module of its own: `sales.payment` holds it,
+  since every money module already imports `sales`.
+- No money module imports `cash`. A money row is placed in its drawer's
+  period by the database (a trigger), and the API layer merges the current
+  ways into the answers of sales, debts and orders (`cash.current`).
+- Only the API, the report and the watcher depend on it. `reports` reads
+  `cash.models` and `cash.current`, never its commands, reads or messages;
+  the watcher script (`scripts/backup_watch.py`) sends `cash.messages`.
+- Its messages copy the backups' sending algorithm rather than share it:
+  `backups` may not be imported by a shop module, and `telegram` may not
+  reach the people.
+- Contracts "the drawer counts money and moves no goods" and "only the API,
+  the report and the watcher depend on the drawer" are new. Twelve others
+  name `cash` too:
+  - "catalog is a leaf", "authz must not depend on business modules",
+    "backups reads no shop's business" and "telegram only talks to Telegram"
+    forbid it;
+  - "a report only reads" forbids `cash.service`, `cash.read` and
+    `cash.messages`;
+  - "nothing depends on the legacy list workflow", "nothing depends on the
+    backups section", "only a return puts units in «Брак»", "nothing depends
+    on the store-state command", "only «Брак» and the API use the supplier
+    returns", "nothing depends on the catalogue corrections" and "nothing
+    depends on the reports" keep it from importing those.
+- import-linter skips a forbidden module that does not exist, silently. A
+  unit test now imports every module the contracts name
+  (`test_import_contracts_name_real_modules.py`).
+- Contracts are in `backend/pyproject.toml` (31 in all).

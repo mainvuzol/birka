@@ -318,6 +318,7 @@ async def test_the_migration_gives_earlier_damaged_returns_their_units():
     role that takes returns."""
     from sqlalchemy import text
 
+    from tests.integration.test_cash_schema import forget_the_ways
     from tests.integration.test_stock_rekey_migration import _admin, _alembic, _run, _url_for
 
     name = f"birka_damaged_{uuid.uuid4().hex[:10]}"
@@ -328,6 +329,7 @@ async def test_the_migration_gives_earlier_damaged_returns_their_units():
         await _run(config, "upgrade", "head", database=name)
         fresh = async_sessionmaker(engine, expire_on_commit=False)
         shops, bin_, variant, size = await damaged_bin(fresh, damaged=2)
+        await forget_the_ways(engine)
         await _run(config, "downgrade", "0019_till_returns", database=name)
         async with engine.begin() as connection:
             await connection.execute(

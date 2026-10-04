@@ -9,6 +9,13 @@ from app.core.idempotency import IdempotencyRecord
 from app.modules.audit.models import AuditLog
 from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.backups.models import BackupAlert, BackupRun, ServerIncident, ServerWatch
+from app.modules.cash.models import (
+    CashClose,
+    CashCloseReason,
+    CashMessage,
+    CashMovement,
+    PaymentCorrection,
+)
 from app.modules.catalog.evidence import (
     AliasEvidence,
     CatalogMatchDecision,
@@ -82,6 +89,10 @@ __all__ = [
     "BackupRun",
     "BusinessCategory",
     "CanonicalConcept",
+    "CashClose",
+    "CashCloseReason",
+    "CashMessage",
+    "CashMovement",
     "CatalogMatchDecision",
     "CreditEntry",
     "CustomerCredit",
@@ -100,6 +111,7 @@ __all__ = [
     "OrderCommand",
     "Organization",
     "ParseResult",
+    "PaymentCorrection",
     "ProductAlias",
     "ProductFamily",
     "ProductVariant",

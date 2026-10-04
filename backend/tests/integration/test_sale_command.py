@@ -53,6 +53,7 @@ from app.modules.inventory.service import (
     current_quantity,
     find_divergences,
 )
+from app.modules.sales.payment import PaymentMethod
 from app.modules.sales.service import FoundInStore, SaleLineInput, create_sale
 from app.modules.tenancy.models import Organization, Store, StoreKind
 from tests.conftest import provision_location, requires_database
@@ -176,6 +177,8 @@ async def sell(session: AsyncSession, shop: Shop, **kwargs: object):
         "command_id": uuid.uuid4(),
         "lines": basket(shop),
         "currency_code": "UAH",
+        # The till's button that sold (owner decisions, 2026-10-04).
+        "payment_method": PaymentMethod.CASH,
     }
     defaults.update(kwargs)
     return await create_sale(session, **defaults)  # type: ignore[arg-type]
@@ -306,6 +309,7 @@ async def test_a_seller_cannot_sell_from_a_foreign_store(session: AsyncSession) 
             command_id=uuid.uuid4(),
             lines=basket(other),
             currency_code="UAH",
+            payment_method=PaymentMethod.CASH,
         )
 
 
@@ -325,6 +329,7 @@ async def test_a_variant_from_another_organization_is_not_found(
             command_id=uuid.uuid4(),
             lines=basket(other),  # variant belongs to the other organization
             currency_code="UAH",
+            payment_method=PaymentMethod.CASH,
         )
 
 
@@ -450,6 +455,7 @@ async def test_a_seller_without_the_narrow_permission_cannot_correct(
             lines=basket(shop),
             currency_code="UAH",
             found_in_store=[FoundInStore(line_index=0, quantity=1)],
+            payment_method=PaymentMethod.CASH,
         )
 
 

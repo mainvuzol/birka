@@ -1,5 +1,6 @@
 """The sales report (owner decisions, 2026-10-02): what the stores sold and
-returned, and the money through each till, for today or any days.
+returned, and the money through each till, for today or any days. The money
+is split by the way it was paid (owner decisions, 2026-10-04; ADR-0012, B11).
 
 The owner and managers read it (`report:view_financial`), each for the stores
 they hold it in. `date_from` and `date_to` are the stores' own days; left out,
@@ -19,13 +20,14 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from app.api.deps import ScopeDep, SessionDep
 from app.modules.reports import sales as report
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import StoreState
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -37,6 +39,33 @@ class PeriodResponse(BaseModel):
     today: date
 
 
+class WayResponse(BaseModel):
+    """One of the till's ways: «не вказано» is a row written before the way
+    was asked."""
+
+    method: Literal["CASH", "CARD", "TRANSFER", "NOT_STATED"]
+    came_in: Decimal
+    went_out: Decimal
+    # Moved to this way by corrections made in these days, less moved from it.
+    corrected: Decimal
+    net: Decimal
+
+
+class OffTillWayResponse(BaseModel):
+    """An order's money paid off the till. Nothing is ever handed back this
+    way: money goes back through the till."""
+
+    came_in: Decimal
+    corrected: Decimal
+    net: Decimal
+
+
+class OffTillResponse(BaseModel):
+    # «Переказ наперед» and «Накладений платіж»: outside «Разом».
+    prepaid_transfer: OffTillWayResponse
+    carrier_cod: OffTillWayResponse
+
+
 class FiguresResponse(BaseModel):
     sales: int
     units: int
@@ -46,11 +75,19 @@ class FiguresResponse(BaseModel):
     returned: Decimal
     # Sold, less what came back.
     net: Decimal
+    # The till's money: an order paid off the till is in none of these.
     paid_in_full: Decimal
     debt_payments: Decimal
     paid_back: Decimal
-    # What the till should hold from these days.
-    cash: Decimal
+    # What corrections moved into the till from the order ways, less out.
+    corrected_into_till: Decimal
+    # What went through the till in these days, «Разом»: the four ways' net
+    # add up to it. It was `cash` until 2026-10-04: always money through the
+    # till, never only banknotes.
+    money: Decimal
+    # CASH, CARD, TRANSFER, NOT_STATED: always these four, in this order.
+    ways: list[WayResponse]
+    off_till: OffTillResponse
 
 
 class StoreFiguresResponse(FiguresResponse):
@@ -91,8 +128,13 @@ class EntryResponse(BaseModel):
     by: str
     units: int
     amount: Decimal
-    # Into the till for a sale, out of it for a return.
-    cash: Decimal
+    # The money it moved: in for a sale, out for a return.
+    money: Decimal
+    # As stated when the money moved; None for «не вказано», and for a return
+    # that only lowered a debt.
+    payment_method: PaymentMethod | None
+    # The way now, when a correction changed it; None when none did.
+    method_now: PaymentMethod | None
     paid_in_parts: bool
     goods: list[str]
 
@@ -100,6 +142,10 @@ class EntryResponse(BaseModel):
 class EntriesResponse(PeriodResponse):
     entries: list[EntryResponse]
     has_more: bool
+
+
+def _off_till(sums: report.WaySums) -> OffTillWayResponse:
+    return OffTillWayResponse(came_in=sums.came_in, corrected=sums.corrected, net=sums.net)
 
 
 def _figures(figures: report.Figures) -> FiguresResponse:
@@ -114,7 +160,22 @@ def _figures(figures: report.Figures) -> FiguresResponse:
         paid_in_full=figures.paid_in_full,
         debt_payments=figures.debt_payments,
         paid_back=figures.paid_back,
-        cash=figures.cash,
+        corrected_into_till=figures.corrected_into_till,
+        money=figures.money,
+        ways=[
+            WayResponse(
+                method=name,
+                came_in=figures.way(name).came_in,
+                went_out=figures.way(name).went_out,
+                corrected=figures.way(name).corrected,
+                net=figures.way(name).net,
+            )
+            for name in report.TILL_WAYS
+        ],
+        off_till=OffTillResponse(
+            prepaid_transfer=_off_till(figures.way(PaymentMethod.PREPAID_TRANSFER.value)),
+            carrier_cod=_off_till(figures.way(PaymentMethod.CARRIER_COD.value)),
+        ),
     )
 
 
@@ -213,7 +274,9 @@ async def sales_entries(
                 by=view.by,
                 units=view.units,
                 amount=view.amount,
-                cash=view.cash,
+                money=view.money,
+                payment_method=view.payment_method,
+                method_now=view.method_now,
                 paid_in_parts=view.paid_in_parts,
                 goods=view.goods,
             )

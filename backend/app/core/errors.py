@@ -345,6 +345,26 @@ class PriceChangedError(DomainError):
     message = "The suggested price changed since it was shown; look at it again"
 
 
+class PaymentMethodChangedError(DomainError):
+    """The way a sale, a payment or a refund was paid is no longer the one
+    the person saw (ADR-0012, B6.1).
+
+    `details.current` is the way that stands now, or null for «не вказано»:
+    someone corrected it in between. Raised after the correction's
+    `command_id` was looked up under its lock, so it proves this command
+    recorded nothing: `details.recorded` is false, as with `ModelMergedError`,
+    and a phone may treat it as final even after an attempt whose outcome it
+    did not know.
+    """
+
+    code = "PAYMENT_METHOD_CHANGED"
+    http_status = 409
+    message = "The way of paying changed since it was shown; look at it again"
+
+    def __init__(self, message: str | None = None, **details: Any) -> None:
+        super().__init__(message, **details, recorded=False)
+
+
 # --- legacy snapshot import (M1-023, ADR-0005) --------------------------------
 
 
@@ -447,6 +467,7 @@ __all__ = [
     "NotFoundError",
     "OpeningBalanceConflictError",
     "PayloadTooLargeError",
+    "PaymentMethodChangedError",
     "PermissionDeniedError",
     "PriceChangedError",
     "RateLimitedError",

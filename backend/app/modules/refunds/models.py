@@ -82,13 +82,31 @@ class Refund(UUIDPrimaryKey, TimestampMixin, Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # How the money went back: the sale's way unless the seller changed it
+    # (owner decisions, 2026-10-04), and always one of the till's three ways.
+    # NULL for a refund taken before revision 0035, which reads «не вказано»,
+    # and for one of a sale paid in parts that only lowered the debt: no money
+    # went back. Never changed after the insert; the database refuses it.
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # The period of the drawer of the store that took the goods back, stamped
+    # by the database at insert (ADR-0012, B3). Never written by the
+    # application.
+    drawer_period: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("organization_id", "command_id", name="uq_refund_org_command"),
         Index("ix_refund_sale", "sale_id"),
         Index("ix_refund_taken_at_store", "taken_at_store_id"),
+        Index("ix_refund_taken_at_store_id_drawer_period", "taken_at_store_id", "drawer_period"),
         CheckConstraint("total_amount >= 0", name="amount_not_negative"),
         CheckConstraint("char_length(currency_code) = 3", name="currency_code_iso4217"),
+        CheckConstraint(
+            "payment_method IS NULL OR payment_method IN ('CASH', 'CARD', 'TRANSFER')",
+            name="payment_method_known",
+        ),
+        CheckConstraint(
+            "drawer_period IS NULL OR drawer_period > 0", name="drawer_period_positive"
+        ),
     )
 
 

@@ -41,6 +41,7 @@ from app.modules.catalog.service import ProductDraft, SizeDraft, VariantDraft
 from app.modules.catalog.service import create_product as create_product_command
 from app.modules.refunds.models import ReturnCondition
 from app.modules.refunds.service import RefundLineInput, create_refund
+from app.modules.sales.payment import PaymentMethod
 from tests.conftest import requires_database
 from tests.integration.test_product_lifecycle_api import (
     Shop,
@@ -280,6 +281,7 @@ async def test_the_services_refuse_a_nul_without_the_router(maker):
                     )
                 ],
                 reason=POISON,
+                payment_method=PaymentMethod.CASH,
             )
         with pytest.raises(ValidationFailedError):
             await create_product_command(
@@ -329,7 +331,7 @@ async def test_unstorable_text_is_refused_everywhere_it_is_accepted(maker, escap
         body = (
             f'{{"command_id": "{uuid.uuid4()}", "reason": "bad{escape}text", "lines": '
             f'[{{"sale_item_id": "{sold.line()["id"]}", "quantity": 1, "restock": true, '
-            f'"condition": "INTACT"}}]}}'
+            f'"condition": "INTACT"}}], "payment_method": "CASH"}}'
         )
         response = await client.post(
             f"/api/v1/sales/{sold.sale_id}/refunds",

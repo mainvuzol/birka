@@ -71,6 +71,8 @@ def payload_for(shop, *, found=False):
             }
         ],
         found_in_store=[{"line_index": 0, "quantity": 1}] if found else [],
+        # The till's button that sold (owner decisions, 2026-10-04).
+        payment_method="CASH",
     )
 
 

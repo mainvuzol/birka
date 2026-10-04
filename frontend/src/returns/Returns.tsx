@@ -4,10 +4,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
+import { isTillMethod, refundHow, tillMethods } from "@/shared/payment";
+import type { TillMethod } from "@/shared/payment";
 import { submitReturn, useReturnCommand } from "./commands";
 import { useBackOnSale } from "./places";
-import { sizeLabel } from "./types";
-import type { Refund, ReturnPart, SaleList, SaleSummary } from "./types";
+import { refundLabels, sizeLabel } from "./types";
+import type {
+  Refund,
+  ReturnPart,
+  SaleList,
+  SaleMethod,
+  SaleSummary,
+} from "./types";
 
 const pageSize = 20;
 
@@ -24,6 +32,10 @@ const pageSize = 20;
  * other stores', this store hands the money back, and damaged goods stay in
  * this store's «Брак». Intact goods sold from a warehouse this store does
  * not reach go to one of its own, which the seller chooses.
+ *
+ * The money goes back the way the sale was paid, unless the seller changes
+ * it — a card sale returned in cash (owner decision, 2026-10-04; ADR-0012
+ * §B12). Money returned to a card does not leave the drawer.
  */
 export function Returns({
   store,
@@ -237,6 +249,23 @@ function SaleCard({
   );
 }
 
+/**
+ * What the seller does with the money, by the way it goes back (ADR-0012
+ * §B12, G39). An answer recorded before the way was asked names none.
+ */
+function handBack(amount: string, way: TillMethod | null | undefined): string {
+  switch (way) {
+    case "CASH":
+      return `Поверніть покупцю ${money(amount)} готівкою.`;
+    case "CARD":
+      return `Поверніть ${money(amount)} на картку покупця через термінал.`;
+    case "TRANSFER":
+      return `Надішліть покупцю ${money(amount)} переказом.`;
+    default:
+      return `Поверніть покупцю ${money(amount)}.`;
+  }
+}
+
 export function Done({
   refund,
   chosen,
@@ -263,8 +292,8 @@ export function Done({
           )}
           <p>
             {(kopecks(credit.cash_back) ?? 0n) > 0n
-              ? `Поверніть покупцю готівкою ${money(credit.cash_back)}.`
-              : "Готівку покупцю не повертаємо."}
+              ? handBack(credit.cash_back, refund.payment_method)
+              : "Грошей покупцю не повертаємо."}
           </p>
           <p>
             {(kopecks(credit.owed_after) ?? 0n) > 0n
@@ -273,7 +302,7 @@ export function Done({
           </p>
         </>
       ) : (
-        <p>Поверніть покупцю {money(refund.total_amount)}.</p>
+        <p>{handBack(refund.total_amount, refund.payment_method)}</p>
       )}
       {intact &&
         (chosen ? (
@@ -323,6 +352,21 @@ function ReturnForm({
   const [places, setPlaces] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
   const [refusal, setRefusal] = useState<unknown>(null);
+  // How the money goes back: the seller's choice, else the one the sale
+  // suggests (owner decision, 2026-10-04; ADR-0012 G4, G5). Only this one
+  // sale's way is asked for, never a list's (G32).
+  const [chosenWay, setChosenWay] = useState<TillMethod | null>(null);
+  const paid = useQuery({
+    queryKey: ["sale-method", store.id, sale.id],
+    queryFn: () =>
+      api<SaleMethod>(
+        `/cash/sales/${sale.id}/method?store_id=${store.id}`,
+        token,
+      ),
+    retry: false,
+  });
+  const suggested = paid.data?.refund_method;
+  const way = chosenWay ?? (isTillMethod(suggested) ? suggested : null);
   const lines = sale.items.filter((item) => item.refunded < item.quantity);
   const elsewhere = sale.store_id !== store.id;
   const choosing = lines.some((item) => !item.back_to_sold_from);
@@ -404,6 +448,9 @@ function ReturnForm({
         lines: parts,
         reason: trimmed ? trimmed : null,
         ...(elsewhere ? { elsewhere: true } : {}),
+        // A sale in parts may go without: the server asks for the way only
+        // when money goes back (ADR-0012 G35).
+        ...(way ? { payment_method: way } : {}),
       },
     });
     if (outcome.kind === "done") {
@@ -436,8 +483,8 @@ function ReturnForm({
       {sale.paid_in_parts && (
         <p className="hint">
           Цей продаж оплачували частинами. Повернений товар спершу зменшує борг
-          покупця; готівкою повертаємо лише те, що сплачено понад вартість
-          товару, який лишається в покупця. Скільки саме — покаже підсумок.
+          покупця; гроші повертаємо лише те, що сплачено понад вартість товару,
+          який лишається в покупця. Скільки саме — покаже підсумок.
         </p>
       )}
       <fieldset disabled={blocked || working}>
@@ -516,6 +563,26 @@ function ReturnForm({
             }}
           />
         </label>
+        <fieldset>
+          <legend>
+            {sale.paid_in_parts
+              ? "Як повертаємо гроші (якщо буде що повертати)"
+              : "Як повертаємо гроші"}
+          </legend>
+          {tillMethods.map((option) => (
+            <label className="check" key={option}>
+              <input
+                type="radio"
+                name="refund-method"
+                checked={way === option}
+                onChange={() => {
+                  setChosenWay(option);
+                }}
+              />
+              {refundLabels[option]}
+            </label>
+          ))}
+        </fieldset>
         {ownPlaces.error && <p role="alert">{errorText(ownPlaces.error)}</p>}
         {problems.map((problem) => (
           <p key={problem} role="alert">
@@ -524,7 +591,7 @@ function ReturnForm({
         ))}
         <button
           type="button"
-          disabled={!ready}
+          disabled={!ready || (!sale.paid_in_parts && way === null)}
           onClick={() => {
             void send();
           }}
@@ -533,7 +600,9 @@ function ReturnForm({
             ? "Вкажіть, що повертають"
             : sale.paid_in_parts
               ? `Оформити повернення на ${money(decimal(total))}`
-              : `Повернути покупцю ${money(decimal(total))}`}
+              : way === null
+                ? "Оберіть, як повертаєте гроші"
+                : `Повернути покупцю ${money(decimal(total))} ${refundHow[way]}`}
         </button>
       </fieldset>
       {refusal !== null && (
@@ -558,6 +627,10 @@ function refusalText(error: unknown): string {
       return "Цілий товар цього продажу йде на склад вашого магазину — оберіть його ще раз.";
     if (error.details.reason === "SEARCH_REQUIRED")
       return "Продаж іншого магазину знаходять за назвою товару.";
+    // Only a sale paid in parts is sent without a way, and the server asks
+    // for one once it has worked out that money goes back (ADR-0012 G35).
+    if (error.details.reason === "PAYMENT_METHOD_REQUIRED")
+      return "Покупцю повертаємо гроші — оберіть, як.";
   }
   return errorText(error);
 }

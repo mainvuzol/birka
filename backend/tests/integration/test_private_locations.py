@@ -333,6 +333,7 @@ async def test_permanent_and_cached_replay_require_direct_private_rights(world, 
                 "unit_price": "100.00",
             }
         ],
+        "payment_method": "CASH",
     }
     headers = {"Idempotency-Key": str(uuid.uuid4())}
     async with client_for(w["maker"], w["users"]["child"]) as client:
@@ -366,6 +367,7 @@ async def test_permanent_and_cached_replay_require_direct_private_rights(world, 
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             }
         original = await client.post(path, headers=headers, json=payload)
         assert original.status_code == 201, original.text
@@ -419,6 +421,7 @@ async def test_private_sale_cannot_borrow_global_correction_permission(world, re
             }
         ],
         report: [{"line_index": 0, "quantity": 1}],
+        "payment_method": "CASH",
     }
     async with client_for(w["maker"], w["users"]["elevated_viewer"]) as client:
         response = await client.post(
@@ -471,6 +474,7 @@ async def test_direct_child_seller_can_sell_and_restock_refund(world):
                         "unit_price": "100.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
         )
         assert sale.status_code == 201, sale.text
@@ -488,6 +492,7 @@ async def test_direct_child_seller_can_sell_and_restock_refund(world):
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
         )
         assert refund.status_code == 201, refund.text

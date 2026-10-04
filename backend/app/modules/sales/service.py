@@ -32,6 +32,13 @@ of the size-not-known balance and into the size — an audited pair of
 `ADJUSTMENT`s, `SIZE_RECLASSIFICATION_OUT` and `_IN` — and are sold as that
 size. It is bounded like «фізично є»: exactly the shortfall this sale consumes
 at that size, so nothing is reclassified that is not leaving in the basket.
+
+`payment_method` is how the customer pays, given by the button that sells
+(owner decisions, 2026-10-04): one of the till's three ways, one per sale,
+never split. A sale paid in parts gives the way of the money taken now. It is
+optional in the request and required of a new sale after the replay lookup,
+so a sale a phone kept from before the way was asked still replays
+(ADR-0012, B2, B13).
 """
 
 from __future__ import annotations
@@ -75,6 +82,7 @@ from app.modules.inventory.service import (
     sale_shortage_ids,
 )
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
+from app.modules.sales.payment import TILL_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.tenancy.service import LocationCapability
 
 logger = get_logger(__name__)
@@ -708,13 +716,19 @@ async def create_sale(
     size_clarified: list[SizeClarified] | None = None,
     credit_terms: Mapping[str, str] | None = None,
     correlation_id: str | None = None,
+    payment_method: PaymentMethod | None = None,
+    method_required: bool = True,
 ) -> SaleResult:
     """Sell the basket, or raise and let the transaction roll back.
 
     `credit_terms` is what a sale paid in parts states, as the credit module
     words it. The sale never reads it: it is part of what makes this command
     this command, so the same command_id retried with other terms, or none,
-    is refused rather than replayed. The caller opens the credit itself."""
+    is refused rather than replayed. The caller opens the credit itself.
+
+    `payment_method` is in the print only when stated, and a new sale without
+    it is refused after the replay lookup (`payment.stated_way`).
+    `method_required=False` is for this service's unit tests only."""
     if not lines:
         raise ValidationFailedError("A sale must contain at least one line")
 
@@ -792,6 +806,11 @@ async def create_sale(
             # Absent, not empty, for a sale paid in full, so every sale made
             # before credit existed keeps the fingerprint it was stored with.
             **({"credit": dict(credit_terms)} if credit_terms is not None else {}),
+            # The same for the way of paying: a sale a phone kept from before
+            # it was asked has none, and must still replay (ADR-0012, B13).
+            # One stated is part of the command: the same command_id resent
+            # with another way is another sale, not a retry.
+            **print_of(payment_method),
         },
         actor_user_id=scope.user_id,
         store_id=store_id,
@@ -841,6 +860,8 @@ async def create_sale(
     )
     if existing is not None:
         return existing
+    # Only now, for a sale nothing recorded: one of the till's three ways.
+    method = stated_way(payment_method, takes=TILL_METHODS, required=method_required)
 
     # The size-not-known balances a clarification may draw on are part of the
     # basket, so they are locked with it, in the same one global order.
@@ -946,6 +967,7 @@ async def create_sale(
         discount_total=discount_total,
         total=total,
         correlation_id=correlation_id,
+        payment_method=method.value if method is not None else None,
     )
     session.add(sale)
     await session.flush()
@@ -1054,6 +1076,7 @@ async def create_sale(
         shortages=len(shortage_ids),
         reclassifications=len(reclassification_ids),
         total=str(sale.total),
+        payment_method=sale.payment_method,
     )
     return SaleResult(
         sale=sale,

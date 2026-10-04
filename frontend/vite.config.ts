@@ -20,7 +20,25 @@ export default defineConfig({
       },
     },
   },
-  // No source maps: served from the public domain they would hand anyone the
-  // app's whole source with its comments, and no error tracker reads them.
-  build: { outDir: "dist", sourcemap: false },
+  build: {
+    outDir: "dist",
+    // No source maps: served from the public domain they would hand anyone
+    // the app's whole source with its comments, and no error tracker reads
+    // them.
+    sourcemap: false,
+    rolldownOptions: {
+      output: {
+        // The libraries (React, TanStack Query, zustand, the Telegram SDK)
+        // in a file of their own, so the app's code alone stays under the
+        // 500 kB warning. Rolldown puts its own small runtime in a third.
+        // The page names all of them and they load at start, as one file
+        // did: no screen loads later, so none can fail to load on its own.
+        // The image keeps every file the page names for a month after it is
+        // replaced (frontend/Dockerfile).
+        codeSplitting: {
+          groups: [{ name: "vendor", test: /[\\/]node_modules[\\/]/ }],
+        },
+      },
+    },
+  },
 });

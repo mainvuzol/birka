@@ -4,6 +4,12 @@ See `models.py` for the owner's decisions. Every command here locks the
 credit's row before reading what is owed, so two payments, or a payment and
 a return, never both see the same debt and both lower it (the pattern a refund
 uses on its sale, I9).
+
+Each payment says how it was paid, one way each (owner decisions,
+2026-10-04): the first holds the way the sale was sold with, and a later one
+is one of the till's three. Optional in the request and required of a new
+payment after the replay lookup, so a payment a phone kept from before the
+way was asked still replays (ADR-0012, B2, B13).
 """
 
 from __future__ import annotations
@@ -35,6 +41,7 @@ from app.modules.authz.scope import RequestScope
 from app.modules.credit.models import CreditEntry, CreditStatus, CustomerCredit, EntryKind
 from app.modules.identity.models import AppUser
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.payment import TILL_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.sales.service import money
 from app.modules.tenancy.models import Store, StoreState
 from app.modules.tenancy.service import hold_stores, store_names, store_state
@@ -72,6 +79,11 @@ class ReturnSettlement:
 
 @dataclass(frozen=True, slots=True)
 class Entry:
+    # Named so the API can merge in each payment's way, and each return's
+    # refund's, as they stand after corrections (ADR-0012, B10): this module
+    # reads neither the corrections nor the refunds.
+    id: uuid.UUID
+    refund_id: uuid.UUID | None
     kind: EntryKind
     amount: Decimal
     cash_back: Decimal
@@ -229,12 +241,14 @@ async def open_credit(
     scope: RequestScope,
     sale: Sale,
     credit: CreditTerms,
+    payment_method: PaymentMethod | None,
     correlation_id: str | None = None,
 ) -> CreditView:
     """The debt a sale paid in parts leaves, in the sale's own transaction.
 
     A retried sale finds its credit, which its fingerprint already proved is
-    the same one."""
+    the same one. `payment_method` is the way the money taken now was paid,
+    which the sale was sold with; the sale's command already required it."""
     scope.require(Permission.SALE_CREDIT, sale.store_id)
     existing = await session.scalar(select(CustomerCredit).where(CustomerCredit.sale_id == sale.id))
     if existing is not None:
@@ -269,6 +283,9 @@ async def open_credit(
             command_fingerprint=sale.command_fingerprint,
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
+            # The drawer reads the money taken now from here, and the sale
+            # holds the same way for its receipt (ADR-0012, B1).
+            payment_method=payment_method.value if payment_method is not None else None,
         )
     )
     await session.flush()
@@ -327,11 +344,17 @@ async def pay(
     amount: Decimal,
     at_store_id: uuid.UUID | None = None,
     correlation_id: str | None = None,
+    payment_method: PaymentMethod | None = None,
+    method_required: bool = True,
 ) -> CreditView:
     """A later payment, taken in the store that sold while it trades, and in
     any store of the network that trades while it does not (owner decisions,
     2026-10-01). `at_store_id` is that other store; the debt stays the selling
-    store's either way."""
+    store's either way.
+
+    `payment_method` is one of the till's three ways, required of a new
+    payment after the replay lookup (`payment.stated_way`).
+    `method_required=False` is for this service's unit tests only."""
     paid = money(amount)
     if paid <= ZERO:
         raise ValidationFailedError("A payment is more than nothing", reason="NOTHING_PAID")
@@ -347,6 +370,9 @@ async def pay(
             # Only when it differs, so a payment where the goods were sold
             # is fingerprinted exactly as before.
             **({"taken_at_store_id": str(taking)} if taking != credit.store_id else {}),
+            # The same for the way: none on a payment kept from before it was
+            # asked (ADR-0012, B13).
+            **print_of(payment_method),
         },
         actor_user_id=scope.user_id,
         store_id=credit.store_id,
@@ -360,6 +386,7 @@ async def pay(
     )
     if replay is not None:
         return replay
+    method = stated_way(payment_method, takes=TILL_METHODS, required=method_required)
     states = await hold_stores(
         session, organization_id=scope.organization_id, store_ids={taking, credit.store_id}
     )
@@ -389,6 +416,7 @@ async def pay(
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
             taken_at_store_id=taking if taking != credit.store_id else None,
+            payment_method=method.value if method is not None else None,
         )
     )
     await session.flush()
@@ -486,18 +514,12 @@ async def write_off(
     return await view(session, credit)
 
 
-async def settle_return(
-    session: AsyncSession,
-    *,
-    organization_id: uuid.UUID,
-    sale_id: uuid.UUID,
-    refund_id: uuid.UUID,
-    worth: Decimal,
-    actor_user_id: uuid.UUID,
-    correlation_id: str | None = None,
-) -> ReturnSettlement | None:
-    """Split returned goods' worth between the debt and cash, in the refund's
-    transaction. None for a sale that was paid in full.
+async def _split(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID, worth: Decimal
+) -> tuple[CustomerCredit, Decimal, Decimal] | None:
+    """The sale's debt, locked, and returned goods' worth split between it and
+    money back: `(credit, debt_reduced, cash_back)`. None for a sale that was
+    paid in full.
 
     Owner decision, 2026-10-01: returned goods first lower what is owed; money
     goes back only for what the customer paid beyond the worth of what they
@@ -529,7 +551,41 @@ async def settle_return(
     worth = money(worth)
     kept = money(credit.amount - returned_debt - cash_back_before - worth)
     cash_back = min(worth, max(ZERO, money(paid - cash_back_before - kept)))
-    debt_reduced = money(worth - cash_back)
+    return credit, money(worth - cash_back), cash_back
+
+
+async def money_back(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID, worth: Decimal
+) -> Decimal | None:
+    """How much of returned goods' worth would go back to the customer as
+    money, for a sale paid in parts; None for one paid in full, where all of
+    it does.
+
+    Asked by the refund before it is written, because the refund says how
+    the money went back only when some does (ADR-0012, G35), and that is
+    never changed after the insert. The debt is locked here and stays locked,
+    so `settle_return` in the same transaction splits it the same way."""
+    split = await _split(session, organization_id=organization_id, sale_id=sale_id, worth=worth)
+    return None if split is None else split[2]
+
+
+async def settle_return(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    sale_id: uuid.UUID,
+    refund_id: uuid.UUID,
+    worth: Decimal,
+    actor_user_id: uuid.UUID,
+    correlation_id: str | None = None,
+) -> ReturnSettlement | None:
+    """Split returned goods' worth between the debt and cash (`_split`), and
+    write it to the debt's ledger, in the refund's transaction. None for a
+    sale that was paid in full."""
+    split = await _split(session, organization_id=organization_id, sale_id=sale_id, worth=worth)
+    if split is None:
+        return None
+    credit, debt_reduced, cash_back = split
     session.add(
         CreditEntry(
             organization_id=organization_id,
@@ -636,6 +692,8 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
         goods=goods,
         entries=[
             Entry(
+                id=entry.id,
+                refund_id=entry.refund_id,
                 kind=EntryKind(entry.kind),
                 amount=entry.amount,
                 cash_back=entry.cash_back,
@@ -880,6 +938,7 @@ __all__ = [
     "fingerprint_of",
     "list_credits",
     "list_customers",
+    "money_back",
     "open_credit",
     "pay",
     "read_credit",

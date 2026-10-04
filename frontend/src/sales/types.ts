@@ -1,4 +1,5 @@
 import type { Line } from "@/orders/types";
+import type { PaymentMethod } from "@/shared/payment";
 
 /** A sale line is shaped exactly like an order line; the command differs. */
 export type SaleLine = Line;
@@ -38,6 +39,13 @@ export interface Sale {
   size_reclassifications: string[];
   /** A sale paid in parts: what was paid now and what is owed. */
   credit?: SaleCredit | null;
+  /**
+   * How the customer paid: the button the seller pressed (owner decision,
+   * 2026-10-04; ADR-0012 §B10). For a sale paid in parts, how the part paid
+   * now was paid. Absent or null on an answer recorded before the way was
+   * asked, whose receipt then names no way.
+   */
+  payment_method?: PaymentMethod | null;
 }
 
 /**
@@ -88,7 +96,9 @@ export interface Shortfall {
   correctable: boolean;
 }
 
-export function shortfallOf(details: Record<string, unknown>): Shortfall | null {
+export function shortfallOf(
+  details: Record<string, unknown>,
+): Shortfall | null {
   const {
     location_id,
     product_variant_id,

@@ -164,6 +164,7 @@ async function damagedAtTheMarket(page: Page): Promise<void> {
           unit_price: "2000.00",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(sold.status()).toBe(201);
@@ -180,6 +181,7 @@ async function damagedAtTheMarket(page: Page): Promise<void> {
           condition: "DAMAGED",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(back.status()).toBe(201);
@@ -323,6 +325,7 @@ test("a debt of a blocked store is found by a search and paid at a store that tr
         customer_phone: phone,
         paid_now: "1000.00",
       },
+      payment_method: "CASH",
     },
   });
   expect(sold.status()).toBe(201);
@@ -357,20 +360,30 @@ test("a debt of a blocked store is found by a search and paid at a store that tr
       page.getByText(/Продано в магазині «Ринок», який зараз заблоковано/),
     ).toBeVisible();
     await page.getByLabel("Сума внеску, грн").fill("500");
-    await page.getByRole("button", { name: "Прийняти внесок" }).click();
+    // Paid by card at «Центр»: its terminal takes it (ADR-0012 §B7 G).
+    await page
+      .getByRole("group", { name: "Внесок", exact: true })
+      .getByRole("button", { name: "Картка" })
+      .click();
     await expect(
-      page.getByText("Внесок 500,00 грн прийнято. Залишок боргу 1500,00 грн."),
+      page.getByText(
+        "Внесок 500,00 грн прийнято карткою. Залишок боргу 1500,00 грн.",
+      ),
     ).toBeVisible();
     expect(payments.bodies).toEqual([
       {
         command_id: expect.any(String) as string,
         amount: "500.00",
+        payment_method: "CARD",
         store_id: fixture.network_centre_store_id,
       },
     ]);
     await expect(
       page.getByRole("list", { name: "Історія боргу" }),
     ).toContainText("прийняв магазин «Центр»");
+    await expect(
+      page.getByRole("list", { name: "Історія боргу" }),
+    ).toContainText("Внесок 500,00 грн · картка ·");
 
     // In the blocked store itself the owner reads the debt: no payment is
     // taken there, and the network's owner may still write it off.
@@ -384,7 +397,7 @@ test("a debt of a blocked store is found by a search and paid at a store that tr
       .click();
     await expect(page.getByText("Залишок боргу")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Прийняти внесок" }),
+      page.getByRole("group", { name: "Внесок", exact: true }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Списати борг" }),

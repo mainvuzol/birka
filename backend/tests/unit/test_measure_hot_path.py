@@ -16,8 +16,10 @@ import httpx
 import pytest
 from scripts import measure_hot_path as harness
 
+from app.api.v1.sales import SaleRequest
 from app.modules.credit.service import customer_key, digits, terms
 from app.modules.identity.telegram_init_data import verify_init_data
+from app.modules.sales.payment import DRAWER_METHOD
 from tests.conftest import TEST_BOT_TOKEN
 
 # The six cases every earlier reading measured (2026-09-29, 2026-10-01): name,
@@ -72,7 +74,18 @@ async def test_the_earlier_sales_send_no_credit() -> None:
 
     for name, builder, _, _ in cases[2:6]:
         for body in await bodies_sent(builder, 3):
-            assert set(body) == {"store_id", "command_id", "lines"}, name
+            assert set(body) == {"store_id", "command_id", "lines", "payment_method"}, name
+
+
+async def test_every_sale_says_it_is_paid_in_cash() -> None:
+    """A sale without a way is refused (ADR-0012, B2): every case states one,
+    the one the drawer counts, and one the till's request takes."""
+    cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
+
+    for name, builder, _, _ in cases[2:]:
+        for body in await bodies_sent(builder, 3):
+            assert body["payment_method"] == DRAWER_METHOD.value, name
+            assert SaleRequest.model_validate(body).payment_method == "CASH", name
 
 
 @pytest.mark.parametrize("gate", harness.GATES)

@@ -41,6 +41,7 @@ interface SaleBody {
   found_in_store: unknown[];
   missing_in_store: unknown[];
   size_clarified?: { line_index: number; quantity: number }[];
+  payment_method?: string;
 }
 
 function launch(): string {
@@ -114,7 +115,7 @@ test("a coat held with its size not known is sold with the size on its label", a
   await expect(
     page.getByText("Розмір з етикетки товару без розміру"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
 
   // The system holds no L, so the server names the shortfall; the till knows
   // the coat came from the size-not-known balance and offers only that.
@@ -131,8 +132,12 @@ test("a coat held with its size not known is sold with the size on its label", a
     path: "test-results/size-clarified-mobile.png",
     fullPage: true,
   });
+  // The answer sells the same way the seller pressed, and says so.
   await page
-    .getByRole("button", { name: "Це товар без розміру — продати як L" })
+    .getByRole("button", {
+      name: "Це товар без розміру — продати як L · Готівка",
+      exact: true,
+    })
     .click();
 
   await expect(
@@ -147,6 +152,7 @@ test("a coat held with its size not known is sold with the size on its label", a
   expect(sent[1]?.found_in_store).toEqual([]);
   // One sale, one command, answered twice.
   expect(sent[1]?.command_id).toBe(sent[0]?.command_id);
+  expect(sent.map((body) => body.payment_method)).toEqual(["CASH", "CASH"]);
 
   // The till read the shelf again after the sale: one coat fewer without a size.
   await page.getByRole("button", { name: "Новий продаж" }).click();
@@ -166,7 +172,7 @@ test("a sized line short of stock is answered from the coats without a size", as
   if (!m) throw new Error("The seed delivers one M after the list");
   await pick(page, m);
   await addToBasket(page, m.available_quantity + 1);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByText(
       `у кошику ${String(m.available_quantity + 1)}, в обліку доступно ${String(m.available_quantity)}`,
@@ -217,7 +223,7 @@ test("when the till cannot see the coats without a size, the server's refusal of
   if (!m) throw new Error("stubbed");
   await pick(page, m);
   await addToBasket(page, m.available_quantity + 1);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await page.getByRole("button", { name: /Товар на місці/ }).click();
 
   // Refused as UNKNOWN_SIZE_STOCK: the same shortfall stands, with the answer
@@ -283,7 +289,7 @@ test("a line sold as size not known is never offered «товар на місц�
   await expect(
     page.getByText("Лоран шоколад · розмір невідомий", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Товар на місці/ }),
@@ -365,7 +371,7 @@ test("a clarification refused for its own reason is explained and withdrawn", as
   if (!m) throw new Error("stubbed");
   await pick(page, m);
   await addToBasket(page, 1);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await page
     .getByRole("button", { name: "Це товар без розміру — продати як M" })
     .click();
@@ -452,4 +458,9 @@ test("a sale written down before clarifications existed is resent exactly as sto
   expect(resent).toHaveLength(1);
   expect(resent[0]?.key).toBe(stored.key);
   expect(JSON.parse(resent[0]?.body ?? "{}")).toEqual(stored.body);
+  // Saved before the till asked how the customer pays, it is resent without
+  // a way (ADR-0012 §B13): the server replays it or refuses it as unrecorded.
+  expect(JSON.parse(resent[0]?.body ?? "{}")).not.toHaveProperty(
+    "payment_method",
+  );
 });

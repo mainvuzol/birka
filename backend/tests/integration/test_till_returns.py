@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.inventory.service import find_divergences
 from app.modules.refunds.models import RefundItem
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import StockLocation, StoreLocationAccess
 from tests.conftest import requires_database
 from tests.integration.test_shared_warehouse import (
@@ -101,7 +102,13 @@ def part(sale: dict, quantity: int, condition: str | None) -> dict:
 
 
 def body(*lines: dict, command_id: str | None = None) -> dict:
-    return {"command_id": command_id or str(uuid.uuid4()), "lines": list(lines)}
+    # The money goes back the way the sale was paid (owner decisions,
+    # 2026-10-04): every sale here is paid in cash.
+    return {
+        "command_id": command_id or str(uuid.uuid4()),
+        "lines": list(lines),
+        "payment_method": "CASH",
+    }
 
 
 async def test_intact_goes_back_where_it_was_sold_and_damaged_to_the_stores_bin(maker):
@@ -560,4 +567,5 @@ async def test_the_command_itself_refuses_goods_back_unjudged(maker):
                     sale_id=uuid.UUID(sale["id"]),
                     command_id=uuid.uuid4(),
                     lines=[line],
+                    payment_method=PaymentMethod.CASH,
                 )

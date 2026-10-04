@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.sales.models import Sale, SaleItem
 
 MAX_QUERY = 100
@@ -76,4 +78,17 @@ async def list_sales(
     return SalePage(sales=sales, items=items, has_more=len(found) > limit)
 
 
-__all__ = ["SalePage", "list_sales"]
+def way_shown_to(scope: RequestScope, *, store_id: uuid.UUID, seller_user_id: uuid.UUID) -> bool:
+    """Whether this person may see how one sale was paid, outside the answer
+    to the command that sold it (ADR-0012, G32).
+
+    The seller counts the drawer without seeing what it should hold (owner
+    decisions, 2026-10-04), and every holder of `sale:view` pages through
+    the store's sales with their totals. So the way is never in that list,
+    and a sale read on its own shows it only to whoever sold it — their own
+    receipt — and to whoever sees the store's money split by way anyway: the
+    owner and managers, with `report:view_financial` there."""
+    return seller_user_id == scope.user_id or scope.can(Permission.REPORT_VIEW_FINANCIAL, store_id)
+
+
+__all__ = ["SalePage", "list_sales", "way_shown_to"]

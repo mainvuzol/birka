@@ -5,6 +5,15 @@ import { ApiError, api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
+import {
+  isTillMethod,
+  methodHow,
+  methodLabels,
+  notStated,
+  refundHow,
+  tillMethods,
+} from "@/shared/payment";
+import type { TillMethod } from "@/shared/payment";
 import { submitCreditCommand, useCreditCommand } from "./commands";
 import { statusLabels } from "./types";
 import type { Credit, CreditEntry, CustomerPage, StoreDebts } from "./types";
@@ -27,6 +36,10 @@ const minSearch = 2;
  * finds its debts by a search and takes the payments; the debt stays that
  * store's, and the owner of the network may still write it off (owner
  * decisions, 2026-10-01, "store states").
+ *
+ * Each payment is paid one way, given by the button that takes it: the
+ * till's «Готівка», «Картка» and «Переказ» (owner decision, 2026-10-04;
+ * ADR-0012 §B12, G23).
  */
 export function Credits({
   store,
@@ -285,6 +298,29 @@ const entryLabels: Record<CreditEntry["kind"], string> = {
   WRITE_OFF: "Списано",
 };
 
+/**
+ * What a history line says of how money moved (ADR-0012 §B12): «· готівка»
+ * after a payment, «(повернено 1000,00 грн на картку)» after a return that
+ * handed money back. A payment recorded before the way was asked reads «не
+ * вказано», and is never guessed (owner decision, 2026-10-04).
+ */
+function entryWay(entry: CreditEntry): string {
+  const corrected = entry.corrected ? " (виправлено)" : "";
+  if (entry.kind === "PAYMENT")
+    return ` · ${
+      entry.payment_method
+        ? methodLabels[entry.payment_method].toLowerCase()
+        : notStated
+    }${corrected}`;
+  if (entry.kind === "RETURN" && (kopecks(entry.cash_back) ?? 0n) > 0n)
+    return ` (повернено ${money(entry.cash_back)}${
+      isTillMethod(entry.payment_method)
+        ? ` ${refundHow[entry.payment_method]}`
+        : ""
+    }${entry.corrected ? ", виправлено" : ""})`;
+  return "";
+}
+
 function Debt({
   store,
   token,
@@ -325,7 +361,12 @@ function Debt({
 
   async function send(
     body:
-      | { kind: "payment"; amount: string; elsewhere?: boolean }
+      | {
+          kind: "payment";
+          amount: string;
+          payment_method: TillMethod;
+          elsewhere?: boolean;
+        }
       | { kind: "write-off"; reason: string },
   ): Promise<void> {
     setProblem(null);
@@ -350,8 +391,8 @@ function Debt({
         body.kind === "write-off"
           ? `Борг списано: ${money(outcome.result.written_off)}.`
           : outcome.result.status === "SETTLED"
-            ? `Внесок ${money(body.amount)} прийнято. Борг сплачено повністю.`
-            : `Внесок ${money(body.amount)} прийнято. Залишок боргу ${money(outcome.result.owed)}.`,
+            ? `Внесок ${money(body.amount)} прийнято ${methodHow[body.payment_method]}. Борг сплачено повністю.`
+            : `Внесок ${money(body.amount)} прийнято ${methodHow[body.payment_method]}. Залишок боргу ${money(outcome.result.owed)}.`,
       );
       changed(outcome.result);
     } else if (outcome.kind === "refused") {
@@ -373,7 +414,7 @@ function Debt({
     }
   }
 
-  function pay(): void {
+  function pay(way: TillMethod): void {
     const cents = kopecks(amount);
     if (cents === null || cents <= 0n) {
       setProblem("Вкажіть суму внеску з точністю до копійок.");
@@ -388,6 +429,7 @@ function Debt({
     void send({
       kind: "payment",
       amount: decimal(cents),
+      payment_method: way,
       ...(elsewhere ? { elsewhere: true } : {}),
     });
   }
@@ -427,7 +469,7 @@ function Debt({
             <dd>
               {money(credit.returned)}
               {(kopecks(credit.cash_back) ?? 0n) > 0n &&
-                `, з них готівкою ${money(credit.cash_back)}`}
+                `, з них грошима ${money(credit.cash_back)}`}
             </dd>
           </>
         )}
@@ -462,9 +504,17 @@ function Debt({
             />
           </label>
           <div className="actions">
-            <button type="button" onClick={pay}>
-              Прийняти внесок
-            </button>
+            {tillMethods.map((way) => (
+              <button
+                key={way}
+                type="button"
+                onClick={() => {
+                  pay(way);
+                }}
+              >
+                {methodLabels[way]}
+              </button>
+            ))}
             <button
               type="button"
               className="quiet"
@@ -537,10 +587,7 @@ function Debt({
         {credit.entries.map((entry, index) => (
           <li key={`${entry.at}:${String(index)}`}>
             {when(entry.at)} · {entryLabels[entry.kind]} {money(entry.amount)}
-            {entry.kind === "RETURN" &&
-              (kopecks(entry.cash_back) ?? 0n) > 0n &&
-              ` (готівкою повернено ${money(entry.cash_back)})`}{" "}
-            · {entry.by}
+            {entryWay(entry)} · {entry.by}
             {entry.taken_at && ` · прийняв магазин «${entry.taken_at}»`}
             {entry.note && ` · ${entry.note}`}
           </li>

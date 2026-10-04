@@ -11,3 +11,12 @@
 - **InventorySnapshot**: point-in-time legacy availability evidence.
 - **StockMovement**: auditable change in stock quantity.
 - **NEEDS_REVIEW / AMBIGUOUS**: insufficient evidence for safe automatic catalog interpretation.
+- **«Каса»**: a store's cash drawer, one per store, and the app's section where it is closed, cash is taken out or put in, and ways of paying are fixed (ADR-0012).
+- **Спосіб оплати (way of paying)**: how one payment was made, never split: «Готівка» (cash), «Картка» (card, on the terminal) or «Переказ» (a transfer to the shop's card or account); for an order also «Переказ наперед» or «Накладений платіж». Only cash is the drawer's. «Не вказано» is a payment recorded before the way was asked.
+- **Накладений платіж (cash on delivery)**: an order paid to the carrier on delivery. It never goes through the till; checking that the carrier paid it out is later work.
+- **Закриття каси (the day's close)**: the seller on duty counts the drawer's cash without seeing what it should hold, then sees the difference. Once per business day; the count is the next day's starting cash. The first close of a store, and the first after the archive, is an opening count with no difference.
+- **Робочий день каси (business day)**: 06:00 to 06:00 in the store's time zone. A close before 06:00 belongs to the evening before.
+- **Період каси (drawer period)**: everything recorded at a drawer after one close and up to the next, stamped by the database in commit order, never by time.
+- **Видача з каси (cash taken out)**: «Власнику», «Витрати» or «Кур’єру постачальника», recorded with who and why. A seller records only the last two.
+- **Внесено в касу (cash put in)**: change brought into the drawer, recorded by the owner or a manager, so the close does not show it as a surplus.
+- **Виправлення способу оплати (a fix of the way of paying)**: a new record, never a rewrite. A fix of the open period changes what the drawer should hold; a fix of a closed day explains that close's difference instead.

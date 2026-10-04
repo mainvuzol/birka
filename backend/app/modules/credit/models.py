@@ -42,10 +42,12 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -156,6 +158,16 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
     taken_at_store_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), nullable=True
     )
+    # A payment only: how it was paid (owner decisions, 2026-10-04). The first
+    # payment holds the way the sale was sold with. NULL for a payment taken
+    # before revision 0035, which reads «не вказано», and for every other
+    # entry: a return's money goes back on its refund, and a write-off moves
+    # none.
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # A payment only: the period of the drawer of the store that took it,
+    # stamped by the database at insert (ADR-0012, B3). Never written by the
+    # application.
+    drawer_period: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         CheckConstraint("kind IN ('PAYMENT', 'RETURN', 'WRITE_OFF')", name="kind_known"),
@@ -172,6 +184,20 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint(
             "taken_at_store_id IS NULL OR kind = 'PAYMENT'", name="only_a_payment_is_taken"
         ),
+        CheckConstraint(
+            "payment_method IS NULL OR payment_method IN "
+            "('CASH', 'CARD', 'TRANSFER', 'PREPAID_TRANSFER', 'CARRIER_COD')",
+            name="payment_method_known",
+        ),
+        CheckConstraint(
+            "payment_method IS NULL OR kind = 'PAYMENT'", name="only_a_payment_has_a_method"
+        ),
+        CheckConstraint(
+            "drawer_period IS NULL OR kind = 'PAYMENT'", name="only_a_payment_has_a_period"
+        ),
+        CheckConstraint(
+            "drawer_period IS NULL OR drawer_period > 0", name="drawer_period_positive"
+        ),
         ForeignKeyConstraint(
             ["organization_id", "taken_at_store_id"],
             ["store.organization_id", "store.id"],
@@ -181,6 +207,11 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
         UniqueConstraint("organization_id", "command_id", name="uq_credit_entry_org_command"),
         UniqueConstraint("refund_id", name="uq_credit_entry_refund_id"),
         Index("ix_credit_entry_credit_id_created_at", "credit_id", "created_at"),
+        Index(
+            "ix_credit_entry_drawer_period",
+            "drawer_period",
+            postgresql_where=text("kind = 'PAYMENT'"),
+        ),
     )
 
 

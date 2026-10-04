@@ -461,6 +461,7 @@ async def test_an_old_sale_of_the_duplicate_comes_back_as_the_model_that_stays(m
                     {"sale_item_id": line, "quantity": 1, "restock": True, "condition": "INTACT"},
                     {"sale_item_id": line, "quantity": 1, "restock": True, "condition": "DAMAGED"},
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -707,6 +708,7 @@ async def test_the_sales_report_counts_the_duplicate_with_the_model_that_stays(m
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )

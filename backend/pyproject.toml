@@ -161,6 +161,7 @@ forbidden_modules = [
     "app.modules.transfers",
     "app.modules.orders",
     "app.modules.snapshots",
+    "app.modules.cash",
 ]
 
 [[tool.importlinter.contracts]]
@@ -176,6 +177,7 @@ forbidden_modules = [
     "app.modules.orders",
     "app.modules.snapshots",
     "app.modules.audit",
+    "app.modules.cash",
 ]
 
 # ADR-0001 permits `refunds -> sales, inventory, authz, tenancy, core` (+ audit).
@@ -335,6 +337,7 @@ source_modules = [
     "app.core",
     "app.modules.audit",
     "app.modules.authz",
+    "app.modules.cash",
     "app.modules.damaged",
     "app.modules.catalog",
     "app.modules.identity",
@@ -367,6 +370,7 @@ forbidden_modules = [
     "app.modules.snapshots",
     "app.modules.audit",
     "app.modules.tenancy",
+    "app.modules.cash",
 ]
 allow_indirect_imports = true
 
@@ -377,6 +381,7 @@ source_modules = [
     "app.core",
     "app.modules.audit",
     "app.modules.authz",
+    "app.modules.cash",
     "app.modules.damaged",
     "app.modules.catalog",
     "app.modules.identity",
@@ -400,6 +405,7 @@ source_modules = ["app.modules.telegram"]
 forbidden_modules = [
     "app.modules.audit",
     "app.modules.authz",
+    "app.modules.cash",
     "app.modules.catalog",
     "app.modules.identity",
     "app.modules.inventory",
@@ -440,6 +446,7 @@ source_modules = [
     "app.modules.audit",
     "app.modules.authz",
     "app.modules.backups",
+    "app.modules.cash",
     "app.modules.catalog",
     "app.modules.identity",
     "app.modules.inventory",
@@ -485,6 +492,7 @@ source_modules = [
     "app.modules.audit",
     "app.modules.authz",
     "app.modules.backups",
+    "app.modules.cash",
     "app.modules.catalog",
     "app.modules.credit",
     "app.modules.damaged",
@@ -558,6 +566,7 @@ source_modules = [
     "app.modules.audit",
     "app.modules.authz",
     "app.modules.backups",
+    "app.modules.cash",
     "app.modules.catalog",
     "app.modules.credit",
     "app.modules.identity",
@@ -619,6 +628,9 @@ forbidden_modules = [
     "app.modules.sales.service",
     "app.modules.refunds.service",
     "app.modules.credit.service",
+    "app.modules.cash.service",
+    "app.modules.cash.read",
+    "app.modules.cash.messages",
 ]
 # Only DIRECT imports: the models it reads sit on the rest underneath.
 allow_indirect_imports = true
@@ -631,6 +643,7 @@ source_modules = [
     "app.modules.audit",
     "app.modules.authz",
     "app.modules.backups",
+    "app.modules.cash",
     "app.modules.catalog",
     "app.modules.credit",
     "app.modules.damaged",
@@ -682,6 +695,7 @@ source_modules = [
     "app.modules.audit",
     "app.modules.authz",
     "app.modules.backups",
+    "app.modules.cash",
     "app.modules.catalog",
     "app.modules.credit",
     "app.modules.damaged",
@@ -699,3 +713,63 @@ source_modules = [
     "app.modules.transfers",
 ]
 forbidden_modules = ["app.modules.catalog_correction"]
+
+# 2026-10-04 (ADR-0001 amendment, ADR-0012): module `cash` counts the drawer —
+# the day's close, cash taken out and put in, and corrections of a way of
+# paying. `cash → sales (models, payment), credit (models), refunds (models),
+# orders (models), identity, authz, tenancy, audit, telegram, core`: it reads
+# the money rows and moves no goods. It never records a sale, a payment or a
+# refund either: those commands are theirs, and it reaches only their models.
+[[tool.importlinter.contracts]]
+name = "the drawer counts money and moves no goods"
+type = "forbidden"
+source_modules = ["app.modules.cash"]
+forbidden_modules = [
+    "app.modules.inventory",
+    "app.modules.transfers",
+    "app.modules.snapshots",
+    "app.modules.damaged",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.catalog_correction",
+    "app.modules.reports",
+    "app.modules.sales.service",
+    "app.modules.sales.order_collection",
+    "app.modules.sales.shelf",
+    "app.modules.credit.service",
+    "app.modules.refunds.service",
+    "app.modules.orders.service",
+    "app.modules.inventory.repository",
+]
+# Only DIRECT imports: the models it reads sit on the rest underneath.
+allow_indirect_imports = true
+
+# A money row is placed in its drawer's period by the database, and the API
+# merges the current way into the answers: no money module needs the drawer.
+[[tool.importlinter.contracts]]
+name = "only the API, the report and the watcher depend on the drawer"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.catalog",
+    "app.modules.catalog_correction",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.cash"]

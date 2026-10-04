@@ -22,6 +22,7 @@ from app.modules.inventory.models import Inventory, MovementType, StockMovement
 from app.modules.orders.models import Carrier, CustomerOrder
 from app.modules.orders.service import OrderLineInput, create_order, read_order, transition_order
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import StoreLocationAccess
 from tests.conftest import requires_database
 from tests.integration.test_sale_command import give_stock, make_shop
@@ -71,6 +72,9 @@ async def act(maker, shop, order, action, *, command_id=None, reason=None):
             command_id=command_id or uuid.uuid4(),
             action=action,
             reason=reason,
+            # «Клієнт забрав» says how the order was paid (owner decisions,
+            # 2026-10-04).
+            payment_method=PaymentMethod.CASH if action == "collect" else None,
         )
         await session.commit()
         return body

@@ -25,6 +25,7 @@ interface ReturnBody {
     condition: string;
   }[];
   reason: string | null;
+  payment_method?: string;
 }
 
 function initData(): string {
@@ -49,11 +50,13 @@ function launch(): string {
 
 /**
  * A coat of a model of this test's own — so the list's search finds exactly
- * its sale — received into the returns warehouse and sold, through the API.
+ * its sale — received into the returns warehouse and sold, through the API,
+ * paid `way`.
  */
 async function sold(
   page: Page,
   quantity: number,
+  way: "CASH" | "CARD" | "TRANSFER" = "CASH",
 ): Promise<{ model: string; variant: string; size: string; token: string }> {
   const auth = await page.request.post("/api/v1/auth/telegram", {
     data: { init_data: initData() },
@@ -115,6 +118,7 @@ async function sold(
           unit_price: "3000.00",
         },
       ],
+      payment_method: way,
     },
   });
   expect(sale.status()).toBe(201);
@@ -161,11 +165,13 @@ function returns(page: Page): { bodies: ReturnBody[]; keys: string[] } {
 test("one coat back intact goes where it was sold, one damaged to the store's «Брак»", async ({
   page,
 }) => {
-  const { model, variant, token } = await sold(page, 2);
+  const { model, variant, token } = await sold(page, 2, "CARD");
   const before = await held(page, token, fixture.returns_location_id, variant);
   const sent = returns(page);
   await find(page, model);
   await expect(page.getByRole("article")).toContainText(model);
+  // The list a seller pages through never says how a sale was paid (G32).
+  await expect(page.getByRole("article")).not.toContainText(/картк/i);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
 
   await page.getByLabel("Цілих").fill("1");
@@ -173,14 +179,32 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
   await page
     .getByLabel("Причина повернення (необов’язково)")
     .fill("не підійшов");
+  // The money goes back the way the sale was paid unless the seller changes
+  // it (owner decision, 2026-10-04): a card sale, returned in cash.
+  const way = page.getByRole("group", {
+    name: "Як повертаємо гроші",
+    exact: true,
+  });
+  await expect(way.getByRole("radio", { name: "На картку" })).toBeChecked();
+  await expect(
+    page.getByRole("button", {
+      name: "Повернути покупцю 6000,00 грн на картку",
+    }),
+  ).toBeVisible();
+  await way.getByRole("radio", { name: "Готівкою" }).check();
   await page
-    .getByRole("button", { name: "Повернути покупцю 6000,00 грн" })
+    .getByRole("button", {
+      name: "Повернути покупцю 6000,00 грн готівкою",
+      exact: true,
+    })
     .click();
 
   await expect(
     page.getByRole("heading", { name: "Повернення оформлено" }),
   ).toBeVisible();
-  await expect(page.getByText("Поверніть покупцю 6000,00 грн.")).toBeVisible();
+  await expect(
+    page.getByText("Поверніть покупцю 6000,00 грн готівкою."),
+  ).toBeVisible();
   await expect(
     page.getByText("Пошкоджений товар — на складі «Брак» магазину."),
   ).toBeVisible();
@@ -190,10 +214,12 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
     "INTACT",
   ]);
   expect(sent.bodies[0]?.reason).toBe("не підійшов");
+  expect(sent.bodies[0]?.payment_method).toBe("CASH");
   // The store and the sale are the journal's own, never sent.
   expect(Object.keys(sent.bodies[0] ?? {}).sort()).toEqual([
     "command_id",
     "lines",
+    "payment_method",
     "reason",
   ]);
 
@@ -239,7 +265,7 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Цілих").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн" })
+    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
     .click();
 
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
@@ -256,6 +282,74 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeEnabled();
+  // The settled return still says how to give the money back.
+  await expect(
+    page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
+  ).toBeVisible();
+});
+
+test("money back on a card goes through the terminal, and a transfer is sent", async ({
+  page,
+}) => {
+  const card = await sold(page, 1, "CARD");
+  const sent = returns(page);
+  await find(page, card.model);
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await page.getByLabel("Цілих").fill("1");
+  await expect(
+    page.getByRole("radio", { name: "На картку", exact: true }),
+  ).toBeChecked();
+  await page
+    .getByRole("button", {
+      name: "Повернути покупцю 3000,00 грн на картку",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Поверніть 3000,00 грн на картку покупця через термінал."),
+  ).toBeVisible();
+  expect(sent.bodies[0]?.payment_method).toBe("CARD");
+
+  // A sale whose way suggests nothing — sold before the way was asked, or in
+  // parts paid several ways (G5) — waits for the seller to choose.
+  const transfer = await sold(page, 1, "TRANSFER");
+  await page.route("**/api/v1/cash/sales/*/method?**", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: {
+        ...((await response.json()) as object),
+        refund_method: null,
+      },
+    });
+  });
+  // A launch link that differs only in its hash would not reload the app.
+  await page.goto("about:blank");
+  await find(page, transfer.model);
+  const asked = page.waitForResponse(
+    (r) => r.url().includes("/api/v1/cash/sales/") && r.status() === 200,
+  );
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await asked;
+  await page.getByLabel("Цілих").fill("1");
+  for (const option of ["Готівкою", "На картку", "Переказом"])
+    await expect(
+      page.getByRole("radio", { name: option, exact: true }),
+    ).not.toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "Оберіть, як повертаєте гроші" }),
+  ).toBeDisabled();
+  await page.getByRole("radio", { name: "Переказом", exact: true }).check();
+  await page
+    .getByRole("button", {
+      name: "Повернути покупцю 3000,00 грн переказом",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Надішліть покупцю 3000,00 грн переказом."),
+  ).toBeVisible();
+  expect(sent.bodies[1]?.payment_method).toBe("TRANSFER");
 });
 
 test("a store without a «Брак» is told so, and nothing is returned", async ({
@@ -276,7 +370,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Пошкоджених").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн" })
+    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
     .click();
   await expect(page.getByRole("alert")).toContainText(
     "ще немає складу «Брак» для пошкодженого товару",

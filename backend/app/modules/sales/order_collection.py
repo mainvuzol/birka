@@ -3,6 +3,12 @@
 The orders service must verify shipment and serialize the transition before
 calling this function. Shipment already wrote the stock ledger; this boundary
 never writes inventory and does not imply that payment has been received.
+
+The sale holds how the order was paid, said at «Клієнт забрав» (owner
+decisions, 2026-10-04): in advance by transfer, cash on delivery through the
+carrier, or at the counter now by cash, card or transfer. Only the counter's
+cash is the drawer's. The orders service requires it of a new collection
+after its own replay lookup; this boundary only checks it is one of the five.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.payment import ORDER_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.sales.service import _amount, _existing_command
 
 
@@ -44,8 +51,12 @@ async def record_collected_sale(
     order_id: uuid.UUID,
     command_id: uuid.UUID,
     lines: list[CollectedSaleLine],
+    payment_method: PaymentMethod | None,
 ) -> Sale:
-    """Freeze the agreed order prices as a sale in the caller's transaction."""
+    """Freeze the agreed order prices as a sale in the caller's transaction.
+
+    `payment_method` is how the order was paid; None only for a collection the
+    orders service's unit tests make without one."""
     scope.require(Permission.SALE_CREATE, store_id)
     if not lines:
         raise ValidationFailedError("A collected order must contain at least one line")
@@ -75,7 +86,10 @@ async def record_collected_sale(
                 }
                 for line in lines
             ],
-        },
+        }
+        # Only when stated, so a sale collected before the way was asked
+        # keeps its print (ADR-0012, B13).
+        | print_of(payment_method),
         actor_user_id=scope.user_id,
         store_id=store_id,
     )
@@ -87,6 +101,7 @@ async def record_collected_sale(
     )
     if existing is not None:
         return existing.sale
+    method = stated_way(payment_method, takes=ORDER_METHODS, required=False)
     subtotal = _amount(sum((line.unit_price * line.quantity for line in lines), Decimal(0)))
     discount = _amount(sum((line.discount_amount * line.quantity for line in lines), Decimal(0)))
     sale = Sale(
@@ -99,6 +114,7 @@ async def record_collected_sale(
         subtotal=subtotal,
         discount_total=discount,
         total=_amount(subtotal - discount),
+        payment_method=method.value if method is not None else None,
     )
     session.add(sale)
     await session.flush()

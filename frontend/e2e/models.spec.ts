@@ -416,7 +416,7 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
   await page.getByLabel("Кількість").fill("1");
   await page.getByLabel("Ціна за одиницю, грн").fill("150.00");
   await page.getByRole("button", { name: "Додати в кошик" }).click();
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Незавершений продаж")).toBeVisible();
   // Meanwhile a manager merges the duplicate.
   const merged = await page.request.post(

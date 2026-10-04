@@ -284,6 +284,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
           unit_price: "2000.00",
         },
       ],
+      payment_method: "CASH",
     },
   });
   const sale = (await sold.json()) as { id: string; items: { id: string }[] };
@@ -299,6 +300,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
           condition: "DAMAGED",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(back.status()).toBe(201);

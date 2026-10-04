@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
  * took back, and the money through its till, for today or any days. The
  * owner and managers read it, each for the stores they hold it in, and the
  * stores together when there are several. A sale and its returns are the
- * store's that sold; money is the store's whose till it went through.
+ * store's that sold; money is the store's whose till it went through. Since
+ * 2026-10-04 the money is split by the way it was paid — «Готівка», «Картка»,
+ * «Переказ» — and an order paid off the till stays outside «Разом»
+ * (ADR-0012 §B11, §G24).
  *
  * In the stores' own network: the owner reads every store; Ганна holds every
  * right at «Центр», Петро at «Ринок»; Марко manages «Центр», Ліда sells there.
@@ -87,13 +90,16 @@ interface Sale {
   items: { id: string }[];
 }
 
+type Method = "CASH" | "CARD" | "TRANSFER";
+
 /** `quantity` coats of a new model at 1500, sold by `store` from the shared
- * warehouse; paid in part when `paidNow` is given. */
+ * warehouse, paid `method`; paid in part when `paidNow` is given. */
 async function sold(
   page: Page,
   headers: Record<string, string>,
   store: string,
   quantity: number,
+  method: Method,
   paidNow?: string,
 ): Promise<{ model: string; sale: Sale }> {
   const model = `Звіт ${randomUUID().slice(0, 8)}`;
@@ -141,6 +147,7 @@ async function sold(
           unit_price: "1500.00",
         },
       ],
+      payment_method: method,
       ...(paidNow
         ? {
             credit: {
@@ -156,17 +163,21 @@ async function sold(
   return { model, sale: (await sale.json()) as Sale };
 }
 
+/** One coat of `sale` back at `at`, its money handed back `method`: a return
+ * that only lowers a debt is stored with no way (ADR-0012 §G35). */
 async function takenBack(
   page: Page,
   headers: Record<string, string>,
   sale: Sale,
   at: string,
+  method: Method,
 ): Promise<void> {
   const refund = await page.request.post(`/api/v1/sales/${sale.id}/refunds`, {
     headers: { ...headers, "Idempotency-Key": randomUUID() },
     data: {
       command_id: randomUUID(),
       store_id: at,
+      payment_method: method,
       lines: [
         {
           sale_item_id: sale.items[0]?.id ?? "",
@@ -180,6 +191,19 @@ async function takenBack(
   expect(refund.status()).toBe(201);
 }
 
+type Way = "CASH" | "CARD" | "TRANSFER" | "NOT_STATED";
+interface WayFigures {
+  method: Way;
+  came_in: string;
+  went_out: string;
+  corrected: string;
+  net: string;
+}
+interface OffTill {
+  came_in: string;
+  corrected: string;
+  net: string;
+}
 interface Figures {
   sales: number;
   units: number;
@@ -191,8 +215,20 @@ interface Figures {
   paid_in_full: string;
   debt_payments: string;
   paid_back: string;
-  cash: string;
+  corrected_into_till: string;
+  money: string;
+  ways: WayFigures[];
+  off_till: { prepaid_transfer: OffTill; carrier_cod: OffTill };
 }
+type Count = "sales" | "units" | "returns" | "returned_units";
+type Sum =
+  | "sold"
+  | "returned"
+  | "net"
+  | "paid_in_full"
+  | "debt_payments"
+  | "paid_back"
+  | "money";
 interface Report {
   stores: (Figures & { store_id: string })[];
 }
@@ -225,17 +261,58 @@ function uah(amount: bigint): string {
   return `${sign}${(size / 100n).toString()},${(size % 100n).toString().padStart(2, "0")} грн`;
 }
 
-/** What a store's block reads once `added` is added to `before`. */
-function expected(
-  before: Figures,
-  added: Partial<Record<keyof Figures, number>>,
-): { terms: string[]; sums: string[] } {
-  const count = (name: keyof Figures): number =>
-    (before[name] as number) + (added[name] ?? 0);
-  const sum = (name: keyof Figures): bigint =>
-    kopecks(before[name] as string) + BigInt((added[name] ?? 0) * 100);
+const wayLabels: Record<Way, string> = {
+  CASH: "Готівка",
+  CARD: "Картка",
+  TRANSFER: "Переказ",
+  NOT_STATED: "Не вказано",
+};
+
+// What these journeys add: counts and sums, and each till way's money in and
+// out.
+type Added = Partial<Record<Count | Sum, number>> & {
+  ways?: Partial<Record<Way, { came_in?: number; went_out?: number }>>;
+};
+
+interface Shown {
+  terms: string[];
+  sums: string[];
+  ways: string[];
+}
+
+/** What a store's block reads once `added` is added to `before`: every sum
+ * in order — sales, returns, the till's money with «Разом», then each way —
+ * and the names of the ways shown. «Не вказано», a correction across the
+ * till and the order ways paid off it show only when they hold something,
+ * as `before` and `added` together say. */
+function expected(before: Figures, added: Added): Shown {
+  const count = (name: Count): number => before[name] + (added[name] ?? 0);
+  const sum = (name: Sum): bigint =>
+    kopecks(before[name]) + BigInt((added[name] ?? 0) * 100);
   const out = (amount: bigint): string =>
     amount === 0n ? uah(0n) : uah(-amount);
+  const into = kopecks(before.corrected_into_till);
+  const ways = before.ways.map((way) => {
+    const more = added.ways?.[way.method] ?? {};
+    const came = kopecks(way.came_in) + BigInt((more.came_in ?? 0) * 100);
+    const went = kopecks(way.went_out) + BigInt((more.went_out ?? 0) * 100);
+    const corrected = kopecks(way.corrected);
+    return {
+      label: wayLabels[way.method],
+      net: came - went + corrected,
+      shown:
+        way.method !== "NOT_STATED" ||
+        came !== 0n ||
+        went !== 0n ||
+        corrected !== 0n,
+    };
+  });
+  const offTill = [
+    { label: "Переказ наперед", ...before.off_till.prepaid_transfer },
+    { label: "Накладений платіж", ...before.off_till.carrier_cod },
+  ].filter(
+    (way) => kopecks(way.came_in) !== 0n || kopecks(way.corrected) !== 0n,
+  );
   return {
     terms: [
       `Продажі: ${String(count("sales"))} (${String(count("units"))} од.)`,
@@ -248,20 +325,30 @@ function expected(
       uah(sum("paid_in_full")),
       uah(sum("debt_payments")),
       out(sum("paid_back")),
-      uah(sum("cash")),
+      ...(into === 0n ? [] : [into > 0n ? `+${uah(into)}` : uah(into)]),
+      uah(sum("money")),
+      ...ways.filter((way) => way.shown).map((way) => uah(way.net)),
+      ...offTill.map((way) => uah(kopecks(way.net))),
     ],
+    ways: ways.filter((way) => way.shown).map((way) => way.label),
   };
 }
 
-async function readsAs(
-  page: Page,
-  title: string,
-  shown: { terms: string[]; sums: string[] },
-): Promise<void> {
+async function readsAs(page: Page, title: string, shown: Shown): Promise<void> {
   const block = page.getByRole("group", { name: title, exact: true });
   await expect(block.locator("dt").nth(0)).toHaveText(shown.terms[0] ?? "");
   await expect(block.locator("dt").nth(1)).toHaveText(shown.terms[1] ?? "");
   await expect(block.locator("dd")).toHaveText(shown.sums);
+  // «Гроші», not «Гроші в касі»: card and transfer are in it (§G24).
+  await expect(
+    block.getByRole("heading", { name: "Гроші", exact: true }),
+  ).toBeVisible();
+  await expect(
+    block.locator("dt").filter({ hasText: /^Разом$/ }),
+  ).toBeVisible();
+  await expect(
+    block.locator('dl[aria-label="За способом оплати"] dt'),
+  ).toHaveText(shown.ways);
 }
 
 test("the owner reads each store, the stores together, and the money through each till", async ({
@@ -270,38 +357,45 @@ test("the owner reads each store, the stores together, and the money through eac
   const before = await today(page);
   const fromHanna = await as(page, hanna, "Ганна");
   const fromPetro = await as(page, petro, "Петро");
-  // «Центр» sells two coats paid in full and takes one back for its money.
-  const atCentre = await sold(page, fromHanna, centre, 2);
-  await takenBack(page, fromHanna, atCentre.sale, centre);
-  // «Ринок» sells two in parts, 500 paid; «Центр» takes one back. The 1500
-  // the other is worth is more than was paid, so the return only lowers the
-  // debt and hands nothing back.
-  const atMarket = await sold(page, fromPetro, market, 2, "500.00");
-  await takenBack(page, fromHanna, atMarket.sale, centre);
+  // «Центр» sells two coats paid in full by card and takes one back, its
+  // money going back to the card, and one coat by transfer.
+  const atCentre = await sold(page, fromHanna, centre, 2, "CARD");
+  await takenBack(page, fromHanna, atCentre.sale, centre, "CARD");
+  await sold(page, fromHanna, centre, 1, "TRANSFER");
+  // «Ринок» sells two in parts, 500 paid in cash; «Центр» takes one back.
+  // The 1500 the other is worth is more than was paid, so the return only
+  // lowers the debt and hands nothing back.
+  const atMarket = await sold(page, fromPetro, market, 2, "CASH", "500.00");
+  await takenBack(page, fromHanna, atMarket.sale, centre, "CASH");
 
   await reportAs(page, owner);
 
   await expect(
     page.getByRole("heading", { name: /^за \d\d\.\d\d\.\d{4}$/ }),
   ).toBeVisible();
+  // A card returned to the card leaves the cash as it was.
   await readsAs(
     page,
     "Центр",
     expected(of(before, centre), {
-      sales: 1,
-      units: 2,
-      sold: 3000,
+      sales: 2,
+      units: 3,
+      sold: 4500,
       returns: 1,
       returned_units: 1,
       returned: 1500,
-      net: 1500,
-      paid_in_full: 3000,
+      net: 3000,
+      paid_in_full: 4500,
       paid_back: 1500,
-      cash: 1500,
+      money: 3000,
+      ways: {
+        CARD: { came_in: 3000, went_out: 1500 },
+        TRANSFER: { came_in: 1500 },
+      },
     }),
   );
   // The coat came back at «Центр», yet the sale and its return are
-  // «Ринок»'s; «Ринок»'s till kept the 500 it took.
+  // «Ринок»'s; «Ринок»'s till kept the 500 it took, in cash.
   await readsAs(
     page,
     "Ринок",
@@ -314,7 +408,8 @@ test("the owner reads each store, the stores together, and the money through eac
       returned: 1500,
       net: 1500,
       debt_payments: 500,
-      cash: 500,
+      money: 500,
+      ways: { CASH: { came_in: 500 } },
     }),
   );
   await expect(
@@ -331,7 +426,7 @@ test("the owner reads each store, the stores together, and the money through eac
       .getByRole("listitem")
       .filter({ hasText: atMarket.model })
       .filter({ hasText: "Продаж 3000,00 грн" }),
-  ).toContainText("частинами, внесено 500,00 грн · «Ринок»");
+  ).toContainText("частинами, внесено 500,00 грн готівкою · «Ринок»");
   await page
     .getByRole("combobox", { name: "Моделі й продажі" })
     .selectOption({ label: "Центр" });
@@ -359,8 +454,14 @@ test("the owner reads each store, the stores together, and the money through eac
     entries
       .getByRole("listitem")
       .filter({ hasText: atCentre.model })
+      .filter({ hasText: "Продаж 3000,00 грн" }),
+  ).toContainText("оплачено повністю карткою");
+  await expect(
+    entries
+      .getByRole("listitem")
+      .filter({ hasText: atCentre.model })
       .filter({ hasText: "Повернення −1500,00 грн" }),
-  ).toContainText("віддано 1500,00 грн");
+  ).toContainText("віддано 1500,00 грн на картку");
 });
 
 test("a manager reads their store alone, and a seller has no report", async ({

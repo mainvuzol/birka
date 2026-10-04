@@ -104,6 +104,7 @@ async function sold(
           unit_price: "3000.00",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(sale.status()).toBe(201);
@@ -157,6 +158,7 @@ async function damaged(
           condition: "DAMAGED",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(returned.status()).toBe(201);

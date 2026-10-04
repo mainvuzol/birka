@@ -6,6 +6,13 @@ its goods have already left via ORDER_DISPATCH and are never removed twice.
 Where an order goes is stated when it is made, its waybill written when it
 is sent or later, and any of it corrected while the order is open (owner
 decisions, 2026-10-01; see `models.py`). It moves no stock.
+
+«Клієнт забрав» says how the order was paid (owner decisions, 2026-10-04):
+in advance by transfer, cash on delivery through the carrier, or at the
+counter now by cash, card or transfer. Optional in the request and required
+of a new collection after the replay lookup, so a collection a phone kept
+from before the way was asked still replays (ADR-0012, B2, B13). Paid in
+parts, the way is the part paid now's (ADR-0012, G2).
 """
 
 from __future__ import annotations
@@ -50,6 +57,7 @@ from app.modules.orders.models import (
     ShippingChangeKind,
 )
 from app.modules.sales.order_collection import CollectedSaleLine, record_collected_sale
+from app.modules.sales.payment import ORDER_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.tenancy.models import StockLocation, StoreLocationAccess
 from app.modules.tenancy.service import LocationCapability
 
@@ -360,9 +368,17 @@ async def _save(
     reason: str | None = None,
     credit: credit_service.CreditView | None = None,
     shipping_before: Shipping | None = None,
+    payment_method: PaymentMethod | None = None,
 ) -> dict[str, Any]:
     await session.flush()
-    body = _response(order, items) | _credit(credit) | await _shipping_detail(session, order)
+    body = (
+        _response(order, items)
+        | _credit(credit)
+        | await _shipping_detail(session, order)
+        # The collection's own answer says how it was paid, as the seller
+        # said it; a read takes it from the collected sale (ADR-0012, B10).
+        | print_of(payment_method)
+    )
     session.add(
         OrderCommand(
             organization_id=scope.organization_id,
@@ -650,10 +666,16 @@ async def transition_order(
     credit: credit_service.CreditTerms | None = None,
     waybill: str | None = None,
     abroad_note: str | None = None,
+    payment_method: PaymentMethod | None = None,
+    method_required: bool = True,
 ) -> dict[str, Any]:
     """`waybill`, or `abroad_note` for an order going abroad, may come with
     `dispatch`: written when the order is sent, or later (owner decision,
-    2026-10-01)."""
+    2026-10-01).
+
+    `payment_method` comes with `collect` only, and a new collection without
+    it is refused after the replay lookup (`payment.stated_way`).
+    `method_required=False` is for this service's unit tests only."""
     transitions = {
         "dispatch": ({OrderStatus.READY_TO_DISPATCH}, OrderStatus.DISPATCHED),
         "arrive": ({OrderStatus.DISPATCHED}, OrderStatus.ARRIVED),
@@ -675,6 +697,8 @@ async def transition_order(
     # Command lock precedes order row lock, consistently across all actions.
     if credit is not None and action != "collect":
         raise ValidationFailedError("Only a collected order is paid in parts")
+    if payment_method is not None and action != "collect":
+        raise ValidationFailedError("Only a collected order says how it was paid")
     details = {
         key: value for key, value in (("waybill", waybill), ("abroad_note", abroad_note)) if value
     }
@@ -692,13 +716,21 @@ async def transition_order(
         # the same command with other terms is another operation.
         | ({"credit": credit_service.fingerprint_of(credit)} if credit is not None else {})
         # The same for a waybill written when it was sent.
-        | details,
+        | details
+        # And for the way it was paid: none on a collection kept from before
+        # it was asked (ADR-0012, B13).
+        | print_of(payment_method),
         actor_user_id=scope.user_id,
         store_id=order.store_id,
     )
     replay = await _command(session, scope, command_id, request_fingerprint)
     if replay is not None:
         return replay
+    method = (
+        stated_way(payment_method, takes=ORDER_METHODS, required=method_required)
+        if action == "collect"
+        else None
+    )
     # populate_existing refreshes the row after waiting on another transition.
     await session.refresh(order, with_for_update=True)
     allowed, target = transitions[action]
@@ -779,6 +811,7 @@ async def transition_order(
                 )
                 for i in items
             ],
+            payment_method=method,
         )
         order.sale_id = sale.id
         # Collected before the debt is opened: an order holds a sale only
@@ -787,8 +820,10 @@ async def transition_order(
         if credit is not None:
             # In the collection's own transaction: the debt exists exactly
             # when the sale does.
+            # Its first payment is the part paid now, which takes any of the
+            # five ways (ADR-0012, G2).
             opened = await credit_service.open_credit(
-                session, scope=scope, sale=sale, credit=credit
+                session, scope=scope, sale=sale, credit=credit, payment_method=method
             )
     order.status = target
     return await _save(
@@ -802,6 +837,7 @@ async def transition_order(
         before,
         reason,
         credit=opened,
+        payment_method=method,
     )
 
 

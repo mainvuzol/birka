@@ -159,6 +159,41 @@ async def organization_wide_holders(
     return sorted((await session.execute(stmt)).scalars())
 
 
+async def organization_wide_holders_in(
+    session: AsyncSession, organization_id: uuid.UUID, permission: Permission
+) -> list[uuid.UUID]:
+    """Every user holding `permission` through an active organization-wide
+    membership of this one organization.
+
+    For news about one network, such as a difference in one of its drawers,
+    which the bot tells the network's owner (owner decisions, 2026-10-04):
+    a grant for one store does not count, and nor does another network's
+    owner. `organization_wide_holders` is the server-wide counterpart.
+    """
+    stmt = (
+        select(Membership.user_id)
+        .join(
+            Role,
+            and_(
+                Role.id == Membership.role_id,
+                or_(
+                    Role.organization_id.is_(None),
+                    Role.organization_id == Membership.organization_id,
+                ),
+            ),
+        )
+        .join(RolePermission, RolePermission.role_id == Role.id)
+        .where(
+            Membership.organization_id == organization_id,
+            Membership.is_active.is_(True),
+            Membership.store_id.is_(None),
+            RolePermission.permission_code == permission.value,
+        )
+        .distinct()
+    )
+    return sorted((await session.execute(stmt)).scalars())
+
+
 async def seed_default_roles(session: AsyncSession, organization_id: uuid.UUID) -> dict[str, Role]:
     """Create OWNER/MANAGER/SELLER for an organization if they do not exist.
 
@@ -193,4 +228,10 @@ async def seed_default_roles(session: AsyncSession, organization_id: uuid.UUID) 
     return created
 
 
-__all__ = ["RoleCode", "organization_wide_holders", "resolve_scope", "seed_default_roles"]
+__all__ = [
+    "RoleCode",
+    "organization_wide_holders",
+    "organization_wide_holders_in",
+    "resolve_scope",
+    "seed_default_roles",
+]

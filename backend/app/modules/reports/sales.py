@@ -12,16 +12,37 @@ The owner decided on 2026-10-02 (business-rules.md, "the sales report"):
 - a sale and its returns are the store's that sold. Money is the store's
   whose till it went through: a return taken at another store, or a debt paid
   there, is that store's money;
-- one sum of money: the app does not ask whether it was cash or a card;
 - what is paid to suppliers is not the till's;
 - the models sold, and every sale and return of those days.
 
-**Money through the till** is:
+"One sum of money" was replaced on 2026-10-04 (business-rules.md, "cash and
+card, the day's close"; ADR-0012, B11): the money is split by the way it was
+paid — cash, card, transfer — and an order's says how it was paid at «Клієнт
+забрав»; only what was paid at the counter went through the till.
+
+**Money through the till** (`money`, «Разом») is:
 - a sale paid in full, its total;
 - a sale paid in parts, what was paid then, and every later payment, at the
   store that took it;
 - less what a return handed back. A return of a sale paid in parts first
-  lowered what was owed, so only its `cash_back` left the till.
+  lowered what was owed, so only its `cash_back` left the till;
+- each of these only when it was paid at the counter: by cash, card or
+  transfer, or «не вказано» on a row written before the way was asked. An
+  order paid in advance by transfer, or by cash on delivery through the
+  carrier, never went through the till: it has its own lines, outside
+  «Разом» (owner decisions, 2026-10-04; ADR-0012, G24);
+- plus what corrections moved into the till from those two ways, or out of
+  it to them (`corrected_into_till`).
+
+**A correction of the way counts on the day it is made**, at the drawer of
+the money it corrects, as its own figure (`corrected`): never back on the day
+of the sale, so a past day never changes (owner decisions, 2026-10-04: "a
+correction dated the day it is made"; a return counts on its day the same
+way). Each way's `net` is what came in, less what went out, plus what
+corrections moved to it; the till's four add up to `money`.
+
+Cash taken out of the drawer or put into it is not here: it is the drawer's,
+in «Каса» (ADR-0012, G24).
 
 Nothing here is stored, so it never disagrees with what it sums.
 """
@@ -29,8 +50,9 @@ Nothing here is stored, so it never disagrees with what it sums.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
@@ -43,11 +65,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ValidationFailedError
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
+from app.modules.cash.current import CurrentMethod, refund_methods, sale_methods
+from app.modules.cash.models import Direction, PaymentCorrection
 from app.modules.catalog.read import current_variants, describe_variants
 from app.modules.credit.models import CreditEntry, CustomerCredit, EntryKind
 from app.modules.identity.models import AppUser
 from app.modules.refunds.models import Refund, RefundItem
 from app.modules.sales.models import Sale, SaleItem, SaleStatus
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import Organization, Store, StoreState
 from app.modules.tenancy.service import store_names
 
@@ -58,10 +83,33 @@ CENT = Decimal("0.01")
 # Where a network has no store yet to say which day it is.
 DEFAULT_ZONE = "Europe/Kyiv"
 
+# «Не вказано»: a money row written before the way was asked (revision 0035).
+# It is never guessed (owner decisions, 2026-10-04), and it went through the
+# till, as everything did before orders said how they were paid.
+NOT_STATED = "NOT_STATED"
+# The till's ways, in the order the report shows them (ADR-0012, B11).
+TILL_WAYS: tuple[str, ...] = (
+    PaymentMethod.CASH.value,
+    PaymentMethod.CARD.value,
+    PaymentMethod.TRANSFER.value,
+    NOT_STATED,
+)
+# An order paid in advance by transfer, or by cash on delivery through the
+# carrier: it never went through the till, so it stays outside «Разом».
+OFF_TILL_WAYS: tuple[str, ...] = (
+    PaymentMethod.PREPAID_TRANSFER.value,
+    PaymentMethod.CARRIER_COD.value,
+)
+
 
 def _money(value: Any) -> Decimal:
     """A sum as money: two places, nothing summed being 0.00."""
     return Decimal(value or 0).quantize(CENT)
+
+
+def _way(stated: str | None) -> str:
+    """A way as the report names it: «не вказано» for none."""
+    return NOT_STATED if stated is None else stated
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,8 +121,33 @@ class Period:
 
 
 @dataclass(frozen=True, slots=True)
+class WaySums:
+    """The money of one way of paying in these days."""
+
+    # Sales paid in full, and payments towards a debt.
+    came_in: Decimal = ZERO
+    # What returns handed back this way.
+    went_out: Decimal = ZERO
+    # What corrections made in these days moved to this way, less what they
+    # moved from it.
+    corrected: Decimal = ZERO
+
+    @property
+    def net(self) -> Decimal:
+        return self.came_in - self.went_out + self.corrected
+
+    def __add__(self, other: WaySums) -> WaySums:
+        return WaySums(
+            came_in=self.came_in + other.came_in,
+            went_out=self.went_out + other.went_out,
+            corrected=self.corrected + other.corrected,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Figures:
-    # Sales made, the units in them, and what they were sold for.
+    # Sales made, the units in them, and what they were sold for: every sale,
+    # an order collected included, however it was paid.
     sales: int = 0
     units: int = 0
     sold: Decimal = ZERO
@@ -82,22 +155,37 @@ class Figures:
     returns: int = 0
     returned_units: int = 0
     returned: Decimal = ZERO
-    # Money in: sales paid in full, and payments towards a debt — the first,
-    # made with the sale, and every later one.
+    # Money into the till: sales paid in full, and payments towards a debt —
+    # the first, made with the sale, and every later one. An order paid off
+    # the till is in neither.
     paid_in_full: Decimal = ZERO
     debt_payments: Decimal = ZERO
-    # Money out: what returns taken here handed back.
+    # Money out of the till: what returns taken here handed back.
     paid_back: Decimal = ZERO
+    # Each way's money, by `PaymentMethod` value or `NOT_STATED`; a way
+    # missing had none.
+    ways: Mapping[str, WaySums] = field(default_factory=dict)
 
     @property
     def net(self) -> Decimal:
         """Sold, less what came back."""
         return self.sold - self.returned
 
+    def way(self, name: str) -> WaySums:
+        return self.ways.get(name, WaySums())
+
     @property
-    def cash(self) -> Decimal:
-        """What the till should hold from these days."""
-        return self.paid_in_full + self.debt_payments - self.paid_back
+    def corrected_into_till(self) -> Decimal:
+        """What corrections moved into the till from the order ways paid off
+        it, less what they moved out to them. Between two of the till's own
+        ways a correction moves nothing in or out."""
+        return sum((self.way(name).corrected for name in TILL_WAYS), ZERO)
+
+    @property
+    def money(self) -> Decimal:
+        """What went through the till in these days, by any of its ways:
+        «Разом». The till's four ways add up to it."""
+        return self.paid_in_full + self.debt_payments - self.paid_back + self.corrected_into_till
 
     def __add__(self, other: Figures) -> Figures:
         return Figures(
@@ -110,6 +198,11 @@ class Figures:
             paid_in_full=self.paid_in_full + other.paid_in_full,
             debt_payments=self.debt_payments + other.debt_payments,
             paid_back=self.paid_back + other.paid_back,
+            ways={
+                name: self.way(name) + other.way(name)
+                for name in (*TILL_WAYS, *OFF_TILL_WAYS)
+                if name in self.ways or name in other.ways
+            },
         )
 
 
@@ -165,8 +258,17 @@ class EntryView:
     units: int
     # What the sale was for, or what the returned goods were worth.
     amount: Decimal
-    # What went through the till: into it for a sale, out of it for a return.
-    cash: Decimal
+    # The money it moved: in for a sale (what was paid with it, for a sale
+    # paid in parts), out for a return. An order paid off the till moved it
+    # outside the till.
+    money: Decimal
+    # The way that money was stated with when it moved; None for «не
+    # вказано», and for a return that only lowered a debt (it moved none).
+    payment_method: PaymentMethod | None
+    # The way it stands at now, when a correction changed it; None when none
+    # did. The entry keeps saying what was stated: a correction is a note
+    # beside it, never a rewrite (ADR-0012, B11).
+    method_now: PaymentMethod | None
     paid_in_parts: bool
     goods: list[str]
 
@@ -258,18 +360,33 @@ def _completed(scope: RequestScope) -> list[ColumnElement[bool]]:
 
 
 async def _figures(session: AsyncSession, scope: RequestScope, store: _Store) -> Figures:
+    # Each way's money in, out, and moved by corrections.
+    came_in: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    went_out: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    corrected: dict[str, Decimal] = defaultdict(lambda: ZERO)
+
     sales_here = [*_completed(scope), _within(Sale.store_id, Sale.sold_at, [store])]
-    sales, sold, paid_in_full = (
+    sales, sold, paid_in_full = 0, ZERO, ZERO
+    # A sale paid in parts brought in its first payment, counted with the
+    # payments below; its own way is that payment's.
+    for way, count, total, in_full in (
         await session.execute(
             select(
+                Sale.payment_method,
                 func.count(Sale.id),
                 func.coalesce(func.sum(Sale.total), 0),
                 func.coalesce(func.sum(Sale.total).filter(CustomerCredit.id.is_(None)), 0),
             )
             .outerjoin(CustomerCredit, CustomerCredit.sale_id == Sale.id)
             .where(*sales_here)
+            .group_by(Sale.payment_method)
         )
-    ).one()
+    ).tuples():
+        sales += int(count)
+        sold += _money(total)
+        came_in[_way(way)] += _money(in_full)
+        if _way(way) in TILL_WAYS:
+            paid_in_full += _money(in_full)
     units = await session.scalar(
         select(func.coalesce(func.sum(SaleItem.quantity), 0))
         .join(Sale, Sale.id == SaleItem.sale_id)
@@ -293,32 +410,73 @@ async def _figures(session: AsyncSession, scope: RequestScope, store: _Store) ->
         .where(*returns_of_its_sales)
     )
     # Payments towards debts that this store's till took: its own, and those
-    # of a store that did not trade.
-    debt_payments = await session.scalar(
-        select(func.coalesce(func.sum(CreditEntry.amount), 0))
-        .join(CustomerCredit, CustomerCredit.id == CreditEntry.credit_id)
-        .where(
-            CreditEntry.organization_id == scope.organization_id,
-            CreditEntry.kind == EntryKind.PAYMENT.value,
-            _within(
-                func.coalesce(CreditEntry.taken_at_store_id, CustomerCredit.store_id),
-                CreditEntry.created_at,
-                [store],
-            ),
+    # of a store that did not trade. The first payment of an order collected
+    # in parts may have been paid off the till (ADR-0012, G2).
+    debt_payments = ZERO
+    for way, amount in (
+        await session.execute(
+            select(CreditEntry.payment_method, func.coalesce(func.sum(CreditEntry.amount), 0))
+            .join(CustomerCredit, CustomerCredit.id == CreditEntry.credit_id)
+            .where(
+                CreditEntry.organization_id == scope.organization_id,
+                CreditEntry.kind == EntryKind.PAYMENT.value,
+                _within(
+                    func.coalesce(CreditEntry.taken_at_store_id, CustomerCredit.store_id),
+                    CreditEntry.created_at,
+                    [store],
+                ),
+            )
+            .group_by(CreditEntry.payment_method)
         )
-    )
-    # What returns taken here handed back: a sale paid in full gets back what
-    # the goods were worth; one paid in parts its `cash_back` alone.
+    ).tuples():
+        came_in[_way(way)] += _money(amount)
+        if _way(way) in TILL_WAYS:
+            debt_payments += _money(amount)
+    # What returns taken here handed back, by the way it went back: a sale
+    # paid in full gets back what the goods were worth; one paid in parts its
+    # `cash_back` alone. Money only ever goes back through the till.
     handed_back = func.coalesce(CreditEntry.cash_back, Refund.total_amount)
-    paid_back = await session.scalar(
-        select(func.coalesce(func.sum(handed_back), 0))
-        .select_from(Refund)
-        .outerjoin(CreditEntry, CreditEntry.refund_id == Refund.id)
-        .where(
-            Refund.organization_id == scope.organization_id,
-            _within(Refund.taken_at_store_id, Refund.created_at, [store]),
+    paid_back = ZERO
+    for way, amount in (
+        await session.execute(
+            select(Refund.payment_method, func.coalesce(func.sum(handed_back), 0))
+            .select_from(Refund)
+            .outerjoin(CreditEntry, CreditEntry.refund_id == Refund.id)
+            .where(
+                Refund.organization_id == scope.organization_id,
+                _within(Refund.taken_at_store_id, Refund.created_at, [store]),
+            )
+            .group_by(Refund.payment_method)
         )
-    )
+    ).tuples():
+        went_out[_way(way)] += _money(amount)
+        paid_back += _money(amount)
+    # Corrections of the way made in these days at this store's drawer — the
+    # store whose till the corrected money went through — whatever day the
+    # money moved on. A sale's or a payment's money came in (IN); a refund's
+    # went out (OUT), so moving it moves the other way.
+    for from_way, to_way, direction, amount in (
+        await session.execute(
+            select(
+                PaymentCorrection.from_method,
+                PaymentCorrection.to_method,
+                PaymentCorrection.direction,
+                func.coalesce(func.sum(PaymentCorrection.amount), 0),
+            )
+            .where(
+                PaymentCorrection.organization_id == scope.organization_id,
+                _within(PaymentCorrection.store_id, PaymentCorrection.created_at, [store]),
+            )
+            .group_by(
+                PaymentCorrection.from_method,
+                PaymentCorrection.to_method,
+                PaymentCorrection.direction,
+            )
+        )
+    ).tuples():
+        moved = _money(amount) if direction == Direction.IN.value else -_money(amount)
+        corrected[_way(to_way)] += moved
+        corrected[_way(from_way)] -= moved
     return Figures(
         sales=int(sales),
         units=int(units or 0),
@@ -329,6 +487,10 @@ async def _figures(session: AsyncSession, scope: RequestScope, store: _Store) ->
         paid_in_full=_money(paid_in_full),
         debt_payments=_money(debt_payments),
         paid_back=_money(paid_back),
+        ways={
+            name: WaySums(came_in=came_in[name], went_out=went_out[name], corrected=corrected[name])
+            for name in (*TILL_WAYS, *OFF_TILL_WAYS)
+        },
     )
 
 
@@ -538,12 +700,24 @@ async def entries(
                 by=view.by,
                 units=view.units,
                 amount=view.amount,
-                cash=view.cash,
+                money=view.money,
+                payment_method=view.payment_method,
+                method_now=view.method_now,
                 paid_in_parts=view.paid_in_parts,
                 goods=view.goods,
             )
         )
     return period, listed_views, len(rows) > limit
+
+
+def _stated(current: CurrentMethod | None) -> PaymentMethod | None:
+    """The way an entry's money was stated with when it moved."""
+    return None if current is None else current.stated
+
+
+def _now(current: CurrentMethod | None) -> PaymentMethod | None:
+    """The way it stands at now, when a correction changed it."""
+    return current.method if current is not None and current.corrected else None
 
 
 async def _sale_entries(
@@ -576,6 +750,12 @@ async def _sale_entries(
         .tuples()
         .all()
     )
+    # The way of the money taken with each: the sale's own, or its first
+    # payment's when it was paid in parts.
+    taken = {
+        sale_id: methods.taken_with_sale
+        for sale_id, methods in (await sale_methods(session, sale_ids)).items()
+    }
     items: dict[uuid.UUID, list[SaleItem]] = {}
     for item in (
         await session.scalars(
@@ -596,7 +776,9 @@ async def _sale_entries(
             by=seller,
             units=sum(item.quantity for item in items.get(sale.id, [])),
             amount=sale.total,
-            cash=first_payments.get(sale.id, sale.total),
+            money=first_payments.get(sale.id, sale.total),
+            payment_method=_stated(taken.get(sale.id)),
+            method_now=_now(taken.get(sale.id)),
             paid_in_parts=sale.id in first_payments,
             goods=[
                 _goods(item.display_name_snapshot, item.variant_snapshot, item.quantity)
@@ -630,6 +812,7 @@ async def _return_entries(
         )
     ).all():
         lines.setdefault(refund_item.refund_id, []).append((refund_item, sale_item))
+    methods = await refund_methods(session, refund_ids)
     return {
         refund.id: EntryView(
             kind=Kind.RETURN,
@@ -643,7 +826,9 @@ async def _return_entries(
             by=actor,
             units=sum(refund_item.quantity for refund_item, _ in lines.get(refund.id, [])),
             amount=refund.total_amount,
-            cash=refund.total_amount if cash_back is None else cash_back,
+            money=refund.total_amount if cash_back is None else cash_back,
+            payment_method=_stated(methods.get(refund.id)),
+            method_now=_now(methods.get(refund.id)),
             paid_in_parts=cash_back is not None,
             goods=[
                 _goods(
@@ -660,6 +845,9 @@ async def _return_entries(
 
 __all__ = [
     "MAX_DAYS",
+    "NOT_STATED",
+    "OFF_TILL_WAYS",
+    "TILL_WAYS",
     "EntryView",
     "Figures",
     "Kind",
@@ -667,6 +855,7 @@ __all__ = [
     "Period",
     "SalesReport",
     "StoreFigures",
+    "WaySums",
     "entries",
     "models_sold",
     "sales_report",

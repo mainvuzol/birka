@@ -224,10 +224,16 @@ test("where an order goes is corrected while it is open, and every version stays
     /Вказано при створенні · Нова пошта · ТТН ще немає · Оля$/,
     /Змінено · Міст · ТТН MEEST-777 · Оля$/,
   ]);
-  // Closed, it is no longer changed.
+  // Closed, it is no longer changed. Collected, it says how it was paid:
+  // every order goes by a carrier, this one paid to it on delivery (owner
+  // decisions, 2026-10-04).
   await page
     .getByRole("button", { name: "Прибув на пошту", exact: true })
     .click();
+  await page
+    .getByRole("group", { name: "Як оплачено замовлення" })
+    .getByRole("radio", { name: "Накладеним платежем", exact: true })
+    .check();
   await page
     .getByRole("button", { name: "Клієнт забрав", exact: true })
     .click();
