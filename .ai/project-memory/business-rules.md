@@ -1170,3 +1170,61 @@ going live:
 
 Built on 2026-10-04; see the [report](cash-and-card-report.md) and
 [ADR-0012](../decisions/ADR-0012-cash-and-card.md).
+
+## Owner decision — 2026-10-04 (the server is unreachable)
+
+Asked when the owner chose this work. Until now the phone said «Сервер зараз
+недоступний», recorded nothing, and said nothing about what to do with the
+customer at the counter. A read-only mapping (four readers and a critic)
+found what happens today:
+- a basket already built can be sent and is kept on the phone until the
+  server answers, and that phone sells nothing more until then;
+- a basket not yet built cannot be built, because the stock list will not
+  load;
+- when the whole server is dead or the shop has no internet, the app does
+  not open at all;
+- the drawer cannot be closed, and the bot tells the owner after 5 minutes
+  that sellers cannot sell.
+
+- **The shop keeps selling, on paper.** The seller writes down the model,
+  the size, the price, how it was paid and the time. When the server
+  answers, the sales are typed in as ordinary sales. The app says so, and
+  helps type them in. An offline mode in the app may be judged later, on
+  real outages.
+- **Whoever can, types them in, whenever they can.** There is no rule
+  about who or when.
+- **A late sale is dated the day it is typed,** as the paper sales of the
+  first days are, and carries the mark «продано під час збою». The mark
+  may name who sold and at what hour, from the paper; both are optional.
+  «Звіт» then shows who sold and who typed. No earlier rule changes: a
+  past day's report never changes, and the drawer counts by the order
+  things were written.
+- **Goods that are already gone from the ledger** when a late sale is
+  typed, because a colleague's late sale took them or the balance was
+  short: the sale is refused, and a manager fixes the balance first. It is
+  the same order as for a paper sale from a later delivery. An empty shelf
+  is reported only while standing at it, never afterwards.
+- **The drawer is not closed while the server is down.** The seller
+  counts the cash and writes the sum down for their own record. The drawer
+  is closed the next evening: two days in one close, and the outage day
+  shows as not closed. This is how it already works.
+- **A cash sale of the outage typed after that day's close** leaves a
+  surplus on that close and a shortage on the next, both with the reason
+  «продаж під час збою». Both stand. The app reminds to type the outage's
+  sales before the close, so the pair does not arise.
+- **Debts, returns and orders go on paper too,** and are typed in later.
+- **A debt payment taken on paper that the server refuses** when typed,
+  because the debt was paid meanwhile or less is owed: it stays refused,
+  and the extra money is given back to the customer. Until then it shows
+  as a surplus of the drawer, with its reason.
+- **What the seller is told:** «Сервер не відповідає. Продавайте на
+  папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість
+  — внесіть продажі до закриття каси.» Nothing about phoning the owner:
+  the bot tells the owner itself.
+- **An operation the server never answered** stays on the phone, as
+  today, and the phone checks it itself as soon as the connection is back.
+  Every sale of an outage stays on paper until the app shows it recorded;
+  a lost phone then loses nothing that is not on paper.
+- **The app does not open without the server,** when the server is dead
+  or the shop has no internet. Paper. This keeps the earlier decision that
+  no phone holds an old page, so updates stay safe.
