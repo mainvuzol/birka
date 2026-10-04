@@ -236,6 +236,12 @@ async def hold_stores(
     here first; a command that comes after reads the new state (owner
     decisions, 2026-10-01). Without it, goods received in the instant a store
     is archived could land in a store that promised to be empty.
+
+    `read=True` is what makes it a share lock: `key_share=True` alone renders
+    `FOR NO KEY UPDATE`, which conflicts with itself, and queued every
+    command of a store behind the one before it. What each command changes
+    is guarded by its own row locks (the stock rows, in order; the debt; the
+    invoice; the sold lines), never by this one.
     """
     if not store_ids:
         return {}
@@ -244,7 +250,7 @@ async def hold_stores(
             select(Store.id, Store.state)
             .where(Store.id.in_(store_ids), Store.organization_id == organization_id)
             .order_by(Store.id)
-            .with_for_update(key_share=True)
+            .with_for_update(read=True, key_share=True)
         )
     ).all()
     if {row.id for row in rows} != store_ids:

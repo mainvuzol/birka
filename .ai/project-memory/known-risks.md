@@ -383,6 +383,26 @@ See the [report](store-states-report.md).
 - **"Only reading" is decided by the HTTP method.** Every command is a POST;
   a GET that changed something would be let through in a closed store. None
   does today, and a review of every `GET` handler found none writing.
+- **Until 2026-10-04 the store's hold was stronger than written.**
+  - `with_for_update(key_share=True)` renders `FOR NO KEY UPDATE`, not
+    `FOR KEY SHARE`.
+  - So every command of one store queued behind the one before it on the
+    store's row: for instance, every sale behind a long delivery being
+    received.
+  - Fixed: the hold is `FOR KEY SHARE`, with a test that two commands of
+    one store run at once while a change of state waits for both
+    (`test_store_hold.py`).
+  - What each command changes was already guarded by its own row locks.
+    The stock rows are locked in order, so no new deadlock arises.
+  - **What remains:** a change of state, or the day's close, waits for a
+    moment when no command of the store is running. While the store's
+    commands keep overlapping, later ones can go ahead of it. At a few
+    sellers per store such a moment comes within a sale.
+  - **Speed on the laptop barely changed,** with one API process. In four
+    alternating readings, the median of the six-seller cases fell by 10–20 %
+    and their p95 rose by 10–30 %. All cases stayed far inside the budget
+    (worst p95 89 ms against 500). Evidence:
+    [`output/verification/2026-10-04-store-hold/`](../../output/verification/2026-10-04-store-hold/).
 
 ## Returns to a supplier — 2026-10-01
 
