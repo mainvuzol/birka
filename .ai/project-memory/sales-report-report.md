@@ -140,7 +140,7 @@ manager's role already held and nothing used).
 ## Not covered here
 
 - **Cash and card are one sum**, as the owner chose. Splitting them needs the
-  till to ask, and its own work.
+  till to ask, and its own work. *Done on 2026-10-04; see the update below.*
 - **The list has no debt payments**, as the owner chose its contents; their
   sum is in the figures.
 - **The figures are summed on every request**, unmeasured, and without an
@@ -172,3 +172,47 @@ manager's role already held and nothing used).
   - the milestone;
   - ADR-0001;
   - the README.
+
+## Update — 2026-10-04: cash and card
+
+The till now asks how each payment was made, and the drawer is counted once
+a day (owner decisions, 2026-10-04; see the
+[cash and card report](cash-and-card-report.md) and
+[ADR-0012](../decisions/ADR-0012-cash-and-card.md)). The report changed with
+it:
+- **The money is split by way.** Each store and the stores together show
+  «Готівка», «Картка» and «Переказ» under «За способом оплати»: what came in,
+  what went back, what fixes moved, and the net. The four ways' nets add up
+  to «Разом».
+- **`cash` is renamed `money`,** in the answer and in each entry. It was
+  always the money through the till, card and transfer included, never
+  banknotes. On the screen the heading «Гроші в касі» is now «Гроші», and
+  «Разом у касі» is «Разом»: «Каса» now means the drawer.
+- **An order paid off the till** has its own lines, «Замовлення, оплачені
+  поза касою»: «Переказ наперед» and «Накладений платіж», outside «Разом».
+  Before, its whole price counted in «Оплачено одразу повністю» on the day
+  it was collected. Only what was paid at the counter is till money.
+- **A fix of a way counts on the day it is made,** at its drawer, as its own
+  figure. A row «Виправлення способу оплати» sits before «Разом» when a fix
+  moved money into or out of the till, and a line under the ways says what
+  moved. A past day never changes.
+- **Old sales read «Не вказано».** Money recorded before the way was asked
+  is never guessed. The row shows only when it holds something.
+- **Each entry** names the way it was paid, and the way now when it was
+  fixed («(виправлено: готівкою)»).
+- **Cash taken out and put in is not in «Звіт».** It is in «Каса», with the
+  closes.
+- **On the server:** `GET /reports/sales` answers `money`,
+  `corrected_into_till`, `ways` (cash, card, transfer and not stated, always
+  in that order) and `off_till`; an entry answers `money`, `payment_method`
+  and `method_now`. `reports` reads `cash.models` and `cash.current`, and
+  nothing else of the drawer.
+- **Tests:** `test_sales_report.py` pins the four ways and the off-till lines
+  on every figure it reads, the split, orders paid off the till, a card
+  return that does not lower the cash, fixes on the day made with yesterday
+  byte for byte the same, and old sales. `sales-report.spec.ts` sells by
+  card and by transfer, and returns to the card.
+
+Readings the owner has not confirmed yet are in the business rules: a return
+of an order paid off the till goes back through the till and lowers «Разом»;
+«Продажі» still counts every sale, orders paid off the till included.

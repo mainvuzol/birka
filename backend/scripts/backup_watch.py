@@ -64,6 +64,14 @@ it again or for a day. So a watcher that hangs, a revoked bot token, or
 nobody to tell is noticed from outside too. A check-in that fails is logged,
 never told — and logged without its address, which is its secret.
 
+**The drawers.** The owner decided on 2026-10-04 ("cash and card, the day's
+close") that a difference found when a store's drawer is closed is told by
+the bot to the network's owner, silently at any hour, as with backups: once
+its reason is written, or 15 minutes after the close without it; never to
+whoever closed, and never for a difference under 1 грн. So every minute this
+queues what is due (`app.modules.cash.messages.queue_due`) and sends it with
+the same silent sender, retried for a day like a backup's message.
+
 It also deletes expired idempotency records once an hour
 (`app.core.idempotency.purge_expired`). Each look runs under a time limit; a
 look that hangs is logged as one that failed. Errors go to Sentry when a DSN
@@ -119,6 +127,8 @@ from app.modules.backups.incidents import (
 from app.modules.backups.server import keep, owner_chats
 from app.modules.backups.service import Send, deliver, overview, queue_alert, queue_alerts
 from app.modules.backups.status import State
+from app.modules.cash.messages import deliver as deliver_cash
+from app.modules.cash.messages import queue_due
 from app.modules.telegram.messages import (
     BotTokenRefusedError,
     UndeliverableError,
@@ -134,12 +144,15 @@ EVERY_SECONDS = 600
 HEALTH_EVERY = 60.0
 CHECK_IN_EVERY = 600.0
 PURGE_EVERY = 3600.0
+# The drawers: every minute, so a reason written is told within one.
+CASH_EVERY = 60.0
 
 # Each look under a limit of its own; one that takes longer is cut off and
 # counted as failed.
 HEALTH_TIMEOUT = 45.0
 BACKUPS_TIMEOUT = 300.0
 PURGE_TIMEOUT = 300.0
+CASH_TIMEOUT = 45.0
 CHECK_IN_TIMEOUT = 30.0
 # Within a look at the server, so its parts fit in its limit.
 STATUS_TIMEOUT = 10.0
@@ -237,6 +250,18 @@ async def look(
         sent = await deliver(session, send=send, now=now)
     if queued or sent:
         logger.info("backup_watch.told", queued=queued, sent=sent)
+
+
+async def tell_cash(maker: async_sessionmaker[AsyncSession], send: Send, now: datetime) -> None:
+    """One look at the drawers: queue what the network's owners must hear of
+    a close's difference, then send what is queued — silently, by the `send`
+    the backups use (owner decisions, 2026-10-04; ADR-0012, B8)."""
+    async with maker() as session:
+        queued = await queue_due(session, now=now)
+    async with maker() as session:
+        sent = await deliver_cash(session, send=send, now=now)
+    if queued or sent:
+        logger.info("backup_watch.cash_told", queued=queued, sent=sent)
 
 
 async def purge_idempotency(
@@ -603,6 +628,13 @@ async def watch(
             every_seconds,
             BACKUPS_TIMEOUT,
             lambda now: look(maker, send, now, edge),
+            stop,
+        ),
+        every(
+            "cash",
+            CASH_EVERY,
+            CASH_TIMEOUT,
+            lambda now: tell_cash(maker, send, now),
             stop,
         ),
         every(

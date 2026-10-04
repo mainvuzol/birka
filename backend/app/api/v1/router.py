@@ -27,6 +27,7 @@ from sqlalchemy import select
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.api.internal import database_state, sign_in_outcomes
 from app.api.v1.backups import router as backups_router
+from app.api.v1.cash import router as cash_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.catalog_corrections import router as catalog_corrections_router
 from app.api.v1.catalog_decisions import router as catalog_decisions_router
@@ -68,6 +69,7 @@ router.include_router(stores_router)
 router.include_router(suppliers_router)
 router.include_router(supplier_invoices_router)
 router.include_router(reports_router)
+router.include_router(cash_router)
 router.include_router(client_errors_router)
 
 

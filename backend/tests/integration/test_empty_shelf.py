@@ -80,7 +80,11 @@ def line(shops: TwoShops, variant: str, size: str, qty: int) -> dict[str, Any]:
 
 async def sell(maker, shops: TwoShops, body: dict[str, Any], permissions=MANAGER) -> httpx.Response:
     async with api(maker, shops.scope(shops.primary_store, permissions)) as client:
-        return await client.post("/api/v1/sales", json=body, headers=key())
+        # Paid in cash, the till's button that sold (owner decisions,
+        # 2026-10-04), unless the body says otherwise.
+        return await client.post(
+            "/api/v1/sales", json={"payment_method": "CASH"} | body, headers=key()
+        )
 
 
 def shelf_body(shops: TwoShops, command: uuid.UUID, *lines: tuple[str, str, int]) -> dict:

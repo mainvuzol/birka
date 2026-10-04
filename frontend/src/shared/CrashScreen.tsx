@@ -6,9 +6,10 @@ import { connectTelegram } from "@/shared/telegram";
 /**
  * Whether the phone keeps a command that was sent and whose answer is not
  * known yet. Only those are saved: each journal
- * (`birka:<scope>-pending:…`, the orders' `birka:pending:…`) is written just
- * before its request and removed once its outcome is known. A basket still
- * being filled lives only on the screen.
+ * (`birka:<scope>-pending:…`, the drawer's `birka:cash-pending:…` among
+ * them, and the orders' `birka:pending:…`) is written just before its
+ * request and removed once its outcome is known. A basket still being filled
+ * lives only on the screen.
  *
  * Only the keys' names are looked at, never their values: those hold
  * customers' names and phones. Storage that cannot be read promises nothing.

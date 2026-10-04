@@ -77,6 +77,13 @@ export function errorText(error: unknown): string {
     return "Вкажіть ім’я покупця, який платить частинами.";
   if (error.details.reason === "CUSTOMER_PHONE")
     return "Телефон покупця має містити від 10 до 15 цифр.";
+  // A sale, a debt payment or money handed back says how the customer pays
+  // (owner decision, 2026-10-04; ADR-0012 §B2). Refused with
+  // `recorded: false`, so an old attempt saved without it settles. A collect
+  // refused for the same reason has its own text («Вкажіть, як оплачено
+  // замовлення.», `cash/errors.ts`), which the App picks before asking here.
+  if (error.details.reason === "PAYMENT_METHOD_REQUIRED")
+    return "Не вказано, як платить покупець. Натисніть «Готівка», «Картка» або «Переказ».";
   if (error.code === "NO_ACCESS")
     return "Доступ до магазину закрито. Зверніться до власника.";
   // A blocked or archived store does nothing (owner decisions, 2026-10-01).

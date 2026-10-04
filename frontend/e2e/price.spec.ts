@@ -185,7 +185,7 @@ test("a store's price set on the stock screen is what its till suggests", async 
   await expect(price).toHaveValue("");
   await product.selectOption(priced.option);
   await page.getByRole("button", { name: "Додати в кошик" }).click();
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();

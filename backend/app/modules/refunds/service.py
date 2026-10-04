@@ -43,11 +43,19 @@ goods go back where they were sold from when that store reaches it; when it
 does not — another store's own warehouse — the seller chooses one of their
 own store's, and that choice is the one destination a client ever states.
 
+**Money handed back goes the way the sale was paid, unless the seller
+changes it** (owner decisions, 2026-10-04): the refund says how, one of the
+till's three ways, and money returned to a card does not leave the drawer.
+Optional in the request and required of a new refund after the replay
+lookup, so a return a phone kept from before the way was asked still replays
+(ADR-0012, B2, B13). A return of a sale paid in parts that only lowers its
+debt moves no money: it needs no way and is stored with none (ADR-0012, G35).
+
 Lock order is fixed and identical in every path — the router's idempotency-row
 insert first (it blocks a concurrent inserter of the same key), then the
 advisory lock on the permanent command, then `sale_item` rows in id order,
-then inventory keys in their own sorted order — so a refund can never hold
-what another refund is waiting for.
+then the debt of a sale paid in parts, then inventory keys in their own
+sorted order — so a refund can never hold what another refund is waiting for.
 """
 
 from __future__ import annotations
@@ -74,7 +82,13 @@ from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
-from app.modules.credit.service import ReturnSettlement, return_settlement, settle_return
+from app.modules.credit.service import (
+    ReturnSettlement,
+    credited_sales,
+    money_back,
+    return_settlement,
+    settle_return,
+)
 from app.modules.damaged.service import DamagedPart, register
 from app.modules.inventory.models import MovementType
 from app.modules.inventory.service import (
@@ -85,6 +99,7 @@ from app.modules.inventory.service import (
 )
 from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
 from app.modules.sales.models import Sale, SaleItem, SaleStatus
+from app.modules.sales.payment import TILL_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.sales.service import MAX_MONEY, money
 from app.modules.tenancy.service import (
     LocationCapability,
@@ -345,6 +360,7 @@ def _fingerprint(
     damaged: uuid.UUID | None,
     taking: uuid.UUID,
     elsewhere: set[uuid.UUID] | None,
+    payment_method: PaymentMethod | None,
 ) -> str:
     """Everything that makes this refund *this* refund.
 
@@ -385,6 +401,9 @@ def _fingerprint(
             # Only when taken at another store, so every earlier refund keeps
             # the fingerprint it had.
             **({"taken_at_store_id": str(taking)} if taking != sale.store_id else {}),
+            # The same for how the money goes back: none on a return kept from
+            # before it was asked (ADR-0012, B13).
+            **print_of(payment_method),
         },
         actor_user_id=scope.user_id,
         store_id=sale.store_id,
@@ -511,11 +530,19 @@ async def create_refund(
     reason: str | None = None,
     correlation_id: str | None = None,
     at_store_id: uuid.UUID | None = None,
+    payment_method: PaymentMethod | None = None,
+    method_required: bool = True,
 ) -> RefundResult:
     """Take goods back against an existing sale, or raise and roll back.
 
     `at_store_id` is the store taking them back, when it is not the one that
     sold (owner decisions, 2026-10-01).
+
+    `payment_method` is how the money goes back, one of the till's three
+    ways. A new refund without it is refused right after the replay lookup,
+    before its lines are checked — for a sale paid in parts only once the
+    split shows money going back (ADR-0012, B2, G35). `method_required=False`
+    is for this service's unit tests only.
 
     Everything below commits together or not at all: the refund, its lines, the
     stock that came back, and the audit entry that explains it.
@@ -587,12 +614,24 @@ async def create_refund(
         damaged=damaged,
         taking=taking,
         elsewhere=elsewhere,
+        payment_method=payment_method,
     )
     existing = await _existing_command(
         session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
     )
     if existing is not None:
         return existing
+    # A way stated must be one of the till's in any case.
+    method = stated_way(payment_method, takes=TILL_METHODS, required=False)
+    # A sale paid in full hands all of the goods' worth back as money, so a
+    # new refund of one says how before anything else is checked (ADR-0012,
+    # B2): an attempt a phone kept from before the way was asked is refused
+    # `PAYMENT_METHOD_REQUIRED` and settles, whatever happened to its lines
+    # since (B13). One paid in parts needs a way only once the split below
+    # shows money going back (G35). Whether a sale was paid in parts was
+    # settled when it was sold.
+    if method is None and sale.id not in await credited_sales(session, sale_ids=[sale.id]):
+        stated_way(method, takes=TILL_METHODS, required=method_required)
 
     # Lock the whole sale's lines, in id order, before reading how much of it
     # has already been refunded. Every refund of this sale takes the same rows
@@ -638,12 +677,17 @@ async def create_refund(
         refunded = already_refunded.get(sale_item_id, 0)
         refundable = sale_item.quantity - refunded
         if quantity > refundable:
+            # After the command's lock and lookup, so it proves this command
+            # wrote nothing, and says so (ADR-0008 §9): a phone that never
+            # heard whether its attempt went through settles it, though a
+            # colleague took the same goods back meanwhile.
             raise RefundExceedsSoldError(
                 sale_item_id=str(sale_item_id),
                 requested=quantity,
                 sold=sale_item.quantity,
                 already_refunded=refunded,
                 refundable=refundable,
+                recorded=False,
             )
 
     total = Decimal("0")
@@ -659,6 +703,17 @@ async def create_refund(
     if total > MAX_MONEY:  # pragma: no cover - unreachable while refund <= sale total
         raise ValidationFailedError("Refund total is out of range")
 
+    # A sale paid in parts: how much of the goods' worth goes back as money
+    # rather than off the debt. Locked here, after the sale's lines, and split
+    # the same way by `settle_return` below. None for a sale paid in full,
+    # where all of it goes back.
+    back = await money_back(
+        session, organization_id=scope.organization_id, sale_id=sale.id, worth=money(total)
+    )
+    moves_money = back is None or back > 0
+    if back is not None and moves_money:
+        stated_way(method, takes=TILL_METHODS, required=method_required)
+
     refund = Refund(
         organization_id=scope.organization_id,
         store_id=sale.store_id,
@@ -673,6 +728,9 @@ async def create_refund(
         total_amount=money(total),
         reason=reason,
         correlation_id=correlation_id,
+        # Only when money goes back: a return that only lowered a debt moved
+        # none, whatever the screen had preselected (ADR-0012, G35).
+        payment_method=method.value if method is not None and moves_money else None,
     )
     session.add(refund)
     await session.flush()
@@ -822,6 +880,7 @@ async def create_refund(
         lines=len(refund_items),
         restocked=len(restocked),
         total=str(refund.total_amount),
+        payment_method=refund.payment_method,
     )
 
     return _result(refund, refund_items, sale_items, movements, credit)

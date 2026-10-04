@@ -114,6 +114,7 @@ async def test_seed_discover_receive_and_sell_shared_stock(setup):
                         "unit_price": "1500.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
         )
         assert sold.status_code == 201, sold.text

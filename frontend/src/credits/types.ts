@@ -1,4 +1,5 @@
 import type { StoreState } from "@/orders/types";
+import type { PaymentMethod, TillMethod } from "@/shared/payment";
 
 /** `GET /credits`: a store's debts — sales paid in parts (owner decisions, 2026-10-01). */
 export type CreditStatus = "OPEN" | "SETTLED" | "WRITTEN_OFF";
@@ -15,6 +16,15 @@ export interface CreditEntry {
   note: string | null;
   /** A payment another store took, because the one that sold did not trade. */
   taken_at: string | null;
+  /**
+   * How it was paid, as it stands now (owner decision, 2026-10-04; ADR-0012
+   * §B10): a payment's way, or for a return how its money went back. Null
+   * when nothing says: recorded before the way was asked, a return that only
+   * lowered the debt, a write-off.
+   */
+  payment_method: PaymentMethod | null;
+  /** The way was corrected after it was recorded. */
+  corrected: boolean;
 }
 
 export interface Credit {
@@ -90,6 +100,12 @@ export type CreditBody =
       command_id: string;
       amount: string;
       elsewhere?: boolean;
+      /**
+       * How the customer pays (owner decision, 2026-10-04; ADR-0012 §B2).
+       * Absent from an attempt written down before it was asked, which is
+       * resent as stored.
+       */
+      payment_method?: TillMethod;
     }
   | {
       kind: "write-off";

@@ -16,8 +16,8 @@ correct.
 - **The release is blocked** on steps only the owner, an administrator with a
   server, or the shops can take: a server and the bot, the real organization
   and its people, backups there, the shops' existing stock, a sale timed in
-  the shop, and the owner's sign-off. The agent still owes the hot path's
-  release reading, every case gated, since `POST /sales` changed.
+  the shop, and the owner's sign-off. The hot path's release reading, every
+  case gated, was taken again on 2026-10-04, after the way of paying.
 - **The shops' existing stock goes in before anything else moves** in a
   warehouse. The first delivery or sale there closes it to an opening list
   for good ([server runbook, step 9](.ai/project-memory/server-runbook.md#9-the-shops-existing-stock-before-anything-moves)).
@@ -29,7 +29,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 168 Playwright journeys on a phone profile, against the real API;
+- 182 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -156,12 +156,20 @@ A customer may take the goods, pay part now and owe the rest to the store
 that sold (owner decisions, 2026-10-01). `POST /sales` takes
 `credit: {customer_name, customer_phone, paid_now}`.
 
+Each payment says how it was paid (owner decisions, 2026-10-04; see "Cash
+and card, the day's close"). The sale's `payment_method` is the way of the
+part paid now, beside `credit`, not inside it; each later payment carries
+its own.
+
 - **Debts:** `GET /api/v1/credits?store_id=` lists a store's debts.
-- **Payments:** `POST /api/v1/credits/{id}/payments` takes one.
+- **Payments:** `POST /api/v1/credits/{id}/payments` takes one, with its
+  `payment_method`: `CASH`, `CARD` or `TRANSFER`. A payment's history entry
+  says its way, and `corrected` when it was fixed.
 - **Write-offs:** the owner writes a debt off at
   `POST /api/v1/credits/{id}/write-off`, with a reason.
 - **Returns:** a return's answer says how much lowers the debt and how much
-  goes back in cash. `GET /sales` says which sales were `paid_in_parts`.
+  goes back, and which way. A return that only lowers the debt needs no way.
+  `GET /sales` says which sales were `paid_in_parts`.
 
 - **By customer:** `GET /api/v1/credits/customers?store_id=` groups a store's
   debts by customer, where one phone is one customer.
@@ -170,9 +178,63 @@ that sold (owner decisions, 2026-10-01). `POST /sales` takes
   sale.
 
 In the app: «Оплата частинами» at the till and on collecting an order, and a
-«Борги» section for `sale:credit`. Only `credit:write_off` writes a debt off. See the
+«Борги» section for `sale:credit`, where «Готівка», «Картка» and «Переказ»
+take a payment. Only `credit:write_off` writes a debt off. See the
 [credit report](.ai/project-memory/customer-credit-report.md) and the
 [credit screens report](.ai/project-memory/credit-screens-report.md).
+
+## Cash and card, the day's close
+
+Every payment says how it was paid, and each store's drawer is counted once
+a day (owner decisions, 2026-10-04; see
+[ADR-0012](.ai/decisions/ADR-0012-cash-and-card.md)).
+
+- **The way of paying:** `payment_method`, one per payment, never split.
+  - `POST /sales`, `POST /credits/{id}/payments` and
+    `POST /sales/{id}/refunds` take `CASH`, `CARD` or `TRANSFER`. A refund's
+    way is how the money went back; the screen suggests the sale's.
+  - `POST /orders/{id}/collect` also takes `PREPAID_TRANSFER` (in advance by
+    transfer) and `CARRIER_COD` (cash on delivery).
+  - A new command without it is refused `PAYMENT_METHOD_REQUIRED`, with
+    `recorded: false`. A command recorded before still replays. Sales
+    recorded before migration `0035` read «не вказано».
+  - In the app «Продати» is three buttons, «Готівка», «Картка» and
+    «Переказ»: a sale is still 5 taps. Press first, then charge the terminal.
+- **Only cash is counted.** Cash at the till, cash handed back, and cash paid
+  at the counter for an order are the drawer's. Card and transfer are shown
+  at the close, to compare with the terminal's slip.
+- **The day's close:** `POST /cash/closes?age=` with the count, named by a
+  `command_id`. The seller on duty counts without seeing what the drawer
+  should hold (`GET /cash/drawer` never says), then sees the difference.
+  - Once per business day, 06:00 to 06:00, Kyiv time
+    (`ALREADY_CLOSED_TODAY`). A count more than 10 minutes old is not
+    recorded (`COUNT_IS_STALE`).
+  - The count is the next day's starting cash. The first close only records
+    it.
+  - A difference of 1,00 грн or more needs a reason,
+    `POST /cash/closes/{id}/reason`, by whoever counted. Until it is
+    written, only «Каса» is open on their phone.
+  - A blocked store is closed by the network's owner only.
+- **Cash taken out and put in:** `POST /cash/movements`. A seller
+  (`cash:expense`) records «Витрати» and «Кур’єру постачальника»; the owner
+  and managers (`cash:take_out`) also «Власнику» and «Внесено в касу
+  (розмін)».
+- **A wrong way** is fixed by a new record, `POST /cash/corrections`: a
+  seller their own sale, payment or return before the close; the owner and
+  managers (`cash:correct`) any, any day. A fix of a closed day explains that
+  close's difference and leaves today's cash alone.
+- **Who reads:** the closes, `GET /cash/closes`, and a day's money,
+  `GET /cash/events`, need `report:view_financial`. A seller reads only their
+  own close.
+- **The bot** tells the network's owner of a difference, silently: once its
+  reason is written, or 15 minutes after the close. `backup-watch` sends it.
+- **Going back** by the code alone across `0035` is not safe once phones run
+  the new version: see the
+  [server runbook](.ai/project-memory/server-runbook.md#going-back). After
+  the update, reopen the app on every phone.
+
+In the app: «Каса», for whoever closes, takes out cash or reads the money.
+See the [report](.ai/project-memory/cash-and-card-report.md).
 
 ## Customer orders
 
@@ -193,8 +255,10 @@ Cancellation is allowed before dispatch and releases the hold, including on a
 paused warehouse. After dispatch, `/orders/{id}/return` requires `command_id`,
 `physically_received: true`, and a nonblank `reason`; it restores goods to their
 original warehouse. After collection use the existing sale refund command.
-Collection may be paid in parts (`credit`, as on a sale; see "Paying in
-parts"); the customer's name and phone are then kept on the debt. Otherwise
+Collection says how the order was paid (`payment_method`, one of five; see
+"Cash and card, the day's close"), and may be paid in parts (`credit`, as on
+a sale; see "Paying in parts"); the customer's name and phone are then kept
+on the debt. Otherwise
 an order records no name, phone or address (see "Where an order goes").
 Partial shipments and reservation expiry remain out of scope. Migration
 rollback refuses existing order/reservation history.
@@ -375,6 +439,12 @@ read it (`report:view_financial`), each for the stores they hold it in.
 - A sale and its returns are the store's that sold; money is the store's
   whose till it went through. A return counts on the day it was taken. See
   the [report](.ai/project-memory/sales-report-report.md).
+- **Since 2026-10-04 the money is split by way:** `money` (renamed from
+  `cash`), and `ways` for cash, card, transfer and «не вказано», whose nets
+  add up to it. An order paid in advance or on delivery is in `off_till`,
+  outside «Разом». A fix of a way counts on the day it is made, so a past
+  day never changes. Each entry says its `payment_method`, and `method_now`
+  when it was fixed.
 
 **Correcting the catalogue** (owner decision, 2026-10-03): the owner and
 managers (`catalog:merge`) put a typo right in «Моделі». See

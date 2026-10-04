@@ -17,6 +17,12 @@ put it on `POST /sales`: a debt, its first payment and an audit row written in
 the sale's own transaction. No reading had measured it. Its two cases run
 after the first six, so those six still measure what they always have.
 
+Every sale says how it was paid, as the till's buttons now send it (owner
+decisions, 2026-10-04; ADR-0012): cash, the way the drawer counts. A sale
+without one is refused, and «cash and card» puts its own work on the path —
+the drawer's period stamped on every sale under its store's row — which is
+what a reading after it measures.
+
 The run prints how it ran before any figure: the gate, the CPUs, Python, the
 PostgreSQL server and the API's environment. The evidence file then says what
 made it.
@@ -320,6 +326,8 @@ def cases(world: World, headers: dict[str, str]) -> list[Case]:
                     # same key twice.
                     for variant_id, size_id in dict.fromkeys(chosen)
                 ],
+                # «Готівка»: the button that sells, and the drawer's own way.
+                "payment_method": "CASH",
             }
             if in_parts:
                 body["credit"] = customer(next(customers))

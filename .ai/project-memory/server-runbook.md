@@ -198,6 +198,16 @@ when it works again. From 9:00 to 20:00, Kyiv time, its messages arrive with
 a sound; at other hours, silently. The «Резервні копії» section shows the
 same troubles, and when the watcher last looked.
 
+Since 2026-10-04 the same watcher also tells **a drawer's difference** found
+at a store's close ([ADR-0012](../decisions/ADR-0012-cash-and-card.md)).
+That message is about the shop, not the server:
+- it goes to the network's owner only, never the administrators, and never
+  to whoever closed;
+- it is always silent, at any hour, as backup messages are;
+- it is sent once the reason is written, or 15 minutes after the close, and
+  retried for a day;
+- it needs nothing set up beyond the owner's «Start» in the bot (step 8).
+
 1. **The administrator** opens the shop's bot and presses «Start», then
    opens the app from it: «Доступу ще немає» shows their Telegram number. Put
    it in `BIRKA_ADMIN_TELEGRAM_IDS`, and `docker compose up -d backup-watch`.
@@ -356,6 +366,13 @@ if it cannot be fixed.
 Read the release's reports first. A migration that changes how stock or
 money is recorded says so, and says what its downgrade refuses.
 
+**After the update that brings `0035` (cash and card), close and reopen the
+app on every phone.** A page of the previous version left open has no way
+buttons: its sales, payments, returns and «Клієнт забрав» are refused, with
+«Перевірте дані та поточний статус замовлення.», until it is opened again.
+Operations kept on a phone from before are resent: a recorded one replays,
+and one never recorded is refused and says to do it again.
+
 The build installs exactly the library versions CI tested
 (`backend/requirements.lock`). The new app's page is never cached, and the
 previous version's files stay for 30 days after they are replaced, so a
@@ -371,10 +388,28 @@ phone that opens the app during or after the update gets a working page.
    - Safe while the new version's migrations only added things; most do.
    - A migration's own report says when an older build is unsafe beside
      its data.
+   - **Not across `0035` once phones run the new version.** Prefer a fix
+     forward. Going back by the code alone there:
+     - a sale recorded with its way whose answer was lost, resent to the old
+       server, gets a 409, and the phone holds it until the server is
+       upgraded again;
+     - payments, returns and «Клієнт забрав» from a page of the new version
+       are refused by the old code;
+     - what the old code records has no way: it reads «не вказано», it is in
+       no expected sum, and the next close shows a false surplus until a
+       manager fixes each from «не вказано».
+
+     If it cannot be avoided, reopen the app on every phone after going
+     back, and again after the next upgrade.
 2. **Code and schema: a migration's downgrade.**
    - Only where its report says the downgrade is lossless.
    - Several refuse while data they cannot keep exists, by design, rather
      than lose it.
+   - `0035` refuses once any drawer was closed, any cash was taken out or
+     put in, any way was corrected, or any sale, payment or return was
+     recorded with its way: `0034` cannot say how anything was paid. In
+     practice, once the shops have sold, only a fix forward or the backup
+     goes back.
 3. **Everything: the backup taken before the update.**
    - Follow [restoring for real](backup-restore-runbook.md#restoring-for-real).
    - Whatever was recorded since that backup is lost: minutes, if it was

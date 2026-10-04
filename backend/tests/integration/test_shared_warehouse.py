@@ -48,6 +48,7 @@ from app.modules.inventory.models import Inventory, MovementType, StockMovement
 from app.modules.inventory.service import find_divergences
 from app.modules.refunds.models import RefundItem
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import Organization, Store, StoreKind
 from tests.conftest import provision_location, requires_database
 
@@ -232,7 +233,19 @@ def sale_body(
                 "unit_price": "1500.00",
             }
         ],
+        # The till's button that sold (owner decisions, 2026-10-04).
+        "payment_method": "CASH",
     }
+
+
+def order_body(
+    store: uuid.UUID, warehouse: uuid.UUID, variant: str, size: str, qty: int = 1
+) -> dict[str, Any]:
+    """The same goods as an order. An order says how it was paid only when it
+    is collected, and its request knows no other field."""
+    body = sale_body(store, warehouse, variant, size, qty)
+    del body["payment_method"]
+    return body
 
 
 async def quantity_at(session: AsyncSession, warehouse: uuid.UUID, variant: str, size: str) -> int:
@@ -383,6 +396,7 @@ async def test_two_stores_cannot_both_sell_the_last_shared_coat(
                     unit_price=Decimal("1500.00"),
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         task = asyncio.create_task(child_sells())
         await asyncio.sleep(0.4)
@@ -603,6 +617,7 @@ async def test_a_return_restocks_the_warehouse_the_goods_were_sold_from(maker):
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -658,6 +673,7 @@ async def test_a_return_is_refused_when_the_store_cannot_receive_at_that_warehou
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -672,6 +688,7 @@ async def test_a_return_is_refused_when_the_store_cannot_receive_at_that_warehou
                 "lines": [
                     {"sale_item_id": sale["items"][0]["id"], "quantity": 1, "restock": False}
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -732,6 +749,7 @@ async def test_one_refund_returns_each_line_to_the_warehouse_it_came_from(maker)
                     }
                     for warehouse in (shops.shared_warehouse, shops.child_warehouse)
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -751,6 +769,7 @@ async def test_one_refund_returns_each_line_to_the_warehouse_it_came_from(maker)
                     {"sale_item_id": item_id, "quantity": 1, "restock": True, "condition": "INTACT"}
                     for item_id in sold_from
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -797,6 +816,7 @@ async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
                     "condition": "INTACT",
                 }
             ],
+            "payment_method": "CASH",
         }
         headers = key()
         first = await client.post(
@@ -832,6 +852,7 @@ async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -1352,6 +1373,7 @@ async def test_found_and_missing_can_stand_together_on_different_shelves(maker):
                 ],
                 "found_in_store": [{"line_index": 0, "quantity": 2}],
                 "missing_in_store": [{"line_index": 1, "quantity": 1}],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -1450,6 +1472,7 @@ async def test_the_service_refuses_a_foreign_warehouse_without_the_router(
                         unit_price=__import__("decimal").Decimal("1500.00"),
                     )
                 ],
+                payment_method=PaymentMethod.CASH,
             )
         await session.rollback()
 

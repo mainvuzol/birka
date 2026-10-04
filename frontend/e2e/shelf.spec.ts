@@ -158,12 +158,13 @@ test("a line with nothing on the shelf is dropped, and the rest is sold", async 
   await till(page);
   await add(page, empty, 3);
   await add(page, there, 1);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
 
   await page
     .getByRole("button", {
-      name: "На полиці немає жодної — продати решту",
+      name: "На полиці немає жодної — продати решту · Готівка",
+      exact: true,
     })
     .click();
 
@@ -174,7 +175,7 @@ test("a line with nothing on the shelf is dropped, and the rest is sold", async 
   await expect(
     page.getByText(`Не продано — на полиці не було: ${empty.name} сірий · M.`),
   ).toBeVisible();
-  await expect(page.getByText("Разом 2000,00 грн")).toBeVisible();
+  await expect(page.getByText("Готівка · Разом 2000,00 грн")).toBeVisible();
   expect(sent[1]?.missing_in_store).toEqual([{ line_index: 0, quantity: 0 }]);
   // The two the ledger believed in were taken off; the one there was sold.
   expect(await held(page, empty)).toBe(0);
@@ -192,10 +193,12 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   });
   await till(page);
   await add(page, empty, 2);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await page
     .getByRole("button", {
+      // Records an empty shelf, takes no money: no way is named.
       name: "На полиці немає жодної — записати нестачу",
+      exact: true,
     })
     .click();
 
@@ -206,7 +209,14 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   expect(recorded).toHaveLength(1);
   expect(await held(page, empty)).toBe(0);
   await page.getByRole("button", { name: "Новий продаж" }).click();
-  await expect(page.getByRole("button", { name: "Продати" })).toBeDisabled();
+  // An empty basket offers none of the three ways to sell.
+  const ways = page.getByRole("group", {
+    name: "Продати — як платить покупець",
+  });
+  for (const way of ["Готівка", "Картка", "Переказ"])
+    await expect(
+      ways.getByRole("button", { name: way, exact: true }),
+    ).toBeDisabled();
 });
 
 test("an empty shelf whose answer was lost is checked, and not recorded twice", async ({
@@ -224,10 +234,12 @@ test("an empty shelf whose answer was lost is checked, and not recorded twice", 
   });
   await till(page);
   await add(page, empty, 2);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await page
     .getByRole("button", {
+      // Records an empty shelf, takes no money: no way is named.
       name: "На полиці немає жодної — записати нестачу",
+      exact: true,
     })
     .click();
   await expect(
@@ -261,7 +273,7 @@ test("whoever may not report goods missing is not offered the empty shelf", asyn
   });
   await till(page);
   await add(page, empty, 2);
-  await page.getByRole("button", { name: "Продати" }).click();
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /На полиці немає жодної/ }),

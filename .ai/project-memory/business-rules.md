@@ -59,7 +59,7 @@ See [business model review and implementation implications](business-model-revie
 
 ## Latest customer-order clarification (recorded 2026-09-23)
 
-Customer postal delivery is separate from warehouse receipt/transfer. Goods at “needs dispatch” are ordered, not yet a completed sale. Reserve them; consume reservation and physical stock once at dispatch; arrival changes delivery status only. Pre-dispatch cancellation releases reserve; after dispatch require a real return. Normal warehouse receipt immediately adds stock. Child warehouse management requires explicit child-store permissions; organization-wide permissions alone do not bypass this. Owner confirmed on 2026-09-23: recognize the completed sale when the customer collects the goods, never at dispatch or postal arrival. Collection does not imply payment. See [implementation sequence and evidence](bootstrap-and-order-next-steps.md).
+Customer postal delivery is separate from warehouse receipt/transfer. Goods at “needs dispatch” are ordered, not yet a completed sale. Reserve them; consume reservation and physical stock once at dispatch; arrival changes delivery status only. Pre-dispatch cancellation releases reserve; after dispatch require a real return. Normal warehouse receipt immediately adds stock. Child warehouse management requires explicit child-store permissions; organization-wide permissions alone do not bypass this. Owner confirmed on 2026-09-23: recognize the completed sale when the customer collects the goods, never at dispatch or postal arrival. Collection does not imply payment. *Since 2026-10-04 the seller says at collection how the order was paid: in advance by transfer, cash on delivery, or cash, card or transfer at the counter ("cash and card, the day's close"). Whether the carrier paid out the cash on delivery is checked later, as separate work.* See [implementation sequence and evidence](bootstrap-and-order-next-steps.md).
 
 ### Private control implementation — 2026-09-23
 
@@ -380,7 +380,7 @@ may do, and who blocks, archives and reopens one.
 
 - **The owner of the network blocks, unblocks, archives and reopens a store,
   in the app.** Each change needs a reason and is recorded. The owner of a
-  child store does not change her own store's state.
+  child store does not change their own store's state.
 - **A blocked store is only read.** Nothing is done in it: no sale, receipt,
   return, debt payment, order, stock correction or «Брак» step.
   - The owner and the network's managers see its history, stock and debts.
@@ -1046,3 +1046,127 @@ above did not settle:
 - **A count that reaches the server more than 10 minutes late** is not
   recorded. The phone says to close the drawer as usual in the evening, and
   that day goes into that close.
+
+**Carried out, 2026-10-04.** How it is carried out is technical, not
+decided by the owner:
+- **Each money operation is placed in its drawer's day by the order it was
+  written in, not by its time.** The database does it under the store's
+  lock: a sale made while the drawer is being closed goes into that close or
+  the next one, never both and never neither.
+- **A close is one record, never changed.** Every figure is fixed when it is
+  made: the cash it started from, cash in and out, cash taken out and put
+  in, the fixes of that day, what the drawer should hold, what was counted,
+  and the difference. Card, transfer, the order ways and «не вказано» are
+  kept beside. What explains its difference later is shown beside it.
+- **The reason is a second step.** The count is recorded at «Так, закрити»;
+  the reason comes after it, as its own record. Asking for both at once
+  would show the difference before the count was final, and let it be typed
+  again.
+- **A fix of today's operation** changes what the drawer should hold now.
+  **A fix of a closed day,** and cash taken out recorded against a closed
+  close, change nothing now: that close then shows «Пояснено …» and «Не
+  пояснено …». In «Звіт» a fix counts on the day it is made.
+- **The bot's timing.** The watcher looks every minute. It writes once the
+  reason is recorded, or 15 minutes after the close without it, and tries
+  for a day. A close older than a day is no longer told.
+- **A refusal says when nothing was recorded** (`recorded: false`), so a
+  phone that never heard the answer stops waiting. An operation recorded
+  before its store was blocked or archived is still answered with what it
+  did; only a new one is refused.
+- **Cash taken out after a close the form did not show.** It goes on that
+  close only while it is the store's newest and was made at most ten
+  minutes ago, by the server's clock. Otherwise it is not recorded: it is
+  recorded again after the close, or the owner or a manager records it
+  against that close.
+- **Someone else closed while the count was typed:** the count is not
+  recorded, and the phone says who closed and when.
+- **An operation kept on a phone from before this change** and never
+  recorded is refused when it is resent. The phone says to do it again and
+  to say how it was paid.
+
+**Waiting for the owner's confirmation.** These are built as the design
+recommended, or as the build read the rules; each is cheap to change before
+going live:
+1. An order collected in parts: the part paid now may be any of the five
+   ways, in advance or on delivery included. (G2)
+2. An order paid partly in advance and the rest on delivery is recorded as
+   «Накладений платіж». (G3)
+3. A return of an order paid in advance or on delivery suggests
+   «Переказом»; the seller may change it. (G4)
+4. A return of a sale whose debt was paid in different ways suggests
+   nothing, and the seller chooses; an old sale suggests nothing either.
+   (G5)
+5. A day nobody closed shows as «не закрито» in «Каса» and in the next
+   close's message, and only if something was sold, paid, returned or
+   taken out that day. (G9)
+6. The owner and managers see no expected sum on the close form either, but
+   a manager can work it out from «Звіт». (G13)
+7. Only the network's owner closes a blocked store, not a network manager or
+   a child store's owner; an archived store's drawer is not closed. (G14)
+8. Nothing is taken out, put in or fixed in a blocked store; money the owner
+   takes at its close is recorded «Власнику» after it is unblocked. (G15)
+9. Cash taken out is recorded whenever it is taken; the close reminds to
+   record it first. (G19)
+10. A supplier's courier paid from the drawer is two records: the take-out
+    in «Каса», and the invoice's payment in «Накладні» by a manager. (G20)
+11. A miscounted close is not fixed: the next close shows the opposite
+    difference, with its reason. (G21)
+12. Card and transfer at a close cover the time since the previous close,
+    not the calendar day, so after a day not closed they will not match one
+    slip. (G22)
+13. In «Борги» the three buttons «Готівка», «Картка» and «Переказ» replace
+    «Прийняти внесок». (G23)
+14. «Звіт» shows no cash taken out; orders paid in advance or on delivery
+    have their own lines outside «Разом»; «Разом у касі» is now «Разом» and
+    «Гроші в касі» is «Гроші». (G24)
+15. A card the terminal refused, and a customer who left without the goods:
+    a return «На картку». (G25)
+16. A store may be archived with its drawer not closed; the owner closes it
+    first if they wish. (G26)
+17. After their close the seller sees what the drawer should have held, what
+    they counted, the difference, and card and transfer, but not the order
+    sums. (G27)
+18. A note on a fix of the way of paying is optional. (G28)
+19. Before their count a seller sees no list of their sales with sums or ways;
+    a sale's way shows only on the one sale being returned or fixed. (G32)
+20. A seller may record «Кур’єру постачальника», not only «Витрати». (G34)
+21. A return of a sale paid in parts that only lowers the debt does not ask
+    how the money goes back. (G35)
+22. A customer who wants to pay part cash and part card pays one way, or
+    the basket is sold as two sales. (G36)
+23. Nobody sells while the drawer is counted; the form says «Поки рахуєте,
+    не продавайте.» (G37)
+24. A transfer that never arrived after the goods were handed over: the
+    receipt asks to check first; if it never comes, a return, or the owner
+    settles it outside the app. (G38)
+25. A return «Переказом» is recorded at once, and whoever holds the shop's
+    account sends the money. (G39)
+26. No message when a day goes unclosed; the next close's message names
+    it. (G42)
+27. A card and cash mix-up found on the terminal's slip after the close is
+    fixed by a manager or the owner, not the seller, and explains that
+    close's difference. (G43)
+28. A return of an order paid in advance or on delivery hands the money back
+    through the till, and lowers «Разом» in «Звіт», not the order's own
+    line.
+29. «Продажі» in «Звіт» still counts every sale, orders paid in advance or
+    on delivery included; only their money is outside «Разом».
+30. Cash taken out sent after a colleague's close, more than ten minutes
+    later or after two closes, is refused, and recorded again or by a
+    manager against that close.
+31. Cash taken out from a form opened before a colleague's close goes on
+    that close, as money taken before it; the phone says «Записано до
+    закриття …».
+32. A seller sees the way of every debt payment and return in «Борги», a
+    colleague's included.
+33. A seller's return screen shows the sum and the way of any sale they may
+    return, one sale at a time.
+34. A seller who closed before their store was blocked still writes their
+    close's reason after the block.
+35. The closer's phone waits for the reason in whichever store of the
+    network it opens.
+36. «Закриття» shows the owner and managers 20 closes at a time, from a
+    year back, with «Показати ще».
+
+Built on 2026-10-04; see the [report](cash-and-card-report.md) and
+[ADR-0012](../decisions/ADR-0012-cash-and-card.md).

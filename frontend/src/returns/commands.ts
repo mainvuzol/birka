@@ -1,4 +1,5 @@
 import { isId, isRecord, journal } from "@/shared/journal";
+import { isTillMethod } from "@/shared/payment";
 import type { Refund, ReturnBody } from "./types";
 
 /**
@@ -28,6 +29,9 @@ const returns = journal<ReturnBody, Refund>({
     command_id: body.command_id,
     lines: body.lines,
     reason: body.reason,
+    // Only when the attempt has it: one saved before the way was asked is
+    // resent byte for byte (ADR-0012 §B12).
+    ...(body.payment_method ? { payment_method: body.payment_method } : {}),
     // Taken back here, sold at another store of the network.
     ...(body.elsewhere ? { store_id: body.store_id } : {}),
   }),
@@ -36,6 +40,7 @@ const returns = journal<ReturnBody, Refund>({
     isId(body.sale_id) &&
     (body.reason === null || typeof body.reason === "string") &&
     (body.elsewhere === undefined || typeof body.elsewhere === "boolean") &&
+    (body.payment_method === undefined || isTillMethod(body.payment_method)) &&
     Array.isArray(body.lines) &&
     body.lines.length > 0 &&
     body.lines.every(isPart),

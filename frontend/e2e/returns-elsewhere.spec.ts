@@ -61,10 +61,11 @@ interface Sold {
   sale: { id: string; items: { id: string }[] };
 }
 
-/** Two coats at 3000 sold by «Другий» from `warehouse`, by the owner. */
+/** Two coats at 3000 sold by «Другий» from `warehouse`, by the owner, paid `way`. */
 async function soldAtTheOtherStore(
   page: Page,
   warehouse: string,
+  way: "CASH" | "CARD" | "TRANSFER" = "CASH",
 ): Promise<Sold> {
   const token = await tokenOf(page, fixture.owner_telegram_user_id);
   const headers = { Authorization: `Bearer ${token}` };
@@ -118,6 +119,7 @@ async function soldAtTheOtherStore(
           unit_price: "3000.00",
         },
       ],
+      payment_method: way,
     },
   });
   expect(sale.status()).toBe(201);
@@ -168,6 +170,7 @@ test("goods bought at another store come back here, and this store hands the mon
   const { model, variant } = await soldAtTheOtherStore(
     page,
     fixture.returns_location_id,
+    "CARD",
   );
   const before = await held(page, fixture.returns_location_id, variant);
   const sent = refunds(page);
@@ -195,8 +198,16 @@ test("goods bought at another store come back here, and this store hands the mon
   await expect(page.getByText(/у магазині «Другий»\./)).toBeVisible();
   await page.getByLabel("Цілих").fill("1");
   await page.getByLabel("Пошкоджених").fill("1");
+  // The other store's sale says how it was paid, for this one return only:
+  // by card, so the money goes back to the card, through this terminal.
+  await expect(
+    page.getByRole("radio", { name: "На картку", exact: true }),
+  ).toBeChecked();
   await page
-    .getByRole("button", { name: "Повернути покупцю 6000,00 грн" })
+    .getByRole("button", {
+      name: "Повернути покупцю 6000,00 грн на картку",
+      exact: true,
+    })
     .click();
 
   await expect(
@@ -204,13 +215,18 @@ test("goods bought at another store come back here, and this store hands the mon
       "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
     ),
   ).toBeVisible();
-  await expect(page.getByText("Поверніть покупцю 6000,00 грн.")).toBeVisible();
+  await expect(
+    page.getByText("Поверніть 6000,00 грн на картку покупця через термінал."),
+  ).toBeVisible();
   await expect(
     page.getByText("Цілий товар повернуто на склад, з якого його продали."),
   ).toBeVisible();
   expect(sent.bodies).toHaveLength(1);
   expect((sent.bodies[0] as { store_id: string }).store_id).toBe(
     fixture.store_id,
+  );
+  expect((sent.bodies[0] as { payment_method: string }).payment_method).toBe(
+    "CARD",
   );
   expect(await held(page, fixture.returns_location_id, variant)).toBe(
     before + 1,
@@ -255,7 +271,7 @@ test("goods sold from the other store's own warehouse go to one of this store's,
   ).toHaveCount(0);
   await place.selectOption(fixture.returns_location_id);
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн" })
+    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
     .click();
 
   await expect(
@@ -298,6 +314,7 @@ test("a unit from the other store's own warehouse goes back on sale here, where 
           condition: "DAMAGED",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(returned.status()).toBe(201);
@@ -342,7 +359,7 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Цілих").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн" })
+    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
     .click();
 
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
@@ -360,6 +377,9 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
   expect((sent.bodies[0] as { store_id: string }).store_id).toBe(
     fixture.store_id,
   );
+  await expect(
+    page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
+  ).toBeVisible();
 });
 
 test("a sale of this store is returned as before, with no store named", async ({
@@ -415,6 +435,7 @@ test("a sale of this store is returned as before, with no store named", async ({
           unit_price: "3000.00",
         },
       ],
+      payment_method: "CASH",
     },
   });
   expect(sale.status()).toBe(201);
@@ -430,13 +451,19 @@ test("a sale of this store is returned as before, with no store named", async ({
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Цілих").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн" })
+    .getByRole("button", {
+      name: "Повернути покупцю 3000,00 грн готівкою",
+      exact: true,
+    })
     .click();
-  await expect(page.getByText("Поверніть покупцю 3000,00 грн.")).toBeVisible();
+  await expect(
+    page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
+  ).toBeVisible();
   await expect(page.getByText(/гроші віддаєте ви/)).toHaveCount(0);
   expect(Object.keys(sent.bodies[0] ?? {}).sort()).toEqual([
     "command_id",
     "lines",
+    "payment_method",
     "reason",
   ]);
 });

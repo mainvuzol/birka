@@ -942,7 +942,11 @@ async def advance(
 ) -> dict[str, Any]:
     async with api(maker, shops.scope(shops.primary_store, MANAGER)) as client:
         response = await client.post(
-            f"/api/v1/orders/{order_id}/{action}", json={"command_id": str(uuid.uuid4())}
+            f"/api/v1/orders/{order_id}/{action}",
+            json={"command_id": str(uuid.uuid4())}
+            # «Клієнт забрав» says how the order was paid (owner decisions,
+            # 2026-10-04).
+            | ({"payment_method": "CASH"} if action == "collect" else {}),
         )
     assert response.status_code == 200, response.text
     body: dict[str, Any] = response.json()

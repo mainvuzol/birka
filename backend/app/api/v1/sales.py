@@ -17,6 +17,14 @@ is sold twice either way — `command_id` is permanent (I20), so the corrected
 attempt is recognised as the same sale and replayed rather than repeated. Only
 a key whose attempt *succeeded* returns `IDEMPOTENCY_CONFLICT` when a different
 payload arrives under it. See `tests/integration/test_sale_retry_contract.py`.
+
+`payment_method` is the button that sold: «Готівка», «Картка» or «Переказ»
+(owner decisions, 2026-10-04). Optional here, because a body the schema
+refused would never reach the replay below, and a sale a phone kept from
+before the way was asked would be stuck for good, sold; the service requires
+it of a new sale instead (ADR-0012, B13). Only the seller who sold, and the
+owner and managers, read it back (`GET /sales/{id}`); the list of the
+store's sales never carries it (ADR-0012, G32).
 """
 
 from __future__ import annotations
@@ -24,7 +32,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,10 +45,12 @@ from app.core.errors import NotFoundError, ValidationFailedError
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
+from app.modules.cash.current import sale_methods
 from app.modules.credit import service as credit_service
 from app.modules.refunds.service import refunded_quantities
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
-from app.modules.sales.read import MAX_QUERY, list_sales
+from app.modules.sales.payment import PaymentMethod
+from app.modules.sales.read import MAX_QUERY, list_sales, way_shown_to
 from app.modules.sales.service import (
     FoundInStore,
     MissingInStore,
@@ -57,6 +67,17 @@ from app.modules.tenancy.service import LocationCapability, back_on_sale_locatio
 router = APIRouter(tags=["sales"])
 
 SALES_ENDPOINT = "POST /sales"
+
+# The till's three ways (`payment.TILL_METHODS`): a sale, a payment toward a
+# debt, money handed back. And all five, which «Клієнт забрав» takes
+# (`payment.ORDER_METHODS`).
+TillMethodValue = Literal["CASH", "CARD", "TRANSFER"]
+MethodValue = Literal["CASH", "CARD", "TRANSFER", "PREPAID_TRANSFER", "CARRIER_COD"]
+
+
+def method_of(value: str | None) -> PaymentMethod | None:
+    """A request's way, as the services take it."""
+    return PaymentMethod(value) if value is not None else None
 
 
 class SaleLinePayload(BaseModel):
@@ -118,6 +139,11 @@ class CreditPayload(BaseModel):
 
 
 class SaleRequest(BaseModel):
+    # Every field a client ever sent is known (`sales/commands.ts`), so an
+    # unknown one is a client mistake, refused rather than dropped, as the
+    # payment, refund and order requests do (ADR-0012, B13).
+    model_config = ConfigDict(extra="forbid")
+
     store_id: uuid.UUID
     # Client-generated and permanent. Two requests carrying the same command_id
     # are the same sale, however far apart they arrive.
@@ -128,6 +154,19 @@ class SaleRequest(BaseModel):
     size_clarified: list[SizeClarifiedPayload] = Field(default_factory=list, max_length=100)
     # Present only when the customer pays in parts.
     credit: CreditPayload | None = None
+    # How the customer pays: the button that sold. Paid in parts, the way of
+    # the money taken now — beside `credit`, not inside it. Absent only from
+    # a sale a phone kept from before it was asked.
+    payment_method: TillMethodValue | None = None
+
+    def fingerprinted(self) -> dict[str, object]:
+        """The body as its 7-day print reads it: a request without a way is
+        printed exactly as before ways existed, so an attempt kept from then
+        still matches what the cache stored (ADR-0012, B13)."""
+        body = self.model_dump(mode="json")
+        if body["payment_method"] is None:
+            del body["payment_method"]
+        return body
 
 
 class SaleItemResponse(BaseModel):
@@ -176,6 +215,10 @@ class SaleResponse(BaseModel):
         ),
     )
     credit: SaleCreditResponse | None = None
+    # The way the seller pressed, in the answer to the command and its stored
+    # snapshot. Absent from answers given before it was asked; on a read,
+    # only for whoever sold it and the owner and managers (ADR-0012, G32).
+    payment_method: str | None = None
 
 
 def _to_response(
@@ -187,6 +230,7 @@ def _to_response(
     credit: credit_service.CreditView | None = None,
 ) -> SaleResponse:
     return SaleResponse(
+        payment_method=sale.payment_method,
         credit=(
             SaleCreditResponse(credit_id=credit.id, paid_now=credit.paid, owed=credit.owed)
             if credit is not None
@@ -282,7 +326,7 @@ async def create(
         endpoint=SALES_ENDPOINT,
         key=idempotency_key,
         request_fingerprint=idempotency.fingerprint(
-            payload.model_dump(mode="json"),
+            payload.fingerprinted(),
             actor_user_id=scope.user_id,
             store_id=payload.store_id,
         ),
@@ -323,6 +367,7 @@ async def create(
         ],
         credit_terms=credit_service.fingerprint_of(credit) if credit is not None else None,
         correlation_id=get_correlation_id(),
+        payment_method=method_of(payload.payment_method),
     )
     opened = (
         await credit_service.open_credit(
@@ -330,6 +375,8 @@ async def create(
             scope=scope,
             sale=result.sale,
             credit=credit,
+            # The money taken now: its first payment holds the sale's way.
+            payment_method=method_of(payload.payment_method),
             correlation_id=get_correlation_id(),
         )
         if credit is not None
@@ -584,18 +631,30 @@ async def read_sale(sale_id: uuid.UUID, scope: ScopeDep, session: SessionDep) ->
     scope.require(Permission.SALE_VIEW, sale.store_id)
 
     if sale.response_snapshot is not None:
-        return SaleResponse.model_validate(sale.response_snapshot)
+        body = SaleResponse.model_validate(sale.response_snapshot)
+    else:
+        items = (
+            (await session.execute(select(SaleItem).where(SaleItem.sale_id == sale.id)))
+            .scalars()
+            .all()
+        )
+        body = _to_response(
+            sale,
+            list(items),
+            await correction_ids(session, sale),
+            await shortage_ids(session, sale),
+            await reclassification_ids(session, sale),
+        )
+    # Every holder of `sale:view` reads any of the store's sales, a seller
+    # counting the drawer blind among them: the way only for whoever sold it
+    # and the owner and managers, and then as it stands after corrections
+    # (ADR-0012, G32).
+    method: PaymentMethod | None = None
+    if way_shown_to(scope, store_id=sale.store_id, seller_user_id=sale.seller_user_id):
+        methods = await sale_methods(session, [sale.id])
+        if sale.id in methods:
+            method = methods[sale.id].taken_with_sale.method
+    return body.model_copy(update={"payment_method": method.value if method else None})
 
-    items = (
-        (await session.execute(select(SaleItem).where(SaleItem.sale_id == sale.id))).scalars().all()
-    )
-    return _to_response(
-        sale,
-        list(items),
-        await correction_ids(session, sale),
-        await shortage_ids(session, sale),
-        await reclassification_ids(session, sale),
-    )
 
-
-__all__ = ["router"]
+__all__ = ["MethodValue", "TillMethodValue", "method_of", "router"]

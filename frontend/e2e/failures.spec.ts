@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
-import { createHmac } from "node:crypto";
+import type { Page, Request, Response } from "@playwright/test";
+import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
@@ -18,9 +18,16 @@ import { readFileSync } from "node:fs";
  *
  * The server's side of each is played with stubs: the API's note endpoint,
  * its error body and the watcher's report are another part's work.
+ *
+ * And one failure the real server plays: an attempt an older page saved
+ * before the way of paying was asked (owner decision, 2026-10-04; ADR-0012
+ * §B13), resent and refused as having recorded nothing.
  */
 interface Fixture {
   owner_telegram_user_id: string;
+  telegram_user_id: string;
+  store_id: string;
+  returns_location_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -66,11 +73,11 @@ function stubbedLaunch(): string {
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
 
-/** The app opened from Telegram by a person the seed knows, signed. */
-function signedLaunch(telegramUserId: string): string {
+/** Telegram's launch data for a person the seed knows, signed. */
+function signedData(telegramUserId: string, name = "Власниця"): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
-    user: `{"id":${telegramUserId},"first_name":"Власниця"}`,
+    user: `{"id":${telegramUserId},"first_name":"${name}"}`,
   });
   const check = [...fields]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -80,7 +87,12 @@ function signedLaunch(telegramUserId: string): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  return fields.toString();
+}
+
+/** The app opened from Telegram by a person the seed knows, signed. */
+function signedLaunch(telegramUserId: string, name?: string): string {
+  return `/#${new URLSearchParams({ tgWebAppData: signedData(telegramUserId, name) }).toString()}`;
 }
 
 async function signInStubbed(page: Page): Promise<void> {
@@ -657,4 +669,315 @@ test("an error nothing caught fails a journey that expected none", async ({
       }, 0);
     }),
   ]);
+});
+
+test.describe("an attempt saved before the way of paying was asked, resent to the real server", () => {
+  /**
+   * A page of the previous version wrote down a sale, a payment or a return
+   * without `payment_method`, and never heard back. Nothing was recorded, so
+   * the server refuses it as a new command without a way, after looking it up
+   * (`recorded: false`). The attempt is resent byte for byte, settles, and the
+   * phone says what was not recorded instead of staying blocked.
+   */
+  interface Seller {
+    token: string;
+    organization: string;
+    user: string;
+  }
+
+  async function seller(page: Page): Promise<Seller> {
+    const auth = await page.request.post("/api/v1/auth/telegram", {
+      data: { init_data: signedData(fixture.telegram_user_id, "Оля") },
+    });
+    const { access_token: token } = (await auth.json()) as {
+      access_token: string;
+    };
+    const me = await page.request.get("/api/v1/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const who = (await me.json()) as {
+      user_id: string;
+      organization_id: string;
+    };
+    return { token, organization: who.organization_id, user: who.user_id };
+  }
+
+  /** A model of the test's own, three of it received where the till sells. */
+  async function coat(
+    page: Page,
+    token: string,
+  ): Promise<{ variant: string; size: string }> {
+    const headers = { Authorization: `Bearer ${token}` };
+    const created = await page.request.post("/api/v1/catalog/products", {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        store_id: fixture.store_id,
+        concept: `Стара спроба ${randomUUID().slice(0, 8)}`,
+        variant: { color: "чорний" },
+        sizes: [{ system: "ALPHA", code: "S" }],
+      },
+    });
+    expect(created.status()).toBe(201);
+    const product = (await created.json()) as {
+      product_variant_id: string;
+      sizes: { size_id: string }[];
+    };
+    const size = product.sizes[0]?.size_id ?? "";
+    const received = await page.request.post("/api/v1/inventory/receipts", {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        store_id: fixture.store_id,
+        location_id: fixture.returns_location_id,
+        command_id: randomUUID(),
+        lines: [
+          {
+            product_variant_id: product.product_variant_id,
+            size_id: size,
+            quantity: 3,
+            acquisition_type: "PURCHASE",
+            unit_cost: null,
+          },
+        ],
+        notes: null,
+      },
+    });
+    expect(received.status()).toBe(201);
+    return { variant: product.product_variant_id, size };
+  }
+
+  /** One of the coats sold now, through the API, as the new till sells. */
+  async function sell(
+    page: Page,
+    token: string,
+    terms?: object,
+  ): Promise<{
+    id: string;
+    items: { id: string }[];
+    credit: { credit_id: string } | null;
+  }> {
+    const { variant, size } = await coat(page, token);
+    const sold = await page.request.post("/api/v1/sales", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Idempotency-Key": randomUUID(),
+      },
+      data: {
+        store_id: fixture.store_id,
+        command_id: randomUUID(),
+        lines: [
+          {
+            product_variant_id: variant,
+            size_id: size,
+            source_location_id: fixture.returns_location_id,
+            quantity: 1,
+            unit_price: "3000.00",
+          },
+        ],
+        ...(terms ? { credit: terms } : {}),
+        payment_method: "CASH",
+      },
+    });
+    expect(sold.status()).toBe(201);
+    return (await sold.json()) as {
+      id: string;
+      items: { id: string }[];
+      credit: { credit_id: string } | null;
+    };
+  }
+
+  /** Leaves `attempt` in `scope`'s journal, as the older page did, and opens the store. */
+  async function resume(
+    page: Page,
+    scope: string,
+    who: Seller,
+    attempt: object,
+  ): Promise<string> {
+    const key = `birka:${scope}:${who.organization}:${who.user}:${fixture.store_id}`;
+    await seed(page, { [key]: JSON.stringify(attempt) });
+    await page.goto(signedLaunch(fixture.telegram_user_id, "Оля"));
+    await page.getByRole("button", { name: "Основний MAIN" }).click();
+    return key;
+  }
+
+  /** The refusal proves nothing was recorded, so it settles the attempt. */
+  async function refusedAsUnrecorded(response: Response): Promise<void> {
+    expect(response.status()).toBe(422);
+    expect(await response.json()).toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: { reason: "PAYMENT_METHOD_REQUIRED", recorded: false },
+    });
+  }
+
+  test("a sale is refused and settles, and the basket is put together again", async ({
+    page,
+  }) => {
+    const who = await seller(page);
+    const { variant, size } = await coat(page, who.token);
+    const stored = {
+      key: randomUUID(),
+      ambiguous: true,
+      body: {
+        store_id: fixture.store_id,
+        command_id: randomUUID(),
+        lines: [
+          {
+            product_variant_id: variant,
+            size_id: size,
+            source_location_id: fixture.returns_location_id,
+            quantity: 1,
+            unit_price: "3000.00",
+            discount_amount: "0.00",
+          },
+        ],
+        found_in_store: [],
+        missing_in_store: [],
+        size_clarified: [],
+      },
+    };
+    const key = await resume(page, "sale-pending", who, stored);
+    await expect(
+      page.getByRole("heading", { name: "Незавершений продаж" }),
+    ).toBeVisible();
+    const answered = page.waitForResponse(
+      (r) =>
+        r.url().endsWith("/api/v1/sales") && r.request().method() === "POST",
+    );
+    await page
+      .getByRole("button", { name: "Перевірити результат продажу" })
+      .click();
+    const response = await answered;
+    // Exactly what was saved, under its own key.
+    expect(response.request().postData()).toBe(JSON.stringify(stored.body));
+    expect(await response.request().headerValue("Idempotency-Key")).toBe(
+      stored.key,
+    );
+    await refusedAsUnrecorded(response);
+
+    await expect(
+      page.getByRole("heading", { name: "Незавершений продаж" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        /Не вказано, як платить покупець\. Натисніть «Готівка», «Картка» або «Переказ»\./,
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Кошик треба зібрати знову\./)).toBeVisible();
+    expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
+    // The till is the seller's again, with the three ways.
+    await expect(
+      page.getByRole("button", { name: "Змінити магазин" }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("group", { name: "Продати — як платить покупець" }),
+    ).toBeVisible();
+  });
+
+  test("a payment is refused and settles, and says it was not taken", async ({
+    page,
+  }) => {
+    const who = await seller(page);
+    const sale = await sell(page, who.token, {
+      customer_name: `Покупець ${randomUUID().slice(0, 8)}`,
+      customer_phone: `067${String(Date.now() % 10_000_000).padStart(7, "0")}`,
+      paid_now: "1000.00",
+    });
+    const creditId = sale.credit?.credit_id ?? "";
+    const stored = {
+      key: randomUUID(),
+      ambiguous: true,
+      body: {
+        kind: "payment",
+        store_id: fixture.store_id,
+        credit_id: creditId,
+        command_id: randomUUID(),
+        amount: "500.00",
+      },
+    };
+    const key = await resume(page, "credit-pending", who, stored);
+    await expect(
+      page.getByRole("heading", { name: "Незавершений внесок" }),
+    ).toBeVisible();
+    const answered = page.waitForResponse((r) =>
+      r.url().endsWith(`/api/v1/credits/${creditId}/payments`),
+    );
+    await page
+      .getByRole("button", { name: "Перевірити результат внеску" })
+      .click();
+    const response = await answered;
+    expect(response.request().postData()).toBe(
+      JSON.stringify({
+        command_id: stored.body.command_id,
+        amount: stored.body.amount,
+      }),
+    );
+    await refusedAsUnrecorded(response);
+
+    await expect(
+      page.getByRole("heading", { name: "Незавершений внесок" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "Внесок не записано — прийміть його ще раз і вкажіть, як платить покупець.",
+      ),
+    ).toBeVisible();
+    expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
+    const debt = await page.request.get(`/api/v1/credits/${creditId}`, {
+      headers: { Authorization: `Bearer ${who.token}` },
+    });
+    expect(((await debt.json()) as { owed: string }).owed).toBe("2000.00");
+  });
+
+  test("a return is refused and settles, and says it was not made", async ({
+    page,
+  }) => {
+    const who = await seller(page);
+    const sale = await sell(page, who.token);
+    const stored = {
+      key: randomUUID(),
+      ambiguous: true,
+      body: {
+        store_id: fixture.store_id,
+        sale_id: sale.id,
+        command_id: randomUUID(),
+        lines: [
+          {
+            sale_item_id: sale.items[0]?.id ?? "",
+            quantity: 1,
+            restock: true,
+            condition: "INTACT",
+          },
+        ],
+        reason: null,
+      },
+    };
+    const key = await resume(page, "return-pending", who, stored);
+    await expect(
+      page.getByRole("heading", { name: "Незавершене повернення" }),
+    ).toBeVisible();
+    const answered = page.waitForResponse((r) =>
+      r.url().endsWith(`/api/v1/sales/${sale.id}/refunds`),
+    );
+    await page
+      .getByRole("button", { name: "Перевірити результат повернення" })
+      .click();
+    const response = await answered;
+    expect(response.request().postData()).toBe(
+      JSON.stringify({
+        command_id: stored.body.command_id,
+        lines: stored.body.lines,
+        reason: null,
+      }),
+    );
+    await refusedAsUnrecorded(response);
+
+    await expect(
+      page.getByRole("heading", { name: "Незавершене повернення" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "Повернення не записано — оформіть його ще раз і вкажіть, як повертаєте гроші.",
+      ),
+    ).toBeVisible();
+    expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
+  });
 });

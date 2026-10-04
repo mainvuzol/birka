@@ -55,6 +55,10 @@ EXPECTED_SELLER = {
     Permission.DAMAGED_HANDLE,
     # Owner decision, 2026-10-01: a seller sells in parts and takes payments.
     Permission.SALE_CREDIT,
+    # Owner decisions, 2026-10-04: the seller on duty closes the drawer, and
+    # records cash taken out for expenses or a supplier's courier.
+    Permission.CASH_CLOSE,
+    Permission.CASH_EXPENSE,
 }
 EXPECTED_MANAGER = EXPECTED_SELLER | {
     Permission.INVENTORY_ADJUST,
@@ -76,6 +80,10 @@ EXPECTED_MANAGER = EXPECTED_SELLER | {
     # Owner decision, 2026-10-01: the same people keep what the store owes its
     # suppliers; a seller never sees it.
     Permission.SUPPLIER_DEBT,
+    # Owner decisions, 2026-10-04: the owner and managers record any cash
+    # taken out or put in, and correct a way of paying after the close.
+    Permission.CASH_TAKE_OUT,
+    Permission.CASH_CORRECT,
 }
 EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.SNAPSHOT_APPROVE,
@@ -181,6 +189,56 @@ def test_only_the_owner_sees_the_backups() -> None:
     assert Permission.BACKUP_VIEW in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
     assert Permission.BACKUP_VIEW not in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
     assert Permission.BACKUP_VIEW not in DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
+
+
+def test_the_seller_on_duty_closes_the_drawer_and_records_her_expenses() -> None:
+    """Owner decisions, 2026-10-04: the seller on duty counts and closes the
+    drawer, and records cash taken out for expenses; so do the owner and the
+    managers."""
+    for role in RoleCode:
+        assert Permission.CASH_CLOSE in DEFAULT_ROLE_PERMISSIONS[role]
+        assert Permission.CASH_EXPENSE in DEFAULT_ROLE_PERMISSIONS[role]
+
+
+def test_a_seller_neither_takes_cash_out_for_the_owner_nor_corrects_a_way() -> None:
+    """Owner decisions, 2026-10-04: the owner and managers record any cash
+    taken out, cash put in, and a correction after the close; a seller
+    records only expenses, and fixes only their own operations before the
+    close, without `cash:correct`."""
+    seller = DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]
+
+    assert Permission.CASH_TAKE_OUT not in seller
+    assert Permission.CASH_CORRECT not in seller
+    for role in (RoleCode.MANAGER, RoleCode.OWNER):
+        assert Permission.CASH_TAKE_OUT in DEFAULT_ROLE_PERMISSIONS[role]
+        assert Permission.CASH_CORRECT in DEFAULT_ROLE_PERMISSIONS[role]
+
+
+@pytest.mark.parametrize(
+    "permission",
+    [
+        Permission.CASH_CLOSE,
+        Permission.CASH_EXPENSE,
+        Permission.CASH_TAKE_OUT,
+        Permission.CASH_CORRECT,
+    ],
+)
+def test_a_role_without_a_drawer_permission_is_refused_it(permission: Permission) -> None:
+    """Every drawer permission is its own: holding all the others, even the
+    rest of the drawer's, grants nothing of it."""
+    scope = _scope(stores={STORE_A: ALL_PERMISSIONS - {permission}})
+
+    assert not scope.can(permission, STORE_A)
+    with pytest.raises(PermissionDeniedError):
+        scope.require(permission, STORE_A)
+
+
+@pytest.mark.parametrize("permission", [Permission.CASH_TAKE_OUT, Permission.CASH_CORRECT])
+def test_a_seller_is_refused_any_take_out_and_any_correction(permission: Permission) -> None:
+    scope = _scope(stores={STORE_A: DEFAULT_ROLE_PERMISSIONS[RoleCode.SELLER]})
+
+    with pytest.raises(PermissionDeniedError):
+        scope.require(permission, STORE_A)
 
 
 # --- scope -----------------------------------------------------------------

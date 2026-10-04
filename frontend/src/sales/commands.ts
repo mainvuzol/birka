@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { api, ApiError, recordedNothing } from "@/shared/api";
+import { isTillMethod } from "@/shared/payment";
+import type { TillMethod } from "@/shared/payment";
 import type {
   CreditTerms,
   EmptyShelf,
@@ -24,6 +26,15 @@ export interface SaleBody {
   size_clarified?: Report[];
   /** Present only when the customer pays in parts. */
   credit?: CreditTerms;
+  /**
+   * How the customer pays: «Готівка», «Картка» or «Переказ», the button that
+   * sold (owner decision, 2026-10-04; ADR-0012 §B2). With `credit`, how the
+   * part paid now is paid. Absent from an attempt written down before the
+   * till asked; such an attempt is resent exactly as stored, so it stays
+   * absent, and the server replays it if it was recorded or refuses it as
+   * having recorded nothing.
+   */
+  payment_method?: TillMethod;
 }
 
 /**
@@ -138,6 +149,8 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
       !isReports((body as SaleBody).size_clarified, lines.length)) ||
     ((body as SaleBody).credit !== undefined &&
       !isTerms((body as SaleBody).credit)) ||
+    ((body as SaleBody).payment_method !== undefined &&
+      !isTillMethod((body as SaleBody).payment_method)) ||
     (attempt.acknowledged !== undefined &&
       typeof attempt.acknowledged !== "boolean") ||
     (attempt.ambiguous !== undefined &&

@@ -87,17 +87,39 @@ class Sale(UUIDPrimaryKey, TimestampMixin, Base):
         DateTime(timezone=True), nullable=False, server_default=UTC_NOW
     )
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # How the customer paid: one of `sales.payment.PaymentMethod`, given by
+    # the button that sold, or at «Клієнт забрав» for an order (owner
+    # decisions, 2026-10-04). A sale paid in parts holds the way of the money
+    # taken now, which its first payment holds too. NULL only on sales made
+    # before revision 0035: they read «не вказано», and nothing guesses them.
+    # Never changed after the insert: a wrong way is corrected by a new row
+    # (`cash.models.PaymentCorrection`), and the database refuses the update.
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # The period of the store's drawer this sale belongs to, stamped by the
+    # database at insert under the store's lock, so it follows commit order
+    # (ADR-0012, B3). The application never writes it, and never reads it
+    # from the object it inserted: the drawer reads it by SQL.
+    drawer_period: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         # Invariant I20: the same command can never create a second sale,
         # at any distance in time.
         UniqueConstraint("organization_id", "command_id", name="uq_sale_org_command"),
         Index("ix_sale_store_sold_at", "store_id", "sold_at"),
+        Index("ix_sale_store_id_drawer_period", "store_id", "drawer_period"),
         CheckConstraint(
             "subtotal >= 0 AND total >= 0 AND discount_total >= 0", name="amounts_sane"
         ),
         CheckConstraint("total = subtotal - discount_total", name="total_is_consistent"),
         CheckConstraint("char_length(currency_code) = 3", name="currency_code_iso4217"),
+        CheckConstraint(
+            "payment_method IS NULL OR payment_method IN "
+            "('CASH', 'CARD', 'TRANSFER', 'PREPAID_TRANSFER', 'CARRIER_COD')",
+            name="payment_method_known",
+        ),
+        CheckConstraint(
+            "drawer_period IS NULL OR drawer_period > 0", name="drawer_period_positive"
+        ),
     )
 
 

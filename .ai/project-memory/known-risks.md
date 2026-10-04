@@ -401,7 +401,7 @@ See the [report](store-states-report.md).
   - **Speed on the laptop barely changed,** with one API process. In four
     alternating readings, the median of the six-seller cases fell by 10–20 %
     and their p95 rose by 10–30 %. All cases stayed far inside the budget
-    (worst p95 89 ms against 500). Evidence:
+    (worst p95 90 ms against 500). Evidence:
     [`output/verification/2026-10-04-store-hold/`](../../output/verification/2026-10-04-store-hold/).
 
 ## Returns to a supplier — 2026-10-01
@@ -484,7 +484,9 @@ See the [report](sales-report-report.md).
 
 - **«Разом у касі» is what the till should hold, not what it holds.** The app
   does not ask cash or card, as the owner chose, so a card payment is in the
-  sum too. Nothing counts the till itself.
+  sum too. Nothing counts the till itself. *Superseded on 2026-10-04: every
+  payment now says how it was paid, «Разом» is split by way, and the drawer
+  is counted once a day. See "Cash and card — 2026-10-04" below.*
 - **Every figure is summed when asked for, never stored.** A year of a busy
   network is read in one request; no index was added for it. It is a read
   for the owner and managers, not the till's hot path, and has not been
@@ -684,3 +686,94 @@ See the [report](failures-visible-report.md) and
   steps). That covers `/ready` through Caddy, `/internal` answered 404, the
   API's healthcheck and the release tag. The watcher's messages have not
   reached a real Telegram.
+
+## Cash and card — 2026-10-04
+
+See the [report](cash-and-card-report.md) and
+[ADR-0012](../decisions/ADR-0012-cash-and-card.md).
+
+- **Going back by the code alone across `0035` is not safe** once phones run
+  the new version.
+  - A sale recorded with a way whose answer was lost, resent to the old
+    server, gets a 409 and holds the phone until the next upgrade.
+  - Payments, returns and collects from a new page are refused by the old
+    code.
+  - What the old code records reads «не вказано» and is in no expected sum,
+    so the next close shows a false surplus until each is fixed from «не
+    вказано».
+  - Prefer a fix forward ([server runbook](server-runbook.md#going-back)).
+- **A page of the previous version left open** refuses every sale, payment,
+  return and collect, with the generic text, until the app is closed and
+  opened again. After this deploy, reopen it on every phone.
+- **Money commands must stay at READ COMMITTED.** The drawer's stamp refuses
+  to run at any other isolation, so a default changed on the role, the
+  database or the server would refuse every sale rather than misplace money.
+- **Two closes and two commands that touch two stores can deadlock:** a
+  payment or a return taken at another store, crossing the closes of both.
+  PostgreSQL aborts one; the phone keeps it as unknown, and the resend goes
+  through. A change of a store's state carries the same exposure.
+- **The blind count is a guarantee of the screens,** not of memory or of
+  what a seller may read:
+  - they can remember their own sales;
+  - «Борги» shows the way of every debt payment and return, a colleague's
+    included, and `GET /credits` lists a store's debts with them. Reviewed
+    on 2026-10-04: as designed, and the owner is asked;
+  - one sale at a time, the return screen (`GET /cash/sales/{id}/method`)
+    gives the sum and the way of any sale they may return. Reviewed: as
+    designed;
+  - a manager can work the expected sum out from «Звіт» and the history.
+- **A sale, payment or return resent after another phone's close,** its
+  answer lost, lands in the next close: +X on one and −X on the next. The
+  close screen asks to check other phones' unfinished operations first.
+  Only a take-out is moved onto the close in between.
+- **Cash taken out from a form opened before a colleague's close** goes on
+  that close, as money taken before it.
+  - If it was in fact taken after, that close shows an unexplained surplus
+    and the next a shortage.
+  - The form reads the drawer when it opens, not at the press. Reading it
+    at the press would be wrong in the commoner order: paid first, recorded
+    after.
+  - The phone says «Записано до закриття …», so the seller can tell a
+    manager.
+- **A genuine take-out resent more than ten minutes after the close in
+  between,** or after two closes, is refused (`CLOSE_IN_BETWEEN`). It is
+  recorded again, or a manager names the close. Within those ten minutes a
+  seller could still put a made-up take-out on a colleague's fresh close;
+  its explanation names them and the time.
+- **Card and transfer at a close cover the time since the previous close,**
+  not the calendar day: after a day not closed they do not match one
+  terminal slip.
+- **A miscounted close is not fixed.** The next close shows the opposite
+  difference, with its own reason and message.
+- **A reason may never come** if the closer never opens the app again. Their
+  phone waits for it, read from the server, and the bot writes without it
+  after 15 minutes.
+- **A difference under 1,00 грн is told to nobody** and needs no reason.
+  Many of them add up only in the history.
+- **The bot does not tell a close older than a day,** for instance after the
+  watcher was down that long. It is in the app.
+- **Count while nobody sells.** A sale made between the physical count and
+  «Так, закрити» is in the expected sum but maybe not in the drawer; the form
+  only reminds.
+- **An order's counter money is taken at «Клієнт забрав»** (owner,
+  2026-10-04). Money paid at the counter when an order is made is not
+  recorded then: it would show as a surplus that day and a shortage on the
+  day it is collected.
+- **The carrier's cash on delivery is not checked** against what the carrier
+  paid out.
+- **The outbox's sending algorithm is copied** from `backups` into
+  `cash.messages`. A fix to one must be made in both.
+- **«Звіт» sums more groups live,** by way and with the fixes, unmeasured and
+  without an index of its own.
+- **A seller whose only grant is the store's own** gets a plain 403 in a
+  blocked store, without `recorded: false`. Their phone shows no «Каса» there
+  and does not load its journal, so it is not held.
+- **Sales recorded before `0035` are in no period:** they read «не вказано»,
+  are in no close, and cannot be fixed (`BEFORE_DRAWER`). Nothing is live,
+  so they are test data.
+- **The frontend has no unit runner.** «Каса»'s paging past 100 closes was
+  checked only in a harness outside the repo, and a seller fixing their own
+  collected order to an order way only by a backend test.
+- **Every sale, payment and return insert runs the stamp trigger,** which
+  takes the store's row `FOR KEY SHARE`. The release reading after it passed
+  with about 3× headroom (checklist row 22).

@@ -1414,6 +1414,7 @@ async def test_a_warehouse_sold_back_to_empty_still_has_history(world):
                         "unit_price": "3900.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
         )
         assert sale.status_code == 201, sale.text
@@ -1738,6 +1739,7 @@ async def test_opening_stock_is_sold_like_any_other(world):
                         "unit_price": "4200.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
         )
     assert sale.status_code == 201, sale.text
@@ -1784,6 +1786,7 @@ async def test_found_during_sale_cannot_count_size_unknown_stock_twice(world):
                     "unit_price": "9000.00",
                 }
             ],
+            "payment_method": "CASH",
         }
         if found:
             body["found_in_store"] = [{"line_index": 0, "quantity": 1}]
@@ -1910,6 +1913,8 @@ def coat_sale(w: World, *lines, command_id=None, **reports) -> dict:
             }
             for size, quantity in lines
         ],
+        # The till's button that sold (owner decisions, 2026-10-04).
+        "payment_method": "CASH",
         **reports,
     }
 
@@ -2063,6 +2068,7 @@ async def test_a_clarification_takes_only_what_is_held_with_size_not_known(world
                         "unit_price": "4200.00",
                     }
                 ],
+                "payment_method": "CASH",
             },
         )
 

@@ -66,6 +66,7 @@ from app.modules.inventory.service import (
     validate_catalog_merges,
 )
 from app.modules.sales.models import Sale
+from app.modules.sales.payment import PaymentMethod
 from app.modules.sales.service import SaleLineInput, create_sale
 from app.modules.snapshots.models import (
     InventorySnapshot,
@@ -483,6 +484,7 @@ async def test_a_retired_model_s_stock_still_sells_returns_moves_and_is_written_
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -803,6 +805,7 @@ async def test_a_retirement_waits_for_a_sale_in_flight_and_both_land(maker, engi
                     unit_price=Decimal("1500.00"),
                 )
             ],
+            payment_method=PaymentMethod.CASH,
         )
         task = asyncio.create_task(retires())
         await wait_until_blocked_by(engine, pid)

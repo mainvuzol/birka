@@ -12,25 +12,44 @@ PostgreSQL, signed in as the network's people.
   whose till it went through.
 - The models sold, and every sale and return.
 
-All data is synthetic.
+Since 2026-10-04 (owner decisions, "cash and card, the day's close"; ADR-0012,
+B11, G24):
+
+- the money is split by the way it was paid: cash, card, transfer, and «не
+  вказано» for a row written before the way was asked, never guessed;
+- an order paid in advance by transfer, or by cash on delivery through the
+  carrier, never went through the till: it is outside «Разом» (`money`);
+- money handed back to a card does not lower the cash;
+- a correction of the way counts on the day it is made, and a past day's
+  figures never change;
+- the till's four ways always add up to `money` (checked on every block read
+  here, `balanced`).
+
+Corrections are written straight into their table, as a script would: the
+database checks each against its money row (revision 0035), and the command
+that records them is the drawer's, tested with it. All data is synthetic.
 """
 
 from __future__ import annotations
 
 import os
 import uuid
-from collections.abc import AsyncIterator
-from datetime import datetime
+from collections.abc import AsyncIterator, Sequence
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 
 from app.modules.authz.models import Membership
 from app.modules.authz.permissions import RoleCode
 from app.modules.authz.service import seed_default_roles
+from app.modules.cash.models import PaymentCorrection
+from app.modules.credit.models import CreditEntry, CustomerCredit, EntryKind
 from app.modules.identity.models import AppUser
 from app.modules.refunds.models import Refund
 from app.modules.sales.models import Sale
@@ -67,27 +86,49 @@ def credit(paid_now: str) -> dict:
 
 
 async def sell(
-    maker, net: Network, by: uuid.UUID, store: uuid.UUID, *, qty: int = 2, **extra
+    maker,
+    net: Network,
+    by: uuid.UUID,
+    store: uuid.UUID,
+    *,
+    qty: int = 2,
+    way: str = "CASH",
+    **extra,
 ) -> dict:
-    """Coats at 1500 each, from the shared warehouse."""
+    """Coats at 1500 each, from the shared warehouse, paid `way`."""
     variant, size = await stocked(maker, net, net.shops.shared_warehouse, qty=qty)
     async with as_(maker, net, by) as client:
         response = await client.post(
             "/api/v1/sales",
-            json=sale_body(store, net.shops.shared_warehouse, variant, size, qty=qty) | extra,
+            json=sale_body(store, net.shops.shared_warehouse, variant, size, qty=qty)
+            | {"payment_method": way}
+            | extra,
             headers=key(),
         )
     assert response.status_code == 201, response.text
     return response.json()
 
 
-async def take_back(maker, net: Network, sale: dict, *, by: uuid.UUID, at: uuid.UUID, qty: int = 1):
+async def take_back(
+    maker,
+    net: Network,
+    sale: dict,
+    *,
+    by: uuid.UUID,
+    at: uuid.UUID,
+    qty: int = 1,
+    way: str = "CASH",
+):
+    """Coats of `sale` back at `at`, the money handed back `way`. A return of
+    a sale paid in parts that only lowers its debt is stored with no way
+    (ADR-0012, G35)."""
     async with as_(maker, net, by) as client:
         response = await client.post(
             f"/api/v1/sales/{sale['id']}/refunds",
             json={
                 "command_id": str(uuid.uuid4()),
                 "store_id": str(at),
+                "payment_method": way,
                 "lines": [
                     {
                         "sale_item_id": sale["items"][0]["id"],
@@ -103,14 +144,110 @@ async def take_back(maker, net: Network, sale: dict, *, by: uuid.UUID, at: uuid.
     return response.json()
 
 
-async def pay(maker, net: Network, credit_id: str, amount: str, *, by: uuid.UUID, at=None):
+async def pay(
+    maker, net: Network, credit_id: str, amount: str, *, by: uuid.UUID, at=None, way="CASH"
+):
     async with as_(maker, net, by) as client:
         response = await client.post(
             f"/api/v1/credits/{credit_id}/payments",
-            json={"command_id": str(uuid.uuid4()), "amount": amount}
+            json={"command_id": str(uuid.uuid4()), "amount": amount, "payment_method": way}
             | ({"store_id": str(at)} if at else {}),
         )
     assert response.status_code == 201, response.text
+
+
+async def collected(maker, net: Network, *, way: str, **extra) -> dict:
+    """Two coats at 1500 ordered at the primary store from the shared
+    warehouse, sent, arrived at the post office and collected, paid `way`."""
+    primary = net.shops.primary_store
+    variant, size = await stocked(maker, net, net.shops.shared_warehouse, qty=2)
+    order = {
+        name: value
+        for name, value in sale_body(
+            primary, net.shops.shared_warehouse, variant, size, qty=2
+        ).items()
+        if name != "payment_method"
+    } | {"carrier": "NOVA_POSHTA"}
+    async with as_(maker, net, net.seller) as client:
+        created = await client.post("/api/v1/orders", json=order)
+        assert created.status_code == 201, created.text
+        order_id = created.json()["id"]
+        for action in ("dispatch", "arrive"):
+            moved = await client.post(
+                f"/api/v1/orders/{order_id}/{action}", json={"command_id": str(uuid.uuid4())}
+            )
+            assert moved.status_code == 200, moved.text
+        done = await client.post(
+            f"/api/v1/orders/{order_id}/collect",
+            json={"command_id": str(uuid.uuid4()), "payment_method": way} | extra,
+        )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "COLLECTED"
+    return done.json()
+
+
+async def corrected(
+    maker,
+    net: Network,
+    *,
+    by: uuid.UUID,
+    sale: str | None = None,
+    payment: uuid.UUID | None = None,
+    refund: str | None = None,
+    way: str,
+) -> None:
+    """The way of one money row corrected now, as the drawer's command
+    records it: the row's own drawer, money and direction, and the way it
+    stands at as `from_method`. The database refuses anything else."""
+    async with maker() as session:
+        if sale is not None:
+            row = await session.get(Sale, uuid.UUID(sale))
+            assert row is not None
+            target: dict[str, Any] = {"sale_id": row.id}
+            store, amount, direction, stated = row.store_id, row.total, "IN", row.payment_method
+        elif payment is not None:
+            entry = await session.get(CreditEntry, payment)
+            assert entry is not None
+            debt = await session.get(CustomerCredit, entry.credit_id)
+            assert debt is not None
+            target = {"credit_entry_id": entry.id}
+            store = entry.taken_at_store_id or debt.store_id
+            amount, direction, stated = entry.amount, "IN", entry.payment_method
+        else:
+            assert refund is not None
+            taken = await session.get(Refund, uuid.UUID(refund))
+            assert taken is not None
+            cash_back = await session.scalar(
+                select(CreditEntry.cash_back).where(CreditEntry.refund_id == taken.id)
+            )
+            target = {"refund_id": taken.id}
+            store, direction, stated = taken.taken_at_store_id, "OUT", taken.payment_method
+            amount = taken.total_amount if cash_back is None else cash_back
+        (column,) = target
+        earlier = (
+            await session.execute(
+                select(PaymentCorrection.seq, PaymentCorrection.to_method)
+                .where(getattr(PaymentCorrection, column) == target[column])
+                .order_by(PaymentCorrection.seq.desc())
+                .limit(1)
+            )
+        ).first()
+        await session.execute(
+            insert(PaymentCorrection).values(
+                organization_id=net.shops.organization_id,
+                store_id=store,
+                seq=1 if earlier is None else earlier.seq + 1,
+                direction=direction,
+                amount=amount,
+                from_method=stated if earlier is None else earlier.to_method,
+                to_method=way,
+                actor_user_id=by,
+                command_id=uuid.uuid4(),
+                command_fingerprint="0" * 64,
+                **target,
+            )
+        )
+        await session.commit()
 
 
 async def read(maker, net: Network, by: uuid.UUID, path: str = REPORT, **params):
@@ -118,9 +255,31 @@ async def read(maker, net: Network, by: uuid.UUID, path: str = REPORT, **params)
         return await client.get(path, params={k: str(v) for k, v in params.items()})
 
 
+def balanced(found: dict) -> dict:
+    """The till's money adds up both ways: what came in less what went out,
+    and the four ways together; each way's net is its own in, out and
+    corrections."""
+    for way in found["ways"]:
+        assert set(way) == {"method", "came_in", "went_out", "corrected", "net"}
+        assert Decimal(way["net"]) == (
+            Decimal(way["came_in"]) - Decimal(way["went_out"]) + Decimal(way["corrected"])
+        )
+    for sums in found["off_till"].values():
+        assert set(sums) == {"came_in", "corrected", "net"}
+        assert Decimal(sums["net"]) == Decimal(sums["came_in"]) + Decimal(sums["corrected"])
+    assert sum(Decimal(way["net"]) for way in found["ways"]) == Decimal(found["money"])
+    assert Decimal(found["money"]) == (
+        Decimal(found["paid_in_full"])
+        + Decimal(found["debt_payments"])
+        - Decimal(found["paid_back"])
+        + Decimal(found["corrected_into_till"])
+    )
+    return found
+
+
 def figures(report: dict, store: uuid.UUID) -> dict:
     [found] = [each for each in report["stores"] if each["store_id"] == str(store)]
-    return found
+    return balanced(found)
 
 
 def money_of(found: dict) -> tuple:
@@ -137,9 +296,53 @@ def money_of(found: dict) -> tuple:
             "paid_in_full",
             "debt_payments",
             "paid_back",
-            "cash",
+            "money",
         )
     )
+
+
+# A way with no money in these days: the till's, and one paid off it.
+NONE = ("0.00", "0.00", "0.00", "0.00")
+NONE_OFF = ("0.00", "0.00", "0.00")
+
+
+def ways_of(found: dict) -> dict[str, tuple[str, ...]]:
+    """Each way's money: in, out, corrected and net for the till's four, always
+    these and in this order; in, corrected and net for the two an order is
+    paid by off the till."""
+    assert [way["method"] for way in found["ways"]] == ["CASH", "CARD", "TRANSFER", "NOT_STATED"]
+    assert list(found["off_till"]) == ["prepaid_transfer", "carrier_cod"]
+    return {
+        **{
+            way["method"]: (way["came_in"], way["went_out"], way["corrected"], way["net"])
+            for way in found["ways"]
+        },
+        **{
+            name.upper(): (sums["came_in"], sums["corrected"], sums["net"])
+            for name, sums in found["off_till"].items()
+        },
+    }
+
+
+def kyiv_day(days_ago: int) -> date:
+    return datetime.now(KYIV).date() - timedelta(days=days_ago)
+
+
+async def on_day(
+    maker, day: date, *, sales: Sequence[str] = (), refunds: Sequence[str] = ()
+) -> None:
+    """Sales sold, and returns taken, at noon of `day` in Kyiv."""
+    noon = datetime.combine(day, time(12, 0), KYIV)
+    async with maker() as session:
+        for sale in sales:
+            await session.execute(
+                update(Sale).where(Sale.id == uuid.UUID(sale)).values(sold_at=noon)
+            )
+        for refund in refunds:
+            await session.execute(
+                update(Refund).where(Refund.id == uuid.UUID(refund)).values(created_at=noon)
+            )
+        await session.commit()
 
 
 async def a_store_manager(maker, net: Network, store: uuid.UUID) -> uuid.UUID:
@@ -195,6 +398,35 @@ async def test_a_day_of_one_store_in_sales_returns_and_money(maker):
         "1500.00",
     )
     assert here["store_state"] == "ACTIVE"
+    # Every payment was cash, and so was every coin handed back.
+    assert ways_of(here) == {
+        "CASH": ("4500.00", "3000.00", "0.00", "1500.00"),
+        "CARD": NONE,
+        "TRANSFER": NONE,
+        "NOT_STATED": NONE,
+        "PREPAID_TRANSFER": NONE_OFF,
+        "CARRIER_COD": NONE_OFF,
+    }
+    assert here["corrected_into_till"] == "0.00"
+    assert set(here) == {
+        "store_id",
+        "store_name",
+        "store_state",
+        "sales",
+        "units",
+        "sold",
+        "returns",
+        "returned_units",
+        "returned",
+        "net",
+        "paid_in_full",
+        "debt_payments",
+        "paid_back",
+        "corrected_into_till",
+        "money",
+        "ways",
+        "off_till",
+    }
     assert money_of(figures(report, net.shops.child_store)) == (
         0,
         0,
@@ -209,7 +441,8 @@ async def test_a_day_of_one_store_in_sales_returns_and_money(maker):
         "0.00",
     )
     # The stores together.
-    assert money_of(report["total"]) == money_of(here)
+    assert money_of(balanced(report["total"])) == money_of(here)
+    assert ways_of(report["total"]) == ways_of(here)
 
 
 async def test_the_sale_is_the_sellers_and_the_money_the_tills(maker):
@@ -241,17 +474,17 @@ async def test_the_sale_is_the_sellers_and_the_money_the_tills(maker):
         there["paid_in_full"],
         there["debt_payments"],
         there["paid_back"],
-        there["cash"],
+        there["money"],
     ) == ("1500.00", "500.00", "0.00", "2000.00")
     here = figures(report, primary)
     assert (here["sales"], here["returns"]) == (0, 0)
     # The primary store's till handed the money back and took the payment.
-    assert (here["debt_payments"], here["paid_back"], here["cash"]) == (
+    assert (here["debt_payments"], here["paid_back"], here["money"]) == (
         "200.00",
         "1500.00",
         "-1300.00",
     )
-    assert report["total"]["cash"] == "700.00"
+    assert balanced(report["total"])["money"] == "700.00"
     assert report["total"]["net"] == "3000.00"
 
 
@@ -280,14 +513,14 @@ async def test_a_day_is_the_stores_own_and_a_return_counts_on_its_day(maker):
     both = (await read(maker, net, net.owner, date_from="2026-03-10", date_to="2026-03-11")).json()
     ninth = figures((await read(maker, net, net.owner, date_from="2026-03-09")).json(), primary)
 
-    assert (tenth["sales"], tenth["returns"], tenth["net"], tenth["cash"]) == (
+    assert (tenth["sales"], tenth["returns"], tenth["net"], tenth["money"]) == (
         1,
         0,
         "1500.00",
         "1500.00",
     )
     # The day of the sale is never changed by its return.
-    assert (eleventh["sales"], eleventh["returns"], eleventh["net"], eleventh["cash"]) == (
+    assert (eleventh["sales"], eleventh["returns"], eleventh["net"], eleventh["money"]) == (
         0,
         1,
         "-1500.00",
@@ -398,31 +631,54 @@ async def test_the_models_sold_and_every_sale_and_return(maker):
     ]
     took, gave_back, in_parts, paid = listed["entries"]
     assert paid["goods"] == [f"{two['items'][0]['display_name']}, M × 2"]
-    assert (paid["by"], paid["units"], paid["amount"], paid["cash"], paid["paid_in_parts"]) == (
+    assert (paid["by"], paid["units"], paid["amount"], paid["money"], paid["paid_in_parts"]) == (
         "seller",
         2,
         "3000.00",
         "3000.00",
         False,
     )
-    assert (in_parts["amount"], in_parts["cash"], in_parts["paid_in_parts"]) == (
+    assert (paid["payment_method"], paid["method_now"]) == ("CASH", None)
+    assert (in_parts["amount"], in_parts["money"], in_parts["paid_in_parts"]) == (
         "4500.00",
         "1000.00",
         True,
     )
-    # A return of a sale paid in parts lowered the debt: nothing left the till.
-    assert (gave_back["amount"], gave_back["cash"], gave_back["paid_in_parts"]) == (
+    assert (in_parts["payment_method"], in_parts["method_now"]) == ("CASH", None)
+    # A return of a sale paid in parts lowered the debt: nothing left the till,
+    # and it went no way.
+    assert (gave_back["amount"], gave_back["money"], gave_back["paid_in_parts"]) == (
         "1500.00",
         "0.00",
         True,
     )
+    assert (gave_back["payment_method"], gave_back["method_now"]) == (None, None)
     assert (
         took["store_name"],
         took["taken_at_store_name"],
         took["by"],
         took["amount"],
-        took["cash"],
-    ) == ("Дочірній", "Основний", "seller", "1500.00", "1500.00")
+        took["money"],
+        took["payment_method"],
+    ) == ("Дочірній", "Основний", "seller", "1500.00", "1500.00", "CASH")
+    assert set(took) == {
+        "kind",
+        "id",
+        "sale_id",
+        "at",
+        "store_id",
+        "store_name",
+        "taken_at_store_id",
+        "taken_at_store_name",
+        "by",
+        "units",
+        "amount",
+        "money",
+        "payment_method",
+        "method_now",
+        "paid_in_parts",
+        "goods",
+    }
     # The child's list has its sale and the return of it taken elsewhere.
     assert [(e["kind"], e["id"]) for e in child_listed["entries"]] == [
         ("RETURN", brought["id"]),
@@ -432,3 +688,271 @@ async def test_the_models_sold_and_every_sale_and_return(maker):
     assert [e["id"] for e in first["entries"]] == [brought["id"]]
     assert (len(exactly["entries"]), exactly["has_more"]) == (2, False)
     assert listed["has_more"] is False
+
+
+async def entries_of(maker, net: Network, **params) -> dict[str, dict]:
+    listed = (await read(maker, net, net.owner, f"{REPORT}/entries", **params)).json()
+    return {entry["id"]: entry for entry in listed["entries"]}
+
+
+async def test_the_money_is_split_by_the_way_it_was_paid(maker):
+    net = await network(maker)
+    primary = net.shops.primary_store
+    await sell(maker, net, net.seller, primary, way="CASH")
+    # A card sale returned to the card: the money never left the drawer.
+    to_card = await sell(maker, net, net.seller, primary, qty=1, way="CARD")
+    card_back = await take_back(maker, net, to_card, by=net.seller, at=primary, way="CARD")
+    # A card sale returned in cash: the owner's own example of money handed
+    # back another way than the sale's.
+    in_cash = await sell(maker, net, net.seller, primary, qty=1, way="CARD")
+    cash_back = await take_back(maker, net, in_cash, by=net.seller, at=primary, way="CASH")
+    by_transfer = await sell(maker, net, net.seller, primary, qty=1, way="TRANSFER")
+    # Paid in parts: 1000 now by card, 500 later by transfer.
+    in_parts = await sell(maker, net, net.seller, primary, way="CARD", **credit("1000.00"))
+    await pay(maker, net, in_parts["credit"]["credit_id"], "500.00", by=net.seller, way="TRANSFER")
+
+    here = figures((await read(maker, net, net.owner)).json(), primary)
+
+    assert money_of(here) == (
+        5,
+        7,
+        "10500.00",
+        2,
+        2,
+        "3000.00",
+        "7500.00",
+        "7500.00",
+        "1500.00",
+        "3000.00",
+        "6000.00",
+    )
+    # A card refund lowers the card, never the cash.
+    assert ways_of(here) == {
+        "CASH": ("3000.00", "1500.00", "0.00", "1500.00"),
+        "CARD": ("4000.00", "1500.00", "0.00", "2500.00"),
+        "TRANSFER": ("2000.00", "0.00", "0.00", "2000.00"),
+        "NOT_STATED": NONE,
+        "PREPAID_TRANSFER": NONE_OFF,
+        "CARRIER_COD": NONE_OFF,
+    }
+    listed = await entries_of(maker, net)
+    assert [
+        (listed[each["id"]]["money"], listed[each["id"]]["payment_method"])
+        for each in (to_card, card_back, in_cash, cash_back, by_transfer, in_parts)
+    ] == [
+        ("1500.00", "CARD"),
+        ("1500.00", "CARD"),
+        ("1500.00", "CARD"),
+        ("1500.00", "CASH"),
+        ("1500.00", "TRANSFER"),
+        ("1000.00", "CARD"),
+    ]
+    assert {entry["method_now"] for entry in listed.values()} == {None}
+
+
+async def test_an_order_paid_off_the_till_is_outside_its_money(maker):
+    net = await network(maker)
+    primary = net.shops.primary_store
+    by_carrier = await collected(maker, net, way="CARRIER_COD")
+    await collected(maker, net, way="PREPAID_TRANSFER")
+    # «Готівкою — зараз, на касі»: the only order money the till took.
+    at_the_counter = await collected(maker, net, way="CASH")
+    # Paid in parts, the part paid now by the carrier (ADR-0012, G2): it is
+    # no payment through the till either.
+    in_parts = await collected(maker, net, way="CARRIER_COD", **credit("1000.00"))
+
+    here = figures((await read(maker, net, net.owner)).json(), primary)
+
+    # Four sales, every one sold; the till took 3000 of them.
+    assert money_of(here) == (
+        4,
+        8,
+        "12000.00",
+        0,
+        0,
+        "0.00",
+        "12000.00",
+        "3000.00",
+        "0.00",
+        "0.00",
+        "3000.00",
+    )
+    assert ways_of(here) == {
+        "CASH": ("3000.00", "0.00", "0.00", "3000.00"),
+        "CARD": NONE,
+        "TRANSFER": NONE,
+        "NOT_STATED": NONE,
+        "PREPAID_TRANSFER": ("3000.00", "0.00", "3000.00"),
+        "CARRIER_COD": ("4000.00", "0.00", "4000.00"),
+    }
+    listed = await entries_of(maker, net)
+    assert [
+        (
+            listed[order["sale_id"]]["money"],
+            listed[order["sale_id"]]["payment_method"],
+            listed[order["sale_id"]]["paid_in_parts"],
+        )
+        for order in (by_carrier, at_the_counter, in_parts)
+    ] == [
+        ("3000.00", "CARRIER_COD", False),
+        ("3000.00", "CASH", False),
+        ("1000.00", "CARRIER_COD", True),
+    ]
+
+
+async def test_a_correction_counts_on_the_day_it_is_made_and_a_past_day_never_changes(maker):
+    net = await network(maker)
+    primary = net.shops.primary_store
+    yesterday, today = kyiv_day(1), kyiv_day(0)
+    # Yesterday: a card sale, an order paid by the carrier, and a cash sale
+    # whose coat came back for cash.
+    by_card = await sell(maker, net, net.seller, primary, qty=1, way="CARD")
+    by_carrier = await collected(maker, net, way="CARRIER_COD")
+    by_cash = await sell(maker, net, net.seller, primary, qty=1, way="CASH")
+    returned = await take_back(maker, net, by_cash, by=net.seller, at=primary, way="CASH")
+    await on_day(
+        maker,
+        yesterday,
+        sales=[by_card["id"], by_carrier["sale_id"], by_cash["id"]],
+        refunds=[returned["id"]],
+    )
+    before = await read(maker, net, net.owner, date_from=yesterday)
+    assert ways_of(figures(before.json(), primary)) == {
+        "CASH": ("1500.00", "1500.00", "0.00", "0.00"),
+        "CARD": ("1500.00", "0.00", "0.00", "1500.00"),
+        "TRANSFER": NONE,
+        "NOT_STATED": NONE,
+        "PREPAID_TRANSFER": NONE_OFF,
+        "CARRIER_COD": ("3000.00", "0.00", "3000.00"),
+    }
+    # Today: a sale in parts, 1000 now by card.
+    in_parts = await sell(maker, net, net.seller, primary, way="CARD", **credit("1000.00"))
+    async with maker() as session:
+        first_payment = await session.scalar(
+            select(CreditEntry.id).where(
+                CreditEntry.credit_id == uuid.UUID(in_parts["credit"]["credit_id"]),
+                CreditEntry.kind == EntryKind.PAYMENT.value,
+            )
+        )
+
+    # Today a manager finds every one of them was paid another way: the card
+    # sale and the order in cash, the return's money to the card, and the
+    # part paid today by transfer.
+    await corrected(maker, net, by=net.manager, sale=by_card["id"], way="CASH")
+    await corrected(maker, net, by=net.manager, sale=by_carrier["sale_id"], way="CASH")
+    await corrected(maker, net, by=net.manager, refund=returned["id"], way="CARD")
+    await corrected(maker, net, by=net.manager, payment=first_payment, way="TRANSFER")
+
+    # Yesterday's report has not moved by a byte.
+    after = await read(maker, net, net.owner, date_from=yesterday)
+    assert after.status_code == 200, after.text
+    assert after.content == before.content
+    # Today's has each correction as its own figure: into the cash, out of
+    # the card and the carrier's money, into the transfers.
+    here = figures((await read(maker, net, net.owner, date_from=today)).json(), primary)
+    assert money_of(here) == (
+        1,
+        2,
+        "3000.00",
+        0,
+        0,
+        "0.00",
+        "3000.00",
+        "0.00",
+        "1000.00",
+        "0.00",
+        "4000.00",
+    )
+    assert ways_of(here) == {
+        "CASH": ("0.00", "0.00", "6000.00", "6000.00"),
+        "CARD": ("1000.00", "0.00", "-4000.00", "-3000.00"),
+        "TRANSFER": ("0.00", "0.00", "1000.00", "1000.00"),
+        "NOT_STATED": NONE,
+        "PREPAID_TRANSFER": NONE_OFF,
+        "CARRIER_COD": ("0.00", "-3000.00", "-3000.00"),
+    }
+    # The order's 3000 came into the till only today.
+    assert here["corrected_into_till"] == "3000.00"
+    # Together the two days say what happened: 6000 in cash, the card's 1500
+    # handed back, 1000 by transfer, nothing left with the carrier.
+    both = figures(
+        (await read(maker, net, net.owner, date_from=yesterday, date_to=today)).json(), primary
+    )
+    assert (both["money"], both["corrected_into_till"]) == ("5500.00", "3000.00")
+    assert ways_of(both) == {
+        "CASH": ("1500.00", "1500.00", "6000.00", "6000.00"),
+        "CARD": ("2500.00", "0.00", "-4000.00", "-1500.00"),
+        "TRANSFER": ("0.00", "0.00", "1000.00", "1000.00"),
+        "NOT_STATED": NONE,
+        "PREPAID_TRANSFER": NONE_OFF,
+        "CARRIER_COD": ("3000.00", "-3000.00", "0.00"),
+    }
+    # The other store's drawer saw none of it.
+    other = figures((await read(maker, net, net.owner)).json(), net.shops.child_store)
+    assert {way[2] for name, way in ways_of(other).items() if name in ("CASH", "CARD")} == {"0.00"}
+
+    # Each entry keeps the way it was stated with; the correction is a note.
+    listed = await entries_of(maker, net, date_from=yesterday, date_to=today)
+    assert [
+        (listed[row]["payment_method"], listed[row]["method_now"])
+        for row in (
+            by_card["id"],
+            by_carrier["sale_id"],
+            by_cash["id"],
+            returned["id"],
+            in_parts["id"],
+        )
+    ] == [
+        ("CARD", "CASH"),
+        ("CARRIER_COD", "CASH"),
+        ("CASH", None),
+        ("CASH", "CARD"),
+        ("CARD", "TRANSFER"),
+    ]
+
+
+async def test_money_recorded_before_the_way_was_asked_reads_not_stated(maker):
+    net = await network(maker)
+    primary = net.shops.primary_store
+    # A sale as the app wrote it before revision 0035: no way at all.
+    async with maker() as session:
+        old = await session.scalar(
+            insert(Sale)
+            .values(
+                organization_id=net.shops.organization_id,
+                store_id=primary,
+                seller_user_id=net.seller,
+                command_id=uuid.uuid4(),
+                command_fingerprint="0" * 64,
+                currency_code="UAH",
+                subtotal=Decimal("1000.00"),
+                total=Decimal("1000.00"),
+            )
+            .returning(Sale.id)
+        )
+        await session.commit()
+    await sell(maker, net, net.seller, primary, qty=1, way="CASH")
+
+    here = figures((await read(maker, net, net.owner)).json(), primary)
+
+    # It went through the till, as everything did then, and nothing guesses
+    # how.
+    assert (here["paid_in_full"], here["money"]) == ("2500.00", "2500.00")
+    assert ways_of(here)["CASH"] == ("1500.00", "0.00", "0.00", "1500.00")
+    assert ways_of(here)["NOT_STATED"] == ("1000.00", "0.00", "0.00", "1000.00")
+    entry = (await entries_of(maker, net))[str(old)]
+    assert (entry["money"], entry["payment_method"], entry["method_now"]) == (
+        "1000.00",
+        None,
+        None,
+    )
+
+    # A manager says how it was paid: from «не вказано» to cash, today.
+    await corrected(maker, net, by=net.manager, sale=str(old), way="CASH")
+
+    here = figures((await read(maker, net, net.owner)).json(), primary)
+    assert (here["money"], here["corrected_into_till"]) == ("2500.00", "0.00")
+    assert ways_of(here)["CASH"] == ("1500.00", "0.00", "1000.00", "2500.00")
+    assert ways_of(here)["NOT_STATED"] == ("1000.00", "0.00", "-1000.00", "0.00")
+    entry = (await entries_of(maker, net))[str(old)]
+    assert (entry["payment_method"], entry["method_now"]) == (None, "CASH")

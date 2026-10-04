@@ -57,6 +57,9 @@ FROZEN: dict[str, str] = {
     ),
     "0032_size_spelling.py": ("c8978c502a04d3eccb3f19dca1d1ab2414682d620663748d3d27de151440a80c"),
     "0033_session_epoch.py": ("f4559e63cda32bb3a065a52f0803fb2b401d4032ad5ab4dbe26d5ca708ace454"),
+    "0034_server_incidents.py": (
+        "3e25bcaf24ab9670aae10c27056da86ee2dbbcf6b002ab0107b81e4a174817d8"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),

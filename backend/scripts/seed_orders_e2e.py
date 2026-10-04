@@ -6,9 +6,10 @@ import asyncio
 import json
 import os
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -17,6 +18,7 @@ from app.modules.authz.models import Membership, Role, RolePermission
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.authz.scope import RequestScope
 from app.modules.backups.models import AlertKind, AlertStatus, BackupAlert, BackupRun
+from app.modules.cash.models import CashClose
 from app.modules.catalog.models import (
     AttributeKind,
     AttributeTerm,
@@ -245,7 +247,8 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     owing a supplier for an invoice. Its owner holds the E2E role
     network-wide; «Ганна» works in «Центр» only, «Петро» in «Ринок» only;
     «Марко» manages «Центр» with a manager's default rights, and «Ліда» sells
-    there with a seller's."""
+    there with a seller's. The drawers' own stores, «Каса» and «Зупинений»,
+    are `seed_drawer`'s."""
     org = Organization(name=f"e2e-states-{uuid.uuid4().hex}", currency_code="UAH")
     session.add(org)
     await session.flush()
@@ -334,6 +337,13 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
         )
         people[f"{key}_telegram_user_id"] = str(person.telegram_user_id)
         staff_ids[key] = person.id
+    drawer = await seed_drawer(
+        session,
+        organization_id=org.id,
+        cashier=cashier,
+        manager_id=staff_ids["network_centre_manager"],
+        manager_role=manager,
+    )
     # What the archived store still owes: any store of the network that trades
     # pays it (owner decision, 2026-10-01).
     owed_to = Supplier(
@@ -357,12 +367,121 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
             command_fingerprint="0" * 64,
         )
     )
-    return people | {
-        "network_centre_store_id": str(centre.id),
-        "network_market_store_id": str(market.id),
-        "network_old_store_id": str(old.id),
-        "network_shared_location_id": str(shared.id),
-        "network_market_location_id": str(market_own.id),
+    return (
+        people
+        | drawer
+        | {
+            "network_centre_store_id": str(centre.id),
+            "network_market_store_id": str(market.id),
+            "network_old_store_id": str(old.id),
+            "network_shared_location_id": str(shared.id),
+            "network_market_location_id": str(market_own.id),
+        }
+    )
+
+
+async def seed_drawer(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    cashier: Role,
+    manager_id: uuid.UUID,
+    manager_role: Role,
+) -> dict[str, str]:
+    """The drawers the «Каса» journeys count (owner decisions, 2026-10-04;
+    ADR-0012, D3).
+
+    «Каса» is a store of its own, so that no other journey's sales move the
+    figures its close is checked against. «Оля» sells there with a seller's
+    default rights, and its drawer was first counted yesterday evening: close
+    #1, an opening count of 1000,00 грн, written here directly, as the
+    database's checks allow. A close in the run then has an expected sum and
+    an exact difference. Its warehouse starts empty; the journeys receive
+    their own coats.
+
+    «Зупинений» is blocked, and nothing was ever counted there: only the
+    network's owner may still count and close its day. «Марко» manages it
+    with a manager's default rights, which give nothing in a store that does
+    not trade.
+    """
+    till = Store(
+        organization_id=organization_id,
+        name="Каса",
+        code="CASH",
+        kind=StoreKind.SECONDARY,
+        timezone="Europe/Kyiv",
+    )
+    paused = Store(
+        organization_id=organization_id,
+        name="Зупинений",
+        code="PAUSED",
+        kind=StoreKind.SECONDARY,
+        state=StoreState.BLOCKED.value,
+        state_since=datetime.now(UTC) - timedelta(days=1),
+    )
+    session.add_all([till, paused])
+    await session.flush()
+    shelf = StockLocation(organization_id=organization_id, name="Склад каси", code="NET-CASH")
+    seller = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Оля")
+    session.add_all([shelf, seller])
+    await session.flush()
+    session.add_all(
+        [
+            StoreLocationAccess(
+                organization_id=organization_id,
+                store_id=till.id,
+                location_id=shelf.id,
+                can_sell=True,
+                can_receive=True,
+            ),
+            Membership(
+                user_id=seller.id,
+                organization_id=organization_id,
+                store_id=till.id,
+                role_id=cashier.id,
+            ),
+            Membership(
+                user_id=manager_id,
+                organization_id=organization_id,
+                store_id=paused.id,
+                role_id=manager_role.id,
+            ),
+        ]
+    )
+    # Yesterday's business day in the store's time zone, which runs from
+    # 06:00 to 06:00 (G8), counted at 20:00.
+    kyiv = ZoneInfo("Europe/Kyiv")
+    yesterday = (datetime.now(kyiv) - timedelta(hours=6)).date() - timedelta(days=1)
+    first = CashClose(
+        organization_id=organization_id,
+        store_id=till.id,
+        number=1,
+        is_opening=True,
+        business_day=yesterday,
+        closed_at=datetime.combine(yesterday, time(20, 0), tzinfo=kyiv),
+        since=None,
+        actor_user_id=seller.id,
+        command_id=uuid.uuid4(),
+        command_fingerprint="0" * 64,
+        opening_float=None,
+        counted=Decimal("1000.00"),
+        cash_in=Decimal("0.00"),
+        cash_out=Decimal("0.00"),
+        taken_out=Decimal("0.00"),
+        put_in=Decimal("0.00"),
+        cash_corrected=Decimal("0.00"),
+        expected=None,
+        difference=None,
+        others={},
+    )
+    session.add(first)
+    await session.flush()
+    return {
+        "network_cash_store_id": str(till.id),
+        "network_cash_location_id": str(shelf.id),
+        "network_cash_seller_telegram_user_id": str(seller.telegram_user_id),
+        "network_cash_first_close_id": str(first.id),
+        "network_paused_store_id": str(paused.id),
     }
 
 

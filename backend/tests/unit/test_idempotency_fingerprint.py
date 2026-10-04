@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 
 from app.core.idempotency import fingerprint
+from app.modules.sales.payment import PaymentMethod, print_of
 
 ACTOR = uuid.uuid4()
 STORE = uuid.uuid4()
@@ -66,3 +67,17 @@ def test_the_fingerprint_is_a_sha256_hex_digest() -> None:
 
     assert len(value) == 64
     assert all(c in "0123456789abcdef" for c in value)
+
+
+def test_a_way_of_paying_changes_the_print_only_when_one_is_stated() -> None:
+    """A command a phone kept from before the way was asked prints as it
+    always did; one that states a way is another command, and so is one that
+    states another way (ADR-0012, B13)."""
+    before = fingerprint(PAYLOAD, actor_user_id=ACTOR, store_id=STORE)
+
+    def with_way(way: PaymentMethod | None) -> str:
+        return fingerprint(PAYLOAD | print_of(way), actor_user_id=ACTOR, store_id=STORE)
+
+    assert with_way(None) == before
+    assert with_way(PaymentMethod.CASH) != before
+    assert with_way(PaymentMethod.CASH) != with_way(PaymentMethod.CARD)

@@ -1,4 +1,11 @@
-/** `GET /sales`: a store's sales, newest first, as a seller looks one up. */
+import type { PaymentMethod, TillMethod } from "@/shared/payment";
+
+/**
+ * `GET /sales`: a store's sales, newest first, as a seller looks one up. It
+ * never says how a sale was paid: a seller pages through it before their
+ * count (ADR-0012 G32). The way of the one sale being returned is asked for
+ * alone (`SaleMethod`).
+ */
 export interface SaleLine {
   id: string;
   display_name: string;
@@ -64,6 +71,13 @@ export interface ReturnBody {
   reason: string | null;
   /** The sale is another store's. Absent from attempts written before. */
   elsewhere?: boolean;
+  /**
+   * How the money goes back (owner decision, 2026-10-04; ADR-0012 §B2).
+   * Absent from an attempt written down before it was asked, which is resent
+   * as stored; and may be absent for a sale paid in parts, whose return asks
+   * it only when money goes back (G35).
+   */
+  payment_method?: TillMethod;
 }
 
 export interface Refund {
@@ -84,7 +98,36 @@ export interface Refund {
   }[];
   /** For a sale paid in parts: how the goods' worth was settled. */
   credit?: CreditSettlement | null;
+  /**
+   * How the money went back. Absent or null on an answer recorded before
+   * the way was asked, and on a return that only lowered a debt (G35).
+   */
+  payment_method?: TillMethod | null;
 }
+
+/**
+ * `GET /cash/sales/{id}/method`: the money taken with the one sale being
+ * returned (ADR-0012 §B10, G32), and the way a return suggests: the sale's
+ * own, «Переказом» for an order paid in advance or on delivery (G4), none for
+ * a sale in parts paid several ways or an old sale (G5).
+ */
+export interface SaleMethod {
+  sale_id: string;
+  target: "SALE" | "PAYMENT";
+  target_id: string;
+  amount_taken: string;
+  method: PaymentMethod | null;
+  corrected: boolean;
+  refund_method: PaymentMethod | null;
+  may_change: boolean;
+}
+
+/** The choices of «Як повертаємо гроші». */
+export const refundLabels: Record<TillMethod, string> = {
+  CASH: "Готівкою",
+  CARD: "На картку",
+  TRANSFER: "Переказом",
+};
 
 /**
  * Returned goods first lower what is owed; money goes back only when the

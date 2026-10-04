@@ -294,3 +294,85 @@ The API ran as CI runs it: one process, no access log, `WARNING`. Evidence:
 
 This closes row 22 for the laptop. A reading on the real server is an
 optional step in the [server runbook](server-runbook.md#the-hot-path-on-this-server-optional).
+
+## Update — 2026-10-04: the way button, and the drawer's stamp
+
+Cash and card ([ADR-0012](../decisions/ADR-0012-cash-and-card.md)) changed
+the till twice: the seller now gives the way of paying with the button that
+sells, and every sale's insert runs a trigger that stamps it into its
+drawer's period.
+
+**Taps: still 5.** «Продати» became three buttons, «Готівка», «Картка» and
+«Переказ», so the last tap gives the way and nothing is guessed. For a model
+with a price:
+
+| | taps |
+|---|---|
+| open «Продаж» | 1 |
+| choose the warehouse (one sellable) | 0 |
+| choose product and size | 2 |
+| quantity (already `1`) | 0 |
+| the price (prefilled) | 0 |
+| «Додати в кошик» | 1 |
+| a way: «Готівка», «Картка» or «Переказ» | 1 |
+| **total** | **5** |
+
+A return is +0 taps when the way back is preselected from the sale, +1
+otherwise. A debt payment is unchanged: a way button replaces «Прийняти
+внесок».
+
+**The release reading,** checklist row 22, was taken again, since the body
+gained a field and the insert a trigger.
+- **The stamp** takes the store's row `FOR KEY SHARE` inside the insert, and
+  reads the newest close's number. It adds no round trip.
+- **The harness** sends `"payment_method": "CASH"` in every sale body. Its
+  cases are otherwise unchanged.
+- **The store's hold is now `FOR KEY SHARE`, as written** (`be806ab`). Until
+  then `with_for_update(key_share=True)` had rendered `FOR NO KEY UPDATE`,
+  so every command of a store queued behind the one before it.
+
+Before that fix, four readings alternated the two locks on the same working
+tree, two of each, in ms:
+
+| Six sellers | p50, old lock | p50, new lock | p95, old lock | p95, new lock |
+|---|---|---|---|---|
+| `POST /sales`, 1 line | 40.5, 41.7 | 36.8, 35.5 | 44.1, 46.0 | 57.7, 57.0 |
+| `POST /sales`, 4 lines | 65.9, 66.4 | 53.6, 52.7 | 78.4, 82.2 | 81.5, 88.8 |
+| `POST /sales`, same coat | 41.1, 41.9 | 40.2, 39.7 | 55.2, 52.5 | 90.0, 48.6 |
+| `POST /sales`, paid in parts | 50.3, 50.9 | 42.0, 41.8 | 55.5, 54.1 | 69.8, 68.6 |
+
+Medians fell, the tails grew, and every case stayed far inside the budget.
+Those readings ran beside a review on the same machine, so they are noisy.
+Evidence:
+[`output/verification/2026-10-04-store-hold/`](../../output/verification/2026-10-04-store-hold/).
+
+Then the release reading: three runs, each on a fresh database migrated to
+`0035`, on the laptop and PostgreSQL 16.2, the API in its `ci` environment.
+Evidence:
+[`output/verification/2026-10-04-hot-path/`](../../output/verification/2026-10-04-hot-path/).
+
+| Case | p95, 2026-10-03 (worst of 3) | **p95, 2026-10-04 (worst of 3)** | p50 now | Budget |
+|---|---|---|---|---|
+| `GET /catalog/stock-options` | 6.3 | **6.2** | 5.6–5.7 | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 72.0 | **87.2** | 20.2–22.5 | 300 ms |
+| `POST /sales`, 1 line | 12.1 | **11.7** | 9.4–10.1 | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 192.0 | **71.7** | 33.3–41.3 | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 107.0 | **167.6** | 47.8–65.3 | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 65.3 | **50.4** | 35.8–40.2 | 500 ms |
+| `POST /sales`, paid in parts | 13.6 | **12.1** | 8.9–10.1 | 500 ms |
+| `POST /sales`, paid in parts, 6 sellers | 90.2 | **71.0** | 36.8–43.0 | 500 ms |
+
+- **Every case passes in every run, gated.** The worst p95 is 167.6 ms
+  against 500, about 3× headroom.
+- **One seller is unchanged:** about 10 ms for a sale and 6 ms for the
+  catalogue read. The trigger costs nothing one can see.
+- **Six sellers at once are faster at the median than on 2026-10-03:** a
+  four-line sale about 48–65 ms against 64, a sale paid in parts about 37–43
+  ms against 49–50. That fits commands of one store no longer queuing on its
+  row.
+- **The 167.6 ms is one run's tail.** That run's p99 was 198 ms; the other
+  two runs gave 87.0 and 77.8 ms for the same case. The same run also gave
+  the catalogue read with six sellers 87.2 ms, against 28.2 and 26.8 in the
+  others.
+
+This closes row 22 again, for the laptop.

@@ -33,7 +33,7 @@ from tests.integration.test_shared_warehouse import (
     TwoShops,
     api,
     make_two_shops,
-    sale_body,
+    order_body,
     stock_a_coat,
 )
 
@@ -70,7 +70,7 @@ async def order(maker, shops: TwoShops, coat, store: uuid.UUID | None = None, **
     async with api(maker, shops.scope(store)) as client:
         return await client.post(
             "/api/v1/orders",
-            json=sale_body(store, shops.shared_warehouse, *coat) | shipping,
+            json=order_body(store, shops.shared_warehouse, *coat) | shipping,
         )
 
 
@@ -112,7 +112,7 @@ async def test_an_order_says_where_it_goes(maker):
     unknown = await order(maker, shops, coat, carrier="DHL")
     assert unknown.status_code == 422, unknown.text
 
-    payload = sale_body(shops.primary_store, shops.shared_warehouse, *coat) | {
+    payload = order_body(shops.primary_store, shops.shared_warehouse, *coat) | {
         "carrier": "NOVA_POSHTA"
     }
     async with api(maker, shops.scope(shops.primary_store)) as client:
@@ -158,7 +158,7 @@ async def test_a_command_from_before_is_still_answered_with_its_order(maker):
     shops = await make_two_shops(maker)
     coat = await coats(maker, shops)
     made = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()
-    legacy = sale_body(shops.primary_store, shops.shared_warehouse, *coat)
+    legacy = order_body(shops.primary_store, shops.shared_warehouse, *coat)
     line = legacy["lines"][0]
     async with maker() as session:
         session.add(

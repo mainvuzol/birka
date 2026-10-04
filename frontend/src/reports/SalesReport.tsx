@@ -5,6 +5,14 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
 import {
+  isTillMethod,
+  methodHow,
+  methodLabels,
+  notStated,
+  refundHow,
+  type PaymentMethod,
+} from "@/shared/payment";
+import {
   dayText,
   daysBefore,
   monthStart,
@@ -13,8 +21,10 @@ import {
   type Entry,
   type Figures,
   type Models,
+  type OffTillFigures,
   type SalesReport as Report,
   type StoreFigures,
+  type WayFigures,
 } from "./types";
 
 type Range = { from: string; to: string };
@@ -28,6 +38,54 @@ function signed(value: string): string {
 // What went out: returned goods, money handed back.
 function minus(value: string): string {
   return value === "0.00" ? money(value) : signed(`-${value}`);
+}
+
+// What a correction moved: «+350,00 грн», «−350,00 грн».
+function moved(value: string): string {
+  return value.startsWith("-") ? signed(value) : `+${money(value)}`;
+}
+
+function nothing(value: string): boolean {
+  return value === "0.00";
+}
+
+// A way's name in the report: «Не вказано» for money recorded before the way
+// was asked (owner decision, 2026-10-04).
+const wayLabels: Record<WayFigures["method"], string> = {
+  CASH: methodLabels.CASH,
+  CARD: methodLabels.CARD,
+  TRANSFER: methodLabels.TRANSFER,
+  NOT_STATED: `${notStated.charAt(0).toUpperCase()}${notStated.slice(1)}`,
+};
+
+type Way = { label: string; came_in: string; corrected: string; net: string };
+
+// An order's money paid off the till, outside «Разом» (owner decision,
+// 2026-10-04; ADR-0012 §G24).
+function offTill(figures: Figures): Way[] {
+  const ways: [string, OffTillFigures][] = [
+    [methodLabels.PREPAID_TRANSFER, figures.off_till.prepaid_transfer],
+    [methodLabels.CARRIER_COD, figures.off_till.carrier_cod],
+  ];
+  return ways.map(([label, sums]) => ({ label, ...sums }));
+}
+
+// «Виправлення способу оплати: картка −350,00 грн, готівка +350,00 грн» —
+// what corrections made in these days moved, the way it left first. A
+// correction counts on the day it is made, never back on the day of its sale
+// (owner decision, 2026-10-04).
+function correctionsText(figures: Figures): string {
+  const ways: Way[] = [
+    ...figures.ways.map((way) => ({ ...way, label: wayLabels[way.method] })),
+    ...offTill(figures),
+  ].filter((way) => !nothing(way.corrected));
+  const ordered = [
+    ...ways.filter((way) => way.corrected.startsWith("-")),
+    ...ways.filter((way) => !way.corrected.startsWith("-")),
+  ];
+  return ordered
+    .map((way) => `${way.label.toLowerCase()} ${moved(way.corrected)}`)
+    .join(", ");
 }
 
 function query(
@@ -61,7 +119,9 @@ const stateLabels: Record<StoreFigures["store_state"], string> = {
  * The sales report (owner decisions, 2026-10-02): what each store sold and
  * took back, and the money through its till, for today or any days. The owner
  * and managers read it, each for the stores they hold it in, and the stores
- * together when there are several.
+ * together when there are several. Since 2026-10-04 the money is split by the
+ * way it was paid, and an order paid off the till has its own lines, outside
+ * «Разом» (ADR-0012 §B11, §G24).
  */
 export function SalesReport({
   token,
@@ -134,7 +194,8 @@ export function SalesReport({
       </div>
       <p className="hint">
         Продажі й повернення рахуються магазину, який продав, гроші — магазину,
-        через чию касу пройшли. Повернення — у день, коли його прийняли.
+        через чию касу пройшли. Повернення — у день, коли його прийняли,
+        виправлення способу оплати — у день, коли його записали.
       </p>
       <div className="choices" aria-label="Період">
         {shortcuts.map(([label, value]) => (
@@ -264,7 +325,9 @@ function Summary({
           <strong>{signed(figures.net)}</strong>
         </dd>
       </dl>
-      <h4>Гроші в касі</h4>
+      {/* «Гроші», not «Гроші в касі»: card and transfer are in it too, and
+          «Каса» is now the cash drawer (ADR-0012 §B11, §G24). */}
+      <h4>Гроші</h4>
       <dl className="debt">
         <dt>Оплачено одразу повністю</dt>
         <dd>{money(figures.paid_in_full)}</dd>
@@ -272,14 +335,70 @@ function Summary({
         <dd>{money(figures.debt_payments)}</dd>
         <dt>Віддано при поверненнях</dt>
         <dd>{minus(figures.paid_back)}</dd>
+        {!nothing(figures.corrected_into_till) && (
+          <>
+            <dt>Виправлення способу оплати</dt>
+            <dd>{moved(figures.corrected_into_till)}</dd>
+          </>
+        )}
         <dt>
-          <strong>Разом у касі</strong>
+          <strong>Разом</strong>
         </dt>
         <dd>
-          <strong>{signed(figures.cash)}</strong>
+          <strong>{signed(figures.money)}</strong>
         </dd>
       </dl>
+      {/* The till's ways add up to «Разом». «Не вказано» only when it holds
+          something: money recorded before the way was asked. */}
+      <h4>За способом оплати</h4>
+      <dl className="debt" aria-label="За способом оплати">
+        {figures.ways
+          .filter(
+            (way) =>
+              way.method !== "NOT_STATED" ||
+              ![way.came_in, way.went_out, way.corrected].every(nothing),
+          )
+          .map((way) => (
+            <Row
+              key={way.method}
+              label={wayLabels[way.method]}
+              value={signed(way.net)}
+            />
+          ))}
+      </dl>
+      {offTill(figures).some(
+        (way) => !nothing(way.came_in) || !nothing(way.corrected),
+      ) && (
+        <>
+          <h4>Замовлення, оплачені поза касою</h4>
+          <dl className="debt">
+            {offTill(figures)
+              .filter((way) => !nothing(way.came_in) || !nothing(way.corrected))
+              .map((way) => (
+                <Row
+                  key={way.label}
+                  label={way.label}
+                  value={signed(way.net)}
+                />
+              ))}
+          </dl>
+        </>
+      )}
+      {correctionsText(figures) && (
+        <p className="hint">
+          Виправлення способу оплати: {correctionsText(figures)}
+        </p>
+      )}
     </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </>
   );
 }
 
@@ -314,17 +433,36 @@ function ModelList({
   );
 }
 
+// How an entry's money moved, after its sum: «готівкою», «на картку».
+function how(entry: Entry, method: PaymentMethod): string {
+  return entry.kind === "RETURN" && isTillMethod(method)
+    ? refundHow[method]
+    : methodHow[method];
+}
+
+// The way as it was stated; a correction is a note beside it, never a
+// rewrite (ADR-0012 §B11).
+function wayText(entry: Entry): string {
+  const stated =
+    entry.payment_method === null
+      ? ` · спосіб ${notStated}`
+      : ` ${how(entry, entry.payment_method)}`;
+  return entry.method_now
+    ? `${stated} (виправлено: ${how(entry, entry.method_now)})`
+    : stated;
+}
+
 function entryNote(entry: Entry, everyStore: boolean): string {
   if (entry.kind === "SALE") {
     const paid = entry.paid_in_parts
-      ? `частинами, внесено ${money(entry.cash)}`
-      : "оплачено повністю";
+      ? `частинами, внесено ${money(entry.money)}${wayText(entry)}`
+      : `оплачено повністю${wayText(entry)}`;
     return everyStore ? `${paid} · «${entry.store_name}»` : paid;
   }
   const handed =
-    entry.cash === "0.00"
+    entry.money === "0.00"
       ? "лише зменшило борг"
-      : `віддано ${money(entry.cash)}`;
+      : `віддано ${money(entry.money)}${wayText(entry)}`;
   return entry.taken_at_store_id && entry.taken_at_store_id !== entry.store_id
     ? `${handed} · продав «${entry.store_name}», прийняв «${entry.taken_at_store_name ?? ""}»`
     : everyStore

@@ -30,12 +30,14 @@ from app.modules.audit.models import AuditLog
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.credit import service
 from app.modules.inventory.service import find_divergences
+from app.modules.sales.payment import PaymentMethod
 from tests.conftest import requires_database
 from tests.integration.test_shared_warehouse import (
     TwoShops,
     api,
     key,
     make_two_shops,
+    order_body,
     quantity_at,
     sale_body,
     stock_a_coat,
@@ -87,7 +89,11 @@ async def pay(maker, shops, credit_id: str, amount: str, command_id: str | None 
     async with api(maker, shops.scope(shops.primary_store)) as client:
         return await client.post(
             f"/api/v1/credits/{credit_id}/payments",
-            json={"command_id": command_id or str(uuid.uuid4()), "amount": amount},
+            json={
+                "command_id": command_id or str(uuid.uuid4()),
+                "amount": amount,
+                "payment_method": "CASH",
+            },
         )
 
 
@@ -105,6 +111,7 @@ async def give_back(maker, shops, sale: dict, quantity: int):
                         "condition": "INTACT",
                     }
                 ],
+                "payment_method": "CASH",
             },
             headers=key(),
         )
@@ -331,7 +338,7 @@ async def test_only_the_store_that_sold_takes_payments_and_sees_the_debt(maker):
         seen = await client.get(f"/api/v1/credits/{credit_id}")
         paid = await client.post(
             f"/api/v1/credits/{credit_id}/payments",
-            json={"command_id": str(uuid.uuid4()), "amount": "100.00"},
+            json={"command_id": str(uuid.uuid4()), "amount": "100.00", "payment_method": "CASH"},
         )
         listed = await client.get("/api/v1/credits", params={"store_id": str(shops.primary_store)})
 
@@ -387,7 +394,12 @@ async def test_two_payments_at_once_never_pay_more_than_is_owed(maker):
 
     async with maker.begin() as first:
         await service.pay(
-            first, scope=scope, credit_id=credit_id, command_id=uuid.uuid4(), amount=Decimal("1500")
+            first,
+            scope=scope,
+            credit_id=credit_id,
+            command_id=uuid.uuid4(),
+            amount=Decimal("1500"),
+            payment_method=PaymentMethod.CASH,
         )
 
         async def second():
@@ -398,6 +410,7 @@ async def test_two_payments_at_once_never_pay_more_than_is_owed(maker):
                     credit_id=credit_id,
                     command_id=uuid.uuid4(),
                     amount=Decimal("1500"),
+                    payment_method=PaymentMethod.CASH,
                 )
 
         meanwhile = asyncio.create_task(second())
@@ -607,7 +620,7 @@ async def arrived_order(maker, shops: TwoShops) -> str:
         )
         created = await client.post(
             "/api/v1/orders",
-            json=sale_body(shops.primary_store, shops.shared_warehouse, variant, size, qty=2)
+            json=order_body(shops.primary_store, shops.shared_warehouse, variant, size, qty=2)
             | {"carrier": "NOVA_POSHTA"},
         )
         assert created.status_code == 201, created.text
@@ -624,7 +637,7 @@ async def collect(maker, shops: TwoShops, order: str, credit: dict | None, comma
     async with api(maker, shops.scope(shops.primary_store, kw.get("permissions", SELLER))) as c:
         return await c.post(
             f"/api/v1/orders/{order}/collect",
-            json={"command_id": command or str(uuid.uuid4())}
+            json={"command_id": command or str(uuid.uuid4()), "payment_method": "CASH"}
             | ({"credit": credit} if credit is not None else {}),
         )
 
@@ -729,6 +742,7 @@ def test_the_seller_states_something_paid_whoever_calls() -> None:
 
 
 async def test_the_downgrade_refuses_while_a_debt_is_recorded():
+    from tests.integration.test_cash_schema import a_credit, a_sale
     from tests.integration.test_stock_rekey_migration import _admin, _alembic, _run, _url_for
 
     name = f"birka_credit_{uuid.uuid4().hex[:10]}"
@@ -741,7 +755,10 @@ async def test_the_downgrade_refuses_while_a_debt_is_recorded():
         await _run(config, "upgrade", "head", database=name)
         fresh = async_sessionmaker(engine, expire_on_commit=False)
         shops = await make_two_shops(fresh)
-        await on_credit(fresh, shops)
+        # Written as a debt recorded before the way of paying was asked: one
+        # recorded with its way stops revision 0035's own downgrade first.
+        async with fresh.begin() as session:
+            await a_credit(session, shops, await a_sale(session, shops, shops.primary_store))
         with pytest.raises(Exception, match="A sale paid in parts is recorded"):
             await _run(config, "downgrade", "0022_shelf_shortage", database=name)
     finally:

@@ -80,6 +80,8 @@ def basket_of(shop, quantity: int, command_id: uuid.UUID) -> dict:
                 "unit_price": "1200.00",
             }
         ],
+        # The till's button that sold (owner decisions, 2026-10-04).
+        "payment_method": "CASH",
     }
 
 

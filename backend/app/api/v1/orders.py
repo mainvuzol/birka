@@ -5,6 +5,14 @@ Ukraine, `carrier` when it is made; `waybill`, or `abroad_note` abroad, on
 `POST /orders/{id}/dispatch` or later; `POST /orders/{id}/shipping` corrects
 any of it while the order is open. `GET /orders?waybill=` finds orders by
 their waybill, and an order names the store's other orders sharing it.
+
+`POST /orders/{id}/collect` says how the order was paid (owner decisions,
+2026-10-04): in advance by transfer, cash on delivery, or at the counter now
+by cash, card or transfer. Optional here, so a collection a phone kept from
+before the way was asked still replays; the service requires it of a new one
+(ADR-0012, B13). A read shows a collected order's way to whoever collected
+it and to the owner and managers, as a sale read on its own does
+(ADR-0012, G32).
 """
 
 from __future__ import annotations
@@ -16,10 +24,14 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep
-from app.api.v1.sales import CreditPayload
+from app.api.v1.sales import CreditPayload, MethodValue, method_of
 from app.core.text import CleanText
+from app.modules.authz.scope import RequestScope
+from app.modules.cash.current import sale_methods
 from app.modules.credit import service as credit_service
 from app.modules.orders.models import Carrier, Destination
 from app.modules.orders.service import (
@@ -30,6 +42,8 @@ from app.modules.orders.service import (
     read_order,
     transition_order,
 )
+from app.modules.sales.models import Sale
+from app.modules.sales.read import way_shown_to
 
 router = APIRouter(tags=["orders"])
 
@@ -68,6 +82,10 @@ class CollectOrderRequest(OrderActionRequest):
     # nothing now and the rest owed to the order's store (owner decision,
     # 2026-10-01).
     credit: CreditPayload | None = None
+    # How it was paid, any of the five ways; paid in parts, the part paid
+    # now's. Absent only from a collection a phone kept from before it was
+    # asked.
+    payment_method: MethodValue | None = None
 
 
 class DispatchOrderRequest(OrderActionRequest):
@@ -151,11 +169,41 @@ class OrderResponse(BaseModel):
     # same waybill, which is saved anyway.
     shipping_history: list[ShippingChangeResponse] = []
     same_waybill: list[SameWaybillResponse] = []
+    # A collected order: how it was paid. As said, in the collection's own
+    # answer; on a read, as it stands after corrections, and only for whoever
+    # collected it and the owner and managers.
+    payment_method: str | None = None
 
 
 class OrderListResponse(BaseModel):
     orders: list[OrderResponse]
     has_more: bool
+
+
+async def _with_ways(
+    session: AsyncSession, scope: RequestScope, orders: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Each collected order read with its sale's way, where this person may
+    see it (`sales.read.way_shown_to`). Merged here because the orders'
+    module does not read the corrections (ADR-0012, B10, B15)."""
+    sold = {uuid.UUID(order["sale_id"]) for order in orders if order.get("sale_id")}
+    if not sold:
+        return orders
+    shown = {
+        sale_id
+        for sale_id, store_id, seller in (
+            await session.execute(
+                select(Sale.id, Sale.store_id, Sale.seller_user_id).where(Sale.id.in_(sold))
+            )
+        ).tuples()
+        if way_shown_to(scope, store_id=store_id, seller_user_id=seller)
+    }
+    methods = await sale_methods(session, shown)
+    for order in orders:
+        sale_id = uuid.UUID(order["sale_id"]) if order.get("sale_id") else None
+        method = methods[sale_id].taken_with_sale.method if sale_id in methods else None
+        order["payment_method"] = method.value if method is not None else None
+    return orders
 
 
 @router.get("/orders", response_model=OrderListResponse)
@@ -167,9 +215,10 @@ async def list_page(
     offset: Annotated[int, Query(ge=0)] = 0,
     waybill: Annotated[CleanText | None, Query(max_length=64)] = None,
 ) -> dict[str, Any]:
-    return await list_orders(
+    page = await list_orders(
         session, scope=scope, store_id=store_id, limit=limit, offset=offset, waybill=waybill
     )
+    return page | {"orders": await _with_ways(session, scope, page["orders"])}
 
 
 @router.post("/orders", status_code=201, response_model=OrderResponse)
@@ -191,7 +240,8 @@ async def create(
 
 @router.get("/orders/{order_id}", response_model=OrderResponse)
 async def read(order_id: uuid.UUID, scope: ScopeDep, session: SessionDep) -> dict[str, Any]:
-    return await read_order(session, scope=scope, order_id=order_id)
+    order = await read_order(session, scope=scope, order_id=order_id)
+    return (await _with_ways(session, scope, [order]))[0]
 
 
 @router.post("/orders/{order_id}/return", response_model=OrderResponse)
@@ -231,6 +281,7 @@ async def collect(
             if payload.credit is not None
             else None
         ),
+        payment_method=method_of(payload.payment_method),
     )
     await session.commit()
     return body
