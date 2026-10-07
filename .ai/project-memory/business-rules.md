@@ -1228,3 +1228,51 @@ found what happens today:
 - **The app does not open without the server,** when the server is dead
   or the shop has no internet. Paper. This keeps the earlier decision that
   no phone holds an old page, so updates stay safe.
+
+## Owner decision — 2026-10-07 (the server is unreachable: what the 2026-10-04 answers left open)
+
+Asked after the design of the outage work and its review (two lenses, 25
+findings). Each answer is the recommended one.
+
+- **An operation kept on the phone is not typed from paper.** The seller
+  writes it on paper as well, marked «у телефоні — <ім’я>». Nobody types
+  that line until the same phone says «не записано»; the phone checks it
+  itself. If the phone is lost, a manager types the line after checking
+  «Звіт». Typing it anyway would record the same sale twice: the server
+  cannot tell the two apart.
+- **Cards are taken during an outage,** charged on the terminal at once,
+  with no receipt from the app. A sale typed from paper then says the card
+  was charged during the outage and must not be charged again, in place of
+  «Проведіть на терміналі». A kept sale the phone confirms by itself says:
+  if the card was already charged, do not charge it a second time. A card
+  debt payment that is refused goes back to the card through the terminal.
+- **The paper switch stays on for a series of paper sales.** The pay
+  buttons say the mode and, under them, who sold and from which warehouse
+  («З паперу · Готівка»), so a forgotten switch is seen before the press.
+  A wrong mark cannot be changed afterwards.
+- **The paper records the warehouse** the goods left from, in a store that
+  sells from two (its own and the shared one). Whoever types it chooses
+  that warehouse.
+- **When the server answers before 6:00** the same night, the seller types
+  everything from paper first, then closes the drawer. If it does not, the
+  drawer is closed the next evening, as decided on 2026-10-04.
+- **The time from paper is an hour, with «вчора»** when it is typed the
+  next day: today or yesterday only. An older sale is typed with no time.
+- **The mark is on sales only.** Debt payments and returns typed from paper
+  are ordinary ones; «Звіт» names who typed them. A mark for them may be
+  added later.
+- **A kept sale recorded once the server answers carries no mark.** It is
+  an ordinary sale, dated when it was recorded, sold by the phone's owner.
+- **«Клієнт забрав» refused because the order was cancelled or came back
+  meanwhile:** the goods are typed as a sale from paper, at the order's
+  prices, with the mark.
+- **Goods sold on paper and reserved for an order meanwhile:** a manager
+  cancels or changes the order, not the balance; then the paper sale is
+  typed.
+- **A refused debt payment when less is owed:** the sum still owed is
+  taken and the rest goes back to the customer: cash from the drawer, a
+  card through the terminal, a transfer by transfer. Cash given back after
+  the close shows a surplus, then a shortage, each with its reason.
+- **A debt payment taken on paper in another store** while the selling
+  store was blocked, refused once that store works again: the app says to
+  pass the paper to a manager, who decides each case.
