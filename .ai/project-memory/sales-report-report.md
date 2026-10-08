@@ -213,6 +213,7 @@ it:
   byte for byte the same, and old sales. `sales-report.spec.ts` sells by
   card and by transfer, and returns to the card.
 
-Readings the owner has not confirmed yet are in the business rules: a return
-of an order paid off the till goes back through the till and lowers «Разом»;
-«Продажі» still counts every sale, orders paid off the till included.
+Readings the owner confirmed as built on 2026-10-08 (business rules, cash
+and card, "carried out", 28 and 29): a return of an order paid off the till
+goes back through the till and lowers «Разом»; «Продажі» still counts every
+sale, orders paid off the till included.

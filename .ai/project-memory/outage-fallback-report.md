@@ -357,8 +357,8 @@ text already did; a kept similar-name refusal still says «Візьміть її
   but "once per return of the server" holds only while nothing else
   answers (found by the frontend's mutation tester).
 - **A kept delivery refused on resend** says it was not recorded and why,
-  not whether to enter it again: that is undecided, on the owner's list
-  (G17) with the other new texts.
+  not whether to enter it again; the owner confirmed this as built with the
+  other new texts on 2026-10-08 (G17).
 - **The sellers' list of a store that does not trade** answers 403 even to
   the network's owner and managers, as a command there would; nobody can
   sell there anyway.

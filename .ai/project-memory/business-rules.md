@@ -276,8 +276,9 @@ Asked while drawing up the [release checklist](release-checklist.md).
   - the JSON's shape, since the parser does not exist yet;
   - whether its lines still pass through review before approval.
 
-  **Chosen on 2026-10-08:** photos → parser → JSON, in a format Birka
-  defines ("the shops' existing stock", below).
+  **All three answered on 2026-10-08:** photos → parser → JSON, in a format
+  Birka defines, every line reviewed by a person ("the shops' existing
+  stock", below).
 
   The rules of 2026-09-29 stand until the owner changes them: an opening
   balance only into a warehouse with no history, and only as the answer to a
@@ -1464,17 +1465,33 @@ Built on 2026-10-08; see the [report](outage-fallback-report.md) and
 
 ## Owner decision — 2026-10-08 (the shops' existing stock)
 
-Asked after PR #70, when the owner chose what comes next. It answers "which
-of the two ways" of 2026-10-01 ("going live").
+Asked on 2026-10-08, after PR #70. It answers what 2026-10-01 left open
+("going live"): which of the two ways, the JSON's shape, and whether its
+lines pass through review.
 
 - **The shops' existing stock goes in by photos → parser → JSON.** The shops
   photograph their notebooks and tables, a parser reads them into JSON, and
   the app imports the JSON. The owner chose this over lists typed by hand.
-  The «Початкові залишки» screen stays in the app.
-- **Birka defines the JSON's format.** The format is described here and the
-  import is built into the app; the parser, whoever makes it, produces that
-  file.
-- **Not decided yet,** and asked before the import is built: what a line
-  holds, and whether the lines pass through review before approval. Until
-  then the rules of 2026-09-29 stand: an opening balance only into a
-  warehouse with no history, and only as the answer to a list.
+- **Birka defines the JSON's format.** Birka describes the format and builds
+  the import into the app; neither is done yet. The parser, whoever makes
+  it, produces that file.
+- **What a line holds.** A notebook line names the model, its size and its
+  count, and sometimes its colour and a price.
+- **The price is only shown.** It is the sale price or the purchase price,
+  depending on the notebook. It stays with the line as the notebook's record
+  and is shown during review. It never sets a model's price, which is set as
+  today.
+- **Every line is reviewed by a person,** as in «Початкові залишки» today:
+  the parser's reading is a hint, a person confirms or corrects each line,
+  and the owner approves the list. A model is never guessed.
+- **Several files fill one list.** How many lines a warehouse holds is not
+  known, and may be more than the 1 000 a list takes today. A warehouse's
+  list is filled from several files (a notebook each, say), reviewed in
+  parts and approved together, and the list's limits are raised.
+- **The photos stay with the shops.** Birka keeps no photo: each line keeps
+  the photo's name and its line number on it, to find it again.
+- **The file is uploaded in the app,** in «Початкові залишки», by whoever may
+  import a list today (the owner or a manager).
+
+Until the import is built, the rules of 2026-09-29 stand: an opening balance
+only into a warehouse with no history, and only as the answer to a list.

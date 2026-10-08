@@ -10,7 +10,7 @@ It was row 15 of the [release checklist](release-checklist.md), the one
 blocker the agent could build. Nothing let the shops' existing stock into
 the app.
 
-The owner chose on 2026-10-01 between two ways in:
+On 2026-10-01 the owner allowed two ways in:
 - **lists with review** (ADR-0005), built on the server in M1-023 with no
   screen;
 - **photos of the notebooks**, read by a separate parser into JSON.
@@ -124,9 +124,9 @@ editor is now a container, not a form, and the E2E journeys found it.
 ## Not covered here
 
 - **The second way, photos → parser → JSON,** was chosen by the owner on
-  2026-10-08, in a format Birka defines; it is not built yet. When it
-  exists, its JSON can become a list's lines and pass through this same
-  review, unless the owner decides otherwise.
+  2026-10-08, in a format Birka defines; it is not built yet. Its lines are
+  to become a list's lines and pass through this same review (owner,
+  2026-10-08).
 - **A model not in the catalogue is created in «Каталог» first,** as when
   receiving. Then return to the line.
 - **Nothing tells in advance whether a warehouse has history.** The hint

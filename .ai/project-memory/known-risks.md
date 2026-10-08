@@ -309,10 +309,9 @@ See the [report](opening-stock-screen-report.md).
   2026-10-02): a delivery that day, a purchase when a seller enters them.
   Nothing tells them apart from goods bought that day.
 - **The photos → parser → JSON way, chosen on 2026-10-08, does not exist
-  yet.** Birka defines its format; the import is not built. Its JSON is not
-  to be loaded as stock directly, or the review would be bypassed. Unless the
-  owner decides otherwise, it becomes a list's lines and passes through the
-  same review.
+  yet.** Birka defines its format; the import is not built. Its JSON is
+  never loaded as stock directly: its lines become a list's lines and pass
+  through the same review (owner, 2026-10-08).
 - **A slow review is the price of no invented counts.** Hundreds of lines on
   a phone take time. Not measured with real notebooks.
 
@@ -809,9 +808,9 @@ the review of the built change raised.
 - **The mark is the typist's word** (G5, accepted by the owner on
   2026-10-08). Nothing checks the named seller or the paper's time against
   anything. A wrong mark, a live sale made with the switch still on, is
-  permanent: the database refuses any change to it. The pay buttons read «З паперу · …» with the
-  seller and the warehouse, so a forgotten switch is seen before the press
-  (owner, 2026-10-07).
+  permanent: the database refuses any change to it. The pay buttons read
+  «З паперу · …» with the seller and the warehouse, so a forgotten switch is
+  seen before the press (owner, 2026-10-07).
 - **A paper sale typed without the switch** is an ordinary sale. On a
   shortfall it gets «Товар на місці», which records a found unit that was
   never there, against the owner's rule that goods gone are fixed by a

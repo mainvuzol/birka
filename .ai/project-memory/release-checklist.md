@@ -16,14 +16,13 @@ way in for the shops' existing stock (`docs/owner-readings`). The verdict
 stands.
 
 **Verdict: BLOCKED.** On 2026-10-08 the owner chose how the shops' existing
-stock goes in: photos → parser → JSON, in a format Birka defines. That
-import is not built yet (row 15), and it is the agent's next work, once the
-owner has said what a line holds. Everything else the agent can build and
-prove without a server or a person is done. The outage work changed
-`POST /sales`, so the hot path's release reading (row 22) and the count of a
-sale's taps (row 10) were taken again on 2026-10-08: every case passes, and
-a sale is still 5 taps. The rest needs the owner, an administrator with a
-server, and the shops.
+stock goes in: photos → parser → JSON, in a format Birka defines, every line
+reviewed by a person. That import is not built yet (row 15). Everything else
+the agent can build and prove without a server or a person is done. The
+outage work changed `POST /sales`, so the hot path's release reading (row
+22) and the count of a sale's taps (row 10) were taken again on 2026-10-08:
+every case passes, and a sale is still 5 taps. The rest needs the owner, an
+administrator with a server, and the shops.
 
 **The order matters.** The shops' existing stock goes into a warehouse
 before anything else is recorded there, or never as an opening balance:
@@ -59,7 +58,7 @@ accepted.
 
 | # | | Who | Status |
 |---|---|---|---|
-| 15 | **The shops' existing stock gets in**, before anything moves in that warehouse ([runbook, step 9](server-runbook.md#9-the-shops-existing-stock-before-anything-moves)). On 2026-10-01 the owner allowed two ways: either lists with review (ADR-0005), or photos of the notebooks → a separate parser → JSON. **On 2026-10-08 the owner chose photos → parser → JSON, in a format Birka defines** (business rules, "the shops' existing stock"). Whatever is still missing is added one by one, through «Приймання» with its size (owner, 2026-10-02). **Lists with review have their screen, «Початкові залишки»** ([report](opening-stock-screen-report.md), PR #52), and nothing moves in a warehouse while its list waits ([report](first-days-report.md)). The JSON import is not built: what a line holds, and whether the lines pass through review, are asked first. | the agent builds the import once the owner has answered; the parser produces the file; the owner approves each warehouse's stock (a child store's own warehouse: whoever holds the owner's role in `SECOND` itself, Q5) | the way chosen; the import not built |
+| 15 | **The shops' existing stock gets in**, before anything moves in that warehouse ([runbook, step 9](server-runbook.md#9-the-shops-existing-stock-before-anything-moves)). On 2026-10-01 the owner allowed two ways: either lists with review (ADR-0005), or photos of the notebooks → a separate parser → JSON. **On 2026-10-08 the owner chose photos → parser → JSON, in a format Birka defines** (business rules, "the shops' existing stock"): every line reviewed by a person, several files filling one warehouse's list, approved together. Whatever is still missing is added one by one, through «Приймання» with its size (owner, 2026-10-02). **Lists with review have their screen, «Початкові залишки»** ([report](opening-stock-screen-report.md), PR #52), and nothing moves in a warehouse while its list waits ([report](first-days-report.md)). The JSON import is not built. | the shops photograph their notebooks and tables; the agent builds the import; the parser produces the files; the owner approves each warehouse's list (a child store's own warehouse: whoever holds the owner's role in `SECOND` itself, Q5) | the way chosen; the import not built |
 | 16 | **A server:** domain, HTTPS, Docker, `.env` with `BIRKA_APP_ENV=production` and the bot's token. Since 2026-10-03, also who hears of trouble: the administrator's Telegram id, and the outside check-in service in the owner's name ([runbook, step 8a](server-runbook.md#8a-being-told-when-something-fails)), given at publication or a test, when the owner says so. | administrator. Who provides the server and the domain, and who administers it, is not recorded: ask the owner | not started |
 | 17 | **The bot's menu button** opens `https://<domain>/`. | administrator | not started |
 | 18 | **The owner and the shop's places** (`seed_organization`), then the sellers (`scripts.people`). | administrator, on the owner's word | not started |
@@ -73,7 +72,8 @@ accepted.
 ## Decided not to block the release
 
 What is still to be built after the release, and what waits on the owner,
-is listed in the [backlog](backlog.md).
+is listed in the [backlog](backlog.md); of it, the JSON stock import blocks
+the release (row 15).
 
 | | |
 |---|---|

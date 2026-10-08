@@ -263,10 +263,12 @@ second (business rules, "going live" and "the shops' existing stock"):
 - **photos of the notebooks**, read by a parser into JSON, in a format Birka
   defines. The import does not exist yet. Until it does, the rules that
   stand keep each warehouse untouched until its stock goes in as its opening
-  balance. What a JSON line holds, and whether the lines pass through
-  review, are not decided yet.
+  balance. Its lines are to go into the warehouse's list and be reviewed
+  there, and several files may fill one list (owner, 2026-10-08).
 
-With lists, for each warehouse, in this order:
+The steps below are for lists typed in the app, the way it has today; the
+JSON way's steps are written when its import is built. With lists, for each
+warehouse, in this order:
 
 1. **The count.** Count the goods, or take the notebooks as they stand on
    one day. The shop goes on selling on paper and keeps those sales.

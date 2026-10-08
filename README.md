@@ -9,12 +9,15 @@ correct.
 ## Status
 
 **Milestone 1 is not complete.**
-- **What a shop needs on day one is built and verified**, including a way in
-  for the shops' existing stock: lists with review, «Початкові залишки».
+- **What a shop needs on day one is built and verified**, except the way in
+  the owner chose on 2026-10-08 for the shops' existing stock: photos →
+  parser → JSON, in a format Birka defines, not built yet. Lists with
+  review, «Початкові залишки», are built.
 - **The catalogue's verified promotion (M1-021/022) is still partial.** It
   waits for human-confirmed data.
-- **The release is blocked** on steps only the owner, an administrator with a
-  server, or the shops can take: a server and the bot, the real organization
+- **The release is blocked** on the JSON stock import (release checklist,
+  row 15), and on steps only the owner, an administrator with a server, or
+  the shops can take: a server and the bot, the real organization
   and its people, backups there, the shops' existing stock, a sale timed in
   the shop, and the owner's sign-off. The hot path's release reading, every
   case gated, was taken again on 2026-10-08, after the outage work's mark

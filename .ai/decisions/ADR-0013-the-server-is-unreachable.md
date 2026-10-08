@@ -619,7 +619,8 @@ No tap is added to a normal sale.
 
 ### 10. The bot
 
-Not asked (G10); built as recommended, in `backups/incidents.py`:
+Not asked at first (G10); built as recommended, and confirmed by the owner
+on 2026-10-08, in `backups/incidents.py`:
 - the app not answering: «Продавці продають на папері.» replaces «Продавці
   зараз не можуть продавати.»;
 - nobody signs in: «Хто ще не увійшов, продає на папері.»;
@@ -712,8 +713,8 @@ checklist, row 16).
 - **A stock list of unknown age shown while the server is down:** with paper
   chosen, it invites selling against it.
 - **A note from each phone after it reconnects:** recommended against, and
-  not asked (G10); the error notes are themselves lost while the server is
-  down.
+  not asked (G10, confirmed as built on 2026-10-08); the error notes are
+  themselves lost while the server is down.
 - **A table for the mark:** one row per sale. Columns keep the receipt, the
   list and the report free of joins.
 - **Refusing the empty shelf on the server for a marked sale:** that command
