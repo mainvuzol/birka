@@ -24,13 +24,31 @@ interface State {
    * nothing, its screen says so before why (ADR-0013 §1).
    */
   kept: boolean;
+  /**
+   * The operation `error` answered. A similar name is answered only on the
+   * form that sent it, while it holds the words sent (owner decision,
+   * 2026-10-03): «Це інша назва» confirms those words, never others.
+   */
+  refused: Command | null;
 }
 export const useCatalogCommand = create<State>(() => ({
   pending: null,
   busy: false,
   error: null,
   kept: false,
+  refused: null,
 }));
+/**
+ * The form a refusal answered is left. A first attempt refused kept nothing,
+ * so its refusal goes with that form: never over the queue, or over another
+ * proposal. A kept operation's stays until the next attempt — its screen says
+ * what was not recorded (ADR-0013 §1).
+ */
+export function forgetCatalogRefusal(): void {
+  const { kept, pending } = useCatalogCommand.getState();
+  if (!kept && pending === null)
+    useCatalogCommand.setState({ error: null, refused: null });
+}
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const CANCEL_CREATION_REASON =
   "Створення скасовано користувачем після непідтвердженої відповіді";
@@ -194,7 +212,7 @@ export async function submitCatalogCommand(
   command: Command,
 ): Promise<Decision | null> {
   if (useCatalogCommand.getState().busy) return null;
-  useCatalogCommand.setState({ busy: true, error: null });
+  useCatalogCommand.setState({ busy: true, error: null, refused: null });
   let ambiguous = Boolean(command.ambiguous);
   let acknowledged = false;
   try {
@@ -288,7 +306,7 @@ export async function submitCatalogCommand(
       localStorage.removeItem(key);
       useCatalogCommand.setState({ pending: null });
     }
-    useCatalogCommand.setState({ error, kept: ambiguous });
+    useCatalogCommand.setState({ error, kept: ambiguous, refused: command });
     return null;
   } finally {
     useCatalogCommand.setState({ busy: false });

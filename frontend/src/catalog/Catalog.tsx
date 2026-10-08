@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
@@ -6,6 +6,7 @@ import { keptText, useAutoCheck } from "@/shared/reach";
 import type { Store } from "@/orders/types";
 import {
   CANCEL_CREATION_REASON,
+  forgetCatalogRefusal,
   submitCatalogCommand,
   useCatalogCommand,
 } from "./commands";
@@ -103,6 +104,14 @@ export function Catalog({
       },
     },
   ]);
+  // A first attempt's refusal goes with this screen: back from another tab,
+  // the queue opens without it.
+  useEffect(
+    () => () => {
+      forgetCatalogRefusal();
+    },
+    [],
+  );
   return (
     <>
       {pending && (
@@ -158,6 +167,7 @@ export function Catalog({
         <button
           disabled={blocked}
           onClick={() => {
+            forgetCatalogRefusal();
             setCreating(true);
             setSelected(null);
             setSuccess("");
@@ -175,6 +185,7 @@ export function Catalog({
           className="quiet"
           disabled={blocked}
           onClick={() => {
+            forgetCatalogRefusal();
             setCreating(false);
             setSelected(null);
             setSuccess("");
@@ -283,6 +294,7 @@ export function Catalog({
                   key={d.decision_id}
                   disabled={blocked}
                   onClick={() => {
+                    forgetCatalogRefusal();
                     setSelected(d.decision_id);
                     setSuccess("");
                   }}
@@ -349,8 +361,9 @@ function Detail({
   run: (c: Command) => Promise<void>;
   refresh: () => void;
 }): JSX.Element {
-  // The last refusal, so creating a product can answer a similar name.
-  const { error } = useCatalogCommand();
+  // The last refusal and the operation it answered: creating this proposal's
+  // product answers a similar name, never another proposal's.
+  const { error, refused } = useCatalogCommand();
   const [variant, setVariant] = useState("");
   const [reason, setReason] = useState("");
   const [feedback, setFeedback] = useState(false);
@@ -402,7 +415,13 @@ function Detail({
           submit={(body) => {
             action("create-product", body);
           }}
-          refusal={error}
+          refusal={
+            error !== null &&
+            refused?.decisionId === decision.decision_id &&
+            refused.path.endsWith("/create-product")
+              ? { error, sent: refused.body }
+              : null
+          }
         />
       )}
       {decision.creation?.redirected_from && (

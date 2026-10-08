@@ -182,6 +182,60 @@ async function open(page: Page, query: string, name: RegExp): Promise<void> {
   await page.getByRole("button", { name }).click();
 }
 
+/** A proposal of this test's own in «Каталог», waiting for review. */
+async function proposal(
+  page: Page,
+  bearer: string,
+  raw: string,
+): Promise<string> {
+  const id = randomUUID();
+  const made = await page.request.post("/api/v1/catalog/match-decisions", {
+    headers: { Authorization: `Bearer ${bearer}` },
+    data: { decision_id: id, store_id: fixture.store_id, raw_text: raw },
+  });
+  expect(made.status(), await made.text()).toBe(200);
+  return id;
+}
+
+/**
+ * «Каталог»'s queue as these proposals alone: every journey shares one
+ * queue, the oldest first, so a proposal made now is not on its first page.
+ */
+async function queue(page: Page, bearer: string, ids: string[]): Promise<void> {
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v1/catalog/match-decisions"),
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      const items = await Promise.all(
+        ids.map(async (id) => {
+          const read = await page.request.get(
+            `/api/v1/catalog/match-decisions/${id}`,
+            { headers: { Authorization: `Bearer ${bearer}` } },
+          );
+          return (await read.json()) as unknown;
+        }),
+      );
+      await route.fulfill({ json: { items, has_more: false } });
+    },
+  );
+}
+
+/** «Створити товар з опису», filled with a name, a colour and the size S. */
+async function fillProduct(
+  page: Page,
+  name: string,
+  colour: string,
+): Promise<void> {
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await page.getByLabel("Колір", { exact: true }).fill(colour);
+  await page.getByLabel("Система розмірів").selectOption("ALPHA");
+  await page.getByLabel("Розмір", { exact: true }).fill("S");
+}
+
 test("a duplicate is merged after a preview, its stock moving to the model that stays", async ({
   page,
 }) => {
@@ -482,6 +536,8 @@ test("creating a product with a Latin letter in a known word is warned once", as
   await expect(page.getByLabel("Колір", { exact: true })).toHaveValue(
     colour.right,
   );
+  await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
+  await expect(page.getByText("У каталозі вже є схожа назва")).toHaveCount(0);
   await page
     .getByRole("button", { name: "Створити та пов’язати товар" })
     .click();
@@ -599,6 +655,166 @@ test("creating a product keeps a similar word once the person says it is another
       { exact: true },
     ),
   ).toBeVisible();
+});
+
+test("a similar name refused is not left over the queue after another tab", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Черга ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await model(
+    page,
+    bearer,
+    { concept: `${name} вже`, variant: { color: colour.right } },
+    0,
+  );
+  const raw = `${name} опис`;
+  await queue(page, bearer, [await proposal(page, bearer, raw)]);
+  await enter(page, "Каталог");
+  await page.getByRole("button", { name: new RegExp(raw) }).click();
+  await fillProduct(page, name, colour.typo);
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  const refused = page.getByText(
+    "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+    { exact: true },
+  );
+  await expect(refused).toBeVisible();
+  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
+  // A first attempt refused kept nothing: the refusal answered that form,
+  // and goes with it.
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  await page.getByRole("button", { name: "Каталог", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
+  await expect(refused).toHaveCount(0);
+  // Opened again, its empty form is not answered by it either.
+  await page.getByRole("button", { name: new RegExp(raw) }).click();
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await expect(page.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    "",
+  );
+  await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Це інша назва — створити як є" }),
+  ).toHaveCount(0);
+});
+
+test("a similar name refused on one proposal is not answered on another", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Пропозиція ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await model(
+    page,
+    bearer,
+    { concept: `${name} вже`, variant: { color: colour.right } },
+    0,
+  );
+  const first = `${name} перша`;
+  const second = `${name} друга`;
+  await queue(page, bearer, [
+    await proposal(page, bearer, first),
+    await proposal(page, bearer, second),
+  ]);
+  await enter(page, "Каталог");
+  await page.getByRole("button", { name: new RegExp(first) }).click();
+  await fillProduct(page, name, colour.typo);
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
+  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page.getByRole("button", { name: new RegExp(second) }).click();
+  await page.getByRole("button", { name: "Створити товар з опису" }).click();
+  await expect(page.getByLabel("Назва моделі", { exact: true })).toBeVisible();
+  // Nothing of this proposal was sent: nothing here says its words are like
+  // another's, and nothing confirms them as another past the check.
+  await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Це інша назва — створити як є" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("У каталозі вже є схожа назва")).toHaveCount(0);
+});
+
+test("words changed after a similar-name warning are checked, not confirmed", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Слова ${randomUUID().slice(0, 8)}`;
+  const first = colours();
+  const second = colours();
+  await model(
+    page,
+    bearer,
+    { concept: `${name} вже`, variant: { color: first.right } },
+    0,
+  );
+  await model(
+    page,
+    bearer,
+    { concept: `${name} ще`, variant: { color: second.right } },
+    0,
+  );
+  const sent: Record<string, unknown>[] = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/create-product"))
+      sent.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  await enter(page, "Каталог");
+  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
+  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
+  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
+  await fillProduct(page, name, first.typo);
+  const create = page.getByRole("button", {
+    name: "Створити та пов’язати товар",
+  });
+  const another = page.getByRole("button", {
+    name: "Це інша назва — створити як є",
+  });
+  const advice = page.getByText(
+    "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+    { exact: true },
+  );
+  await create.click();
+  await expect(
+    page.getByText(
+      `Колір: «${first.typo}» схоже на «${first.right}», що вже є в каталозі.`,
+    ),
+  ).toBeVisible();
+  await expect(another).toBeVisible();
+  await expect(advice).toBeVisible();
+  // Another word typed since: «another» would confirm words never checked,
+  // and nothing is left saying to take a spelling or confirm.
+  await page.getByLabel("Колір", { exact: true }).fill(second.typo);
+  await expect(another).toHaveCount(0);
+  await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
+  await expect(advice).toHaveCount(0);
+  await create.click();
+  await expect(
+    page.getByText(
+      `Колір: «${second.typo}» схоже на «${second.right}», що вже є в каталозі.`,
+    ),
+  ).toBeVisible();
+  expect(sent).toHaveLength(2);
+  expect(sent[1]?.similar_confirmed).toBeUndefined();
+  expect(sent[1]?.variant).toEqual({ color: second.typo });
+  // The words warned about may be confirmed as another.
+  await another.click();
+  await expect(
+    page.getByText(
+      `Збережений товар: ${name} ${second.typo}. Розміри: S (ALPHA)`,
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(sent[2]).toMatchObject({
+    similar_confirmed: true,
+    variant: { color: second.typo },
+  });
 });
 
 test("a delivery whose answer was lost settles when its model was retired meanwhile", async ({
@@ -793,6 +1009,81 @@ test("a product whose creation answer was lost settles when it was refused", asy
       { exact: true },
     ),
   ).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
+test("a kept creation refused stays across tabs, answered on its own proposal alone", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Збережена ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await model(
+    page,
+    bearer,
+    { concept: `${name} вже`, variant: { color: colour.right } },
+    0,
+  );
+  const first = `${name} перша`;
+  const second = `${name} друга`;
+  await queue(page, bearer, [
+    await proposal(page, bearer, first),
+    await proposal(page, bearer, second),
+  ]);
+  // The first attempt never reaches the server; resent, it is refused as a
+  // similar name, which proves nothing was recorded.
+  let attempts = 0;
+  await page.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      attempts += 1;
+      if (attempts === 1) await route.abort("connectionfailed");
+      else await route.continue();
+    },
+  );
+  await enter(page, "Каталог");
+  await page.getByRole("button", { name: new RegExp(first) }).click();
+  await fillProduct(page, name, colour.typo);
+  await page
+    .getByRole("button", { name: "Створити та пов’язати товар" })
+    .click();
+  await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .click();
+  const kept = page.getByText(
+    "Операцію каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+    { exact: true },
+  );
+  await expect(kept).toBeVisible();
+  expect(attempts).toBe(2);
+  // A kept operation's refusal says what was not recorded until the next
+  // attempt: not left behind with the form, nor with the tab.
+  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await expect(kept).toBeVisible();
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  await page.getByRole("button", { name: "Каталог", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
+  await expect(kept).toBeVisible();
+  // Another proposal, the same words: they were not sent for it, so nothing
+  // there says they are like another's, or confirms them past the check.
+  await page.getByRole("button", { name: new RegExp(second) }).click();
+  await fillProduct(page, name, colour.typo);
+  await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Це інша назва — створити як є" }),
+  ).toHaveCount(0);
+  // Its own proposal, the words it sent: answered there.
+  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page.getByRole("button", { name: new RegExp(first) }).click();
+  await fillProduct(page, name, colour.typo);
+  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Це інша назва — створити як є" }),
+  ).toBeVisible();
+  await expect(kept).toBeVisible();
   expect(attempts).toBe(2);
 });
 
