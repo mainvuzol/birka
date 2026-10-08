@@ -1170,3 +1170,291 @@ going live:
 
 Built on 2026-10-04; see the [report](cash-and-card-report.md) and
 [ADR-0012](../decisions/ADR-0012-cash-and-card.md).
+
+## Owner decision — 2026-10-04 (the server is unreachable)
+
+Asked when the owner chose this work. Until now the phone said «Сервер зараз
+недоступний», recorded nothing, and said nothing about what to do with the
+customer at the counter. A read-only mapping (four readers and a critic)
+found what happens today:
+- a basket already built can be sent and is kept on the phone until the
+  server answers, and that phone sells nothing more until then;
+- a basket not yet built cannot be built, because the stock list will not
+  load;
+- when the whole server is dead or the shop has no internet, the app does
+  not open at all;
+- the drawer cannot be closed, and the bot tells the owner after 5 minutes
+  that sellers cannot sell.
+
+- **The shop keeps selling, on paper.** The seller writes down the model,
+  the size, the price, how it was paid and the time. When the server
+  answers, the sales are typed in as ordinary sales. The app says so, and
+  helps type them in. An offline mode in the app may be judged later, on
+  real outages.
+- **Whoever can, types them in, whenever they can.** There is no rule
+  about who or when.
+- **A late sale is dated the day it is typed,** as the paper sales of the
+  first days are, and carries the mark «продано під час збою». The mark
+  may name who sold and at what hour, from the paper; both are optional.
+  «Звіт» then shows who sold and who typed. No earlier rule changes: a
+  past day's report never changes, and the drawer counts by the order
+  things were written.
+- **Goods that are already gone from the ledger** when a late sale is
+  typed, because a colleague's late sale took them or the balance was
+  short: the sale is refused, and a manager fixes the balance first. It is
+  the same order as for a paper sale from a later delivery. An empty shelf
+  is reported only while standing at it, never afterwards.
+- **The drawer is not closed while the server is down.** The seller
+  counts the cash and writes the sum down for their own record. The drawer
+  is closed the next evening: two days in one close, and the outage day
+  shows as not closed. This is how it already works.
+- **A cash sale of the outage typed after that day's close** leaves a
+  surplus on that close and a shortage on the next, both with the reason
+  «продаж під час збою». Both stand. The app reminds to type the outage's
+  sales before the close, so the pair does not arise.
+- **Debts, returns and orders go on paper too,** and are typed in later.
+- **A debt payment taken on paper that the server refuses** when typed,
+  because the debt was paid meanwhile or less is owed: it stays refused,
+  and the extra money is given back to the customer. Until then it shows
+  as a surplus of the drawer, with its reason.
+- **What the seller is told:** «Сервер не відповідає. Продавайте на
+  папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість
+  — внесіть продажі до закриття каси.» Nothing about phoning the owner:
+  the bot tells the owner itself.
+- **An operation the server never answered** stays on the phone, as
+  today, and the phone checks it itself as soon as the connection is back.
+  Every sale of an outage stays on paper until the app shows it recorded;
+  a lost phone then loses nothing that is not on paper.
+- **The app does not open without the server,** when the server is dead
+  or the shop has no internet. Paper. This keeps the earlier decision that
+  no phone holds an old page, so updates stay safe.
+
+## Owner decision — 2026-10-07 (the server is unreachable: what the 2026-10-04 answers left open)
+
+Asked after the design of the outage work and its review (two lenses, 25
+findings). Each answer is the recommended one.
+
+- **An operation kept on the phone is not typed from paper.** The seller
+  writes it on paper as well, marked «у телефоні — <ім’я>». Nobody types
+  that line until the same phone says «не записано»; the phone checks it
+  itself. If the phone is lost, a manager types the line after checking
+  «Звіт». Typing it anyway would record the same sale twice: the server
+  cannot tell the two apart.
+- **Cards are taken during an outage,** charged on the terminal at once,
+  with no receipt from the app. A sale typed from paper then says the card
+  was charged during the outage and must not be charged again, in place of
+  «Проведіть на терміналі». A kept sale the phone confirms by itself says:
+  if the card was already charged, do not charge it a second time. A card
+  debt payment that is refused goes back to the card through the terminal.
+- **The paper switch stays on for a series of paper sales.** The pay
+  buttons say the mode and, under them, who sold and from which warehouse
+  («З паперу · Готівка»), so a forgotten switch is seen before the press.
+  A wrong mark cannot be changed afterwards.
+- **The paper records the warehouse** the goods left from, in a store that
+  sells from two (its own and the shared one). Whoever types it chooses
+  that warehouse.
+- **When the server answers before 6:00** the same night, the seller types
+  everything from paper first, then closes the drawer. If it does not, the
+  drawer is closed the next evening, as decided on 2026-10-04.
+- **The time from paper is an hour, with «вчора»** when it is typed the
+  next day: today or yesterday only. An older sale is typed with no time.
+- **The mark is on sales only.** Debt payments and returns typed from paper
+  are ordinary ones; «Звіт» names who typed a return, «Борги» who took a
+  payment (corrected 2026-10-08). A mark for them may be added later.
+- **A kept sale recorded once the server answers carries no mark.** It is
+  an ordinary sale, dated when it was recorded, sold by the phone's owner.
+- **«Клієнт забрав» refused because the order was cancelled or came back
+  meanwhile:** the goods are typed as a sale from paper, at the order's
+  prices, with the mark.
+- **Goods sold on paper and reserved for an order meanwhile:** a manager
+  cancels or changes the order, not the balance; then the paper sale is
+  typed.
+- **A refused debt payment when less is owed:** the sum still owed is
+  taken and the rest goes back to the customer: cash from the drawer, a
+  card through the terminal, a transfer by transfer. Cash given back after
+  the close shows a surplus, then a shortage, each with its reason.
+- **A debt payment taken on paper in another store** while the selling
+  store was blocked, refused once that store works again: the app says to
+  pass the paper to a manager, who decides each case.
+
+Also answered on 2026-10-08, after the review of the built change (each the
+recommended option):
+- **A lost phone's lines:** a manager checks its sales and returns in
+  «Звіт» and its debt payments in «Борги», where each debt's history names
+  who took each payment and when. «Звіт» shows debt payments only as one
+  sum, so checking it alone could type a recorded payment a second time.
+- **A kept return the phone confirms by itself** says, as for a card: if
+  the money has not been given back yet, give it back; if it was given back
+  while the server did not answer, do not give it back a second time.
+- **A store blocked, or a warehouse closed, while a phone keeps an
+  operation there:** the server refuses the resend before it looks the
+  operation up, so the phone keeps it, and that store's screens on that
+  phone wait, until the store trades again or the warehouse reopens. Then
+  the phone checks it by itself. Nothing is recorded twice or lost, and the
+  phone works in other stores. Kept as a known risk; no button to discard
+  it.
+- **The app does not open at all:** the seller checks the shop's internet;
+  if there is none, they tell a manager, and sell on paper meanwhile. The
+  bot knows only of the server's own failures, not of one shop's internet.
+
+How it is carried out, not decided by the owner:
+- **A refusal says when nothing was recorded** (`recorded: false`), now on
+  every command a seller sends, whenever it is refused after the command
+  was looked up: a sale, an empty shelf, a debt payment or a write-off, an
+  order's step, a return, a delivery and a stock correction. A phone that
+  never heard the answer stops waiting. A refusal about the command's own
+  identity never says so.
+- **A database that does not answer, or is not updated for this version,**
+  answers «Сервер тимчасово недоступний.» (503), so the phone shows the
+  owner's text, not a server error with a number. A fault in the code still
+  shows its number.
+- **The phone checks a kept operation by itself** with the same command,
+  never a new one. While something waits, it asks the server every 20
+  seconds whether it answers.
+- **The mark is stored on the sale and never changed:** who sold, if named,
+  and the paper's time, if given. Who typed stays the sale's seller. The
+  sale's date, its day in «Звіт» and its drawer are those of the moment it
+  was typed.
+- **A marked sale is checked after it is looked up,** so one recorded, its
+  answer lost, and resent days later, or after the named seller left, is
+  answered as recorded.
+- **A marked sale cannot answer the shelf** («Товар на місці», «На полиці
+  немає жодної», a size from the label): nobody stands at the shelf when the
+  paper is typed.
+- **The paper's time may be up to 5 minutes ahead** of the server's clock,
+  for clocks that differ; any later is refused.
+
+**Waiting for the owner's confirmation.** Not asked: these are built as the
+design recommended ([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md)),
+and each is cheap to change. G14 and G20 are stated on the sellers' page
+([paper-when-the-server-is-down.md](paper-when-the-server-is-down.md)),
+which stays a draft until both are confirmed. The four answers of
+2026-10-08 above (a lost phone's lines, a kept return confirmed by the
+phone, a store blocked or a warehouse closed while a phone keeps an
+operation there, the app that does not open at all) are decided, and are
+not waiting.
+1. A paper sale of a model the ledger holds only «без розміру» is typed as
+   «розмір невідомий»: in paper mode the till does not offer the size from
+   the label. (G3)
+   - Питання: «Якщо в обліку ця модель є лише "без розміру", а на папері
+     записано розмір — вносити як "розмір невідомий" чи уточнювати розмір за
+     папером?»
+2. Whoever is named as the seller is an active person who may sell in this
+   store now, by a grant for this store or for the whole network, never
+   someone of another network. Someone who has left since cannot be named;
+   the field is left «Не вказано». (G4)
+   - Питання: «Продавця, якого вже звільнили, вказати не можна — залишаємо
+     "не вказано". Так?»
+3. The mark is the word of whoever types it: nothing checks the named seller
+   or the time, and «Звіт» names whoever typed. (G5)
+   - Питання: «Позначка — зі слів того, хто вносить; перевірити її нічим. Так
+     прийнятно?»
+4. The close form's reminder to type the paper first is always shown, not
+   only on a phone that saw the server down that day: another phone may have
+   seen it. (G7)
+   - Питання: «Нагадування "спершу внесіть усе з паперу" показувати завжди на
+     формі закриття каси?»
+5. Under «Чому не збігається?» two quick choices fill the reason, which can
+   still be edited: «Продаж під час збою», and «Повернення чи внесок під час
+   збою» for the pair a return or a debt payment typed after the close
+   leaves. (G8)
+   - Питання: «Додати до причини розбіжності кнопки-підказки «Продаж під час
+     збою» і «Повернення чи внесок під час збою»?»
+6. The bot's words: «Продавці продають на папері.» when the server does not
+   answer, «Сервер знову відповідає: продажі з паперу можна вносити.» when it
+   answers again, and «Хто ще не увійшов, продає на папері.» when nobody can
+   sign in. (G10)
+   - Питання: «Бот пише "Продавці продають на папері" і, коли сервер
+     відповість, "продажі з паперу можна вносити". Так?»
+7. The phone checks by itself every kept operation a seller can hold: sales,
+   debt payments, returns, orders, deliveries, stock corrections, catalogue
+   operations and «Каса». Changes to models, stores, invoices and returns to
+   a supplier keep their button. (G11)
+   - Питання: «Застосунок сам перевіряє незавершені продажі, внески,
+     повернення, замовлення, приймання, коригування, операції каталогу й
+     касу; зміни моделей, магазинів, накладних і повернень постачальнику —
+     кнопкою. Так?»
+8. It checks once when the server answers again, and once each time the app
+   is opened with a kept operation, after sign-in and choosing the store:
+   the same resend the button sends. (G12)
+   - Питання: «Після перезапуску застосунку незавершений продаж (внесок,
+     повернення) перевіряти одразу самому, як після повернення зв’язку, чи
+     лишати кнопку «Перевірити результат»?»
+9. The owner's text is shown on every screen: the owner's and managers' too,
+   «Брак» (followed by «Повторне натискання безпечне.»), and under
+   «Застосунок не завантажився». The managers' own "press again, it is safe"
+   texts stay. (G13)
+   - Питання: «Текст "Сервер не відповідає. Продавайте на папері…" показуємо
+     всім, і власнику та менеджерам, і в «Браку». Так?»
+10. The sellers' page: what the paper records beyond the five items (who
+    sold; for a sale in parts, the customer's name and phone and the part
+    paid; a debt payment, a return, a collected order), and its rules: the
+    card, «у телефоні», the switch always on, the warehouse, the close, and
+    what to do when the app refuses. (G14)
+    - Питання: «Чи погоджуєте інструкцію для продавців: що записувати на
+      папері для частинами, внесків, повернень і замовлень, і правила про
+      картку, «у телефоні», перемикач і склад?»
+11. A kept sale refused for any reason that proves nothing was recorded, not
+    only for stock, says «Продаж не записано (<причина>). Якщо товар віддали
+    покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу».»;
+    goods gone from the ledger are typed after a manager fixes the balance.
+    (G15)
+    - Питання: «Продаж, який чекав на сервер і не пройшов (з будь-якої
+      причини): застосунок каже, що його не записано, і якщо товар віддали —
+      його вносять з паперу (коли товару вже немає в обліку — після
+      виправлення залишку). Так?»
+12. The mark shows on the receipt, on a kept marked sale's confirmation, in
+    the sales list and in «Звіт»; not in «Каса» or the bot's message. (G16)
+    - Питання: «Позначку видно в чеку, у списку продажів і у «Звіті»; у «Касі»
+      її немає. Так?»
+13. The other new texts of the app, as a whole: the banner's line, the
+    switch, its band and the buttons, the till's refusals and their reserved
+    variant, the marked receipt and the confirmations, «Борги» by the way
+    paid, a kept sale's refusal, a late «Клієнт забрав», «Каса» and the crash
+    screen (listed in ADR-0013). (G17) Built beyond the design, and in the
+    same list:
+    - «Борги»: a kept payment refused because nothing is owed any more reads
+      only «Борги»'s own text, which already says «внесок не записано», with
+      no «Внесок не записано.» before it; and the screen's own check of a sum
+      over the debt says what the owner decided on 2026-10-07: take what is
+      owed, give the rest back by the way it was paid.
+    - A kept sale refused while units are reserved for an order says
+      «частина цих одиниць у резерві замовлення — спершу менеджер має
+      вирішити із замовленням».
+    - Inside «Продаж не записано (…)» the till's reason starts lower-case and
+      loses its final full stop.
+    - The mark leaves out a seller or a paper time that was not given.
+    - The line under the pay buttons says «склади: A, B» when the basket
+      takes goods from both warehouses.
+    - The text for a late «Клієнт забрав» (G24) is shown only when the server
+      says the order was cancelled or returned. A «Клієнт забрав» refused
+      for another reason, such as the order already collected from another
+      phone, gets its ordinary text, which does not say to type it from
+      paper.
+    - Any other kept operation refused on resend, proven to have recorded
+      nothing, says so before why: «Коригування не записано. …» (with the
+      correction screen's own reason, such as «Поки ви рахували, облік
+      змінився: …»), «Приймання не записано. …», «Операцію «<назва>» не
+      записано. …» for an order's step, «Операцію каталогу не записано. …»
+      and «Зміну каталогу не записано. …». It does not say what to do next,
+      such as typing a delivery again.
+    - The exact words of a kept return the phone confirms by itself (decided
+      2026-10-08): «Якщо гроші ще не повернули — <як повернути>. Якщо вже
+      повернули, поки сервер не відповідав, — не повертайте вдруге.»
+    - A kept return of another store's sale, confirmed by the phone, names
+      the warehouse of this store the goods went into; when its name cannot
+      be read: «Цілий товар повернуто на склад вашого магазину.»
+    - Питання: «Чи погоджуєте нові тексти застосунку (список додається)?»
+14. A paper sale typed without «Вношу продаж з паперу» could be offered
+    «Товар на місці», and the ledger would record a found coat that never
+    was. Unticking the switch clears a basket already built, and the
+    sellers' page says to switch it on always; a basket built without it from
+    the start is taken as the seller's word. (G20)
+    - Питання: «Якщо продаж з паперу внести без «Вношу продаж з паперу»,
+      застосунок може запропонувати «Товар на місці», і облік запише
+      знайдений товар, якого не було. Вимкнення перемикача для вже зібраного
+      кошика очищає кошик, а в інструкції пишемо «завжди вмикайте»; решту
+      приймаємо як «зі слів продавця». Так?»
+
+Built on 2026-10-08; see the [report](outage-fallback-report.md) and
+[ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md).

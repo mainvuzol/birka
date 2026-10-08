@@ -662,8 +662,12 @@ export function Models({
           void resolveCorrectionCommand(journalKey, token, pending).then(
             (outcome) => {
               if (outcome.kind === "done") void settled(outcome.result);
+              // Proven to have recorded nothing: it says so before why
+              // (ADR-0008 §9; ADR-0013 §1).
               else if (outcome.kind === "refused")
-                setFailure(errorText(outcome.error));
+                setFailure(
+                  `Зміну каталогу не записано. ${errorText(outcome.error)}`,
+                );
             },
           );
         }}

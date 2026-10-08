@@ -102,6 +102,10 @@ export interface Entry {
   method_now: PaymentMethod | null;
   paid_in_parts: boolean;
   goods: string[];
+  // A sale typed from paper, «продано під час збою» (ADR-0013 §5.6): who sold
+  // and the paper's time, each null when the paper named none; `by` above is
+  // still whoever typed it. Null on every other entry.
+  outage?: { sold_by: string | null; sold_at: string | null } | null;
 }
 
 export interface Entries extends Period {

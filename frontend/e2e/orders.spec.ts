@@ -149,10 +149,9 @@ test("lost committed response survives reopening and reuses the same command", a
   ).toBeEnabled();
   await page.close();
   const reopened = await context.newPage();
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await enter(reopened);
-  await reopened
-    .getByRole("button", { name: "Повторити ту саму команду" })
-    .click();
   await expect(
     reopened.getByRole("heading", { name: /Замовлення №/ }),
   ).toBeVisible();
@@ -393,17 +392,15 @@ test("a «Клієнт забрав» saved before the way was asked is refused 
     ] as const,
   );
   await page.goto("about:blank");
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
+  const refused = page.waitForResponse(
+    (r) => r.url().endsWith("/collect") && r.request().method() === "POST",
+  );
   await enter(page);
   const resend = page.getByRole("button", {
     name: "Повторити ту саму команду",
   });
-  await expect(
-    page.getByRole("button", { name: "+ Нове замовлення" }),
-  ).toBeDisabled();
-  const refused = page.waitForResponse(
-    (r) => r.url().endsWith("/collect") && r.request().method() === "POST",
-  );
-  await resend.click();
   const answer = await refused;
   expect(answer.status()).toBe(422);
   expect(

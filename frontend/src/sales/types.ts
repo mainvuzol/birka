@@ -46,6 +46,70 @@ export interface Sale {
    * asked, whose receipt then names no way.
    */
   payment_method?: PaymentMethod | null;
+  /**
+   * The mark «продано під час збою» of a sale typed from paper (ADR-0013
+   * §5.6). Absent or null on every other sale, and on an answer recorded
+   * before the mark existed.
+   */
+  outage?: OutageMark | null;
+}
+
+/**
+ * What the till sends for a sale typed from paper (ADR-0013 §5.2): who sold,
+ * one of the store's sellers, and the paper's time as the store's wall clock,
+ * `YYYY-MM-DDTHH:MM`, today or yesterday (owner decision, 2026-10-07). Both
+ * optional: null says nobody or no time was named.
+ */
+export interface OutageBody {
+  sold_by_user_id: string | null;
+  sold_at: string | null;
+}
+
+/**
+ * The mark as the server shows it (ADR-0013 §5.6): the person's name as it
+ * was when the sale was typed, and the paper's time as a moment.
+ */
+export interface OutageMark {
+  sold_by_user_id: string | null;
+  sold_by: string | null;
+  sold_at: string | null;
+}
+
+/**
+ * «Продано під час збою · продавець: Марина · за папером 06.10, 19:40», as
+ * the receipt, the confirmation, the sales list and «Звіт» write it, by the
+ * phone's own clock. What the paper did not name is left out.
+ */
+export function markText(mark: {
+  sold_by: string | null;
+  sold_at: string | null;
+}): string {
+  const parts = ["Продано під час збою"];
+  if (mark.sold_by !== null) parts.push(`продавець: ${mark.sold_by}`);
+  if (mark.sold_at !== null && !Number.isNaN(Date.parse(mark.sold_at))) {
+    const at = new Date(mark.sold_at);
+    parts.push(
+      `за папером ${at.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })}, ${at.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`,
+    );
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * The money line of a sale paid during the outage, by card or transfer (owner
+ * decision, 2026-10-07; ADR-0013 §5.6): the customer is gone and a second
+ * charge is the risk, so it never says to charge the terminal. Cash says
+ * nothing more; neither does a way the till does not take.
+ */
+export function paidDuringOutage(way: PaymentMethod): string | null {
+  switch (way) {
+    case "CARD":
+      return "оплату провели під час збою, на терміналі не проводьте ще раз";
+    case "TRANSFER":
+      return "отримано під час збою, звірте з папером";
+    default:
+      return null;
+  }
 }
 
 /**
@@ -94,6 +158,11 @@ export interface Shortfall {
   requested: number;
   available: number;
   correctable: boolean;
+  /**
+   * Units of this key are reserved for an order (ADR-0013 §6). Absent from a
+   * refusal of a server that did not say it yet: read as not.
+   */
+  reserved?: boolean;
 }
 
 export function shortfallOf(
@@ -106,6 +175,7 @@ export function shortfallOf(
     requested,
     available,
     correctable,
+    reserved,
   } = details;
   if (
     typeof location_id !== "string" ||
@@ -123,6 +193,7 @@ export function shortfallOf(
     requested,
     available,
     correctable,
+    ...(typeof reserved === "boolean" ? { reserved } : {}),
   };
 }
 

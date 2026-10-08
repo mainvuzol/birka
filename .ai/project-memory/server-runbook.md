@@ -339,6 +339,72 @@ proves the till.
 **Never run `docker compose down -v`.** `-v` deletes the database's volume,
 and with it everything since last night's backup.
 
+## When the server does not answer
+
+The owner decided on 2026-10-04 that the shops go on selling on paper, and
+type it in when the server answers
+([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md)).
+
+**What has already happened by the time anyone looks:**
+- After 5 minutes the bot has told the owner and the administrators:
+  «⚠️ Сервер застосунку не відповідає. Продавці продають на папері.»
+  ([step 8a](#8a-being-told-when-something-fails)). Nobody needs to phone.
+- The sellers' phones say «Сервер не відповідає. Продавайте на папері…», and
+  the shops sell on paper as their page says:
+  [paper-when-the-server-is-down.md](paper-when-the-server-is-down.md).
+- A phone whose operation got no answer keeps it, shows since when it waits,
+  and its paper line is marked «у телефоні — <ім’я>».
+- When the whole server is dead, the app does not open at all. Only the
+  outside service tells ([step 8a](#8a-being-told-when-something-fails), 2),
+  once it is set up.
+- When one shop has no internet, the app does not open there either, and
+  nobody is told, not even by the outside service: the server answers
+  everyone else. The seller checks the shop's internet and, if there is
+  none, tells a manager, and the shop sells on paper meanwhile (owner,
+  2026-10-08).
+
+**What the administrator checks,** in this order:
+1. `docker compose ps`: is every service up, and the api `healthy`?
+2. `curl -sS https://<domain>/api/v1/ready` from outside: `ready`, or the
+   reason, `database` or `schema`. Not `-f`: on a 503 it hides the body, and
+   with it the reason.
+3. `docker compose logs --since 15m api` and `docker compose logs --since 15m db`.
+   A request refused because the database did not answer is the line
+   `request.unavailable`, with `DATABASE` or `SCHEMA`: the phone got a 503
+   and the paper text, not an error with a number.
+4. The disk: `df -h /`.
+5. Then the table under [step 8a](#8a-being-told-when-something-fails), for
+   what the bot's message names.
+
+**When it answers again:**
+- The bot says «✅ Сервер знову відповідає: продажі з паперу можна вносити.»
+  It tells the owner and the administrators, not the shops: **tell the shops**
+  to type everything from paper before the drawer is closed (their page,
+  step 6). If it answers before 6:00 the same night, the seller types
+  everything from paper first, then closes the drawer; if it does not, the
+  drawer is closed the next evening (owner, 2026-10-07).
+- **Open the app on every phone that holds a kept operation.** It checks it
+  by itself once the store is chosen: «… підтверджено» (a return:
+  «Повернення оформлено»), or «… не записано», and only then is its paper
+  line typed. A phone left closed keeps it. A
+  lost phone's lines go to a manager, who checks its sales and returns in
+  «Звіт» and its debt payments in «Борги» before typing them: «Звіт» shows
+  debt payments only as one sum, and each debt's history in «Борги» names
+  who took each payment and when (owner, 2026-10-08).
+- **A store blocked, or a warehouse closed, while a phone keeps an
+  operation there** holds that phone in that store until the store trades
+  again or the warehouse reopens: the server refuses the resend before it
+  looks the operation up. Once it does, the phone checks it by itself the
+  next time the app is opened in that store, or at its button. The phone
+  works in other stores meanwhile (owner, 2026-10-08;
+  [risk register](known-risks.md#the-server-is-unreachable--2026-10-08)).
+- **Expect the pair** if a close came between: a cash sale of the outage
+  typed after that day's close shows +X on that close and −X on the next,
+  each with its reason «Продаж під час збою».
+- **A sale typed from paper is dated the day it is typed,** with its mark
+  «продано під час збою» in the receipt, the sales list and «Звіт». A past
+  day's report does not change.
+
 ## A new version
 
 **While the shops are closed,** in the evening or at night (owner decision,
@@ -382,6 +448,11 @@ buttons: its sales, payments, returns and «Клієнт забрав» are refu
 Operations kept on a phone from before are resent: a recorded one replays,
 and one never recorded is refused and says to do it again.
 
+**The update that brings `0036` (the mark «продано під час збою»)** needs
+nothing more. A page left open sends no mark and shows the old texts; its
+kept sale refused on resend now settles too. Reopen the app after it, as
+always.
+
 The build installs exactly the library versions CI tested
 (`backend/requirements.lock`). The new app's page is never cached, and the
 previous version's files stay for 30 days after they are replaced, so a
@@ -410,6 +481,12 @@ phone that opens the app during or after the update gets a working page.
 
      If it cannot be avoided, reopen the app on every phone after going
      back, and again after the next upgrade.
+   - **Across `0036` (the mark) it is safe.** The old code leaves the mark's
+     columns to their defaults. A marked sale from a page of the new version
+     is refused by it, and nothing is sold. One narrow case holds a phone: a
+     marked sale recorded whose answer was lost, resent to the old server,
+     is refused before its lookup and stays kept until the server is
+     upgraded again.
 2. **Code and schema: a migration's downgrade.**
    - Only where its report says the downgrade is lossless.
    - Several refuse while data they cannot keep exists, by design, rather
@@ -419,6 +496,8 @@ phone that opens the app during or after the update gets a working page.
      recorded with its way: `0034` cannot say how anything was paid. In
      practice, once the shops have sold, only a fix forward or the backup
      goes back.
+   - `0036` refuses once any sale carries the mark «продано під час збою»:
+     `0035` cannot hold it, and the mark is never changed.
 3. **Everything: the backup taken before the update.**
    - Follow [restoring for real](backup-restore-runbook.md#restoring-for-real).
    - Whatever was recorded since that backup is lost: minutes, if it was

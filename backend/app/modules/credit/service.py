@@ -32,6 +32,7 @@ from app.core.errors import (
     NotFoundError,
     StoreNotTradingError,
     ValidationFailedError,
+    nothing_recorded,
 )
 from app.core.logging import get_logger
 from app.core.text import is_storable
@@ -254,10 +255,16 @@ async def open_credit(
     if existing is not None:
         return await view(session, existing)
     if credit.paid_now >= sale.total:
+        # Reached only by a sale new in this transaction: a sale recorded
+        # with these terms already has its debt (found above), and the same
+        # command with other terms is refused by its own lookup, the sale's
+        # or the order's. So it proves the command recorded nothing, and
+        # says so (ADR-0013 §1).
         raise ValidationFailedError(
             "Everything is paid now, so nothing is owed: sell it as an ordinary sale",
             reason="PAID_IN_FULL",
             total=str(sale.total),
+            recorded=False,
         )
     row = CustomerCredit(
         organization_id=sale.organization_id,
@@ -386,58 +393,69 @@ async def pay(
     )
     if replay is not None:
         return replay
-    method = stated_way(payment_method, takes=TILL_METHODS, required=method_required)
-    states = await hold_stores(
-        session, organization_id=scope.organization_id, store_ids={taking, credit.store_id}
-    )
-    if states[taking] is not StoreState.ACTIVE:
-        raise StoreNotTradingError(store_id=str(taking), state=states[taking].value)
-    if taking != credit.store_id and states[credit.store_id] is StoreState.ACTIVE:
-        raise ValidationFailedError(
-            "The store that sold takes the payments while it trades",
-            reason="PAID_WHERE_SOLD",
-            store_id=str(credit.store_id),
+    # Under the debt's row lock, and no entry under this command: every
+    # refusal from here on proves the payment recorded nothing, and says so
+    # (ADR-0013 §1). A store blocked while this payment runs, the selling
+    # store trading again, the debt paid off by a colleague: a phone that
+    # never heard its answer settles the attempt, and the seller gives the
+    # money back (owner decisions, 2026-10-04 and 2026-10-07). A store
+    # blocked before the resend is refused above, by the scope, with no
+    # `recorded`: the phone keeps the attempt (owner, 2026-10-08).
+    with nothing_recorded():
+        method = stated_way(payment_method, takes=TILL_METHODS, required=method_required)
+        states = await hold_stores(
+            session, organization_id=scope.organization_id, store_ids={taking, credit.store_id}
         )
-    if credit.status != CreditStatus.OPEN.value:
-        raise ValidationFailedError(
-            "Nothing is owed on this sale any more", reason="NOT_OWED", status=credit.status
+        if states[taking] is not StoreState.ACTIVE:
+            raise StoreNotTradingError(store_id=str(taking), state=states[taking].value)
+        if taking != credit.store_id and states[credit.store_id] is StoreState.ACTIVE:
+            raise ValidationFailedError(
+                "The store that sold takes the payments while it trades",
+                reason="PAID_WHERE_SOLD",
+                store_id=str(credit.store_id),
+            )
+        if credit.status != CreditStatus.OPEN.value:
+            raise ValidationFailedError(
+                "Nothing is owed on this sale any more", reason="NOT_OWED", status=credit.status
+            )
+        owed = await _owed(session, credit)
+        if paid > owed:
+            raise ValidationFailedError(
+                "More than is owed", reason="MORE_THAN_OWED", owed=str(owed)
+            )
+        session.add(
+            CreditEntry(
+                organization_id=scope.organization_id,
+                credit_id=credit.id,
+                kind=EntryKind.PAYMENT.value,
+                amount=paid,
+                command_id=command_id,
+                command_fingerprint=fingerprint,
+                actor_user_id=scope.user_id,
+                correlation_id=correlation_id,
+                taken_at_store_id=taking if taking != credit.store_id else None,
+                payment_method=method.value if method is not None else None,
+            )
         )
-    owed = await _owed(session, credit)
-    if paid > owed:
-        raise ValidationFailedError("More than is owed", reason="MORE_THAN_OWED", owed=str(owed))
-    session.add(
-        CreditEntry(
+        await session.flush()
+        _settle_if_paid(credit, money(owed - paid))
+        await session.flush()
+        await audit.record(
+            session,
             organization_id=scope.organization_id,
-            credit_id=credit.id,
-            kind=EntryKind.PAYMENT.value,
-            amount=paid,
-            command_id=command_id,
-            command_fingerprint=fingerprint,
             actor_user_id=scope.user_id,
-            correlation_id=correlation_id,
-            taken_at_store_id=taking if taking != credit.store_id else None,
-            payment_method=method.value if method is not None else None,
+            action="credit.paid",
+            entity_type="customer_credit",
+            entity_id=credit.id,
+            before={"owed": str(owed)},
+            after={
+                "owed": str(money(owed - paid)),
+                "paid": str(paid),
+                **({"taken_at_store_id": str(taking)} if taking != credit.store_id else {}),
+            },
         )
-    )
-    await session.flush()
-    _settle_if_paid(credit, money(owed - paid))
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="credit.paid",
-        entity_type="customer_credit",
-        entity_id=credit.id,
-        before={"owed": str(owed)},
-        after={
-            "owed": str(money(owed - paid)),
-            "paid": str(paid),
-            **({"taken_at_store_id": str(taking)} if taking != credit.store_id else {}),
-        },
-    )
-    logger.info("credit.paid", credit_id=str(credit.id), taken_at_store_id=str(taking))
-    return await view(session, credit)
+        logger.info("credit.paid", credit_id=str(credit.id), taken_at_store_id=str(taking))
+        return await view(session, credit)
 
 
 async def write_off(
@@ -478,40 +496,42 @@ async def write_off(
     )
     if replay is not None:
         return replay
-    if credit.status != CreditStatus.OPEN.value:
-        raise ValidationFailedError(
-            "Nothing is owed on this sale any more", reason="NOT_OWED", status=credit.status
+    # The same as a payment: after the lookup, nothing recorded (ADR-0013 §1).
+    with nothing_recorded():
+        if credit.status != CreditStatus.OPEN.value:
+            raise ValidationFailedError(
+                "Nothing is owed on this sale any more", reason="NOT_OWED", status=credit.status
+            )
+        owed = await _owed(session, credit)
+        session.add(
+            CreditEntry(
+                organization_id=scope.organization_id,
+                credit_id=credit.id,
+                kind=EntryKind.WRITE_OFF.value,
+                amount=owed,
+                command_id=command_id,
+                command_fingerprint=fingerprint,
+                actor_user_id=scope.user_id,
+                note=why,
+                correlation_id=correlation_id,
+            )
         )
-    owed = await _owed(session, credit)
-    session.add(
-        CreditEntry(
+        credit.status = CreditStatus.WRITTEN_OFF.value
+        credit.closed_at = datetime.now(tz=UTC)
+        await session.flush()
+        await audit.record(
+            session,
             organization_id=scope.organization_id,
-            credit_id=credit.id,
-            kind=EntryKind.WRITE_OFF.value,
-            amount=owed,
-            command_id=command_id,
-            command_fingerprint=fingerprint,
             actor_user_id=scope.user_id,
-            note=why,
-            correlation_id=correlation_id,
+            action="credit.written_off",
+            entity_type="customer_credit",
+            entity_id=credit.id,
+            before={"owed": str(owed)},
+            after={"owed": "0.00"},
+            reason=why,
         )
-    )
-    credit.status = CreditStatus.WRITTEN_OFF.value
-    credit.closed_at = datetime.now(tz=UTC)
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="credit.written_off",
-        entity_type="customer_credit",
-        entity_id=credit.id,
-        before={"owed": str(owed)},
-        after={"owed": "0.00"},
-        reason=why,
-    )
-    logger.info("credit.written_off", credit_id=str(credit.id))
-    return await view(session, credit)
+        logger.info("credit.written_off", credit_id=str(credit.id))
+        return await view(session, credit)
 
 
 async def _split(

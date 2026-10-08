@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { api, ApiError, recordedNothing } from "@/shared/api";
+import { isSince, sinceOf } from "@/shared/reach";
 
 /**
  * One stock command, written down before it is sent.
@@ -21,6 +22,13 @@ export interface Attempt<Body> {
   key: string;
   body: Body;
   ambiguous?: boolean;
+  /**
+   * When it was first written down, by the phone's clock, kept on every
+   * resend: the banner's «Чекає відповіді сервера з 14:20» (ADR-0013 §4.4).
+   * Beside the body, never in it, so what is sent stays the same. Absent
+   * from an attempt kept before it was written.
+   */
+  since?: string;
 }
 
 export type JournalOutcome<Result> =
@@ -100,6 +108,7 @@ export function journal<
       !isRecord(value) ||
       !isId(value.key) ||
       (value.ambiguous !== undefined && typeof value.ambiguous !== "boolean") ||
+      !isSince(value.since) ||
       !isRecord(body) ||
       body.store_id !== owner[3] ||
       !isId(body.command_id) ||
@@ -145,8 +154,9 @@ export function journal<
     try {
       current = validate(storageKey, current);
       const saved = localStorage.getItem(storageKey);
+      let existing: Attempt<Body> | null = null;
       if (saved) {
-        const existing = validate(storageKey, JSON.parse(saved));
+        existing = validate(storageKey, JSON.parse(saved));
         if (existing.body.command_id !== current.body.command_id) {
           use.setState({ pending: existing });
           throw new Error(unfinished);
@@ -155,7 +165,11 @@ export function journal<
       }
       // Written down BEFORE the request, so a page that dies mid-flight still
       // knows which command to ask about.
-      current = { ...current, ambiguous: true };
+      current = {
+        ...current,
+        ambiguous: true,
+        ...sinceOf(existing, current),
+      };
       use.setState({ pending: current });
       localStorage.setItem(storageKey, JSON.stringify(current));
       const result = await api<Result>(

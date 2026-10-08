@@ -113,6 +113,11 @@ async def test_the_refusal_names_the_shortfall_and_whether_to_offer_a_correction
         "requested": 5,
         "available": 4,
         "correctable": True,
+        # No order holds any of it (ADR-0013 §6).
+        "reserved": False,
+        # Refused after the sale's replay lookup: nothing was recorded
+        # (ADR-0013 §1).
+        "recorded": False,
     }
     assert await sold_count(maker, shop) == 0
 

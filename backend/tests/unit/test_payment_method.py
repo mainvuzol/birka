@@ -118,10 +118,12 @@ def test_a_sale_request_without_a_way_prints_as_before_ways_existed() -> None:
     assert request.payment_method is None
     printed = request.fingerprinted()
     assert "payment_method" not in printed
+    # Nor the mark of a sale typed from paper, which came later still
+    # (ADR-0013 §5.2).
     assert printed == {
         key: value
         for key, value in request.model_dump(mode="json").items()
-        if key != "payment_method"
+        if key not in {"payment_method", "outage"}
     }
 
 
@@ -129,7 +131,11 @@ def test_a_sale_request_without_a_way_prints_as_before_ways_existed() -> None:
 def test_a_sale_request_with_a_way_prints_its_whole_body(way: str) -> None:
     request = SaleRequest.model_validate(SALE_BODY | {"payment_method": way})
 
-    assert request.fingerprinted() == request.model_dump(mode="json")
+    # Whole but for the mark of a sale typed from paper, absent when unused
+    # (ADR-0013 §5.2).
+    printed = request.model_dump(mode="json")
+    del printed["outage"]
+    assert request.fingerprinted() == printed
     assert request.fingerprinted()["payment_method"] == way
 
 

@@ -9,6 +9,8 @@ Error codes are part of the client contract. Renaming one is a breaking change.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Literal
 
 # Why launch data was refused, as a fixed word the log and the API's status
@@ -444,6 +446,33 @@ class IdempotencyInProgressError(DomainError):
     message = "An identical request is currently being processed"
 
 
+# --- a refusal that proves nothing was recorded -------------------------------
+
+
+@contextmanager
+def nothing_recorded() -> Iterator[None]:
+    """Every refusal raised after a command's `command_id` was looked up,
+    under its lock, and found nothing, proves the command recorded nothing
+    (ADR-0008 §9, ADR-0013 §1): it says so (`details.recorded = false`), so a
+    phone whose answer was lost can settle the attempt instead of being left
+    blocked by it. A `recorded` the refusal already states is kept.
+
+    Wrap only the code after the lookup, never the lookup itself. And never
+    an identity refusal: `IDEMPOTENCY_CONFLICT` and `IDEMPOTENCY_IN_PROGRESS`
+    leave as they came (ADR-0013 §1). A wrapped region can hold another
+    command's lookup — «Клієнт забрав» runs the collected sale's own inside
+    the order's — and what that lookup refuses proves nothing about what was
+    recorded.
+    """
+    try:
+        yield
+    except (IdempotencyConflictError, IdempotencyInProgressError):
+        raise
+    except DomainError as refusal:
+        refusal.details.setdefault("recorded", False)
+        raise
+
+
 __all__ = [
     "AuthenticationFailedError",
     "CatalogAmbiguousError",
@@ -478,4 +507,5 @@ __all__ = [
     "StoreNotTradingError",
     "UnknownSizeStockError",
     "ValidationFailedError",
+    "nothing_recorded",
 ]

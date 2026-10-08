@@ -3,7 +3,8 @@ import type { ComponentProps, JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
 import { methodHow } from "@/shared/payment";
-import type { PaymentMethod } from "@/shared/payment";
+import type { PaymentMethod, TillMethod } from "@/shared/payment";
+import { keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import {
   connectTelegram,
@@ -40,6 +41,8 @@ import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
 import { loadSale, resolve, useSaleCommand } from "@/sales/commands";
+import { clearPaper } from "@/sales/paper";
+import { markText, paidDuringOutage } from "@/sales/types";
 import { Receive } from "@/inventory/Receive";
 import {
   loadReceipt,
@@ -54,7 +57,7 @@ import {
 import type { Adjustment } from "@/inventory/adjustmentTypes";
 import { Backups, useBackups } from "@/backups/Backups";
 import { Done as ReturnDone, Returns } from "@/returns/Returns";
-import type { Refund } from "@/returns/types";
+import type { Refund, ReturnPart } from "@/returns/types";
 import { Credits } from "@/credits/Credits";
 import {
   loadCreditCommand,
@@ -94,9 +97,11 @@ import { Cash, useDrawer } from "@/cash/Cash";
 import type { FixTarget } from "@/cash/Cash";
 import { loadCashCommand, useCashCommand } from "@/cash/commands";
 import {
+  adjustmentErrorText,
   collectNeedsMethod,
   creditErrorText,
   orderErrorText,
+  receiptErrorText,
   returnErrorText,
   saleErrorText,
 } from "@/cash/errors";
@@ -280,6 +285,19 @@ function Workspace({
   storesChanged: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
+  // Journals whose attempt was read from the phone's storage when this store
+  // opened: each is checked once by itself (ADR-0013 §4.3, Trigger 2).
+  const [fromDisk, setFromDisk] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const loadedFromDisk = useCallback((journal: string) => {
+    setFromDisk((known) =>
+      known.has(journal) ? known : new Set([...known, journal]),
+    );
+  }, []);
+  // A series of paper sales is this store's: another store, or leaving,
+  // ends it (ADR-0013 §7).
+  useEffect(() => clearPaper, []);
   const [tab, setTab] = useState<
     | "list"
     | "new"
@@ -403,11 +421,14 @@ function Workspace({
     try {
       const saved = loadReceipt(receiptKey);
       useReceiptCommand.setState({ pending: saved, error: null });
-      if (saved) setTab("receive");
+      if (saved) {
+        setTab("receive");
+        loadedFromDisk("receipt");
+      }
     } catch {
       setReceiptStorageError(true);
     }
-  }, [receiptKey]);
+  }, [receiptKey, loadedFromDisk]);
   const adjustmentKey = `birka:adjustment-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [adjustmentStorageError, setAdjustmentStorageError] = useState(false);
   const [adjustmentSettled, setAdjustmentSettled] = useState<Adjustment | null>(
@@ -418,11 +439,14 @@ function Workspace({
     try {
       const saved = loadAdjustment(adjustmentKey);
       useAdjustmentCommand.setState({ pending: saved, error: null });
-      if (saved) setTab("stock");
+      if (saved) {
+        setTab("stock");
+        loadedFromDisk("adjustment");
+      }
     } catch {
       setAdjustmentStorageError(true);
     }
-  }, [adjustmentKey]);
+  }, [adjustmentKey, loadedFromDisk]);
   const returnKey = `birka:return-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [returnStorageError, setReturnStorageError] = useState(false);
   const returnCommand = useReturnCommand();
@@ -430,17 +454,30 @@ function Workspace({
     try {
       const saved = loadReturn(returnKey);
       useReturnCommand.setState({ pending: saved, error: null });
-      if (saved) setTab("returns");
+      if (saved) {
+        setTab("returns");
+        loadedFromDisk("return");
+      }
     } catch {
       setReturnStorageError(true);
     }
-  }, [returnKey]);
+  }, [returnKey, loadedFromDisk]);
   // A return is looked up in the store's sales, so it needs both.
   const canReturn =
     store.permissions.includes("sale:refund") &&
     store.permissions.includes("sale:view");
-  // A return whose outcome was unknown, settled: what to give back.
-  const [returnSettled, setReturnSettled] = useState<Refund | null>(null);
+  // A return whose outcome was unknown, settled: what to give back, unless
+  // it was given back while the server did not answer; and the lines its
+  // attempt sent, which say where the seller put intact goods.
+  const [returnSettled, setReturnSettled] = useState<{
+    refund: Refund;
+    sent: ReturnPart[];
+  } | null>(null);
+  // «Повернення» is mounted afresh once a kept return settles, as the till is
+  // after a kept sale: its form would otherwise keep that return's command,
+  // and pressed again would answer it once more without saying it may have
+  // been paid out already.
+  const [returnsEpoch, setReturnsEpoch] = useState(0);
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -454,10 +491,12 @@ function Workspace({
     amount: string | null;
     way: PaymentMethod | null;
   } | null>(null);
-  // Which command a resent attempt refused as recording nothing was.
-  const [creditRefused, setCreditRefused] = useState<"payment" | "write-off">(
-    "payment",
-  );
+  // Which command a resent attempt refused as recording nothing was, and
+  // how a payment was pressed: what to give back says it (ADR-0013 §8).
+  const [creditRefused, setCreditRefused] = useState<{
+    kind: "payment" | "write-off";
+    way: TillMethod | null;
+  }>({ kind: "payment", way: null });
   // Bumped to remount «Борги» once such a command settles, so no screen
   // keeps showing the debt as it was before it.
   const [creditEpoch, setCreditEpoch] = useState(0);
@@ -465,11 +504,14 @@ function Workspace({
     try {
       const saved = loadCreditCommand(creditKey);
       useCreditCommand.setState({ pending: saved, error: null });
-      if (saved) setTab("credits");
+      if (saved) {
+        setTab("credits");
+        loadedFromDisk("credit");
+      }
     } catch {
       setCreditStorageError(true);
     }
-  }, [creditKey]);
+  }, [creditKey, loadedFromDisk]);
   // The drawer (owner decisions, 2026-10-04; ADR-0012, B12): whoever closes
   // it or takes cash out for expenses, and the owner and managers, who read
   // the closes. In a store that does not trade only the network's owner,
@@ -491,6 +533,9 @@ function Workspace({
       useCashCommand.setState({ pending: saved, error: null });
       if (saved) setTab("cash");
     } catch {
+      // The journal outlives the store: another store's refusal must not
+      // show in this one's «Каса», whose own kept command cannot be read.
+      useCashCommand.setState({ error: null });
       setCashStorageError(true);
     }
   }, [cashKey, canSeeCash]);
@@ -533,11 +578,14 @@ function Workspace({
     try {
       const saved = loadSale(saleKey);
       useSaleCommand.setState({ pending: saved, error: null });
-      if (saved) setTab("sale");
+      if (saved) {
+        setTab("sale");
+        loadedFromDisk("sale");
+      }
     } catch {
       setSaleStorageError(true);
     }
-  }, [saleKey]);
+  }, [saleKey, loadedFromDisk]);
   useEffect(() => {
     try {
       const saved = loadCatalogCommand(catalogKey);
@@ -550,11 +598,13 @@ function Workspace({
   const { pending, busy, error } = useCommand();
   useEffect(() => {
     try {
-      useCommand.getState().set(loadPending(key));
+      const saved = loadPending(key);
+      useCommand.getState().set(saved);
+      if (saved) loadedFromDisk("orders");
     } catch {
       setStorageError(true);
     }
-  }, [key]);
+  }, [key, loadedFromDisk]);
   const list = useQuery({
     queryKey: ["orders", store.id, offset, waybillSearch],
     queryFn: () =>
@@ -571,11 +621,12 @@ function Workspace({
     queryFn: () => api<Order>(`/orders/${selectedId ?? ""}`, token),
     enabled: selectedId !== null,
   });
-  // Whether the order command last sent was a saved one resent: refused for
-  // want of a way, it was an old «Клієнт забрав» (ADR-0012, B12).
-  const [orderResent, setOrderResent] = useState(false);
+  // The order command last sent, when it was a saved one resent: refused
+  // for want of a way, it was an old «Клієнт забрав» (ADR-0012, B12), and
+  // refused as having recorded nothing, it says which (ADR-0013 §1).
+  const [orderResent, setOrderResent] = useState<string | null>(null);
   async function run(command: Pending, resent = false): Promise<void> {
-    setOrderResent(resent);
+    setOrderResent(resent ? command.label : null);
     const order = await submitPending(key, token, command);
     if (order) {
       cache.setQueryData(["order", store.id, order.id], order);
@@ -586,6 +637,133 @@ function Workspace({
         cache.invalidateQueries({ queryKey: ["stock", store.id] }),
       ]);
     }
+  }
+  /*
+   * Each kept operation's check: what its banner's button does, and what the
+   * phone does by itself when the server is back or the app was reopened
+   * (ADR-0013 §4.3). The identical attempt resent under its own key, never a
+   * new command.
+   */
+  function checkSale(): void {
+    const attempt = saleCommand.pending;
+    if (!attempt) return;
+    void resolve(saleKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "sold") {
+        setSettled(outcome.sale);
+        setSaleEpoch((epoch) => epoch + 1);
+        setTab("sale");
+      } else if (outcome.kind === "nothing-sold") {
+        setShelfSettled(true);
+        setSaleEpoch((epoch) => epoch + 1);
+        setTab("sale");
+      } else if (outcome.kind === "refused") {
+        // Proven to have recorded nothing (ADR-0013 §1): the basket is
+        // the seller's again, and the refusal says why and what to do.
+        useSaleCommand.setState({ error: outcome.error });
+        setSaleEpoch((epoch) => epoch + 1);
+        setTab("sale");
+      }
+    });
+  }
+  function checkReceipt(): void {
+    const attempt = receiptCommand.pending;
+    if (!attempt) return;
+    void resolveReceipt(receiptKey, token, attempt).then((outcome) => {
+      // Proven to have recorded nothing (a model merged or retired since,
+      // an opening list now waiting, the store blocked or the warehouse
+      // closed while the resend ran): say it was not taken, and why. A
+      // store blocked, or a warehouse closed, before the resend is refused
+      // before the lookup, without `recorded: false`: the phone keeps the
+      // attempt, and that store's screens wait, until it trades again or
+      // the warehouse reopens (owner, 2026-10-08).
+      if (outcome.kind === "refused")
+        useReceiptCommand.setState({ error: outcome.error });
+    });
+  }
+  function checkReturn(): void {
+    const attempt = returnCommand.pending;
+    if (!attempt) return;
+    void resolveReturn(returnKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "done") {
+        // The attempt's own lines, as the phone kept them: the form that
+        // chose a warehouse is gone after a reopen.
+        setReturnSettled({ refund: outcome.result, sent: attempt.body.lines });
+        setReturnsEpoch((epoch) => epoch + 1);
+        // What a live return reads again: the sales, debts, stock and «Брак».
+        void cache.invalidateQueries({
+          queryKey: ["store-sales", store.id],
+        });
+        void cache.invalidateQueries({
+          queryKey: ["credits", store.id],
+        });
+        void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
+        void cache.invalidateQueries({
+          queryKey: ["damaged-units", store.id],
+        });
+      } else if (outcome.kind === "refused") {
+        // Proven to have recorded nothing — an attempt saved before the
+        // way was asked, say: settled, and it says so rather than
+        // vanishing (ADR-0012, B12).
+        useReturnCommand.setState({ error: outcome.error });
+        setReturnsEpoch((epoch) => epoch + 1);
+      }
+    });
+  }
+  function checkCredit(): void {
+    const attempt = creditCommand.pending;
+    if (!attempt) return;
+    void resolveCreditCommand(creditKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "done") {
+        setCreditSettled({
+          kind: attempt.body.kind,
+          credit: outcome.result,
+          ...(attempt.body.kind === "payment"
+            ? {
+                amount: attempt.body.amount,
+                way: attempt.body.payment_method ?? null,
+              }
+            : { amount: null, way: null }),
+        });
+        setCreditEpoch((epoch) => epoch + 1);
+        void cache.invalidateQueries({
+          queryKey: ["credits", store.id],
+        });
+      } else if (outcome.kind === "refused") {
+        // Proven to have recorded nothing: settled, and said, with what to
+        // do with money already taken.
+        setCreditRefused({
+          kind: attempt.body.kind,
+          way:
+            attempt.body.kind === "payment"
+              ? (attempt.body.payment_method ?? null)
+              : null,
+        });
+        useCreditCommand.setState({ error: outcome.error });
+      }
+    });
+  }
+  function checkAdjustment(): void {
+    const attempt = adjustmentCommand.pending;
+    if (!attempt) return;
+    void resolveAdjustment(adjustmentKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "done") {
+        setAdjustmentSettled(outcome.result);
+        void cache.invalidateQueries({
+          queryKey: ["inventory-stock"],
+        });
+      } else if (outcome.kind === "refused") {
+        // Proven to have recorded nothing — the balance moved since the
+        // count, say: settled, and it says so rather than vanishing, with
+        // the balances read again to count against (ADR-0013 §1).
+        useAdjustmentCommand.setState({ error: outcome.error });
+        void cache.invalidateQueries({
+          queryKey: ["inventory-stock"],
+        });
+      }
+    });
+  }
+  function checkOrder(): void {
+    if (pending) void run(pending, true);
   }
   const returnUnsettled =
     returnStorageError || returnCommand.busy || returnCommand.pending !== null;
@@ -667,6 +845,52 @@ function Workspace({
     supplierUnsettled ||
     invoiceUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
+  // The seller's kept operations, checked by themselves (G11). «Каса» and
+  // the catalogue check their own, on their screens.
+  useAutoCheck([
+    {
+      pending: saleCommand.pending !== null,
+      busy: saleCommand.busy,
+      loaded: fromDisk.has("sale"),
+      run: checkSale,
+    },
+    {
+      pending: receiptCommand.pending !== null,
+      busy: receiptCommand.busy,
+      loaded: fromDisk.has("receipt"),
+      run: checkReceipt,
+    },
+    {
+      pending: returnCommand.pending !== null,
+      busy: returnCommand.busy,
+      loaded: fromDisk.has("return"),
+      run: checkReturn,
+    },
+    {
+      pending: creditCommand.pending !== null,
+      busy: creditCommand.busy,
+      loaded: fromDisk.has("credit"),
+      run: checkCredit,
+    },
+    {
+      pending: adjustmentCommand.pending !== null,
+      busy: adjustmentCommand.busy,
+      loaded: fromDisk.has("adjustment"),
+      run: checkAdjustment,
+    },
+    {
+      pending: pending !== null,
+      busy,
+      loaded: fromDisk.has("orders"),
+      run: checkOrder,
+    },
+  ]);
+  // A sale typed from paper and confirmed later shows the money line of
+  // its receipt (ADR-0013 §5.6).
+  const settledPaid =
+    settled?.outage && settled.payment_method
+      ? paidDuringOutage(settled.payment_method)
+      : null;
   setScreen(tab);
   return (
     <>
@@ -930,31 +1154,8 @@ function Workspace({
             Невідомо, чи записано попередній продаж. Перевірте результат — та
             сама операція не продасться двічі. Нові операції заблоковано.
           </p>
-          <button
-            disabled={saleCommand.busy}
-            onClick={() => {
-              const attempt = saleCommand.pending;
-              if (!attempt) return;
-              void resolve(saleKey, token, attempt).then((outcome) => {
-                if (outcome.kind === "sold") {
-                  setSettled(outcome.sale);
-                  setSaleEpoch((epoch) => epoch + 1);
-                  setTab("sale");
-                } else if (outcome.kind === "nothing-sold") {
-                  setShelfSettled(true);
-                  setSaleEpoch((epoch) => epoch + 1);
-                  setTab("sale");
-                } else if (outcome.kind === "refused") {
-                  // Proven to have recorded nothing (a model merged or
-                  // retired since): the basket is the seller's again, and
-                  // the refusal says why.
-                  useSaleCommand.setState({ error: outcome.error });
-                  setSaleEpoch((epoch) => epoch + 1);
-                  setTab("sale");
-                }
-              });
-            }}
-          >
+          <p>{keptText(saleCommand.pending.since, me.display_name)}</p>
+          <button disabled={saleCommand.busy} onClick={checkSale}>
             Перевірити результат продажу
           </button>
         </section>
@@ -969,9 +1170,11 @@ function Workspace({
               {settled.payment_method
                 ? ` ${methodHow[settled.payment_method]}`
                 : ""}
-              , покупець винен {money(settled.credit.owed)}.
+              {settledPaid !== null && ` — ${settledPaid}`}, покупець винен{" "}
+              {money(settled.credit.owed)}.
               {settled.payment_method === "CARD" &&
-                ` Проведіть на терміналі ${money(settled.credit.paid_now)}.`}
+                settledPaid === null &&
+                ` ${chargeOnce(settled.credit.paid_now)}`}
             </p>
           )}
           <button
@@ -1019,27 +1222,14 @@ function Workspace({
             Невідомо, чи записано попередню поставку. Перевірте результат — та
             сама поставка не буде прийнята двічі. Нові операції заблоковано.
           </p>
-          <button
-            disabled={receiptCommand.busy}
-            onClick={() => {
-              const attempt = receiptCommand.pending;
-              if (!attempt) return;
-              void resolveReceipt(receiptKey, token, attempt).then(
-                (outcome) => {
-                  // Proven to have recorded nothing (a model merged or
-                  // retired since): say why the delivery was not taken.
-                  if (outcome.kind === "refused")
-                    useReceiptCommand.setState({ error: outcome.error });
-                },
-              );
-            }}
-          >
+          <p>{keptText(receiptCommand.pending.since, me.display_name)}</p>
+          <button disabled={receiptCommand.busy} onClick={checkReceipt}>
             Перевірити результат приймання
           </button>
         </section>
       )}
       {receiptCommand.error !== null && (
-        <p role="alert">{errorText(receiptCommand.error)}</p>
+        <p role="alert">{receiptErrorText(receiptCommand.error)}</p>
       )}
       {returnStorageError && (
         <p role="alert">
@@ -1059,35 +1249,21 @@ function Workspace({
             саме повернення не буде оформлено двічі, і гроші не повернуться
             двічі. Нові операції заблоковано.
           </p>
-          <button
-            disabled={returnCommand.busy}
-            onClick={() => {
-              const attempt = returnCommand.pending;
-              if (!attempt) return;
-              void resolveReturn(returnKey, token, attempt).then((outcome) => {
-                if (outcome.kind === "done") {
-                  setReturnSettled(outcome.result);
-                  void cache.invalidateQueries({
-                    queryKey: ["store-sales", store.id],
-                  });
-                  void cache.invalidateQueries({
-                    queryKey: ["credits", store.id],
-                  });
-                } else if (outcome.kind === "refused")
-                  // Proven to have recorded nothing — an attempt saved
-                  // before the way was asked, say: settled, and it says so
-                  // rather than vanishing (ADR-0012, B12).
-                  useReturnCommand.setState({ error: outcome.error });
-              });
-            }}
-          >
+          <p>{keptText(returnCommand.pending.since, me.display_name)}</p>
+          <button disabled={returnCommand.busy} onClick={checkReturn}>
             Перевірити результат повернення
           </button>
         </section>
       )}
       {returnSettled && (
         <section className="notice">
-          <ReturnDone refund={returnSettled} />
+          <ReturnDone
+            store={store}
+            token={token}
+            refund={returnSettled.refund}
+            sent={returnSettled.sent}
+            kept
+          />
           <p>Його було записано один раз — повторно воно не пройде.</p>
           <button
             onClick={() => {
@@ -1117,37 +1293,8 @@ function Workspace({
             Перевірте результат — та сама операція не запишеться двічі. Нові
             операції заблоковано.
           </p>
-          <button
-            disabled={creditCommand.busy}
-            onClick={() => {
-              const attempt = creditCommand.pending;
-              if (!attempt) return;
-              void resolveCreditCommand(creditKey, token, attempt).then(
-                (outcome) => {
-                  if (outcome.kind === "done") {
-                    setCreditSettled({
-                      kind: attempt.body.kind,
-                      credit: outcome.result,
-                      ...(attempt.body.kind === "payment"
-                        ? {
-                            amount: attempt.body.amount,
-                            way: attempt.body.payment_method ?? null,
-                          }
-                        : { amount: null, way: null }),
-                    });
-                    setCreditEpoch((epoch) => epoch + 1);
-                    void cache.invalidateQueries({
-                      queryKey: ["credits", store.id],
-                    });
-                  } else if (outcome.kind === "refused") {
-                    // Proven to have recorded nothing: settled, and said.
-                    setCreditRefused(attempt.body.kind);
-                    useCreditCommand.setState({ error: outcome.error });
-                  }
-                },
-              );
-            }}
-          >
+          <p>{keptText(creditCommand.pending.since, me.display_name)}</p>
+          <button disabled={creditCommand.busy} onClick={checkCredit}>
             Перевірити результат внеску
           </button>
         </section>
@@ -1168,7 +1315,7 @@ function Workspace({
             {money(creditSettled.credit.owed)}.
             {creditSettled.amount !== null &&
               creditSettled.way === "CARD" &&
-              ` Проведіть на терміналі ${money(creditSettled.amount)}.`}
+              ` ${chargeOnce(creditSettled.amount)}`}
           </p>
           <button
             onClick={() => {
@@ -1181,7 +1328,11 @@ function Workspace({
       )}
       {creditCommand.error !== null && (
         <p role="alert">
-          {creditErrorText(creditCommand.error, creditRefused)}
+          {creditErrorText(
+            creditCommand.error,
+            creditRefused.kind,
+            creditRefused.way,
+          )}
         </p>
       )}
       {adjustmentStorageError && (
@@ -1202,23 +1353,8 @@ function Workspace({
             результат — те саме коригування не застосується двічі. Нові операції
             заблоковано.
           </p>
-          <button
-            disabled={adjustmentCommand.busy}
-            onClick={() => {
-              const attempt = adjustmentCommand.pending;
-              if (!attempt) return;
-              void resolveAdjustment(adjustmentKey, token, attempt).then(
-                (outcome) => {
-                  if (outcome.kind === "done") {
-                    setAdjustmentSettled(outcome.result);
-                    void cache.invalidateQueries({
-                      queryKey: ["inventory-stock"],
-                    });
-                  }
-                },
-              );
-            }}
-          >
+          <p>{keptText(adjustmentCommand.pending.since, me.display_name)}</p>
+          <button disabled={adjustmentCommand.busy} onClick={checkAdjustment}>
             Перевірити результат коригування
           </button>
         </section>
@@ -1241,7 +1377,7 @@ function Workspace({
         </section>
       )}
       {adjustmentCommand.error !== null && (
-        <p role="alert">{errorText(adjustmentCommand.error)}</p>
+        <p role="alert">{adjustmentErrorText(adjustmentCommand.error)}</p>
       )}
       {pending && (
         <section className="notice">
@@ -1250,12 +1386,8 @@ function Workspace({
             {pending.label}. До підтвердження результату нові операції
             заблоковано.
           </p>
-          <button
-            disabled={busy}
-            onClick={() => {
-              void run(pending, true);
-            }}
-          >
+          <p>{keptText(pending.since, me.display_name)}</p>
+          <button disabled={busy} onClick={checkOrder}>
             {pending.acknowledged
               ? "Оновити результат"
               : "Повторити ту саму команду"}
@@ -1334,6 +1466,7 @@ function Workspace({
       ) : tab === "returns" ? (
         canReturn ? (
           <Returns
+            key={returnsEpoch}
             store={store}
             token={token}
             journalKey={returnKey}
@@ -1466,6 +1599,7 @@ function Workspace({
             networkOwner={me.organization_permissions.includes("store:manage")}
             fix={cashFix}
             fixSeen={fixSeen}
+            person={me.display_name}
           />
         ) : (
           <p role="alert">Немає доступу до каси.</p>
@@ -1497,6 +1631,7 @@ function Workspace({
             storageError={
               catalogStorageError || storageError || busy || pending !== null
             }
+            person={me.display_name}
           />
         ) : (
           <p role="alert">
@@ -1674,20 +1809,38 @@ function Workspace({
   );
 }
 /**
+ * A card operation whose answer was lost, confirmed — maybe by the phone
+ * itself, minutes or hours after the press. Following the paper text, the
+ * seller may have charged the terminal meanwhile, so it says to charge it
+ * only if nobody did (owner decision, 2026-10-07; ADR-0013 §5.6, G19).
+ */
+function chargeOnce(amount: string): string {
+  return `Якщо картку ще не провели — проведіть на терміналі ${money(amount)}. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.`;
+}
+
+/**
  * A sale whose answer was lost, settled: what it came to and how it was
  * paid (ADR-0012, B12). The seller presses first and charges the terminal
- * after (owner decision, 2026-10-04), so a card sale says to charge it. A
- * sale in parts names its way on the part paid now, and an answer recorded
- * before the way was asked names none.
+ * after (owner decision, 2026-10-04), so a card sale says to charge it,
+ * unless that was done while the server did not answer. A sale typed from
+ * paper shows its mark, and money taken during the outage is never charged
+ * again (ADR-0013 §5.6). A sale in parts names its way on the part paid now,
+ * and an answer recorded before the way was asked names none.
  */
 function SettledSale({ sale }: { sale: SaleReceipt }): JSX.Element {
   const way = sale.credit ? null : (sale.payment_method ?? null);
+  const mark = sale.outage ?? null;
+  const paid = mark !== null && way !== null ? paidDuringOutage(way) : null;
   return (
-    <p>
-      Операцію було записано. Разом {money(sale.total)}
-      {way ? ` ${methodHow[way]}` : ""}. Повторно вона не пройде.
-      {way === "CARD" && ` Проведіть на терміналі ${money(sale.total)}.`}
-    </p>
+    <>
+      {mark && <p className="badge">{markText(mark)}</p>}
+      <p>
+        Операцію було записано. Разом {money(sale.total)}
+        {way ? ` ${methodHow[way]}` : ""}
+        {paid !== null && ` — ${paid}`}. Повторно вона не пройде.
+        {way === "CARD" && paid === null && ` ${chargeOnce(sale.total)}`}
+      </p>
+    </>
   );
 }
 function Failure({

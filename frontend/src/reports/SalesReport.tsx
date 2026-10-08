@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
+import { markText } from "@/sales/types";
 import {
   isTillMethod,
   methodHow,
@@ -470,6 +471,24 @@ function entryNote(entry: Entry, everyStore: boolean): string {
       : handed;
 }
 
+/**
+ * A sale typed from paper (ADR-0013 §5.6): who sold and the paper's time,
+ * from the mark, and who typed it, the entry's `by`. Its figures are the
+ * day it was typed.
+ */
+function OutageLine({ entry }: { entry: Entry }): JSX.Element | null {
+  const { outage } = entry;
+  if (outage === undefined || outage === null) return null;
+  return (
+    <>
+      <br />
+      <small>
+        {markText(outage)} · внесено: {entry.by}
+      </small>
+    </>
+  );
+}
+
 function EntryList({
   entries,
   everyStore,
@@ -512,6 +531,7 @@ function EntryList({
                 {entry.goods.join(", ")}
                 <br />
                 <small>{entryNote(entry, everyStore)}</small>
+                <OutageLine entry={entry} />
               </li>
             ))}
           </ul>

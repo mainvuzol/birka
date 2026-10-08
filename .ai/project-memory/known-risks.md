@@ -47,7 +47,7 @@ See the [report](m1-023-snapshot-import-report.md) and [ADR-0005](../decisions/A
 
 - **An opening balance is a one-way door per warehouse** (confirmed by the owner, 2026-09-29). Any stock movement at a warehouse before its list is approved closes that door for good, because the ledger is append-only. The seed grants `can_sell` from day one, so a single «фізично є» is enough. Warehouses holding test data can never take one: importing real balances at launch needs warehouses with no history, which belongs with the owner's import-or-start-empty decision.
 - **Paper sales entered before the approval close the door.** The owner's procedure is to enter them afterwards (2026-09-29), and nothing in the app enforces the order: the mistake surfaces only at approval, as `OPENING_BALANCE_CONFLICT`, after the review work is done. A guard that refuses stock commands at a warehouse whose list awaits a decision would need a location state and a migration; it is proposed, not built.
-- **Back-entered paper sales carry the date they were entered**, not the day they were made. Takings by day are off for that stretch. A "sold on" date is a separate change to sales and money.
+- **Back-entered paper sales carry the date they were entered**, not the day they were made. Takings by day are off for that stretch. A "sold on" date is a separate change to sales and money. *Since 2026-10-08 this covers the sales of an outage too: they keep the paper's hour in their mark, but count on the day they are typed (see [the server is unreachable](#the-server-is-unreachable--2026-10-08)).*
 - **"Size not known" stock gets its size only at the counter**, one sale at a time, bounded to what the sale takes (owner decision, 2026-09-29). Outside a sale there is still no reclassification command, so a manager cannot fix sizes in bulk. «Фізично є» on a sized key beside such stock is still refused, and «фізично є» never adds it; receipts and positive adjustments refuse it too.
 - **The adjustment command no longer accepts the two `SIZE_RECLASSIFICATION_*` reasons** (422). No client sent one; a script that did now fails.
 - **A reservation on either balance blocks a clarification**, as it blocks «фізично є» (found by the 2026-09-29 review). If a customer order holds a "size not known" coat of a model, no other coat of that model at that warehouse can be clarified until the order is dispatched or released; the seller sells it as size not known. The refusal names the balance so a client can offer that. Whether unreserved units may be clarified is a question for the owner if it comes up in practice.
@@ -777,3 +777,121 @@ See the [report](cash-and-card-report.md) and
 - **Every sale, payment and return insert runs the stamp trigger,** which
   takes the store's row `FOR KEY SHARE`. The release reading after it passed
   with about 3× headroom (checklist row 22).
+
+## The server is unreachable — 2026-10-08
+
+See the [report](outage-fallback-report.md) and
+[ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md). The owner
+decided on 2026-10-04 that the shops sell on paper and type it in later, and
+on 2026-10-07 answered what that left open; on 2026-10-08, four questions
+the review of the built change raised.
+
+- **A kept operation and its paper line can both be recorded.**
+  - Someone types the paper line on another phone while the first phone
+    still holds the attempt. The attempt is then resent, by its button or
+    by the phone itself.
+  - The server tells commands apart only by `command_id`, and the two have
+    different ones; it refuses only below zero. With a second unit on the
+    shelf, two sales are recorded: stock −2, and the drawer expects twice
+    the money counted. The same holds for a kept debt payment while
+    something is still owed, and a kept return while units remain to
+    return.
+  - Only the paper's rule prevents it: the line is marked «у телефоні —
+    <ім’я>», and nobody types it until that phone says «не записано» (owner,
+    2026-10-07). The banner says the same.
+  - **A lost phone found and signed in again** resends its kept attempt,
+    which may duplicate the line a manager typed from paper meanwhile.
+  - A lost phone's lines are checked in «Звіт» for sales and returns, and
+    in «Борги» for debt payments (owner, 2026-10-08): «Звіт» shows debt
+    payments only as one sum, so checking it alone could type a recorded
+    payment a second time.
+- **The mark is the typist's word** (G5, awaiting the owner). Nothing checks
+  the named seller or the paper's time against anything. A wrong mark, a
+  live sale made with the switch still on, is permanent: the database
+  refuses any change to it. The pay buttons read «З паперу · …» with the
+  seller and the warehouse, so a forgotten switch is seen before the press
+  (owner, 2026-10-07).
+- **A paper sale typed without the switch** is an ordinary sale. On a
+  shortfall it gets «Товар на місці», which records a found unit that was
+  never there, against the owner's rule that goods gone are fixed by a
+  manager first. Unticking the switch clears a basket built in paper mode,
+  but a basket built without the switch from the start cannot be told from
+  a live sale. The sellers' page says to switch it on always (G20, awaiting
+  the owner).
+- **A card charged during the outage may be charged again** by a seller who
+  follows a terminal prompt. Cards are taken during an outage (owner,
+  2026-10-07): a marked receipt, and a kept card operation confirmed later,
+  say not to charge twice, but nothing can check it. A return typed from
+  paper «На картку» still says to pay back through the terminal, since
+  returns carry no mark (G2).
+- **The money for a kept return may be given back twice.** The seller gives
+  it back during the outage, as the sellers' page says, and the phone
+  confirms the return by itself later, perhaps hours later and on another
+  shift. Its «Повернення оформлено» then says, as for a card (owner,
+  2026-10-08): if the money has not been given back yet, give it back; if it
+  was given back while the server did not answer, not a second time.
+  Nothing can check which. A transfer, which needs no customer at the
+  counter, is the likeliest to go out twice.
+- **A store blocked, or a warehouse closed, while a phone keeps an operation
+  there holds that phone in that store** (owner, 2026-10-08: kept as a known
+  risk, with no button to discard the operation).
+  - Only a block or a closing that lands while the command runs reaches the
+    refusal that says nothing was recorded. A resend after it is refused
+    before the lookup, with no `recorded`: by the scope, rebuilt on every
+    request (`STORE_NOT_TRADING`), or by the warehouse's access (`NOT_FOUND`,
+    «Unknown stock location»). That refusal cannot say it, since the
+    attempt may have been recorded.
+  - So the phone keeps the attempt, and that store's screens on that phone
+    wait, the till included, until the store trades again or the warehouse
+    reopens; only an operator reopens a warehouse. Then the phone checks it
+    by itself the next time the app is opened in that store, or at its
+    button. Nothing is recorded twice or lost, and the phone works in other
+    stores.
+  - The tests of a store blocked meanwhile (`test_refusals_record_nothing.py`,
+    `test_sale_refusals_record_nothing.py`) hold a scope built before the
+    block, so they prove only a block that lands while the command runs.
+- **A kept sale resent days later still sells** what is on the shelf then,
+  dated then, under the phone's person, **without a mark** (owner,
+  2026-10-07). The phone checks it by itself when the server answers and
+  when the app is opened, which shortens that window; a phone nobody opens
+  keeps it.
+- **An outage over the close leaves a pair:** a cash sale or debt payment of
+  the outage typed after that day's close is +X on that close and −X on the
+  next, each with its reason; a cash return the mirror (owner, 2026-10-04).
+  The close form reminds to type the paper first.
+- **A refused debt payment not given back by the close** shows as a surplus,
+  then as a shortage on the close after it is given back, each with its
+  reason (owner, 2026-10-07).
+- **A server dead whole, or a shop with no internet, means no app at all**
+  until it is back (owner, 2026-10-04): the page is never cached. The shops
+  sell on paper. Nothing tells the owner of a dead server until the outside
+  check-in is set up ([failures are visible](#failures-are-visible--2026-10-03)).
+  Nothing tells anyone of one shop's own internet, not even that check-in:
+  the seller checks it and tells a manager (owner, 2026-10-08).
+- **What Telegram's WebView shows during an outage, and whether it says it
+  is offline, is unmeasured.** The phone's side is proven in a browser on a
+  phone profile only; the drill on a real phone is in the
+  [release checklist](release-checklist.md).
+- **The paper's date is the phone's.** The phone builds it from its own date
+  and «Це було вчора»; the server refuses only a time more than 5 minutes
+  ahead of its own, or before yesterday in the store's zone. A phone whose
+  date is wrong within that window gives a wrong paper time, for good.
+- **An outage answers 503 and is not re-raised,** so it reaches neither
+  uvicorn's traceback nor Sentry: one warning line, `request.unavailable`,
+  per request, and the watcher tells of it after 5 minutes. Only the
+  database not answering, or a schema the readiness check calls behind, is
+  an outage; an undefined column with the schema current is a bug, and
+  stays a 500 with its number.
+- **The probe asks `/api/v1/ready` every 20 seconds** from each phone while
+  something waits, without a token, and nothing limits it. For a shop of a
+  few phones this is nothing.
+- **A kept operation whose own request keeps getting no answer, while reads
+  do, is resent on each answered read.** The phone takes any answer as the
+  server being back, so with `/api/v1/ready` answering and, say, a sale
+  that hangs, it resends that sale about every half minute. Each resend
+  carries the same key, so nothing is recorded twice; the phone checks it
+  "once per return of the server" only while nothing else answers.
+- **Going back by the code alone across `0036`** holds one kind of phone: a
+  marked sale recorded by the new code whose answer was lost, resent to the
+  old code, is refused before its lookup and stays kept until the server is
+  upgraded again.

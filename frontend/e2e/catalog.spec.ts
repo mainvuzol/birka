@@ -143,9 +143,8 @@ test("lost proposal response survives reopening with the same UUID", async ({
   await expect(
     reopened.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
-  await reopened
-    .getByRole("button", { name: "Повторити ту саму операцію" })
-    .click();
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await expect(
     reopened.getByRole("button", { name: "Підтвердити обраний товар" }),
   ).toBeVisible();
@@ -232,17 +231,16 @@ test("lost alias-feedback response reuses the same evidence UUID after reopening
   ).toBeEnabled();
   await page.close();
   const reopened = await context.newPage();
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
+  const response = reopened.waitForResponse(
+    (r) => r.url().endsWith("/alias-feedback") && r.status() === 200,
+  );
   await reopened.goto(launch());
   await reopened.getByRole("button", { name: "Основний MAIN" }).click();
   await expect(
     reopened.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
-  const response = reopened.waitForResponse(
-    (r) => r.url().endsWith("/alias-feedback") && r.status() === 200,
-  );
-  await reopened
-    .getByRole("button", { name: "Повторити ту саму операцію" })
-    .click();
   const body = (await (await response).json()) as { confirm_count: number };
   expect(body.confirm_count).toBe(1);
   expect(ids).toHaveLength(2);
@@ -357,10 +355,9 @@ test("create a reviewed product and recover a lost response without duplication"
   await page.close();
   const reopened = await context.newPage();
   await reopened.goto(launch());
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await reopened.getByRole("button", { name: "Основний MAIN" }).click();
-  await reopened
-    .getByRole("button", { name: "Повторити ту саму операцію" })
-    .click();
   await expect(
     reopened.getByText(`Збережений товар: ${name} синій. Розміри: L (ALPHA)`, {
       exact: true,

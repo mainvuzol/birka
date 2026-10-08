@@ -10,7 +10,9 @@ one day to a year (`PERIOD`).
 - `GET /reports/sales` — each store, and the stores together when there are
   several;
 - `GET /reports/sales/models` — the models sold, the most money first;
-- `GET /reports/sales/entries` — every sale and return, the newest first.
+- `GET /reports/sales/entries` — every sale and return, the newest first. A
+  sale typed from paper carries its mark «продано під час збою» (`outage`):
+  who sold and the paper's time; `by` is whoever typed it (ADR-0013 §5.6).
 
 The last two read one store (`store_id`), or every store the report shows.
 """
@@ -116,6 +118,14 @@ class ModelsResponse(PeriodResponse):
     models: list[ModelResponse]
 
 
+class OutageEntryResponse(BaseModel):
+    """«Продано під час збою»: who sold and when, as the paper says; each
+    None when the paper named none."""
+
+    sold_by: str | None
+    sold_at: datetime | None
+
+
 class EntryResponse(BaseModel):
     kind: report.Kind
     id: uuid.UUID
@@ -137,6 +147,9 @@ class EntryResponse(BaseModel):
     method_now: PaymentMethod | None
     paid_in_parts: bool
     goods: list[str]
+    # A sale typed from paper; None for every other entry. `by` stays whoever
+    # typed it.
+    outage: OutageEntryResponse | None = None
 
 
 class EntriesResponse(PeriodResponse):
@@ -279,6 +292,11 @@ async def sales_entries(
                 method_now=view.method_now,
                 paid_in_parts=view.paid_in_parts,
                 goods=view.goods,
+                outage=(
+                    OutageEntryResponse(sold_by=view.outage.sold_by, sold_at=view.outage.sold_at)
+                    if view.outage is not None
+                    else None
+                ),
             )
             for view in views
         ],

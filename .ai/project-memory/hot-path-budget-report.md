@@ -377,3 +377,49 @@ Evidence:
   others.
 
 This closes row 22 again, for the laptop.
+
+## Update — 2026-10-08: the mark of a sale typed from paper
+
+The outage work ([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md))
+gave `POST /sales` an optional mark, «продано під час збою». For an ordinary
+sale the field is read as nothing, and the sale sends the same 37
+statements as before: its INSERT writes NULL for the mark's two details and
+the database defaults the third. No new plpgsql trigger runs (the guard
+fires only on an update of its own columns); the new foreign key adds one
+internal check per insert, a no-op for NULL.
+
+**Taps: still 5.** «Вношу продаж з паперу» sits above «Склад», off by
+default, and asks nothing until ticked; the sellers' list is read only once
+it is. A sale typed from paper is 6 for the first of a series (the switch),
+then 5, since the switch and «Хто продав» stay on.
+
+**The release reading,** checklist row 22: three runs, each on a fresh
+database migrated to `0036`, on the laptop and PostgreSQL 16.2, the API in
+its `ci` environment. Evidence:
+[`output/verification/2026-10-08-hot-path/`](../../output/verification/2026-10-08-hot-path/).
+
+| Case | p95, 2026-10-04 (worst of 3) | **p95, 2026-10-08 (worst of 3)** | p50 now | Budget |
+|---|---|---|---|---|
+| `GET /catalog/stock-options` | 6.2 | **11.9** | 9.6–10.3 | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 87.2 | **63.4** | 19.3–19.7 | 300 ms |
+| `POST /sales`, 1 line | 11.7 | **17.6** | 11.3–11.8 | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 71.7 | **52.2** | 32.1–33.8 | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 167.6 | **79.1** | 47.4–48.3 | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 50.4 | **85.9** | 36.2–38.1 | 500 ms |
+| `POST /sales`, paid in parts | 12.1 | **25.0** | 11.2–14.5 | 500 ms |
+| `POST /sales`, paid in parts, 6 sellers | 71.0 | **93.9** | 37.6–46.9 | 500 ms |
+
+- **Every case passes in every run, gated.** The worst p95 is 93.9 ms
+  against 500, about 5× headroom.
+- **One seller is a little slower than on 2026-10-04,** about 11 ms for a
+  sale against 10, and 10 ms for the catalogue read against 6, which the
+  change does not touch. So the same laptop then read main's own code
+  against the branch, alternately, three times each, on fresh databases:
+  the two are indistinguishable in every case (catalogue read p50 8.1–10.6
+  against 8.2–10.2; a one-line sale 10.0–10.7 against 9.7–10.9; the tails
+  of six sellers scatter on both sides). The difference from 2026-10-04 is
+  the machine on the day: agents were editing and checking code beside the
+  readings. Evidence:
+  [`ab/`](../../output/verification/2026-10-08-hot-path/ab/).
+
+This closes row 22 again, for the laptop.

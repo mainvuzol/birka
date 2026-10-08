@@ -205,7 +205,7 @@ async def test_a_database_down_then_back_gets_the_trouble_with_its_true_start(ma
 
     for minute in range(6):
         await seeing.look_at_server(T0 + timedelta(minutes=minute))
-    assert telegram.texts() == ["⚠️ База даних не відповідає. Продавці зараз не можуть продавати."]
+    assert telegram.texts() == ["⚠️ База даних не відповідає. Продавці продають на папері."]
     assert [chat for chat, _, _ in telegram.sent] == [ADMIN]
 
     seeing.maker = maker
@@ -327,7 +327,7 @@ async def test_an_open_trouble_nobody_heard_of_is_told_after_a_restart(maker):
     await seeing.look_at_server(T0)
 
     assert telegram.texts() == [
-        "⚠️ Ніхто не може увійти в застосунок. Продавці зараз не можуть продавати."
+        "⚠️ Ніхто не може увійти в застосунок. Хто ще не увійшов, продає на папері."
     ]
     [kept] = await incidents(maker)
     assert kept.told_at == T0

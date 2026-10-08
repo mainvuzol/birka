@@ -158,8 +158,9 @@ test("a seller at a blocked store reads it again with the token, however the rea
     });
 
     await page.getByRole("button", { name: "Оновити" }).click();
+    // No answer: the shop sells on paper (owner decision, 2026-10-04).
     await expect(page.getByRole("alert")).toHaveText(
-      "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.",
+      "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
     );
     await page.getByRole("button", { name: "Спробувати ще раз" }).click();
     await expect(

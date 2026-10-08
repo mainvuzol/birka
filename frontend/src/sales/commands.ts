@@ -2,9 +2,11 @@ import { create } from "zustand";
 import { api, ApiError, recordedNothing } from "@/shared/api";
 import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import { isSince, sinceOf } from "@/shared/reach";
 import type {
   CreditTerms,
   EmptyShelf,
+  OutageBody,
   Report,
   Sale,
   SaleLine,
@@ -35,6 +37,13 @@ export interface SaleBody {
    * having recorded nothing.
    */
   payment_method?: TillMethod;
+  /**
+   * A sale typed from paper after the server did not answer: «продано під
+   * час збою», with who sold and the paper's time when known (owner
+   * decisions, 2026-10-04 and 2026-10-07; ADR-0013 §5.2, §7). Absent from
+   * every ordinary sale, so its body and its print stay as they were.
+   */
+  outage?: OutageBody;
 }
 
 /**
@@ -64,6 +73,13 @@ export interface SaleAttempt {
   shelfId?: string;
   acknowledged?: boolean;
   ambiguous?: boolean;
+  /**
+   * When it was first written down, by the phone's clock, kept on every
+   * resend: the banner's «Чекає відповіді сервера з 14:20» (ADR-0013 §4.4).
+   * Beside the body, never in it: what is sent stays byte for byte the same.
+   * Absent from an attempt kept before it was written.
+   */
+  since?: string;
 }
 
 export type Outcome =
@@ -124,6 +140,28 @@ function isTerms(value: unknown): boolean {
   );
 }
 
+/**
+ * The mark of a sale typed from paper: exactly its two fields, each null or
+ * what the till fills — a person's id, and the paper's time as
+ * `YYYY-MM-DDTHH:MM`.
+ */
+function isOutage(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false;
+  const mark = value as Record<string, unknown>;
+  return (
+    Object.keys(mark).every((field) =>
+      ["sold_by_user_id", "sold_at"].includes(field),
+    ) &&
+    (mark.sold_by_user_id === null ||
+      (typeof mark.sold_by_user_id === "string" &&
+        isUuid.test(mark.sold_by_user_id))) &&
+    (mark.sold_at === null ||
+      (typeof mark.sold_at === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(mark.sold_at)))
+  );
+}
+
 /** Storage is untrusted, whatever TypeScript has been told about it. */
 function validateAttempt(key: string, value: unknown): SaleAttempt {
   if (typeof value !== "object" || value === null)
@@ -151,6 +189,9 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
       !isTerms((body as SaleBody).credit)) ||
     ((body as SaleBody).payment_method !== undefined &&
       !isTillMethod((body as SaleBody).payment_method)) ||
+    ((body as SaleBody).outage !== undefined &&
+      !isOutage((body as SaleBody).outage)) ||
+    !isSince(attempt.since) ||
     (attempt.acknowledged !== undefined &&
       typeof attempt.acknowledged !== "boolean") ||
     (attempt.ambiguous !== undefined &&
@@ -211,8 +252,9 @@ export async function submitSale(
   try {
     current = validateAttempt(storageKey, current);
     const saved = localStorage.getItem(storageKey);
+    let existing: SaleAttempt | null = null;
     if (saved) {
-      const existing = validateAttempt(storageKey, JSON.parse(saved));
+      existing = validateAttempt(storageKey, JSON.parse(saved));
       if (existing.body.command_id !== current.body.command_id) {
         useSaleCommand.setState({ pending: existing });
         throw new Error("Спершу завершіть збережений продаж.");
@@ -220,8 +262,8 @@ export async function submitSale(
       previouslyAmbiguous ||= Boolean(existing.ambiguous);
     }
     // Written down BEFORE the request, so a page that dies mid-flight still
-    // knows which key to ask about.
-    current = { ...current, ambiguous: true };
+    // knows which key to ask about. Since when is kept from the first time.
+    current = { ...current, ambiguous: true, ...sinceOf(existing, current) };
     useSaleCommand.setState({ pending: current });
     localStorage.setItem(storageKey, JSON.stringify(current));
 

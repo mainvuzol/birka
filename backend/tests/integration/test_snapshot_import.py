@@ -1576,7 +1576,9 @@ async def test_nothing_moves_in_a_warehouse_while_its_list_waits(world):
     for refused in (receipt, correction):
         assert refused.status_code == 409, refused.text
         assert refused.json()["code"] == "OPENING_LIST_PENDING"
-        assert refused.json()["details"] == {"location_ids": [str(w.shared)]}
+        # Refused after each command's lookup, so each says nothing was
+        # recorded (ADR-0013 §1).
+        assert refused.json()["details"] == {"location_ids": [str(w.shared)], "recorded": False}
     assert all(movement.location_id != w.shared for movement in await movements(w))
     # Another warehouse, with no list of its own, goes on as before.
     assert elsewhere.status_code == 201, elsewhere.text
