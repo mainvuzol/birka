@@ -286,6 +286,14 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await expect(
     page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
   ).toBeVisible();
+  // «Повернення» opens afresh: the form that sent it is gone, so it cannot be
+  // pressed again and answered as though nothing had been given back yet.
+  await expect(
+    page.getByRole("button", {
+      name: "Повернути покупцю 3000,00 грн готівкою",
+    }),
+  ).toHaveCount(0);
+  expect(sent.bodies).toHaveLength(2);
 });
 
 test("money back on a card goes through the terminal, and a transfer is sent", async ({

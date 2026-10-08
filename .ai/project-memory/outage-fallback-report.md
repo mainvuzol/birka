@@ -250,6 +250,35 @@ not built the code:
 - frontend: 35 new mutants. 9 caught, 24 were gaps, each now caught by a new
   or stronger journey in `outage.spec.ts` (37 → 56), and 2 are equivalent.
 
+**Fixed afterwards, each in its own commit on this branch,** found while
+checking this work: what a screen says outlived the command it answered.
+- **«Каса» named a refused command wrongly** after another tab was opened
+  (since PR #68): «Підрахунок не записано.» for a refused take-out or fix of
+  a way. The name now lives beside the journal. Another store whose kept
+  cash command cannot be read no longer shows the previous store's refusal.
+- **The catalogue's similar-name refusal outlived its form.** It showed over
+  the queue after a tab switch, on an emptied form, and on another
+  proposal's form, where «Це інша назва — створити як є» would have created
+  that proposal's name unchecked. A refusal now answers only its own
+  proposal and the exact words sent, and «Це інша назва» is offered only
+  while the form still holds them. A kept refusal still survives a tab
+  switch, as ADR-0013 §1 needs.
+- **A kept return the phone confirms by itself named the warehouse it was
+  sold from,** even when the seller had put the goods into one of this
+  store's warehouses. It now names the warehouse from the server's answer,
+  or «склад вашого магазину» when its name cannot be read. «Повернення»
+  also opens afresh once a kept return settles, as the till does after a
+  kept sale: its form kept the return's command, and pressed again it was
+  answered once more with the plain «Поверніть покупцю …». The stock and
+  «Брак» lists are read again, as after a live return.
+
+Each was reviewed (an attacker and a skeptic), and each journey added
+fails on the code before its fix (seen by putting it back). E2E: 239 → 249.
+Still open from them: a return that sends one line back where it was sold
+and another into a chosen warehouse names only the chosen one, as the live
+text already did; a kept similar-name refusal still says «Візьміть її або
+підтвердьте, що це інша» after the words were changed.
+
 ## Where the build departs from the design
 
 - **The 503's log line** also names the method and the path (never the

@@ -382,6 +382,73 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
   ).toBeVisible();
 });
 
+test("a kept return of goods from the other store's own warehouse, checked by the phone itself on reopening, names the warehouse chosen", async ({
+  page,
+}) => {
+  const { model, variant } = await soldAtTheOtherStore(
+    page,
+    fixture.second_location_id,
+  );
+  const before = await held(page, fixture.returns_location_id, variant);
+  const sent = refunds(page);
+  // No answer while the app is open: the attempt stays on the phone.
+  let answered = false;
+  await page.route("**/api/v1/sales/*/refunds", async (route) => {
+    if (answered) await route.continue();
+    else await route.abort("connectionreset");
+  });
+  await findElsewhere(page, model);
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await page.getByLabel("Цілих").fill("1");
+  await page
+    .getByLabel("Цілий товар — на склад вашого магазину")
+    .selectOption(fixture.returns_location_id);
+  await page
+    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
+    .click();
+  await expect(page.getByText("Незавершене повернення")).toBeVisible();
+
+  // Closed, and opened again once the server answers: the form and its
+  // choice are gone, and the phone checks what it kept by itself.
+  await page.goto("about:blank");
+  answered = true;
+  await page.goto(launch());
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  const confirmed = page.locator("section.notice", {
+    has: page.getByRole("heading", { name: "Повернення оформлено" }),
+  });
+  await expect(confirmed).toBeVisible();
+  await expect(
+    confirmed.getByText(
+      "Цілий товар повернуто на склад «Склад повернень» вашого магазину.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(confirmed.getByText(/з якого його продали/)).toHaveCount(0);
+  await expect(
+    confirmed.getByText(
+      "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    confirmed.getByText(
+      "Якщо гроші ще не повернули — поверніть покупцю 3000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // The identical attempt, the warehouse chosen included, and the coat is
+  // there.
+  expect(sent.bodies).toHaveLength(2);
+  expect(sent.bodies[1]).toEqual(sent.bodies[0]);
+  expect(sent.keys[1]).toBe(sent.keys[0]);
+  const body = sent.bodies[0] as { lines: { location_id?: string }[] };
+  expect(body.lines[0]?.location_id).toBe(fixture.returns_location_id);
+  expect(await held(page, fixture.returns_location_id, variant)).toBe(
+    before + 1,
+  );
+});
+
 test("a sale of this store is returned as before, with no store named", async ({
   page,
 }) => {

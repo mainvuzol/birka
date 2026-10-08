@@ -2458,6 +2458,148 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toHaveCount(0);
   });
 
+  /** The kept return's notice, once the phone has settled it. */
+  function confirmedReturn(page: Page) {
+    return page.locator("section.notice", {
+      has: page.getByRole("heading", { name: "Повернення оформлено" }),
+    });
+  }
+
+  test("a kept return of this store's own sale the phone confirms by itself says the goods went back where they were sold from", async ({
+    page,
+  }) => {
+    await seed(page, { [returnKey]: keptReturn("CASH") });
+    await serve(page);
+    const sent = await returns(page, recorded);
+    await page.goto(launch());
+    await page.getByRole("button", { name: /Подільський/ }).click();
+    const confirmed = confirmedReturn(page);
+    await expect(confirmed).toBeVisible();
+    await expect(
+      confirmed.getByText(
+        "Цілий товар повернуто на склад, з якого його продали.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(confirmed.getByText(/вашого магазину/)).toHaveCount(0);
+    await expect(confirmed.getByText(/гроші віддаєте ви/)).toHaveCount(0);
+    expect(sent).toHaveLength(1);
+  });
+
+  /** Another store of the network, which sold from its own warehouse. */
+  const otherStore = "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c16";
+
+  /**
+   * A return taken here of the other store's sale, kept on the phone: this
+   * store does not reach the warehouse it was sold from, so its coat goes to
+   * `place`, one of this store's the seller chose (owner decisions,
+   * 2026-10-01).
+   */
+  function keptElsewhere(place: string): string {
+    return JSON.stringify({
+      key: randomUUID(),
+      ambiguous: true,
+      since: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+      body: {
+        store_id: ids.store,
+        sale_id: ids.sale,
+        command_id: randomUUID(),
+        lines: [
+          {
+            sale_item_id: item,
+            quantity: 1,
+            restock: true,
+            condition: "INTACT",
+            location_id: place,
+          },
+        ],
+        reason: null,
+        elsewhere: true,
+        payment_method: "CASH",
+      },
+    });
+  }
+
+  for (const read of [
+    {
+      name: "names the warehouse chosen",
+      warehouses: [
+        warehouse(ids.shared, "Спільний"),
+        warehouse(ids.own, "Склад Б"),
+      ],
+      said: "Цілий товар повернуто на склад «Склад Б» вашого магазину.",
+    },
+    {
+      // Closed since the seller chose it: no longer among this store's.
+      name: "with that warehouse closed since, names none",
+      warehouses: [warehouse(ids.shared, "Спільний")],
+      said: "Цілий товар повернуто на склад вашого магазину.",
+    },
+  ])
+    test(`a kept return of another store's sale, its warehouse chosen, the phone confirms by itself ${read.name}, and never says it went where it was sold from`, async ({
+      page,
+    }) => {
+      await seed(page, { [returnKey]: keptElsewhere(ids.own) });
+      await serve(page, read.warehouses);
+      const sent = await returns(page, async (route, way) => {
+        await route.fulfill({
+          status: 201,
+          json: {
+            id: randomUUID(),
+            sale_id: ids.sale,
+            store_id: otherStore,
+            taken_at_store_id: ids.store,
+            total_amount: "3000.00",
+            items: [
+              {
+                sale_item_id: item,
+                quantity: 1,
+                amount: "3000.00",
+                condition: "INTACT",
+                destination_location_id: ids.own,
+                display_name: `${coat} · M`,
+              },
+            ],
+            credit: null,
+            payment_method: way,
+          },
+        });
+      });
+      // This store's warehouses, read for the name once the form is gone.
+      let reads = 0;
+      page.on("requestfinished", (request) => {
+        if (new URL(request.url()).pathname === "/api/v1/stock-locations")
+          reads += 1;
+      });
+      await page.goto(launch());
+      await page.getByRole("button", { name: /Подільський/ }).click();
+      const confirmed = confirmedReturn(page);
+      await expect(confirmed).toBeVisible();
+      await expect(
+        confirmed.getByText(
+          "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        confirmed.getByText(
+          "Якщо гроші ще не повернули — поверніть покупцю 3000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(confirmed.getByText(/з якого його продали/)).toHaveCount(0);
+      await expect.poll(() => reads).toBeGreaterThan(0);
+      await expect(
+        confirmed.getByText(read.said, { exact: true }),
+      ).toBeVisible();
+      // The identical attempt, the warehouse it named included.
+      expect(sent).toHaveLength(1);
+      expect(JSON.parse(sent[0] ?? "{}")).toMatchObject({
+        store_id: ids.store,
+        lines: [{ location_id: ids.own }],
+      });
+    });
+
   test("a kept return refused on resend, part of it returned meanwhile, says so in «Повернення»'s words", async ({
     page,
   }) => {

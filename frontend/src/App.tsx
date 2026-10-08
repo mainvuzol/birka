@@ -57,7 +57,7 @@ import {
 import type { Adjustment } from "@/inventory/adjustmentTypes";
 import { Backups, useBackups } from "@/backups/Backups";
 import { Done as ReturnDone, Returns } from "@/returns/Returns";
-import type { Refund } from "@/returns/types";
+import type { Refund, ReturnPart } from "@/returns/types";
 import { Credits } from "@/credits/Credits";
 import {
   loadCreditCommand,
@@ -467,8 +467,17 @@ function Workspace({
     store.permissions.includes("sale:refund") &&
     store.permissions.includes("sale:view");
   // A return whose outcome was unknown, settled: what to give back, unless
-  // it was given back while the server did not answer.
-  const [returnSettled, setReturnSettled] = useState<Refund | null>(null);
+  // it was given back while the server did not answer; and the lines its
+  // attempt sent, which say where the seller put intact goods.
+  const [returnSettled, setReturnSettled] = useState<{
+    refund: Refund;
+    sent: ReturnPart[];
+  } | null>(null);
+  // «Повернення» is mounted afresh once a kept return settles, as the till is
+  // after a kept sale: its form would otherwise keep that return's command,
+  // and pressed again would answer it once more without saying it may have
+  // been paid out already.
+  const [returnsEpoch, setReturnsEpoch] = useState(0);
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -676,18 +685,28 @@ function Workspace({
     if (!attempt) return;
     void resolveReturn(returnKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
-        setReturnSettled(outcome.result);
+        // The attempt's own lines, as the phone kept them: the form that
+        // chose a warehouse is gone after a reopen.
+        setReturnSettled({ refund: outcome.result, sent: attempt.body.lines });
+        setReturnsEpoch((epoch) => epoch + 1);
+        // What a live return reads again: the sales, debts, stock and «Брак».
         void cache.invalidateQueries({
           queryKey: ["store-sales", store.id],
         });
         void cache.invalidateQueries({
           queryKey: ["credits", store.id],
         });
-      } else if (outcome.kind === "refused")
+        void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
+        void cache.invalidateQueries({
+          queryKey: ["damaged-units", store.id],
+        });
+      } else if (outcome.kind === "refused") {
         // Proven to have recorded nothing — an attempt saved before the
         // way was asked, say: settled, and it says so rather than
         // vanishing (ADR-0012, B12).
         useReturnCommand.setState({ error: outcome.error });
+        setReturnsEpoch((epoch) => epoch + 1);
+      }
     });
   }
   function checkCredit(): void {
@@ -1238,7 +1257,13 @@ function Workspace({
       )}
       {returnSettled && (
         <section className="notice">
-          <ReturnDone refund={returnSettled} kept />
+          <ReturnDone
+            store={store}
+            token={token}
+            refund={returnSettled.refund}
+            sent={returnSettled.sent}
+            kept
+          />
           <p>Його було записано один раз — повторно воно не пройде.</p>
           <button
             onClick={() => {
@@ -1441,6 +1466,7 @@ function Workspace({
       ) : tab === "returns" ? (
         canReturn ? (
           <Returns
+            key={returnsEpoch}
             store={store}
             token={token}
             journalKey={returnKey}

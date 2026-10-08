@@ -1441,6 +1441,9 @@ not waiting.
     - The exact words of a kept return the phone confirms by itself (decided
       2026-10-08): «Якщо гроші ще не повернули — <як повернути>. Якщо вже
       повернули, поки сервер не відповідав, — не повертайте вдруге.»
+    - A kept return of another store's sale, confirmed by the phone, names
+      the warehouse of this store the goods went into; when its name cannot
+      be read: «Цілий товар повернуто на склад вашого магазину.»
     - Питання: «Чи погоджуєте нові тексти застосунку (список додається)?»
 14. A paper sale typed without «Вношу продаж з паперу» could be offered
     «Товар на місці», and the ledger would record a found coat that never
