@@ -1500,5 +1500,32 @@ lines pass through review.
 - **The owner and the managers review the lines,** as in «Початкові залишки»
   today; sellers do not. Only the owner approves the list.
 
+Answered the same day, to the design's questions:
+- **Removing a file needs no reason:** the history shows who removed it and
+  when. Any manager or the owner may remove any file, not only whoever added
+  it. The last file of a list is not removed: the list is rejected instead,
+  and its warehouse is released. A removed file may be added again, as a new
+  file, whose lines are answered anew.
+- **Lines typed by hand** may be added to a list of files as a part of their
+  own, for a page the parser could not read. They have no photo reference,
+  and are reviewed the same way.
+- **The parser's count is only a hint unless the line's text shows it.**
+  When the parser's count differs from the count the text states («3 шт»
+  read as 5), or the text shows no count at all, neither is taken: the
+  person looks at the photo or the goods and states the count, with a note.
+  A line with no count but with numbers, a price or a numeric size («Лоран 46
+  1200»), is answered as today: with a note, never as one piece in one tap.
+- **Counts per size occur in the notebooks** («S-1 M-2 L-1»). The file
+  carries a count for each size, and a split that the line's text shows,
+  each size with its count, is confirmed by a tap, without a note. For this
+  case only, it changes the rule that a split is never "stated" (ADR-0005).
+- **Every written line is passed on,** crossed out, illegible, a heading or
+  a total included, with the parser's note («закреслено», «нерозбірливо»).
+  The person decides, for example «Це не товар» with a reason.
+- **One notebook holds one kind of price,** sale or purchase: the kind is
+  given once per file.
+- **The warehouse waits for the whole review,** even when it takes days: the
+  rule of 2026-10-02 stands, and the shops sell from it on paper meanwhile.
+
 Until the import is built, the rules of 2026-09-29 stand: an opening balance
 only into a warehouse with no history, and only as the answer to a list.
