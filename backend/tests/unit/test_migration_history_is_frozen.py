@@ -18,7 +18,8 @@ itself is not evidence of anything.
 
 What that test actually protected is kept here, and made absolute: **a shipped
 migration's bytes never change.** Model-versus-database drift is proven by
-`alembic check` against real PostgreSQL, which CI runs on every push together
+`alembic check` against real PostgreSQL, which CI runs on every pull request
+and every push to main, together
 with a full `downgrade base` → `upgrade head` round trip (`.github/workflows`).
 That is a stronger check than the offline reconstruction ever was, because it
 runs against the database rather than against a rendering of it.

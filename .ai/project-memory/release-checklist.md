@@ -6,7 +6,8 @@ on 2026-10-03 for correcting the catalogue (`feat/catalog-correction`).
 Rows 3, 11b, 16, 19 and 22 updated on 2026-10-03 for failures are visible
 (`feat/failures-visible`). Re-assessed on 2026-10-04 for cash and card, the
 day's close (`feat/cash-and-card`): rows 2, 3, 8, 10 and 22, and the list of
-what does not block. The verdict stands.
+what does not block. Rows 3 and 4 reworded on 2026-10-08: CI runs on pull
+requests and pushes to main (`chore/ci-upkeep`). The verdict stands.
 
 **Verdict: BLOCKED.** Everything the agent can build and prove without a
 server or a person is done, including a way in for the shops' existing stock:
