@@ -28,8 +28,9 @@ derived readings the same day. Two answers changed the plan:
   sales, debt payments and returns, not sales alone;
 - a difference under 1,00 грн needs no reason and no message.
 
-The rest is technical. The readings the owner has not confirmed yet are
-built as recommended, and listed in the business rules ("carried out").
+The rest is technical. The readings the owner had not confirmed then were
+built as recommended and listed in the business rules ("carried out"); the
+owner confirmed all of them as built on 2026-10-08.
 
 Nothing is live, so sales recorded before this change are test data. Their
 way reads «не вказано», and is never guessed.
@@ -483,5 +484,6 @@ append-only `cash_movement` row.
 - **The carrier's cash on delivery is not checked** against what the carrier
   paid out. It is later work.
 - **Fiscal receipts (ПРРО) are not part of this.**
-- **The readings the owner has not confirmed yet** are built as recommended
-  and cheap to change before go-live (business rules, "carried out").
+- **The readings left open at the build** were built as recommended, and
+  the owner confirmed them as built on 2026-10-08 (business rules, "carried
+  out").

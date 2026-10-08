@@ -69,10 +69,11 @@ the recommended one**:
 - **G25:** a debt payment taken in another store and refused: a manager
   decides each case.
 
-The other fourteen (G3, G4, G5, G7, G8, G10–G17, G20) were not asked. They
-are built as recommended, and listed for the owner's confirmation in the
-business rules ("how it is carried out"). G14 and G20 are stated on the
-sellers' printed page, which stays a draft until they are confirmed.
+The other fourteen (G3, G4, G5, G7, G8, G10–G17, G20) were not asked then.
+They were built as recommended and listed in the business rules ("how it is
+carried out"), and the owner confirmed all fourteen as built on 2026-10-08.
+G14 and G20 are stated on the sellers' printed page, which is therefore no
+longer a draft.
 
 The review of the built change raised four more, answered on 2026-10-08,
 each the recommended option:
@@ -618,7 +619,8 @@ No tap is added to a normal sale.
 
 ### 10. The bot
 
-Not asked (G10); built as recommended, in `backups/incidents.py`:
+Not asked at first (G10); built as recommended, and confirmed by the owner
+on 2026-10-08, in `backups/incidents.py`:
 - the app not answering: «Продавці продають на папері.» replaces «Продавці
   зараз не можуть продавати.»;
 - nobody signs in: «Хто ще не увійшов, продає на папері.»;
@@ -711,8 +713,8 @@ checklist, row 16).
 - **A stock list of unknown age shown while the server is down:** with paper
   chosen, it invites selling against it.
 - **A note from each phone after it reconnects:** recommended against, and
-  not asked (G10); the error notes are themselves lost while the server is
-  down.
+  not asked (G10, confirmed as built on 2026-10-08); the error notes are
+  themselves lost while the server is down.
 - **A table for the mark:** one row per sale. Columns keep the receipt, the
   list and the report free of joins.
 - **Refusing the empty shelf on the server for a marked sale:** that command
@@ -729,8 +731,8 @@ checklist, row 16).
 ## Consequences
 
 - **The sellers' page,** [`paper-when-the-server-is-down.md`](../project-memory/paper-when-the-server-is-down.md),
-  stays a draft until the owner confirms G14 and G20. Only then is it handed
-  to the shops (release checklist).
+  was confirmed by the owner on 2026-10-08 (G14, G20). The owner hands it to
+  the shops (release checklist, row 25).
 - **A kept operation and its paper line can both be recorded** if someone
   types the line anyway: only the paper's rule prevents it (risk register).
 - **A paper sale typed without the switch** gets the ordinary offers, and
@@ -751,6 +753,6 @@ checklist, row 16).
   seller tells a manager (§3).
 - **The release reading was taken again** (release checklist, row 22): the
   mark costs nothing one can see. A sale is still 5 taps (row 10).
-- **The readings the owner has not confirmed yet** are built as recommended,
-  and are cheap to change: texts, a phone rule, or an additive column
-  (business rules, "how it is carried out").
+- **The readings left unasked at first** were built as recommended, and the
+  owner confirmed them as built on 2026-10-08 (business rules, "how it is
+  carried out").

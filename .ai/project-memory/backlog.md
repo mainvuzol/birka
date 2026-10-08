@@ -1,7 +1,9 @@
 # What to build next
 
 Work the owner asked for, or that waits on the owner, and is not built yet.
-None of it blocks the release (see the [release checklist](release-checklist.md)).
+Of the work here, only the JSON stock import blocks the release: the owner
+chose it as the way in on 2026-10-08 (row 15 of the
+[release checklist](release-checklist.md)).
 Before anything here is built, the owner answers the open questions under it.
 Nothing is invented in the meantime.
 
@@ -15,8 +17,13 @@ one network do not settle with each other.
 ## The JSON stock import
 
 Existing stock from photos of the notebooks: a separate parser turns them
-into JSON, which the app imports into a list for review (owner, 2026-10-01).
-It waits for the owner to choose this way, and for the parser's format.
+into JSON, which the app imports (owner, 2026-10-01). The owner chose this
+way on 2026-10-08 and answered what it needs (business rules, "the shops'
+existing stock"): Birka defines the JSON's format; a line names the model,
+size and count, sometimes a colour and a price, which is only shown; every
+line is reviewed by a person; several files fill one warehouse's list; the
+photos stay with the shops; the file is uploaded in the app. Nothing is
+built yet.
 
 ## An offline mode, judged on real outages
 

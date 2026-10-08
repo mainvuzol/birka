@@ -1,16 +1,14 @@
-> **ЧЕРНЕТКА — не роздавати в магазини, доки її не підтвердить власник.**
->
-> Draft. The owner has not yet confirmed this page as a whole: what the
-> paper records beyond the five items of 2026-10-04, and its rules (G14);
-> nor «завжди увімкніть «Вношу продаж з паперу»» (G20). Everything else it
-> states the owner decided: selling on paper, the five items, no phoning,
+> Confirmed by the owner on 2026-10-08: what the paper records beyond the
+> five items of 2026-10-04, and its rules (G14); and «завжди увімкніть
+> «Вношу продаж з паперу»» (G20). Everything else it states the owner
+> decided before: selling on paper, the five items, no phoning,
 > the close, a manager fixing goods gone, the empty shelf only at the shelf
 > (2026-10-04); G9, G18, G19, G21, G23, G24, G25 and G26 (2026-10-07); a
 > lost phone's lines checked in «Звіт» and «Борги», a kept return confirmed
 > by the phone, and the app that does not open at all (2026-10-08). See
 > business-rules.md, "the server is unreachable" and "how it is carried
 > out", and [ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md).
-> Remove this box once G14 and G20 are confirmed; print from the line below.
+> Print from the line below.
 
 ---
 

@@ -39,8 +39,9 @@ unreachable"):
 
 The design's derived readings, reviewed through two lenses, were put to the
 owner on 2026-10-07: twelve answers, each the recommended one (business
-rules, "what the 2026-10-04 answers left open"). Fourteen were not asked,
-and are built as recommended ("how it is carried out"). The review of the
+rules, "what the 2026-10-04 answers left open"). Fourteen were not asked
+then, and were built as recommended ("how it is carried out"); the owner
+confirmed all fourteen as built on 2026-10-08. The review of the
 built change raised four more, answered on 2026-10-08 in the same section:
 a lost phone's lines are checked in «Звіт» and «Борги»; a kept return
 confirmed by the phone says not to give the money back twice; a store
@@ -344,11 +345,6 @@ text already did; a kept similar-name refusal still says «Візьміть її
   phone in Telegram: the drill is release checklist row 24.
 - **The release reading and the tap recount are owed** (release checklist,
   rows 22 and 10).
-- **The sellers' page is a draft** until the owner confirms G14 and G20
-  (release checklist row 25).
-- **The readings the owner has not confirmed yet** are listed in the
-  business rules ("how it is carried out"). Each is built as recommended and
-  cheap to change.
 - **A store blocked, or a warehouse closed, while a phone keeps an
   operation there** holds that phone in that store until it trades or
   reopens; there is no button to discard it (owner, 2026-10-08).
@@ -361,8 +357,8 @@ text already did; a kept similar-name refusal still says «Візьміть її
   but "once per return of the server" holds only while nothing else
   answers (found by the frontend's mutation tester).
 - **A kept delivery refused on resend** says it was not recorded and why,
-  not whether to enter it again: that is undecided, on the owner's list
-  (G17) with the other new texts.
+  not whether to enter it again; the owner confirmed this as built with the
+  other new texts on 2026-10-08 (G17).
 - **The sellers' list of a store that does not trade** answers 403 even to
   the network's owner and managers, as a command there would; nobody can
   sell there anyway.

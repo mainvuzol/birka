@@ -195,8 +195,9 @@ confirmed 7 findings, all fixed:
 Four were refused: the take-out form keeping the close it opened with (as
 designed; the other order is commoner), a seller reading one sale's way at a
 time, a seller reading debt payments' ways in «Борги», and a seller writing
-their reason after a block. The last three are in the risk register and the
-owner's list.
+their reason after a block. The last three are in the risk register; the
+owner confirmed them as built on 2026-10-08 (business rules, "carried
+out").
 
 **Mutation testing:**
 - by the builders, 233 in all:
@@ -235,9 +236,6 @@ owner's list.
 
 - **Nothing has run in production,** and the bot's message has not reached a
   real Telegram: it is tested against fakes.
-- **The readings the owner has not confirmed yet** are listed in the
-  business rules ("carried out", 2026-10-04). Each is built as recommended
-  and cheap to change before going live.
 - **The carrier's cash on delivery is not checked** against what the carrier
   paid out. It is later work.
 - **Fiscal receipts (ПРРО)** are out of scope.

@@ -9,16 +9,20 @@ day's close (`feat/cash-and-card`): rows 2, 3, 8, 10 and 22, and the list of
 what does not block. Re-assessed on 2026-10-08 for the server is unreachable
 (`feat/outage-fallback`): rows 2, 3, 10 and 22, the new rows 24 and 25, and
 the list of what does not block. Rows 3 and 4 reworded on 2026-10-08: CI
-runs on pull requests and pushes to main (`chore/ci-upkeep`). The verdict
+runs on pull requests and pushes to main (`chore/ci-upkeep`). Rows 15 and
+25, the verdict's first sentences and the list of what does not block
+updated on 2026-10-08: the owner confirmed every open reading and chose the
+way in for the shops' existing stock (`docs/owner-readings`). The verdict
 stands.
 
-**Verdict: BLOCKED.** Everything the agent can build and prove without a
-server or a person is done, including a way in for the shops' existing stock:
-lists with review and «Початкові залишки». The outage work changed
-`POST /sales`, so the hot path's release reading (row 22) and the count of a
-sale's taps (row 10) were taken again on 2026-10-08: every case passes, and
-a sale is still 5 taps. The rest needs the owner, an administrator with a
-server, and the shops.
+**Verdict: BLOCKED.** On 2026-10-08 the owner chose how the shops' existing
+stock goes in: photos → parser → JSON, in a format Birka defines, every line
+reviewed by a person. That import is not built yet (row 15). Everything else
+the agent can build and prove without a server or a person is done. The
+outage work changed `POST /sales`, so the hot path's release reading (row
+22) and the count of a sale's taps (row 10) were taken again on 2026-10-08:
+every case passes, and a sale is still 5 taps. The rest needs the owner, an
+administrator with a server, and the shops.
 
 **The order matters.** The shops' existing stock goes into a warehouse
 before anything else is recorded there, or never as an opening balance:
@@ -54,7 +58,7 @@ accepted.
 
 | # | | Who | Status |
 |---|---|---|---|
-| 15 | **The shops' existing stock gets in**, before anything moves in that warehouse ([runbook, step 9](server-runbook.md#9-the-shops-existing-stock-before-anything-moves)). On 2026-10-01 the owner allowed two ways and has not yet chosen between them: either lists with review (ADR-0005), or photos of the notebooks → a separate parser → JSON. Whatever is still missing is added one by one, through «Приймання» with its size (owner, 2026-10-02). **Lists with review have their screen, «Початкові залишки»** ([report](opening-stock-screen-report.md), PR #52), and nothing moves in a warehouse while its list waits ([report](first-days-report.md)). The JSON way waits for the owner's choice and the parser's format. | the owner chooses the way; the shops build the catalogue and type one list per warehouse; the owner approves each (a child store's own warehouse: whoever holds the owner's role in `SECOND` itself, Q5) | the screen is merged; not started in the shops |
+| 15 | **The shops' existing stock gets in**, before anything moves in that warehouse ([runbook, step 9](server-runbook.md#9-the-shops-existing-stock-before-anything-moves)). On 2026-10-01 the owner allowed two ways: either lists with review (ADR-0005), or photos of the notebooks → a separate parser → JSON. **On 2026-10-08 the owner chose photos → parser → JSON, in a format Birka defines** (business rules, "the shops' existing stock"): every line reviewed by a person, several files filling one warehouse's list, approved together. Whatever is still missing is added one by one, through «Приймання» with its size (owner, 2026-10-02). **Lists with review have their screen, «Початкові залишки»** ([report](opening-stock-screen-report.md), PR #52), and nothing moves in a warehouse while its list waits ([report](first-days-report.md)). The JSON import is not built. | the shops photograph their notebooks and tables; the agent builds the import; the parser produces the files; the owner approves each warehouse's list (a child store's own warehouse: whoever holds the owner's role in `SECOND` itself, Q5) | the way chosen; the import not built |
 | 16 | **A server:** domain, HTTPS, Docker, `.env` with `BIRKA_APP_ENV=production` and the bot's token. Since 2026-10-03, also who hears of trouble: the administrator's Telegram id, and the outside check-in service in the owner's name ([runbook, step 8a](server-runbook.md#8a-being-told-when-something-fails)), given at publication or a test, when the owner says so. | administrator. Who provides the server and the domain, and who administers it, is not recorded: ask the owner | not started |
 | 17 | **The bot's menu button** opens `https://<domain>/`. | administrator | not started |
 | 18 | **The owner and the shop's places** (`seed_organization`), then the sellers (`scripts.people`). | administrator, on the owner's word | not started |
@@ -62,13 +66,14 @@ accepted.
 | 20 | **One full restore rehearsed on the server**, as the runbook's "restoring for real" describes. The nightly drill restores every night, but the manual sequence has never run. | administrator | not started |
 | 21 | **`time-to-sale` ≤ 15 s**, a person timing a real sale on a phone, in the shop. | owner or a seller | not measured |
 | 24 | **An outage drill on a real phone in Telegram** ([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md)). With the API stopped: the paper text at sign-in. In airplane mode with the app open: the till says it, and a kept sale is checked by itself when the network is back. The app closed during the outage and opened after it: the kept sale checked on opening. The whole server stopped: what Telegram shows, recorded. What the WebView does offline is unmeasured until then (risk register). | owner or administrator | not started |
-| 25 | **The sellers' page, confirmed and handed to the shops.** [When the server is down](paper-when-the-server-is-down.md) is a draft until the owner confirms what the paper records and the page's rules (G14) and the paper switch always on (G20), in the business rules ("the server is unreachable", "how it is carried out"). | owner | draft |
+| 25 | **The sellers' page, handed to the shops.** [When the server is down](paper-when-the-server-is-down.md) was confirmed by the owner on 2026-10-08: what the paper records and the page's rules (G14), and the paper switch always on (G20) (business rules, "how it is carried out"). Printed from the line under its note. | owner | confirmed; not handed out |
 | 23 | **The owner's sign-off.** | owner | — |
 
 ## Decided not to block the release
 
 What is still to be built after the release, and what waits on the owner,
-is listed in the [backlog](backlog.md).
+is listed in the [backlog](backlog.md); of it, the JSON stock import blocks
+the release (row 15).
 
 | | |
 |---|---|
@@ -88,6 +93,6 @@ is listed in the [backlog](backlog.md).
 | **Goods borrowed from another shop** | Done on 2026-10-01 (owner decisions): taken at an agreed price, marked sold into «Накладні», sent back unsold ([report](borrowed-goods-report.md)). |
 | **Settling money between the network's stores** | Not needed: stores of one network do not settle with each other (owner, 2026-10-01). |
 | **A sales report** | Done on 2026-10-02 (owner decisions): what each store sold and took back, and the money through its till ([report](sales-report-report.md)). |
-| **Cash and card, the day's close** | Done on 2026-10-04 (owner decisions): each payment says how it was paid, one drawer per store is counted blind once a day, cash taken out and put in is recorded, a difference needs a reason and the bot tells the owner silently, and «Звіт» splits the money by way ([report](cash-and-card-report.md)). The readings the owner has not confirmed yet are listed in the business rules; each is cheap to change before going live. After the deploy, the app is reopened on every phone. |
-| **The server is unreachable** | Done on 2026-10-08 (owner decisions, 2026-10-04 and 2026-10-07): every screen says to sell on paper, a refusal that proves nothing was recorded settles the phone, the phone checks its kept operations by itself, a sale typed from paper carries the mark «продано під час збою», and the bot says the shops sell on paper ([report](outage-fallback-report.md)). The readings the owner has not confirmed yet are listed in the business rules; the sellers' page waits for two of them (row 25). |
+| **Cash and card, the day's close** | Done on 2026-10-04 (owner decisions): each payment says how it was paid, one drawer per store is counted blind once a day, cash taken out and put in is recorded, a difference needs a reason and the bot tells the owner silently, and «Звіт» splits the money by way ([report](cash-and-card-report.md)). The owner confirmed every reading left open as built on 2026-10-08. After the deploy, the app is reopened on every phone. |
+| **The server is unreachable** | Done on 2026-10-08 (owner decisions, 2026-10-04 and 2026-10-07): every screen says to sell on paper, a refusal that proves nothing was recorded settles the phone, the phone checks its kept operations by itself, a sale typed from paper carries the mark «продано під час збою», and the bot says the shops sell on paper ([report](outage-fallback-report.md)). The owner confirmed every reading left open as built on 2026-10-08, and with them the sellers' page (row 25). |
 | **An offline mode** (the phone records sales and sends them later) | Not built: the owner chose paper when the server does not answer (2026-10-04), and an offline mode may be judged later, on real outages ([backlog](backlog.md)). |
