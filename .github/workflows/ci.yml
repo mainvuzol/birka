@@ -686,18 +686,21 @@ jobs:
           test -n "$rid" || fail "the API sent no request id"
           test "$rid" != chosen-by-the-client || fail "a client chose the request id"
 
-          # Bodies: more than the largest list anyone sends (0.4 MB) still
-          # reaches the API, which refuses this one as malformed; over 1 MB is
-          # refused at the edge. Expect: is cleared so curl sends at once.
+          # Bodies: the largest a phone sends is one part of a stock list
+          # from a file, under 990 000 bytes (ADR-0014 §11). 999 000 bytes
+          # still reach the API, which refuses this one as malformed with its
+          # own 4xx; 1 000 001 is past the edge's 1MB (1 000 000 bytes, SI)
+          # and refused there with 413, never a 502 a phone would read as an
+          # outage. Expect: is cleared so curl sends at once.
           post() {
             head -c "$1" /dev/zero | status_of -H 'Expect:' -H 'Content-Type: application/json' \
               --data-binary @- "$base/api/v1/auth/telegram"
           }
-          code=$(post 500000)
+          code=$(post 999000)
           case "$code" in 4??) test "$code" != 413 ;; *) false ;; esac \
-            || fail "a 0.5 MB body did not reach the API (got $code)"
-          code=$(post 2000000)
-          test "$code" = 413 || fail "a 2 MB body was not refused at the edge (got $code)"
+            || fail "a 999 000-byte body did not reach the API (got $code)"
+          code=$(post 1000001)
+          test "$code" = 413 || fail "a 1 000 001-byte body was not refused at the edge (got $code)"
           echo "the edge sends what the server must send"
 
       - name: Sign-ins are counted per real address, whatever a client claims

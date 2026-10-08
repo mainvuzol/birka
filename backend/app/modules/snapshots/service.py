@@ -1,13 +1,16 @@
 """Legacy stock lists: evidence in, a person's answers beside it, stock only on approval.
 
-M1-023, ADR-0005, and `.ai/workflows/legacy-inventory-snapshot-import.md`:
+M1-023, ADR-0005, ADR-0014, and `.ai/workflows/legacy-inventory-snapshot-import.md`:
 
-1. **Import.** Every line is kept verbatim as catalog evidence and parsed.
-   Nothing is matched, created or counted.
+1. **Import.** A list is filled by parts: lines typed by hand, or a parser's
+   file in Birka's format (ADR-0014; owner decision, 2026-10-08). Every line
+   is kept verbatim as catalog evidence and parsed. Nothing is matched,
+   created or counted. A part added by mistake is removed, with the answers
+   given to its lines; the lines stay as evidence and count nowhere.
 2. **Review.** A person states what each line means — one or more
    `(variant, size, quantity)` allocations, and where the numbers came from —
    or that it is not stock, and why. Nothing is inferred: not a size, not a
-   colour split, not a quantity.
+   colour split, not a quantity. A parser's reading of a line is a hint.
 3. **Approve** turns the whole list into `OPENING_BALANCE` stock at once, and
    only into a warehouse with no stock history. **Reject** turns none of it
    into stock and keeps all of it as evidence. Either way the database then
@@ -20,20 +23,26 @@ warehouse (`can_receive` and an open warehouse for anything that leads to
 stock), and the private-warehouse rule. Every check runs before any replay
 (invariant I13).
 
+A list of the shared warehouse belongs to both stores (owner decision,
+2026-10-08). Every command and read names the store the person acts through,
+`via_store_id`, which defaults to the list's own. Through another store, that
+store needs `can_receive` at the list's warehouse and the person the action's
+permission there (ADR-0014 §7). The list's own store still acts in the ledger.
+
 The caller owns the transaction.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import case, func, select
+from pydantic import ValidationError
+from sqlalchemy import Text, and_, case, cast, delete, func, or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.correlation import get_correlation_id
@@ -53,7 +62,7 @@ from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.evidence import RawInputSource
 from app.modules.catalog.raw_lines import mark_lines, read_lines, record_lines, repeated_lines
-from app.modules.catalog.read import describe_variants, size_labels
+from app.modules.catalog.read import describe_variants, size_labels, sizes_by_spelling
 from app.modules.catalog.service import ensure_unknown_size
 from app.modules.catalog.validation import require_active_variants, validate_stock_references
 from app.modules.inventory.service import (
@@ -63,33 +72,65 @@ from app.modules.inventory.service import (
     opening_balance_movement_ids,
     release_opening_list,
 )
+from app.modules.snapshots.file_lines import countless, file_line_evidence
 from app.modules.snapshots.models import (
     InventorySnapshot,
     InventorySnapshotAllocation,
+    InventorySnapshotPart,
     InventorySnapshotRow,
+    SnapshotPartKind,
+    SnapshotPriceKind,
     SnapshotQuantityBasis,
     SnapshotQuantityState,
     SnapshotRowStatus,
     SnapshotStatus,
 )
-from app.modules.tenancy.service import LocationCapability, validate_active_stores
+from app.modules.snapshots.rules import (
+    MAX_QUANTITY,
+    SEVERAL_OPTIONS,
+    check_basis,
+    lines_import_request,
+    mentions_no_count,
+    request_fingerprint,
+    source_quantity,
+)
+from app.modules.snapshots.stock_file import (
+    MAX_LINE_CHARS,
+    MAX_PART_LINES,
+    MAX_PART_TEXT_CHARS,
+    StockFileV1,
+    canonical,
+    content_fingerprint_of_file,
+)
+from app.modules.tenancy.service import (
+    LocationCapability,
+    accessible_locations,
+    store_names,
+    validate_active_stores,
+)
 
-MAX_LINES = 1000
-# The parser's cost grows faster than a line's length, and every line's parse
-# is kept for good. Real lines are a few dozen characters (the store corpus has
-# none over 40); these bounds hold the worst import to about a second of
-# parsing, off the event loop (M1-023 security review).
-MAX_LINE_CHARS = 500
-MAX_LIST_CHARS = 100_000
 MAX_ALLOCATIONS = 50
 # What one list may open a warehouse with, in all. It bounds the approval —
-# which holds the warehouse exclusively — and every read of what it became.
+# which writes the whole list in one transaction, holding the warehouse
+# exclusively — and every read of what it became. Set by measurement
+# (ADR-0014 §10): the largest of 2 000, 5 000 and 10 000 allocations whose
+# slowest approval took at most 10 s, with no statement over 5 s. 5 000 took
+# at most 7.5 s; 10 000 was refused outright, since the ledger reads every
+# allocation's reservation in one statement, which PostgreSQL 16 refuses past
+# about 6 500 keys (`max_stack_depth`). Measured 2026-10-08:
+# output/verification/2026-10-08-json-import-approval/. Raise it only with a
+# new measurement, and that read batched first.
 MAX_LIST_ALLOCATIONS = 5_000
-MAX_QUANTITY = 10_000
+# Two answers per line: a line naming several sizes takes one allocation per
+# size, and a list whose last lines cannot be answered can only be rejected.
+MAX_LIST_LINES = MAX_LIST_ALLOCATIONS // 2
+# Every row ever added, removed ones included: it bounds `line_no`.
+MAX_LIST_ROWS = 3 * MAX_LIST_LINES
+# Every part ever added, removed ones included.
+MAX_LIST_PARTS = 1_000
+MAX_FILE_NAME = 200
 MAX_NOTE = 1000
 OPEN_ROW_STATUSES = (SnapshotRowStatus.PENDING, SnapshotRowStatus.NEEDS_REVIEW)
-# The parser's own signal that a line names several sizes or several colours.
-SEVERAL_OPTIONS = frozenset({"CONFLICTING_SIZE", "CONFLICTING_COLOR"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,109 +144,11 @@ class AllocationInput:
     size_unknown: bool = False
 
 
-# ---------------------------------------------------------------------------
-# Pure rules
-# ---------------------------------------------------------------------------
-
-
-def source_quantity(parsed: dict[str, Any]) -> tuple[SnapshotQuantityState, int | None]:
-    """What the line itself said about quantity, as the parser read it.
-
-    A total counts only when the parser found exactly one quantity, was sure
-    of it (`3 шт`), and it is a count stock could be (at most `MAX_QUANTITY`).
-    A line naming several sizes or colours leaves the split unknown even when
-    the total is stated — a slash enumeration (`Лама бежевая/персик/butter
-    3 шт`) and a plain one (`Лоран S M L 3 шт`) alike (invariant I15). A bare
-    number is never a quantity: the parser keeps it as a possible item code.
-    """
-    candidates = parsed.get("fields", {}).get("quantity", [])
-    total: int | None = None
-    if len(candidates) == 1 and candidates[0].get("confidence") == "EXPLICIT":
-        value = int(candidates[0]["value"])
-        if value <= MAX_QUANTITY:
-            total = value
-    if parsed.get("quantity_distribution") == "UNKNOWN_DISTRIBUTION" or SEVERAL_OPTIONS & set(
-        parsed.get("review_reasons", [])
-    ):
-        return SnapshotQuantityState.UNKNOWN_DISTRIBUTION, total
-    if total is None:
-        return SnapshotQuantityState.UNKNOWN_QUANTITY, None
-    return SnapshotQuantityState.KNOWN, total
-
-
-def mentions_no_count(parsed: dict[str, Any] | None) -> bool:
-    """True when nothing in the line could be a count.
-
-    `LINE_IMPLIES_ONE` is for a line like `Бомбер шоколад М`. It never applies
-    to a line the parser found any quantity in — two of them (`Куртка 2 шт
-    3 шт`), a negated one (`Куртка не 3 шт`) — nor to a line with a number it
-    could not classify (`3 куртки`, `Куртка 1636`): that may be a count, a size
-    or an item code, and only a person can say which, in a note.
-    """
-    if parsed is None or parsed.get("fields", {}).get("quantity"):
-        return False
-    return not any(
-        character.isdigit()
-        for descriptor in parsed.get("unclassified_descriptors", [])
-        for character in descriptor.get("text", "")
-    )
-
-
-def check_basis(
-    *,
-    state: SnapshotQuantityState,
-    stated_total: int | None,
-    basis: SnapshotQuantityBasis,
-    quantities: Sequence[int],
-    note: str | None,
-    countless: bool,
-) -> None:
-    """Refuse an answer whose numbers claim more than their basis supports.
-
-    * `STATED` — only the one count the line states, in one allocation. A
-      split is never stated: the parser reads no per-size counts.
-    * `LINE_IMPLIES_ONE` — only for a line with no number that could be a
-      count (`countless`, see `mentions_no_count`), as exactly one piece.
-    * `RECOUNTED` / `OWNER_KNOWLEDGE` — anything, with a note saying who
-      counted or how it is known. This is also the only way to answer a line
-      whose split is unknown, or to differ from what a line states.
-    """
-    if basis is SnapshotQuantityBasis.STATED:
-        if state is not SnapshotQuantityState.KNOWN or stated_total is None:
-            raise ValidationFailedError(
-                "This line states no count to take as it is; say how the count is known"
-            )
-        if len(quantities) != 1:
-            raise ValidationFailedError(
-                "The line does not state a split across sizes or colours; say how it is known"
-            )
-        if quantities[0] != stated_total:
-            raise ValidationFailedError(
-                "A stated answer is the count the line states",
-                stated=stated_total,
-                allocated=quantities[0],
-            )
-    elif basis is SnapshotQuantityBasis.LINE_IMPLIES_ONE:
-        if state is not SnapshotQuantityState.UNKNOWN_QUANTITY or not countless:
-            raise ValidationFailedError(
-                "Only a line with no number that could be a count can be taken as one piece; "
-                "say how the count is known"
-            )
-        if list(quantities) != [1]:
-            raise ValidationFailedError("A line taken as one piece is one allocation of one")
-    elif note is None:
-        raise ValidationFailedError("Say in a note who counted, or how the count is known")
-
-
-def request_fingerprint(request: dict[str, Any]) -> str:
-    """sha256 of the canonical import request: the retry proof (ADR-0003)."""
-    canonical = json.dumps(request, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
 def _lock_key(organization_id: uuid.UUID, command_id: uuid.UUID) -> int:
     """Scoped exactly like `uq_inventory_snapshot_org_command`, so two
-    organizations using one command id never wait on each other."""
+    organizations using one command id never wait on each other. Creating a
+    list and adding a part take the same one: a stock-list command id names
+    one list or one added part, never both (ADR-0014 §8)."""
     digest = hashlib.sha256(
         b"inventory-snapshot:" + organization_id.bytes + command_id.bytes
     ).digest()
@@ -225,6 +168,71 @@ def _clean_text(value: str | None, *, limit: int, what: str, required: bool) -> 
 
 def _now() -> datetime:
     return datetime.now(tz=UTC)
+
+
+# ---------------------------------------------------------------------------
+# What a part brings
+# ---------------------------------------------------------------------------
+
+
+def _pasted_lines(lines: Sequence[str]) -> list[str]:
+    if not 1 <= len(lines) <= MAX_PART_LINES:
+        raise ValidationFailedError(f"A part of a stock list has 1 to {MAX_PART_LINES} lines")
+    for line_no, text in enumerate(lines, start=1):
+        if len(text) > MAX_LINE_CHARS:
+            raise ValidationFailedError(
+                f"A line holds at most {MAX_LINE_CHARS} characters", line_no=line_no
+            )
+    if sum(len(text) for text in lines) > MAX_PART_TEXT_CHARS:
+        raise ValidationFailedError(
+            f"A part of a stock list holds at most {MAX_PART_TEXT_CHARS} characters"
+        )
+    return list(lines)
+
+
+def _checked_file(file: StockFileV1) -> StockFileV1:
+    """The file as the format reads it, checked here too: a caller that did
+    not come through the router gets the same refusal, not a broken row."""
+    try:
+        return StockFileV1.model_validate(canonical(file))
+    except ValidationError as refused:
+        first = refused.errors(include_url=False)[0]
+        raise ValidationFailedError(
+            "This file is not in Birka's format",
+            type=first["type"],
+            loc=[str(part) for part in first["loc"]],
+            problems=refused.error_count(),
+        ) from None
+
+
+def _file_name(value: str | None) -> str:
+    if value is None:
+        raise ValidationFailedError("A file comes with its name")
+    if (
+        not value.strip()
+        or len(value) > MAX_FILE_NAME
+        or not is_storable(value)
+        or any(character < " " or character == "\x7f" for character in value)
+    ):
+        raise ValidationFailedError(
+            f"The file's name must contain 1 to {MAX_FILE_NAME} valid characters"
+        )
+    return value
+
+
+def _part_content(
+    *, lines: Sequence[str] | None, file: StockFileV1 | None, file_name: str | None
+) -> tuple[list[str], StockFileV1 | None, str | None]:
+    """Exactly one of lines and a file; a file's name only with a file."""
+    if (lines is None) == (file is None):
+        raise ValidationFailedError("Give the list's lines or a file, exactly one")
+    if file is None:
+        assert lines is not None
+        if file_name is not None:
+            raise ValidationFailedError("Only a file comes with a file name")
+        return _pasted_lines(lines), None, None
+    checked = _checked_file(file)
+    return [line.text for line in checked.lines], checked, _file_name(file_name)
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +260,29 @@ async def _load(
     return snapshot
 
 
+async def _load_part(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    part_id: uuid.UUID,
+    lock: bool = False,
+) -> InventorySnapshotPart:
+    """A part of this list. Another list's, or another organization's, is as
+    unknown as one that never existed."""
+    query = select(InventorySnapshotPart).where(
+        InventorySnapshotPart.id == part_id,
+        InventorySnapshotPart.inventory_snapshot_id == snapshot_id,
+        InventorySnapshotPart.organization_id == scope.organization_id,
+    )
+    if lock:
+        query = query.with_for_update()
+    part = (await session.scalars(query.execution_options(populate_existing=True))).one_or_none()
+    if part is None:
+        raise NotFoundError("Unknown file of this stock list", part_id=str(part_id))
+    return part
+
+
 def _reader_permission(scope: RequestScope, store_id: uuid.UUID) -> Permission:
     """Either snapshot permission lets a person see the list.
 
@@ -266,6 +297,11 @@ def _reader_permission(scope: RequestScope, store_id: uuid.UUID) -> Permission:
     return Permission.SNAPSHOT_IMPORT  # `require` refuses it with a clear message
 
 
+def _acting_through(snapshot: InventorySnapshot, via_store_id: uuid.UUID | None) -> uuid.UUID:
+    assert snapshot.acting_store_id is not None
+    return snapshot.acting_store_id if via_store_id is None else via_store_id
+
+
 async def _authorize(
     session: AsyncSession,
     *,
@@ -273,25 +309,53 @@ async def _authorize(
     snapshot: InventorySnapshot,
     permission: Permission,
     command: bool,
+    via_store_id: uuid.UUID | None = None,
 ) -> None:
     """The person, then the store at this warehouse, then the private rule.
 
-    A command that leads to stock needs `can_receive` and an open warehouse and
-    store; reading a list needs only reach.
+    Through the list's own store, as ADR-0005 §9 has it: a command that leads
+    to stock needs `can_receive` and an open warehouse and store; reading a
+    list needs only reach. Through another store, reads too need that store
+    to hold `can_receive` at the list's warehouse: only a store that may
+    import there shares the list (ADR-0014 §7). A child store's own
+    warehouse is reached by that store alone, so its list stays its own.
     """
     assert snapshot.acting_store_id is not None and snapshot.location_id is not None
+    through = _acting_through(snapshot, via_store_id)
+    own = through == snapshot.acting_store_id
     await require_stock_access(
         session,
         scope=scope,
-        store_id=snapshot.acting_store_id,
+        store_id=through,
         location_ids={snapshot.location_id},
-        capability=LocationCapability.RECEIVE if command else None,
+        capability=LocationCapability.RECEIVE if command or not own else None,
         permission=permission,
     )
     if command:
+        # The list's own store acts in the ledger, whoever acts through which
+        # store; both must trade.
         await validate_active_stores(
-            session, organization_id=scope.organization_id, store_ids={snapshot.acting_store_id}
+            session,
+            organization_id=scope.organization_id,
+            store_ids={snapshot.acting_store_id, through},
         )
+
+
+async def _authorize_reader(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot: InventorySnapshot,
+    via_store_id: uuid.UUID | None,
+) -> None:
+    await _authorize(
+        session,
+        scope=scope,
+        snapshot=snapshot,
+        permission=_reader_permission(scope, _acting_through(snapshot, via_store_id)),
+        command=False,
+        via_store_id=via_store_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +375,8 @@ async def _summary(session: AsyncSession, snapshot_id: uuid.UUID) -> dict[str, A
         .tuples()
         .all()
     )
+    # A removed file's lines count nowhere (ADR-0014 §9).
+    counts.pop(SnapshotRowStatus.REMOVED, None)
     per_row = (
         select(
             InventorySnapshotRow.quantity_basis.label("basis"),
@@ -361,6 +427,14 @@ async def _summary(session: AsyncSession, snapshot_id: uuid.UUID) -> dict[str, A
         allocations += int(basis_allocations)
         units += int(basis_units)
         differing += int(basis_differing)
+    parts, parts_removed = (
+        await session.execute(
+            select(
+                func.count().filter(InventorySnapshotPart.removed_at.is_(None)),
+                func.count().filter(InventorySnapshotPart.removed_at.is_not(None)),
+            ).where(InventorySnapshotPart.inventory_snapshot_id == snapshot_id)
+        )
+    ).one()
     return {
         "lines": sum(counts.values()),
         "pending": counts.get(SnapshotRowStatus.PENDING, 0),
@@ -372,15 +446,31 @@ async def _summary(session: AsyncSession, snapshot_id: uuid.UUID) -> dict[str, A
         "lines_differing_from_source": differing,
         "lines_by_basis": lines_by_basis,
         "units_by_basis": units_by_basis,
+        "parts": int(parts),
+        "parts_removed": int(parts_removed),
+        # Both headrooms: «рядків 1 840 з 2 500 · відповідей 3 120 з 5 000».
+        "limits": {"lines": MAX_LIST_LINES, "allocations": MAX_LIST_ALLOCATIONS},
     }
 
 
-async def _snapshot_view(session: AsyncSession, snapshot: InventorySnapshot) -> dict[str, Any]:
+async def _snapshot_view(
+    session: AsyncSession, snapshot: InventorySnapshot, *, store_name: str | None = None
+) -> dict[str, Any]:
+    assert snapshot.acting_store_id is not None
     summary = await _summary(session, snapshot.id)
+    if store_name is None:
+        store_name = (
+            await store_names(
+                session,
+                organization_id=snapshot.organization_id,
+                store_ids={snapshot.acting_store_id},
+            )
+        ).get(snapshot.acting_store_id)
     return {
         "snapshot_id": snapshot.id,
         "command_id": snapshot.command_id,
         "store_id": snapshot.acting_store_id,
+        "store_name": store_name,
         "location_id": snapshot.location_id,
         "status": snapshot.status,
         "source_document_ref": snapshot.source_document_ref,
@@ -400,6 +490,88 @@ async def _snapshot_view(session: AsyncSession, snapshot: InventorySnapshot) -> 
     }
 
 
+async def _part_views(
+    session: AsyncSession, *, snapshot_id: uuid.UUID, parts: Sequence[InventorySnapshotPart]
+) -> list[dict[str, Any]]:
+    """Each part with its progress and its overlap with the rest of the list.
+
+    `photo_lines_elsewhere` counts the part's lines that name a photo and a
+    line another part of the list names too: a photo read twice, or put in
+    two files. Only lines not removed count, on either side.
+    """
+    if not parts:
+        return []
+    progress: dict[uuid.UUID, dict[SnapshotRowStatus, int]] = {}
+    for part_id, status, count in (
+        await session.execute(
+            select(InventorySnapshotRow.part_id, InventorySnapshotRow.status, func.count())
+            .where(
+                InventorySnapshotRow.inventory_snapshot_id == snapshot_id,
+                InventorySnapshotRow.part_id.in_([part.id for part in parts]),
+            )
+            .group_by(InventorySnapshotRow.part_id, InventorySnapshotRow.status)
+        )
+    ).tuples():
+        progress.setdefault(part_id, {})[status] = count
+    # One scan, and no join: a pair is named elsewhere when the parts naming
+    # it are not all one. A join here is planned from statistics, and a list
+    # being filled is newer than they are: a nested loop over thousands of
+    # lines took seconds before autoanalyze caught up (measured, ADR-0014 §10).
+    pair = (InventorySnapshotRow.photo_name, InventorySnapshotRow.photo_line)
+    part_text = cast(InventorySnapshotRow.part_id, Text)
+    spread = (
+        select(
+            InventorySnapshotRow.part_id,
+            func.min(part_text).over(partition_by=pair).label("first"),
+            func.max(part_text).over(partition_by=pair).label("last"),
+        )
+        .where(*_live_rows(snapshot_id), InventorySnapshotRow.photo_name.is_not(None))
+        .subquery()
+    )
+    elsewhere = dict(
+        (
+            await session.execute(
+                select(spread.c.part_id, func.count())
+                .where(spread.c.first != spread.c.last)
+                .group_by(spread.c.part_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    views = []
+    for part in parts:
+        counts = progress.get(part.id, {})
+        views.append(
+            {
+                "part_id": part.id,
+                "part_no": part.part_no,
+                "kind": part.kind,
+                "file_name": part.file_name,
+                "source": part.source,
+                "counted_on": part.counted_on,
+                "price_kind": part.price_kind,
+                "parser": part.parser,
+                "format_version": part.format_version,
+                "lines": part.line_count,
+                "first_line_no": part.first_line_no,
+                "last_line_no": part.last_line_no,
+                "added_by_user_id": part.added_by_user_id,
+                "added_at": part.created_at,
+                "removed_by_user_id": part.removed_by_user_id,
+                "removed_at": part.removed_at,
+                "progress": {
+                    "pending": counts.get(SnapshotRowStatus.PENDING, 0),
+                    "needs_review": counts.get(SnapshotRowStatus.NEEDS_REVIEW, 0),
+                    "resolved": counts.get(SnapshotRowStatus.RESOLVED, 0),
+                    "skipped": counts.get(SnapshotRowStatus.SKIPPED, 0),
+                },
+                "photo_lines_elsewhere": elsewhere.get(part.id, 0),
+            }
+        )
+    return views
+
+
 def _parse_summary(parsed: dict[str, Any] | None) -> dict[str, Any]:
     if parsed is None:
         return {"review_reasons": [], "candidates": {}, "unclassified": []}
@@ -411,6 +583,14 @@ def _parse_summary(parsed: dict[str, Any] | None) -> dict[str, Any]:
         },
         "unclassified": [item["text"] for item in parsed.get("unclassified_descriptors", [])],
     }
+
+
+def _live_rows(snapshot_id: uuid.UUID) -> Any:
+    """The list's lines that count: every line but a removed file's."""
+    return (
+        InventorySnapshotRow.inventory_snapshot_id == snapshot_id,
+        InventorySnapshotRow.status != SnapshotRowStatus.REMOVED,
+    )
 
 
 async def _row_views(
@@ -436,19 +616,58 @@ async def _row_views(
     lines = await read_lines(
         session, organization_id=organization_id, raw_input_ids={row.raw_input_id for row in rows}
     )
-    # Repeats are counted across the whole list, not just this page.
+    # Repeats are counted across the whole list, not just this page, and
+    # only among the lines that count (ADR-0014 §6).
     repeats = await repeated_lines(
         session,
         organization_id=organization_id,
-        raw_input_ids=set(
-            (
-                await session.scalars(
-                    select(InventorySnapshotRow.raw_input_id).where(
-                        InventorySnapshotRow.inventory_snapshot_id == snapshot_id
+        raw_input_ids={row.raw_input_id for row in rows},
+        among=select(InventorySnapshotRow.raw_input_id).where(*_live_rows(snapshot_id)),
+    )
+    photos = {
+        (row.photo_name, row.photo_line)
+        for row in rows
+        if row.photo_name is not None and row.photo_line is not None
+    }
+    same_photo: dict[tuple[str | None, int | None], int] = {}
+    if photos:
+        same_photo = {
+            (name, line): count
+            for name, line, count in (
+                await session.execute(
+                    select(
+                        InventorySnapshotRow.photo_name,
+                        InventorySnapshotRow.photo_line,
+                        func.count(),
                     )
+                    .where(
+                        *_live_rows(snapshot_id),
+                        tuple_(
+                            InventorySnapshotRow.photo_name, InventorySnapshotRow.photo_line
+                        ).in_(photos),
+                    )
+                    .group_by(InventorySnapshotRow.photo_name, InventorySnapshotRow.photo_line)
                 )
-            ).all()
-        ),
+            ).tuples()
+        }
+    parts = {
+        part_id: (part_no, price_kind)
+        for part_id, part_no, price_kind in (
+            await session.execute(
+                select(
+                    InventorySnapshotPart.id,
+                    InventorySnapshotPart.part_no,
+                    InventorySnapshotPart.price_kind,
+                ).where(InventorySnapshotPart.id.in_({row.part_id for row in rows}))
+            )
+        ).tuples()
+    }
+    # The catalogue's size for each size a shown split names: what
+    # `STATED_BY_SIZE` would answer with, or none when the catalogue lacks it.
+    split_sizes = await sizes_by_spelling(
+        session,
+        organization_id=organization_id,
+        written={pair["size"] for row in rows for pair in row.shown_split or ()},
     )
     names = await describe_variants(
         session, list({allocation.product_variant_id for allocation in allocations})
@@ -471,6 +690,7 @@ async def _row_views(
     views = []
     for row in rows:
         line = lines.get(row.raw_input_id)
+        part_no, price_kind = parts[row.part_id]
         views.append(
             {
                 "line_no": row.line_no,
@@ -483,21 +703,210 @@ async def _row_views(
                 # Whether `LINE_IMPLIES_ONE` may answer it: `check_basis`'s own
                 # rule, so a client offers only what the server accepts.
                 "may_imply_one": row.quantity_state is SnapshotQuantityState.UNKNOWN_QUANTITY
-                and mentions_no_count(line.parsed if line else None),
+                and countless(line.parsed if line else None, row.reading),
                 **_parse_summary(line.parsed if line else None),
                 "quantity_basis": row.quantity_basis,
                 "allocations": by_row.get(row.id, []),
                 "resolution_note": row.resolution_note,
                 "resolved_by_user_id": row.resolved_by_user_id,
                 "resolved_at": row.resolved_at,
+                "part_id": row.part_id,
+                "part_no": part_no,
+                "photo_name": row.photo_name,
+                "photo_line": row.photo_line,
+                "reading": row.reading,
+                "price_kind": price_kind,
+                "file_reasons": list(row.file_reasons),
+                "shown_split": [
+                    {
+                        "size": pair["size"],
+                        "count": pair["count"],
+                        "size_id": split_sizes.get(pair["size"]),
+                    }
+                    for pair in row.shown_split
+                ]
+                if row.shown_split is not None
+                else None,
+                # How many lines that count name this photo and line: more
+                # than one is a photo read twice, or put in two files.
+                "same_photo_lines": same_photo.get((row.photo_name, row.photo_line), 0)
+                if row.photo_name is not None and row.photo_line is not None
+                else 0,
             }
         )
     return views
 
 
 # ---------------------------------------------------------------------------
-# Import
+# Import: a list, and its parts
 # ---------------------------------------------------------------------------
+
+
+async def _require_room(session: AsyncSession, *, snapshot_id: uuid.UUID, adding: int) -> None:
+    """A part fits the list's lines, its rows ever added, and its parts."""
+    lines, rows = (
+        await session.execute(
+            select(
+                func.count().filter(InventorySnapshotRow.status != SnapshotRowStatus.REMOVED),
+                func.count(),
+            ).where(InventorySnapshotRow.inventory_snapshot_id == snapshot_id)
+        )
+    ).one()
+    parts = await session.scalar(
+        select(func.count()).where(InventorySnapshotPart.inventory_snapshot_id == snapshot_id)
+    )
+    for what, limit, now, more in (
+        ("lines", MAX_LIST_LINES, int(lines), adding),
+        ("rows", MAX_LIST_ROWS, int(rows), adding),
+        ("parts", MAX_LIST_PARTS, int(parts or 0), 1),
+    ):
+        if now + more > limit:
+            raise SnapshotConflictError(
+                "This stock list has no room for this part",
+                reason="LIST_FULL",
+                what=what,
+                limit=limit,
+                now=now,
+                adding=more,
+            )
+
+
+async def _record_part(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot: InventorySnapshot,
+    store_id: uuid.UUID,
+    command_id: uuid.UUID,
+    command_fingerprint: str,
+    texts: Sequence[str],
+    file: StockFileV1 | None,
+    file_name: str | None,
+    source: str | None,
+    counted_on: str | None,
+) -> InventorySnapshotPart:
+    """Keep a part's lines as evidence, after the list's last line.
+
+    Runs under the list's row lock (or, for a new list, before anyone else
+    can see it), so two parts added at once get two contiguous ranges. A
+    line from a file keeps its photo, the parser's reading, and what that
+    reading says about its count (`file_lines`).
+    """
+    await _require_room(session, snapshot_id=snapshot.id, adding=len(texts))
+    content_fingerprint: str | None = None
+    if file is not None:
+        content_fingerprint = content_fingerprint_of_file(file)
+        twin = (
+            await session.scalars(
+                select(InventorySnapshotPart)
+                .where(
+                    InventorySnapshotPart.inventory_snapshot_id == snapshot.id,
+                    InventorySnapshotPart.kind == SnapshotPartKind.FILE,
+                    InventorySnapshotPart.removed_at.is_(None),
+                    InventorySnapshotPart.content_fingerprint == content_fingerprint,
+                )
+                .order_by(InventorySnapshotPart.part_no)
+            )
+        ).first()
+        if twin is not None:
+            raise SnapshotConflictError(
+                "This file is already in the list",
+                reason="PART_DUPLICATE",
+                part_id=str(twin.id),
+                part_no=twin.part_no,
+                file_name=twin.file_name,
+            )
+    last_line = await session.scalar(
+        select(func.max(InventorySnapshotRow.line_no)).where(
+            InventorySnapshotRow.inventory_snapshot_id == snapshot.id
+        )
+    )
+    last_part = await session.scalar(
+        select(func.max(InventorySnapshotPart.part_no)).where(
+            InventorySnapshotPart.inventory_snapshot_id == snapshot.id
+        )
+    )
+    first_line_no = (last_line or 0) + 1
+    recorded = await record_lines(
+        session,
+        organization_id=scope.organization_id,
+        store_id=store_id,
+        actor_user_id=scope.user_id,
+        source_kind=RawInputSource.SNAPSHOT_IMPORT,
+        source_refs=[
+            f"inventory_snapshot:{snapshot.id}:{line_no}"
+            for line_no in range(first_line_no, first_line_no + len(texts))
+        ],
+        lines=texts,
+    )
+    part = InventorySnapshotPart(
+        id=uuid.uuid4(),
+        organization_id=scope.organization_id,
+        inventory_snapshot_id=snapshot.id,
+        part_no=(last_part or 0) + 1,
+        command_id=command_id,
+        command_fingerprint=command_fingerprint,
+        content_fingerprint=content_fingerprint,
+        kind=SnapshotPartKind.FILE if file is not None else SnapshotPartKind.PASTED,
+        file_name=file_name,
+        source=source,
+        counted_on=counted_on,
+        price_kind=SnapshotPriceKind(file.price_kind.upper())
+        if file is not None and file.price_kind is not None
+        else None,
+        parser=file.parser if file is not None else None,
+        format_version=file.version if file is not None else None,
+        line_count=len(texts),
+        first_line_no=first_line_no,
+        last_line_no=first_line_no + len(texts) - 1,
+        added_by_user_id=scope.user_id,
+    )
+    session.add(part)
+    await session.flush()
+
+    rows = []
+    for offset, line in enumerate(recorded):
+        reasons: tuple[str, ...] = ()
+        extra: dict[str, Any] = {}
+        if file is None:
+            state, total = source_quantity(line.parsed)
+        else:
+            written = file.lines[offset]
+            evidence = file_line_evidence(line.parsed, written)
+            state, total, reasons = evidence.state, evidence.total, evidence.reasons
+            extra = {
+                "photo_name": written.photo,
+                "photo_line": written.photo_line,
+                # Exactly what the file said, beside the text it read.
+                "reading": written.model_dump(
+                    mode="json", exclude_none=True, exclude={"text", "photo", "photo_line"}
+                ),
+                "shown_split": [
+                    {"size": size, "count": count} for size, count in evidence.shown_split
+                ]
+                if evidence.shown_split is not None
+                else None,
+            }
+        rows.append(
+            InventorySnapshotRow(
+                id=uuid.uuid4(),
+                inventory_snapshot_id=snapshot.id,
+                part_id=part.id,
+                line_no=first_line_no + offset,
+                raw_input_id=line.raw_input_id,
+                parse_result_id=line.parse_result_id,
+                quantity_total=total,
+                quantity_state=state,
+                file_reasons=list(reasons),
+                status=SnapshotRowStatus.NEEDS_REVIEW
+                if line.parsed.get("review_reasons") or reasons
+                else SnapshotRowStatus.PENDING,
+                **extra,
+            )
+        )
+    session.add_all(rows)
+    await session.flush()
+    return part
 
 
 async def import_snapshot(
@@ -507,17 +916,21 @@ async def import_snapshot(
     command_id: uuid.UUID,
     store_id: uuid.UUID,
     location_id: uuid.UUID,
-    lines: Sequence[str],
+    lines: Sequence[str] | None = None,
+    file: StockFileV1 | None = None,
+    file_name: str | None = None,
     source_document_ref: str | None = None,
     captured_at: str | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Keep a legacy list as evidence, line by line. Returns `(view, created)`.
 
-    `command_id` is the client's permanent name for this import within its
-    organization: repeating the same request returns the list as it is now;
-    any other request under the same name is a conflict. Another organization
-    using the same name is simply another list. Nothing is matched, created or
-    counted: every line waits for a person.
+    From typed `lines` or from a parser's `file` with its `file_name`, exactly
+    one: that is the list's first part. `command_id` is the client's
+    permanent name for this import within its organization: repeating the
+    same request returns the list as it is now; any other request under the
+    same name is a conflict, and so is a name already given to an added part.
+    Another organization using the same name is simply another list. Nothing
+    is matched, created or counted: every line waits for a person.
     """
     await require_stock_access(
         session,
@@ -530,30 +943,35 @@ async def import_snapshot(
     await validate_active_stores(
         session, organization_id=scope.organization_id, store_ids={store_id}
     )
-    if not 1 <= len(lines) <= MAX_LINES:
-        raise ValidationFailedError(f"A stock list has 1 to {MAX_LINES} lines")
-    for line_no, text in enumerate(lines, start=1):
-        if len(text) > MAX_LINE_CHARS:
-            raise ValidationFailedError(
-                f"A line holds at most {MAX_LINE_CHARS} characters", line_no=line_no
-            )
-    if sum(len(text) for text in lines) > MAX_LIST_CHARS:
-        raise ValidationFailedError(f"A stock list holds at most {MAX_LIST_CHARS} characters")
+    texts, checked, file_name = _part_content(lines=lines, file=file, file_name=file_name)
     source_document_ref = _clean_text(
         source_document_ref, limit=300, what="The source document", required=False
     )
     captured_at = _clean_text(captured_at, limit=40, what="The list's date", required=False)
-    request = {
-        "store_id": str(store_id),
-        "location_id": str(location_id),
-        "source_document_ref": source_document_ref,
-        "captured_at": captured_at,
-        "lines": list(lines),
-    }
+    if checked is None:
+        # Byte for byte the request M1-023 fingerprinted, so a retry sent
+        # before this deploy still replays after it (ADR-0014 §8).
+        request = lines_import_request(
+            store_id=store_id,
+            location_id=location_id,
+            source_document_ref=source_document_ref,
+            captured_at=captured_at,
+            lines=texts,
+        )
+    else:
+        request = {
+            "store_id": str(store_id),
+            "location_id": str(location_id),
+            "source_document_ref": source_document_ref,
+            "captured_at": captured_at,
+            "file_name": file_name,
+            "file": canonical(checked),
+        }
     fingerprint = request_fingerprint(request)
 
-    # Serializes two deliveries of the same import; the unique command would
-    # otherwise turn the loser into a unique-violation 500.
+    # Serializes two deliveries of the same import, and an import with a
+    # part added under the same name; the unique commands would otherwise
+    # turn the loser into a unique-violation 500.
     await session.execute(
         select(func.pg_advisory_xact_lock(_lock_key(scope.organization_id, command_id)))
     )
@@ -572,6 +990,13 @@ async def import_snapshot(
             raise IdempotencyConflictError("This command id was already used for another list")
         # The same request: the same store and warehouse, authorized above.
         return await _snapshot_view(session, existing), False
+    if await session.scalar(
+        select(InventorySnapshotPart.id).where(
+            InventorySnapshotPart.organization_id == scope.organization_id,
+            InventorySnapshotPart.command_id == command_id,
+        )
+    ):
+        raise IdempotencyConflictError("This command id names a file of another list")
 
     snapshot = InventorySnapshot(
         id=uuid.uuid4(),
@@ -596,37 +1021,19 @@ async def import_snapshot(
         location_id=location_id,
         snapshot_id=snapshot.id,
     )
-
-    recorded = await record_lines(
+    part = await _record_part(
         session,
-        organization_id=scope.organization_id,
+        scope=scope,
+        snapshot=snapshot,
         store_id=store_id,
-        actor_user_id=scope.user_id,
-        source_kind=RawInputSource.SNAPSHOT_IMPORT,
-        source_refs=[
-            f"inventory_snapshot:{snapshot.id}:{line_no}" for line_no in range(1, len(lines) + 1)
-        ],
-        lines=lines,
+        command_id=command_id,
+        command_fingerprint=fingerprint,
+        texts=texts,
+        file=checked,
+        file_name=file_name,
+        source=checked.source if checked is not None else None,
+        counted_on=checked.counted_on if checked is not None else None,
     )
-    rows = []
-    for line_no, line in enumerate(recorded, start=1):
-        state, total = source_quantity(line.parsed)
-        rows.append(
-            InventorySnapshotRow(
-                id=uuid.uuid4(),
-                inventory_snapshot_id=snapshot.id,
-                line_no=line_no,
-                raw_input_id=line.raw_input_id,
-                parse_result_id=line.parse_result_id,
-                quantity_total=total,
-                quantity_state=state,
-                status=SnapshotRowStatus.NEEDS_REVIEW
-                if line.parsed.get("review_reasons")
-                else SnapshotRowStatus.PENDING,
-            )
-        )
-    session.add_all(rows)
-    await session.flush()
     await audit.record(
         session,
         organization_id=scope.organization_id,
@@ -638,12 +1045,299 @@ async def import_snapshot(
             "command_id": str(command_id),
             "store_id": str(store_id),
             "location_id": str(location_id),
-            "lines": len(lines),
+            "lines": len(texts),
             "source_document_ref": source_document_ref,
             "captured_at": captured_at,
+            "part_id": str(part.id),
+            "kind": part.kind.value,
+            "file_name": part.file_name,
+            "format_version": part.format_version,
+            "parser": part.parser,
         },
     )
     return await _snapshot_view(session, snapshot), True
+
+
+async def _part_change(
+    session: AsyncSession, snapshot: InventorySnapshot, part: InventorySnapshotPart
+) -> dict[str, Any]:
+    views = await _part_views(session, snapshot_id=snapshot.id, parts=[part])
+    return {"snapshot": await _snapshot_view(session, snapshot), "part": views[0]}
+
+
+async def add_part(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    command_id: uuid.UUID,
+    via_store_id: uuid.UUID | None = None,
+    lines: Sequence[str] | None = None,
+    file: StockFileV1 | None = None,
+    file_name: str | None = None,
+    source: str | None = None,
+    counted_on: str | None = None,
+) -> tuple[dict[str, Any], bool]:
+    """Add a file, or hand-typed lines, to a list under review. Returns
+    `({snapshot, part}, created)` (ADR-0014 §8).
+
+    `command_id` names the part for good: the same request again answers
+    with the part as it is now, even removed since, even once the list is
+    decided; another request under it, or a list's name, is a conflict. The
+    same file is not added twice to one list while neither copy is removed.
+    A file naming photos and lines the list already holds is added, and the
+    answer counts them (`photo_lines_elsewhere`), so a person can remove it.
+
+    Locks: the command, then the list. No warehouse lock: the list's hold
+    already keeps the warehouse still, and an approval takes the list first,
+    so a part added after one finds the list decided.
+    """
+    observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
+    await _authorize(
+        session,
+        scope=scope,
+        snapshot=observed,
+        permission=Permission.SNAPSHOT_IMPORT,
+        command=True,
+        via_store_id=via_store_id,
+    )
+    texts, checked, file_name = _part_content(lines=lines, file=file, file_name=file_name)
+    if checked is not None:
+        if source is not None or counted_on is not None:
+            raise ValidationFailedError("A file says where it came from itself")
+        request: dict[str, Any] = {
+            "snapshot_id": str(snapshot_id),
+            "kind": SnapshotPartKind.FILE.value,
+            "file_name": file_name,
+            "file": canonical(checked),
+        }
+        source, counted_on = checked.source, checked.counted_on
+    else:
+        source = _clean_text(source, limit=300, what="The source document", required=False)
+        counted_on = _clean_text(counted_on, limit=40, what="The lines' date", required=False)
+        request = {
+            "snapshot_id": str(snapshot_id),
+            "kind": SnapshotPartKind.PASTED.value,
+            "lines": texts,
+            "source": source,
+            "counted_on": counted_on,
+        }
+    fingerprint = request_fingerprint(request)
+
+    await session.execute(
+        select(func.pg_advisory_xact_lock(_lock_key(scope.organization_id, command_id)))
+    )
+    existing = (
+        await session.scalars(
+            select(InventorySnapshotPart)
+            .where(
+                InventorySnapshotPart.organization_id == scope.organization_id,
+                InventorySnapshotPart.command_id == command_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).one_or_none()
+    if existing is not None:
+        if existing.inventory_snapshot_id != snapshot_id:
+            raise IdempotencyConflictError("This command id names a file of another list")
+        if existing.command_fingerprint is None or existing.command_fingerprint != fingerprint:
+            raise IdempotencyConflictError("This command id was already used for another file")
+        current = await _load(session, scope=scope, snapshot_id=snapshot_id)
+        return await _part_change(session, current, existing), False
+    if await session.scalar(
+        select(InventorySnapshot.id).where(
+            InventorySnapshot.organization_id == scope.organization_id,
+            InventorySnapshot.command_id == command_id,
+        )
+    ):
+        raise IdempotencyConflictError("This command id names a stock list")
+
+    snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id, lock=True)
+    if snapshot.status is not SnapshotStatus.IN_REVIEW:
+        raise SnapshotConflictError(
+            "This stock list is already decided", reason="ALREADY_DECIDED", status=snapshot.status
+        )
+    part = await _record_part(
+        session,
+        scope=scope,
+        snapshot=snapshot,
+        store_id=_acting_through(snapshot, via_store_id),
+        command_id=command_id,
+        command_fingerprint=fingerprint,
+        texts=texts,
+        file=checked,
+        file_name=file_name,
+        source=source,
+        counted_on=counted_on,
+    )
+    snapshot.review_revision += 1
+    await session.flush()
+    result = await _part_change(session, snapshot, part)
+    await audit.record(
+        session,
+        organization_id=scope.organization_id,
+        actor_user_id=scope.user_id,
+        action="snapshot.part_added",
+        entity_type="inventory_snapshot",
+        entity_id=snapshot.id,
+        after={
+            "part_id": str(part.id),
+            "part_no": part.part_no,
+            "kind": part.kind.value,
+            "file_name": part.file_name,
+            "source": part.source,
+            "counted_on": part.counted_on,
+            "parser": part.parser,
+            "format_version": part.format_version,
+            "lines": part.line_count,
+            "first_line_no": part.first_line_no,
+            "last_line_no": part.last_line_no,
+            "photo_lines_elsewhere": result["part"]["photo_lines_elsewhere"],
+            "review_revision": snapshot.review_revision,
+            "via_store_id": str(_acting_through(snapshot, via_store_id)),
+        },
+    )
+    return result, True
+
+
+async def remove_part(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    part_id: uuid.UUID,
+    via_store_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    """Take a part added by mistake out of a list under review, with the
+    answers given to its lines. Returns `{snapshot, part}` (ADR-0014 §9).
+
+    Any owner or manager who may import there removes any part, with no
+    reason (owner, 2026-10-08); the history shows who and when. A part
+    already removed is answered as it is, before the list's state is
+    checked. The last part is never removed: the list is rejected instead,
+    which also lets its warehouse go. The part's lines stay as evidence,
+    `REMOVED`, and count nowhere; every earlier answer stays in its own
+    `snapshot.line_resolved` entry. Removal is final: a removed file comes
+    back only by being added again, as a new part.
+    """
+    observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
+    await _authorize(
+        session,
+        scope=scope,
+        snapshot=observed,
+        permission=Permission.SNAPSHOT_IMPORT,
+        command=True,
+        via_store_id=via_store_id,
+    )
+    snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id, lock=True)
+    part = await _load_part(
+        session, scope=scope, snapshot_id=snapshot_id, part_id=part_id, lock=True
+    )
+    if part.removed_at is not None:
+        return await _part_change(session, snapshot, part)
+    if snapshot.status is not SnapshotStatus.IN_REVIEW:
+        raise SnapshotConflictError(
+            "This stock list is already decided", reason="ALREADY_DECIDED", status=snapshot.status
+        )
+    others = await session.scalar(
+        select(func.count()).where(
+            InventorySnapshotPart.inventory_snapshot_id == snapshot_id,
+            InventorySnapshotPart.removed_at.is_(None),
+            InventorySnapshotPart.id != part.id,
+        )
+    )
+    if not others:
+        raise SnapshotConflictError(
+            "The last file of a list is not removed; reject the list instead",
+            reason="LAST_PART",
+            part_id=str(part.id),
+        )
+
+    its_rows = select(InventorySnapshotRow.id).where(InventorySnapshotRow.part_id == part.id)
+    statuses = dict(
+        (
+            await session.execute(
+                select(InventorySnapshotRow.status, func.count())
+                .where(InventorySnapshotRow.part_id == part.id)
+                .group_by(InventorySnapshotRow.status)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    allocations, units = (
+        await session.execute(
+            select(
+                func.count(InventorySnapshotAllocation.id),
+                func.coalesce(func.sum(InventorySnapshotAllocation.quantity), 0),
+            ).where(InventorySnapshotAllocation.snapshot_row_id.in_(its_rows))
+        )
+    ).one()
+    raw_input_ids = set(
+        (
+            await session.scalars(
+                select(InventorySnapshotRow.raw_input_id).where(
+                    InventorySnapshotRow.part_id == part.id
+                )
+            )
+        ).all()
+    )
+    # In this order: the database lets a line be removed only once its part
+    # is, and only without an answer (`inventory_snapshot_row_is_fixed`).
+    await session.execute(
+        delete(InventorySnapshotAllocation)
+        .where(InventorySnapshotAllocation.snapshot_row_id.in_(its_rows))
+        .execution_options(synchronize_session=False)
+    )
+    part.removed_at = _now()
+    part.removed_by_user_id = scope.user_id
+    await session.flush()
+    await session.execute(
+        update(InventorySnapshotRow)
+        .where(InventorySnapshotRow.part_id == part.id)
+        .values(
+            status=SnapshotRowStatus.REMOVED,
+            quantity_basis=None,
+            resolution_note=None,
+            resolved_by_user_id=None,
+            resolved_at=None,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    await mark_lines(
+        session, organization_id=scope.organization_id, raw_input_ids=raw_input_ids, resolved=False
+    )
+    snapshot.review_revision += 1
+    await session.flush()
+    await audit.record(
+        session,
+        organization_id=scope.organization_id,
+        actor_user_id=scope.user_id,
+        action="snapshot.part_removed",
+        entity_type="inventory_snapshot",
+        entity_id=snapshot.id,
+        before={
+            "lines": part.line_count,
+            "pending": statuses.get(SnapshotRowStatus.PENDING, 0),
+            "needs_review": statuses.get(SnapshotRowStatus.NEEDS_REVIEW, 0),
+            "resolved": statuses.get(SnapshotRowStatus.RESOLVED, 0),
+            "skipped": statuses.get(SnapshotRowStatus.SKIPPED, 0),
+            "allocations": int(allocations),
+            "units": int(units),
+        },
+        after={
+            "part_id": str(part.id),
+            "part_no": part.part_no,
+            "kind": part.kind.value,
+            "file_name": part.file_name,
+            "first_line_no": part.first_line_no,
+            "last_line_no": part.last_line_no,
+            "removed_at": part.removed_at.isoformat(),
+            "review_revision": snapshot.review_revision,
+            "via_store_id": str(_acting_through(snapshot, via_store_id)),
+        },
+    )
+    return await _part_change(session, snapshot, part)
 
 
 # ---------------------------------------------------------------------------
@@ -697,6 +1391,29 @@ async def _normalize_allocations(
     )
 
 
+async def _shown_split_sizes(
+    session: AsyncSession, *, organization_id: uuid.UUID, row: InventorySnapshotRow
+) -> list[tuple[uuid.UUID, int]] | None:
+    """The split a line shows, with the catalogue's own size for each size as
+    written. A size the catalogue lacks makes it unavailable: the person
+    creates the size, or answers with a note (ADR-0014 §5)."""
+    if row.shown_split is None:
+        return None
+    sizes = await sizes_by_spelling(
+        session,
+        organization_id=organization_id,
+        written={pair["size"] for pair in row.shown_split},
+    )
+    shown = []
+    for pair in row.shown_split:
+        if pair["size"] not in sizes:
+            raise ValidationFailedError(
+                "A size of this line is not in the catalogue", size=pair["size"]
+            )
+        shown.append((sizes[pair["size"]], int(pair["count"])))
+    return shown
+
+
 def _row_state(
     row: InventorySnapshotRow, allocations: list[tuple[uuid.UUID, uuid.UUID, int]]
 ) -> dict[str, Any]:
@@ -721,6 +1438,7 @@ async def resolve_row(
     quantity_basis: SnapshotQuantityBasis | None = None,
     skip_reason: str | None = None,
     note: str | None = None,
+    via_store_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Say what one line means, replacing whatever was said before.
 
@@ -728,7 +1446,7 @@ async def resolve_row(
     optional note, or a reason the line is not stock. Repeating the current
     answer changes nothing; any other answer bumps the list's
     `review_revision`, so an approval can never apply a list that changed
-    after it was checked.
+    after it was checked. A line of a removed file takes no answer.
     """
     observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
     await _authorize(
@@ -737,6 +1455,7 @@ async def resolve_row(
         snapshot=observed,
         permission=Permission.SNAPSHOT_IMPORT,
         command=True,
+        via_store_id=via_store_id,
     )
     snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id, lock=True)
     if snapshot.status is not SnapshotStatus.IN_REVIEW:
@@ -756,6 +1475,13 @@ async def resolve_row(
     ).one_or_none()
     if row is None:
         raise NotFoundError("Unknown line in this stock list", line_no=line_no)
+    if row.status is SnapshotRowStatus.REMOVED:
+        raise SnapshotConflictError(
+            "This line's file was removed from the list",
+            reason="PART_REMOVED",
+            line_no=line_no,
+            part_id=str(row.part_id),
+        )
 
     if (allocations is None) == (skip_reason is None):
         raise ValidationFailedError("Give the line's allocations, or a reason to skip it")
@@ -789,7 +1515,11 @@ async def resolve_row(
             basis=basis,
             quantities=[quantity for _, _, quantity in desired],
             note=new_note,
-            countless=mentions_no_count(evidence.parsed if evidence else None),
+            countless=countless(evidence.parsed if evidence else None, row.reading),
+            answer=desired,
+            shown=await _shown_split_sizes(session, organization_id=scope.organization_id, row=row)
+            if basis is SnapshotQuantityBasis.STATED_BY_SIZE
+            else None,
         )
         elsewhere = await session.scalar(
             select(func.count(InventorySnapshotAllocation.id))
@@ -878,52 +1608,43 @@ async def resolve_row(
 # ---------------------------------------------------------------------------
 
 
-async def _application(
-    session: AsyncSession, *, organization_id: uuid.UUID, snapshot: InventorySnapshot
-) -> dict[str, Any]:
-    """What an applied list became, read back from the ledger — the same way
-    for the approval that wrote it and for every replay of it."""
-    rows = (
-        await session.execute(
-            select(InventorySnapshotAllocation, InventorySnapshotRow.line_no)
-            .join(
-                InventorySnapshotRow,
-                InventorySnapshotRow.id == InventorySnapshotAllocation.snapshot_row_id,
-            )
-            .where(
-                InventorySnapshotRow.inventory_snapshot_id == snapshot.id,
-                InventorySnapshotRow.status == SnapshotRowStatus.RESOLVED,
-            )
-            .order_by(
-                InventorySnapshotRow.line_no,
-                InventorySnapshotAllocation.product_variant_id,
-                InventorySnapshotAllocation.size_id,
-            )
-            .execution_options(populate_existing=True)
+def _counted_allocations(snapshot_id: uuid.UUID) -> Any:
+    """The answers that count: resolved lines of parts not removed. A removed
+    line has none (the database sees to it); the service filters too."""
+    return (
+        select(InventorySnapshotAllocation)
+        .join(
+            InventorySnapshotRow,
+            InventorySnapshotRow.id == InventorySnapshotAllocation.snapshot_row_id,
         )
-    ).all()
-    movements = await opening_balance_movement_ids(
-        session, organization_id=organization_id, snapshot_id=snapshot.id
+        .join(InventorySnapshotPart, InventorySnapshotPart.id == InventorySnapshotRow.part_id)
+        .where(
+            InventorySnapshotRow.inventory_snapshot_id == snapshot_id,
+            InventorySnapshotRow.status == SnapshotRowStatus.RESOLVED,
+            InventorySnapshotPart.removed_at.is_(None),
+        )
     )
-    lines = [
-        {
-            "line_no": line_no,
-            "allocation_id": allocation.id,
-            "product_variant_id": allocation.product_variant_id,
-            "size_id": allocation.size_id,
-            "quantity": allocation.quantity,
-            "stock_lot_id": allocation.stock_lot_id,
-            "movement_id": movements.get(allocation.stock_lot_id)
-            if allocation.stock_lot_id
-            else None,
-        }
-        for allocation, line_no in rows
-    ]
-    return {"lines": lines, "units": sum(line["quantity"] for line in lines)}
+
+
+async def _application(session: AsyncSession, *, snapshot: InventorySnapshot) -> dict[str, Any]:
+    """What an applied list became, in all: units and allocations. The lines
+    themselves are read by pages (`list_application`)."""
+    counted = _counted_allocations(snapshot.id).subquery()
+    allocations, units = (
+        await session.execute(
+            select(func.count(counted.c.id), func.coalesce(func.sum(counted.c.quantity), 0))
+        )
+    ).one()
+    return {"units": int(units), "allocations": int(allocations)}
 
 
 async def approve_snapshot(
-    session: AsyncSession, *, scope: RequestScope, snapshot_id: uuid.UUID, expected_revision: int
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    expected_revision: int,
+    via_store_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Turn the whole list into opening stock, or refuse and change nothing.
 
@@ -931,7 +1652,8 @@ async def approve_snapshot(
     same approval repeated returns what it did; an approval of any other
     revision is refused. Invariant I17 holds by construction: the only thing
     this can write is `OPENING_BALANCE` (`inventory.apply_opening_balance`),
-    and the database refuses an opening balance that names no list.
+    and the database refuses an opening balance that names no list. A
+    removed file's lines are not part of it.
     """
     if expected_revision < 0:
         raise ValidationFailedError("A review revision is never negative")
@@ -942,6 +1664,7 @@ async def approve_snapshot(
         snapshot=observed,
         permission=Permission.SNAPSHOT_APPROVE,
         command=True,
+        via_store_id=via_store_id,
     )
     snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id, lock=True)
     assert snapshot.acting_store_id is not None and snapshot.location_id is not None
@@ -955,9 +1678,7 @@ async def approve_snapshot(
             )
         return {
             **await _snapshot_view(session, snapshot),
-            "application": await _application(
-                session, organization_id=scope.organization_id, snapshot=snapshot
-            ),
+            "application": await _application(session, snapshot=snapshot),
         }
     if snapshot.status is not SnapshotStatus.IN_REVIEW:
         raise SnapshotConflictError(
@@ -973,9 +1694,14 @@ async def approve_snapshot(
         (
             await session.scalars(
                 select(InventorySnapshotRow.line_no)
+                .join(
+                    InventorySnapshotPart,
+                    InventorySnapshotPart.id == InventorySnapshotRow.part_id,
+                )
                 .where(
                     InventorySnapshotRow.inventory_snapshot_id == snapshot_id,
                     InventorySnapshotRow.status.in_(OPEN_ROW_STATUSES),
+                    InventorySnapshotPart.removed_at.is_(None),
                 )
                 .order_by(InventorySnapshotRow.line_no)
             )
@@ -991,15 +1717,7 @@ async def approve_snapshot(
     allocations = list(
         (
             await session.scalars(
-                select(InventorySnapshotAllocation)
-                .join(
-                    InventorySnapshotRow,
-                    InventorySnapshotRow.id == InventorySnapshotAllocation.snapshot_row_id,
-                )
-                .where(
-                    InventorySnapshotRow.inventory_snapshot_id == snapshot_id,
-                    InventorySnapshotRow.status == SnapshotRowStatus.RESOLVED,
-                )
+                _counted_allocations(snapshot_id)
                 .order_by(
                     InventorySnapshotRow.line_no,
                     InventorySnapshotAllocation.product_variant_id,
@@ -1071,6 +1789,22 @@ async def approve_snapshot(
     snapshot.decided_at = _now()
     await session.flush()
     view = await _snapshot_view(session, snapshot)
+    parts = (
+        await session.scalars(
+            select(InventorySnapshotPart)
+            .where(
+                InventorySnapshotPart.inventory_snapshot_id == snapshot.id,
+                InventorySnapshotPart.removed_at.is_(None),
+            )
+            .order_by(InventorySnapshotPart.part_no)
+        )
+    ).all()
+    lines_removed = await session.scalar(
+        select(func.count()).where(
+            InventorySnapshotRow.inventory_snapshot_id == snapshot.id,
+            InventorySnapshotRow.status == SnapshotRowStatus.REMOVED,
+        )
+    )
     await audit.record(
         session,
         organization_id=scope.organization_id,
@@ -1088,40 +1822,54 @@ async def approve_snapshot(
             "source_document_ref": snapshot.source_document_ref,
             "lines_resolved": view["summary"]["resolved"],
             "lines_skipped": view["summary"]["skipped"],
+            "lines_removed": int(lines_removed or 0),
             "allocations": len(allocations),
             "units": sum(allocation.quantity for allocation in allocations),
             "lines_by_basis": view["summary"]["lines_by_basis"],
             "units_by_basis": view["summary"]["units_by_basis"],
+            "parts": [
+                {
+                    "part_id": str(part.id),
+                    "part_no": part.part_no,
+                    "kind": part.kind.value,
+                    "file_name": part.file_name,
+                    "lines": part.line_count,
+                }
+                for part in parts
+            ],
+            "via_store_id": str(_acting_through(snapshot, via_store_id)),
         },
     )
     return {
         **view,
-        "application": await _application(
-            session, organization_id=scope.organization_id, snapshot=snapshot
-        ),
+        "application": {
+            "units": sum(allocation.quantity for allocation in allocations),
+            "allocations": len(allocations),
+        },
     }
 
 
 async def reject_snapshot(
-    session: AsyncSession, *, scope: RequestScope, snapshot_id: uuid.UUID, reason: str
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    reason: str,
+    via_store_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Close a list without turning any of it into stock. The evidence stays.
 
-    Needs only reach, not `can_receive` or an open warehouse: a list for a
-    paused warehouse can still be abandoned.
+    Through its own store, needs only reach, not `can_receive` or an open
+    warehouse: a list for a paused warehouse can still be abandoned.
     """
     clean = _clean_text(reason, limit=MAX_NOTE, what="The reason", required=True)
     observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
     assert observed.acting_store_id is not None
-    await _authorize(
-        session,
-        scope=scope,
-        snapshot=observed,
-        permission=_reader_permission(scope, observed.acting_store_id),
-        command=False,
-    )
+    await _authorize_reader(session, scope=scope, snapshot=observed, via_store_id=via_store_id)
     await validate_active_stores(
-        session, organization_id=scope.organization_id, store_ids={observed.acting_store_id}
+        session,
+        organization_id=scope.organization_id,
+        store_ids={observed.acting_store_id, _acting_through(observed, via_store_id)},
     )
     snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id, lock=True)
     if snapshot.status is SnapshotStatus.REJECTED:
@@ -1152,6 +1900,7 @@ async def reject_snapshot(
             "status": SnapshotStatus.REJECTED.value,
             "acting_store_id": str(snapshot.acting_store_id),
             "location_id": str(snapshot.location_id),
+            "via_store_id": str(_acting_through(snapshot, via_store_id)),
         },
         reason=clean,
     )
@@ -1164,23 +1913,103 @@ async def reject_snapshot(
 
 
 async def get_snapshot(
-    session: AsyncSession, *, scope: RequestScope, snapshot_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    via_store_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id)
-    assert snapshot.acting_store_id is not None
-    await _authorize(
-        session,
-        scope=scope,
-        snapshot=snapshot,
-        permission=_reader_permission(scope, snapshot.acting_store_id),
-        command=False,
-    )
+    await _authorize_reader(session, scope=scope, snapshot=snapshot, via_store_id=via_store_id)
     view = await _snapshot_view(session, snapshot)
     if snapshot.status is SnapshotStatus.APPLIED:
-        view["application"] = await _application(
-            session, organization_id=scope.organization_id, snapshot=snapshot
-        )
+        view["application"] = await _application(session, snapshot=snapshot)
     return view
+
+
+async def list_parts(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    via_store_id: uuid.UUID | None = None,
+) -> list[dict[str, Any]]:
+    """Every part of the list, removed ones included, in the order added.
+    At most `MAX_LIST_PARTS`, so one page."""
+    snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id)
+    await _authorize_reader(session, scope=scope, snapshot=snapshot, via_store_id=via_store_id)
+    parts = (
+        await session.scalars(
+            select(InventorySnapshotPart)
+            .where(InventorySnapshotPart.inventory_snapshot_id == snapshot_id)
+            .order_by(InventorySnapshotPart.part_no)
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+    return await _part_views(session, snapshot_id=snapshot_id, parts=parts)
+
+
+async def list_application(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    snapshot_id: uuid.UUID,
+    via_store_id: uuid.UUID | None = None,
+    offset: int = 0,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """What an applied list became, a page at a time, in the list's own
+    order: each allocation, the lot it became and the movement that brought
+    it in. A list not applied became nothing."""
+    if not 1 <= limit <= 500 or not 0 <= offset <= MAX_LIST_ALLOCATIONS:
+        raise ValidationFailedError("Invalid page")
+    snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id)
+    await _authorize_reader(session, scope=scope, snapshot=snapshot, via_store_id=via_store_id)
+    if snapshot.status is not SnapshotStatus.APPLIED:
+        return {"items": [], "has_more": False}
+    rows = (
+        await session.execute(
+            select(InventorySnapshotAllocation, InventorySnapshotRow.line_no)
+            .join(
+                InventorySnapshotRow,
+                InventorySnapshotRow.id == InventorySnapshotAllocation.snapshot_row_id,
+            )
+            .join(InventorySnapshotPart, InventorySnapshotPart.id == InventorySnapshotRow.part_id)
+            .where(
+                InventorySnapshotRow.inventory_snapshot_id == snapshot.id,
+                InventorySnapshotRow.status == SnapshotRowStatus.RESOLVED,
+                InventorySnapshotPart.removed_at.is_(None),
+            )
+            .order_by(
+                InventorySnapshotRow.line_no,
+                InventorySnapshotAllocation.product_variant_id,
+                InventorySnapshotAllocation.size_id,
+            )
+            .limit(limit + 1)
+            .offset(offset)
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+    movements = await opening_balance_movement_ids(
+        session, organization_id=scope.organization_id, snapshot_id=snapshot.id
+    )
+    return {
+        "items": [
+            {
+                "line_no": line_no,
+                "allocation_id": allocation.id,
+                "product_variant_id": allocation.product_variant_id,
+                "size_id": allocation.size_id,
+                "quantity": allocation.quantity,
+                "stock_lot_id": allocation.stock_lot_id,
+                "movement_id": movements.get(allocation.stock_lot_id)
+                if allocation.stock_lot_id
+                else None,
+            }
+            for allocation, line_no in rows[:limit]
+        ],
+        "has_more": len(rows) > limit,
+    }
 
 
 async def list_lines(
@@ -1189,26 +2018,32 @@ async def list_lines(
     scope: RequestScope,
     snapshot_id: uuid.UUID,
     status: SnapshotRowStatus | None = None,
+    part_id: uuid.UUID | None = None,
+    via_store_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """A page of the list, in its own order, with each line's evidence and answer."""
-    if not 1 <= limit <= 200 or not 0 <= offset <= MAX_LINES:
+    """A page of the list, in its own order, with each line's evidence and answer.
+
+    A removed file's lines are left out unless asked for: by `status`
+    `REMOVED`, or by `part_id` naming that file.
+    """
+    if not 1 <= limit <= 200 or not 0 <= offset <= MAX_LIST_ROWS:
         raise ValidationFailedError("Invalid page")
     snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id)
-    assert snapshot.acting_store_id is not None
-    await _authorize(
-        session,
-        scope=scope,
-        snapshot=snapshot,
-        permission=_reader_permission(scope, snapshot.acting_store_id),
-        command=False,
-    )
+    await _authorize_reader(session, scope=scope, snapshot=snapshot, via_store_id=via_store_id)
     query = select(InventorySnapshotRow).where(
         InventorySnapshotRow.inventory_snapshot_id == snapshot_id
     )
+    removed_part = False
+    if part_id is not None:
+        part = await _load_part(session, scope=scope, snapshot_id=snapshot_id, part_id=part_id)
+        removed_part = part.removed_at is not None
+        query = query.where(InventorySnapshotRow.part_id == part_id)
     if status is not None:
         query = query.where(InventorySnapshotRow.status == status)
+    elif not removed_part:
+        query = query.where(InventorySnapshotRow.status != SnapshotRowStatus.REMOVED)
     rows = list(
         (
             await session.scalars(
@@ -1230,21 +2065,52 @@ async def list_lines(
     }
 
 
+async def _readable_places(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    store_id: uuid.UUID,
+    location_ids: Sequence[uuid.UUID],
+    capability: LocationCapability | None,
+    permission: Permission,
+) -> set[uuid.UUID]:
+    readable: set[uuid.UUID] = set()
+    for location_id in sorted(set(location_ids)):
+        try:
+            await require_stock_access(
+                session,
+                scope=scope,
+                store_id=store_id,
+                location_ids={location_id},
+                capability=capability,
+                permission=permission,
+            )
+        except DomainError:
+            continue
+        readable.add(location_id)
+    return readable
+
+
 async def list_snapshots(
     session: AsyncSession,
     *,
     scope: RequestScope,
     store_id: uuid.UUID,
     status: SnapshotStatus | None = None,
+    location_id: uuid.UUID | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """This store's lists, newest first; a list at a warehouse the person may
-    not see — a private one, a revoked one — is left out, not refused.
+    """The lists a store sees, newest first: its own, and every list waiting
+    or decided at a warehouse it may import into (ADR-0014 §7).
 
-    Left out *in the query*, so the page and `has_more` say nothing about the
-    lists left out. Each warehouse is authorized exactly as a single read of
-    one of its lists would be (`_authorize`), once per warehouse.
+    Its own lists follow the reach rule, and a list at a warehouse the person
+    may not see — a private one, a revoked one — is left out, not refused.
+    Another store's list is seen through this store exactly as a single read
+    of it through this store would be: `can_receive` here, and the person's
+    permission under the private rule. Each warehouse is authorized once.
+    Both are left out *in the query*, so the page and `has_more` say nothing
+    about the lists left out. `location_id` answers «what waits here».
     """
     if not 1 <= limit <= 100 or not 0 <= offset <= 10_000:
         raise ValidationFailedError("Invalid page")
@@ -1259,23 +2125,39 @@ async def list_snapshots(
         .where(*mine, InventorySnapshot.location_id.is_not(None))
         .distinct()
     )
-    readable: set[uuid.UUID] = set()
-    for location_id in sorted(place for place in places if place is not None):
-        try:
-            await require_stock_access(
-                session,
-                scope=scope,
-                store_id=store_id,
-                location_ids={location_id},
-                capability=None,
-                permission=permission,
-            )
-        except DomainError:
-            continue
-        readable.add(location_id)
-    query = select(InventorySnapshot).where(*mine, InventorySnapshot.location_id.in_(readable))
+    own = await _readable_places(
+        session,
+        scope=scope,
+        store_id=store_id,
+        location_ids=[place for place in places if place is not None],
+        capability=None,
+        permission=permission,
+    )
+    shared = await _readable_places(
+        session,
+        scope=scope,
+        store_id=store_id,
+        location_ids=await accessible_locations(
+            session,
+            organization_id=scope.organization_id,
+            store_id=store_id,
+            capability=LocationCapability.RECEIVE,
+        ),
+        capability=LocationCapability.RECEIVE,
+        permission=permission,
+    )
+    query = select(InventorySnapshot).where(
+        InventorySnapshot.organization_id == scope.organization_id,
+        InventorySnapshot.acting_store_id.is_not(None),
+        or_(
+            and_(*mine, InventorySnapshot.location_id.in_(own)),
+            InventorySnapshot.location_id.in_(shared),
+        ),
+    )
     if status is not None:
         query = query.where(InventorySnapshot.status == status)
+    if location_id is not None:
+        query = query.where(InventorySnapshot.location_id == location_id)
     snapshots = list(
         (
             await session.scalars(
@@ -1286,27 +2168,50 @@ async def list_snapshots(
             )
         ).all()
     )
+    names = await store_names(
+        session,
+        organization_id=scope.organization_id,
+        store_ids={snapshot.acting_store_id for snapshot in snapshots if snapshot.acting_store_id},
+    )
     return {
-        "items": [await _snapshot_view(session, snapshot) for snapshot in snapshots[:limit]],
+        "items": [
+            await _snapshot_view(
+                session,
+                snapshot,
+                store_name=names.get(snapshot.acting_store_id)
+                if snapshot.acting_store_id
+                else None,
+            )
+            for snapshot in snapshots[:limit]
+        ],
         "has_more": len(snapshots) > limit,
     }
 
 
 __all__ = [
     "MAX_ALLOCATIONS",
-    "MAX_LINES",
     "MAX_LINE_CHARS",
     "MAX_LIST_ALLOCATIONS",
-    "MAX_LIST_CHARS",
+    "MAX_LIST_LINES",
+    "MAX_LIST_PARTS",
+    "MAX_LIST_ROWS",
+    "MAX_PART_LINES",
+    "MAX_PART_TEXT_CHARS",
+    "MAX_QUANTITY",
+    "SEVERAL_OPTIONS",
     "AllocationInput",
+    "add_part",
     "approve_snapshot",
     "check_basis",
     "get_snapshot",
     "import_snapshot",
+    "list_application",
     "list_lines",
+    "list_parts",
     "list_snapshots",
     "mentions_no_count",
     "reject_snapshot",
+    "remove_part",
     "request_fingerprint",
     "resolve_row",
     "source_quantity",

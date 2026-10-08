@@ -1,0 +1,231 @@
+{
+  "measured_at": "2026-10-08T20:19:53+00:00",
+  "database": "birka_json_perf",
+  "caps_for_the_run": {
+    "MAX_LIST_ALLOCATIONS": 10000,
+    "MAX_LIST_LINES": 11000,
+    "MAX_LIST_ROWS": 11000
+  },
+  "rule": {
+    "approval_s": 10.0,
+    "statement_s": 5.0,
+    "add_part_s": 5.0,
+    "page_s": 0.5
+  },
+  "results": [
+    {
+      "allocations": 2000,
+      "approvals": [
+        {
+          "seconds": 2.755,
+          "statements": 14042,
+          "slowest_statement_s": 0.0731,
+          "slowest_sql": "SELECT inventory.location_id, inventory.product_variant_id, inventory.size_id, inventory.reserved_quantity FROM inventory WHERE (inventory.location_id, inventor",
+          "reply_bytes": 1108
+        },
+        {
+          "seconds": 2.704,
+          "statements": 14042,
+          "slowest_statement_s": 0.0576,
+          "slowest_sql": "UPDATE inventory_snapshot_allocation SET stock_lot_id=$1::UUID WHERE inventory_snapshot_allocation.id = $2::UUID",
+          "reply_bytes": 1108
+        },
+        {
+          "seconds": 2.6761,
+          "statements": 14042,
+          "slowest_statement_s": 0.0565,
+          "slowest_sql": "UPDATE inventory_snapshot_allocation SET stock_lot_id=$1::UUID WHERE inventory_snapshot_allocation.id = $2::UUID",
+          "reply_bytes": 1108
+        }
+      ],
+      "pages": {
+        "GET /snapshots/{id}": {
+          "seconds": 0.0417,
+          "statements": 10,
+          "slowest_statement_s": 0.0048,
+          "slowest_sql": "SELECT anon_1.basis, count(*) AS count_1, sum(anon_1.allocations) AS sum_1, sum(anon_1.units) AS sum_2, sum(CASE WHEN (anon_1.stated IS NOT NULL AND anon_1.stat",
+          "reply_bytes": 1021
+        },
+        "GET lines, last page": {
+          "seconds": 0.0167,
+          "statements": 15,
+          "slowest_statement_s": 0.0036,
+          "slowest_sql": "SELECT product_variant.id, product_variant.length_cm, product_variant.attributes, product_family.organization_id, product_family.id AS family_id, product_family",
+          "reply_bytes": 53492
+        },
+        "GET parts": {
+          "seconds": 0.0079,
+          "statements": 10,
+          "slowest_statement_s": 0.0025,
+          "slowest_sql": "SELECT anon_1.part_id, count(*) AS count_1 FROM (SELECT inventory_snapshot_row.part_id AS part_id, min(CAST(inventory_snapshot_row.part_id AS TEXT)) OVER (PARTI",
+          "reply_bytes": 1668
+        },
+        "GET application, first 500": {
+          "seconds": 0.0118,
+          "statements": 8,
+          "slowest_statement_s": 0.0034,
+          "slowest_sql": "SELECT inventory_snapshot_allocation.snapshot_row_id, inventory_snapshot_allocation.product_variant_id, inventory_snapshot_allocation.size_id, inventory_snapsho",
+          "reply_bytes": 149919
+        }
+      },
+      "add_part": {
+        "seconds": 0.2892,
+        "statements": 30,
+        "slowest_statement_s": 0.0491,
+        "slowest_sql": "INSERT INTO inventory_snapshot_row (inventory_snapshot_id, part_id, line_no, raw_input_id, parse_result_id, quantity_total, quantity_state, status, quantity_bas",
+        "reply_bytes": 1599
+      },
+      "remove_part": {
+        "seconds": 0.0494,
+        "statements": 26,
+        "slowest_statement_s": 0.0247,
+        "slowest_sql": "UPDATE inventory_snapshot_row SET status=$1::snapshot_row_status, quantity_basis=$2::snapshot_quantity_basis, resolution_note=$3::VARCHAR, resolved_by_user_id=$",
+        "reply_bytes": 1665
+      },
+      "slowest_approval_s": 2.755,
+      "slowest_statement_s": 0.0731,
+      "approval_passes": true,
+      "add_part_passes": true,
+      "pages_pass": true
+    },
+    {
+      "allocations": 5000,
+      "approvals": [
+        {
+          "seconds": 7.0673,
+          "statements": 35045,
+          "slowest_statement_s": 0.1254,
+          "slowest_sql": "UPDATE inventory_snapshot_allocation SET stock_lot_id=$1::UUID WHERE inventory_snapshot_allocation.id = $2::UUID",
+          "reply_bytes": 1108
+        },
+        {
+          "seconds": 7.6198,
+          "statements": 35045,
+          "slowest_statement_s": 0.1441,
+          "slowest_sql": "UPDATE inventory_snapshot_allocation SET stock_lot_id=$1::UUID WHERE inventory_snapshot_allocation.id = $2::UUID",
+          "reply_bytes": 1108
+        },
+        {
+          "seconds": 7.6289,
+          "statements": 35045,
+          "slowest_statement_s": 0.1503,
+          "slowest_sql": "SELECT inventory.location_id, inventory.product_variant_id, inventory.size_id, inventory.reserved_quantity FROM inventory WHERE (inventory.location_id, inventor",
+          "reply_bytes": 1108
+        }
+      ],
+      "pages": {
+        "GET /snapshots/{id}": {
+          "seconds": 0.0549,
+          "statements": 10,
+          "slowest_statement_s": 0.0099,
+          "slowest_sql": "SELECT anon_1.basis, count(*) AS count_1, sum(anon_1.allocations) AS sum_1, sum(anon_1.units) AS sum_2, sum(CASE WHEN (anon_1.stated IS NOT NULL AND anon_1.stat",
+          "reply_bytes": 1021
+        },
+        "GET lines, last page": {
+          "seconds": 0.1185,
+          "statements": 15,
+          "slowest_statement_s": 0.095,
+          "slowest_sql": "SELECT inventory_snapshot_row.inventory_snapshot_id, inventory_snapshot_row.part_id, inventory_snapshot_row.line_no, inventory_snapshot_row.raw_input_id, invent",
+          "reply_bytes": 53592
+        },
+        "GET parts": {
+          "seconds": 0.0112,
+          "statements": 10,
+          "slowest_statement_s": 0.0056,
+          "slowest_sql": "SELECT anon_1.part_id, count(*) AS count_1 FROM (SELECT inventory_snapshot_row.part_id AS part_id, min(CAST(inventory_snapshot_row.part_id AS TEXT)) OVER (PARTI",
+          "reply_bytes": 3327
+        },
+        "GET application, first 500": {
+          "seconds": 0.0181,
+          "statements": 8,
+          "slowest_statement_s": 0.0054,
+          "slowest_sql": "SELECT inventory_snapshot_allocation.snapshot_row_id, inventory_snapshot_allocation.product_variant_id, inventory_snapshot_allocation.size_id, inventory_snapsho",
+          "reply_bytes": 149919
+        }
+      },
+      "add_part": {
+        "seconds": 0.252,
+        "statements": 30,
+        "slowest_statement_s": 0.0491,
+        "slowest_sql": "INSERT INTO inventory_snapshot_row (inventory_snapshot_id, part_id, line_no, raw_input_id, parse_result_id, quantity_total, quantity_state, status, quantity_bas",
+        "reply_bytes": 1599
+      },
+      "remove_part": {
+        "seconds": 0.0494,
+        "statements": 26,
+        "slowest_statement_s": 0.0242,
+        "slowest_sql": "UPDATE inventory_snapshot_row SET status=$1::snapshot_row_status, quantity_basis=$2::snapshot_quantity_basis, resolution_note=$3::VARCHAR, resolved_by_user_id=$",
+        "reply_bytes": 1665
+      },
+      "slowest_approval_s": 7.6289,
+      "slowest_statement_s": 0.1503,
+      "approval_passes": true,
+      "add_part_passes": true,
+      "pages_pass": true
+    },
+    {
+      "allocations": 10000,
+      "approvals": [
+        {
+          "status": 500,
+          "error": "{\"code\": \"INTERNAL_ERROR\", \"message\": \"Внутрішня помилка сервера.\", \"details\": {}}",
+          "seconds": 7.2966,
+          "statements": 40039,
+          "slowest_statement_s": 0.0902,
+          "slowest_sql": "SELECT stock_lot.organization_id, stock_lot.location_id, stock_lot.product_variant_id, stock_lot.size_id, stock_lot.acquisition_type, stock_lot.source_identity_"
+        }
+      ],
+      "pages": {
+        "GET /snapshots/{id}": {
+          "seconds": 0.0434,
+          "statements": 10,
+          "slowest_statement_s": 0.005,
+          "slowest_sql": "SELECT anon_1.basis, count(*) AS count_1, sum(anon_1.allocations) AS sum_1, sum(anon_1.units) AS sum_2, sum(CASE WHEN (anon_1.stated IS NOT NULL AND anon_1.stat",
+          "reply_bytes": 1029
+        },
+        "GET lines, last page": {
+          "seconds": 0.0134,
+          "statements": 15,
+          "slowest_statement_s": 0.0036,
+          "slowest_sql": "SELECT inventory_snapshot_row.inventory_snapshot_id, inventory_snapshot_row.part_id, inventory_snapshot_row.line_no, inventory_snapshot_row.raw_input_id, invent",
+          "reply_bytes": 53645
+        },
+        "GET parts": {
+          "seconds": 0.0142,
+          "statements": 10,
+          "slowest_statement_s": 0.0082,
+          "slowest_sql": "SELECT anon_1.part_id, count(*) AS count_1 FROM (SELECT inventory_snapshot_row.part_id AS part_id, min(CAST(inventory_snapshot_row.part_id AS TEXT)) OVER (PARTI",
+          "reply_bytes": 6100
+        }
+      },
+      "add_part": {
+        "seconds": 0.3339,
+        "statements": 30,
+        "slowest_statement_s": 0.055,
+        "slowest_sql": "INSERT INTO parse_result (raw_input_id, parser_version, parsed, field_confidence, unclassified, id) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::JSONB, $5::JSO",
+        "reply_bytes": 1611
+      },
+      "remove_part": {
+        "seconds": 0.0603,
+        "statements": 26,
+        "slowest_statement_s": 0.0247,
+        "slowest_sql": "UPDATE inventory_snapshot_row SET status=$1::snapshot_row_status, quantity_basis=$2::snapshot_quantity_basis, resolution_note=$3::VARCHAR, resolved_by_user_id=$",
+        "reply_bytes": 1677
+      },
+      "refused": {
+        "status": 500,
+        "error": "{\"code\": \"INTERNAL_ERROR\", \"message\": \"Внутрішня помилка сервера.\", \"details\": {}}",
+        "seconds": 7.2966,
+        "statements": 40039,
+        "slowest_statement_s": 0.0902,
+        "slowest_sql": "SELECT stock_lot.organization_id, stock_lot.location_id, stock_lot.product_variant_id, stock_lot.size_id, stock_lot.acquisition_type, stock_lot.source_identity_"
+      },
+      "slowest_approval_s": 7.2966,
+      "slowest_statement_s": 0.0902,
+      "approval_passes": false,
+      "add_part_passes": true,
+      "pages_pass": true
+    }
+  ],
+  "largest_passing": 5000
+}

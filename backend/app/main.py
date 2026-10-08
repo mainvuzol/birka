@@ -90,10 +90,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         The shape FastAPI produces is kept exactly — clients already parse it —
         and only values that cannot be encoded are replaced.
+
+        A parser's file (ADR-0014 §13) is not sent back: under `file`, each
+        refusal keeps its `type`, `loc`, `msg` and `ctx` (its line, as
+        `ctx.line`), and loses `input` and `url`, so a refused file of up to
+        a megabyte is not echoed to the phone that sent it.
         """
-        return JSONResponse(status_code=422, content={"detail": _encodable(exc.errors())})
+        return JSONResponse(
+            status_code=422,
+            content={"detail": _encodable([_without_file(error) for error in exc.errors()])},
+        )
 
     return app
+
+
+def _without_file(error: Any) -> Any:
+    """A refusal of a stock file, without the file's content echoed in it."""
+    if isinstance(error, dict) and tuple(error.get("loc", ()))[:2] == ("body", "file"):
+        return {key: item for key, item in error.items() if key not in ("input", "url")}
+    return error
 
 
 def _encodable(value: Any) -> Any:

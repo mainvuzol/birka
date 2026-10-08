@@ -19,7 +19,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ValidationFailedError
@@ -196,15 +196,47 @@ async def repeated_lines(
     *,
     organization_id: uuid.UUID,
     raw_input_ids: Collection[uuid.UUID],
+    among: Select[tuple[uuid.UUID]] | None = None,
 ) -> dict[uuid.UUID, int]:
     """For each line, how many of the given lines have exactly its text.
 
     A list may repeat a line on purpose — one line per piece — or by a slip of
     transcription. Which, only a person can say; this only makes the repeat
     visible, beside each line it concerns.
+
+    `among` counts across the lines it selects instead (a query of raw input
+    ids), in the database: a page of a long list is then compared with the
+    whole list without sending every line of it on every page (ADR-0014 §18).
+    A given line it does not select is counted among them all the same, and
+    may be counted 0 times.
     """
     if not raw_input_ids:
         return {}
+    if among is not None:
+        given = (
+            await session.execute(
+                select(RawInput.id, RawInput.content_hash).where(
+                    RawInput.id.in_(list(raw_input_ids)),
+                    RawInput.organization_id == organization_id,
+                )
+            )
+        ).all()
+        counted = dict(
+            (
+                await session.execute(
+                    select(RawInput.content_hash, func.count())
+                    .where(
+                        RawInput.id.in_(among),
+                        RawInput.organization_id == organization_id,
+                        RawInput.content_hash.in_({content_hash for _, content_hash in given}),
+                    )
+                    .group_by(RawInput.content_hash)
+                )
+            )
+            .tuples()
+            .all()
+        )
+        return {raw_input_id: counted.get(content_hash, 0) for raw_input_id, content_hash in given}
     rows = (
         await session.execute(
             select(RawInput.id, RawInput.content_hash).where(

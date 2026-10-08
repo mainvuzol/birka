@@ -1,0 +1,36 @@
+measure_opening_approval, 2026-10-08T20:09:06+00:00
+machine: macOS-26.7.1-arm64-arm-64bit (arm64), 10 CPUs, Apple M5, 32 GiB
+python: 3.12.14 (CPython)
+postgresql: PostgreSQL 16.2 on aarch64-apple-darwin23.5.0, compiled by Apple clang version 15.0.0 (clang-1500.0.40.1), 64-bit
+settings: fsync on, synchronous_commit on, shared_buffers 128MB, work_mem 4MB, max_wal_size 1GB, statement_timeout 30s
+app: environment local, statement_timeout 30 s, in process (httpx.ASGITransport)
+caps raised for the run: MAX_LIST_ALLOCATIONS 10000, MAX_LIST_LINES 11000, MAX_LIST_ROWS 11000
+rule: approval <= 10 s and no statement > 5 s; adding a part <= 5 s; a page <= 0.5 s
+seeding …
+seeded 10000 stock keys (2500 models × 4 sizes)
+
+2000 allocations, 3 runs
+  run 1: built 2000 lines in 31.5 s (slowest part added through the service 0.21 s)
+  run 1: approve 2.75 s, 14042 statements, slowest 0.073 s, reply 1108 bytes
+  run 2: built 2000 lines in 34.0 s (slowest part added through the service 0.18 s)
+  run 2: approve 2.70 s, 14042 statements, slowest 0.058 s, reply 1108 bytes
+  run 3: built 2000 lines in 35.4 s (slowest part added through the service 0.25 s)
+  run 3: approve 2.68 s, 14042 statements, slowest 0.057 s, reply 1108 bytes
+  2000: slowest approval 2.75 s, slowest statement 0.073 s -> PASS; adding a 1 000-line file 0.29 s, removing it 0.05 s; pages GET /snapshots/{id} 0.042 s, GET lines, last page 0.017 s, GET parts 0.008 s, GET application, first 500 0.012 s
+
+5000 allocations, 3 runs
+  run 1: built 5000 lines in 100.9 s (slowest part added through the service 0.28 s)
+  run 1: approve 7.07 s, 35045 statements, slowest 0.125 s, reply 1108 bytes
+  run 2: built 5000 lines in 94.2 s (slowest part added through the service 0.30 s)
+  run 2: approve 7.62 s, 35045 statements, slowest 0.144 s, reply 1108 bytes
+  run 3: built 5000 lines in 98.0 s (slowest part added through the service 0.30 s)
+  run 3: approve 7.63 s, 35045 statements, slowest 0.150 s, reply 1108 bytes
+  5000: slowest approval 7.63 s, slowest statement 0.150 s -> PASS; adding a 1 000-line file 0.25 s, removing it 0.05 s; pages GET /snapshots/{id} 0.055 s, GET lines, last page 0.118 s, GET parts 0.011 s, GET application, first 500 0.018 s
+
+10000 allocations, 3 runs
+  run 1: built 10000 lines in 208.6 s (slowest part added through the service 0.29 s)
+  run 1: approve REFUSED after 7.30 s, 40039 statements: HTTP 500 {"code": "INTERNAL_ERROR", "message": "Внутрішня помилка сервера.", "details": {}}
+  not repeated: the refusal does not depend on the run
+  10000: refused, slowest approval 7.30 s, slowest statement 0.090 s -> FAIL; adding a 1 000-line file 0.33 s, removing it 0.06 s; pages GET /snapshots/{id} 0.043 s, GET lines, last page 0.013 s, GET parts 0.014 s
+
+largest size that passes: 5000

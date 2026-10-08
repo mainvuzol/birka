@@ -12,11 +12,21 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.api.v1.snapshots import AllocationPayload, ImportRequest, ResolutionRequest
+from app.api.v1.snapshots import (
+    AddPartRequest,
+    AllocationPayload,
+    ImportRequest,
+    RemovePartRequest,
+    ResolutionRequest,
+)
 from app.core.errors import ValidationFailedError
 from app.modules.catalog.parser import parse_catalog_line
+from app.modules.snapshots import service
 from app.modules.snapshots.models import SnapshotQuantityBasis, SnapshotQuantityState
+from app.modules.snapshots.rules import lines_import_request
 from app.modules.snapshots.service import (
+    MAX_PART_LINES,
+    MAX_PART_TEXT_CHARS,
     check_basis,
     mentions_no_count,
     request_fingerprint,
@@ -30,6 +40,13 @@ STATED = SnapshotQuantityBasis.STATED
 LINE_IMPLIES_ONE = SnapshotQuantityBasis.LINE_IMPLIES_ONE
 RECOUNTED = SnapshotQuantityBasis.RECOUNTED
 OWNER_KNOWLEDGE = SnapshotQuantityBasis.OWNER_KNOWLEDGE
+STATED_BY_SIZE = SnapshotQuantityBasis.STATED_BY_SIZE
+
+A_FILE = {
+    "format": "birka.stock-list",
+    "version": 1,
+    "lines": [{"text": "Лоран M-1 L-2", "photo": "IMG_1.jpg", "photo_line": 1}],
+}
 
 
 @pytest.mark.parametrize(
@@ -145,12 +162,100 @@ def test_an_import_that_is_not_a_list_of_lines_is_refused(lines: list[str]) -> N
 
 
 def test_the_longest_list_the_import_takes() -> None:
+    longest = MAX_PART_TEXT_CHARS // MAX_PART_LINES
     ImportRequest(
         command_id=uuid.uuid4(),
         store_id=uuid.uuid4(),
         location_id=uuid.uuid4(),
-        lines=["x" * 500] * 200,
+        lines=["x" * longest] * MAX_PART_LINES,
     )
+    ImportRequest(
+        command_id=uuid.uuid4(),
+        store_id=uuid.uuid4(),
+        location_id=uuid.uuid4(),
+        lines=["x" * 500] * (MAX_PART_TEXT_CHARS // 500),
+    )
+
+
+def test_a_list_takes_what_its_approval_was_measured_to_write() -> None:
+    """ADR-0014 §10: the largest measured size whose approval passed, and the
+    bounds derived from it. 10 000 answers were refused outright: the
+    ledger's reservation read names every answer in one statement, which
+    PostgreSQL 16 refuses past about 6 500 (2026-10-08 measurement). A raise
+    needs a new measurement, not an edit here."""
+    assert service.MAX_LIST_ALLOCATIONS == 5_000
+    assert service.MAX_LIST_LINES == service.MAX_LIST_ALLOCATIONS // 2 == 2_500
+    assert service.MAX_LIST_ROWS == 3 * service.MAX_LIST_LINES == 7_500
+    assert service.MAX_LIST_PARTS == 1_000
+    # A list's line numbers stay within the API's bounds.
+    assert service.MAX_LIST_ROWS >= service.MAX_LIST_LINES >= MAX_PART_LINES
+
+
+def test_the_lines_import_fingerprint_is_unchanged() -> None:
+    """The retry proof of an import of typed lines, byte for byte as M1-023
+    computed it before ADR-0014, so a retry across the deploy replays
+    (ADR-0014 §8). Computed from `service.request_fingerprint` at 8b32a05,
+    before the service changed."""
+    request = lines_import_request(
+        store_id=uuid.UUID("00000000-0000-4000-8000-000000000001"),
+        location_id=uuid.UUID("00000000-0000-4000-8000-000000000002"),
+        source_document_ref="зошит, сторінка 4",
+        captured_at="осінь 2025",
+        lines=["Лоран шоколад S M L", "Мышка чорний М 2 шт", "Куртки"],
+    )
+
+    assert request_fingerprint(request) == (
+        "7d9102abdb6a2d8eca363ff5d037dc460f5e0ebf9ff1fd467fcc38739ff8d447"
+    )
+
+
+def test_an_import_gives_lines_or_a_file_never_both() -> None:
+    ids = {"command_id": uuid.uuid4(), "store_id": uuid.uuid4(), "location_id": uuid.uuid4()}
+    ImportRequest.model_validate({**ids, "lines": ["Куртки"]})
+    ImportRequest.model_validate({**ids, "file": A_FILE, "file_name": "зошит-1.json"})
+    for invalid in (
+        {},
+        {"lines": ["Куртки"], "file": A_FILE, "file_name": "зошит-1.json"},
+        # A file comes with its name, and only a file does.
+        {"file": A_FILE},
+        {"lines": ["Куртки"], "file_name": "зошит-1.json"},
+        {"file": A_FILE, "file_name": ""},
+        {"file": A_FILE, "file_name": "зошит\n1.json"},
+        {"file": A_FILE, "file_name": "x" * 201},
+        {"lines": None},
+        {"lines": ["x" * 500] * (MAX_PART_TEXT_CHARS // 500 + 1)},
+    ):
+        with pytest.raises(ValidationError):
+            ImportRequest.model_validate({**ids, **invalid})
+
+
+def test_a_part_gives_lines_or_a_file_never_both() -> None:
+    command = {"command_id": uuid.uuid4()}
+    AddPartRequest.model_validate({**command, "lines": ["Куртки"]})
+    AddPartRequest.model_validate(
+        {**command, "lines": ["Куртки"], "source": "сторінка 7", "counted_on": "осінь"}
+    )
+    AddPartRequest.model_validate({**command, "file": A_FILE, "file_name": "зошит-2.json"})
+    for invalid in (
+        {},
+        {"lines": ["Куртки"], "file": A_FILE, "file_name": "зошит-2.json"},
+        {"file": A_FILE},
+        {"lines": ["Куртки"], "file_name": "зошит-2.json"},
+        # A file says where it came from itself.
+        {"file": A_FILE, "file_name": "зошит-2.json", "source": "сторінка 7"},
+        {"file": A_FILE, "file_name": "зошит-2.json", "counted_on": "осінь"},
+        {"lines": ["Куртки"], "source": ""},
+        {"lines": ["Куртки"] * (MAX_PART_LINES + 1)},
+        {"lines": ["Куртки"], "store_id": str(uuid.uuid4())},
+    ):
+        with pytest.raises(ValidationError):
+            AddPartRequest.model_validate({**command, **invalid})
+    with pytest.raises(ValidationError):
+        AddPartRequest.model_validate({"lines": ["Куртки"]})
+    # Removing a part takes no body, and no reason (owner, 2026-10-08).
+    RemovePartRequest.model_validate({})
+    with pytest.raises(ValidationError):
+        RemovePartRequest.model_validate({"reason": "не той зошит"})
 
 
 def test_an_allocation_names_its_size_or_says_it_is_unknown_never_both() -> None:
@@ -270,3 +375,114 @@ def test_an_answer_may_not_claim_more_than_its_basis(
             note=note,
             countless=countless,
         )
+
+
+# --- a split the line's text shows (ADR-0014 §5) -----------------------------
+
+COAT = uuid.UUID("00000000-0000-4000-8000-0000000000c0")
+BOMBER = uuid.UUID("00000000-0000-4000-8000-0000000000b0")
+S, M, L = (uuid.UUID(f"00000000-0000-4000-8000-00000000000{n}") for n in (1, 2, 3))
+
+
+def stated_by_size(
+    answer: list[tuple[uuid.UUID, uuid.UUID, int]],
+    shown: list[tuple[uuid.UUID, int]] | None,
+    *,
+    state: SnapshotQuantityState = UNKNOWN_DISTRIBUTION,
+    total: int | None = 3,
+    note: str | None = None,
+) -> None:
+    check_basis(
+        state=state,
+        stated_total=total,
+        basis=STATED_BY_SIZE,
+        quantities=[quantity for _, _, quantity in answer],
+        note=note,
+        countless=False,
+        answer=answer,
+        shown=shown,
+    )
+
+
+def test_a_split_the_line_shows_may_be_stated_by_size() -> None:
+    """«Лоран M-1 L-2»: one model, one allocation per size, each with its
+    count, and no note (owner, 2026-10-08)."""
+    stated_by_size([(COAT, M, 1), (COAT, L, 2)], [(M, 1), (L, 2)])
+    # In any order the answer comes in.
+    stated_by_size([(COAT, L, 2), (COAT, M, 1)], [(M, 1), (L, 2)])
+    # One size with its count, «Лоран M-3», whatever the line's own state.
+    stated_by_size([(COAT, M, 3)], [(M, 3)], state=UNKNOWN_QUANTITY, total=None)
+    stated_by_size([(COAT, M, 3)], [(M, 3)], state=KNOWN, total=3)
+    # A note may be added; it is not needed.
+    stated_by_size([(COAT, M, 1), (COAT, L, 2)], [(M, 1), (L, 2)], note="як у рядку")
+
+
+@pytest.mark.parametrize(
+    ("answer", "shown"),
+    [
+        # The line shows no split: a typed line, or «M 3».
+        ([(COAT, M, 3)], None),
+        ([(COAT, M, 3)], []),
+        # A split shown with one size twice is no split to take.
+        ([(COAT, M, 1), (COAT, L, 2)], [(M, 1), (M, 2)]),
+        # Another count, a size missing, a size more, another size.
+        ([(COAT, M, 2), (COAT, L, 2)], [(M, 1), (L, 2)]),
+        ([(COAT, M, 1)], [(M, 1), (L, 2)]),
+        ([(COAT, M, 1), (COAT, L, 2), (COAT, S, 1)], [(M, 1), (L, 2)]),
+        ([(COAT, S, 1), (COAT, L, 2)], [(M, 1), (L, 2)]),
+        # Two models: the split names one.
+        ([(COAT, M, 1), (BOMBER, L, 2)], [(M, 1), (L, 2)]),
+        # The same size of two models, the counts summed: still two models.
+        ([(COAT, M, 1), (BOMBER, M, 2)], [(M, 3)]),
+        # The total in one size.
+        ([(COAT, M, 3)], [(M, 1), (L, 2)]),
+    ],
+)
+def test_a_split_stated_by_size_names_every_size_with_its_count_for_one_model(
+    answer: list[tuple[uuid.UUID, uuid.UUID, int]], shown: list[tuple[uuid.UUID, int]] | None
+) -> None:
+    with pytest.raises(ValidationFailedError):
+        stated_by_size(answer, shown)
+    # A note does not make it what the line shows; another basis does.
+    with pytest.raises(ValidationFailedError):
+        stated_by_size(answer, shown, note="власниця знає")
+
+
+def test_a_split_the_line_shows_is_still_not_stated() -> None:
+    """`STATED` keeps its rule: one allocation of the count the line states
+    with its unit. A shown split is `STATED_BY_SIZE`, never `STATED`."""
+    for quantities in ([1, 2], [3]):
+        with pytest.raises(ValidationFailedError):
+            check_basis(
+                state=UNKNOWN_DISTRIBUTION,
+                stated_total=3,
+                basis=STATED,
+                quantities=quantities,
+                note=None,
+                countless=False,
+                answer=[(COAT, M, 1), (COAT, L, 2)],
+                shown=[(M, 1), (L, 2)],
+            )
+
+
+def test_a_split_stated_by_size_says_why_it_is_refused() -> None:
+    """What a refusal says is what the person reads: a line that shows no
+    split asks how the count is known; a split answered otherwise names
+    what it must be."""
+    for shown in (None, []):
+        with pytest.raises(ValidationFailedError, match="does not show its split"):
+            stated_by_size([(COAT, M, 3)], shown)
+        with pytest.raises(ValidationFailedError, match="does not show its split"):
+            stated_by_size([], shown)
+    # A shown split naming one size twice is no split to take, whatever the
+    # answer (a slip of `sizes_by_spelling` must never pass as one).
+    with pytest.raises(ValidationFailedError, match="does not show its split"):
+        stated_by_size([(COAT, M, 1), (COAT, M, 1)], [(M, 1), (M, 1)])
+    for answer in (
+        # The same size twice, before `_normalize_allocations` would refuse it.
+        [(COAT, M, 1), (COAT, M, 1)],
+        [(COAT, M, 1), (BOMBER, M, 1)],
+        [(COAT, M, 2)],
+    ):
+        with pytest.raises(ValidationFailedError, match="names each of its sizes"):
+            stated_by_size(answer, [(M, 1)])

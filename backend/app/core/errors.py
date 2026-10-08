@@ -374,9 +374,14 @@ class SnapshotConflictError(DomainError):
     """The list is not in a state where this can happen.
 
     `details.reason` says which: `ROWS_NEED_REVIEW`, `NOTHING_TO_APPLY`,
-    `REVISION_CHANGED` or `ALREADY_DECIDED`. One code with a reason rather than
-    four codes, because a client does the same thing for all of them — show
-    the list again.
+    `REVISION_CHANGED` or `ALREADY_DECIDED`; and for a list filled by parts
+    (ADR-0014): `PART_DUPLICATE` (the same file is already in the list,
+    naming it), `LIST_FULL` (no room: `details.what` is `lines`, `rows` or
+    `parts`, with the limit and the counts), `LAST_PART` (the last file is
+    not removed; the list is rejected instead) and `PART_REMOVED` (a removed
+    file's line takes no answer). One code with a reason rather than a code
+    each, because a client does the same thing for all of them — show the
+    list again — and says the reason in its own words.
     """
 
     code = "SNAPSHOT_CONFLICT"
