@@ -11,18 +11,30 @@ text 500 and no id, so a seller had nothing to quote and the app nothing to
 parse. This middleware answers them itself, in the shape every other refusal
 has, with the id; then the error goes on up unchanged, so uvicorn still writes
 its traceback and Sentry, when it is on, still reports it.
+
+Except when the server itself cannot serve: its database does not answer, or
+its schema is behind this code (ADR-0013 §2). Then the answer is 503
+`SERVER_UNAVAILABLE` with the reason, which the phone reads as "the server
+does not answer" and tells the seller to sell on paper (owner decision,
+2026-10-04); one warning line says so, and the error goes no further. An
+outage is told by the watcher (ADR-0011 §1), not by an error report for
+every request it fails.
 """
 
 from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
+from typing import Any
 
 import sentry_sdk
 import structlog
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.core.unavailable import UnavailableReason
 
 REQUEST_ID_HEADER = "X-Request-ID"
 _MAX_INBOUND_LENGTH = 128
@@ -37,6 +49,23 @@ INTERNAL_ERROR_PAYLOAD = {
     "details": {},
 }
 _INTERNAL_ERROR_BODY = json.dumps(INTERNAL_ERROR_PAYLOAD, ensure_ascii=False).encode("utf-8")
+
+# What a request the server could not serve answers (ADR-0013 §2), in the
+# same shape: `details.reason` is `DATABASE` or `SCHEMA`.
+SERVER_UNAVAILABLE_CODE = "SERVER_UNAVAILABLE"
+SERVER_UNAVAILABLE_MESSAGE = "Сервер тимчасово недоступний."
+
+# Says whether an error nothing handled is the server's own failure, and
+# which (`app/api/unavailable.py classify`); None for any other error.
+Unavailable = Callable[[BaseException], Awaitable[UnavailableReason | None]]
+
+
+def unavailable_payload(reason: UnavailableReason) -> dict[str, Any]:
+    return {
+        "code": SERVER_UNAVAILABLE_CODE,
+        "message": SERVER_UNAVAILABLE_MESSAGE,
+        "details": {"reason": reason},
+    }
 
 
 _correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
@@ -83,10 +112,15 @@ def _tag_error_reports(request_id: str) -> None:
 
 
 class CorrelationIdMiddleware:
-    """Pure-ASGI middleware so the id is set before anything else runs."""
+    """Pure-ASGI middleware so the id is set before anything else runs.
 
-    def __init__(self, app: ASGIApp) -> None:
+    `unavailable` tells an error nothing handled that is the server's own
+    failure from a bug (ADR-0013 §2). Without it, every such error is a 500.
+    """
+
+    def __init__(self, app: ASGIApp, unavailable: Unavailable | None = None) -> None:
         self.app = app
+        self.unavailable = unavailable
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -116,6 +150,13 @@ class CorrelationIdMiddleware:
             if not response_started:
                 # Once an answer has begun, nothing else can be said: the
                 # error only goes on up.
+                reason = await _reason(self.unavailable, error)
+                if reason is not None:
+                    # Answered and told, and not raised: the watcher tells
+                    # of an outage, not a report per request (ADR-0013 §2).
+                    await _answer_unavailable(send_with_header, reason)
+                    _log_unavailable(error, reason, scope)
+                    return
                 await _answer_internal_error(send_with_header)
             _log_unhandled(error, scope)
             raise
@@ -144,18 +185,54 @@ def _log_unhandled(error: Exception, scope: Scope) -> None:
         return
 
 
-async def _answer_internal_error(send: Send) -> None:
+async def _reason(unavailable: Unavailable | None, error: Exception) -> UnavailableReason | None:
+    """What `unavailable` says of `error`. A failure to tell is no reason:
+    the error is then answered as any other, never left unanswered."""
+    if unavailable is None:
+        return None
+    try:
+        return await unavailable(error)
+    except Exception:
+        return None
+
+
+def _log_unavailable(error: Exception, reason: UnavailableReason, scope: Scope) -> None:
+    """One warning line with the request's id: the reason and the error's
+    kind, never its text, which may name the database's host
+    (`app/api/internal.py`). The path only, never the query, as above."""
+    try:
+        structlog.get_logger().bind(logger=__name__).warning(
+            "request.unavailable",
+            reason=reason,
+            error=type(error).__name__,
+            method=scope.get("method"),
+            path=scope.get("path"),
+        )
+    except Exception:  # pragma: no cover - only a broken logging setup gets here
+        return
+
+
+async def _answer(send: Send, status: int, body: bytes) -> None:
     await send(
         {
             "type": "http.response.start",
-            "status": 500,
+            "status": status,
             "headers": [
                 (b"content-type", b"application/json"),
-                (b"content-length", str(len(_INTERNAL_ERROR_BODY)).encode("latin-1")),
+                (b"content-length", str(len(body)).encode("latin-1")),
             ],
         }
     )
-    await send({"type": "http.response.body", "body": _INTERNAL_ERROR_BODY})
+    await send({"type": "http.response.body", "body": body})
+
+
+async def _answer_internal_error(send: Send) -> None:
+    await _answer(send, 500, _INTERNAL_ERROR_BODY)
+
+
+async def _answer_unavailable(send: Send, reason: UnavailableReason) -> None:
+    body = json.dumps(unavailable_payload(reason), ensure_ascii=False).encode("utf-8")
+    await _answer(send, 503, body)
 
 
 async def correlation_id_dependency(request: Request) -> str:
@@ -166,8 +243,12 @@ async def correlation_id_dependency(request: Request) -> str:
 __all__ = [
     "INTERNAL_ERROR_PAYLOAD",
     "REQUEST_ID_HEADER",
+    "SERVER_UNAVAILABLE_CODE",
+    "SERVER_UNAVAILABLE_MESSAGE",
     "CorrelationIdMiddleware",
+    "Unavailable",
     "correlation_id_dependency",
     "get_correlation_id",
     "set_correlation_id",
+    "unavailable_payload",
 ]

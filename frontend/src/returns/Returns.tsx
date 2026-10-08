@@ -57,7 +57,7 @@ export function Returns({
   const [selected, setSelected] = useState<SaleSummary | null>(null);
   const [done, setDone] = useState<{
     refund: Refund;
-    chosen: string | undefined;
+    sent: ReturnPart[];
   } | null>(null);
   const searching = !elsewhere || search.length >= 2;
   const sales = useQuery({
@@ -73,8 +73,8 @@ export function Returns({
     retry: false,
   });
 
-  async function settled(refund: Refund, chosen?: string): Promise<void> {
-    setDone({ refund, chosen });
+  async function settled(refund: Refund, sent: ReturnPart[]): Promise<void> {
+    setDone({ refund, sent });
     setSelected(null);
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["store-sales", store.id] }),
@@ -92,8 +92,8 @@ export function Returns({
         journalKey={journalKey}
         blocked={blocked}
         sale={selected}
-        settled={(refund, chosen) => {
-          void settled(refund, chosen);
+        settled={(refund, sent) => {
+          void settled(refund, sent);
         }}
         back={() => {
           setSelected(null);
@@ -119,7 +119,14 @@ export function Returns({
         Знайдіть продаж, з якого повертають товар. Цілий товар повернеться на
         склад, з якого його продали, пошкоджений — на склад «Брак» магазину.
       </p>
-      {done && <Done refund={done.refund} chosen={done.chosen} />}
+      {done && (
+        <Done
+          store={store}
+          token={token}
+          refund={done.refund}
+          sent={done.sent}
+        />
+      )}
       <label>
         Де купили
         <select
@@ -211,6 +218,14 @@ function when(iso: string): string {
   });
 }
 
+/**
+ * A sale typed from paper (ADR-0013 §5.6): the list carries its mark, never
+ * its sum or way, so the drawer's blind count is untouched.
+ */
+function soldDuringOutage(sale: SaleSummary): boolean {
+  return sale.outage !== undefined && sale.outage !== null;
+}
+
 function SaleCard({
   sale,
   here,
@@ -230,6 +245,9 @@ function SaleCard({
       </strong>
       {!here && <span>Продано в магазині «{sale.store_name}»</span>}
       {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
+      {soldDuringOutage(sale) && (
+        <span className="badge">Продано під час збою</span>
+      )}
       <ul>
         {sale.items.map((item) => (
           <li key={item.id}>
@@ -266,16 +284,69 @@ function handBack(amount: string, way: TillMethod | null | undefined): string {
   }
 }
 
+/**
+ * A kept return confirmed — maybe by the phone itself, hours after the
+ * press. Following the paper text, the money may have been given back
+ * meanwhile, so it says to give it back only if nobody did, as a card does
+ * at the till (owner decision, 2026-10-08).
+ */
+function handBackOnce(
+  amount: string,
+  way: TillMethod | null | undefined,
+): string {
+  const step = handBack(amount, way).replace(/\.$/, "");
+  return `Якщо гроші ще не повернули — ${step.charAt(0).toLowerCase()}${step.slice(1)}. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.`;
+}
+
 export function Done({
+  store,
+  token,
   refund,
-  chosen,
+  sent,
+  kept = false,
 }: {
+  store: Store;
+  token: string;
   refund: Refund;
-  /** The warehouse of this store intact goods went to, when one was chosen. */
-  chosen?: string | undefined;
+  /**
+   * The lines as sent: the form's, or a kept attempt's, read back from the
+   * phone after a reopen. A line naming a warehouse is one whose intact goods
+   * go to a warehouse of this store the seller chose.
+   */
+  sent: readonly ReturnPart[];
+  /** A kept attempt confirmed, never a return answered at once. */
+  kept?: boolean;
 }): JSX.Element {
+  const back = kept ? handBackOnce : handBack;
   const damaged = refund.items.some((item) => item.condition === "DAMAGED");
   const intact = refund.items.some((item) => item.condition === "INTACT");
+  // Intact goods the seller sent to a warehouse of this store (owner
+  // decision, 2026-10-01): named where the server says they went, from this
+  // store's warehouses as the form offered them — read again when the form
+  // is gone. A name not found there is left out, never said to be the
+  // warehouse they were sold from.
+  const chose = new Set(
+    sent.flatMap((part) =>
+      part.location_id === undefined ? [] : [part.sale_item_id],
+    ),
+  );
+  const placed = new Set(
+    refund.items.flatMap((item) =>
+      item.condition === "INTACT" &&
+      chose.has(item.sale_item_id) &&
+      item.destination_location_id !== null
+        ? [item.destination_location_id]
+        : [],
+    ),
+  );
+  const ownPlaces = useBackOnSale(store, token, placed.size > 0);
+  const named = (ownPlaces.data ?? []).filter((location) =>
+    placed.has(location.id),
+  );
+  const chosen =
+    named.length === placed.size
+      ? named.map((location) => location.name).join("», «")
+      : undefined;
   const { credit } = refund;
   const elsewhere =
     !!refund.taken_at_store_id && refund.taken_at_store_id !== refund.store_id;
@@ -292,7 +363,7 @@ export function Done({
           )}
           <p>
             {(kopecks(credit.cash_back) ?? 0n) > 0n
-              ? handBack(credit.cash_back, refund.payment_method)
+              ? back(credit.cash_back, refund.payment_method)
               : "Грошей покупцю не повертаємо."}
           </p>
           <p>
@@ -302,13 +373,15 @@ export function Done({
           </p>
         </>
       ) : (
-        <p>{handBack(refund.total_amount, refund.payment_method)}</p>
+        <p>{back(refund.total_amount, refund.payment_method)}</p>
       )}
       {intact &&
-        (chosen ? (
+        (placed.size === 0 ? (
+          <p>Цілий товар повернуто на склад, з якого його продали.</p>
+        ) : chosen ? (
           <p>Цілий товар повернуто на склад «{chosen}» вашого магазину.</p>
         ) : (
-          <p>Цілий товар повернуто на склад, з якого його продали.</p>
+          <p>Цілий товар повернуто на склад вашого магазину.</p>
         ))}
       {damaged && (
         <p>
@@ -341,7 +414,7 @@ function ReturnForm({
   journalKey: string;
   blocked: boolean;
   sale: SaleSummary;
-  settled: (refund: Refund, chosen: string | undefined) => void;
+  settled: (refund: Refund, sent: ReturnPart[]) => void;
   back: () => void;
 }): JSX.Element {
   const { busy, pending } = useReturnCommand();
@@ -414,16 +487,6 @@ function ReturnForm({
         total += (kopecks(item.final_unit_price) ?? 0n) * BigInt(quantity);
       }
   }
-  const chosen = parts
-    .map((part) => part.location_id)
-    .filter((id): id is string => id !== undefined);
-  const chosenName =
-    chosen.length > 0
-      ? ownPlaces.data
-          ?.filter((location) => chosen.includes(location.id))
-          .map((location) => location.name)
-          .join("», «")
-      : undefined;
   const working = busy || pending !== null;
   const ready = problems.length === 0 && parts.length > 0;
 
@@ -455,7 +518,7 @@ function ReturnForm({
     });
     if (outcome.kind === "done") {
       setCommandId(crypto.randomUUID());
-      settled(outcome.result, chosenName);
+      settled(outcome.result, parts);
     } else if (outcome.kind === "refused") {
       setRefusal(outcome.error);
       setCommandId(crypto.randomUUID());
@@ -612,7 +675,11 @@ function ReturnForm({
   );
 }
 
-function refusalText(error: unknown): string {
+/**
+ * Why a return was refused. A kept return refused on resend says the same
+ * (`@/cash/errors`, ADR-0013 §8).
+ */
+export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "DAMAGED_RETURNS_UNAVAILABLE")
       return error.details.reason === "SOLD_FROM"

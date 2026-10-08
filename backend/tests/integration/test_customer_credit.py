@@ -195,7 +195,13 @@ async def test_never_more_than_is_owed(maker):
     nothing = await pay(maker, shops, sale["credit"]["credit_id"], "0")
 
     assert too_much.status_code == 422
-    assert too_much.json()["details"] == {"reason": "MORE_THAN_OWED", "owed": "2000.00"}
+    # Refused after the payment's lookup: it says nothing was recorded
+    # (ADR-0013 §1).
+    assert too_much.json()["details"] == {
+        "reason": "MORE_THAN_OWED",
+        "owed": "2000.00",
+        "recorded": False,
+    }
     assert nothing.status_code == 422
     assert (await debt(maker, shops, sale["credit"]["credit_id"]))["owed"] == "2000.00"
 
@@ -420,7 +426,11 @@ async def test_two_payments_at_once_never_pay_more_than_is_owed(maker):
 
     with pytest.raises(ValidationFailedError) as refused:
         await meanwhile
-    assert refused.value.details == {"reason": "MORE_THAN_OWED", "owed": "500.00"}
+    assert refused.value.details == {
+        "reason": "MORE_THAN_OWED",
+        "owed": "500.00",
+        "recorded": False,
+    }
 
 
 async def test_the_ledger_of_a_debt_is_never_rewritten(maker):

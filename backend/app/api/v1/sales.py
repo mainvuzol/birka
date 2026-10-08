@@ -25,6 +25,16 @@ before the way was asked would be stuck for good, sold; the service requires
 it of a new sale instead (ADR-0012, B13). Only the seller who sold, and the
 owner and managers, read it back (`GET /sales/{id}`); the list of the
 store's sales never carries it (ADR-0012, G32).
+
+`outage` marks a sale typed from paper after the server did not answer:
+«продано під час збою», with who sold and the paper's time, each optional
+(owner decisions, 2026-10-04 and 2026-10-07; ADR-0013 §5). Only its shape is
+checked here. Who may be named, and which day the time may be, are checked by
+the service after the replay lookup: a refusal here, before it, would answer a
+marked sale recorded and resent days later with a 422 that says nothing of
+what was recorded, and leave that phone blocked for good (ADR-0013 §5.2). The
+receipt, the sale read back and the store's list of sales all show the mark;
+it carries no sum or way, so the blind count is untouched.
 """
 
 from __future__ import annotations
@@ -35,7 +45,7 @@ from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
@@ -49,6 +59,7 @@ from app.modules.cash.current import sale_methods
 from app.modules.credit import service as credit_service
 from app.modules.refunds.service import refunded_quantities
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
+from app.modules.sales.outage import MarkView, OutageMark, marks_of, paper_time
 from app.modules.sales.payment import PaymentMethod
 from app.modules.sales.read import MAX_QUERY, list_sales, way_shown_to
 from app.modules.sales.service import (
@@ -138,6 +149,33 @@ class CreditPayload(BaseModel):
     paid_now: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
 
 
+def _paper_time(written: str) -> str:
+    """Kept exactly as written: the sale's prints carry the literal."""
+    paper_time(written)
+    return written
+
+
+# The store's wall clock as the paper says, to the minute: "2026-10-06T19:40".
+PaperTime = Annotated[str, Field(min_length=16, max_length=16), AfterValidator(_paper_time)]
+
+
+class OutageMarkPayload(BaseModel):
+    """«Продано під час збою»: a sale typed from paper (ADR-0013 §5.2). `{}`
+    marks it with nobody and no time named.
+
+    Only the shape: a real date and time, written `YYYY-MM-DDTHH:MM`. Whether
+    the person may be named, and whether the time is today's or yesterday's,
+    is decided after the replay lookup, never here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Who sold, as the paper says: one of the store's people.
+    sold_by_user_id: uuid.UUID | None = None
+    # The paper's time, the store's own wall clock with no offset; the phone
+    # fills in the day, today or yesterday.
+    sold_at: PaperTime | None = None
+
+
 class SaleRequest(BaseModel):
     # Every field a client ever sent is known (`sales/commands.ts`), so an
     # unknown one is a client mistake, refused rather than dropped, as the
@@ -158,15 +196,27 @@ class SaleRequest(BaseModel):
     # the money taken now — beside `credit`, not inside it. Absent only from
     # a sale a phone kept from before it was asked.
     payment_method: TillMethodValue | None = None
+    # Present only on a sale typed from paper (ADR-0013 §5).
+    outage: OutageMarkPayload | None = None
 
     def fingerprinted(self) -> dict[str, object]:
         """The body as its 7-day print reads it: a request without a way is
         printed exactly as before ways existed, so an attempt kept from then
-        still matches what the cache stored (ADR-0012, B13)."""
+        still matches what the cache stored (ADR-0012, B13). The same for a
+        sale without the mark, which every sale was before it existed
+        (ADR-0013 §5.2)."""
         body = self.model_dump(mode="json")
         if body["payment_method"] is None:
             del body["payment_method"]
+        if body["outage"] is None:
+            del body["outage"]
         return body
+
+    def mark(self) -> OutageMark | None:
+        """The mark, as the service takes it."""
+        if self.outage is None:
+            return None
+        return OutageMark(sold_by_user_id=self.outage.sold_by_user_id, sold_at=self.outage.sold_at)
 
 
 class SaleItemResponse(BaseModel):
@@ -189,6 +239,24 @@ class SaleCreditResponse(BaseModel):
     credit_id: uuid.UUID
     paid_now: Decimal
     owed: Decimal
+
+
+class OutageMarkResponse(BaseModel):
+    """«Продано під час збою» (ADR-0013 §5.6): who sold as the paper says, by
+    name too, and the paper's time; each None when the paper named none. Who
+    typed it is whoever sold it here, as for any sale."""
+
+    sold_by_user_id: uuid.UUID | None
+    sold_by: str | None
+    sold_at: datetime | None
+
+
+def _outage(view: MarkView | None) -> OutageMarkResponse | None:
+    if view is None:
+        return None
+    return OutageMarkResponse(
+        sold_by_user_id=view.sold_by_user_id, sold_by=view.sold_by, sold_at=view.sold_at
+    )
 
 
 class SaleResponse(BaseModel):
@@ -219,6 +287,10 @@ class SaleResponse(BaseModel):
     # snapshot. Absent from answers given before it was asked; on a read,
     # only for whoever sold it and the owner and managers (ADR-0012, G32).
     payment_method: str | None = None
+    # The mark of a sale typed from paper, frozen in the stored answer with
+    # the rest; None for every other sale, and in answers given before it
+    # existed.
+    outage: OutageMarkResponse | None = None
 
 
 def _to_response(
@@ -228,8 +300,10 @@ def _to_response(
     shortages: list[uuid.UUID],
     reclassifications: list[uuid.UUID],
     credit: credit_service.CreditView | None = None,
+    outage: MarkView | None = None,
 ) -> SaleResponse:
     return SaleResponse(
+        outage=_outage(outage),
         payment_method=sale.payment_method,
         credit=(
             SaleCreditResponse(credit_id=credit.id, paid_now=credit.paid, owed=credit.owed)
@@ -368,6 +442,7 @@ async def create(
         credit_terms=credit_service.fingerprint_of(credit) if credit is not None else None,
         correlation_id=get_correlation_id(),
         payment_method=method_of(payload.payment_method),
+        outage=payload.mark(),
     )
     opened = (
         await credit_service.open_credit(
@@ -393,6 +468,8 @@ async def create(
             result.shortages,
             result.reclassifications,
             opened,
+            # No query for an ordinary sale: it carries no mark.
+            (await marks_of(session, [result.sale])).get(result.sale.id),
         )
     )
     result.sale.response_snapshot = body.model_dump(mode="json")
@@ -525,6 +602,8 @@ class SaleSummary(BaseModel):
     # answer says how much goes back in cash.
     paid_in_parts: bool
     items: list[SaleLineSummary]
+    # «Продано під час збою», for a sale typed from paper (ADR-0013 §5.6).
+    outage: OutageMarkResponse | None = None
 
 
 class SaleListResponse(BaseModel):
@@ -585,6 +664,7 @@ async def list_store_sales(
     paid_in_parts = await credit_service.credited_sales(
         session, sale_ids=[sale.id for sale in page.sales]
     )
+    marks = await marks_of(session, page.sales)
     return SaleListResponse(
         has_more=page.has_more,
         sales=[
@@ -596,6 +676,7 @@ async def list_store_sales(
                 currency_code=sale.currency_code,
                 total=sale.total,
                 paid_in_parts=sale.id in paid_in_parts,
+                outage=_outage(marks.get(sale.id)),
                 items=[
                     SaleLineSummary(
                         id=item.id,
@@ -644,6 +725,7 @@ async def read_sale(sale_id: uuid.UUID, scope: ScopeDep, session: SessionDep) ->
             await correction_ids(session, sale),
             await shortage_ids(session, sale),
             await reclassification_ids(session, sale),
+            outage=(await marks_of(session, [sale])).get(sale.id),
         )
     # Every holder of `sale:view` reads any of the store's sales, a seller
     # counting the drawer blind among them: the way only for whoever sold it

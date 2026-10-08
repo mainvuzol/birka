@@ -72,15 +72,19 @@ SHOP_ZONE = ZoneInfo("Europe/Kyiv")
 SOUND_FROM = time(9, 0)
 SOUND_UNTIL = time(20, 0)
 
-# What the sellers feel, said after the reason.
-CANNOT_SELL = "Продавці зараз не можуть продавати."
+# What the sellers do meanwhile, said after the reason. They sell on paper
+# and type it in once the server answers (owner decision, 2026-10-04); the
+# words are the ones proposed in ADR-0013 §10 (G10), built as recommended
+# and listed for the owner to confirm.
+ON_PAPER = "Продавці продають на папері."
 FEEL: Mapping[Kind, str] = {
-    Kind.NOT_ANSWERING: CANNOT_SELL,
+    Kind.NOT_ANSWERING: ON_PAPER,
     Kind.DISK_LOW: "Коли місце закінчиться, застосунок і нічні копії зупиняться.",
-    Kind.SIGN_IN_FAILING: CANNOT_SELL,
+    # Whoever is signed in still sells: only a new sign-in fails.
+    Kind.SIGN_IN_FAILING: "Хто ще не увійшов, продає на папері.",
 }
 AGAIN: Mapping[Kind, str] = {
-    Kind.NOT_ANSWERING: "Сервер знову відповідає: продавці можуть продавати.",
+    Kind.NOT_ANSWERING: "Сервер знову відповідає: продажі з паперу можна вносити.",
     Kind.DISK_LOW: "На диску сервера знову достатньо місця.",
     Kind.SIGN_IN_FAILING: "Вхід у застосунок знову працює.",
 }

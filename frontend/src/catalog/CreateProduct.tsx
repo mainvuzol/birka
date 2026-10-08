@@ -1,10 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { JSX } from "react";
+import { forgetCatalogRefusal } from "./commands";
 import { FamilySearch, familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
 import { Similar } from "./Similar";
 import { similarFrom } from "./modelTypes";
 import type { Decision } from "./types";
+
+/**
+ * The words the similar-name check reads — the model's name, its source and
+ * the variant's words (`typed_words`, backend) — as one value to compare.
+ */
+function words(body: Record<string, unknown>): string {
+  const variant = (body.variant ?? {}) as Record<string, unknown>;
+  return JSON.stringify([
+    body.concept,
+    body.source,
+    ...["color", "material", "texture", "fur", "collar"].map((k) => variant[k]),
+  ]);
+}
 
 export function CreateProduct({
   decision,
@@ -19,8 +33,11 @@ export function CreateProduct({
   scopeKey: string;
   blocked: boolean;
   submit: (body: Record<string, unknown>) => void;
-  /** The last refusal of creating it; a similar name is answered here. */
-  refusal: unknown;
+  /**
+   * The last refusal of creating it, and what was sent; a similar name is
+   * answered here, for those words.
+   */
+  refusal: { error: unknown; sent: Record<string, unknown> } | null;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [family, setFamily] = useState("");
@@ -43,37 +60,53 @@ export function CreateProduct({
   const lengthValid =
     !length ||
     (/^\d{1,4}([.,]\d)?$/.test(length) && Number(length.replace(",", ".")) > 0);
-  // A name like one the catalogue uses is refused once (owner decision,
-  // 2026-10-03): take the spelling in use, or say this is another name.
-  const similar = similarFrom(refusal);
   const ready =
     !blocked &&
     Boolean(system) &&
     Boolean(size.trim()) &&
     lengthValid &&
     Boolean(family || (concept.trim() && (!separate || note.trim())));
+  const variant: Record<string, string> = Object.fromEntries(
+    Object.entries(attributes)
+      .filter(([, value]) => value.trim())
+      .map(([key, value]) => [key, value.trim()]),
+  );
+  if (length) variant.length_cm = length.replace(",", ".");
+  // What creating it sends as the form stands, but for `similar_confirmed`.
+  const body: Record<string, unknown> = {
+    store_id: decision.store_id,
+    ...(family
+      ? { product_family_id: family }
+      : {
+          concept: concept.trim(),
+          ...(source.trim() ? { source: source.trim() } : {}),
+          ...(category.trim() ? { business_category: category.trim() } : {}),
+          ...(garment.trim() ? { garment_type: garment.trim() } : {}),
+          new_model: separate,
+          ...(separate ? { distinction_note: note.trim() } : {}),
+        }),
+    variant,
+    sizes: [{ system, code: size.trim() }],
+  };
+  // A name like one the catalogue uses is refused once (owner decision,
+  // 2026-10-03): take the spelling in use, or say this is another name.
+  // Only while the form holds the words refused: saying so confirms those,
+  // and words typed since are checked like any others.
+  const typed = words(body);
+  const sent = refusal ? words(refusal.sent) : null;
+  const similar = refusal && sent === typed ? similarFrom(refusal.error) : null;
+  // Words typed since, or a spelling taken, leave that refusal with its
+  // advice, as a rename in «Моделі» does; a kept operation's stays, saying
+  // what was not recorded (forgetCatalogRefusal).
+  const refusedSimilar =
+    refusal !== null && similarFrom(refusal.error) !== null;
+  useEffect(() => {
+    if (refusedSimilar && sent !== typed) forgetCatalogRefusal();
+  }, [refusedSimilar, sent, typed]);
   function send(similarConfirmed: boolean): void {
-    if (!ready) return;
-    const variant: Record<string, string> = Object.fromEntries(
-      Object.entries(attributes)
-        .filter(([, value]) => value.trim())
-        .map(([key, value]) => [key, value.trim()]),
-    );
-    if (length) variant.length_cm = length.replace(",", ".");
+    if (!ready || (similarConfirmed && !similar)) return;
     submit({
-      store_id: decision.store_id,
-      ...(family
-        ? { product_family_id: family }
-        : {
-            concept: concept.trim(),
-            ...(source.trim() ? { source: source.trim() } : {}),
-            ...(category.trim() ? { business_category: category.trim() } : {}),
-            ...(garment.trim() ? { garment_type: garment.trim() } : {}),
-            new_model: separate,
-            ...(separate ? { distinction_note: note.trim() } : {}),
-          }),
-      variant,
-      sizes: [{ system, code: size.trim() }],
+      ...body,
       ...(similarConfirmed ? { similar_confirmed: true } : {}),
     });
   }

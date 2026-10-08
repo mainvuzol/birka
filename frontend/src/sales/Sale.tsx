@@ -13,15 +13,35 @@ import type { TermsInput } from "@/credits/Terms";
 import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { submitSale, useSaleCommand } from "./commands";
+import { setPaper, setSoldBy, usePaper } from "./paper";
 import type {
   EmptyShelf,
+  OutageBody,
   SaleLine,
   Sale as SaleReceipt,
   Shortfall,
 } from "./types";
-import { stockKey } from "./types";
+import { markText, paidDuringOutage, stockKey } from "./types";
 
 const pageSize = 100;
+
+/**
+ * A sale typed from paper refused for stock (owner decisions, 2026-10-04 and
+ * 2026-10-07; ADR-0013 §6): never sold around the shortfall — nobody stands
+ * at the shelf now — but after a manager fixes the balance, or, for units
+ * reserved for an order, decides about the order.
+ */
+const paperGone =
+  "Цього товару вже немає в обліку — продаж з паперу не записано. Попросіть менеджера спершу виправити залишок, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
+const paperReserved =
+  "Частина цих одиниць у резерві замовлення — продаж з паперу не записано. Менеджер має вирішити із замовленням, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
+
+/** The phone's own date, today or yesterday: the paper's day (G1). */
+function paperDay(yesterday: boolean): string {
+  const at = new Date();
+  if (yesterday) at.setDate(at.getDate() - 1);
+  return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
 
 interface Draft {
   line: SaleLine;
@@ -57,6 +77,15 @@ interface Draft {
  * nothing is guessed (owner decision, 2026-10-04; ADR-0012 §B12). The press
  * comes first, then the terminal is charged the sum the receipt shows: it may
  * still change when a coat is not on the shelf.
+ *
+ * Sales written on paper while the server did not answer are typed here
+ * once it does, with «Вношу продаж з паперу» ticked (owner decisions,
+ * 2026-10-04 and 2026-10-07; ADR-0013 §7): each is marked «продано під час
+ * збою», with who sold and the paper's time when known. Off by default, so a
+ * live sale still takes five taps and its body carries no mark. On, the till
+ * offers nothing that describes the shelf now — nobody stands at it — and
+ * the pay buttons say the mode, who sold and from which warehouse, since a
+ * wrong mark can never be changed.
  */
 export function Sale({
   store,
@@ -107,6 +136,14 @@ export function Sale({
   // The way the seller pressed. A shortfall's answers resend the same sale,
   // so they keep it and say it (ADR-0012 §B12); a changed basket forgets it.
   const [method, setMethod] = useState<TillMethod | null>(null);
+  // Paper mode: the switch and «Хто продав» outlive this screen (`./paper`);
+  // the paper's time is this sale's alone.
+  const paper = usePaper((state) => state.storeId === store.id);
+  const soldBy = usePaper((state) =>
+    state.storeId === store.id ? state.soldBy : null,
+  );
+  const [paperTime, setPaperTime] = useState("");
+  const [yesterday, setYesterday] = useState(false);
   const { busy, pending } = useSaleCommand();
 
   const mayCorrect = store.permissions.includes(
@@ -144,9 +181,25 @@ export function Sale({
     queryKey: ["sale-sizes", journalKey, store.id],
     queryFn: () =>
       api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
-    enabled: mayReadLabel && !!selected?.size_is_unknown,
+    enabled: mayReadLabel && !!selected?.size_is_unknown && !paper,
     retry: false,
   });
+  // Who may be named as having sold: read only while the switch is on
+  // (ADR-0013 §5.7). Only someone this list shows is ever sent.
+  const sellers = useQuery({
+    queryKey: ["sale-sellers", journalKey, store.id],
+    queryFn: () =>
+      api<{ sellers: { user_id: string; display_name: string }[] }>(
+        `/stores/${store.id}/sellers`,
+        token,
+      ),
+    enabled: paper,
+    retry: false,
+  });
+  const named =
+    soldBy === null
+      ? undefined
+      : sellers.data?.sellers.find((seller) => seller.user_id === soldBy);
 
   // A basket that changed is a different business operation, and any answer
   // given about the old one no longer applies to it.
@@ -159,6 +212,30 @@ export function Sale({
     setShortfall(null);
     setPresent("");
     setMethod(null);
+  }
+
+  /**
+   * The switch (G20). Ticked, the basket stays, and any answer about the
+   * shelf already given goes: a marked sale may not carry one (§5.3).
+   * Unticked, a basket built from paper goes, with its answers and its
+   * `command_id`: sent unmarked, its shortfall would offer «Товар на місці»
+   * and record a coat found that never was.
+   */
+  function turnPaper(on: boolean): void {
+    setPaper(store.id, on);
+    setPaperTime("");
+    setYesterday(false);
+    setRefusal(null);
+    setValidation("");
+    setLabelSize("");
+    if (on) {
+      setFound({});
+      setMissing({});
+      setClarified({});
+      setShortfall(null);
+      setPresent("");
+      setMethod(null);
+    } else if (draft.length > 0) replaceDraft([]);
   }
 
   useEffect(() => {
@@ -178,6 +255,20 @@ export function Sale({
     (location) => location.is_active && location.can_sell,
   );
   const onlyWarehouse = sellable.length === 1 ? sellable[0] : undefined;
+  // Where the goods leave from, named on a paper sale's press: a store may
+  // sell from two warehouses, and the paper says which (G21).
+  const from = [
+    ...new Set(
+      (draft.length > 0
+        ? draft.map((d) => d.line.source_location_id)
+        : [locationId]
+      )
+        .map(
+          (id) => locations.data?.find((location) => location.id === id)?.name,
+        )
+        .filter((name): name is string => name !== undefined),
+    ),
+  ];
 
   useEffect(() => {
     // Explicitly permitted: "the client may prefill it when the store reaches
@@ -265,16 +356,33 @@ export function Sale({
       setValidation(terms);
       return;
     }
+    // The paper's time as its day and hour, the store's wall clock (G1).
+    const time = /^\d{2}:\d{2}/.exec(paperTime)?.[0];
+    const mark: OutageBody | null = paper
+      ? {
+          sold_by_user_id: named?.user_id ?? null,
+          sold_at: time ? `${paperDay(yesterday)}T${time}` : null,
+        }
+      : null;
+    let key: string;
+    try {
+      // A new key per payload: one key then always answers one payload, and
+      // a replay of it is unambiguous. `command_id` is what keeps the
+      // corrected attempt from selling twice.
+      key = crypto.randomUUID();
+    } catch (error) {
+      // The phone's own failure, before anything was sent: said as such,
+      // never as the server's (ADR-0013 §3).
+      setRefusal(error);
+      return;
+    }
     const asked = shortfall;
     setMethod(way);
     setShortfall(null);
     setRefusal(null);
     setValidation("");
     const outcome = await submitSale(journalKey, token, {
-      // A new key per payload: one key then always answers one payload, and a
-      // replay of it is unambiguous. `command_id` is what keeps the corrected
-      // attempt from selling twice.
-      key: crypto.randomUUID(),
+      key,
       emptyShelf,
       body: {
         store_id: store.id,
@@ -294,6 +402,8 @@ export function Sale({
         })),
         ...(terms ? { credit: terms } : {}),
         payment_method: way,
+        // Only in paper mode: an ordinary sale has no such key (§7).
+        ...(mark ? { outage: mark } : {}),
       },
     });
     if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
@@ -310,6 +420,11 @@ export function Sale({
       setCommandId(crypto.randomUUID());
       setPresent("");
       setMethod(null);
+      // A paper's time is one sale's: left, it would go on the next one,
+      // and a wrong time is permanent (§7). The switch and who sold stay
+      // for the series.
+      setPaperTime("");
+      setYesterday(false);
       // The next customer is someone else.
       setCredit(noTerms);
       await stock.refetch();
@@ -429,8 +544,80 @@ export function Sale({
         Оберіть склад, з якого фізично віддаєте товар. Ціна — остаточна після
         торгу.
       </p>
+      {paper && (
+        <section className="notice" aria-label="Режим: продаж з паперу">
+          <h3>Режим: продаж з паперу</h3>
+          <p>
+            Продаж позначать «продано під час збою». Він увійде в сьогоднішній
+            «Звіт» і в касу до наступного закриття.
+          </p>
+        </section>
+      )}
       <fieldset disabled={blocked || working}>
         <legend>Кошик</legend>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={paper}
+            onChange={(event) => {
+              turnPaper(event.target.checked);
+            }}
+          />
+          Вношу продаж з паперу
+        </label>
+        {paper && (
+          <>
+            <label>
+              Хто продав
+              <select
+                value={named?.user_id ?? ""}
+                onChange={(event) => {
+                  setSoldBy(store.id, event.target.value || null);
+                }}
+              >
+                <option value="">Не вказано</option>
+                {(sellers.data?.sellers ?? []).map((seller) => (
+                  <option key={seller.user_id} value={seller.user_id}>
+                    {seller.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {sellers.error && (
+              <Failure
+                error={sellers.error}
+                retry={() => {
+                  void sellers.refetch();
+                }}
+              />
+            )}
+            <div className="fields">
+              <label>
+                Час з паперу
+                <input
+                  type="time"
+                  value={paperTime}
+                  onChange={(event) => {
+                    setPaperTime(event.target.value);
+                    if (!event.target.value) setYesterday(false);
+                  }}
+                />
+              </label>
+              {paperTime && (
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={yesterday}
+                    onChange={(event) => {
+                      setYesterday(event.target.checked);
+                    }}
+                  />
+                  Це було вчора
+                </label>
+              )}
+            </div>
+          </>
+        )}
         {locations.isPending ? (
           <p role="status">Завантажуємо склади…</p>
         ) : locations.error ? (
@@ -534,7 +721,14 @@ export function Sale({
                     " · розмір невідомий: продається як є"}
                 </p>
               )}
-              {selected?.size_is_unknown && mayReadLabel && (
+              {selected?.size_is_unknown && paper && (
+                // A size read off a coat in hand: on paper nobody holds it
+                // (G3).
+                <p className="hint">
+                  Товар без розміру вносьте як «розмір невідомий».
+                </p>
+              )}
+              {selected?.size_is_unknown && mayReadLabel && !paper && (
                 <label>
                   Розмір з етикетки
                   <select
@@ -690,13 +884,24 @@ export function Sale({
                 void send(way, found, missing, clarified);
               }}
             >
-              {methodLabels[way]}
+              {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
             </button>
           ))}
         </div>
+        {paper && (
+          // Seen before the press: a forgotten switch marks a live sale for
+          // good, with a colleague's name (G6).
+          <p>
+            Продавець: {named?.display_name ?? "не вказано"}
+            {from.length > 0 &&
+              ` · ${from.length > 1 ? "склади" : "склад"}: ${from.join(", ")}`}
+          </p>
+        )}
         <p className="hint">
-          Спершу натисніть тут, потім проведіть на терміналі суму, яку покаже
-          чек нижче: вона може змінитися, якщо товару не виявиться на полиці.
+          {paper
+            ? // The card was charged during the outage (G19).
+              "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
+            : "Спершу натисніть тут, потім проведіть на терміналі суму, яку покаже чек нижче: вона може змінитися, якщо товару не виявиться на полиці."}
         </p>
       </fieldset>
       {refusal !== null && (
@@ -718,7 +923,10 @@ export function Sale({
                 {shortDraft.name} · {shortDraft.size}: у кошику{" "}
                 {shortfall.requested}, в обліку доступно {shortfall.available}.
               </p>
-              {!shortfall.correctable ? (
+              {paper ? (
+                // Nothing that describes the shelf now (§6, §7).
+                <p>{shortfall.reserved === true ? paperReserved : paperGone}</p>
+              ) : !shortfall.correctable ? (
                 <p>
                   Цей залишок неможливо виправити під час продажу — частина
                   одиниць у резерві замовлення. Зменшіть кількість або продайте
@@ -862,12 +1070,24 @@ function Receipt({
 }): JSX.Element {
   // An answer recorded before the way was asked names none (ADR-0012 §B12).
   const way = receipt.payment_method ?? null;
+  // A sale typed from paper (ADR-0013 §5.6): its mark, and money taken
+  // during the outage is never charged again.
+  const mark = receipt.outage ?? null;
+  const paid = mark !== null && way !== null ? paidDuringOutage(way) : null;
   return (
     <section>
       <h2>Продаж записано</h2>
+      {mark && <p className="badge">{markText(mark)}</p>}
       {way === null || receipt.credit ? (
         <p className="total">
           Разом <strong>{money(receipt.total)}</strong>
+        </p>
+      ) : paid !== null ? (
+        <p className="total">
+          <span>
+            {methodLabels[way]} · Разом <strong>{money(receipt.total)}</strong>{" "}
+            — {paid}
+          </span>
         </p>
       ) : way === "TRANSFER" ? (
         // Checked before the goods are handed over (ADR-0012 G38). One
@@ -893,6 +1113,7 @@ function Receipt({
           <p>
             Сплачено зараз <strong>{money(receipt.credit.paid_now)}</strong>
             {way !== null && ` ${methodHow[way]}`}
+            {paid !== null && ` — ${paid}`}
           </p>
           <p>
             Покупець винен <strong>{money(receipt.credit.owed)}</strong>
@@ -983,8 +1204,11 @@ function NothingSold({
   );
 }
 
-/** What the till can say about a refusal it knows the cause of. */
-function refusalText(error: unknown): string {
+/**
+ * What the till can say about a refusal it knows the cause of. A kept sale
+ * refused on resend says it too (`@/cash/errors`, ADR-0013 §8).
+ */
+export function refusalText(error: unknown): string {
   const details = (error as Partial<ApiError> | null)?.details ?? {};
   switch (details.reason) {
     case "SIZE_NOT_KNOWN_SHORT":
@@ -1005,6 +1229,15 @@ function refusalText(error: unknown): string {
       return "Покупець має сплатити зараз більше нуля.";
     case "RESERVED":
       return "Частина цих одиниць у резерві замовлення, тому під час продажу облік не виправити. Зменшіть кількість або продайте інший товар.";
+    // A sale typed from paper, refused for its mark (ADR-0013 §5.3).
+    case "OUTAGE_SHELF_REPORT":
+      return "Продаж з паперу не виправляє залишок. Попросіть менеджера спершу виправити залишок, потім внесіть продаж ще раз.";
+    case "OUTAGE_SELLER_UNKNOWN":
+      return "Цієї людини немає серед продавців магазину. Оберіть іншу або залиште «не вказано».";
+    case "OUTAGE_TIME_FUTURE":
+      return "Цей час ще не настав. Перевірте час і день з паперу.";
+    case "OUTAGE_TIME_TOO_OLD":
+      return "Час з паперу можна вказати лише за сьогодні або вчора. Для давнішого продажу залиште час порожнім.";
     default:
       return errorText(error);
   }

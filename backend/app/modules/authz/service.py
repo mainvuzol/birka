@@ -194,6 +194,46 @@ async def organization_wide_holders_in(
     return sorted((await session.execute(stmt)).scalars())
 
 
+async def holders_in_store(
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    permission: Permission,
+) -> list[uuid.UUID]:
+    """Every user holding `permission` in one store of this organization,
+    through an active membership for that store or for the whole network.
+
+    For naming who sold a sale typed from paper (owner decisions, 2026-10-04
+    and 2026-10-07; ADR-0013 §5.3). The organization is filtered here, never
+    left to the store: an organization-wide membership has no store, in
+    every organization, so without it another network's owner would hold
+    here too. Memberships and roles only; whether the person is still active
+    is the caller's to read (`identity` sits above this module).
+    """
+    stmt = (
+        select(Membership.user_id)
+        .join(
+            Role,
+            and_(
+                Role.id == Membership.role_id,
+                or_(
+                    Role.organization_id.is_(None),
+                    Role.organization_id == Membership.organization_id,
+                ),
+            ),
+        )
+        .join(RolePermission, RolePermission.role_id == Role.id)
+        .where(
+            Membership.organization_id == organization_id,
+            Membership.is_active.is_(True),
+            or_(Membership.store_id == store_id, Membership.store_id.is_(None)),
+            RolePermission.permission_code == permission.value,
+        )
+        .distinct()
+    )
+    return sorted((await session.execute(stmt)).scalars())
+
+
 async def seed_default_roles(session: AsyncSession, organization_id: uuid.UUID) -> dict[str, Role]:
     """Create OWNER/MANAGER/SELLER for an organization if they do not exist.
 
@@ -230,6 +270,7 @@ async def seed_default_roles(session: AsyncSession, organization_id: uuid.UUID) 
 
 __all__ = [
     "RoleCode",
+    "holders_in_store",
     "organization_wide_holders",
     "organization_wide_holders_in",
     "resolve_scope",

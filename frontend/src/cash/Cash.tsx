@@ -5,8 +5,9 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, errorText, unreachable } from "@/shared/api";
 import type { JournalOutcome } from "@/shared/journal";
+import { keptText, useAutoCheck } from "@/shared/reach";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { methodLabels, notStated } from "@/shared/payment";
@@ -15,6 +16,7 @@ import {
   resolveCashCommand,
   submitCashCommand,
   useCashCommand,
+  useCashLastCommand,
 } from "./commands";
 import { cashErrorText, cashJournalText, dayOf, timeOf } from "./errors";
 import { directionOf, movementLabels, waysFor } from "./types";
@@ -297,6 +299,7 @@ export function Cash({
   networkOwner,
   fix,
   fixSeen,
+  person,
 }: {
   store: Store;
   token: string;
@@ -308,9 +311,15 @@ export function Cash({
   /** The receipt's «Змінити спосіб оплати»: straight to that sale. */
   fix: FixTarget | null;
   fixSeen: () => void;
+  /** Whoever this phone belongs to: named on the kept operation's paper line. */
+  person: string;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error } = useCashCommand();
+  // Kept when this screen opened: the App read it from the phone's storage
+  // and opened «Каса» on it, since a kept drawer command holds every other
+  // tab.
+  const [loaded] = useState(() => pending !== null);
   const drawer = useDrawer(store.id, token, true);
   const [step, setStep] = useState<Step>(() =>
     fix ? { name: "fix", chosen: fix } : { name: "main" },
@@ -322,8 +331,9 @@ export function Cash({
   const [result, setResult] = useState<Close | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  // Which command the journal's error is about, to say what was not recorded.
-  const [lastCommand, setLastCommand] = useState<CashBody["command"]>("close");
+  // Which command the journal's error is about, to say what was not
+  // recorded: beside the journal, since the error outlives this screen.
+  const lastCommand = useCashLastCommand((state) => state.command);
   const working = blocked || busy || pending !== null;
   const financial = store.permissions.includes("report:view_financial");
   // Recent closes: the history's first page, and what a late movement may
@@ -351,7 +361,7 @@ export function Cash({
   async function send(body: CashBody): Promise<JournalOutcome<CashAnswer>> {
     setDone(null);
     setProblem(null);
-    setLastCommand(body.command);
+    useCashLastCommand.setState({ command: body.command });
     const outcome = await submitCashCommand(journalKey, token, {
       // A new transport key per attempt; the command's identity is
       // `command_id`, which is what makes a late retry safe.
@@ -403,6 +413,32 @@ export function Cash({
     retry: false,
   });
   const close = result?.id === shownId ? result : (shown.data ?? result);
+
+  /** The kept command, resent as it is: by its button, or by itself. */
+  function check(): void {
+    const attempt = pending;
+    if (!attempt) return;
+    setDone(null);
+    setProblem(null);
+    useCashLastCommand.setState({ command: attempt.body.command });
+    void resolveCashCommand(journalKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "done") {
+        recorded(attempt.body, outcome.result);
+        if (attempt.body.command !== "reason")
+          setDone(
+            (text) =>
+              text ??
+              "Операцію було записано один раз — повторно вона не пройде.",
+          );
+      } else if (outcome.kind === "refused")
+        // Proven to have recorded nothing: the journal is settled, and the
+        // refusal says what to do instead.
+        useCashCommand.setState({ error: outcome.error });
+      changed();
+    });
+  }
+  // «Каса»'s kept command is checked by itself too (ADR-0013 §4.3, §9).
+  useAutoCheck([{ pending: pending !== null, busy, loaded, run: check }]);
 
   if (step.name === "move" && drawer.data)
     return (
@@ -526,32 +562,8 @@ export function Cash({
             Перевірте результат — та сама операція не запишеться двічі. Нові
             операції заблоковано.
           </p>
-          <button
-            disabled={busy}
-            onClick={() => {
-              const attempt = pending;
-              setDone(null);
-              setProblem(null);
-              setLastCommand(attempt.body.command);
-              void resolveCashCommand(journalKey, token, attempt).then(
-                (outcome) => {
-                  if (outcome.kind === "done") {
-                    recorded(attempt.body, outcome.result);
-                    if (attempt.body.command !== "reason")
-                      setDone(
-                        (text) =>
-                          text ??
-                          "Операцію було записано один раз — повторно вона не пройде.",
-                      );
-                  } else if (outcome.kind === "refused")
-                    // Proven to have recorded nothing: the journal is
-                    // settled, and the refusal says what to do instead.
-                    useCashCommand.setState({ error: outcome.error });
-                  changed();
-                },
-              );
-            }}
-          >
+          <p>{keptText(pending.since, person)}</p>
+          <button disabled={busy} onClick={check}>
             Перевірити результат
           </button>
         </section>
@@ -566,6 +578,16 @@ export function Cash({
       ) : drawer.error ? (
         <div role="alert">
           <p>{errorText(drawer.error)}</p>
+          {unreachable(drawer.error) && (
+            // No close while the server does not answer (owner decisions,
+            // 2026-10-04 and 2026-10-07; ADR-0013 §9, G26).
+            <p>
+              Касу зараз не закрити: сервер не відповідає. Перерахуйте гроші й
+              запишіть суму для себе. Якщо сервер відповість сьогодні — спершу
+              внесіть усе з паперу, потім закрийте касу; якщо ні — закриєте
+              наступного вечора.
+            </p>
+          )}
           <button
             onClick={() => {
               void drawer.refetch();
@@ -751,6 +773,12 @@ function Status({
       </p>
       {moves}
       <p className="hint">Поки рахуєте, не продавайте.</p>
+      {/* Shown always: another phone may have seen the server down (owner
+          decision, 2026-10-04; ADR-0013 §9, G7). */}
+      <p className="hint">
+        Якщо сервер не відповідав — спершу внесіть усе, що записали на папері,
+        потім рахуйте касу.
+      </p>
       <p className="hint">
         Якщо на іншому телефоні операція чекає перевірки, спершу перевірте її:
         інакше вона потрапить у наступне закриття.
@@ -837,6 +865,17 @@ function CloseForm({
   );
 }
 
+/**
+ * One tap for the reasons an outage leaves (owner decision, 2026-10-04;
+ * ADR-0013 §9, G8): a sale typed after the close it belonged to, and a
+ * return or a debt payment typed so. Each puts its words in the field, to
+ * be edited: the reason stays free text.
+ */
+const outageReasons = [
+  "Продаж під час збою",
+  "Повернення чи внесок під час збою",
+] as const;
+
 /** Why the count differs, written only by whoever counted (G12). */
 function ReasonForm({
   disabled,
@@ -858,6 +897,20 @@ function ReasonForm({
           }}
         />
       </label>
+      <div className="actions">
+        {outageReasons.map((text) => (
+          <button
+            key={text}
+            type="button"
+            className="quiet"
+            onClick={() => {
+              setReason(text);
+            }}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
       <button
         type="button"
         disabled={reason.trim() === ""}

@@ -44,6 +44,11 @@ corrections moved to it; the till's four add up to `money`.
 Cash taken out of the drawer or put into it is not here: it is the drawer's,
 in «Каса» (ADR-0012, G24).
 
+A sale typed from paper (owner decisions, 2026-10-04 and 2026-10-07;
+ADR-0013 §5.6) counts on the day it was typed, like any sale: its entry says
+«продано під час збою», who sold and the paper's time, as the paper says, and
+`by` stays whoever typed it. The mark changes no figure.
+
 Nothing here is stored, so it never disagrees with what it sums.
 """
 
@@ -61,6 +66,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, and_, func, literal, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.errors import ValidationFailedError
 from app.modules.authz.permissions import Permission
@@ -241,6 +247,15 @@ class Kind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class OutageView:
+    """«Продано під час збою»: a sale typed from paper (ADR-0013 §5.6). Who
+    sold and when, as the paper says; each None when the paper named none."""
+
+    sold_by: str | None
+    sold_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
 class EntryView:
     kind: Kind
     # The sale's id, or the return's.
@@ -271,6 +286,9 @@ class EntryView:
     method_now: PaymentMethod | None
     paid_in_parts: bool
     goods: list[str]
+    # The mark of a sale typed from paper; `by` above is still whoever typed
+    # it (owner decision, 2026-10-04: «Звіт» shows who sold and who typed).
+    outage: OutageView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -705,6 +723,7 @@ async def entries(
                 method_now=view.method_now,
                 paid_in_parts=view.paid_in_parts,
                 goods=view.goods,
+                outage=view.outage,
             )
         )
     return period, listed_views, len(rows) > limit
@@ -725,10 +744,13 @@ async def _sale_entries(
 ) -> dict[uuid.UUID, EntryView]:
     if not sale_ids:
         return {}
+    # Whoever the mark of a sale typed from paper names as having sold it.
+    named = aliased(AppUser)
     sales = (
         await session.execute(
-            select(Sale, AppUser.display_name)
+            select(Sale, AppUser.display_name, named.display_name)
             .join(AppUser, AppUser.id == Sale.seller_user_id)
+            .outerjoin(named, named.id == Sale.outage_sold_by)
             .where(Sale.id.in_(sale_ids))
         )
     ).all()
@@ -784,8 +806,13 @@ async def _sale_entries(
                 _goods(item.display_name_snapshot, item.variant_snapshot, item.quantity)
                 for item in items.get(sale.id, [])
             ],
+            outage=(
+                OutageView(sold_by=sold_by, sold_at=sale.outage_sold_at)
+                if sale.during_outage
+                else None
+            ),
         )
-        for sale, seller in sales
+        for sale, seller, sold_by in sales
     }
 
 
@@ -852,6 +879,7 @@ __all__ = [
     "Figures",
     "Kind",
     "ModelFigures",
+    "OutageView",
     "Period",
     "SalesReport",
     "StoreFigures",

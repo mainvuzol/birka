@@ -264,16 +264,25 @@ export function Correction({
   );
 }
 
-/** What the screen can say about a refusal it knows the cause of. */
-function refusalText(error: ApiError, system: number): string {
+/**
+ * What the screen can say about a refusal it knows the cause of. `system` is
+ * the balance the count was made against. `after` says that nothing was
+ * recorded; a kept correction refused on resend says it first instead
+ * («Коригування не записано.», `@/cash/errors`), and passes none.
+ */
+export function refusalText(
+  error: ApiError,
+  system: number | null,
+  after = " Нічого не записано.",
+): string {
   const { details } = error;
   if (error.code === "STOCK_CHANGED" && typeof details.actual === "number")
     return details.expected === 0 && system === 0
       ? `Цей товар уже є в обліку цього складу: ${String(details.actual)} од. Перерахуйте його й введіть кількість ще раз.`
-      : `Поки ви рахували, облік змінився: було ${String(details.expected)}, тепер ${String(details.actual)}. Перерахуйте товар і введіть кількість ще раз. Нічого не записано.`;
+      : `Поки ви рахували, облік змінився: було ${String(details.expected)}, тепер ${String(details.actual)}. Перерахуйте товар і введіть кількість ще раз.${after}`;
   if (error.code === "INSUFFICIENT_STOCK")
-    return "В обліку вже менше, ніж ви списуєте. Залишки оновлено — перевірте кількість. Нічого не записано.";
+    return `В обліку вже менше, ніж ви списуєте. Залишки оновлено — перевірте кількість.${after}`;
   if (details.reason === "RESERVED" && typeof details.reserved === "number")
-    return `На цей товар є резерв замовлення (${String(details.reserved)} од.). Виправити облік можна після видачі або скасування замовлення. Нічого не записано.`;
-  return `${errorText(error)} Нічого не записано.`;
+    return `На цей товар є резерв замовлення (${String(details.reserved)} од.). Виправити облік можна після видачі або скасування замовлення.${after}`;
+  return `${errorText(error)}${after}`;
 }

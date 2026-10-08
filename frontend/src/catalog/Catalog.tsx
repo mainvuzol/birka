@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, errorText } from "@/shared/api";
+import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
+import { keptText, useAutoCheck } from "@/shared/reach";
 import type { Store } from "@/orders/types";
 import {
   CANCEL_CREATION_REASON,
+  forgetCatalogRefusal,
   submitCatalogCommand,
   useCatalogCommand,
 } from "./commands";
@@ -35,11 +37,14 @@ export function Catalog({
   token,
   journalKey,
   storageError,
+  person,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   storageError: boolean;
+  /** Whoever this phone belongs to: named on the kept operation's paper line. */
+  person: string;
 }): JSX.Element {
   const cache = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
@@ -48,7 +53,10 @@ export function Catalog({
   const [filter, setFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const [success, setSuccess] = useState("");
-  const { pending, busy, error } = useCatalogCommand();
+  const { pending, busy, error, kept } = useCatalogCommand();
+  // Kept when this screen opened: its journal read it from the phone's
+  // storage, since a kept operation holds every tab on this one.
+  const [loaded] = useState(() => pending !== null);
   const blocked = storageError || busy || pending !== null;
   const list = useQuery({
     queryKey: ["catalog-decisions", journalKey, filter, offset],
@@ -84,6 +92,26 @@ export function Catalog({
       });
     }
   }
+  // A seller's kept catalogue operation holds the till too, so the phone
+  // checks it by itself (ADR-0013 §4.3, G11): the same operation resent.
+  useAutoCheck([
+    {
+      pending: pending !== null,
+      busy,
+      loaded,
+      run: () => {
+        if (pending) void run(pending);
+      },
+    },
+  ]);
+  // A first attempt's refusal goes with this screen: back from another tab,
+  // the queue opens without it.
+  useEffect(
+    () => () => {
+      forgetCatalogRefusal();
+    },
+    [],
+  );
   return (
     <>
       {pending && (
@@ -93,6 +121,7 @@ export function Catalog({
             Результат ще не підтверджено. Повторна спроба використовує ту саму
             операцію.
           </p>
+          <p>{keptText(pending.since, person)}</p>
           <button
             disabled={busy}
             onClick={() => {
@@ -125,13 +154,20 @@ export function Catalog({
           )}
         </section>
       )}
-      {error !== null && <p role="alert">{message(error)}</p>}
+      {error !== null && (
+        <p role="alert">
+          {kept && recordedNothing(error)
+            ? `Операцію каталогу не записано. ${message(error)}`
+            : message(error)}
+        </p>
+      )}
       {success && <p role="status">{success}</p>}
       <div className="toolbar">
         <h2>Перевірка каталогу</h2>
         <button
           disabled={blocked}
           onClick={() => {
+            forgetCatalogRefusal();
             setCreating(true);
             setSelected(null);
             setSuccess("");
@@ -149,6 +185,7 @@ export function Catalog({
           className="quiet"
           disabled={blocked}
           onClick={() => {
+            forgetCatalogRefusal();
             setCreating(false);
             setSelected(null);
             setSuccess("");
@@ -257,6 +294,7 @@ export function Catalog({
                   key={d.decision_id}
                   disabled={blocked}
                   onClick={() => {
+                    forgetCatalogRefusal();
                     setSelected(d.decision_id);
                     setSuccess("");
                   }}
@@ -323,8 +361,9 @@ function Detail({
   run: (c: Command) => Promise<void>;
   refresh: () => void;
 }): JSX.Element {
-  // The last refusal, so creating a product can answer a similar name.
-  const { error } = useCatalogCommand();
+  // The last refusal and the operation it answered: creating this proposal's
+  // product answers a similar name, never another proposal's.
+  const { error, refused } = useCatalogCommand();
   const [variant, setVariant] = useState("");
   const [reason, setReason] = useState("");
   const [feedback, setFeedback] = useState(false);
@@ -376,7 +415,13 @@ function Detail({
           submit={(body) => {
             action("create-product", body);
           }}
-          refusal={error}
+          refusal={
+            error !== null &&
+            refused?.decisionId === decision.decision_id &&
+            refused.path.endsWith("/create-product")
+              ? { error, sent: refused.body }
+              : null
+          }
         />
       )}
       {decision.creation?.redirected_from && (

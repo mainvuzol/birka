@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, ApiError, recordedNothing } from "@/shared/api";
+import { isSince, sinceOf } from "@/shared/reach";
 import type { Order } from "./types";
 export interface Pending {
   path: string;
@@ -8,6 +9,13 @@ export interface Pending {
   orderId?: string;
   acknowledged?: boolean;
   ambiguous?: boolean;
+  /**
+   * When it was first written down, by the phone's clock, kept on every
+   * resend: the banner's «Чекає відповіді сервера з 14:20» (ADR-0013 §4.4).
+   * Beside the body, never in it. Absent from a command kept before it was
+   * written.
+   */
+  since?: string;
 }
 interface CommandState {
   pending: Pending | null;
@@ -52,6 +60,7 @@ function validatePending(key: string, value: unknown): Pending {
       typeof pending.acknowledged !== "boolean") ||
     (pending.ambiguous !== undefined &&
       typeof pending.ambiguous !== "boolean") ||
+    !isSince(pending.since) ||
     (pending.acknowledged &&
       (typeof pending.orderId !== "string" ||
         !new RegExp(`^${uuid}$`).test(pending.orderId)))
@@ -85,8 +94,9 @@ export async function submitPending(
   try {
     current = validatePending(key, current);
     const saved = localStorage.getItem(key);
+    let existing: Pending | null = null;
     if (saved) {
-      const existing = validatePending(key, JSON.parse(saved));
+      existing = validatePending(key, JSON.parse(saved));
       if (existing.body.command_id !== current.body.command_id) {
         useCommand.setState({ pending: existing });
         throw new Error("Спершу перевірте збережену операцію.");
@@ -94,7 +104,8 @@ export async function submitPending(
       previouslyAmbiguous ||= Boolean(existing.ambiguous);
     }
     // Persist uncertainty BEFORE sending, including page closure during fetch.
-    current = { ...current, ambiguous: true };
+    // Since when is kept from the first time.
+    current = { ...current, ambiguous: true, ...sinceOf(existing, current) };
     useCommand.setState({ pending: current });
     localStorage.setItem(key, JSON.stringify(current));
     if (!current.acknowledged) {

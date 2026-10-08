@@ -450,10 +450,8 @@ test("a sale written down before clarifications existed is resent exactly as sto
   });
   await page.reload();
   await page.getByRole("button", { name: "Основний MAIN" }).click();
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Перевірити результат продажу" })
-    .click();
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await expect(page.getByText("Продаж підтверджено")).toBeVisible();
   expect(resent).toHaveLength(1);
   expect(resent[0]?.key).toBe(stored.key);

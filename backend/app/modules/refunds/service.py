@@ -75,6 +75,7 @@ from app.core.errors import (
     NotFoundError,
     RefundExceedsSoldError,
     ValidationFailedError,
+    nothing_recorded,
 )
 from app.core.logging import get_logger
 from app.core.text import is_storable
@@ -621,269 +622,279 @@ async def create_refund(
     )
     if existing is not None:
         return existing
-    # A way stated must be one of the till's in any case.
-    method = stated_way(payment_method, takes=TILL_METHODS, required=False)
-    # A sale paid in full hands all of the goods' worth back as money, so a
-    # new refund of one says how before anything else is checked (ADR-0012,
-    # B2): an attempt a phone kept from before the way was asked is refused
-    # `PAYMENT_METHOD_REQUIRED` and settles, whatever happened to its lines
-    # since (B13). One paid in parts needs a way only once the split below
-    # shows money going back (G35). Whether a sale was paid in parts was
-    # settled when it was sold.
-    if method is None and sale.id not in await credited_sales(session, sale_ids=[sale.id]):
-        stated_way(method, takes=TILL_METHODS, required=method_required)
+    # Under the command's lock, and no refund under it: every refusal from
+    # here on proves this return recorded nothing, and says so, so a phone
+    # that never heard its answer can settle it (ADR-0008 §9, ADR-0013 §1).
+    # Those that already said so keep saying it.
+    with nothing_recorded():
+        # A way stated must be one of the till's in any case.
+        method = stated_way(payment_method, takes=TILL_METHODS, required=False)
+        # A sale paid in full hands all of the goods' worth back as money, so a
+        # new refund of one says how before anything else is checked (ADR-0012,
+        # B2): an attempt a phone kept from before the way was asked is refused
+        # `PAYMENT_METHOD_REQUIRED` and settles, whatever happened to its lines
+        # since (B13). One paid in parts needs a way only once the split below
+        # shows money going back (G35). Whether a sale was paid in parts was
+        # settled when it was sold.
+        if method is None and sale.id not in await credited_sales(session, sale_ids=[sale.id]):
+            stated_way(method, takes=TILL_METHODS, required=method_required)
 
-    # Lock the whole sale's lines, in id order, before reading how much of it
-    # has already been refunded. Every refund of this sale takes the same rows
-    # in the same order, so they serialize instead of racing (invariant I9).
-    sale_items = {
-        item.id: item
-        for item in (
-            await session.scalars(
-                select(SaleItem)
-                .where(SaleItem.sale_id == sale.id)
-                .order_by(SaleItem.id)
-                .with_for_update()
-            )
-        ).all()
-    }
-    for line in lines:
-        if line.sale_item_id not in sale_items:
-            # Scoped to this sale, so a line belonging to another receipt — or
-            # to another tenant's — is simply not found.
-            raise NotFoundError(
-                "Sale line not found on this sale",
-                sale_id=str(sale.id),
-                sale_item_id=str(line.sale_item_id),
-            )
+        # Lock the whole sale's lines, in id order, before reading how much of it
+        # has already been refunded. Every refund of this sale takes the same rows
+        # in the same order, so they serialize instead of racing (invariant I9).
+        sale_items = {
+            item.id: item
+            for item in (
+                await session.scalars(
+                    select(SaleItem)
+                    .where(SaleItem.sale_id == sale.id)
+                    .order_by(SaleItem.id)
+                    .with_for_update()
+                )
+            ).all()
+        }
+        for line in lines:
+            if line.sale_item_id not in sale_items:
+                # Scoped to this sale, so a line belonging to another receipt — or
+                # to another tenant's — is simply not found.
+                raise NotFoundError(
+                    "Sale line not found on this sale",
+                    sale_id=str(sale.id),
+                    sale_item_id=str(line.sale_item_id),
+                )
 
-    already_refunded = {
-        sale_item_id: int(quantity)
-        for sale_item_id, quantity in (
-            await session.execute(
-                select(RefundItem.sale_item_id, func.sum(RefundItem.quantity))
-                .where(RefundItem.sale_item_id.in_(list(sale_items)))
-                .group_by(RefundItem.sale_item_id)
-            )
-        ).all()
-    }
+        already_refunded = {
+            sale_item_id: int(quantity)
+            for sale_item_id, quantity in (
+                await session.execute(
+                    select(RefundItem.sale_item_id, func.sum(RefundItem.quantity))
+                    .where(RefundItem.sale_item_id.in_(list(sale_items)))
+                    .group_by(RefundItem.sale_item_id)
+                )
+            ).all()
+        }
 
-    # Every part of a line counts: two intact and one damaged is three back.
-    requested: dict[uuid.UUID, int] = {}
-    for line in lines:
-        requested[line.sale_item_id] = requested.get(line.sale_item_id, 0) + line.quantity
-    for sale_item_id, quantity in requested.items():
-        sale_item = sale_items[sale_item_id]
-        refunded = already_refunded.get(sale_item_id, 0)
-        refundable = sale_item.quantity - refunded
-        if quantity > refundable:
-            # After the command's lock and lookup, so it proves this command
-            # wrote nothing, and says so (ADR-0008 §9): a phone that never
-            # heard whether its attempt went through settles it, though a
-            # colleague took the same goods back meanwhile.
-            raise RefundExceedsSoldError(
-                sale_item_id=str(sale_item_id),
-                requested=quantity,
-                sold=sale_item.quantity,
-                already_refunded=refunded,
-                refundable=refundable,
-                recorded=False,
-            )
+        # Every part of a line counts: two intact and one damaged is three back.
+        requested: dict[uuid.UUID, int] = {}
+        for line in lines:
+            requested[line.sale_item_id] = requested.get(line.sale_item_id, 0) + line.quantity
+        for sale_item_id, quantity in requested.items():
+            sale_item = sale_items[sale_item_id]
+            refunded = already_refunded.get(sale_item_id, 0)
+            refundable = sale_item.quantity - refunded
+            if quantity > refundable:
+                # After the command's lock and lookup, so it proves this command
+                # wrote nothing, and says so (ADR-0008 §9): a phone that never
+                # heard whether its attempt went through settles it, though a
+                # colleague took the same goods back meanwhile.
+                raise RefundExceedsSoldError(
+                    sale_item_id=str(sale_item_id),
+                    requested=quantity,
+                    sold=sale_item.quantity,
+                    already_refunded=refunded,
+                    refundable=refundable,
+                    recorded=False,
+                )
 
-    total = Decimal("0")
-    amounts: list[Decimal] = []
-    for line in lines:
-        sale_item = sale_items[line.sale_item_id]
-        # The only arithmetic in a refund. Both operands are exact, so this is
-        # the amount actually charged for those units, to the kopeck.
-        amount = money(sale_item.final_unit_price * line.quantity)
-        amounts.append(amount)
-        total += amount
+        total = Decimal("0")
+        amounts: list[Decimal] = []
+        for line in lines:
+            sale_item = sale_items[line.sale_item_id]
+            # The only arithmetic in a refund. Both operands are exact, so this is
+            # the amount actually charged for those units, to the kopeck.
+            amount = money(sale_item.final_unit_price * line.quantity)
+            amounts.append(amount)
+            total += amount
 
-    if total > MAX_MONEY:  # pragma: no cover - unreachable while refund <= sale total
-        raise ValidationFailedError("Refund total is out of range")
+        if total > MAX_MONEY:  # pragma: no cover - unreachable while refund <= sale total
+            raise ValidationFailedError("Refund total is out of range")
 
-    # A sale paid in parts: how much of the goods' worth goes back as money
-    # rather than off the debt. Locked here, after the sale's lines, and split
-    # the same way by `settle_return` below. None for a sale paid in full,
-    # where all of it goes back.
-    back = await money_back(
-        session, organization_id=scope.organization_id, sale_id=sale.id, worth=money(total)
-    )
-    moves_money = back is None or back > 0
-    if back is not None and moves_money:
-        stated_way(method, takes=TILL_METHODS, required=method_required)
-
-    refund = Refund(
-        organization_id=scope.organization_id,
-        store_id=sale.store_id,
-        taken_at_store_id=taking,
-        sale_id=sale.id,
-        actor_user_id=scope.user_id,
-        command_id=command_id,
-        command_fingerprint=request_fingerprint,
-        # The sale's currency, not the configured one: a receipt is refunded in
-        # what it was paid in.
-        currency_code=sale.currency_code,
-        total_amount=money(total),
-        reason=reason,
-        correlation_id=correlation_id,
-        # Only when money goes back: a return that only lowered a debt moved
-        # none, whatever the screen had preselected (ADR-0012, G35).
-        payment_method=method.value if method is not None and moves_money else None,
-    )
-    session.add(refund)
-    await session.flush()
-
-    refund_items = [
-        RefundItem(
-            refund_id=refund.id,
-            sale_item_id=line.sale_item_id,
-            quantity=line.quantity,
-            amount=amount,
-            restock=line.restock,
-            condition=line.condition.value if line.condition else None,
-            destination_location_id=_destination(
-                line, sale_items[line.sale_item_id], damaged, elsewhere
-            ),
+        # A sale paid in parts: how much of the goods' worth goes back as money
+        # rather than off the debt. Locked here, after the sale's lines, and split
+        # the same way by `settle_return` below. None for a sale paid in full,
+        # where all of it goes back.
+        back = await money_back(
+            session, organization_id=scope.organization_id, sale_id=sale.id, worth=money(total)
         )
-        for line, amount in zip(lines, amounts, strict=True)
-    ]
-    session.add_all(refund_items)
-    await session.flush()
-    # Taken after the sale's lines are locked, so two returns of one sale
-    # split its debt one after the other.
-    credit = await settle_return(
-        session,
-        organization_id=scope.organization_id,
-        sale_id=sale.id,
-        refund_id=refund.id,
-        worth=refund.total_amount,
-        actor_user_id=scope.user_id,
-        correlation_id=correlation_id,
-    )
+        moves_money = back is None or back > 0
+        if back is not None and moves_money:
+            stated_way(method, takes=TILL_METHODS, required=method_required)
 
-    movements: list[uuid.UUID] = []
-    restocked = [
-        (line, item) for line, item in zip(lines, refund_items, strict=True) if line.restock
-    ]
-    # Goods come back as the model that stands now: an old sale of a model
-    # merged since comes back as the model that stays (owner decision,
-    # 2026-10-03). Held as a stock command holds a model, so a merge cannot
-    # take it away before the goods land. The sale line keeps its own.
-    leading = await current_variants(
-        session,
-        organization_id=scope.organization_id,
-        variant_ids={sale_items[line.sale_item_id].product_variant_id for line in lines},
-    )
-    # Owner decision, 2026-09-17: goods go back to the warehouse the sale line
-    # drew them from. Returning them anywhere else is a return plus a transfer,
-    # and must be two explicit operations (invariant I16) — with the one
-    # exception the owner made on 2026-10-01: a damaged unit goes to the
-    # store's «Брак», so it is never back on sale.
-    if restocked:
-        await apply_movements(
+        refund = Refund(
+            organization_id=scope.organization_id,
+            store_id=sale.store_id,
+            taken_at_store_id=taking,
+            sale_id=sale.id,
+            actor_user_id=scope.user_id,
+            command_id=command_id,
+            command_fingerprint=request_fingerprint,
+            # The sale's currency, not the configured one: a receipt is refunded in
+            # what it was paid in.
+            currency_code=sale.currency_code,
+            total_amount=money(total),
+            reason=reason,
+            correlation_id=correlation_id,
+            # Only when money goes back: a return that only lowered a debt moved
+            # none, whatever the screen had preselected (ADR-0012, G35).
+            payment_method=method.value if method is not None and moves_money else None,
+        )
+        session.add(refund)
+        await session.flush()
+
+        refund_items = [
+            RefundItem(
+                refund_id=refund.id,
+                sale_item_id=line.sale_item_id,
+                quantity=line.quantity,
+                amount=amount,
+                restock=line.restock,
+                condition=line.condition.value if line.condition else None,
+                destination_location_id=_destination(
+                    line, sale_items[line.sale_item_id], damaged, elsewhere
+                ),
+            )
+            for line, amount in zip(lines, amounts, strict=True)
+        ]
+        session.add_all(refund_items)
+        await session.flush()
+        # Taken after the sale's lines are locked, so two returns of one sale
+        # split its debt one after the other.
+        credit = await settle_return(
             session,
             organization_id=scope.organization_id,
-            requests=[
-                MovementRequest(
-                    location_id=item.destination_location_id,
-                    acting_store_id=taking,
-                    product_variant_id=leading[sale_items[line.sale_item_id].product_variant_id],
-                    size_id=sale_items[line.sale_item_id].size_id,
-                    quantity_delta=line.quantity,
-                    movement_type=MovementType.REFUND_RETURN,
-                    reference_type=REFUND_REFERENCE,
-                    reference_id=refund.id,
-                )
-                for line, item in restocked
-                if item.destination_location_id is not None
-            ],
+            sale_id=sale.id,
+            refund_id=refund.id,
+            worth=refund.total_amount,
             actor_user_id=scope.user_id,
             correlation_id=correlation_id,
-            # A damaged part goes into the store's «Брак», which only a
-            # return taken damaged and the «Брак» section may fill.
-            damaged_stock=damaged is not None,
-        )
-        movements = await refund_return_movement_ids(
-            session, organization_id=scope.organization_id, refund_id=refund.id
         )
 
-    if damaged is not None:
-        # Each unit returned damaged is one row in «Брак», to be inspected
-        # (owner decision, 2026-10-01).
-        await register(
+        movements: list[uuid.UUID] = []
+        restocked = [
+            (line, item) for line, item in zip(lines, refund_items, strict=True) if line.restock
+        ]
+        # Goods come back as the model that stands now: an old sale of a model
+        # merged since comes back as the model that stays (owner decision,
+        # 2026-10-03). Held as a stock command holds a model, so a merge cannot
+        # take it away before the goods land. The sale line keeps its own.
+        leading = await current_variants(
             session,
             organization_id=scope.organization_id,
-            store_id=taking,
-            location_id=damaged,
-            parts=[
-                DamagedPart(
-                    refund_item_id=item.id,
-                    product_variant_id=leading[sale_items[item.sale_item_id].product_variant_id],
-                    size_id=sale_items[item.sale_item_id].size_id,
-                    sold_from_location_id=sale_items[item.sale_item_id].source_location_id,
-                    display_name=sale_items[item.sale_item_id].display_name_snapshot,
-                    size_label=sale_items[item.sale_item_id].variant_snapshot.get("size"),
-                    quantity=item.quantity,
-                )
-                for item in refund_items
-                if item.condition == ReturnCondition.DAMAGED.value
-            ],
+            variant_ids={sale_items[line.sale_item_id].product_variant_id for line in lines},
+        )
+        # Owner decision, 2026-09-17: goods go back to the warehouse the sale line
+        # drew them from. Returning them anywhere else is a return plus a transfer,
+        # and must be two explicit operations (invariant I16) — with the one
+        # exception the owner made on 2026-10-01: a damaged unit goes to the
+        # store's «Брак», so it is never back on sale.
+        if restocked:
+            await apply_movements(
+                session,
+                organization_id=scope.organization_id,
+                requests=[
+                    MovementRequest(
+                        location_id=item.destination_location_id,
+                        acting_store_id=taking,
+                        product_variant_id=leading[
+                            sale_items[line.sale_item_id].product_variant_id
+                        ],
+                        size_id=sale_items[line.sale_item_id].size_id,
+                        quantity_delta=line.quantity,
+                        movement_type=MovementType.REFUND_RETURN,
+                        reference_type=REFUND_REFERENCE,
+                        reference_id=refund.id,
+                    )
+                    for line, item in restocked
+                    if item.destination_location_id is not None
+                ],
+                actor_user_id=scope.user_id,
+                correlation_id=correlation_id,
+                # A damaged part goes into the store's «Брак», which only a
+                # return taken damaged and the «Брак» section may fill.
+                damaged_stock=damaged is not None,
+            )
+            movements = await refund_return_movement_ids(
+                session, organization_id=scope.organization_id, refund_id=refund.id
+            )
+
+        if damaged is not None:
+            # Each unit returned damaged is one row in «Брак», to be inspected
+            # (owner decision, 2026-10-01).
+            await register(
+                session,
+                organization_id=scope.organization_id,
+                store_id=taking,
+                location_id=damaged,
+                parts=[
+                    DamagedPart(
+                        refund_item_id=item.id,
+                        product_variant_id=leading[
+                            sale_items[item.sale_item_id].product_variant_id
+                        ],
+                        size_id=sale_items[item.sale_item_id].size_id,
+                        sold_from_location_id=sale_items[item.sale_item_id].source_location_id,
+                        display_name=sale_items[item.sale_item_id].display_name_snapshot,
+                        size_label=sale_items[item.sale_item_id].variant_snapshot.get("size"),
+                        quantity=item.quantity,
+                    )
+                    for item in refund_items
+                    if item.condition == ReturnCondition.DAMAGED.value
+                ],
+            )
+
+        await audit.record(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            action="sale.refunded",
+            entity_type="refund",
+            entity_id=refund.id,
+            before={
+                "sale_id": str(sale.id),
+                "refunded_before": {
+                    str(line.sale_item_id): already_refunded.get(line.sale_item_id, 0)
+                    for line in lines
+                },
+            },
+            after={
+                "refund_id": str(refund.id),
+                "total_amount": str(refund.total_amount),
+                "currency_code": refund.currency_code,
+                **({"taken_at_store_id": str(taking)} if taking != sale.store_id else {}),
+                **(
+                    {
+                        "debt_reduced": str(credit.debt_reduced),
+                        "cash_back": str(credit.cash_back),
+                    }
+                    if credit is not None
+                    else {}
+                ),
+                "refunded_now": {
+                    str(sale_item_id): quantity for sale_item_id, quantity in requested.items()
+                },
+                "restocked": sorted({str(line.sale_item_id) for line, _ in restocked}),
+                "damaged": {
+                    str(line.sale_item_id): line.quantity
+                    for line in lines
+                    if line.condition is ReturnCondition.DAMAGED
+                },
+            },
+            reason=reason,
         )
 
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="sale.refunded",
-        entity_type="refund",
-        entity_id=refund.id,
-        before={
-            "sale_id": str(sale.id),
-            "refunded_before": {
-                str(line.sale_item_id): already_refunded.get(line.sale_item_id, 0) for line in lines
-            },
-        },
-        after={
-            "refund_id": str(refund.id),
-            "total_amount": str(refund.total_amount),
-            "currency_code": refund.currency_code,
-            **({"taken_at_store_id": str(taking)} if taking != sale.store_id else {}),
-            **(
-                {
-                    "debt_reduced": str(credit.debt_reduced),
-                    "cash_back": str(credit.cash_back),
-                }
-                if credit is not None
-                else {}
-            ),
-            "refunded_now": {
-                str(sale_item_id): quantity for sale_item_id, quantity in requested.items()
-            },
-            "restocked": sorted({str(line.sale_item_id) for line, _ in restocked}),
-            "damaged": {
-                str(line.sale_item_id): line.quantity
-                for line in lines
-                if line.condition is ReturnCondition.DAMAGED
-            },
-        },
-        reason=reason,
-    )
+        logger.info(
+            "refund.created",
+            refund_id=str(refund.id),
+            sale_id=str(sale.id),
+            store_id=str(sale.store_id),
+            taken_at_store_id=str(taking),
+            lines=len(refund_items),
+            restocked=len(restocked),
+            total=str(refund.total_amount),
+            payment_method=refund.payment_method,
+        )
 
-    logger.info(
-        "refund.created",
-        refund_id=str(refund.id),
-        sale_id=str(sale.id),
-        store_id=str(sale.store_id),
-        taken_at_store_id=str(taking),
-        lines=len(refund_items),
-        restocked=len(restocked),
-        total=str(refund.total_amount),
-        payment_method=refund.payment_method,
-    )
-
-    return _result(refund, refund_items, sale_items, movements, credit)
+        return _result(refund, refund_items, sale_items, movements, credit)
 
 
 async def refunded_quantities(

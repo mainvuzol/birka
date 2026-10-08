@@ -25,6 +25,11 @@ B11, G24):
 - the till's four ways always add up to `money` (checked on every block read
   here, `balanced`).
 
+Since 2026-10-07 (owner decisions, "the server is unreachable"; ADR-0013
+§5.6): a sale typed from paper counts on the day it was typed, and its entry
+says «продано під час збою», who sold and the paper's time, while `by` stays
+whoever typed it.
+
 Corrections are written straight into their table, as a script would: the
 database checks each against its money row (revision 0035), and the command
 that records them is the drawer's, tested with it. All data is synthetic.
@@ -678,7 +683,10 @@ async def test_the_models_sold_and_every_sale_and_return(maker):
         "method_now",
         "paid_in_parts",
         "goods",
+        "outage",
     }
+    # Nothing here was typed from paper.
+    assert {entry["outage"] for entry in listed["entries"]} == {None}
     # The child's list has its sale and the return of it taken elsewhere.
     assert [(e["kind"], e["id"]) for e in child_listed["entries"]] == [
         ("RETURN", brought["id"]),
@@ -956,3 +964,52 @@ async def test_money_recorded_before_the_way_was_asked_reads_not_stated(maker):
     assert ways_of(here)["NOT_STATED"] == ("1000.00", "0.00", "-1000.00", "0.00")
     entry = (await entries_of(maker, net))[str(old)]
     assert (entry["payment_method"], entry["method_now"]) == (None, "CASH")
+
+
+async def test_a_sale_typed_from_paper_counts_the_day_it_was_typed_and_names_both(maker):
+    """Typed today by the manager from yesterday evening's paper, sold by the
+    seller: today's sale, as the paper sales of the first days were; «Звіт»
+    shows who sold and who typed it (owner decision, 2026-10-04). The mark
+    changes no figure."""
+    net = await network(maker)
+    primary = net.shops.primary_store
+    written = f"{kyiv_day(1).isoformat()}T19:40"
+    typed = await sell(
+        maker,
+        net,
+        net.manager,
+        primary,
+        qty=1,
+        way="CARD",
+        outage={"sold_by_user_id": str(net.seller), "sold_at": written},
+    )
+    live = await sell(maker, net, net.seller, primary, qty=1, way="CASH")
+
+    today = figures((await read(maker, net, net.owner)).json(), primary)
+    yesterday = figures((await read(maker, net, net.owner, date_from=kyiv_day(1))).json(), primary)
+    entries = await entries_of(maker, net, store_id=primary)
+
+    assert (today["sales"], today["sold"], today["money"]) == (2, "3000.00", "3000.00")
+    assert ways_of(today)["CARD"] == ("1500.00", "0.00", "0.00", "1500.00")
+    assert (yesterday["sales"], yesterday["money"]) == (0, "0.00")
+    entry = entries[typed["id"]]
+    assert (entry["by"], entry["outage"]["sold_by"]) == ("manager", "seller")
+    assert datetime.fromisoformat(entry["outage"]["sold_at"]) == datetime.combine(
+        kyiv_day(1), time(19, 40), KYIV
+    )
+    assert datetime.fromisoformat(entry["at"]).astimezone(KYIV).date() == kyiv_day(0)
+    assert entries[live["id"]]["outage"] is None
+
+
+async def test_a_sale_typed_from_paper_naming_nobody_still_says_so(maker):
+    """Who sold and when are both optional on the paper (owner decision,
+    2026-10-04): with neither named, «Звіт» still says the sale was typed
+    from paper, and who typed it."""
+    net = await network(maker)
+    primary = net.shops.primary_store
+    typed = await sell(maker, net, net.seller, primary, qty=1, way="CASH", outage={})
+
+    entry = (await entries_of(maker, net, store_id=primary))[typed["id"]]
+
+    assert entry["by"] == "seller"
+    assert entry["outage"] == {"sold_by": None, "sold_at": None}

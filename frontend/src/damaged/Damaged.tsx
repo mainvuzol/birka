@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, unreachable } from "@/shared/api";
 import type { Location, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import { sizeLabel } from "@/returns/types";
@@ -73,12 +73,14 @@ export function Damaged({
         body,
       );
     } catch (error) {
+      // No answer reads as everywhere else, the owner's words (ADR-0013 §3,
+      // G13), and this screen's own: pressing again is safe.
       setProblem(
         error instanceof ApiError && error.code === "DAMAGED_UNIT_CHANGED"
           ? "Цю одиницю щойно змінив хтось інший. Список оновлено — подивіться ще раз."
-          : error instanceof ApiError
+          : error instanceof ApiError && !unreachable(error)
             ? errorText(error)
-            : "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
+            : `${errorText(error)} Повторне натискання безпечне.`,
       );
     } finally {
       setBusy(null);

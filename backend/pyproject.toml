@@ -626,6 +626,9 @@ forbidden_modules = [
     "app.modules.audit",
     "app.modules.telegram",
     "app.modules.sales.service",
+    # The mark of a sale typed from paper is read from its columns, never
+    # through the command's check (ADR-0013 §11).
+    "app.modules.sales.outage",
     "app.modules.refunds.service",
     "app.modules.credit.service",
     "app.modules.cash.service",
@@ -738,6 +741,7 @@ forbidden_modules = [
     "app.modules.sales.service",
     "app.modules.sales.order_collection",
     "app.modules.sales.shelf",
+    "app.modules.sales.outage",
     "app.modules.credit.service",
     "app.modules.refunds.service",
     "app.modules.orders.service",

@@ -19,6 +19,22 @@ Each print is taken from the real command code, driven from an HTTP body
 through its endpoint where there is one. The database calls in front of the
 print are stubbed, and the replay lookup — where the print is compared with
 what was stored — takes it and stops the command there.
+
+The bodies a phone of «cash and card» (#68) sends are pinned the same way
+(ADR-0013 §5.4). Its sales and payments always carry a way of paying, and its
+returns whenever money goes back (`sales/Sale.tsx:296`,
+`credits/Credits.tsx:432`, `returns/Returns.tsx:453`), so the pins of #67, all
+without one, would pass a change that alters a print only when a way is
+present. Their values were computed by this file against the code of
+`3b081a0`, before the outage mark touched a print, and they never change
+either: an attempt that phone kept through an outage is resent byte for byte,
+and must still replay.
+
+A sale typed from paper carries the mark «продано під час збою» in both
+prints, and only it does (ADR-0013 §5.4): the pins above stay as they were,
+and the marked sale's own were computed by this file when the mark was added.
+The paper's time is printed as the literal the body carried, so the print
+never depends on the store's zone.
 """
 
 from __future__ import annotations
@@ -97,6 +113,31 @@ ORDER_COLLECT_IN_PARTS_PERMANENT = (
     "57c4adf476afd5ccb0fb4056c78400326083eb000ae0f121ec3df756bbe78959"
 )
 COLLECTED_SALE_PERMANENT = "58134a528d0ccede44c4919580a26ce12b28af2c4e7211340e88ab8e99ab7c67"
+
+# The golden prints of bodies a phone of #68 sends, computed at 3b081a0
+# (ADR-0013 §5.4). A payment has only the permanent one: it is sent without
+# an Idempotency-Key.
+SALE_CASH_7_DAY = "ffb5397b5c1df74bf5fba0cbbb6c5152e748a0e4f5edb169ac86e8f6fd0196e7"
+SALE_CASH_PERMANENT = "f61520c8f3210ed12ff2e6c7f63ea92af9cd777a758dec9248b3914dfe086421"
+SALE_IN_PARTS_CARD_7_DAY = "d7b96f5b3a69b637b62b3020981b640165bd7ab81735a23267a975c7dd328ff9"
+SALE_IN_PARTS_CARD_PERMANENT = "cca25fa7ff472352323830e4027d0384c87b18c9c81a84a2a92f40136276f0ba"
+PAYMENT_TRANSFER_PERMANENT = "c55a68f1b8854ca6b3a1ce0e68069d6339704af5f72bf587920e3bd67873124f"
+PAYMENT_ELSEWHERE_TRANSFER_PERMANENT = (
+    "dacd85a934861e2797e043053d802ad8d17c45a738dc13ecf8f7cc63b33fee69"
+)
+REFUND_CASH_7_DAY = "54f7354c21374f2d5267e15922b7478136b35225e471ca178fef964e5daff982"
+REFUND_CASH_PERMANENT = "941c8a423d67048cc923b997c6a5ee0d535e8327792f2b358dd023ff88b38d70"
+REFUND_ELSEWHERE_CARD_7_DAY = "8aa71f2cabbfd131dff5c0e6b83ed26ba08a3c643490e74faeb623fd96e77266"
+REFUND_ELSEWHERE_CARD_PERMANENT = "43d6b4867c737329fa0d3441ac57bac3db52949c541aa7b291483386d0edcfc5"
+
+# The golden prints of a sale typed from paper (ADR-0013 §5.4), computed when
+# the mark was added: one naming who sold and the paper's time, and one
+# marked with nothing named.
+NAMED_SELLER = uuid.UUID("0a000000-0000-4000-8000-00000000000f")
+SALE_MARKED_7_DAY = "a6a65f2d914aea7a1ec5f608a3a53e439d042bab7b79e8ba196d5732fa414e2b"
+SALE_MARKED_PERMANENT = "1a58f9df682736443f113bdbe070600ebcef525980445b0785d6f4d0a54a2e69"
+SALE_MARKED_UNNAMED_7_DAY = "1e78afc25f6aa9832cf5262ac1c11a6c61297dcdf92df08081ebe04ca29ba92c"
+SALE_MARKED_UNNAMED_PERMANENT = "06984ca6f8f15fb5e44612a7cee84a23c638b756ab9c4dc5d5ad40896292e50d"
 
 
 class _StoppedError(Exception):
@@ -203,22 +244,101 @@ async def test_a_sale_paid_in_parts_keeps_both_prints(taken: dict[str, str]) -> 
     assert taken == {"7-day": SALE_IN_PARTS_7_DAY, "permanent": SALE_IN_PARTS_PERMANENT}
 
 
+async def test_a_sale_paid_in_cash_keeps_both_prints(taken: dict[str, str]) -> None:
+    """The body as a phone of #68 sends it (`sales/Sale.tsx:279-297`): the
+    empty corrections are written out, and print as their absence does."""
+    await _sell(
+        {
+            "store_id": str(STORE),
+            "command_id": str(COMMAND),
+            "lines": [LINE],
+            "found_in_store": [],
+            "missing_in_store": [],
+            "size_clarified": [],
+            "payment_method": "CASH",
+        }
+    )
+
+    assert taken == {"7-day": SALE_CASH_7_DAY, "permanent": SALE_CASH_PERMANENT}
+
+
+async def test_a_sale_paid_in_parts_by_card_keeps_both_prints(taken: dict[str, str]) -> None:
+    """The way of the money taken now, beside `credit` and not inside it."""
+    await _sell(
+        {
+            "store_id": str(STORE),
+            "command_id": str(COMMAND),
+            "lines": [LINE],
+            "found_in_store": [],
+            "missing_in_store": [],
+            "size_clarified": [],
+            "credit": CREDIT_BODY,
+            "payment_method": "CARD",
+        }
+    )
+
+    assert taken == {"7-day": SALE_IN_PARTS_CARD_7_DAY, "permanent": SALE_IN_PARTS_CARD_PERMANENT}
+
+
 @pytest.mark.parametrize(
-    ("taken_at", "expected"),
-    [(None, PAYMENT_PERMANENT), (OTHER_STORE, PAYMENT_ELSEWHERE_PERMANENT)],
-    ids=["where-sold", "elsewhere"],
+    ("outage", "expected"),
+    [
+        (
+            {"sold_by_user_id": str(NAMED_SELLER), "sold_at": "2026-10-06T19:40"},
+            {"7-day": SALE_MARKED_7_DAY, "permanent": SALE_MARKED_PERMANENT},
+        ),
+        ({}, {"7-day": SALE_MARKED_UNNAMED_7_DAY, "permanent": SALE_MARKED_UNNAMED_PERMANENT}),
+    ],
+    ids=["who-and-when", "nothing-named"],
+)
+async def test_a_sale_typed_from_paper_keeps_both_prints(
+    taken: dict[str, str], outage: dict[str, str], expected: dict[str, str]
+) -> None:
+    """The body a phone sends in paper mode: a sale paid by card on the
+    terminal during the outage, typed in later. Marked with nothing named, it
+    is still another command than the same sale unmarked."""
+    await _sell(
+        {
+            "store_id": str(STORE),
+            "command_id": str(COMMAND),
+            "lines": [LINE],
+            "found_in_store": [],
+            "missing_in_store": [],
+            "size_clarified": [],
+            "payment_method": "CARD",
+            "outage": outage,
+        }
+    )
+
+    assert taken == expected
+    assert expected["permanent"] != SALE_CASH_PERMANENT
+
+
+@pytest.mark.parametrize(
+    ("taken_at", "way", "expected"),
+    [
+        (None, None, PAYMENT_PERMANENT),
+        (OTHER_STORE, None, PAYMENT_ELSEWHERE_PERMANENT),
+        (None, "TRANSFER", PAYMENT_TRANSFER_PERMANENT),
+        (OTHER_STORE, "TRANSFER", PAYMENT_ELSEWHERE_TRANSFER_PERMANENT),
+    ],
+    ids=["where-sold", "elsewhere", "where-sold-with-a-way", "elsewhere-with-a-way"],
 )
 async def test_a_later_payment_keeps_its_print(
     taken: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
     taken_at: uuid.UUID | None,
+    way: str | None,
     expected: str,
 ) -> None:
     async def locked(session: Any, *, organization_id: uuid.UUID, credit_id: uuid.UUID) -> Any:
         return SimpleNamespace(id=CREDIT, store_id=STORE)
 
     monkeypatch.setattr(credit_service, "_locked", locked)
+    # Keys in the order a phone of #68 sends them (`credits/commands.ts:21-32`).
     body: dict[str, Any] = {"command_id": str(COMMAND), "amount": "500.00"}
+    if way is not None:
+        body["payment_method"] = way
     if taken_at is not None:
         body["store_id"] = str(taken_at)
 
@@ -283,8 +403,57 @@ class _SaleLines:
             },
             {"7-day": REFUND_ELSEWHERE_7_DAY, "permanent": REFUND_ELSEWHERE_PERMANENT},
         ),
+        # As a phone of #68 sends a return (`returns/commands.ts:28-37`):
+        # every line came back, `reason` is written out even when empty, and
+        # the way is there whenever money goes back.
+        (
+            {
+                "command_id": str(COMMAND),
+                "lines": [
+                    {
+                        "sale_item_id": str(SALE_ITEM),
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    },
+                    {
+                        "sale_item_id": str(SALE_ITEM),
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "DAMAGED",
+                    },
+                ],
+                "reason": "Не підійшов розмір",
+                "payment_method": "CASH",
+            },
+            {"7-day": REFUND_CASH_7_DAY, "permanent": REFUND_CASH_PERMANENT},
+        ),
+        (
+            {
+                "command_id": str(COMMAND),
+                "lines": [
+                    {
+                        "sale_item_id": str(SALE_ITEM),
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                        "location_id": str(OTHER_LOCATION),
+                    },
+                    {
+                        "sale_item_id": str(SALE_ITEM),
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "DAMAGED",
+                    },
+                ],
+                "reason": None,
+                "payment_method": "CARD",
+                "store_id": str(OTHER_STORE),
+            },
+            {"7-day": REFUND_ELSEWHERE_CARD_7_DAY, "permanent": REFUND_ELSEWHERE_CARD_PERMANENT},
+        ),
     ],
-    ids=["where-sold", "elsewhere"],
+    ids=["where-sold", "elsewhere", "where-sold-with-a-way", "elsewhere-with-a-way"],
 )
 async def test_a_refund_keeps_both_prints(
     taken: dict[str, str],

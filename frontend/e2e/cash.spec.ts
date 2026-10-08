@@ -26,6 +26,7 @@ interface Fixture {
   network_cash_location_id: string;
   network_cash_first_close_id: string;
   network_paused_store_id: string;
+  network_market_store_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -450,17 +451,11 @@ test.describe("«Оля»'s day at «Каса»", () => {
         ambiguous: true,
       }),
     );
+    // Read from the phone's storage, it is checked at once, with no tap
+    // (ADR-0013 §4.3).
+    const resent = page.waitForResponse(isClose);
     await openAs(page, olya, "Оля");
     await page.getByRole("button", { name: /^Каса CASH/ }).click();
-    await expect(
-      page.getByRole("heading", { name: "Незавершена операція каси" }),
-    ).toBeVisible();
-    for (const name of otherTabs)
-      await expect(
-        page.getByRole("button", { name, exact: true }),
-      ).toBeDisabled();
-    const resent = page.waitForResponse(isClose);
-    await page.getByRole("button", { name: "Перевірити результат" }).click();
     const answer = await resent;
     expect(answer.status()).toBe(422);
     expect(
@@ -593,12 +588,10 @@ test("a take-out kept on the phone settles on the refusal of a close in between,
       },
     }),
   );
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await openAs(page, olya, "Оля");
   await page.getByRole("button", { name: /^Каса CASH/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Незавершена операція каси" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Перевірити результат" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\. Якщо гроші взяли чи внесли вже після закриття — запишіть ще раз\. Якщо до нього — це запише менеджер до того закриття\.$/,
   );
@@ -607,6 +600,108 @@ test("a take-out kept on the phone settles on the refusal of a close in between,
   expect(await page.evaluate((name) => localStorage.getItem(name), key)).toBe(
     null,
   );
+});
+
+test("a kept fix of a way refused on its resend still says what was not recorded once another tab was opened", async ({
+  page,
+}) => {
+  // A fix of a sale's way whose answer never came, kept on the phone.
+  const key = await journalKey(page, olya);
+  await seed(
+    page,
+    key,
+    JSON.stringify({
+      key: randomUUID(),
+      body: {
+        command: "correction",
+        store_id: store,
+        command_id: randomUUID(),
+        target: "SALE",
+        target_id: randomUUID(),
+        from_method: "CASH",
+        to_method: "CARD",
+        note: null,
+      },
+      ambiguous: true,
+    }),
+  );
+  // The server's answer to its resend, made up here: the day was closed
+  // meanwhile, and a seller fixes their own operation only before the close.
+  await page.route("**/api/v1/cash/corrections", (route) =>
+    route.fulfill({
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "Request failed validation",
+        details: { reason: "DAY_CLOSED", recorded: false },
+      },
+    }),
+  );
+  await openAs(page, olya, "Оля");
+  await page.getByRole("button", { name: /^Каса CASH/ }).click();
+  const said =
+    "Зміну способу оплати не записано. Касу вже закрито: змінити спосіб оплати тепер може лише менеджер або власник.";
+  await expect(page.getByRole("alert")).toHaveText(said);
+  // The refusal outlives «Каса»: opened again, it names its own command,
+  // not the count.
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(said);
+});
+
+test("a refusal read in one store's «Каса» does not follow into another store whose kept command cannot be read", async ({
+  page,
+}) => {
+  // In «Каса»: a fix of a way, kept on the phone and refused on its resend.
+  const key = await journalKey(page, owner);
+  await seed(
+    page,
+    key,
+    JSON.stringify({
+      key: randomUUID(),
+      body: {
+        command: "correction",
+        store_id: store,
+        command_id: randomUUID(),
+        target: "SALE",
+        target_id: randomUUID(),
+        from_method: "CASH",
+        to_method: "CARD",
+        note: null,
+      },
+      ambiguous: true,
+    }),
+  );
+  // In «Ринок»: what an earlier visit left there cannot be read.
+  await seed(
+    page,
+    key.replace(store, fixture.network_market_store_id),
+    "{not a command",
+  );
+  await page.route("**/api/v1/cash/corrections", (route) =>
+    route.fulfill({
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "Request failed validation",
+        details: { reason: "BEFORE_DRAWER", recorded: false },
+      },
+    }),
+  );
+  await openAs(page, owner);
+  await page.getByRole("button", { name: /^Каса CASH/ }).click();
+  const said =
+    "Зміну способу оплати не записано. Цю операцію записано до того, як застосунок почав рахувати касу: її спосіб оплати не змінюють.";
+  await expect(page.getByRole("alert")).toHaveText(said);
+  await page.getByRole("button", { name: "Змінити магазин" }).click();
+  await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+  await expect(
+    page.getByText(/^Не вдалося прочитати збережену операцію каси/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Каса" })).toBeVisible();
+  await expect(page.getByText(said)).toHaveCount(0);
 });
 
 test("a blocked store: only the network's owner counts and closes its day", async ({

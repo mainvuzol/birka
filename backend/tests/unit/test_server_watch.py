@@ -119,7 +119,7 @@ async def test_trouble_reaches_each_administrator_once_with_a_sound_in_the_day()
     assert telegram.sent == []
     await seeing.look_at_server(DAY + timedelta(minutes=5))
 
-    text = "⚠️ Сервер застосунку не відповідає. Продавці зараз не можуть продавати."
+    text = "⚠️ Сервер застосунку не відповідає. Продавці продають на папері."
     assert telegram.sent == [(ADMIN, text, False), (OTHER_ADMIN, text, False)]
     assert seeing.book.open[Kind.NOT_ANSWERING].told_at == DAY + timedelta(minutes=5)
     await seeing.look_at_server(DAY + timedelta(minutes=6))
@@ -352,7 +352,7 @@ async def test_the_owners_are_known_even_when_the_incidents_cannot_be_written(mo
         (
             OWNER,
             "⚠️ База не оновлена до цієї версії застосунку: міграцію не виконано. "
-            "Продавці зараз не можуть продавати.",
+            "Продавці продають на папері.",
             False,
         )
     ]
@@ -378,7 +378,7 @@ async def test_sign_ins_failing_are_told_from_the_apis_count():
 
     assert {text for _, text, _ in telegram.sent} == {
         "⚠️ Ніхто не може увійти в застосунок: схоже, на сервері неправильний годинник. "
-        "Продавці зараз не можуть продавати."
+        "Хто ще не увійшов, продає на папері."
     }
 
 

@@ -17,7 +17,8 @@ correct.
   server, or the shops can take: a server and the bot, the real organization
   and its people, backups there, the shops' existing stock, a sale timed in
   the shop, and the owner's sign-off. The hot path's release reading, every
-  case gated, was taken again on 2026-10-04, after the way of paying.
+  case gated, was taken again on 2026-10-08, after the outage work's mark
+  on a sale: every case passes (release checklist, row 22).
 - **The shops' existing stock goes in before anything else moves** in a
   warehouse. The first delivery or sale there closes it to an opening list
   for good ([server runbook, step 9](.ai/project-memory/server-runbook.md#9-the-shops-existing-stock-before-anything-moves)).
@@ -29,7 +30,7 @@ the shops' existing stock, updating and going back.
 
 CI verifies every push:
 - every backend test, on PostgreSQL 17 with the production locale;
-- 182 Playwright journeys on a phone profile, against the real API;
+- 249 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -236,6 +237,48 @@ a day (owner decisions, 2026-10-04; see
 In the app: «Каса», for whoever closes, takes out cash or reads the money.
 See the [report](.ai/project-memory/cash-and-card-report.md).
 
+## When the server does not answer
+
+The shops sell on paper, and type the sales in when the server answers
+(owner decisions, 2026-10-04 and 2026-10-07; see
+[ADR-0013](.ai/decisions/ADR-0013-the-server-is-unreachable.md)).
+
+- **The seller is told** «Сервер не відповідає. Продавайте на папері:
+  модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть
+  продажі до закриття каси.» on no answer, a timeout, a 502, 503 or 504.
+  - A database that does not answer, or a schema behind the code, answers
+    `503 SERVER_UNAVAILABLE` (`reason`: `DATABASE` or `SCHEMA`) instead of a
+    500. A fault in the code keeps its «Номер запиту».
+- **A refusal that proves nothing was recorded says so** (`recorded:
+  false`) on every seller's command refused after its lookup: sales, empty
+  shelves, debt payments and write-offs, orders, returns, deliveries and
+  stock corrections. A kept attempt refused so on resend settles the phone.
+  One resent after its store was blocked, or its warehouse closed, is
+  refused before the lookup, with no `recorded`, and stays kept until the
+  store trades or the warehouse reopens (owner, 2026-10-08).
+- **The phone checks a kept operation by itself,** with the same command:
+  once when the server answers again (while something waits it asks
+  `/api/v1/ready` every 20 seconds), and once when the app is opened with
+  it. The banner says since when it waits, and to write it on paper «у
+  телефоні — <ім’я>» without typing it in.
+- **A sale typed from paper** («Вношу продаж з паперу» at the till) sends
+  `outage: {sold_by_user_id, sold_at}`, both optional, with `POST /sales`.
+  - It is an ordinary sale, dated when it is typed, marked «продано під час
+    збою» on the receipt, in the sales list and in «Звіт», which also names
+    who typed it. The mark is never changed (migration `0036`).
+  - `GET /stores/{id}/sellers` lists who may be named. The paper time is
+    today or yesterday only. It may not answer the shelf
+    (`OUTAGE_SHELF_REPORT`), and goods gone from the ledger are refused
+    until a manager fixes the balance.
+- **The bot** says «Продавці продають на папері.», and when the server
+  answers again «продажі з паперу можна вносити».
+- **The sellers' page,** to print:
+  [paper-when-the-server-is-down.md](.ai/project-memory/paper-when-the-server-is-down.md),
+  a draft until the owner confirms it.
+
+See the [server runbook](.ai/project-memory/server-runbook.md#when-the-server-does-not-answer)
+and the [report](.ai/project-memory/outage-fallback-report.md).
+
 ## Customer orders
 
 `POST /api/v1/orders` accepts `store_id`, permanent `command_id`, and price/quantity
@@ -343,8 +386,10 @@ there is no production test-login bypass.
 Pending commands are retained in browser local storage under organization/user/store
 keys, without auth tokens. Retry keeps the original command and refreshes the
 current order. Do not clear that journal to recover an uncertain operation;
-restore access/connectivity and retry. Paying in parts has its own section
-above. See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
+restore access/connectivity and retry. The phone also retries it by itself,
+once when the server answers again and once when the app is opened with it
+([when the server does not answer](#when-the-server-does-not-answer)). Paying
+in parts has its own section above. See [verification and E2E setup](.ai/project-memory/order-ui-report.md).
 
 **Returns at the till** («Повернення»): the seller finds the sale in the
 store's list (`GET /sales?store_id=…&q=…`) and states, for each unit, whether
@@ -516,7 +561,9 @@ See the [report](.ai/project-memory/public-hardening-report.md).
 - **A broken screen** shows «Щось пішло не так» and «Перезапустити»
   instead of a blank page, and leaves a note in the server's log with no
   personal data.
-- **A server error** shows its «Номер запиту».
+- **A server error** shows its «Номер запиту». Since 2026-10-08 a database
+  that does not answer shows the paper text instead
+  ([when the server does not answer](#when-the-server-does-not-answer)).
 - **Sentry** is ready for the API and the watcher, and stays off until a
   DSN is set.
 

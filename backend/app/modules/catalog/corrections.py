@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -31,12 +29,12 @@ from sqlalchemy.orm import aliased
 
 from app.core.errors import (
     CatalogAmbiguousError,
-    DomainError,
     IdempotencyConflictError,
     ModelMergedError,
     NotFoundError,
     SameAsError,
     ValidationFailedError,
+    nothing_recorded,
 )
 from app.core.text import is_storable
 from app.modules.audit import service as audit
@@ -190,19 +188,6 @@ def refuse_merged(model: HeldModel) -> None:
         raise ModelMergedError(
             product_variant_id=str(model.id), merged_into=str(model.merged_into_id)
         )
-
-
-@contextmanager
-def nothing_recorded() -> Iterator[None]:
-    """Every refusal raised after a correction's `command_id` was looked up,
-    under its lock, proves the command recorded nothing (ADR-0008 §9): it
-    says so (`details.recorded = false`), so a phone whose answer was lost
-    can settle the attempt instead of being left blocked by it."""
-    try:
-        yield
-    except DomainError as refusal:
-        refusal.details.setdefault("recorded", False)
-        raise
 
 
 def _command_lock_key(organization_id: uuid.UUID, command_id: uuid.UUID) -> int:
@@ -824,6 +809,9 @@ __all__ = [
     "hold_models",
     "merge_emptied_family",
     "model_card",
+    # Lives in `app.core.errors` since every seller's command uses it
+    # (ADR-0013 §1); kept here for `catalog/intake.py` and
+    # `catalog_correction/service.py`, which import it from this module.
     "nothing_recorded",
     "record_correction",
     "refuse_merged",

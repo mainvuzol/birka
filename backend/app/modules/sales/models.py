@@ -24,6 +24,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -100,6 +101,22 @@ class Sale(UUIDPrimaryKey, TimestampMixin, Base):
     # (ADR-0012, B3). The application never writes it, and never reads it
     # from the object it inserted: the drawer reads it by SQL.
     drawer_period: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # «Продано під час збою»: a sale typed from paper after the server did not
+    # answer (owner decisions, 2026-10-04 and 2026-10-07; ADR-0013 §5). Dated
+    # when typed like any sale, so it never moves `sold_at`, the day in «Звіт»
+    # or the drawer period; who typed it is `seller_user_id`. It may name who
+    # sold, as the paper says (one of the store's people, `sales.outage`), and
+    # the paper's time, composed in the store's zone. An ordinary sale sets
+    # none of the three, and the mark defaults to false in the database. The
+    # database refuses any change of them afterwards (revision 0036): a wrong
+    # mark is permanent.
+    during_outage: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    outage_sold_by: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    outage_sold_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         # Invariant I20: the same command can never create a second sale,
@@ -119,6 +136,10 @@ class Sale(UUIDPrimaryKey, TimestampMixin, Base):
         ),
         CheckConstraint(
             "drawer_period IS NULL OR drawer_period > 0", name="drawer_period_positive"
+        ),
+        CheckConstraint(
+            "during_outage OR (outage_sold_by IS NULL AND outage_sold_at IS NULL)",
+            name="outage_details_need_the_mark",
         ),
     )
 

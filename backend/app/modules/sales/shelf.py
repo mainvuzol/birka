@@ -29,7 +29,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
-from app.core.errors import IdempotencyConflictError, NotFoundError, ValidationFailedError
+from app.core.errors import (
+    IdempotencyConflictError,
+    NotFoundError,
+    ValidationFailedError,
+    nothing_recorded,
+)
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
@@ -134,109 +139,113 @@ async def report_empty_shelf(
             "This command_id already made a sale", command_id=str(command_id)
         )
 
-    demand: dict[StockKey, int] = {}
-    for line in lines:
-        demand[_key(line)] = demand.get(_key(line), 0) + line.quantity
-    keys = sorted(demand)
-    # A balance an order holds is not corrected at the till, whatever the
-    # shelf says. The ledger refuses it (`RESERVED`), as at a sale: a reserved
-    # balance is held stock, so there is always something here to take off.
-    quantities = await lock_stock(
-        session, organization_id=scope.organization_id, keys=keys, acting_store_ids={store_id}
-    )
-    described = await describe_variants(session, [key[1] for key in keys])
-    for key in keys:
-        description = described.get(key[1])
-        if description is None or description.organization_id != scope.organization_id:
-            raise NotFoundError("Unknown product variant", product_variant_id=str(key[1]))
-
-    shortage = ShelfShortage(
-        organization_id=scope.organization_id,
-        store_id=store_id,
-        reported_by_user_id=scope.user_id,
-        command_id=command_id,
-        command_fingerprint=fingerprint,
-        lines=[],
-        correlation_id=correlation_id,
-    )
-    session.add(shortage)
-    await session.flush()
-
-    # What the ledger believed in for this basket, and no more (I25).
-    believed = {key: min(quantities[key], demand[key]) for key in keys}
-    requests = [
-        MovementRequest(
-            location_id=key[0],
-            acting_store_id=store_id,
-            product_variant_id=key[1],
-            size_id=key[2],
-            quantity_delta=-believed[key],
-            movement_type=MovementType.ADJUSTMENT,
-            reason_code=MovementReason.MISSING_AT_SALE,
-            reference_type=REFERENCE,
-            reference_id=shortage.id,
+    # Under the command's lock, and nothing recorded under it: every refusal
+    # from here on proves this basket recorded nothing, and says so, so a
+    # phone that never heard its answer can settle it (ADR-0013 §1).
+    with nothing_recorded():
+        demand: dict[StockKey, int] = {}
+        for line in lines:
+            demand[_key(line)] = demand.get(_key(line), 0) + line.quantity
+        keys = sorted(demand)
+        # A balance an order holds is not corrected at the till, whatever the
+        # shelf says. The ledger refuses it (`RESERVED`), as at a sale: a reserved
+        # balance is held stock, so there is always something here to take off.
+        quantities = await lock_stock(
+            session, organization_id=scope.organization_id, keys=keys, acting_store_ids={store_id}
         )
-        for key in keys
-        if believed[key] > 0
-    ]
-    moved: dict[StockKey, uuid.UUID] = {}
-    if requests:
-        for entry in await apply_movements(
-            session,
+        described = await describe_variants(session, [key[1] for key in keys])
+        for key in keys:
+            description = described.get(key[1])
+            if description is None or description.organization_id != scope.organization_id:
+                raise NotFoundError("Unknown product variant", product_variant_id=str(key[1]))
+
+        shortage = ShelfShortage(
             organization_id=scope.organization_id,
-            requests=requests,
-            actor_user_id=scope.user_id,
+            store_id=store_id,
+            reported_by_user_id=scope.user_id,
+            command_id=command_id,
+            command_fingerprint=fingerprint,
+            lines=[],
             correlation_id=correlation_id,
-        ):
-            request = entry.request
-            moved[(request.location_id, request.product_variant_id, request.size_id)] = (
-                entry.movement_id
+        )
+        session.add(shortage)
+        await session.flush()
+
+        # What the ledger believed in for this basket, and no more (I25).
+        believed = {key: min(quantities[key], demand[key]) for key in keys}
+        requests = [
+            MovementRequest(
+                location_id=key[0],
+                acting_store_id=store_id,
+                product_variant_id=key[1],
+                size_id=key[2],
+                quantity_delta=-believed[key],
+                movement_type=MovementType.ADJUSTMENT,
+                reason_code=MovementReason.MISSING_AT_SALE,
+                reference_type=REFERENCE,
+                reference_id=shortage.id,
             )
-            await audit.record(
+            for key in keys
+            if believed[key] > 0
+        ]
+        moved: dict[StockKey, uuid.UUID] = {}
+        if requests:
+            for entry in await apply_movements(
                 session,
                 organization_id=scope.organization_id,
+                requests=requests,
                 actor_user_id=scope.user_id,
-                action="inventory.missing_at_sale",
-                entity_type="stock_movement",
-                entity_id=entry.movement_id,
-                before={"quantity": entry.quantity_after - request.quantity_delta},
-                after={"quantity": entry.quantity_after},
-                reason=MovementReason.MISSING_AT_SALE.value,
-            )
+                correlation_id=correlation_id,
+            ):
+                request = entry.request
+                moved[(request.location_id, request.product_variant_id, request.size_id)] = (
+                    entry.movement_id
+                )
+                await audit.record(
+                    session,
+                    organization_id=scope.organization_id,
+                    actor_user_id=scope.user_id,
+                    action="inventory.missing_at_sale",
+                    entity_type="stock_movement",
+                    entity_id=entry.movement_id,
+                    before={"quantity": entry.quantity_after - request.quantity_delta},
+                    after={"quantity": entry.quantity_after},
+                    reason=MovementReason.MISSING_AT_SALE.value,
+                )
 
-    recorded: list[dict[str, Any]] = []
-    for key in keys:
-        recorded.append(
-            {
-                "source_location_id": str(key[0]),
-                "product_variant_id": str(key[1]),
-                "size_id": str(key[2]),
-                "display_name": described[key[1]].display_name,
-                "size": await size_label(session, key[2]),
-                "requested": demand[key],
-                "removed": believed[key],
-                "movement_id": str(moved[key]) if key in moved else None,
-            }
+        recorded: list[dict[str, Any]] = []
+        for key in keys:
+            recorded.append(
+                {
+                    "source_location_id": str(key[0]),
+                    "product_variant_id": str(key[1]),
+                    "size_id": str(key[2]),
+                    "display_name": described[key[1]].display_name,
+                    "size": await size_label(session, key[2]),
+                    "requested": demand[key],
+                    "removed": believed[key],
+                    "movement_id": str(moved[key]) if key in moved else None,
+                }
+            )
+        shortage.lines = recorded
+        await session.flush()
+        await audit.record(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            action="sale.empty_shelf",
+            entity_type=REFERENCE,
+            entity_id=shortage.id,
+            after={"command_id": str(command_id), "lines": recorded},
         )
-    shortage.lines = recorded
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="sale.empty_shelf",
-        entity_type=REFERENCE,
-        entity_id=shortage.id,
-        after={"command_id": str(command_id), "lines": recorded},
-    )
-    logger.info(
-        "sale.empty_shelf",
-        shelf_shortage_id=str(shortage.id),
-        store_id=str(store_id),
-        lines=len(recorded),
-        removed=sum(believed.values()),
-    )
-    return shortage
+        logger.info(
+            "sale.empty_shelf",
+            shelf_shortage_id=str(shortage.id),
+            store_id=str(store_id),
+            lines=len(recorded),
+            removed=sum(believed.values()),
+        )
+        return shortage
 
 
 async def read_empty_shelf(

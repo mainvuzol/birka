@@ -17,3 +17,21 @@ one network do not settle with each other.
 Existing stock from photos of the notebooks: a separate parser turns them
 into JSON, which the app imports into a list for review (owner, 2026-10-01).
 It waits for the owner to choose this way, and for the parser's format.
+
+## An offline mode, judged on real outages
+
+When the server does not answer, the shops sell on paper and type the sales
+in when it answers (owner, 2026-10-04). An offline mode in the app, the
+phone recording sales and sending them later, may be judged later, on real
+outages (owner, the same day). Nothing is built for it. It would reopen the
+page that is never cached (ADR-0010 §4) and the drawer's commit order
+(ADR-0012 §3), with stock of unknown age and screens for conflicts; see
+[ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md), "Rejected".
+
+## A mark on debt payments and returns typed from paper
+
+The mark «продано під час збою» is on sales only. Debt payments and returns
+typed from paper are ordinary ones: «Звіт» names who typed a return, and
+«Борги» who took a payment (owner, 2026-10-07, corrected 2026-10-08). A mark
+for them may be added later (owner, 2026-10-07); it would add the same
+columns to their records, additively.

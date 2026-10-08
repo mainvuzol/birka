@@ -540,7 +540,10 @@ async def test_the_list_of_the_stores_sales_never_carries_a_way(maker):
         "total",
         "paid_in_parts",
         "items",
+        # «Продано під час збою», which says nothing of money (ADR-0013 §5.6).
+        "outage",
     }
+    assert listed["outage"] is None
     assert set(listed["items"][0]) == {
         "id",
         "display_name",
@@ -821,8 +824,9 @@ async def test_a_sale_kept_from_before_replays_never_refused(old_world, cached):
         )
 
     assert replayed.status_code == 201, replayed.text
-    # What #67 answered, and no way: an old receipt never shows one.
-    assert replayed.json() == OLD_SALE_ANSWER | {"payment_method": None}
+    # What #67 answered, and no way: an old receipt never shows one. Nor a
+    # mark, which no sale had then (ADR-0013 §5.6).
+    assert replayed.json() == OLD_SALE_ANSWER | {"payment_method": None, "outage": None}
     assert await rows(old_world, Sale) == 1
 
 
@@ -845,7 +849,7 @@ async def test_a_sale_in_parts_kept_from_before_replays_never_refused(old_world,
         )
 
     assert replayed.status_code == 201, replayed.text
-    assert replayed.json() == answer | {"payment_method": None}
+    assert replayed.json() == answer | {"payment_method": None, "outage": None}
     assert (await rows(old_world, Sale), await rows(old_world, CreditEntry)) == (1, 1)
 
 

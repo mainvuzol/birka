@@ -1,3 +1,4 @@
+import { create } from "zustand";
 import { isId, journal } from "@/shared/journal";
 import { isPaymentMethod, movementKinds, targets } from "./types";
 import type { CashAnswer, CashBody, MovementKind, Target } from "./types";
@@ -136,3 +137,13 @@ export const useCashCommand = cash.use;
 export const loadCashCommand = cash.load;
 export const submitCashCommand = cash.submit;
 export const resolveCashCommand = cash.resolve;
+
+/**
+ * Which command the journal's error is about, so «Каса» says what was not
+ * recorded. Kept beside the journal, not in the screen: the error outlives
+ * «Каса» (a refusal read, another tab opened, «Каса» opened again), and so
+ * must the name of what it refused.
+ */
+export const useCashLastCommand = create<{ command: CashBody["command"] }>(
+  () => ({ command: "close" }),
+);

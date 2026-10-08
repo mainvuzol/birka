@@ -137,7 +137,7 @@ def test_five_minutes_without_an_answer_is_told_once_dating_from_the_first():
     book, news = look(book, T0 + timedelta(minutes=5), DOWN)
     [start] = news
     assert (start.kind, start.moment) == (Kind.NOT_ANSWERING, Moment.START)
-    assert start.text == ("⚠️ Сервер застосунку не відповідає. Продавці зараз не можуть продавати.")
+    assert start.text == "⚠️ Сервер застосунку не відповідає. Продавці продають на папері."
     incident = book.open[Kind.NOT_ANSWERING]
     assert (incident.started_at, incident.reason, incident.told_at) == (T0, API_SILENT, None)
 
@@ -180,7 +180,7 @@ def test_an_answer_in_between_starts_the_five_minutes_again():
 def test_the_reason_says_what_did_not_answer(api, reason):
     book, news = run(Book(), [(T0, api), (T0 + timedelta(minutes=5), api)])
     assert book.open[Kind.NOT_ANSWERING].reason == reason
-    assert news[0].text == f"⚠️ {reason} Продавці зараз не можуть продавати."
+    assert news[0].text == f"⚠️ {reason} Продавці продають на папері."
 
 
 def test_the_spelled_out_reasons():
@@ -194,7 +194,9 @@ def test_it_works_again_at_the_first_look_that_answers_and_says_how_long():
     book, news = look(book, T0 + timedelta(minutes=12), OK)
     [again] = news
     assert (again.kind, again.moment) == (Kind.NOT_ANSWERING, Moment.AGAIN)
-    assert again.text == "✅ Сервер знову відповідає: продавці можуть продавати. Тривало 12 хв."
+    assert again.text == (
+        "✅ Сервер знову відповідає: продажі з паперу можна вносити. Тривало 12 хв."
+    )
     assert book.open == {}
     [ended] = book.ended
     assert (ended.started_at, ended.ended_at) == (T0, T0 + timedelta(minutes=12))
@@ -225,7 +227,7 @@ def test_a_reminder_every_24_hours_from_the_start():
     assert reminder.moment is Moment.REMINDER
     assert reminder.text == (
         "⚠️ Досі не виправлено, уже 24 год. Сервер застосунку не відповідає. "
-        "Продавці зараз не можуть продавати."
+        "Продавці продають на папері."
     )
     book, news = look(book, T0 + timedelta(hours=24, minutes=1), DOWN)
     assert news == []
@@ -363,7 +365,7 @@ def test_sign_ins_refused_for_ten_minutes_three_times_are_told_dating_from_the_f
     assert start.text == (
         "⚠️ Ніхто не може увійти в застосунок: "
         "можливо, токен бота на сервері не збігається з ботом. "
-        "Продавці зараз не можуть продавати."
+        "Хто ще не увійшов, продає на папері."
     )
     assert book.open[Kind.SIGN_IN_FAILING].started_at == T0
 
@@ -574,8 +576,9 @@ def test_how_long_it_lasted(span, said):
 
 def test_each_kind_says_what_the_sellers_feel():
     assert start_text(Kind.SIGN_IN_FAILING, CLOCK_WRONG).endswith(
-        "Продавці зараз не можуть продавати."
+        "Хто ще не увійшов, продає на папері."
     )
+    assert start_text(Kind.NOT_ANSWERING, API_SILENT).endswith("Продавці продають на папері.")
     assert reminder_text(Kind.DISK_LOW, "x", timedelta(hours=25)) == (
         "⚠️ Досі не виправлено, уже 25 год. x "
         "Коли місце закінчиться, застосунок і нічні копії зупиняться."

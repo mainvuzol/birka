@@ -292,10 +292,9 @@ test("a correction whose answer is lost is resent unchanged", async ({
   ).toBeEnabled();
   await page.close();
   const reopened = await context.newPage();
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await enter(reopened);
-  await reopened
-    .getByRole("button", { name: "Повторити ту саму команду" })
-    .click();
   await expect(
     reopened.getByText("Доставка: Нова пошта · ТТН 20451111"),
   ).toBeVisible();

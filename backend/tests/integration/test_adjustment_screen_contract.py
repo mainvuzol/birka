@@ -86,7 +86,9 @@ async def test_a_count_against_a_balance_that_moved_is_refused_and_writes_nothin
         response = await post(client, counted(shop, uuid.uuid4(), shelf=3, system=5))
     assert response.status_code == 409, response.text
     assert response.json()["code"] == "STOCK_CHANGED"
-    assert response.json()["details"] == {"expected": 5, "actual": 6}
+    # Refused after the correction's lookup, so it says nothing was recorded
+    # (ADR-0013 §1).
+    assert response.json()["details"] == {"expected": 5, "actual": 6, "recorded": False}
     assert await held(maker, shop) == (6, 0), "nothing may be written"
     assert await adjustments(maker, shop) == 0
 
@@ -162,7 +164,7 @@ async def test_the_count_is_compared_under_the_lock(maker):
             response = await request
 
     assert response.status_code == 409, response.text
-    assert response.json()["details"] == {"expected": 5, "actual": 6}
+    assert response.json()["details"] == {"expected": 5, "actual": 6, "recorded": False}
     async with maker() as session:
         adjusted = await session.scalar(
             select(func.count())
@@ -228,5 +230,6 @@ async def test_a_reserved_balance_is_refused_and_says_how_much_is_reserved(maker
         "product_variant_id": str(shop.variant_id),
         "size_id": str(shop.size_id),
         "reserved": 2,
+        "recorded": False,
     }
     assert await held(maker, shop) == (5, 0)

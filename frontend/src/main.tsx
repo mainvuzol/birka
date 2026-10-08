@@ -13,8 +13,24 @@ import { createRoot } from "react-dom/client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+/*
+ * A read never sits paused (ADR-0013 §4.1). TanStack's default network mode
+ * holds a query silently while the phone says it is offline, and
+ * «Повторити» then does nothing visible; with "always" it runs, fails, and
+ * says the server does not answer. That mode turns reading again on
+ * reconnection off unless it is written out: written, every stale read —
+ * one that failed with nothing to show among them — is read again when the
+ * phone is back online, the till's list and a failed sign-in too.
+ */
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, refetchOnWindowFocus: true } },
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: true,
+      networkMode: "always",
+      refetchOnReconnect: true,
+    },
+  },
 });
 
 import { App } from "@/App";

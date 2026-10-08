@@ -39,6 +39,18 @@ never split. A sale paid in parts gives the way of the money taken now. It is
 optional in the request and required of a new sale after the replay lookup,
 so a sale a phone kept from before the way was asked still replays
 (ADR-0012, B2, B13).
+
+`outage` is the mark «продано під час збою» of a sale typed from paper after
+the server did not answer (owner decisions, 2026-10-04 and 2026-10-07;
+ADR-0013 §5): who sold and the paper's time, each optional. It is part of the
+command's print when stated, and checked only after the replay lookup
+(`outage.checked_mark`), so a marked sale recorded and resent days later
+still replays. Such a sale reports nothing about the shelf, and its shortfall
+is never offered a correction (ADR-0013 §6).
+
+Every refusal after the replay lookup proves the command recorded nothing,
+and says so with `recorded: false` (ADR-0008 §9, ADR-0013 §1): a phone that
+kept the attempt then settles it instead of staying blocked by it.
 """
 
 from __future__ import annotations
@@ -61,6 +73,7 @@ from app.core.errors import (
     NotFoundError,
     UnknownSizeStockError,
     ValidationFailedError,
+    nothing_recorded,
 )
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
@@ -82,6 +95,7 @@ from app.modules.inventory.service import (
     sale_shortage_ids,
 )
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
+from app.modules.sales.outage import OutageMark, checked_mark, print_of_mark
 from app.modules.sales.payment import TILL_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.tenancy.service import LocationCapability
 
@@ -425,6 +439,10 @@ def _clarification_sources(
                 requested=report.quantity,
                 available=0,
                 correctable=False,
+                # Every shortfall says whether an order holds the units
+                # (ADR-0013 §6). Here none can: a reserved balance a
+                # clarification may draw on was refused `RESERVED` first.
+                reserved=False,
                 **details,
             )
         if len(held) > 1:
@@ -539,6 +557,8 @@ def _resolve_clarifications(
                 requested=wanted,
                 available=quantities[source],
                 correctable=False,
+                # Never reserved: see the refusal above.
+                reserved=False,
             )
         out_of_unknown.append(
             MovementRequest(
@@ -718,6 +738,7 @@ async def create_sale(
     correlation_id: str | None = None,
     payment_method: PaymentMethod | None = None,
     method_required: bool = True,
+    outage: OutageMark | None = None,
 ) -> SaleResult:
     """Sell the basket, or raise and let the transaction roll back.
 
@@ -728,7 +749,10 @@ async def create_sale(
 
     `payment_method` is in the print only when stated, and a new sale without
     it is refused after the replay lookup (`payment.stated_way`).
-    `method_required=False` is for this service's unit tests only."""
+    `method_required=False` is for this service's unit tests only.
+
+    `outage` marks a sale typed from paper (ADR-0013 §5). In the print only
+    when stated, and checked only after the replay lookup."""
     if not lines:
         raise ValidationFailedError("A sale must contain at least one line")
 
@@ -811,6 +835,9 @@ async def create_sale(
             # One stated is part of the command: the same command_id resent
             # with another way is another sale, not a retry.
             **print_of(payment_method),
+            # And the mark of a sale typed from paper, absent from every sale
+            # typed live (ADR-0013 §5.4).
+            **print_of_mark(outage),
         },
         actor_user_id=scope.user_id,
         store_id=store_id,
@@ -860,8 +887,73 @@ async def create_sale(
     )
     if existing is not None:
         return existing
+    # The lookup, under the command's lock, found nothing: whatever refuses
+    # from here on proves this command recorded nothing, and says so (ADR-0008
+    # §9, ADR-0013 §1). The lookup itself stays outside: its conflict may
+    # concern a sale that was recorded.
+    with nothing_recorded():
+        try:
+            return await _new_sale(
+                session,
+                scope=scope,
+                store_id=store_id,
+                command_id=command_id,
+                request_fingerprint=request_fingerprint,
+                lines=lines,
+                currency_code=currency_code,
+                corrections_requested=corrections_requested,
+                shortages_requested=shortages_requested,
+                clarifications_requested=clarifications_requested,
+                correlation_id=correlation_id,
+                payment_method=payment_method,
+                method_required=method_required,
+                outage=outage,
+            )
+        except InsufficientStockError as refusal:
+            if outage is not None:
+                # A sale typed from paper is refused, never corrected: nobody
+                # stands at the shelf, and a manager fixes the balance first
+                # (owner decision, 2026-10-04; ADR-0013 §6). `reserved` still
+                # says whether an order holds the units.
+                refusal.details["correctable"] = False
+            raise
+
+
+async def _new_sale(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    store_id: uuid.UUID,
+    command_id: uuid.UUID,
+    request_fingerprint: str,
+    lines: list[SaleLineInput],
+    currency_code: str,
+    corrections_requested: list[FoundInStore],
+    shortages_requested: list[MissingInStore],
+    clarifications_requested: list[SizeClarified],
+    correlation_id: str | None,
+    payment_method: PaymentMethod | None,
+    method_required: bool,
+    outage: OutageMark | None,
+) -> SaleResult:
+    """The sale of a basket nothing was recorded under yet: everything
+    `create_sale` does after its replay lookup."""
     # Only now, for a sale nothing recorded: one of the till's three ways.
     method = stated_way(payment_method, takes=TILL_METHODS, required=method_required)
+    # And the mark, only for a sale that carries one (ADR-0013 §5.3).
+    mark = (
+        await checked_mark(
+            session,
+            organization_id=scope.organization_id,
+            store_id=store_id,
+            mark=outage,
+            reports_the_shelf=bool(
+                corrections_requested or shortages_requested or clarifications_requested
+            ),
+        )
+        if outage is not None
+        else None
+    )
 
     # The size-not-known balances a clarification may draw on are part of the
     # basket, so they are locked with it, in the same one global order.
@@ -969,6 +1061,13 @@ async def create_sale(
         correlation_id=correlation_id,
         payment_method=method.value if method is not None else None,
     )
+    if mark is not None:
+        # Written once, with the insert; the database refuses any change.
+        # An ordinary sale sets none of the three: its insert writes NULL for
+        # the two details, and the database defaults `during_outage` to false.
+        sale.during_outage = True
+        sale.outage_sold_by = mark.sold_by_user_id
+        sale.outage_sold_at = mark.sold_at
     session.add(sale)
     await session.flush()
 
@@ -1077,6 +1176,7 @@ async def create_sale(
         reclassifications=len(reclassification_ids),
         total=str(sale.total),
         payment_method=sale.payment_method,
+        during_outage=mark is not None,
     )
     return SaleResult(
         sale=sale,

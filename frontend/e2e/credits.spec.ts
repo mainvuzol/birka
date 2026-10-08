@@ -448,13 +448,10 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
-  // Written down before it was sent: a reload still knows what to ask about.
+  // Written down before it was sent: a reload still knows what to ask
+  // about, and asks at once, with no tap (ADR-0013 §4.3).
   await page.reload();
   await page.getByRole("button", { name: "Основний MAIN" }).click();
-  await expect(page.getByText("Незавершений внесок")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Перевірити результат внеску" })
-    .click();
   await expect(page.getByText("Внесок підтверджено")).toBeVisible();
   await expect(
     page.getByText(`${name}: залишок боргу 1300,00 грн.`),

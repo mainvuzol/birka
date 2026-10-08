@@ -27,6 +27,7 @@ from app.core.errors import (
     NotFoundError,
     StockChangedError,
     ValidationFailedError,
+    nothing_recorded,
 )
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
@@ -400,99 +401,112 @@ async def receive_goods(
         response.status_code = status.HTTP_201_CREATED
         return replayed
 
-    await lock_stock(
-        session,
-        organization_id=scope.organization_id,
-        keys=[
-            (payload.location_id, line.product_variant_id, line.size_id) for line in payload.lines
-        ],
-        acting_store_ids={payload.store_id},
-    )
-    correlation_id = get_correlation_id()
-    results: list[ReceiptLineResult] = []
-    requests: list[MovementRequest] = []
-    lots: list[StockLot] = []
+    # Under the command's lock, and no receipt under it: every refusal from
+    # here on proves this delivery recorded nothing, and says so (ADR-0013
+    # §1). A warehouse closed or a store blocked while it runs, an opening
+    # list now waiting: the phone settles the attempt rather than being held
+    # by it, since a kept delivery keeps the till from selling. One closed
+    # or blocked before a resend is refused above, by the scope or the
+    # warehouse's access, without `recorded`: that attempt may have been
+    # recorded, so the phone keeps it until the store trades or the
+    # warehouse reopens (owner decision, 2026-10-08).
+    with nothing_recorded():
+        await lock_stock(
+            session,
+            organization_id=scope.organization_id,
+            keys=[
+                (payload.location_id, line.product_variant_id, line.size_id)
+                for line in payload.lines
+            ],
+            acting_store_ids={payload.store_id},
+        )
+        correlation_id = get_correlation_id()
+        results: list[ReceiptLineResult] = []
+        requests: list[MovementRequest] = []
+        lots: list[StockLot] = []
 
-    receipt = GoodsReceipt(
-        organization_id=scope.organization_id,
-        location_id=payload.location_id,
-        receiving_store_id=payload.store_id,
-        created_by_user_id=scope.user_id,
-        command_id=payload.command_id,
-        notes=payload.notes,
-        correlation_id=correlation_id,
-        command_fingerprint=permanent_fingerprint,
-        supplier_id=payload.supplier_id,
-    )
-    session.add(receipt)
-    await session.flush()
-
-    for line in payload.lines:
-        lot = StockLot(
+        receipt = GoodsReceipt(
             organization_id=scope.organization_id,
             location_id=payload.location_id,
-            product_variant_id=line.product_variant_id,
-            size_id=line.size_id,
-            acquisition_type=line.acquisition_type,
-            unit_cost=line.unit_cost,
-            currency_code=settings.default_currency_code if line.unit_cost is not None else None,
-            goods_receipt_id=receipt.id,
+            receiving_store_id=payload.store_id,
+            created_by_user_id=scope.user_id,
+            command_id=payload.command_id,
             notes=payload.notes,
+            correlation_id=correlation_id,
+            command_fingerprint=permanent_fingerprint,
+            supplier_id=payload.supplier_id,
         )
-        session.add(lot)
-        lots.append(lot)
-    await session.flush()
+        session.add(receipt)
+        await session.flush()
 
-    for line, lot in zip(payload.lines, lots, strict=True):
-        requests.append(
-            MovementRequest(
+        for line in payload.lines:
+            lot = StockLot(
+                organization_id=scope.organization_id,
                 location_id=payload.location_id,
-                acting_store_id=payload.store_id,
                 product_variant_id=line.product_variant_id,
                 size_id=line.size_id,
-                quantity_delta=line.quantity,
-                movement_type=MovementType.DELIVERY,
-                stock_lot_id=lot.id,
-                reference_type="stock_lot",
-                reference_id=lot.id,
+                acquisition_type=line.acquisition_type,
+                unit_cost=line.unit_cost,
+                currency_code=settings.default_currency_code
+                if line.unit_cost is not None
+                else None,
+                goods_receipt_id=receipt.id,
+                notes=payload.notes,
             )
+            session.add(lot)
+            lots.append(lot)
+        await session.flush()
+
+        for line, lot in zip(payload.lines, lots, strict=True):
+            requests.append(
+                MovementRequest(
+                    location_id=payload.location_id,
+                    acting_store_id=payload.store_id,
+                    product_variant_id=line.product_variant_id,
+                    size_id=line.size_id,
+                    quantity_delta=line.quantity,
+                    movement_type=MovementType.DELIVERY,
+                    stock_lot_id=lot.id,
+                    reference_type="stock_lot",
+                    reference_id=lot.id,
+                )
+            )
+
+        applied = await apply_movements(
+            session,
+            organization_id=scope.organization_id,
+            requests=requests,
+            actor_user_id=scope.user_id,
+            correlation_id=correlation_id,
         )
 
-    applied = await apply_movements(
-        session,
-        organization_id=scope.organization_id,
-        requests=requests,
-        actor_user_id=scope.user_id,
-        correlation_id=correlation_id,
-    )
-
-    by_lot = {entry.request.stock_lot_id: entry for entry in applied}
-    for lot in lots:
-        entry = by_lot[lot.id]
-        results.append(
-            ReceiptLineResult(
-                location_id=entry.request.location_id,
-                product_variant_id=entry.request.product_variant_id,
-                size_id=entry.request.size_id,
-                quantity_received=entry.request.quantity_delta,
-                quantity_after=entry.quantity_after,
-                stock_lot_id=lot.id,
-                movement_id=entry.movement_id,
-                unit_cost=lot.unit_cost,
-                currency_code=lot.currency_code,
+        by_lot = {entry.request.stock_lot_id: entry for entry in applied}
+        for lot in lots:
+            entry = by_lot[lot.id]
+            results.append(
+                ReceiptLineResult(
+                    location_id=entry.request.location_id,
+                    product_variant_id=entry.request.product_variant_id,
+                    size_id=entry.request.size_id,
+                    quantity_received=entry.request.quantity_delta,
+                    quantity_after=entry.quantity_after,
+                    stock_lot_id=lot.id,
+                    movement_id=entry.movement_id,
+                    unit_cost=lot.unit_cost,
+                    currency_code=lot.currency_code,
+                )
             )
-        )
 
-    body = ReceiptResponse(id=receipt.id, store_id=payload.store_id, lines=results)
-    receipt.response_snapshot = body.model_dump(mode="json")
-    await idempotency.complete(
-        session,
-        outcome.record_id,
-        response=body.model_dump(mode="json"),
-        http_status=status.HTTP_201_CREATED,
-    )
-    await session.commit()
-    return body
+        body = ReceiptResponse(id=receipt.id, store_id=payload.store_id, lines=results)
+        receipt.response_snapshot = body.model_dump(mode="json")
+        await idempotency.complete(
+            session,
+            outcome.record_id,
+            response=body.model_dump(mode="json"),
+            http_status=status.HTTP_201_CREATED,
+        )
+        await session.commit()
+        return body
 
 
 __all__ = ["router"]
@@ -633,46 +647,48 @@ async def adjust_inventory(
         response.status_code = status.HTTP_201_CREATED
         return replayed
 
-    if payload.expected_quantity is not None:
-        # Locked here and held to commit, so nothing can move the balance
-        # between this comparison and the movement below.
-        key = (payload.location_id, payload.product_variant_id, payload.size_id)
-        held = await lock_stock(
+    # The same after this command's lookup (ADR-0013 §1).
+    with nothing_recorded():
+        if payload.expected_quantity is not None:
+            # Locked here and held to commit, so nothing can move the balance
+            # between this comparison and the movement below.
+            key = (payload.location_id, payload.product_variant_id, payload.size_id)
+            held = await lock_stock(
+                session,
+                organization_id=scope.organization_id,
+                keys=[key],
+                acting_store_ids={payload.store_id},
+            )
+            if held[key] != payload.expected_quantity:
+                raise StockChangedError(expected=payload.expected_quantity, actual=held[key])
+
+        recorded = await record_adjustment(
             session,
             organization_id=scope.organization_id,
-            keys=[key],
-            acting_store_ids={payload.store_id},
+            store_id=payload.store_id,
+            actor_user_id=scope.user_id,
+            command_id=payload.command_id,
+            command_fingerprint=permanent_fingerprint,
+            location_id=payload.location_id,
+            product_variant_id=payload.product_variant_id,
+            size_id=payload.size_id,
+            quantity_delta=payload.quantity_delta,
+            reason_code=payload.reason_code,
+            note=payload.note,
+            correlation_id=get_correlation_id(),
         )
-        if held[key] != payload.expected_quantity:
-            raise StockChangedError(expected=payload.expected_quantity, actual=held[key])
-
-    recorded = await record_adjustment(
-        session,
-        organization_id=scope.organization_id,
-        store_id=payload.store_id,
-        actor_user_id=scope.user_id,
-        command_id=payload.command_id,
-        command_fingerprint=permanent_fingerprint,
-        location_id=payload.location_id,
-        product_variant_id=payload.product_variant_id,
-        size_id=payload.size_id,
-        quantity_delta=payload.quantity_delta,
-        reason_code=payload.reason_code,
-        note=payload.note,
-        correlation_id=get_correlation_id(),
-    )
-    body = AdjustmentResponse(
-        id=recorded.adjustment.id,
-        movement_id=recorded.movement.movement_id,
-        quantity_before=recorded.quantity_before,
-        quantity_after=recorded.movement.quantity_after,
-    )
-    recorded.adjustment.response_snapshot = body.model_dump(mode="json")
-    await idempotency.complete(
-        session,
-        outcome.record_id,
-        response=body.model_dump(mode="json"),
-        http_status=status.HTTP_201_CREATED,
-    )
-    await session.commit()
-    return body
+        body = AdjustmentResponse(
+            id=recorded.adjustment.id,
+            movement_id=recorded.movement.movement_id,
+            quantity_before=recorded.quantity_before,
+            quantity_after=recorded.movement.quantity_after,
+        )
+        recorded.adjustment.response_snapshot = body.model_dump(mode="json")
+        await idempotency.complete(
+            session,
+            outcome.record_id,
+            response=body.model_dump(mode="json"),
+            http_status=status.HTTP_201_CREATED,
+        )
+        await session.commit()
+        return body
