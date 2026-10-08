@@ -215,6 +215,34 @@ def test_both_backend_images_hold_the_same_code_and_run_as_birka() -> None:
     )
 
 
+def _dockerignore() -> list[str]:
+    lines = (DOCKERFILE.parent / ".dockerignore").read_text().splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+
+
+def test_the_backend_build_takes_only_what_its_images_copy() -> None:
+    """2026-10-08: the build took the whole backend directory, so a checkout
+    that had run the tests sent its caches to Docker, and the images held its
+    bytecode. Now it takes what the Dockerfile copies, and inside that,
+    nothing a local run leaves beside the code."""
+    rules = _dockerignore()
+    assert rules[0] == "*", "everything is left out first, then let back in"
+    copied = {
+        source
+        for stage in _stages(DOCKERFILE).values()
+        for line in stage
+        if line.startswith("COPY ")
+        for source in line.split()[1:-1]
+        if not source.startswith("--")
+    }
+    let_in = {rule[1:] for rule in rules if rule.startswith("!")}
+    assert let_in == copied, "the build takes exactly what the images copy"
+    last_let_in = max(at for at, rule in enumerate(rules) if rule.startswith("!"))
+    for left_out in ("**/__pycache__", "**/*.py[cod]", "**/.env"):
+        assert left_out in rules, left_out
+        assert rules.index(left_out) > last_let_in, f"{left_out} comes after what it overrides"
+
+
 def test_the_bundle_is_built_with_the_version_and_the_published_stage_needs_none() -> None:
     build, published = _stages(ROOT / "frontend" / "Dockerfile").values()
     at = build.index("ARG BIRKA_RELEASE=dev")

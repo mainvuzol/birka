@@ -1,0 +1,44 @@
+{
+  "job": "python-audit",
+  "name": "backend (known vulnerabilities in the locked packages)",
+  "result": "passed",
+  "counts": "pip-audit audited 43 packages: 0 known vulnerabilities (\"No known vulnerabilities found\")",
+  "reasons": [],
+  "commit": "a160935",
+  "tree": "clean",
+  "runner_sha256": "f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2",
+  "started": "2026-10-08T17:57:52+03:00",
+  "finished": "2026-10-08T17:57:56+03:00",
+  "duration": "0m03s",
+  "brief": "pip-audit 2.9.0 from its own venv (Python 3.12.14); its report as JSON, counted from pip-audit's own output",
+  "images": [
+    "none (this job starts no container)"
+  ],
+  "deviations": [
+    "pip-audit 2.9.0 lives in its own venv (/Users/nikitahlushak/.cache/birka-runtime/ci/pip-audit-venv, Python 3.12.14), installed once with uv from PyPI (2026-10-08) and never reinstalled; the step's `pip install pip-audit==2.9.0` becomes `pip-audit --version`.",
+    "CI's pip-audit command, with `-f json -o python-audit-report.json` (the report in the evidence directory, so the counts are pip-audit's own) and `--cache-dir <work>/pip-audit-cache` (instead of ~/Library/Caches/pip-audit) added; the verdict line and the exit status are pip-audit's, as in CI. Its advisory queries go to PyPI's vulnerability service, as in CI."
+  ],
+  "gaps": [],
+  "coverage": null,
+  "steps": [
+    {
+      "name": "actions/checkout@v4",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "actions/setup-python@v5",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Audit requirements.lock",
+      "status": "ok",
+      "seconds": 3.1,
+      "code": 0
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-08-dockerignore-ci-local/python-audit.txt"
+}

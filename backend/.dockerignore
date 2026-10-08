@@ -1,0 +1,22 @@
+# What the image build may take from the checkout it runs in: only what the
+# Dockerfile copies. The test and lint caches, the tests, and a local build or
+# egg-info stay out: the build sends Docker about 2 MB of code, not the 60 MB
+# a checkout that has run the tests holds. A file the Dockerfile starts to
+# copy is added below, or its COPY fails.
+*
+!requirements.lock
+!alembic.ini
+!app
+!migrations
+!scripts
+
+# Inside those, what a developer's machine leaves beside the code. The image
+# never writes bytecode (PYTHONDONTWRITEBYTECODE), so any it held would be a
+# copy of someone's local run, and the image would differ by whose checkout
+# built it. Local .env files stay out too: the image is built from the
+# commit, nothing else. These come after the lines above, which they override.
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store
+**/.env
+**/.env.*
