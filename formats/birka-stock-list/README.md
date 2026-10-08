@@ -176,6 +176,14 @@ sign**, the person confirms the split with one tap, «Як у рядку, по
 - The tap needs each size in the catalogue, under the same spelling
   («M», «46»). A size the catalogue lacks is created first, or the line is
   answered with a note.
+- **A size range written with a sign makes the app ask.** «42-44» may be
+  size 42 with 44 pieces, or the sizes 42 to 44: a parser that reads it as
+  `{"size": "42", "count": 44}` passes every check above. So when the count,
+  or the whole record («42-44»), is also a size in the shop's catalogue, the
+  app asks the person what the record means, and offers the tap only after
+  «розмір 42 — 44 шт» is chosen; a range is answered with a note (owner,
+  2026-10-09). A record you read as a range is not a size with its count:
+  keep it in `text`, never in `size_counts`.
 - Otherwise the split is only a hint, and the person answers it with a note.
 
 **The rest is shown, never used.**

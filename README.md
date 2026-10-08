@@ -662,7 +662,12 @@ Through the API:
      line naming several sizes or colours;
    - `STATED_BY_SIZE` — only for a file line whose text writes each size
      joined to its count by a sign («S-1 M-2 L-1», «Лоран M-3»): one model,
-     one allocation per size with exactly its count;
+     one allocation per size with exactly its count. A record that may also
+     be a range of sizes (`shown_split[].may_be_range`: «42-44», its count
+     or the whole record being a size too) needs
+     `split_read_as: "SIZE_WITH_COUNT"`, what the person chose; without it
+     the answer is refused (422, `SPLIT_MAY_BE_RANGE`), checked again at the
+     answer (owner decision, 2026-10-09);
    - `LINE_IMPLIES_ONE` — a line with no number that could be a count, taken
      as one piece;
    - `RECOUNTED` or `OWNER_KNOWLEDGE` — with a `note`.
@@ -674,6 +679,12 @@ Through the API:
    private warehouse, the approver must hold the owner's role in the child
    store itself. Alternatively, `POST .../reject` with a `reason` keeps
    everything as evidence.
+
+   A list whose own store is blocked or archived (`store_state`) is rejected
+   through the other store, which releases its warehouse; nothing else is
+   done to it, through either store: through the other one the refusal is
+   `SNAPSHOT_CONFLICT`, `LIST_STORE_NOT_TRADING` (owner decision,
+   2026-10-09).
 
 Approve a warehouse's list before anything else is recorded there. Paper sales
 made between the count and the approval are entered afterwards, as ordinary

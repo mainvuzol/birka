@@ -104,6 +104,11 @@ async def main() -> None:
         file_slow = StockLocation(
             organization_id=org.id, name="Склад повільних відповідей", code="E2E-FILE-SLOW"
         )
+        # One where a record may be a size with its count or a range of
+        # sizes («42-44»), and the person is asked (owner decision, 2026-10-09).
+        file_range = StockLocation(
+            organization_id=org.id, name="Склад для діапазону", code="E2E-FILE-RANGE"
+        )
         # And one both stores may import into: its list belongs to both
         # (owner decision, 2026-10-08).
         shared_opening = StockLocation(
@@ -142,6 +147,7 @@ async def main() -> None:
                 file_removal,
                 file_checks,
                 file_slow,
+                file_range,
                 shared_opening,
                 second,
                 second_own,
@@ -174,6 +180,7 @@ async def main() -> None:
             file_removal,
             file_checks,
             file_slow,
+            file_range,
             shared_opening,
         ):
             session.add(
@@ -260,6 +267,7 @@ async def main() -> None:
             "file_removal_location_id": str(file_removal.id),
             "file_checks_location_id": str(file_checks.id),
             "file_slow_location_id": str(file_slow.id),
+            "file_range_location_id": str(file_range.id),
             "shared_opening_location_id": str(shared_opening.id),
             "second_store_id": str(second.id),
             "second_location_id": str(second_own.id),
@@ -292,7 +300,8 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     network-wide; «Ганна» works in «Центр» only, «Петро» in «Ринок» only;
     «Марко» manages «Центр» with a manager's default rights, and «Ліда» sells
     there with a seller's. The drawers' own stores, «Каса» and «Зупинений»,
-    are `seed_drawer`'s."""
+    are `seed_drawer`'s; «Північний» and «Південний», sharing an empty
+    warehouse, are `seed_sharing_pair`'s."""
     org = Organization(name=f"e2e-states-{uuid.uuid4().hex}", currency_code="UAH")
     session.add(org)
     await session.flush()
@@ -388,6 +397,7 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
         manager_id=staff_ids["network_centre_manager"],
         manager_role=manager,
     )
+    sharing = await seed_sharing_pair(session, organization_id=org.id, manager_role=manager)
     # What the archived store still owes: any store of the network that trades
     # pays it (owner decision, 2026-10-01).
     owed_to = Supplier(
@@ -414,6 +424,7 @@ async def seed_network(session: AsyncSession) -> dict[str, str]:
     return (
         people
         | drawer
+        | sharing
         | {
             "network_centre_store_id": str(centre.id),
             "network_market_store_id": str(market.id),
@@ -526,6 +537,56 @@ async def seed_drawer(
         "network_cash_seller_telegram_user_id": str(seller.telegram_user_id),
         "network_cash_first_close_id": str(first.id),
         "network_paused_store_id": str(paused.id),
+    }
+
+
+async def seed_sharing_pair(
+    session: AsyncSession, *, organization_id: uuid.UUID, manager_role: Role
+) -> dict[str, str]:
+    """Two stores of their own that share one empty warehouse, for a shared
+    list whose own store stops trading (owner decision, 2026-10-09): the
+    journey blocks «Північний» after it starts a list there, and «Ніна»,
+    who manages «Південний» with a manager's default rights, rejects it.
+    Stores of their own, so that blocking one stops nothing another journey
+    sells in; nothing sells from their warehouse."""
+    north = Store(
+        organization_id=organization_id, name="Північний", code="NORTH", kind=StoreKind.SECONDARY
+    )
+    south = Store(
+        organization_id=organization_id, name="Південний", code="SOUTH", kind=StoreKind.SECONDARY
+    )
+    between = StockLocation(
+        organization_id=organization_id, name="Склад півночі й півдня", code="NET-NORTH-SOUTH"
+    )
+    manager = AppUser(telegram_user_id=uuid.uuid4().int % 2**52, display_name="Ніна")
+    session.add_all([north, south, between, manager])
+    await session.flush()
+    session.add_all(
+        [
+            StoreLocationAccess(
+                organization_id=organization_id,
+                store_id=shop.id,
+                location_id=between.id,
+                can_sell=False,
+                can_receive=True,
+            )
+            for shop in (north, south)
+        ]
+        + [
+            Membership(
+                user_id=manager.id,
+                organization_id=organization_id,
+                store_id=south.id,
+                role_id=manager_role.id,
+            )
+        ]
+    )
+    await session.flush()
+    return {
+        "network_north_store_id": str(north.id),
+        "network_south_store_id": str(south.id),
+        "network_north_south_location_id": str(between.id),
+        "network_south_manager_telegram_user_id": str(manager.telegram_user_id),
     }
 
 

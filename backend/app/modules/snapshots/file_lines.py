@@ -12,6 +12,10 @@ makes a line `KNOWN`:
   joined by a sign («S-1 M-2 L-1», one size too: «Лоран M-3»); a space
   alone is a bare number («M 3»; owner, 2026-10-08). Birka checks it in the
   text, never on the parser's word alone, and keeps it as `shown_split`.
+- **A record that may also be a range of sizes is asked about.** «42-44»
+  may be size 42 with 44 pieces, or the sizes 42 to 44. When the catalogue
+  makes it either, the person says which before the tap is offered (owner,
+  2026-10-09; `may_be_range`).
 
 Pure: no database.
 """
@@ -19,7 +23,9 @@ Pure: no database.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from itertools import pairwise
 from typing import Any
 
@@ -48,6 +54,15 @@ _GAP = "[ \t]*[" + re.escape(SPLIT_SEPARATORS) + "][ \t]*"
 _SLASH = "SLASH_OPTIONS_REQUIRE_REVIEW"
 
 
+class SplitReading(StrEnum):
+    """What a person said a record of a shown split means, when it may also
+    be a range of sizes (owner, 2026-10-09). Only `SIZE_WITH_COUNT` lets the
+    split be stated by size: «розмір 42 — 44 шт». A range is answered with
+    another basis and a note, as any line is."""
+
+    SIZE_WITH_COUNT = "SIZE_WITH_COUNT"
+
+
 @dataclass(frozen=True, slots=True)
 class FileLineEvidence:
     """What a file line's row keeps: its count's summary, the split its text
@@ -63,6 +78,13 @@ class FileLineEvidence:
 def _quantities(parsed: dict[str, Any]) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = parsed.get("fields", {}).get("quantity", [])
     return candidates
+
+
+def _places(text: str, size: str) -> list[re.Match[str]]:
+    """Every place the text writes this size as a whole word, joined by one
+    sign to a run of digits: «M-3», «42 – 44». The digits are group 1."""
+    pattern = re.compile(r"(?<![^\W_])" + re.escape(size) + _GAP + r"(\d+)(?!\d)", re.IGNORECASE)
+    return list(pattern.finditer(text))
 
 
 def shown_split(
@@ -105,13 +127,9 @@ def shown_split(
     ):
         return None
 
-    text = line.text
     places: list[tuple[int, int]] = []
     for pair in pairs:
-        pattern = re.compile(
-            r"(?<![^\W_])" + re.escape(pair.size) + _GAP + r"(\d+)(?!\d)", re.IGNORECASE
-        )
-        found = list(pattern.finditer(text))
+        found = _places(line.text, pair.size)
         if len(found) != 1 or int(found[0].group(1)) != pair.count:
             return None
         places.append(found[0].span())
@@ -119,6 +137,58 @@ def shown_split(
     if any(earlier[1] > later[0] for earlier, later in pairwise(places)):
         return None
     return tuple((pair.size, pair.count) for pair in pairs)
+
+
+@dataclass(frozen=True, slots=True)
+class SplitRecord:
+    """One size of a shown split, and how the line's text writes it:
+    `written` is the record («42-44», «M - 3») and `count_written` its count's
+    digits («44»), exactly as in the text. None when the text no longer shows
+    the record, which a kept row cannot do: its text and its split are both
+    fixed evidence."""
+
+    size: str
+    count: int
+    written: str | None
+    count_written: str | None
+
+    def spellings(self) -> tuple[str, ...]:
+        """What the catalogue is asked about: the size, the count, the record."""
+        return tuple(
+            value for value in (self.size, self.count_written, self.written) if value is not None
+        )
+
+
+def split_records(text: str, split: Sequence[Mapping[str, Any]]) -> list[SplitRecord]:
+    """Each pair of a kept split (`{size, count}`, in the file's order) with
+    its record in the line's text, found as `shown_split` found it."""
+    records = []
+    for pair in split:
+        size, count = str(pair["size"]), int(pair["count"])
+        found = [place for place in _places(text, size) if int(place.group(1)) == count]
+        place = found[0] if len(found) == 1 else None
+        records.append(
+            SplitRecord(
+                size=size,
+                count=count,
+                written=place.group(0) if place else None,
+                count_written=place.group(1) if place else None,
+            )
+        )
+    return records
+
+
+def may_be_range(record: SplitRecord, sizes: Collection[str]) -> bool:
+    """Whether a record of a size with its count may also be read as a range
+    of sizes (owner, 2026-10-09): its count, as written, is itself one of the
+    organization's sizes («42-44», with a size 44), or the whole record is
+    («42-44», a size of its own). `sizes` holds every spelling the catalogue
+    has a size of, as `catalog.read.sizes_by_spelling` answers: one spelling,
+    ADR-0009, so case and the kind of dash do not matter. A record the text
+    no longer shows is asked about too: it cannot be told apart."""
+    if record.written is None or record.count_written is None:
+        return True
+    return record.count_written in sizes or record.written in sizes
 
 
 def file_line_evidence(parsed: dict[str, Any], line: StockFileLineV1) -> FileLineEvidence:
@@ -187,7 +257,11 @@ __all__ = [
     "FILE_SPLIT_NOT_IN_TEXT",
     "SPLIT_SEPARATORS",
     "FileLineEvidence",
+    "SplitReading",
+    "SplitRecord",
     "countless",
     "file_line_evidence",
+    "may_be_range",
     "shown_split",
+    "split_records",
 ]

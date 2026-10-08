@@ -7,7 +7,9 @@ The parser's reading only adds doubt, and never makes a line `KNOWN`:
   2026-10-08: «Бомбер M 3 1200» is a bare number, answered with a note);
 - a split the text shows, each size joined to its count by a sign, one
   size or several («S-1 M-2 L-1», «Лоран M-3»), is kept for a tap; a space
-  alone joins nothing («M 3»; owner, 2026-10-08).
+  alone joins nothing («M 3»; owner, 2026-10-08);
+- a record of it that may also be a range of sizes («42-44») is asked about
+  first (owner, 2026-10-09).
 
 Every case runs through the real parser, so what is pinned is what a line
 will get.
@@ -21,6 +23,7 @@ from typing import Any
 import pytest
 
 from app.modules.catalog.parser import parse_catalog_line
+from app.modules.catalog.sizes import spell_size
 from app.modules.snapshots.file_lines import (
     FILE_COUNT_DIFFERS,
     FILE_COUNT_HINT,
@@ -28,9 +31,12 @@ from app.modules.snapshots.file_lines import (
     FILE_SPLIT_NOT_IN_TEXT,
     SPLIT_SEPARATORS,
     FileLineEvidence,
+    SplitRecord,
     countless,
     file_line_evidence,
+    may_be_range,
     shown_split,
+    split_records,
 )
 from app.modules.snapshots.models import SnapshotQuantityState
 from app.modules.snapshots.stock_file import StockFileLineV1
@@ -344,3 +350,75 @@ def test_birka_s_own_reading_of_options_leaves_the_split_unknown() -> None:
     assert evidence("Куртка бежевая/xyz 3 шт", count=4) == FileLineEvidence(
         UNKNOWN_DISTRIBUTION, None, None, (FILE_COUNT_DIFFERS,)
     )
+
+
+# ---------------------------------------------------------------------------
+# A record that may also be a range of sizes (owner, 2026-10-09)
+# ---------------------------------------------------------------------------
+
+
+def found_in(catalogue: tuple[str, ...], records: list[SplitRecord]) -> set[str]:
+    """What `catalog.read.sizes_by_spelling` answers for these records, with
+    a catalogue of these codes: each spelling asked about whose one spelling
+    (ADR-0009) is a code's, ignoring case."""
+    codes = {spell_size(code).casefold() for code in catalogue}
+    return {
+        spelling
+        for record in records
+        for spelling in record.spellings()
+        if spell_size(spelling).casefold() in codes
+    }
+
+
+def ranges(text: str, pairs: tuple[tuple[str, int], ...], *catalogue: str) -> list[bool]:
+    records = split_records(text, counts(*pairs))
+    sizes = found_in(catalogue, records)
+    return [may_be_range(record, sizes) for record in records]
+
+
+@pytest.mark.parametrize(
+    ("text", "pairs", "written"),
+    [
+        ("Парка 42-44", (("42", 44),), [("42-44", "44")]),
+        ("Парка 42 – 44", (("42", 44),), [("42 – 44", "44")]),
+        ("Лоран m:3 l = 12", (("M", 3), ("L", 12)), [("m:3", "3"), ("l = 12", "12")]),
+    ],
+)
+def test_each_record_of_a_split_is_found_as_the_text_writes_it(
+    text: str, pairs: tuple[tuple[str, int], ...], written: list[tuple[str, str]]
+) -> None:
+    assert split(text, size_counts=counts(*pairs)) == pairs
+    records = split_records(text, counts(*pairs))
+    assert [(record.written, record.count_written) for record in records] == written
+
+
+def test_a_count_that_is_itself_a_size_may_be_a_range() -> None:
+    assert ranges("Парка 42-44", (("42", 44),), "42", "44") == [True]
+    assert ranges("Парка 42-44 46-2", (("42", 44), ("46", 2)), "42", "44", "46") == [True, False]
+
+
+def test_a_record_that_is_itself_a_size_may_be_a_range() -> None:
+    assert ranges("Парка 42-44", (("42", 44),), "42", "42-44") == [True]
+
+
+def test_a_record_neither_way_a_size_is_a_size_with_its_count() -> None:
+    assert ranges("Парка 42-44", (("42", 44),), "42", "46", "M") == [False]
+    assert ranges("Лоран M-1 L-2", (("M", 1), ("L", 2)), "M", "L", "XL") == [False, False]
+    # The size itself is no range: «42» alone answers nothing.
+    assert ranges("Парка 42-1", (("42", 1),), "42") == [False]
+
+
+def test_a_possible_range_is_found_under_any_spelling_of_the_size() -> None:
+    """One size, one spelling (ADR-0009): case, Cyrillic letters, spaces and
+    the kind of dash do not matter."""
+    assert ranges("Парка 42 – 44", (("42", 44),), "42-44") == [True]
+    assert ranges("Парка 42—44", (("42", 44),), "42 - 44") == [True]
+    assert ranges("Лоран M-3", (("M", 3),), "м-3") == [True]
+    assert ranges("Лоран m-3", (("M", 3),), "M-3") == [True]
+
+
+def test_a_record_the_text_does_not_show_is_asked_about() -> None:
+    [record] = split_records("Парка", counts(("42", 44)))
+
+    assert (record.written, record.count_written) == (None, None)
+    assert may_be_range(record, set()) is True

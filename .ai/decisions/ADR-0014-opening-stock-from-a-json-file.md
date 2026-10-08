@@ -2,10 +2,12 @@
 
 Status: Accepted (2026-10-08). Built on `feat/json-stock-import`; see the
 [report](../project-memory/json-stock-import-report.md). Amended the same day
-with what the build found (§1, §4, §5, §7, §10, §13).
+with what the build found (§1, §4, §5, §7, §10, §13), and on 2026-10-09 with
+the owner's two changed readings (§5, §7, §12, §13, Consequences).
 Owner decisions: business-rules.md, "the shops' existing stock" (2026-10-08),
-with the answers to the design's questions the same day; "going live"
-(2026-10-01); "the first days" (2026-10-02).
+with the answers to the design's questions the same day, and the readings of
+"how it is carried out" answered on 2026-10-09; "going live" (2026-10-01);
+"the first days" (2026-10-02).
 Amends: ADR-0005 §2, §3, §8, §9, §10 and its Consequences; ADR-0010 §2 (the
 largest body); ADR-0013 §4.2 (a slow call is not an outage).
 Builds on: ADR-0001 (module boundaries), ADR-0003 (a command's permanent
@@ -248,8 +250,32 @@ not, the file's counts are a hint, with reason `FILE_SPLIT_NOT_IN_TEXT`, and
 the line is answered as any split is: with a note.
 
 **A size range written with a sign** (`42-44`) can pass this check if the
-parser misreads it as size 42 with a count of 44. The person still taps, and
-sees the text and the photo reference; the risk register names it.
+parser misreads it as size 42 with a count of 44. **The app asks** (owner,
+2026-10-09: "if such cases occur, the app asks the person what the record
+means, and the person chooses"). A pair of a shown split **may be a range**
+when, in the organization's catalogue, under one spelling (ADR-0009:
+`spell_size`, ignoring case):
+- its count, as the text writes it («44»), is itself a size; or
+- its record, the size, the sign and the count as the text writes them
+  («42-44», «42 – 44»), is itself a size.
+
+It is read at every look, never kept: the catalogue decides it, as it
+decides the pair's `size_id`, so a size created after the import makes a
+pair ambiguous from then on.
+- **The editor asks first,** per such pair: «Запис «42-44» — це:», with
+  «Розмір 42 — 44 шт» and «Діапазон розмірів 42–44», the record as written.
+  Only once every such pair is read as a size with its count is
+  `STATED_BY_SIZE` offered, never preselected. Read as a range, it is not
+  offered: the person answers with another basis and a note, as for any
+  line.
+- **The server checks again at the answer.** `STATED_BY_SIZE` on a line
+  with such a pair needs `split_read_as: "SIZE_WITH_COUNT"`; without it the
+  answer is refused (422 `VALIDATION_ERROR`, reason `SPLIT_MAY_BE_RANGE`,
+  naming the records), as every refusal of a basis is. `split_read_as` goes
+  with `STATED_BY_SIZE` only. The answer's audit entry keeps it, with the
+  records that could be read otherwise.
+- A range whose count is no size of the catalogue yet («42-58», no size 58)
+  is not asked about; the risk register names it.
 
 Hand-typed lines carry no file reading, so they never have a shown split.
 
@@ -318,6 +344,31 @@ own store (`acting_store_id`).
 A child store's own warehouse is reached by that store alone, so its list
 stays its own (Q5).
 
+**While the list's own store does not trade,** blocked or archived, the
+list is **only rejected**, through the other store (owner, 2026-10-09: "the
+other store's manager, or the owner, may reject it, which releases the
+warehouse; its files then go into a new list started from the other store.
+It still cannot be approved while its own store does not trade").
+- **A rejection** needs only the store acted through trading, with the
+  reach above: through another store, `can_receive` and the person's
+  permission there, either snapshot permission. The hold is released as for
+  any rejection, and the audit names the store acted through
+  (`via_store_id`). Through the list's own store, the scope refuses it,
+  `STORE_NOT_TRADING`, as before.
+- **Every other command** — approving, answering, adding or removing a
+  file — still needs the list's own store trading, since the list acts in
+  the ledger through it. Through the other store the refusal names it:
+  409 `SNAPSHOT_CONFLICT`, reason `LIST_STORE_NOT_TRADING`, with that
+  store and its state (before, a bare 404 "Unknown store").
+- **The list says so.** The list's `store_state` is its own store's. The
+  list page, seen through the other store, reads «Магазин «…», що почав цей
+  список, не працює: список можна лише відхилити, а файли додати до нового
+  списку.», offers no approval, no file and no answer, and offers
+  «Відхилити список» to whoever may reject there, managers included.
+  «Новий список» names such a waiting list and says to reject it first.
+- **Its files go into a new list** started from the other store, their lines
+  answered anew: nothing is carried over.
+
 **A paused warehouse's list is seen from its own store only.** `can_receive`
 through another store also needs the warehouse open, so while it is paused
 the other store neither sees the list nor acts on it. Its own store still
@@ -330,7 +381,7 @@ reads it and may reject it, under reach (ADR-0005 §9).
   acted through (`via_store_id`).
 - The opening movements' acting store is still `acting_store_id`, as
   ADR-0005 §4 writes them.
-- A command still needs that store trading.
+- A command still needs that store trading, a rejection apart (above).
 
 **A list waiting at a warehouse is visible from either store.**
 `GET /snapshots?store_id=` lists, for that store:
@@ -565,6 +616,10 @@ part of an opening stock list, is under 0.96 MB.
 | Approve | `snapshot:approve` | as above |
 | Read, reject | either | the list's own store: reach. Another store: `can_receive` |
 
+Every command but a rejection also needs the list's own store trading; a
+rejection needs only the store acted through trading (§7; owner,
+2026-10-09).
+
 **No new permission.** Managers and owners hold `snapshot:import`; sellers
 hold neither.
 
@@ -610,9 +665,18 @@ out `REMOVED`, unless `part_id` names a removed part. Its offset and the
 - `photo_name`, `photo_line`;
 - `reading`, `price_kind`;
 - `file_reasons`;
-- `shown_split [{size, count, size_id}]`, where `size_id` is null when the
-  catalogue lacks the size;
+- `shown_split [{size, count, size_id, written, may_be_range}]`, where
+  `size_id` is null when the catalogue lacks the size, `written` is the
+  record as the text writes it, and `may_be_range` says the person is asked
+  first (§5);
 - `same_photo_lines`.
+
+**`PUT /snapshots/{id}/lines/{line_no}`** gains `split_read_as`
+(`"SIZE_WITH_COUNT"`), with `STATED_BY_SIZE` only; a line with a pair that
+may be a range needs it (`SPLIT_MAY_BE_RANGE`, §5).
+
+**A list** gains `store_state`, its own store's: `ACTIVE`, `BLOCKED` or
+`ARCHIVED` (§7).
 
 **Every route on a list** takes an optional `store_id`, the store acted
 through (§7).
@@ -620,8 +684,8 @@ through (§7).
 **`GET /snapshots`** gains `location_id`.
 
 **New `SNAPSHOT_CONFLICT` reasons:** `PART_DUPLICATE`, `LIST_FULL`,
-`LAST_PART`, `PART_REMOVED`. One code with a reason, as that error's
-docstring prescribes.
+`LAST_PART`, `PART_REMOVED`, and `LIST_STORE_NOT_TRADING` (§7). One code
+with a reason, as that error's docstring prescribes.
 
 **A file's 422** keeps FastAPI's shape. Under `file`:
 - every refusal carries a stable `type`; inside `lines` it also carries its
@@ -857,10 +921,16 @@ every page.
   at the same moment from two stores. Only one can be approved. The other
   is rejected, and its lines are answered again in the first, by adding its
   file there.
-- **A shared list whose own store stops trading holds the warehouse.** Every
-  command on the list, rejection included, needs that store trading (§7).
-  While it is blocked or archived, the list is neither approved nor
-  rejected through either store, and the warehouse waits for both.
+- **A shared list whose own store stops trading is rejected, not approved**
+  (owner, 2026-10-09). Through the other store it is rejected, which
+  releases the warehouse, and its files are added again to a new list there,
+  their lines answered anew. It is approved only once its store trades
+  again. If the warehouse is paused too, the other store does not reach the
+  list, and it waits until one of the two changes.
+- **A record that may be a range of sizes costs a question** (owner,
+  2026-10-09). «42-44», with a size 44 or «42-44» in the catalogue, is asked
+  about before the tap; a range not in the catalogue («42-58») still passes
+  as a size with its count, the person seeing the text and the photo line.
 - **A line is about 2–3 KB of evidence.** A list at its 5 000 lines is
   about 10–15 MB, and up to about 30 MB with its 10 000 rows, removed files
   included.

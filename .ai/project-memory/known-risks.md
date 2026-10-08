@@ -918,8 +918,15 @@ person; the same day the owner answered the design's questions.
   measured with real notebooks.
 - **A size range written with a sign can pass for a split.** «42-44» read
   by the parser as size 42 with a count of 44 passes the check of a split
-  the text shows (ADR-0014 §5). The person still taps, and sees the text and
-  the photo's line; nothing else catches it.
+  the text shows (ADR-0014 §5). *Asked since 2026-10-09 (owner):* when the
+  count, or the whole record, is also one of the organization's sizes, the
+  app asks what the record means, and the tap is offered only once the
+  person chooses «розмір 42 — 44 шт»; the server refuses the tap without
+  that choice (`SPLIT_MAY_BE_RANGE`) and keeps it in the answer's history.
+  What is left: a range whose end is no size of the catalogue yet («42-58»
+  with no size 58) is not asked about, and passes as before, the person
+  seeing the text and the photo's line. The question is asked again once
+  such a size is created, even of a line read before.
 - **The limit, and a warehouse larger than it.** A list takes at most 5 000
   answers and 5 000 lines, and a warehouse takes one list, once. The owner
   kept 5 000 on 2026-10-08: the shops first count their largest warehouse
@@ -946,14 +953,17 @@ person; the same day the owner answered the design's questions.
   starting lists for one warehouse at the same moment from the two stores
   can make two. Only one can be approved; the other is rejected, and its
   files are added to the first, its lines answered again.
-- **A shared list whose own store stops trading holds the warehouse.** The
-  list's opening movements name the store that started it (ADR-0005 §4),
-  and every command on the list, rejection included, needs that store
-  trading. If it is blocked or archived while the list waits, the list can
-  be neither approved nor rejected through either store, and the shared
-  warehouse waits for both stores until that store trades again. Through
-  the other store the server answers only 404, "Unknown store". Rare; put to
-  the owner (business rules, "how it is carried out", 8).
+- **A shared list whose own store stops trading** *(resolved for rejection
+  on 2026-10-09, owner).* The list's opening movements name the store that
+  started it (ADR-0005 §4), so it is still not approved, nor changed, while
+  that store is blocked or archived: through the other store the server
+  says so, `LIST_STORE_NOT_TRADING`, no longer a bare 404. It is rejected
+  through the other store, by its managers or the owner, which releases
+  the warehouse; its files are added again to a new list started there,
+  and their lines answered anew (server runbook, step 9). What is left: a
+  warehouse that is also paused is not reached through the other store
+  (below), so such a list waits until the warehouse reopens or the store
+  trades again.
 - **A store that may sell at the shared warehouse but not receive there**
   gets `OPENING_LIST_PENDING` at its till, which points to «Початкові
   залишки», but its managers do not see the list there. In both seeds both

@@ -23,7 +23,13 @@ interface Fixture {
   file_removal_location_id: string;
   file_checks_location_id: string;
   file_slow_location_id: string;
+  file_range_location_id: string;
   shared_opening_location_id: string;
+  network_owner_telegram_user_id: string;
+  network_north_store_id: string;
+  network_south_store_id: string;
+  network_north_south_location_id: string;
+  network_south_manager_telegram_user_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -41,10 +47,10 @@ const SLOW =
 const LAST =
   "Це останній файл списку. Якщо він помилковий — відхиліть список: склад звільниться.";
 
-function initData(): string {
+function initData(telegramUserId = fixture.telegram_user_id): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
-    user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
+    user: `{"id":${telegramUserId},"first_name":"Оля"}`,
   });
   const check = [...fields]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -57,9 +63,12 @@ function initData(): string {
   return fields.toString();
 }
 
-async function token(page: Page): Promise<string> {
+async function token(
+  page: Page,
+  telegramUserId = fixture.telegram_user_id,
+): Promise<string> {
   const auth = await page.request.post("/api/v1/auth/telegram", {
-    data: { init_data: initData() },
+    data: { init_data: initData(telegramUserId) },
   });
   return ((await auth.json()) as { access_token: string }).access_token;
 }
@@ -87,6 +96,28 @@ async function model(page: Page): Promise<string> {
       sizes: [
         { system: "ALPHA", code: "M" },
         { system: "ALPHA", code: "L" },
+      ],
+    },
+  });
+  expect(created.status()).toBe(201);
+  return name;
+}
+
+/** A model of this test's own in the sizes 42 and 44, colour «сірий». */
+async function numericModel(page: Page): Promise<string> {
+  const name = `Парка ${word()}`;
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: {
+      Authorization: `Bearer ${await token(page)}`,
+      "Idempotency-Key": randomUUID(),
+    },
+    data: {
+      store_id: fixture.store_id,
+      concept: name,
+      variant: { color: "сірий" },
+      sizes: [
+        { system: "NUMERIC_EU", code: "42" },
+        { system: "NUMERIC_EU", code: "44" },
       ],
     },
   });
@@ -779,6 +810,106 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
   expect(sent).toHaveLength(before);
 });
 
+test("a record that may be a size with its count or a range of sizes is asked about, and the split is taken by a tap only once it is read as a size with its count", async ({
+  page,
+}) => {
+  const parka = await numericModel(page);
+  await noListWaits(page, fixture.file_range_location_id);
+  const answers: Record<string, unknown>[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().includes("/lines/"))
+      answers.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  await openings(page);
+  const form = await newFromFile(page, fixture.file_range_location_id);
+  await choose(
+    form,
+    "діапазони.json",
+    stockFile(
+      [
+        {
+          text: `${parka} сірий 42-44`,
+          photo: "R.jpg",
+          photo_line: 1,
+          model: parka,
+          size_counts: [{ size: "42", count: 44 }],
+        },
+        {
+          text: `${parka} сірий 42 – 44`,
+          photo: "R.jpg",
+          photo_line: 2,
+          model: parka,
+          size_counts: [{ size: "42", count: 44 }],
+        },
+      ],
+      { source: "Зошит діапазонів" },
+    ),
+  );
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Зошит діапазонів" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  // 44 is a size too: the record may be read either way.
+  await expect(card(page, 1)).toContainText(
+    "Запис «42-44» може означати й діапазон розмірів: під час розбору вкажіть, що саме.",
+  );
+
+  // Asked first; the split as the line shows it waits for the answer.
+  let editor = await answer(page, 1);
+  const question = editor.getByRole("group", { name: "Запис «42-44» — це:" });
+  await expect(question).toBeVisible();
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await expect(editor.getByRole("radio", { checked: true })).toHaveCount(0);
+  await question.getByLabel("Розмір 42 — 44 шт").check();
+  const bySize = editor.getByLabel("Як у рядку, по розмірах: 42 × 44");
+  await expect(bySize).toBeVisible();
+  await expect(bySize).not.toBeChecked();
+  // Read as a range after all: the tap goes, and the choice made with it.
+  await bySize.check();
+  await question.getByLabel("Діапазон розмірів 42–44").check();
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await expect(editor).toContainText(
+    "Діапазон не каже, скільки якого розміру: вкажіть розміри й кількість і звідки вони відомі.",
+  );
+  await question.getByLabel("Розмір 42 — 44 шт").check();
+  await expect(bySize).not.toBeChecked();
+  await bySize.check();
+  await pickModel(editor, parka);
+  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await expect(card(page, 1)).toContainText(
+    "Звідки кількість: Як у рядку, по розмірах",
+  );
+  await expect(card(page, 1)).toContainText(`→ ${parka} сірий, 42 × 44`);
+  expect(answers).toHaveLength(1);
+  expect(answers[0]).toMatchObject({
+    quantity_basis: "STATED_BY_SIZE",
+    split_read_as: "SIZE_WITH_COUNT",
+  });
+
+  // Read as a range, as the text writes it: answered as any line, with a note.
+  editor = await answer(page, 2);
+  const asWritten = editor.getByRole("group", {
+    name: "Запис «42 – 44» — це:",
+  });
+  await asWritten.getByLabel("Діапазон розмірів 42–44").check();
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await editor.getByLabel("Відомо інакше").check();
+  await pickModel(editor, parka);
+  await editor
+    .getByRole("combobox", { name: "Розмір", exact: true })
+    .selectOption({ label: "42" });
+  await editor.getByLabel("Кількість").fill("1");
+  await editor
+    .getByLabel("Звідки це відомо")
+    .fill("діапазон 42–44: на полиці одна 42");
+  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await expect(card(page, 2)).toContainText("Звідки кількість: Відомо інакше");
+  expect(answers).toHaveLength(2);
+  expect(answers[1]).toMatchObject({ quantity_basis: "OWNER_KNOWLEDGE" });
+  expect(answers[1]).not.toHaveProperty("split_read_as");
+});
+
 test("the shared warehouse's list is seen and filled from the other store, and no second list is offered for it", async ({
   page,
 }) => {
@@ -855,6 +986,145 @@ test("the shared warehouse's list is seen and filled from the other store, and n
   ).toHaveCount(0);
   await another.getByRole("button", { name: "Відкрити список" }).click();
   await expect(page.getByRole("heading", { name })).toBeVisible();
+});
+
+/** Put a store in a state through the API, whatever state a run left it in. */
+async function settle(
+  page: Page,
+  store: string,
+  state: "ACTIVE" | "BLOCKED",
+): Promise<void> {
+  const headers = {
+    Authorization: `Bearer ${await token(page, fixture.network_owner_telegram_user_id)}`,
+  };
+  const stores = (await (
+    await page.request.get("/api/v1/stores", { headers })
+  ).json()) as { id: string; state: string }[];
+  if (stores.find((s) => s.id === store)?.state === state) return;
+  const changed = await page.request.post(`/api/v1/stores/${store}/state`, {
+    headers,
+    data: { command_id: randomUUID(), state, reason: "підготовка тесту" },
+  });
+  expect(changed.status()).toBe(200);
+}
+
+test("a shared list whose own store stopped trading is only rejected, from the other store, and its warehouse takes a new list there", async ({
+  page,
+}) => {
+  const north = fixture.network_north_store_id;
+  const south = fixture.network_south_store_id;
+  const between = fixture.network_north_south_location_id;
+  const headers = {
+    Authorization: `Bearer ${await token(page, fixture.network_owner_telegram_user_id)}`,
+  };
+  const name = `Північний зошит ${word()}`;
+  // What an earlier run left waiting is rejected, through the store that
+  // trades, whatever state the store that started it is in.
+  const waiting = await page.request.get(
+    `/api/v1/snapshots?store_id=${south}&location_id=${between}&status=IN_REVIEW&limit=100`,
+    { headers },
+  );
+  for (const list of (
+    (await waiting.json()) as { items: { snapshot_id: string }[] }
+  ).items) {
+    const rejected = await page.request.post(
+      `/api/v1/snapshots/${list.snapshot_id}/reject?store_id=${south}`,
+      { headers, data: { reason: "лишився від іншого прогону" } },
+    );
+    expect(rejected.ok()).toBe(true);
+  }
+  await settle(page, north, "ACTIVE");
+  try {
+    // «Північний» starts the warehouse's list, then the owner blocks it.
+    const started = await page.request.post("/api/v1/snapshots", {
+      headers,
+      data: {
+        command_id: randomUUID(),
+        store_id: north,
+        location_id: between,
+        source_document_ref: name,
+        lines: ["Пальто сіре 2 шт"],
+      },
+    });
+    expect(started.status()).toBe(201);
+    await settle(page, north, "BLOCKED");
+
+    // «Ніна» manages «Південний»: no second list, and the one waiting named.
+    const asked: string[] = [];
+    page.on("request", (request) => {
+      if (/\/api\/v1\/snapshots\/[^/?]+/.test(request.url()))
+        asked.push(request.url());
+    });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_south_manager_telegram_user_id) }).toString()}`,
+    );
+    await page.getByRole("button", { name: "Південний SOUTH" }).click();
+    await page.getByRole("button", { name: "Початкові залишки" }).click();
+    await page.getByRole("button", { name: "Новий список" }).click();
+    const form = page.getByRole("form", { name: "Новий список" });
+    await form.getByLabel("Склад").selectOption(between);
+    await expect(form).toContainText(
+      `На складі «Склад півночі й півдня» чекає список «${name}» магазину «Північний», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`,
+    );
+    await expect(
+      form.getByRole("button", { name: "Зберегти список" }),
+    ).toHaveCount(0);
+    await form.getByRole("button", { name: "Відкрити список" }).click();
+    await expect(page.getByRole("heading", { name })).toBeVisible();
+    await expect(
+      page.getByText(
+        "Магазин «Північний», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.",
+      ),
+    ).toBeVisible();
+    // Nothing else is done to it: no approval, no file, no answer.
+    await page.getByRole("button", { name: "Усі", exact: true }).click();
+    await expect(card(page, 1)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Затвердити список" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Додати файл" })).toHaveCount(
+      0,
+    );
+    await expect(
+      card(page, 1).getByRole("button", { name: "Розібрати рядок" }),
+    ).toHaveCount(0);
+
+    // A manager rejects it, and the warehouse is released.
+    const decision = page.getByLabel("Рішення щодо списку");
+    await decision.getByRole("button", { name: "Відхилити список" }).click();
+    await decision
+      .getByLabel("Чому відхиляємо")
+      .fill("Північний не працює, файли — до нового списку");
+    await decision.getByRole("button", { name: "Так, відхилити" }).click();
+    await expect(
+      page.getByText(
+        "Відхилено: Північний не працює, файли — до нового списку. Залишків цей список не змінив.",
+      ),
+    ).toBeVisible();
+    expect(asked.length).toBeGreaterThan(0);
+    for (const url of asked)
+      expect(new URL(url).searchParams.get("store_id")).toBe(south);
+
+    // Its warehouse takes a new list, started from «Південний».
+    await page.getByRole("button", { name: "До списків" }).click();
+    await page.getByRole("button", { name: "Новий список" }).click();
+    const fresh = page.getByRole("form", { name: "Новий список" });
+    await fresh.getByLabel("Склад").selectOption(between);
+    await fresh
+      .getByLabel("Звідки список (необов’язково)")
+      .fill(`${name}, заново`);
+    await fresh.getByLabel(/Рядки списку/).fill("Пальто сіре 2 шт");
+    await fresh.getByRole("button", { name: "Зберегти список" }).click();
+    await expect(
+      page.getByRole("heading", { name: `${name}, заново` }),
+    ).toBeVisible();
+    await expect(page.getByText("Веде магазин «Північний»")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Додати файл" }),
+    ).toBeVisible();
+  } finally {
+    await settle(page, north, "ACTIVE");
+  }
 });
 
 /** Holds each matching request until released, or gives it no answer. */

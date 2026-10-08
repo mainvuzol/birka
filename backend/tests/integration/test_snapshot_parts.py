@@ -386,8 +386,20 @@ async def test_a_list_created_from_a_file_keeps_each_line_its_photo_and_reading(
     split, hint, heading = items
     # The split the text shows, each size of the catalogue's, waits for a tap.
     assert split["shown_split"] == [
-        {"size": "M", "count": 1, "size_id": str(w.sizes["M"])},
-        {"size": "L", "count": 2, "size_id": str(w.sizes["L"])},
+        {
+            "size": "M",
+            "count": 1,
+            "size_id": str(w.sizes["M"]),
+            "written": "M-1",
+            "may_be_range": False,
+        },
+        {
+            "size": "L",
+            "count": 2,
+            "size_id": str(w.sizes["L"]),
+            "written": "L-2",
+            "may_be_range": False,
+        },
     ]
     assert (split["quantity_state"], split["quantity_total"], split["file_reasons"]) == (
         "UNKNOWN_DISTRIBUTION",
@@ -1520,7 +1532,15 @@ async def test_a_split_the_text_shows_is_stated_by_size_in_one_answer(world):
 
     assert (two["quantity_state"], two["quantity_total"]) == ("UNKNOWN_DISTRIBUTION", 3)
     assert (one["quantity_state"], one["quantity_total"]) == ("UNKNOWN_QUANTITY", None)
-    assert one["shown_split"] == [{"size": "M", "count": 3, "size_id": str(w.sizes["M"])}]
+    assert one["shown_split"] == [
+        {
+            "size": "M",
+            "count": 3,
+            "size_id": str(w.sizes["M"]),
+            "written": "M-3",
+            "may_be_range": False,
+        }
+    ]
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
     line = first.json()["line"]
@@ -1611,13 +1631,25 @@ async def test_a_split_whose_size_the_catalogue_lacks_needs_a_note(world):
         )
 
     assert line["shown_split"] == [
-        {"size": "46", "count": 1, "size_id": None},
-        {"size": "48", "count": 2, "size_id": None},
+        {"size": "46", "count": 1, "size_id": None, "written": "46-1", "may_be_range": False},
+        {"size": "48", "count": 2, "size_id": None, "written": "48-2", "may_be_range": False},
     ]
     assert (tapped.status_code, tapped.json()["details"]["size"]) == (422, "46")
     assert now["shown_split"] == [
-        {"size": "46", "count": 1, "size_id": str(sizes["46"])},
-        {"size": "48", "count": 2, "size_id": str(sizes["48"])},
+        {
+            "size": "46",
+            "count": 1,
+            "size_id": str(sizes["46"]),
+            "written": "46-1",
+            "may_be_range": False,
+        },
+        {
+            "size": "48",
+            "count": 2,
+            "size_id": str(sizes["48"]),
+            "written": "48-2",
+            "may_be_range": False,
+        },
     ]
     assert by_tap.status_code == 200, by_tap.text
 
@@ -1660,6 +1692,133 @@ async def test_the_approval_counts_what_rests_on_a_split_the_text_shows(world):
         (w.coat, w.sizes["L"]): 2,
         (w.bomber, w.sizes["M"]): 2,
     }
+
+
+async def numeric_model(
+    client: httpx.AsyncClient, w: World, concept: str, *codes: str
+) -> tuple[uuid.UUID, dict[str, uuid.UUID]]:
+    """A model in numeric sizes: each size created in the catalogue with it."""
+    response = await client.post(
+        "/api/v1/catalog/products",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={
+            "store_id": str(w.main),
+            "concept": concept,
+            "sizes": [{"system": "NUMERIC_EU", "code": code} for code in codes],
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    return uuid.UUID(body["product_variant_id"]), {
+        size["code"]: uuid.UUID(size["size_id"]) for size in body["sizes"]
+    }
+
+
+# «42-44» as the parser read it: size 42, 44 pieces.
+RANGE_LIKE = stock_file(file_line("Парка 42-44", size_counts=counts(("42", 44))))
+
+
+async def test_a_record_that_may_be_a_range_of_sizes_is_stated_by_size_only_when_said_so(world):
+    """Owner, 2026-10-09: when a size with its count may also be read as a
+    range of sizes, the app asks the person what the record means; the tap
+    is offered only after «розмір 42 — 44 шт» is chosen."""
+    w = world
+    async with w.client() as client:
+        parka, sizes = await numeric_model(client, w, "Парка", "42", "44")
+        view = await created_from_file(client, w, RANGE_LIKE)
+        snapshot_id = view["snapshot_id"]
+        [line] = await lines_of(client, snapshot_id)
+        answer = [allocation(parka, sizes["42"], 44)]
+        unsaid = await resolve(
+            client, snapshot_id, 1, allocations=answer, quantity_basis="STATED_BY_SIZE"
+        )
+        elsewhere = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="OWNER_KNOWLEDGE",
+            note="так на фото",
+            split_read_as="SIZE_WITH_COUNT",
+        )
+        unchanged = await view_of(client, snapshot_id)
+        said = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+        )
+
+    assert line["shown_split"] == [
+        {
+            "size": "42",
+            "count": 44,
+            "size_id": str(sizes["42"]),
+            "written": "42-44",
+            "may_be_range": True,
+        }
+    ]
+    assert (unsaid.status_code, unsaid.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert unsaid.json()["details"] == {"reason": "SPLIT_MAY_BE_RANGE", "records": ["42-44"]}
+    assert elsewhere.status_code == 422, elsewhere.text
+    assert (unchanged["review_revision"], unchanged["summary"]["resolved"]) == (0, 0)
+    assert said.status_code == 200, said.text
+    assert said.json()["line"]["quantity_basis"] == "STATED_BY_SIZE"
+    [entry] = await audit_of(w, "snapshot.line_resolved")
+    assert entry.after["split_read_as"] == "SIZE_WITH_COUNT"
+    assert entry.after["split_may_be_range"] == ["42-44"]
+    assert entry.after["quantity_basis"] == "STATED_BY_SIZE"
+
+
+async def test_a_size_created_after_the_import_makes_a_record_a_possible_range(world):
+    """Read at every look, and again at the answer: a person who saw no
+    question before the size 44 was created is asked after."""
+    w = world
+    async with w.client() as client:
+        parka, sizes = await numeric_model(client, w, "Парка", "42")
+        view = await created_from_file(client, w, RANGE_LIKE)
+        snapshot_id = view["snapshot_id"]
+        [before] = await lines_of(client, snapshot_id)
+        # Another model brings the size 44 into the catalogue.
+        await numeric_model(client, w, "Жилет", "44")
+        refused = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=[allocation(parka, sizes["42"], 44)],
+            quantity_basis="STATED_BY_SIZE",
+        )
+        [after] = await lines_of(client, snapshot_id)
+
+    assert [pair["may_be_range"] for pair in before["shown_split"]] == [False]
+    assert (refused.status_code, refused.json()["details"]["reason"]) == (
+        422,
+        "SPLIT_MAY_BE_RANGE",
+    )
+    assert [pair["may_be_range"] for pair in after["shown_split"]] == [True]
+
+
+async def test_a_record_written_as_a_size_of_its_own_may_be_a_range_whatever_its_dashes(world):
+    """The whole record is a size: «42 – 44» in the text, «42-44» in the
+    catalogue, one spelling (ADR-0009)."""
+    w = world
+    file = stock_file(
+        file_line("Парка 42 – 44", size_counts=counts(("42", 44))),
+        file_line("Парка 46-2", photo_line=2, size_counts=counts(("46", 2))),
+    )
+    async with w.client() as client:
+        await numeric_model(client, w, "Парка", "42", "42-44", "46")
+        view = await created_from_file(client, w, file)
+        ranged, plain = await lines_of(client, view["snapshot_id"])
+
+    assert [(pair["written"], pair["may_be_range"]) for pair in ranged["shown_split"]] == [
+        ("42 – 44", True)
+    ]
+    assert [(pair["written"], pair["may_be_range"]) for pair in plain["shown_split"]] == [
+        ("46-2", False)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1917,6 +2076,104 @@ async def test_the_lists_waiting_at_a_warehouse_are_named_to_either_store(world)
     assert item["store_name"] == await store_name(w, w.main)
     assert [i["snapshot_id"] for i in elsewhere.json()["items"]] == [private["snapshot_id"]]
     assert [i["snapshot_id"] for i in from_main.json()["items"]] == [view["snapshot_id"]]
+
+
+async def stop_trading(w: World, store: uuid.UUID, state: str) -> None:
+    """The owner blocks the store, or archives it, saying why."""
+    async with w.client() as client:
+        changed = await client.post(
+            f"/api/v1/stores/{store}/state",
+            json={"command_id": str(uuid.uuid4()), "state": state, "reason": "перевірка"},
+        )
+    assert changed.status_code == 200, changed.text
+
+
+async def decide(
+    client: httpx.AsyncClient, snapshot_id: str, action: str, store: uuid.UUID, **body: Any
+) -> httpx.Response:
+    return await client.post(
+        f"/api/v1/snapshots/{snapshot_id}/{action}", params=through(store), json=body
+    )
+
+
+@pytest.mark.parametrize("state", ["BLOCKED", "ARCHIVED"])
+async def test_a_shared_list_whose_own_store_stops_trading_is_rejected_through_the_other(
+    world, state
+):
+    """Owner, 2026-10-09: the other store's manager, or the owner, may reject
+    it, which releases the warehouse; its files then go into a new list
+    started from the other store. It still cannot be approved while its own
+    store does not trade."""
+    w = world
+    reason = "магазин не працює, файли — до нового списку"
+    async with w.client("manager") as client:
+        view = await prepared(client, w)
+        snapshot_id = view["snapshot_id"]
+    async with w.client("child_manager") as client:
+        held = await receive(client, w, store=w.second)
+    await stop_trading(w, w.main, state)
+    async with w.client() as client:
+        approved_through_other = await decide(
+            client, snapshot_id, "approve", w.second, expected_review_revision=3
+        )
+        approved_through_own = await decide(
+            client, snapshot_id, "approve", w.main, expected_review_revision=3
+        )
+        rejected_through_own = await decide(client, snapshot_id, "reject", w.main, reason=reason)
+    async with w.client("manager") as client:
+        own_manager = await decide(client, snapshot_id, "reject", w.main, reason=reason)
+    async with w.client("child_manager") as client:
+        seen = await view_of(client, snapshot_id, store=w.second)
+        answered = await resolve_through(
+            client, snapshot_id, 1, w.second, skip_reason="не товар, перевірила Ніна"
+        )
+        rejected = await decide(client, snapshot_id, "reject", w.second, reason=reason)
+        again = await decide(client, snapshot_id, "reject", w.second, reason=reason)
+        released = await receive(client, w, store=w.second)
+        # Its files go into a new list started from the other store.
+        restarted = await created_from_file(client, w, store=w.second)
+
+    assert (held.status_code, held.json()["code"]) == (409, "OPENING_LIST_PENDING")
+    assert seen["store_state"] == state
+    details = conflict(approved_through_other, "LIST_STORE_NOT_TRADING")
+    assert (details["store_id"], details["state"]) == (str(w.main), state)
+    conflict(answered, "LIST_STORE_NOT_TRADING")
+    for refused in (approved_through_own, rejected_through_own, own_manager):
+        assert (refused.status_code, refused.json()["code"]) == (403, "STORE_NOT_TRADING")
+    assert rejected.status_code == 200, rejected.text
+    assert (rejected.json()["status"], rejected.json()["store_id"]) == ("REJECTED", str(w.main))
+    assert again.status_code == 200, again.text
+    assert released.status_code == 201, released.text
+    assert restarted["store_id"] == str(w.second)
+    [entry] = await audit_of(w, "snapshot.rejected")
+    assert (entry.after["via_store_id"], entry.after["acting_store_id"]) == (
+        str(w.second),
+        str(w.main),
+    )
+    assert entry.actor_user_id == w.users["child_manager"]
+    assert await audit_of(w, "snapshot.applied") == []
+    assert await stock(w) == {(w.bottega, w.sizes["M"]): 1}
+
+
+async def test_a_list_whose_own_store_trades_again_is_approved_as_before(world):
+    """The refusal lasts while the store does not trade, and no longer."""
+    w = world
+    async with w.client("manager") as client:
+        view = await prepared(client, w)
+    await stop_trading(w, w.main, "BLOCKED")
+    async with w.client() as client:
+        refused = await decide(
+            client, view["snapshot_id"], "approve", w.second, expected_review_revision=3
+        )
+    await stop_trading(w, w.main, "ACTIVE")
+    async with w.client() as client:
+        approved = await decide(
+            client, view["snapshot_id"], "approve", w.second, expected_review_revision=3
+        )
+
+    conflict(refused, "LIST_STORE_NOT_TRADING")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["store_state"] == "ACTIVE"
 
 
 async def test_who_added_and_who_removed_a_file_are_named(world):

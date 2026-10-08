@@ -326,9 +326,12 @@ For each warehouse, in this order:
    the line itself says «шт»: a person states the count, with a note. A line
    that writes each size joined to its count by a sign («S-1 M-2 L-1»,
    «Лоран M-3») is confirmed by a tap, «Як у рядку, по розмірах»; «M 3»,
-   with a space alone, is a bare number. Headings, totals and crossed-out
-   lines come with the parser's note, and a person decides each (owner,
-   2026-10-08).
+   with a space alone, is a bare number. A record that may also be a range
+   of sizes («42-44», when 44 or «42-44» is a size of the catalogue) is
+   asked about first, «Запис «42-44» — це:»: the tap is offered only after
+   «Розмір 42 — 44 шт» is chosen; a range is answered with the sizes and a
+   note (owner, 2026-10-09). Headings, totals and crossed-out lines come
+   with the parser's note, and a person decides each (owner, 2026-10-08).
 6. **The approval.** The owner (`snapshot:approve`) approves the list, and
    it becomes the warehouse's stock. It cannot be undone. A rejected list
    changes nothing, and a new one may be started.
@@ -371,9 +374,21 @@ warehouse whose list waits: it names that list and opens it. Two people
 starting lists for one warehouse at the same moment from the two stores
 can still make two. Only one can be approved: reject the other, and add
 its files to the first. While the warehouse is paused, its list is seen
-only from the store that started it. And the list needs that store
-trading: while it is blocked or archived, the list is neither approved nor
-rejected, and the warehouse waits for both stores, until it trades again.
+only from the store that started it.
+
+**The store that started the list stops trading** (owner, 2026-10-09).
+While it is blocked or archived, its list is not approved, nor filled or
+answered: the list page, seen through the other store, says so and offers
+only «Відхилити список». Then:
+1. a manager of the other store, or the owner, opens the list in
+   «Початкові залишки» through that store and rejects it, saying why. The
+   warehouse is released at once;
+2. through the same store, «Новий список» for that warehouse, and its files
+   added again, the same files from the shop. Their lines are answered
+   anew: the answers of the rejected list stay only in its history.
+
+If the warehouse is paused too, the other store does not reach the list:
+open the warehouse first, or let the store trade again.
 
 **While a list waits, the warehouse waits** (owner, 2026-10-02), for the
 whole review, even days (owner, 2026-10-08). The app refuses every receipt,

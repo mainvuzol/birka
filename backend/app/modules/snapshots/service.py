@@ -28,6 +28,9 @@ A list of the shared warehouse belongs to both stores (owner decision,
 `via_store_id`, which defaults to the list's own. Through another store, that
 store needs `can_receive` at the list's warehouse and the person the action's
 permission there (ADR-0014 §7). The list's own store still acts in the ledger.
+While the list's own store does not trade, the list can only be rejected,
+through the other store, which releases its warehouse (owner decision,
+2026-10-09).
 
 The caller owns the transaction.
 """
@@ -72,7 +75,13 @@ from app.modules.inventory.service import (
     opening_balance_movement_ids,
     release_opening_list,
 )
-from app.modules.snapshots.file_lines import countless, file_line_evidence
+from app.modules.snapshots.file_lines import (
+    SplitReading,
+    countless,
+    file_line_evidence,
+    may_be_range,
+    split_records,
+)
 from app.modules.snapshots.models import (
     InventorySnapshot,
     InventorySnapshotAllocation,
@@ -102,10 +111,12 @@ from app.modules.snapshots.stock_file import (
     canonical,
     content_fingerprint_of_file,
 )
+from app.modules.tenancy.models import StoreState
 from app.modules.tenancy.service import (
     LocationCapability,
     accessible_locations,
     store_names,
+    store_state,
     validate_active_stores,
 )
 
@@ -325,6 +336,12 @@ async def _authorize(
     to hold `can_receive` at the list's warehouse: only a store that may
     import there shares the list (ADR-0014 §7). A child store's own
     warehouse is reached by that store alone, so its list stays its own.
+
+    A command also needs the list's own store trading, since it acts in the
+    ledger. Through that store, the scope has already refused it by name
+    (`STORE_NOT_TRADING`); through the other store, it is refused here as
+    `LIST_STORE_NOT_TRADING`, naming the list's store and its state: such a
+    list can only be rejected (`reject_snapshot`; owner, 2026-10-09).
     """
     assert snapshot.acting_store_id is not None and snapshot.location_id is not None
     through = _acting_through(snapshot, via_store_id)
@@ -341,9 +358,26 @@ async def _authorize(
         # The list's own store acts in the ledger, whoever acts through which
         # store; both must trade.
         await validate_active_stores(
-            session,
-            organization_id=scope.organization_id,
-            store_ids={snapshot.acting_store_id, through},
+            session, organization_id=scope.organization_id, store_ids={through}
+        )
+        await _require_own_store_trading(session, snapshot=snapshot)
+
+
+async def _require_own_store_trading(session: AsyncSession, *, snapshot: InventorySnapshot) -> None:
+    """The store that started the list trades, or the list is refused by
+    name: `LIST_STORE_NOT_TRADING`, with that store and its state."""
+    assert snapshot.acting_store_id is not None
+    state = await store_state(
+        session, organization_id=snapshot.organization_id, store_id=snapshot.acting_store_id
+    )
+    if state is None:
+        raise NotFoundError("Unknown store")
+    if state is not StoreState.ACTIVE:
+        raise SnapshotConflictError(
+            "The store that started this list does not trade; the list can only be rejected",
+            reason="LIST_STORE_NOT_TRADING",
+            store_id=str(snapshot.acting_store_id),
+            state=state.value,
         )
 
 
@@ -460,7 +494,11 @@ async def _summary(session: AsyncSession, snapshot_id: uuid.UUID) -> dict[str, A
 
 
 async def _snapshot_view(
-    session: AsyncSession, snapshot: InventorySnapshot, *, store_name: str | None = None
+    session: AsyncSession,
+    snapshot: InventorySnapshot,
+    *,
+    store_name: str | None = None,
+    state: StoreState | None = None,
 ) -> dict[str, Any]:
     assert snapshot.acting_store_id is not None
     summary = await _summary(session, snapshot.id)
@@ -472,11 +510,18 @@ async def _snapshot_view(
                 store_ids={snapshot.acting_store_id},
             )
         ).get(snapshot.acting_store_id)
+    if state is None:
+        state = await store_state(
+            session, organization_id=snapshot.organization_id, store_id=snapshot.acting_store_id
+        )
     return {
         "snapshot_id": snapshot.id,
         "command_id": snapshot.command_id,
         "store_id": snapshot.acting_store_id,
         "store_name": store_name,
+        # Whether the list's own store trades: while it does not, the list
+        # can only be rejected, through the other store (owner, 2026-10-09).
+        "store_state": state,
         "location_id": snapshot.location_id,
         "status": snapshot.status,
         "source_document_ref": snapshot.source_document_ref,
@@ -591,6 +636,53 @@ def _parse_summary(parsed: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+async def _shown_splits(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    rows: Sequence[tuple[InventorySnapshotRow, str | None]],
+) -> dict[uuid.UUID, list[dict[str, Any]]]:
+    """Each kept split as the catalogue reads it now, per row and pair.
+
+    - `size_id`: the organization's own size of that spelling, or none when
+      the catalogue lacks it: what `STATED_BY_SIZE` would answer with.
+    - `written`: the record as the line's text writes it («42-44»).
+    - `may_be_range`: whether that record may also be a range of sizes, its
+      count or the whole record being a size too (owner, 2026-10-09).
+
+    Read at every look, never kept: a size created after the import makes
+    a record ambiguous, as it makes a size known.
+    """
+    records = {
+        row.id: split_records(text or "", row.shown_split)
+        for row, text in rows
+        if row.shown_split is not None
+    }
+    sizes = await sizes_by_spelling(
+        session,
+        organization_id=organization_id,
+        written={
+            spelling
+            for found in records.values()
+            for record in found
+            for spelling in record.spellings()
+        },
+    )
+    return {
+        row_id: [
+            {
+                "size": record.size,
+                "count": record.count,
+                "size_id": sizes.get(record.size),
+                "written": record.written,
+                "may_be_range": may_be_range(record, sizes),
+            }
+            for record in found
+        ]
+        for row_id, found in records.items()
+    }
+
+
 def _live_rows(snapshot_id: uuid.UUID) -> Any:
     """The list's lines that count: every line but a removed file's."""
     return (
@@ -668,12 +760,14 @@ async def _row_views(
             )
         ).tuples()
     }
-    # The catalogue's size for each size a shown split names: what
-    # `STATED_BY_SIZE` would answer with, or none when the catalogue lacks it.
-    split_sizes = await sizes_by_spelling(
+    # The catalogue's size for each size a shown split names, and whether
+    # its record may also be a range of sizes.
+    splits = await _shown_splits(
         session,
         organization_id=organization_id,
-        written={pair["size"] for row in rows for pair in row.shown_split or ()},
+        rows=[
+            (row, line.raw_text if (line := lines.get(row.raw_input_id)) else None) for row in rows
+        ],
     )
     names = await describe_variants(
         session, list({allocation.product_variant_id for allocation in allocations})
@@ -723,16 +817,7 @@ async def _row_views(
                 "reading": row.reading,
                 "price_kind": price_kind,
                 "file_reasons": list(row.file_reasons),
-                "shown_split": [
-                    {
-                        "size": pair["size"],
-                        "count": pair["count"],
-                        "size_id": split_sizes.get(pair["size"]),
-                    }
-                    for pair in row.shown_split
-                ]
-                if row.shown_split is not None
-                else None,
+                "shown_split": splits.get(row.id),
                 # How many lines that count name this photo and line: more
                 # than one is a photo read twice, or put in two files.
                 "same_photo_lines": same_photo.get((row.photo_name, row.photo_line), 0)
@@ -1397,26 +1482,34 @@ async def _normalize_allocations(
     )
 
 
-async def _shown_split_sizes(
-    session: AsyncSession, *, organization_id: uuid.UUID, row: InventorySnapshotRow
+def _stated_split(
+    split: Sequence[dict[str, Any]] | None, read_as: SplitReading | None
 ) -> list[tuple[uuid.UUID, int]] | None:
-    """The split a line shows, with the catalogue's own size for each size as
-    written. A size the catalogue lacks makes it unavailable: the person
-    creates the size, or answers with a note (ADR-0014 §5)."""
-    if row.shown_split is None:
+    """The split a line shows, as `STATED_BY_SIZE` may answer it: the
+    catalogue's own size for each size as written, with its count.
+
+    A size the catalogue lacks makes it unavailable: the person creates the
+    size, or answers with a note (ADR-0014 §5). A record that may also be a
+    range of sizes («42-44») needs the person to have said it is a size
+    with its count, `read_as` (owner, 2026-10-09); checked here, at the
+    answer, since a size created after the line was read can make it so.
+    """
+    if split is None:
         return None
-    sizes = await sizes_by_spelling(
-        session,
-        organization_id=organization_id,
-        written={pair["size"] for pair in row.shown_split},
-    )
     shown = []
-    for pair in row.shown_split:
-        if pair["size"] not in sizes:
+    for pair in split:
+        if pair["size_id"] is None:
             raise ValidationFailedError(
                 "A size of this line is not in the catalogue", size=pair["size"]
             )
-        shown.append((sizes[pair["size"]], int(pair["count"])))
+        shown.append((pair["size_id"], int(pair["count"])))
+    ranges = [pair["written"] or pair["size"] for pair in split if pair["may_be_range"]]
+    if ranges and read_as is not SplitReading.SIZE_WITH_COUNT:
+        raise ValidationFailedError(
+            "A record of this line may also be a range of sizes; say what it means",
+            reason="SPLIT_MAY_BE_RANGE",
+            records=ranges,
+        )
     return shown
 
 
@@ -1445,6 +1538,7 @@ async def resolve_row(
     skip_reason: str | None = None,
     note: str | None = None,
     via_store_id: uuid.UUID | None = None,
+    split_read_as: SplitReading | None = None,
 ) -> dict[str, Any]:
     """Say what one line means, replacing whatever was said before.
 
@@ -1453,6 +1547,10 @@ async def resolve_row(
     answer changes nothing; any other answer bumps the list's
     `review_revision`, so an approval can never apply a list that changed
     after it was checked. A line of a removed file takes no answer.
+
+    `split_read_as` is what the person said a record of the line's split
+    means, when it may also be a range of sizes (`_stated_split`): it goes
+    only with `STATED_BY_SIZE`, and the answer's audit entry keeps it.
     """
     observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
     await _authorize(
@@ -1491,6 +1589,9 @@ async def resolve_row(
 
     if (allocations is None) == (skip_reason is None):
         raise ValidationFailedError("Give the line's allocations, or a reason to skip it")
+    if split_read_as is not None and quantity_basis is not SnapshotQuantityBasis.STATED_BY_SIZE:
+        raise ValidationFailedError("What a record of the split means goes only with its split")
+    read: dict[str, Any] = {}
     desired: list[tuple[uuid.UUID, uuid.UUID, int]]
     basis: SnapshotQuantityBasis | None
     if skip_reason is not None:
@@ -1515,6 +1616,25 @@ async def resolve_row(
                 session, organization_id=scope.organization_id, raw_input_ids={row.raw_input_id}
             )
         ).get(row.raw_input_id)
+        shown = None
+        if basis is SnapshotQuantityBasis.STATED_BY_SIZE:
+            split = (
+                await _shown_splits(
+                    session,
+                    organization_id=scope.organization_id,
+                    rows=[(row, evidence.raw_text if evidence else None)],
+                )
+            ).get(row.id)
+            shown = _stated_split(split, split_read_as)
+            if split_read_as is not None:
+                # What the person said the record means, beside the records
+                # that could be read otherwise when they said it.
+                read = {
+                    "split_read_as": split_read_as.value,
+                    "split_may_be_range": [
+                        pair["written"] for pair in split or () if pair["may_be_range"]
+                    ],
+                }
         check_basis(
             state=row.quantity_state,
             stated_total=row.quantity_total,
@@ -1523,9 +1643,7 @@ async def resolve_row(
             note=new_note,
             countless=countless(evidence.parsed if evidence else None, row.reading),
             answer=desired,
-            shown=await _shown_split_sizes(session, organization_id=scope.organization_id, row=row)
-            if basis is SnapshotQuantityBasis.STATED_BY_SIZE
-            else None,
+            shown=shown,
         )
         elsewhere = await session.scalar(
             select(func.count(InventorySnapshotAllocation.id))
@@ -1600,7 +1718,11 @@ async def resolve_row(
             entity_type="inventory_snapshot_row",
             entity_id=row.id,
             before=before,
-            after={**_row_state(row, desired), "review_revision": snapshot.review_revision},
+            after={
+                **_row_state(row, desired),
+                "review_revision": snapshot.review_revision,
+                **read,
+            },
             reason=new_note,
         )
     view = await _row_views(
@@ -1867,6 +1989,12 @@ async def reject_snapshot(
 
     Through its own store, needs only reach, not `can_receive` or an open
     warehouse: a list for a paused warehouse can still be abandoned.
+
+    Only the store acted through must trade. While the list's own store is
+    blocked or archived, the list is rejected through the other store, by
+    its managers or the owner, which releases the warehouse; its files then
+    go into a new list started there. It is still not approved while its own
+    store does not trade (owner decision, 2026-10-09).
     """
     clean = _clean_text(reason, limit=MAX_NOTE, what="The reason", required=True)
     observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
@@ -1875,7 +2003,7 @@ async def reject_snapshot(
     await validate_active_stores(
         session,
         organization_id=scope.organization_id,
-        store_ids={observed.acting_store_id, _acting_through(observed, via_store_id)},
+        store_ids={_acting_through(observed, via_store_id)},
     )
     snapshot = await _load(session, scope=scope, snapshot_id=snapshot_id, lock=True)
     if snapshot.status is SnapshotStatus.REJECTED:
@@ -2174,11 +2302,14 @@ async def list_snapshots(
             )
         ).all()
     )
-    names = await store_names(
-        session,
-        organization_id=scope.organization_id,
-        store_ids={snapshot.acting_store_id for snapshot in snapshots if snapshot.acting_store_id},
-    )
+    starting = {snapshot.acting_store_id for snapshot in snapshots if snapshot.acting_store_id}
+    names = await store_names(session, organization_id=scope.organization_id, store_ids=starting)
+    states = {
+        store_id: await store_state(
+            session, organization_id=scope.organization_id, store_id=store_id
+        )
+        for store_id in sorted(starting)
+    }
     return {
         "items": [
             await _snapshot_view(
@@ -2187,6 +2318,7 @@ async def list_snapshots(
                 store_name=names.get(snapshot.acting_store_id)
                 if snapshot.acting_store_id
                 else None,
+                state=states.get(snapshot.acting_store_id) if snapshot.acting_store_id else None,
             )
             for snapshot in snapshots[:limit]
         ],

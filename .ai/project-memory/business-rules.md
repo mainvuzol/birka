@@ -1588,7 +1588,8 @@ How it is carried out, not decided by the owner
 
 **Answered by the owner on 2026-10-09.** Built as the design read the rules,
 without being asked, then each put to the owner with the question under it.
-Seven were confirmed as built; two changed (5 and 8).
+Seven were confirmed as built; two changed (5 and 8), and both changes were
+built the same day.
 1. While a warehouse is paused, its list is seen and changed only from the
    store that started it; the other store sees it again once the warehouse
    reopens.
@@ -1621,7 +1622,15 @@ Seven were confirmed as built; two changed (5 and 8).
    **Changed by the owner:** when a size with its count may also be read as a
    range of sizes, the app asks the person what the record means, and the
    person chooses; the tap is offered only after «розмір 42 — 44 шт» is
-   chosen.
+   chosen. **Built** (2026-10-09; ADR-0014 §5): a record may be a range when
+   its count, or the whole record, is also a size of the catalogue under
+   one spelling («42-44» with a size 44, or a size «42-44»). The line's
+   editor then asks «Запис «42-44» — це:», «Розмір 42 — 44 шт» or
+   «Діапазон розмірів 42–44»; read as a range, the line is answered with
+   another basis and a note. The server refuses the tap without that choice,
+   checks it again at the answer, and keeps the choice in the line's
+   history. A range whose end is not a size of the catalogue yet is not
+   asked about (known risks).
    - Питання: «Запис "42-44" застосунок може прийняти за "розмір 42 — 44
      шт", якщо так його прочитав парсер; людина бачить рядок і фото й
      натискає сама. Прийнятно?»
@@ -1641,7 +1650,14 @@ Seven were confirmed as built; two changed (5 and 8).
    stores. **Changed by the owner:** the other store's manager, or the
    owner, may reject it, which releases the warehouse; its files then go
    into a new list started from the other store. It still cannot be
-   approved while its own store does not trade.
+   approved while its own store does not trade. **Built** (2026-10-09;
+   ADR-0014 §7): through the other store the list is rejected, its history
+   naming that store, and the warehouse is released; the list's page says
+   its store does not trade and offers only «Відхилити список», to that
+   store's managers and the owner. Approving, answering and adding or
+   removing files are refused while the store does not trade, and the
+   refusal says so. Through the blocked or archived store itself nothing is
+   done, as for any such store.
    - Питання: «Якщо магазин, що почав список спільного складу, заблокують чи
      заархівують до затвердження, список не можна ні затвердити, ні
      відхилити, доки магазин знову не запрацює, — і склад чекає для обох

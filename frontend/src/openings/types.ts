@@ -1,3 +1,5 @@
+import type { StoreState } from "@/orders/types";
+
 /** `/snapshots`: a legacy stock list, reviewed line by line (ADR-0005). */
 export type ListStatus = "IN_REVIEW" | "APPLIED" | "REJECTED";
 
@@ -47,6 +49,9 @@ export interface StockList {
   /** The store that keeps the list: a shared warehouse's is seen from both. */
   store_id: string;
   store_name: string | null;
+  /** Whether that store trades. While it does not, the list is only
+   * rejected, through the other store (owner decision, 2026-10-09). */
+  store_state: StoreState;
   location_id: string;
   status: ListStatus;
   source_document_ref: string | null;
@@ -116,7 +121,15 @@ export interface ShownSize {
   size: string;
   count: number;
   size_id: string | null;
+  /** The record as the line's text writes it: «42-44». */
+  written: string | null;
+  /** The record may also be a range of sizes: the person says which before
+   * the split is taken as it is (owner decision, 2026-10-09). */
+  may_be_range: boolean;
 }
+
+/** What a person said a record that may be a range of sizes means. */
+export type SplitReading = "SIZE_WITH_COUNT" | "RANGE";
 
 /** One file of a list, or one hand-typed part (ADR-0014 §2). */
 export interface StockPart {

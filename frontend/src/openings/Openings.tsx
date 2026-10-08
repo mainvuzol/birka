@@ -25,6 +25,8 @@ import type {
   LineStatus,
   ListLine,
   Reading,
+  ShownSize,
+  SplitReading,
   StockList,
   StockPart,
 } from "./types";
@@ -52,6 +54,10 @@ import type {
  *
  * Every text from a file, and every line of a list, is shown through
  * `visible()`: what reorders or hides characters is shown as a mark.
+ *
+ * While the store that started a shared warehouse's list does not trade,
+ * the list is only rejected, through the other store, which releases the
+ * warehouse for a new list there (owner decision, 2026-10-09).
  */
 export function Openings({
   store,
@@ -451,7 +457,9 @@ function NewList({
           other && (
             <div className="notice" role="status">
               <p>
-                {`На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${other.store_name ?? "—"}»). Другий список для нього не створюють — додайте файл до наявного.`}
+                {other.store_state === "ACTIVE"
+                  ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${other.store_name ?? "—"}»). Другий список для нього не створюють — додайте файл до наявного.`
+                  : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${other.store_name ?? "—"}», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`}
               </p>
               <button
                 type="button"
@@ -664,7 +672,11 @@ function ListView({
     retry: false,
   });
   const allParts = parts.data?.items ?? [];
-  const editable = list.status === "IN_REVIEW" && canImport;
+  // While the store that started the list does not trade, the list is only
+  // rejected, through this store; its files go into a new list (owner
+  // decision, 2026-10-09).
+  const trading = list.store_state === "ACTIVE";
+  const editable = list.status === "IN_REVIEW" && canImport && trading;
   const statusFilters: { status: LineStatus | null; label: string }[] =
     list.summary.parts_removed > 0
       ? [...lineFilters, { status: "REMOVED", label: "Прибрані" }]
@@ -702,6 +714,11 @@ function ListView({
       {list.store_id !== store.id && (
         <p className="hint">Веде магазин «{list.store_name ?? "—"}»</p>
       )}
+      {list.status === "IN_REVIEW" && !trading && (
+        <p className="notice" role="status">
+          {`Магазин «${list.store_name ?? "—"}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
+        </p>
+      )}
       <p className="hint">
         Рядків: {list.summary.lines} · розібрано {list.summary.resolved} · не
         товар {list.summary.skipped} · чекають{" "}
@@ -728,21 +745,25 @@ function ListView({
       {list.status === "IN_REVIEW" && (
         <p className="notice">
           Поки список чекає рішення, на складі «{warehouse}», де ще не було руху
-          товару, нічого не приймають, не продають і не виправляють. Затвердіть
-          або відхиліть його.
+          товару, нічого не приймають, не продають і не виправляють.{" "}
+          {trading
+            ? "Затвердіть або відхиліть його."
+            : "Відхиліть його, щоб склад звільнився."}
         </p>
       )}
-      {list.status === "IN_REVIEW" && canApprove && (
-        <Approval
-          list={list}
-          store={store}
-          token={token}
-          warehouse={warehouse}
-          blocked={blocked}
-          refresh={refresh}
-        />
-      )}
-      {list.status === "IN_REVIEW" && canImport && !canPick && (
+      {list.status === "IN_REVIEW" &&
+        (canApprove || (!trading && canImport)) && (
+          <Approval
+            list={list}
+            store={store}
+            token={token}
+            warehouse={warehouse}
+            approvable={trading && canApprove}
+            blocked={blocked}
+            refresh={refresh}
+          />
+        )}
+      {list.status === "IN_REVIEW" && trading && canImport && !canPick && (
         <p role="alert">
           Щоб розбирати рядки, потрібне право приймати товар у цьому магазині.
         </p>
@@ -887,10 +908,7 @@ function ListView({
                 line={line}
                 parts={allParts}
                 answer={
-                  list.status === "IN_REVIEW" &&
-                  canImport &&
-                  canPick &&
-                  line.status !== "REMOVED"
+                  editable && canPick && line.status !== "REMOVED"
                     ? () => {
                         setEditing(line.line_no);
                       }
@@ -1019,6 +1037,13 @@ function LineCard({
       <span className="badge">{lineStatusLabels[line.status]}</span>
       <small>{visible(sourceQuantity(line))}</small>
       <FileEvidence line={line} parts={parts} />
+      {(line.shown_split ?? [])
+        .filter((size) => size.may_be_range)
+        .map((size) => (
+          <small key={`range:${size.size}`}>
+            {`Запис «${recordText(size)}» може означати й діапазон розмірів: під час розбору вкажіть, що саме.`}
+          </small>
+        ))}
       {line.same_text_lines > 1 && (
         <small>
           Такий самий рядок у списку — {line.same_text_lines} разів: це може
@@ -1053,6 +1078,11 @@ function LineCard({
       )}
     </article>
   );
+}
+
+/** A record of a split as the line writes it: «42-44». Guarded. */
+function recordText(size: ShownSize): string {
+  return visible(size.written ?? `${size.size}-${String(size.count)}`);
 }
 
 interface Part {
@@ -1092,8 +1122,21 @@ function LineEditor({
   // §5): offered as it is only when every size is the catalogue's own, and
   // never chosen for the person.
   const split = line.shown_split ?? [];
+  // A record that may also be a range of sizes («42-44») is asked about
+  // first, and the split is offered as it is only once each such record is
+  // read as a size with its count (owner decision, 2026-10-09).
+  const [readings, setReadings] = useState<Record<number, SplitReading>>({});
+  const ambiguous = split.flatMap((size, index) =>
+    size.may_be_range ? [index] : [],
+  );
+  const readAsSizes = ambiguous.every(
+    (index) => readings[index] === "SIZE_WITH_COUNT",
+  );
+  const readAsRange = ambiguous.some((index) => readings[index] === "RANGE");
   const bySizeOffered =
-    split.length > 0 && split.every((size) => size.size_id !== null);
+    split.length > 0 &&
+    split.every((size) => size.size_id !== null) &&
+    readAsSizes;
   const missing = split.filter((size) => size.size_id === null);
   const allowed: Basis[] = [
     ...(stated ? (["STATED"] as const) : []),
@@ -1172,6 +1215,10 @@ function LineEditor({
               })),
               quantity_basis: basis,
               note: note.trim() || null,
+              // What the person said each record that may be a range means.
+              ...(ambiguous.length > 0
+                ? { split_read_as: "SIZE_WITH_COUNT" }
+                : {}),
             }
           : {
               allocations: shown.map((p, i) => ({
@@ -1198,11 +1245,15 @@ function LineEditor({
           ? "Немає відповіді сервера. Натисніть ще раз — повторна відповідь безпечна."
           : error.details.reason === "PART_REMOVED"
             ? "Файл цього рядка прибрали — відповідь не збережено."
-            : error.code === "SNAPSHOT_CONFLICT"
-              ? "Список уже затвердили або відхилили — відповідь не збережено."
-              : error.code === "NOT_FOUND"
-                ? "Товар або розмір більше недоступний. Оберіть інший."
-                : errorText(error),
+            : error.details.reason === "SPLIT_MAY_BE_RANGE"
+              ? "Запис у рядку тепер може означати й діапазон розмірів. Скасуйте, відкрийте рядок знову й вкажіть, що він означає."
+              : error.details.reason === "LIST_STORE_NOT_TRADING"
+                ? errorText(error)
+                : error.code === "SNAPSHOT_CONFLICT"
+                  ? "Список уже затвердили або відхилили — відповідь не збережено."
+                  : error.code === "NOT_FOUND"
+                    ? "Товар або розмір більше недоступний. Оберіть інший."
+                    : errorText(error),
       );
     } finally {
       setBusy(false);
@@ -1222,6 +1273,49 @@ function LineEditor({
       </strong>
       <small>{visible(sourceQuantity(line))}</small>
       <FileEvidence line={line} parts={listParts} />
+      {ambiguous.map((index) => {
+        const size = split[index];
+        if (size === undefined) return null;
+        const name = `split-${String(line.line_no)}-${String(index)}`;
+        const choose = (reading: SplitReading): void => {
+          setReadings({ ...readings, [index]: reading });
+          // Read as a range, the line is no longer answered as it shows.
+          if (reading === "RANGE" && basis === "STATED_BY_SIZE") setBasis("");
+        };
+        return (
+          <fieldset key={name}>
+            <legend>{`Запис «${recordText(size)}» — це:`}</legend>
+            <label className="check">
+              <input
+                type="radio"
+                name={name}
+                checked={readings[index] === "SIZE_WITH_COUNT"}
+                onChange={() => {
+                  choose("SIZE_WITH_COUNT");
+                }}
+              />
+              {`Розмір ${visible(size.size)} — ${String(size.count)} шт`}
+            </label>
+            <label className="check">
+              <input
+                type="radio"
+                name={name}
+                checked={readings[index] === "RANGE"}
+                onChange={() => {
+                  choose("RANGE");
+                }}
+              />
+              {`Діапазон розмірів ${visible(size.size)}–${String(size.count)}`}
+            </label>
+          </fieldset>
+        );
+      })}
+      {readAsRange && (
+        <p className="hint">
+          Діапазон не каже, скільки якого розміру: вкажіть розміри й кількість і
+          звідки вони відомі.
+        </p>
+      )}
       <fieldset>
         <legend>Звідки кількість</legend>
         {allowed.map((option) => (
@@ -1358,7 +1452,8 @@ function LineEditor({
                   </button>
                 </div>
               )}
-              <div className="fields">
+              {/* The size's own room: «Оберіть розмір» whole, even at 375 px. */}
+              <div className="fields size-count">
                 <label>
                   Розмір
                   <select
@@ -1464,11 +1559,17 @@ function LineEditor({
   );
 }
 
+/**
+ * The owner's decision on a list: approve it, or reject it. While the store
+ * that started it does not trade, it is only rejected (`approvable` false),
+ * by the other store's managers or the owner (owner decision, 2026-10-09).
+ */
 function Approval({
   list,
   store,
   token,
   warehouse,
+  approvable,
   blocked,
   refresh,
 }: {
@@ -1476,6 +1577,8 @@ function Approval({
   store: Store;
   token: string;
   warehouse: string;
+  /** Whether approval is offered at all; rejection always is. */
+  approvable: boolean;
   blocked: boolean;
   refresh: () => Promise<void>;
 }): JSX.Element {
@@ -1529,16 +1632,21 @@ function Approval({
   }
 
   return (
-    <div className="notice" aria-label="Затвердження списку">
-      <h3>Затвердження</h3>
-      <p>
-        Стане початковим залишком складу «{warehouse}»:{" "}
-        <strong>{list.summary.units} од.</strong>
-      </p>
+    <div
+      className="notice"
+      aria-label={approvable ? "Затвердження списку" : "Рішення щодо списку"}
+    >
+      <h3>{approvable ? "Затвердження" : "Рішення щодо списку"}</h3>
+      {approvable && (
+        <p>
+          Стане початковим залишком складу «{warehouse}»:{" "}
+          <strong>{list.summary.units} од.</strong>
+        </p>
+      )}
       <p>
         {`Файлів у списку: ${String(list.summary.parts)}${list.summary.parts_removed > 0 ? ` · прибрано: ${String(list.summary.parts_removed)}` : ""}`}
       </p>
-      {bases.length > 0 && (
+      {approvable && bases.length > 0 && (
         <ul>
           {bases.map((basis) => (
             <li key={basis}>
@@ -1548,13 +1656,13 @@ function Approval({
           ))}
         </ul>
       )}
-      {list.summary.lines_differing_from_source > 0 && (
+      {approvable && list.summary.lines_differing_from_source > 0 && (
         <p>
           Рядків, де відповідь відрізняється від списку:{" "}
           {list.summary.lines_differing_from_source}
         </p>
       )}
-      {waiting > 0 && (
+      {approvable && waiting > 0 && (
         <p className="hint">
           Затвердити можна, коли кожен рядок розібрано або позначено «не товар».
           Ще чекають: {waiting}.
@@ -1615,14 +1723,16 @@ function Approval({
         </div>
       ) : (
         <div className="actions">
-          <button
-            disabled={!list.ready_to_approve || busy || blocked}
-            onClick={() => {
-              setAsking("approve");
-            }}
-          >
-            Затвердити список
-          </button>
+          {approvable && (
+            <button
+              disabled={!list.ready_to_approve || busy || blocked}
+              onClick={() => {
+                setAsking("approve");
+              }}
+            >
+              Затвердити список
+            </button>
+          )}
           <button
             className="quiet"
             disabled={busy || blocked}

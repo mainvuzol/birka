@@ -71,6 +71,80 @@ a file is shown through a guard that marks bidirectional and invisible
 characters. Creating a list from a file, adding a file and approving wait
 60 s, and their timeout is not taken as the server being down.
 
+## Two readings the owner changed — 2026-10-09
+
+Nine readings of "how it is carried out" were put to the owner; seven were
+confirmed as built, and two changed (business rules, readings 5 and 8).
+Both are built.
+
+**5. A record that may be a range of sizes is asked about** (ADR-0014 §5).
+- The server works out, at every read of a line, whether each pair of its
+  shown split may also be a range: its count as written («44»), or its
+  record as written («42-44», «42 – 44»), is itself a size of the
+  organization, under one spelling (`file_lines.split_records`,
+  `may_be_range`; the catalogue's `sizes_by_spelling`). It is never kept:
+  a size created after the import makes the pair ambiguous from then on.
+- A line's `shown_split[]` gains `written` and `may_be_range`.
+- `PUT …/lines/{n}` with `STATED_BY_SIZE` on such a line needs
+  `split_read_as: "SIZE_WITH_COUNT"`, checked again at the answer; without
+  it, 422 `VALIDATION_ERROR`, reason `SPLIT_MAY_BE_RANGE`, naming the
+  records. `split_read_as` goes with `STATED_BY_SIZE` only. The answer's
+  `snapshot.line_resolved` entry keeps it, with the records it answered.
+- The editor asks first, per such pair, «Запис «42-44» — це:»: «Розмір 42
+  — 44 шт» or «Діапазон розмірів 42–44», the record as written, through
+  `visible()`. «Як у рядку, по розмірах» appears only once every such pair
+  is read as a size with its count, never preselected; read as a range,
+  it goes, and the line is answered with another basis and a note. The
+  line's card says the record may be a range.
+
+**8. A shared list whose own store stops trading is rejected through the
+other store** (ADR-0014 §7).
+- `reject_snapshot` needs only the store acted through trading, with the
+  usual reach (through the other store, `can_receive` and either snapshot
+  permission). The hold is released as for any rejection; the audit names
+  `via_store_id`. Through the blocked or archived store itself it is still
+  refused by the scope (`STORE_NOT_TRADING`).
+- Every other command through the other store — approving, answering,
+  adding or removing a file — is refused by name: 409 `SNAPSHOT_CONFLICT`,
+  reason `LIST_STORE_NOT_TRADING`, with the store and its state. Before, it
+  was a bare 404 "Unknown store".
+- A list gains `store_state`, its own store's. Seen through the other
+  store, the list page says «Магазин «…», що почав цей список, не працює:
+  список можна лише відхилити, а файли додати до нового списку.», offers no
+  approval, file or answer, and offers «Відхилити список» to that store's
+  managers as well as the owner. «Новий список» names such a waiting list
+  and says to reject it first; after the rejection the warehouse takes a
+  new list from that store.
+
+**A small fix.** At 375 px the size choice in a line's editor read «Обері»:
+the size now takes two shares of the row and its count one
+(`.fields.size-count`), so «Оберіть розмір» reads whole.
+
+**Verified, for this change, on 2026-10-09** (the full run's figures are
+still to come, under "Verification"):
+- backend: ruff, format (330 files), mypy (156 files), 31 import contracts
+  kept; the snapshot, stock-file and parts-migration test files, 502
+  passed; the whole suite, 2 954 passed and 1 skipped (`age` not
+  installed), the catalogue evaluation's integration file left out, as it
+  needs `birka_test`;
+- new tests: unit `test_file_lines.py` (8: records as written, the count a
+  size, the record a size, neither, any spelling, a record not found);
+  integration `test_snapshot_parts.py` (6: the tap refused without the
+  choice and taken with it, the choice in the audit; a size created after
+  the import; a record that is a size of its own; blocked and archived
+  stores; approved again once the store trades);
+- E2E: two journeys in `openings-file.spec.ts` — the question asked and
+  answered both ways, and a list of a blocked store rejected by the other
+  store's manager, then a new list there. The seed gains a warehouse for the
+  first, and two stores of their own sharing a warehouse, with a manager,
+  for the second. The full run on a fresh seed: 256 passed (254 before);
+- frontend: typecheck, lint, build and Prettier;
+- 16 hand mutants over the new rules — the detection, the answer's check
+  and its audit, the rejection through the other store, the approval still
+  refused, the list's store state, and the editor's question before the tap
+  — each caught by the tests above and reverted, the tree byte for byte as
+  before.
+
 ## The format
 
 The parser's author gets one package,
@@ -212,11 +286,12 @@ The built change has had no independent review at the time of this report.
 
 In the [risk register](known-risks.md#the-json-stock-import--2026-10-08):
 the evidence is a transcription; the parser's precision is unknown; tables
-of numbers mean notes; a size range can pass for a split; a warehouse larger
-than the limit cannot be taken in; the measurement on PostgreSQL 16; the
-warehouse held for days; two lists at once from two stores; a shared list
-whose own store stops trading, which can then be neither approved nor
-rejected and holds the warehouse; the Telegram file picker.
+of numbers mean notes; a size range can pass for a split, now asked about
+when the catalogue makes it a possible range (2026-10-09); a warehouse
+larger than the limit cannot be taken in; the measurement on PostgreSQL 16;
+the warehouse held for days; two lists at once from two stores; a shared
+list whose own store stops trading, now rejected through the other store
+(2026-10-09), still not approved; the Telegram file picker.
 
 ## What is not done
 
@@ -230,5 +305,5 @@ rejected and holds the warehouse; the Telegram file picker.
   counts each size of a line that names several.
 - **The slow call's timeout has no journey;** it is reviewed in the code.
 - **The catalogue screens** still show raw text unguarded.
-- **Readings awaiting the owner:** nine, each with its question (business
-  rules, "the shops' existing stock", "how it is carried out").
+- **Readings awaiting the owner:** none. The nine were answered on
+  2026-10-09: seven confirmed, two changed and built (above).

@@ -378,6 +378,14 @@ nav {
 .line-return .fields label:first-child {
   flex: 1;
 }
+/* A list line's size and its count: the size takes two shares, so its
+   choice reads whole on a phone («Оберіть розмір», «Розмір невідомий»). */
+.fields.size-count label {
+  flex: 1 1 0;
+}
+.fields.size-count label:first-child {
+  flex: 2 1 0;
+}
 
 /* A unit in «Брак»: what it is, where it came from, who is looking. */
 .damaged-unit {

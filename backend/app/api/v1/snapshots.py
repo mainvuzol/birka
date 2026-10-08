@@ -34,6 +34,7 @@ from pydantic import (
 from app.api.deps import ScopeDep, SessionDep
 from app.core.text import CleanText, reject_unstorable
 from app.modules.identity.service import display_names
+from app.modules.snapshots.file_lines import SplitReading
 from app.modules.snapshots.models import (
     SnapshotPartKind,
     SnapshotPriceKind,
@@ -62,6 +63,7 @@ from app.modules.snapshots.service import (
     resolve_row,
 )
 from app.modules.snapshots.stock_file import StockFileV1
+from app.modules.tenancy.models import StoreState
 
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
 
@@ -185,6 +187,10 @@ class ResolutionRequest(BaseModel):
     quantity_basis: SnapshotQuantityBasis | None = None
     note: CleanText | None = Field(default=None, min_length=1, max_length=1000)
     skip_reason: CleanText | None = Field(default=None, min_length=1, max_length=1000)
+    # What a record of the line's split means when it may also be a range of
+    # sizes («42-44», `may_be_range`): only `SIZE_WITH_COUNT`, and only with
+    # `STATED_BY_SIZE`, which such a line needs it for (owner, 2026-10-09).
+    split_read_as: SplitReading | None = None
 
     @model_validator(mode="after")
     def _one_answer(self) -> ResolutionRequest:
@@ -196,6 +202,11 @@ class ResolutionRequest(BaseModel):
             self.note is not None or self.quantity_basis is not None
         ):
             raise ValueError("A skipped line is explained by its skip_reason alone")
+        if (
+            self.split_read_as is not None
+            and self.quantity_basis is not SnapshotQuantityBasis.STATED_BY_SIZE
+        ):
+            raise ValueError("split_read_as goes only with STATED_BY_SIZE")
         return self
 
 
@@ -269,6 +280,9 @@ class SnapshotResponse(BaseModel):
     # The list's own store, by name: a shared warehouse's list is seen from
     # the other store too.
     store_name: str | None
+    # Whether that store trades. While it does not, the list is only
+    # rejected, through the other store (owner decision, 2026-10-09).
+    store_state: StoreState
     location_id: uuid.UUID
     status: SnapshotStatus
     source_document_ref: str | None
@@ -318,6 +332,12 @@ class SplitResponse(BaseModel):
     # The catalogue's size of this spelling; null when it has none, and then
     # the split cannot be confirmed by a tap.
     size_id: uuid.UUID | None
+    # The record as the line's text writes it («42-44»).
+    written: str | None
+    # Whether that record may also be a range of sizes: its count, or the
+    # whole record, is a size of the catalogue too. Then the person says
+    # what it means before the tap (`split_read_as`; owner, 2026-10-09).
+    may_be_range: bool
 
 
 class LineResponse(BaseModel):
@@ -546,6 +566,7 @@ async def resolve_line(
         skip_reason=payload.skip_reason,
         note=payload.note,
         via_store_id=via,
+        split_read_as=payload.split_read_as,
     )
     await session.commit()
     return result
