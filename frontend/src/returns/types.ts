@@ -1,3 +1,4 @@
+import type { OutageMark } from "@/sales/types";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 
 /**
@@ -39,6 +40,12 @@ export interface SaleSummary {
    */
   paid_in_parts: boolean;
   items: SaleLine[];
+  /**
+   * «Продано під час збою», a sale typed from paper (ADR-0013 §5.6): who sold
+   * and the paper's time, never its sum or way, so the blind count is
+   * untouched. Null on every other sale.
+   */
+  outage?: OutageMark | null;
 }
 
 export interface SaleList {

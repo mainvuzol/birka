@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from app import models_registry  # noqa: F401  - every table on the metadata, like migrations/env.py
 from app.api.internal import router as internal_router
+from app.api.unavailable import classify
 from app.api.v1.router import router as v1_router
 from app.core.config import Settings, get_settings
 from app.core.correlation import CorrelationIdMiddleware
@@ -57,8 +58,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # app is built once, when uvicorn imports this module.
     app.state.started_at = datetime.now(tz=UTC)
     # Also answers an error nothing handled, with its request id
-    # (app/core/correlation.py).
-    app.add_middleware(CorrelationIdMiddleware)
+    # (app/core/correlation.py): 503 when the database does not answer or
+    # its schema is behind this code, else 500 (ADR-0013 §2).
+    app.add_middleware(CorrelationIdMiddleware, unavailable=classify)
     app.include_router(v1_router, prefix="/api/v1")
     # Not under /api: Caddy passes only /api/* on, so only the compose
     # network reaches it (app/api/internal.py).

@@ -211,6 +211,14 @@ function when(iso: string): string {
   });
 }
 
+/**
+ * A sale typed from paper (ADR-0013 §5.6): the list carries its mark, never
+ * its sum or way, so the drawer's blind count is untouched.
+ */
+function soldDuringOutage(sale: SaleSummary): boolean {
+  return sale.outage !== undefined && sale.outage !== null;
+}
+
 function SaleCard({
   sale,
   here,
@@ -230,6 +238,9 @@ function SaleCard({
       </strong>
       {!here && <span>Продано в магазині «{sale.store_name}»</span>}
       {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
+      {soldDuringOutage(sale) && (
+        <span className="badge">Продано під час збою</span>
+      )}
       <ul>
         {sale.items.map((item) => (
           <li key={item.id}>
@@ -266,14 +277,32 @@ function handBack(amount: string, way: TillMethod | null | undefined): string {
   }
 }
 
+/**
+ * A kept return confirmed — maybe by the phone itself, hours after the
+ * press. Following the paper text, the money may have been given back
+ * meanwhile, so it says to give it back only if nobody did, as a card does
+ * at the till (owner decision, 2026-10-08).
+ */
+function handBackOnce(
+  amount: string,
+  way: TillMethod | null | undefined,
+): string {
+  const step = handBack(amount, way).replace(/\.$/, "");
+  return `Якщо гроші ще не повернули — ${step.charAt(0).toLowerCase()}${step.slice(1)}. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.`;
+}
+
 export function Done({
   refund,
   chosen,
+  kept = false,
 }: {
   refund: Refund;
   /** The warehouse of this store intact goods went to, when one was chosen. */
   chosen?: string | undefined;
+  /** A kept attempt confirmed, never a return answered at once. */
+  kept?: boolean;
 }): JSX.Element {
+  const back = kept ? handBackOnce : handBack;
   const damaged = refund.items.some((item) => item.condition === "DAMAGED");
   const intact = refund.items.some((item) => item.condition === "INTACT");
   const { credit } = refund;
@@ -292,7 +321,7 @@ export function Done({
           )}
           <p>
             {(kopecks(credit.cash_back) ?? 0n) > 0n
-              ? handBack(credit.cash_back, refund.payment_method)
+              ? back(credit.cash_back, refund.payment_method)
               : "Грошей покупцю не повертаємо."}
           </p>
           <p>
@@ -302,7 +331,7 @@ export function Done({
           </p>
         </>
       ) : (
-        <p>{handBack(refund.total_amount, refund.payment_method)}</p>
+        <p>{back(refund.total_amount, refund.payment_method)}</p>
       )}
       {intact &&
         (chosen ? (
@@ -612,7 +641,11 @@ function ReturnForm({
   );
 }
 
-function refusalText(error: unknown): string {
+/**
+ * Why a return was refused. A kept return refused on resend says the same
+ * (`@/cash/errors`, ADR-0013 §8).
+ */
+export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "DAMAGED_RETURNS_UNAVAILABLE")
       return error.details.reason === "SOLD_FROM"

@@ -52,7 +52,7 @@ from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, 
 from app.modules.authz.scope import RequestScope
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import Inventory, MovementType, StockMovement
-from app.modules.inventory.service import find_divergences
+from app.modules.inventory.service import ReservationRequest, find_divergences, reserve_stock
 from app.modules.sales.models import Sale
 from app.modules.sales.payment import PaymentMethod
 from app.modules.tenancy.models import (
@@ -543,10 +543,54 @@ async def test_a_shortfall_at_the_source_moves_nothing_at_all(maker):
     assert error["details"]["available"] == 1
     assert error["details"]["requested"] == 3
     assert error["details"]["correctable"] is False
+    assert error["details"]["reserved"] is False
 
     await assert_nothing_moved(maker, shops, coat, shared=1, child=0)
     async with maker() as session:
         assert await quantity_at(session, shops.shared_warehouse, coat.variant, coat.size("L")) == 1
+
+
+async def test_a_shortfall_held_for_an_order_says_so(maker):
+    """Every shortfall says whether an order holds units of it (`reserved`,
+    ADR-0013 §6), a transfer's as a sale's: the unit on the shelf is an
+    order's, so nothing is free to move."""
+    shops = await make_shops(maker)
+    coat = await stock(
+        maker,
+        shops,
+        warehouse=shops.shared_warehouse,
+        store=shops.primary_store,
+        quantities={"M": 1},
+    )
+    async with maker.begin() as session:
+        await reserve_stock(
+            session,
+            organization_id=shops.organization_id,
+            store_id=shops.primary_store,
+            reference_id=uuid.uuid4(),
+            requests=[
+                ReservationRequest(
+                    shops.shared_warehouse, uuid.UUID(coat.variant), uuid.UUID(coat.size()), 1
+                )
+            ],
+            actor_user_id=shops.user_id,
+        )
+    async with api(maker, shops.scope(shops.child_store)) as client:
+        response = await client.post(
+            "/api/v1/transfers",
+            json=transfer_body(
+                shops,
+                source=shops.shared_warehouse,
+                destination=shops.child_warehouse,
+                lines=[(coat.variant, coat.size(), 1)],
+            ),
+            headers=key(),
+        )
+    assert response.status_code == 409, response.text
+    details = response.json()["details"]
+    assert response.json()["code"] == "INSUFFICIENT_STOCK"
+    assert (details["available"], details["correctable"], details["reserved"]) == (0, False, True)
+    await assert_nothing_moved(maker, shops, coat, shared=1, child=0)
 
 
 async def test_a_shortfall_never_takes_goods_from_another_warehouse(maker):

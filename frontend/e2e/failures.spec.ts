@@ -13,7 +13,8 @@ import { readFileSync } from "node:fs";
  *   which screen, which error, the version, the request's number — never a
  *   name, a phone, what was typed, or the Telegram number.
  * - A server error tells the seller its request's number; a server the edge
- *   cannot reach is told as such.
+ *   cannot reach, or no answer at all, tells them to sell on paper (owner
+ *   decision, 2026-10-04; ADR-0013 §3).
  * - Trouble on the server is shown in «Резервні копії», as backups are.
  *
  * The server's side of each is played with stubs: the API's note endpoint,
@@ -21,7 +22,8 @@ import { readFileSync } from "node:fs";
  *
  * And one failure the real server plays: an attempt an older page saved
  * before the way of paying was asked (owner decision, 2026-10-04; ADR-0012
- * §B13), resent and refused as having recorded nothing.
+ * §B13), resent by itself as the store opens (ADR-0013 §4.3) and refused as
+ * having recorded nothing.
  */
 interface Fixture {
   owner_telegram_user_id: string;
@@ -239,7 +241,17 @@ test.describe("a screen that breaks", () => {
       expect(sent).not.toContain(secret);
 
     // Started again, the app signs in from the same launch data and finds
-    // the sale it had sent, to check — never to send anew.
+    // the sale it had sent, to check — never to send anew. It checks it at
+    // once, with no tap (ADR-0013 §4.3): the same sale under the same key.
+    // The server still does not answer, so it stays kept.
+    const resent: { key: string | null; body: string | null }[] = [];
+    await page.route("**/api/v1/sales", async (route) => {
+      resent.push({
+        key: await route.request().headerValue("Idempotency-Key"),
+        body: route.request().postData(),
+      });
+      await route.abort("connectionreset");
+    });
     broken = false;
     await Promise.all([
       page.waitForEvent("load"),
@@ -247,9 +259,13 @@ test.describe("a screen that breaks", () => {
     ]);
     expect(page.url()).toContain("#tgWebAppData=");
     await page.getByRole("button", { name: /Подільський/ }).click();
+    await expect.poll(() => resent.length).toBe(1);
     await expect(
       page.getByRole("heading", { name: "Незавершений продаж" }),
     ).toBeVisible();
+    const first = JSON.parse(saved) as { key: string; body: unknown };
+    expect(resent[0]?.key).toBe(first.key);
+    expect(JSON.parse(resent[0]?.body ?? "null")).toEqual(first.body);
     expect(notes).toHaveLength(1);
   });
 
@@ -399,6 +415,31 @@ test.describe("a screen that breaks", () => {
     ).toHaveCount(0);
   });
 
+  test("while the server does not answer, it says to sell on paper, and that the app may not open again", async ({
+    page,
+  }) => {
+    await openBroken(page);
+    const crashed = page.locator("[data-crashed]");
+    await expect(crashed).not.toContainText("Продавайте на папері");
+    // The server stops answering: what the app's own requests note (the
+    // class is the app's own, handed out by the development server).
+    await page.evaluate(async (path) => {
+      const { noteUnreachable } = (await import(
+        path
+      )) as typeof import("../src/shared/reach");
+      noteUnreachable();
+    }, "/src/shared/reach.ts");
+    await expect(crashed).toContainText(
+      "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
+    );
+    await expect(crashed).toContainText(
+      "Якщо сервер не відповідає, після перезапуску застосунок може не відкритися — продавайте на папері.",
+    );
+    await expect(
+      page.getByRole("button", { name: "Перезапустити" }),
+    ).toBeVisible();
+  });
+
   test("a note that cannot be sent is dropped without a word", async ({
     page,
   }) => {
@@ -440,6 +481,12 @@ test("the app's code that never arrives is said so, but only after a wait", asyn
   await page.waitForTimeout(3000);
   await expect(fallback).toBeHidden();
   await expect(fallback).toBeVisible({ timeout: 10_000 });
+  // An outage, in practice: the owner's words under it (ADR-0013 §3).
+  await expect(
+    page.getByText(
+      "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
+    ),
+  ).toBeVisible();
 });
 
 test("an app that opens replaces the waiting text at once", async ({
@@ -454,7 +501,7 @@ test("an app that opens replaces the waiting text at once", async ({
   await expect(page.locator(".not-loaded")).toHaveCount(0);
 });
 
-test("a server error gives its request's number; a server out of reach says to try in a minute", async ({
+test("a server error gives its request's number; a server out of reach says to sell on paper", async ({
   page,
 }) => {
   const notes = await collectNotes(page);
@@ -488,25 +535,21 @@ test("a server error gives its request's number; a server out of reach says to t
     "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 3f9c2a7e.",
   );
 
-  for (const status of ["502", "503", "504"] as const) {
+  // The edge answering for a server that did not, and no answer at all: the
+  // shop sells on paper (owner decision, 2026-10-04; ADR-0013 §3).
+  for (const status of ["502", "503", "504", "lost"] as const) {
     answer = status;
     await again.click();
     await expect(said).toHaveText(
-      "Сервер зараз недоступний. Спробуйте ще раз за хвилину.",
+      "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
     );
   }
 
-  // A server error without a number reads as it always did, and so does no
-  // answer at all.
+  // A server error without a number reads as it always did.
   answer = "500-bare";
   await again.click();
   await expect(said).toHaveText(
     "Не вдалося виконати операцію. Спробуйте ще раз.",
-  );
-  answer = "lost";
-  await again.click();
-  await expect(said).toHaveText(
-    "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.",
   );
   // A refusal the screen shows is not a broken screen: nothing is noted.
   expect(notes).toHaveLength(0);
@@ -571,8 +614,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
       open: [
         {
           kind: "NOT_ANSWERING",
-          reason:
-            "Продавці зараз не можуть продавати: база даних не відповідає.",
+          reason: "База даних не відповідає.",
           started_at: ago(25),
           told_at: ago(25),
         },
@@ -596,9 +638,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     await expect(now).toHaveCount(1);
     await expect(now).toContainText("Сервер не відповідає");
     await expect(now).toContainText("уже 25 хв");
-    await expect(now).toContainText(
-      "Продавці зараз не можуть продавати: база даних не відповідає.",
-    );
+    await expect(now).toContainText("База даних не відповідає.");
     await expect(block.locator("[data-watcher]")).toHaveText(
       "Сторож перевіряв 2 хв тому.",
     );
@@ -834,17 +874,13 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
         size_clarified: [],
       },
     };
-    const key = await resume(page, "sale-pending", who, stored);
-    await expect(
-      page.getByRole("heading", { name: "Незавершений продаж" }),
-    ).toBeVisible();
+    // Read from the phone's storage, it is checked at once, with no tap
+    // (ADR-0013 §4.3).
     const answered = page.waitForResponse(
       (r) =>
         r.url().endsWith("/api/v1/sales") && r.request().method() === "POST",
     );
-    await page
-      .getByRole("button", { name: "Перевірити результат продажу" })
-      .click();
+    const key = await resume(page, "sale-pending", who, stored);
     const response = await answered;
     // Exactly what was saved, under its own key.
     expect(response.request().postData()).toBe(JSON.stringify(stored.body));
@@ -856,12 +892,13 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     await expect(
       page.getByRole("heading", { name: "Незавершений продаж" }),
     ).toHaveCount(0);
+    // Whatever the reason, a kept sale not recorded says how to type it from
+    // paper (ADR-0013 §8).
     await expect(
       page.getByText(
-        /Не вказано, як платить покупець\. Натисніть «Готівка», «Картка» або «Переказ»\./,
+        "Продаж не записано (не вказано, як платить покупець. Натисніть «Готівка», «Картка» або «Переказ»). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.",
       ),
     ).toBeVisible();
-    await expect(page.getByText(/Кошик треба зібрати знову\./)).toBeVisible();
     expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
     // The till is the seller's again, with the three ways.
     await expect(
@@ -893,16 +930,10 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
         amount: "500.00",
       },
     };
-    const key = await resume(page, "credit-pending", who, stored);
-    await expect(
-      page.getByRole("heading", { name: "Незавершений внесок" }),
-    ).toBeVisible();
     const answered = page.waitForResponse((r) =>
       r.url().endsWith(`/api/v1/credits/${creditId}/payments`),
     );
-    await page
-      .getByRole("button", { name: "Перевірити результат внеску" })
-      .click();
+    const key = await resume(page, "credit-pending", who, stored);
     const response = await answered;
     expect(response.request().postData()).toBe(
       JSON.stringify({
@@ -950,16 +981,10 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
         reason: null,
       },
     };
-    const key = await resume(page, "return-pending", who, stored);
-    await expect(
-      page.getByRole("heading", { name: "Незавершене повернення" }),
-    ).toBeVisible();
     const answered = page.waitForResponse((r) =>
       r.url().endsWith(`/api/v1/sales/${sale.id}/refunds`),
     );
-    await page
-      .getByRole("button", { name: "Перевірити результат повернення" })
-      .click();
+    const key = await resume(page, "return-pending", who, stored);
     const response = await answered;
     expect(response.request().postData()).toBe(
       JSON.stringify({

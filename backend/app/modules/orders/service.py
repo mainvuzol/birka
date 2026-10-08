@@ -27,7 +27,12 @@ from typing import Any
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import IdempotencyConflictError, NotFoundError, ValidationFailedError
+from app.core.errors import (
+    IdempotencyConflictError,
+    NotFoundError,
+    ValidationFailedError,
+    nothing_recorded,
+)
 from app.core.idempotency import fingerprint
 from app.core.text import is_storable
 from app.modules.audit import service as audit
@@ -473,58 +478,62 @@ async def create_order(
     replay = await _command(session, scope, command_id, request_fingerprint)
     if replay is not None:
         return replay
-    shipping = check_shipping(destination, carrier)
-    order = CustomerOrder(
-        id=uuid.uuid4(),
-        organization_id=scope.organization_id,
-        store_id=store_id,
-        created_by_user_id=scope.user_id,
-        status=OrderStatus.READY_TO_DISPATCH,
-        currency_code="UAH",
-    )
-    # Inventory validates the tenant/product/size and locks the entire basket.
-    await reserve_stock(
-        session,
-        organization_id=scope.organization_id,
-        store_id=store_id,
-        reference_id=order.id,
-        requests=[
-            ReservationRequest(
-                location_id=i.source_location_id,
-                product_variant_id=i.product_variant_id,
-                size_id=i.size_id,
-                quantity=i.quantity,
-            )
-            for i in lines
-        ],
-        actor_user_id=scope.user_id,
-    )
-    descriptions = await describe_variants(session, [i.product_variant_id for i in lines])
-    session.add(order)
-    await session.flush()
-    items = []
-    for line in lines:
-        description = descriptions[line.product_variant_id]
-        snapshot = dict(description.snapshot)
-        snapshot["size"] = await size_label(session, line.size_id)
-        items.append(
-            CustomerOrderItem(
-                order_id=order.id,
-                product_variant_id=line.product_variant_id,
-                size_id=line.size_id,
-                source_location_id=line.source_location_id,
-                quantity=line.quantity,
-                unit_price=line.unit_price,
-                discount_amount=line.discount_amount,
-                display_name_snapshot=description.display_name,
-                variant_snapshot=snapshot,
-            )
+    # Under the command's lock, and nothing recorded under it: every refusal
+    # from here on proves this order recorded nothing, and says so, so a
+    # phone that never heard its answer can settle it (ADR-0013 §1).
+    with nothing_recorded():
+        shipping = check_shipping(destination, carrier)
+        order = CustomerOrder(
+            id=uuid.uuid4(),
+            organization_id=scope.organization_id,
+            store_id=store_id,
+            created_by_user_id=scope.user_id,
+            status=OrderStatus.READY_TO_DISPATCH,
+            currency_code="UAH",
         )
-    session.add_all(items)
-    _ship(session, scope, order, shipping, ShippingChangeKind.CREATED)
-    return await _save(
-        session, scope, order, items, command_id, request_fingerprint, "created", None
-    )
+        # Inventory validates the tenant/product/size and locks the entire basket.
+        await reserve_stock(
+            session,
+            organization_id=scope.organization_id,
+            store_id=store_id,
+            reference_id=order.id,
+            requests=[
+                ReservationRequest(
+                    location_id=i.source_location_id,
+                    product_variant_id=i.product_variant_id,
+                    size_id=i.size_id,
+                    quantity=i.quantity,
+                )
+                for i in lines
+            ],
+            actor_user_id=scope.user_id,
+        )
+        descriptions = await describe_variants(session, [i.product_variant_id for i in lines])
+        session.add(order)
+        await session.flush()
+        items = []
+        for line in lines:
+            description = descriptions[line.product_variant_id]
+            snapshot = dict(description.snapshot)
+            snapshot["size"] = await size_label(session, line.size_id)
+            items.append(
+                CustomerOrderItem(
+                    order_id=order.id,
+                    product_variant_id=line.product_variant_id,
+                    size_id=line.size_id,
+                    source_location_id=line.source_location_id,
+                    quantity=line.quantity,
+                    unit_price=line.unit_price,
+                    discount_amount=line.discount_amount,
+                    display_name_snapshot=description.display_name,
+                    variant_snapshot=snapshot,
+                )
+            )
+        session.add_all(items)
+        _ship(session, scope, order, shipping, ShippingChangeKind.CREATED)
+        return await _save(
+            session, scope, order, items, command_id, request_fingerprint, "created", None
+        )
 
 
 # An order not yet collected, cancelled or come back: its goods are still
@@ -726,119 +735,129 @@ async def transition_order(
     replay = await _command(session, scope, command_id, request_fingerprint)
     if replay is not None:
         return replay
-    method = (
-        stated_way(payment_method, takes=ORDER_METHODS, required=method_required)
-        if action == "collect"
-        else None
-    )
-    # populate_existing refreshes the row after waiting on another transition.
-    await session.refresh(order, with_for_update=True)
-    allowed, target = transitions[action]
-    opened: credit_service.CreditView | None = None
-    if order.status not in allowed:
-        raise ValidationFailedError("Invalid order transition", status=order.status, action=action)
-    before = order.status
-    shipped = _shipping_of(order)
-    if details:
-        if shipped is None:
+    # The same after this command's lookup (ADR-0013 §1). Another phone may
+    # have cancelled the order or taken it back meanwhile: the late command
+    # is refused as a transition no longer allowed, and settles. A refused
+    # «Клієнт забрав» is then typed as a sale from paper (owner decision,
+    # 2026-10-07). It runs the collected sale's own lookup in here: what that
+    # refuses as another command's identity leaves as it came, never
+    # claiming what was recorded.
+    with nothing_recorded():
+        method = (
+            stated_way(payment_method, takes=ORDER_METHODS, required=method_required)
+            if action == "collect"
+            else None
+        )
+        # populate_existing refreshes the row after waiting on another transition.
+        await session.refresh(order, with_for_update=True)
+        allowed, target = transitions[action]
+        opened: credit_service.CreditView | None = None
+        if order.status not in allowed:
             raise ValidationFailedError(
-                "Say where the order goes before its waybill", reason="NO_DESTINATION"
+                "Invalid order transition", status=order.status, action=action
             )
-        _ship(
+        before = order.status
+        shipped = _shipping_of(order)
+        if details:
+            if shipped is None:
+                raise ValidationFailedError(
+                    "Say where the order goes before its waybill", reason="NO_DESTINATION"
+                )
+            _ship(
+                session,
+                scope,
+                order,
+                check_shipping(
+                    shipped.destination,
+                    shipped.carrier,
+                    waybill if waybill else shipped.waybill,
+                    abroad_note if abroad_note else shipped.abroad_note,
+                ),
+                ShippingChangeKind.DISPATCHED,
+            )
+        if action == "dispatch":
+            await dispatch_reserved_stock(
+                session,
+                organization_id=scope.organization_id,
+                store_id=order.store_id,
+                reference_id=order.id,
+                actor_user_id=scope.user_id,
+            )
+        elif action == "cancel":
+            await release_stock(
+                session,
+                organization_id=scope.organization_id,
+                store_id=order.store_id,
+                reference_id=order.id,
+                actor_user_id=scope.user_id,
+            )
+        elif action == "return":
+            await apply_movements(
+                session,
+                organization_id=scope.organization_id,
+                requests=[
+                    MovementRequest(
+                        location_id=i.source_location_id,
+                        acting_store_id=order.store_id,
+                        product_variant_id=i.product_variant_id,
+                        size_id=i.size_id,
+                        quantity_delta=i.quantity,
+                        movement_type=MovementType.ORDER_RETURN,
+                        reference_type="customer_order",
+                        reference_id=order.id,
+                    )
+                    for i in items
+                ],
+                actor_user_id=scope.user_id,
+            )
+        elif action == "collect":
+            sale = await record_collected_sale(
+                session,
+                scope=scope,
+                store_id=order.store_id,
+                order_id=order.id,
+                command_id=command_id,
+                lines=[
+                    CollectedSaleLine(
+                        product_variant_id=i.product_variant_id,
+                        size_id=i.size_id,
+                        source_location_id=i.source_location_id,
+                        quantity=i.quantity,
+                        unit_price=i.unit_price,
+                        discount_amount=i.discount_amount,
+                        display_name_snapshot=i.display_name_snapshot,
+                        variant_snapshot=i.variant_snapshot,
+                    )
+                    for i in items
+                ],
+                payment_method=method,
+            )
+            order.sale_id = sale.id
+            # Collected before the debt is opened: an order holds a sale only
+            # once collected, and opening the debt flushes the order.
+            order.status = target
+            if credit is not None:
+                # In the collection's own transaction: the debt exists exactly
+                # when the sale does.
+                # Its first payment is the part paid now, which takes any of the
+                # five ways (ADR-0012, G2).
+                opened = await credit_service.open_credit(
+                    session, scope=scope, sale=sale, credit=credit, payment_method=method
+                )
+        order.status = target
+        return await _save(
             session,
             scope,
             order,
-            check_shipping(
-                shipped.destination,
-                shipped.carrier,
-                waybill if waybill else shipped.waybill,
-                abroad_note if abroad_note else shipped.abroad_note,
-            ),
-            ShippingChangeKind.DISPATCHED,
-        )
-    if action == "dispatch":
-        await dispatch_reserved_stock(
-            session,
-            organization_id=scope.organization_id,
-            store_id=order.store_id,
-            reference_id=order.id,
-            actor_user_id=scope.user_id,
-        )
-    elif action == "cancel":
-        await release_stock(
-            session,
-            organization_id=scope.organization_id,
-            store_id=order.store_id,
-            reference_id=order.id,
-            actor_user_id=scope.user_id,
-        )
-    elif action == "return":
-        await apply_movements(
-            session,
-            organization_id=scope.organization_id,
-            requests=[
-                MovementRequest(
-                    location_id=i.source_location_id,
-                    acting_store_id=order.store_id,
-                    product_variant_id=i.product_variant_id,
-                    size_id=i.size_id,
-                    quantity_delta=i.quantity,
-                    movement_type=MovementType.ORDER_RETURN,
-                    reference_type="customer_order",
-                    reference_id=order.id,
-                )
-                for i in items
-            ],
-            actor_user_id=scope.user_id,
-        )
-    elif action == "collect":
-        sale = await record_collected_sale(
-            session,
-            scope=scope,
-            store_id=order.store_id,
-            order_id=order.id,
-            command_id=command_id,
-            lines=[
-                CollectedSaleLine(
-                    product_variant_id=i.product_variant_id,
-                    size_id=i.size_id,
-                    source_location_id=i.source_location_id,
-                    quantity=i.quantity,
-                    unit_price=i.unit_price,
-                    discount_amount=i.discount_amount,
-                    display_name_snapshot=i.display_name_snapshot,
-                    variant_snapshot=i.variant_snapshot,
-                )
-                for i in items
-            ],
+            items,
+            command_id,
+            request_fingerprint,
+            action,
+            before,
+            reason,
+            credit=opened,
             payment_method=method,
         )
-        order.sale_id = sale.id
-        # Collected before the debt is opened: an order holds a sale only
-        # once collected, and opening the debt flushes the order.
-        order.status = target
-        if credit is not None:
-            # In the collection's own transaction: the debt exists exactly
-            # when the sale does.
-            # Its first payment is the part paid now, which takes any of the
-            # five ways (ADR-0012, G2).
-            opened = await credit_service.open_credit(
-                session, scope=scope, sale=sale, credit=credit, payment_method=method
-            )
-    order.status = target
-    return await _save(
-        session,
-        scope,
-        order,
-        items,
-        command_id,
-        request_fingerprint,
-        action,
-        before,
-        reason,
-        credit=opened,
-        payment_method=method,
-    )
 
 
 async def change_shipping(
@@ -872,25 +891,27 @@ async def change_shipping(
     replay = await _command(session, scope, command_id, request_fingerprint)
     if replay is not None:
         return replay
-    await session.refresh(order, with_for_update=True)
-    if order.status not in OPEN_STATUSES:
-        raise ValidationFailedError(
-            "The order is closed: where it went stays as it was",
-            reason="ORDER_CLOSED",
-            status=order.status,
+    # The same after this command's lookup (ADR-0013 §1).
+    with nothing_recorded():
+        await session.refresh(order, with_for_update=True)
+        if order.status not in OPEN_STATUSES:
+            raise ValidationFailedError(
+                "The order is closed: where it went stays as it was",
+                reason="ORDER_CLOSED",
+                status=order.status,
+            )
+        shipping = check_shipping(destination, carrier, waybill, abroad_note)
+        before = _shipping_of(order)
+        if shipping != before:
+            _ship(session, scope, order, shipping, ShippingChangeKind.CORRECTED)
+        return await _save(
+            session,
+            scope,
+            order,
+            items,
+            command_id,
+            request_fingerprint,
+            "shipping_changed",
+            order.status,
+            shipping_before=before,
         )
-    shipping = check_shipping(destination, carrier, waybill, abroad_note)
-    before = _shipping_of(order)
-    if shipping != before:
-        _ship(session, scope, order, shipping, ShippingChangeKind.CORRECTED)
-    return await _save(
-        session,
-        scope,
-        order,
-        items,
-        command_id,
-        request_fingerprint,
-        "shipping_changed",
-        order.status,
-        shipping_before=before,
-    )

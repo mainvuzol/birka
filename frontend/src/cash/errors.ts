@@ -1,5 +1,10 @@
 import { ApiError, errorText, recordedNothing } from "@/shared/api";
 import { methodLabels, notStated } from "@/shared/payment";
+import type { TillMethod } from "@/shared/payment";
+import { refusalText as debtRefusalText } from "@/credits/Credits";
+import { refusalText as correctionRefusalText } from "@/inventory/Correction";
+import { refusalText as returnRefusalText } from "@/returns/Returns";
+import { refusalText as tillRefusalText } from "@/sales/Sale";
 import { isPaymentMethod } from "./types";
 import type { CashBody } from "./types";
 
@@ -90,15 +95,35 @@ export function cashErrorText(error: unknown): string {
  */
 export const collectNeedsMethod = "Вкажіть, як оплачено замовлення.";
 
-/** An order command refused, as the orders' journal shows it. */
-export function orderErrorText(error: unknown, resent: boolean): string {
+/**
+ * An order command refused, as the orders' journal shows it. `resent` is the
+ * label of a saved command resent — by its button or by the phone itself —
+ * and null for one sent from its screen.
+ */
+export function orderErrorText(error: unknown, resent: string | null): string {
   if (
     error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
   )
-    return resent
+    return resent !== null
       ? "Замовлення не позначено як забране — вкажіть, як оплачено, і натисніть «Клієнт забрав» ще раз."
       : collectNeedsMethod;
+  // «Клієнт забрав» after another phone cancelled the order or took it
+  // back: refused, recording nothing (ADR-0013 §1). The customer has the
+  // goods, so they are typed as a sale from paper at the order's prices
+  // (owner decision, 2026-10-07; G24).
+  if (
+    recordedNothing(error) &&
+    error instanceof ApiError &&
+    error.details.action === "collect" &&
+    (error.details.status === "CANCELLED" ||
+      error.details.status === "RETURNED")
+  )
+    return "Замовлення вже скасовано або повернено — «Клієнт забрав» не записано. Якщо товар віддали — внесіть його як продаж з паперу, за цінами замовлення.";
+  // A saved command refused on resend: nobody is looking at its form, so it
+  // says what was not recorded before why (ADR-0013 §1).
+  if (resent !== null && recordedNothing(error))
+    return `Операцію «${resent}» не записано. ${errorText(error)}`;
   return errorText(error);
 }
 
@@ -111,24 +136,79 @@ export function orderErrorText(error: unknown, resent: boolean): string {
  * mark so is an unknown outcome, said as before.
  */
 
-/** The till: a refused old sale remounts an empty basket. */
+/**
+ * Why a kept sale was not recorded, inside «Продаж не записано (…)»: the
+ * till's own words, as one clause.
+ */
+function saleReason(error: unknown): string {
+  // Goods gone from the ledger: a manager fixes the balance first (owner
+  // decision, 2026-10-04). Units reserved for an order meanwhile: a manager
+  // decides about the order, never the balance (owner decision, 2026-10-07).
+  if (error instanceof ApiError && error.code === "INSUFFICIENT_STOCK")
+    return error.details.reserved === true
+      ? "частина цих одиниць у резерві замовлення — спершу менеджер має вирішити із замовленням"
+      : "цього товару вже немає в обліку — спершу попросіть менеджера виправити залишок";
+  const text = tillRefusalText(error).replace(/\.$/, "");
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * The till: a refused old sale remounts an empty basket. Its customer has
+ * usually left with the goods, so whatever the reason, the sale is typed
+ * from paper, marked (ADR-0013 §8; G15).
+ */
 export function saleErrorText(error: unknown): string {
   return recordedNothing(error)
-    ? `${errorText(error)} Кошик треба зібрати знову.`
+    ? `Продаж не записано (${saleReason(error)}). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.`
     : errorText(error);
 }
 
+/**
+ * A kept delivery: the shared words for why, as «Приймання» shows a
+ * refusal of its own (ADR-0013 §1).
+ */
+export function receiptErrorText(error: unknown): string {
+  return recordedNothing(error)
+    ? `Приймання не записано. ${errorText(error)}`
+    : errorText(error);
+}
+
+/**
+ * A kept stock correction: the correction screen's own words for why, so a
+ * count made against a balance that moved meanwhile says to count again
+ * (ADR-0013 §1). The balance it was made against is the one the refusal
+ * names: the server compares the count with nothing else.
+ */
+export function adjustmentErrorText(error: unknown): string {
+  if (!recordedNothing(error) || !(error instanceof ApiError))
+    return errorText(error);
+  const counted = error.details.expected;
+  return `Коригування не записано. ${correctionRefusalText(
+    error,
+    typeof counted === "number" ? counted : null,
+    "",
+  )}`;
+}
+
+/** «Повернення»'s own words for why (ADR-0013 §8). */
 export function returnErrorText(error: unknown): string {
   if (!recordedNothing(error)) return errorText(error);
   return error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
     ? "Повернення не записано — оформіть його ще раз і вкажіть, як повертаєте гроші."
-    : `Повернення не записано. ${errorText(error)}`;
+    : `Повернення не записано. ${returnRefusalText(error)}`;
 }
 
+/**
+ * «Борги»'s own words for why, by the way the payment was pressed: money
+ * already taken for a debt paid meanwhile goes back (owner decisions,
+ * 2026-10-04 and 2026-10-07; ADR-0013 §8). `way` is the kept payment's, null
+ * for one kept before the way was asked.
+ */
 export function creditErrorText(
   error: unknown,
   kind: "payment" | "write-off",
+  way: TillMethod | null = null,
 ): string {
   if (!recordedNothing(error)) return errorText(error);
   if (
@@ -136,7 +216,15 @@ export function creditErrorText(
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
   )
     return "Внесок не записано — прийміть його ще раз і вкажіть, як платить покупець.";
-  return `${kind === "payment" ? "Внесок" : "Списання"} не записано. ${errorText(error)}`;
+  const why = debtRefusalText(error, kind === "payment" ? way : undefined);
+  // It says itself that the payment was not recorded.
+  if (
+    kind === "payment" &&
+    error instanceof ApiError &&
+    error.details.reason === "NOT_OWED"
+  )
+    return why;
+  return `${kind === "payment" ? "Внесок" : "Списання"} не записано. ${why}`;
 }
 
 const notRecorded: Record<CashBody["command"], string> = {

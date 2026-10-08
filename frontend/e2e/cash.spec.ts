@@ -450,17 +450,11 @@ test.describe("«Оля»'s day at «Каса»", () => {
         ambiguous: true,
       }),
     );
+    // Read from the phone's storage, it is checked at once, with no tap
+    // (ADR-0013 §4.3).
+    const resent = page.waitForResponse(isClose);
     await openAs(page, olya, "Оля");
     await page.getByRole("button", { name: /^Каса CASH/ }).click();
-    await expect(
-      page.getByRole("heading", { name: "Незавершена операція каси" }),
-    ).toBeVisible();
-    for (const name of otherTabs)
-      await expect(
-        page.getByRole("button", { name, exact: true }),
-      ).toBeDisabled();
-    const resent = page.waitForResponse(isClose);
-    await page.getByRole("button", { name: "Перевірити результат" }).click();
     const answer = await resent;
     expect(answer.status()).toBe(422);
     expect(
@@ -593,12 +587,10 @@ test("a take-out kept on the phone settles on the refusal of a close in between,
       },
     }),
   );
+  // Read from the phone's storage, it is checked at once, with no tap
+  // (ADR-0013 §4.3).
   await openAs(page, olya, "Оля");
   await page.getByRole("button", { name: /^Каса CASH/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Незавершена операція каси" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Перевірити результат" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\. Якщо гроші взяли чи внесли вже після закриття — запишіть ще раз\. Якщо до нього — це запише менеджер до того закриття\.$/,
   );

@@ -435,14 +435,15 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
   );
   expect(merged.status(), await merged.text()).toBe(200);
   // Asking again is refused as proof nothing was recorded: the till is the
-  // seller's again, and says why.
+  // seller's again, and says why, and what to do with goods already given
+  // (ADR-0013 §8).
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
     .click();
   await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
   await expect(
     page.getByText(
-      "Цю модель об’єднано з іншою. Виберіть товар ще раз: стара назва тепер веде до моделі, що лишилась.",
+      "Продаж не записано (цю модель об’єднано з іншою. Виберіть товар ще раз: стара назва тепер веде до моделі, що лишилась). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.",
     ),
   ).toBeVisible();
   await expect(
@@ -648,9 +649,11 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
     .getByRole("button", { name: "Перевірити результат приймання" })
     .click();
   await expect(page.getByText("Незавершене приймання")).toHaveCount(0);
+  // Settled, and said: what was not recorded, then why (ADR-0013 §1).
   await expect(
     page.getByText(
-      "Цю модель прибрано: її залишок продають, але нового не приймають. Щоб приймати, поверніть її в «Моделях».",
+      "Приймання не записано. Цю модель прибрано: її залишок продають, але нового не приймають. Щоб приймати, поверніть її в «Моделях».",
+      { exact: true },
     ),
   ).toBeVisible();
   await expect(
@@ -736,7 +739,8 @@ test("a rename whose answer was lost settles when it was refused", async ({
   await expect(page.getByText("Незавершена зміна каталогу")).toHaveCount(0);
   await expect(
     page.getByText(
-      "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+      "Зміну каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+      { exact: true },
     ),
   ).toBeVisible();
   await expect(
@@ -785,7 +789,8 @@ test("a product whose creation answer was lost settles when it was refused", asy
   await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
   await expect(
     page.getByText(
-      "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+      "Операцію каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+      { exact: true },
     ),
   ).toBeVisible();
   expect(attempts).toBe(2);

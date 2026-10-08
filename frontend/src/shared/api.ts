@@ -1,3 +1,29 @@
+import { noteAnswered, noteUnreachable } from "@/shared/reach";
+
+/**
+ * What the seller is told when the server does not answer, in the owner's
+ * words (owner decision, 2026-10-04; ADR-0013 §3): the shop sells on paper,
+ * and types it in once the server answers. Nothing about phoning the owner:
+ * the bot tells them itself.
+ */
+export const UNREACHABLE =
+  "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.";
+
+/**
+ * No answer from the server, as `api()` itself knows it (ADR-0013 §3):
+ * `fetch` gave up — no network, a connection reset, the edge dead — or the
+ * 20 s ran out, or a page that is not the API's answered for it (a captive
+ * portal's, an operator's). A request that got no answer may still have been
+ * recorded, so a journal keeps its attempt. The app's own errors are never
+ * this, so a bug never tells the seller to sell on paper.
+ */
+export class Unreachable extends Error {
+  constructor(cause: unknown) {
+    super("UNREACHABLE", { cause });
+    this.name = "Unreachable";
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -25,7 +51,9 @@ export async function api<T>(
   // answered by a PUT, which replaces its previous answer.
   method: "POST" | "PUT" = "POST",
 ): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, {
+  // Built before the request: what fails here is the app's own, never the
+  // connection.
+  const init: RequestInit = {
     method: body === undefined ? "GET" : method,
     headers: {
       "Content-Type": "application/json",
@@ -34,36 +62,77 @@ export async function api<T>(
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(20000),
-  });
+  };
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1${path}`, init);
+  } catch (error) {
+    // `fetch`'s own rejection, or the 20 s abort: no answer.
+    noteUnreachable();
+    throw new Unreachable(error);
+  }
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as {
       code?: string;
       error?: { code?: string };
       details?: Record<string, unknown>;
     } | null;
-    throw new ApiError(
+    const error = new ApiError(
       response.status,
       data?.code ?? data?.error?.code ?? "HTTP_ERROR",
       data?.details ?? {},
       response.headers.get("X-Request-ID"),
     );
+    // Whether the server is reachable, for the phone's own checks
+    // (ADR-0013 §4.2).
+    if (unreachable(error)) noteUnreachable();
+    else noteAnswered();
+    throw error;
   }
-  return (await response.json()) as T;
+  let data: T;
+  try {
+    data = (await response.json()) as T;
+  } catch (error) {
+    // A 2xx that is not the API's JSON: a page answering for the server.
+    noteUnreachable();
+    throw new Unreachable(error);
+  }
+  noteAnswered();
+  return data;
+}
+
+/**
+ * The server was not reached (ADR-0013 §3): no answer at all (`Unreachable`),
+ * or a 502, 503 or 504 — the edge's own for a stopped API, the server's own
+ * `SERVER_UNAVAILABLE` when its database does not answer, a gateway's
+ * timeout. Nothing else: an error of the app's own code is not an outage.
+ */
+export function unreachable(error: unknown): boolean {
+  return (
+    error instanceof Unreachable ||
+    (error instanceof ApiError &&
+      (error.status === 502 || error.status === 503 || error.status === 504))
+  );
 }
 /**
  * A refusal the server raised after looking the command up under its lock,
  * so it proves the command recorded nothing (`details.recorded === false`):
- * the model was merged into another, or retired, since (ADR-0008 §9). It
+ * the model was merged into another, or retired, since (ADR-0008 §9), and
+ * since ADR-0013 §1 every refusal decided after a seller's command was
+ * looked up — goods gone, the debt paid meanwhile, the order cancelled. It
  * settles even an attempt whose outcome was unknown, so a phone that sent a
- * sale of a duplicate just before a merge is not left blocked.
+ * sale just before the server stopped answering is not left blocked.
  */
 export function recordedNothing(error: unknown): boolean {
   return error instanceof ApiError && error.details.recorded === false;
 }
 
 export function errorText(error: unknown): string {
+  // The server was not reached: the shop sells on paper (ADR-0013 §3).
+  if (unreachable(error)) return UNREACHABLE;
+  // The app's own failure, or a journal's: nothing to do with the connection.
   if (!(error instanceof ApiError))
-    return "Немає відповіді сервера. Перевірте зв’язок і повторіть спробу.";
+    return "Не вдалося виконати операцію. Спробуйте ще раз.";
   // Paying in parts, refused for what the seller stated.
   // A warehouse waits for its opening list (owner decision, 2026-10-02).
   if (error.code === "OPENING_LIST_PENDING")
@@ -124,10 +193,6 @@ export function errorText(error: unknown): string {
     return "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
   if (error.status === 422)
     return "Перевірте дані та поточний статус замовлення.";
-  // The edge answered for a server that did not: the phone's own connection
-  // works, and asking again at once would not help.
-  if (error.status === 502 || error.status === 503 || error.status === 504)
-    return "Сервер зараз недоступний. Спробуйте ще раз за хвилину.";
   // A server error is logged under the request's number: the seller can
   // quote its start to whoever reads the log.
   if (error.status >= 500 && error.requestId)

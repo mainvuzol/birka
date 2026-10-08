@@ -488,7 +488,8 @@ async def apply_movements(
 
     Raises `InsufficientStockError` naming the first line that cannot be
     satisfied, so the caller can offer the correction flow (business fact F30)
-    instead of a dead end.
+    instead of a dead end, and saying whether an order holds units of it
+    (`reserved`, ADR-0013 §6).
 
     Never an opening balance. Only `apply_opening_balance` writes one, after
     holding the warehouse exclusively and proving it has no stock history
@@ -641,25 +642,28 @@ async def _apply_movements(
                     product_variant_id=request.product_variant_id,
                     size_id=request.size_id,
                 )
+                held_for_orders = reserved.get(
+                    (request.location_id, request.product_variant_id, request.size_id), 0
+                )
                 raise InsufficientStockError(
                     location_id=str(request.location_id),
                     product_variant_id=str(request.product_variant_id),
                     size_id=str(request.size_id),
                     requested=magnitude,
-                    available=physical
-                    - reserved.get(
-                        (request.location_id, request.product_variant_id, request.size_id), 0
-                    ),
+                    available=physical - held_for_orders,
                     # Only a sale has a correction to offer (FOUND_DURING_SALE,
                     # business fact F30). Telling a transfer or an adjustment
                     # it could "correct" its way past a shortfall would point
                     # the client at a flow that does not exist for it.
                     correctable=(
-                        request.movement_type is MovementType.SALE
-                        and not reserved.get(
-                            (request.location_id, request.product_variant_id, request.size_id), 0
-                        )
+                        request.movement_type is MovementType.SALE and not held_for_orders
                     ),
+                    # Whether an order holds units of this balance, said on
+                    # its own: `correctable` was the only sign of it, and a
+                    # sale typed from paper is never correctable, reserved or
+                    # not (ADR-0013 §6). Its till then says to settle the order
+                    # first, not to add stock the order would take as well.
+                    reserved=bool(held_for_orders),
                 )
         else:
             quantity_after = await repository.increment(
@@ -1093,6 +1097,9 @@ async def reserve_stock(
                 requested=quantity,
                 available=available,
                 correctable=False,
+                # As every shortfall says (ADR-0013 §6): other orders hold
+                # some of what this one asks for.
+                reserved=bool(reserved.get(key, 0)),
             )
     for key, quantity in sorted(demand.items()):
         await repository.change_reserved(session, key=key, delta=quantity)

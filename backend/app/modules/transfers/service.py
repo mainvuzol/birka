@@ -397,9 +397,10 @@ async def move_goods(
     # already been applied — a shortfall would leave half a transfer in the
     # transaction for any caller that caught the error and committed.
     for line in lines:
-        available = quantities[
-            (from_location_id, line.product_variant_id, line.size_id)
-        ] - reserved.get((from_location_id, line.product_variant_id, line.size_id), 0)
+        held_for_orders = reserved.get((from_location_id, line.product_variant_id, line.size_id), 0)
+        available = (
+            quantities[(from_location_id, line.product_variant_id, line.size_id)] - held_for_orders
+        )
         if available < line.quantity:
             raise InsufficientStockError(
                 location_id=str(from_location_id),
@@ -409,6 +410,9 @@ async def move_goods(
                 available=available,
                 # A sale can offer "it is physically here"; a transfer cannot.
                 correctable=False,
+                # Whether an order holds units of it, as every shortfall says
+                # (ADR-0013 §6).
+                reserved=bool(held_for_orders),
             )
 
     # One timestamp for both halves of a single-step transfer, taken from the

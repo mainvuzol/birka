@@ -398,7 +398,12 @@ function Debt({
     } else if (outcome.kind === "refused") {
       setCommandId(crypto.randomUUID());
       setAsking(false);
-      setProblem(refusalText(outcome.error));
+      setProblem(
+        refusalText(
+          outcome.error,
+          body.kind === "payment" ? body.payment_method : undefined,
+        ),
+      );
       // Refused because the debt moved on — another payment, a return: show
       // it as it is now.
       try {
@@ -421,9 +426,9 @@ function Debt({
       return;
     }
     if (cents > owed) {
-      setProblem(
-        `Це більше, ніж винні: залишок боргу ${money(credit.owed)}. Прийміть не більше.`,
-      );
+      // The same words as the server's refusal: a sum typed from paper may
+      // have been taken already (owner decision, 2026-10-07).
+      setProblem(moreThanOwed(credit.owed, way));
       return;
     }
     void send({
@@ -597,19 +602,64 @@ function Debt({
   );
 }
 
-function refusalText(error: unknown): string {
+/**
+ * How money taken for a debt goes back to the customer: the way it came,
+ * never another — cash from the drawer, a card through the terminal, a
+ * transfer by transfer (owner decision, 2026-10-07; ADR-0013 §8, G9). After
+ * «поверніть покупцю»; cash, and a payment kept from before the way was
+ * asked, add nothing.
+ */
+function backTo(way: TillMethod | null): string {
+  return way === "CARD"
+    ? " на картку через термінал"
+    : way === "TRANSFER"
+      ? " переказом"
+      : "";
+}
+
+/**
+ * More than is owed: what is still owed is taken, and the rest goes back the
+ * way it came (G9).
+ */
+function moreThanOwed(owed: string, way: TillMethod | null): string {
+  return `Це більше, ніж винні: залишок боргу ${money(owed)}. Прийміть ${money(owed)}, а решту поверніть покупцю${backTo(way)}.`;
+}
+
+/**
+ * Why a payment or a write-off was refused. `way` is how the payment was
+ * pressed, null for one kept from before the way was asked, and absent for a
+ * write-off. A payment taken on paper and typed once the debt was paid
+ * meanwhile stays refused, and the money goes back (owner decisions,
+ * 2026-10-04 and 2026-10-07; ADR-0013 §8, G9, G19). A kept payment refused
+ * on resend says the same (`@/cash/errors`).
+ */
+export function refusalText(error: unknown, way?: TillMethod | null): string {
   if (error instanceof ApiError) {
     switch (error.details.reason) {
       case "MORE_THAN_OWED":
-        return `Це більше, ніж винні: залишок боргу ${money(String(error.details.owed))}.`;
+        return way === undefined
+          ? `Це більше, ніж винні: залишок боргу ${money(String(error.details.owed))}.`
+          : moreThanOwed(String(error.details.owed), way);
       case "NOT_OWED":
-        return "За цим продажем уже нічого не винні.";
+        if (way === undefined) return "За цим продажем уже нічого не винні.";
+        // Cash not yet given back is in the drawer: a surplus at the close,
+        // with its reason. A card or a transfer is not in it.
+        return `За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю${backTo(way)}${
+          way === "CASH"
+            ? ". Поки не повернули, вони зайві в касі: при закритті вкажіть причину."
+            : way === null
+              ? "."
+              : ". На касу це не впливає."
+        }`;
       case "NOTHING_PAID":
         return "Внесок має бути більшим за нуль.";
       case "NO_REASON":
         return "Вкажіть, чому списуємо борг.";
+      // Taken on paper in another store while this one was blocked, typed
+      // once it works again: a manager decides each case (owner decision,
+      // 2026-10-07; G25).
       case "PAID_WHERE_SOLD":
-        return "Магазин, де продали, знову працює — внесок приймає він.";
+        return "Магазин, де продали, знову працює — внесок приймає він. Передайте папір менеджеру.";
       case "SEARCH_REQUIRED":
         return "Знайдіть покупця за ім’ям або телефоном — щонайменше дві літери чи цифри.";
     }

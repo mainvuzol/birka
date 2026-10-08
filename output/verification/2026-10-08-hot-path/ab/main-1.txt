@@ -1,0 +1,19 @@
+main at 73c94b9 (git archive), migrations to 0035; PostgreSQL 16.2 on the laptop; runs alternated main, branch ×3, each on a fresh birka_perf
+gate: all; 10 CPUs; harness, API and database on one machine
+GET /catalog/stock-options               n=200  p50=    8.5  p95=   12.1  p99=   33.7  max=   72.7  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   23.5  p95=   80.2  p99=   90.3  max=   95.6  pass
+POST /sales · 1 line                     n=200  p50=   10.7  p95=   14.4  p99=   16.8  max=   18.7  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   38.8  p95=   62.2  p99=  119.6  max=  131.8  pass
+POST /sales · 4 lines (6 sellers)        n=200  p50=   51.7  p95=   79.9  p99=  115.4  max=  131.7  pass
+POST /sales · same coat, 6 sellers       n=120  p50=   37.5  p95=   46.8  p99=   48.5  max=   77.8  pass
+POST /sales · paid in parts              n=200  p50=   11.4  p95=   13.6  p99=   17.3  max=   69.0  pass
+POST /sales · paid in parts (6 sellers)  n=300  p50=   37.0  p95=   61.3  p99=  100.1  max=  126.1  pass
+    "gated": true
+    "gated": true
+    "gated": true
+    "gated": true
+    "gated": true
+    "gated": true
+    "gated": true
+    "gated": true
+exit 0

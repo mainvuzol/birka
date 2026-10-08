@@ -1,5 +1,7 @@
 import { Component, useEffect, useState } from "react";
 import type { JSX, ReactNode } from "react";
+import { UNREACHABLE } from "@/shared/api";
+import { useReach } from "@/shared/reach";
 import { release, reportError } from "@/shared/report";
 import { connectTelegram } from "@/shared/telegram";
 
@@ -40,9 +42,14 @@ function unansweredCommandKept(): boolean {
  * It never clears the phone's storage. Reloading keeps the address, and with
  * it Telegram's launch data, so within that data's hour the app signs in
  * again by itself.
+ *
+ * While the server does not answer it says so in the owner's words, and that
+ * the app may not open again after «Перезапустити»: without the server there
+ * is no app at all (owner decision, 2026-10-04; ADR-0013 §3, G26).
  */
 function Crashed(): JSX.Element {
   const [kept, setKept] = useState(unansweredCommandKept);
+  const down = useReach((state) => state.down);
   // A command still on its way when the screen broke is answered a moment
   // later, and its journal removed: the promise must not outlive it.
   useEffect(() => {
@@ -84,6 +91,15 @@ function Crashed(): JSX.Element {
           повторювати. Кошик, який ви ще не надіслали, доведеться скласти
           заново.
         </p>
+      )}
+      {down && (
+        <>
+          <p role="alert">{UNREACHABLE}</p>
+          <p>
+            Якщо сервер не відповідає, після перезапуску застосунок може не
+            відкритися — продавайте на папері.
+          </p>
+        </>
       )}
       <button
         onClick={() => {

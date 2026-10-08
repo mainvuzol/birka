@@ -305,8 +305,12 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
       exact: true,
     })
     .click();
+  // Answered at once: the money goes back now, said plainly (owner
+  // decision, 2026-10-08: only a kept return confirmed later hedges it).
   await expect(
-    page.getByText("Поверніть 3000,00 грн на картку покупця через термінал."),
+    page.getByText("Поверніть 3000,00 грн на картку покупця через термінал.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(sent.bodies[0]?.payment_method).toBe("CARD");
 
@@ -347,7 +351,7 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
     })
     .click();
   await expect(
-    page.getByText("Надішліть покупцю 3000,00 грн переказом."),
+    page.getByText("Надішліть покупцю 3000,00 грн переказом.", { exact: true }),
   ).toBeVisible();
   expect(sent.bodies[1]?.payment_method).toBe("TRANSFER");
 });

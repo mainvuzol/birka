@@ -1,21 +1,35 @@
 import { create } from "zustand";
 import { api, ApiError, recordedNothing } from "@/shared/api";
+import { isSince, sinceOf } from "@/shared/reach";
 import type { Decision } from "./types";
 export interface Command {
   path: string;
   body: Record<string, unknown>;
   decisionId: string;
   ambiguous?: boolean;
+  /**
+   * When it was first written down, by the phone's clock, kept on every
+   * resend: the banner's «Чекає відповіді сервера з 14:20» (ADR-0013 §4.4).
+   * Beside the body, never in it. Absent from an operation kept before it
+   * was written.
+   */
+  since?: string;
 }
 interface State {
   pending: Command | null;
   busy: boolean;
   error: unknown;
+  /**
+   * `error` answered a kept operation, resent: refused as having recorded
+   * nothing, its screen says so before why (ADR-0013 §1).
+   */
+  kept: boolean;
 }
 export const useCatalogCommand = create<State>(() => ({
   pending: null,
   busy: false,
   error: null,
+  kept: false,
 }));
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const CANCEL_CREATION_REASON =
@@ -164,7 +178,8 @@ function valid(key: string, value: unknown): Command {
   } else throw new Error("Invalid journal");
   if (
     Object.keys(body).some((k) => !keys.includes(k)) ||
-    (c.ambiguous !== undefined && typeof c.ambiguous !== "boolean")
+    (c.ambiguous !== undefined && typeof c.ambiguous !== "boolean") ||
+    !isSince(c.since)
   )
     throw new Error("Invalid journal");
   return c;
@@ -198,7 +213,13 @@ export async function submitCatalogCommand(
     )
       throw new Error("Unfinished command");
     ambiguous ||= Boolean(saved);
-    const pending = { ...command, ambiguous: true };
+    // Since when is kept from the first time: the same operation resent,
+    // never the cancellation that replaces an unfinished creation.
+    const pending = {
+      ...command,
+      ambiguous: true,
+      ...sinceOf(saved?.path === command.path ? saved : null, command),
+    };
     localStorage.setItem(key, JSON.stringify(pending));
     useCatalogCommand.setState({ pending });
     try {
@@ -267,7 +288,7 @@ export async function submitCatalogCommand(
       localStorage.removeItem(key);
       useCatalogCommand.setState({ pending: null });
     }
-    useCatalogCommand.setState({ error });
+    useCatalogCommand.setState({ error, kept: ambiguous });
     return null;
   } finally {
     useCatalogCommand.setState({ busy: false });
