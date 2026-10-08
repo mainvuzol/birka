@@ -1531,6 +1531,11 @@ Answered the same day, to the design's questions:
   parser's number is shown as a hint; the person states the count with a
   note, as today for a bare number. Notebooks kept as tables may have many
   such lines.
+- **One size with its count** («Лоран M-3») is confirmed by a tap, as
+  «S-1 M-2 L-1» is, but only when a sign stands between the size and its
+  count («M-3», «M:3», «M=3»), in one size or in several. «M 3», with a space
+  alone, is a number without «шт»: the person writes a note («Бомбер M 3
+  1200», above).
 - **A list of the shared warehouse belongs to both stores:** the managers of
   either store who may import lists see it, add files to it and review its
   lines. The app does not offer to start a second list for a warehouse whose
