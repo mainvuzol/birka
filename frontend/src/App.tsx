@@ -524,6 +524,9 @@ function Workspace({
       useCashCommand.setState({ pending: saved, error: null });
       if (saved) setTab("cash");
     } catch {
+      // The journal outlives the store: another store's refusal must not
+      // show in this one's «Каса», whose own kept command cannot be read.
+      useCashCommand.setState({ error: null });
       setCashStorageError(true);
     }
   }, [cashKey, canSeeCash]);

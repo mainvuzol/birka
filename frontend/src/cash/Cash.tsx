@@ -16,6 +16,7 @@ import {
   resolveCashCommand,
   submitCashCommand,
   useCashCommand,
+  useCashLastCommand,
 } from "./commands";
 import { cashErrorText, cashJournalText, dayOf, timeOf } from "./errors";
 import { directionOf, movementLabels, waysFor } from "./types";
@@ -330,8 +331,9 @@ export function Cash({
   const [result, setResult] = useState<Close | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  // Which command the journal's error is about, to say what was not recorded.
-  const [lastCommand, setLastCommand] = useState<CashBody["command"]>("close");
+  // Which command the journal's error is about, to say what was not
+  // recorded: beside the journal, since the error outlives this screen.
+  const lastCommand = useCashLastCommand((state) => state.command);
   const working = blocked || busy || pending !== null;
   const financial = store.permissions.includes("report:view_financial");
   // Recent closes: the history's first page, and what a late movement may
@@ -359,7 +361,7 @@ export function Cash({
   async function send(body: CashBody): Promise<JournalOutcome<CashAnswer>> {
     setDone(null);
     setProblem(null);
-    setLastCommand(body.command);
+    useCashLastCommand.setState({ command: body.command });
     const outcome = await submitCashCommand(journalKey, token, {
       // A new transport key per attempt; the command's identity is
       // `command_id`, which is what makes a late retry safe.
@@ -418,7 +420,7 @@ export function Cash({
     if (!attempt) return;
     setDone(null);
     setProblem(null);
-    setLastCommand(attempt.body.command);
+    useCashLastCommand.setState({ command: attempt.body.command });
     void resolveCashCommand(journalKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
         recorded(attempt.body, outcome.result);
