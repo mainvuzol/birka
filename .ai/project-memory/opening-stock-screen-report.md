@@ -123,10 +123,10 @@ editor is now a container, not a form, and the E2E journeys found it.
 
 ## Not covered here
 
-- **The second way, photos → parser → JSON,** waits for the owner's choice
-  and the parser's format. When it exists, its JSON can become a list's
-  lines and pass through this same review, unless the owner decides
-  otherwise.
+- **The second way, photos → parser → JSON,** was chosen by the owner on
+  2026-10-08, in a format Birka defines; it is not built yet. When it
+  exists, its JSON can become a list's lines and pass through this same
+  review, unless the owner decides otherwise.
 - **A model not in the catalogue is created in «Каталог» first,** as when
   receiving. Then return to the line.
 - **Nothing tells in advance whether a warehouse has history.** The hint

@@ -276,6 +276,9 @@ Asked while drawing up the [release checklist](release-checklist.md).
   - the JSON's shape, since the parser does not exist yet;
   - whether its lines still pass through review before approval.
 
+  **Chosen on 2026-10-08:** photos → parser → JSON, in a format Birka
+  defines ("the shops' existing stock", below).
+
   The rules of 2026-09-29 stand until the owner changes them: an opening
   balance only into a warehouse with no history, and only as the answer to a
   list.
@@ -1084,9 +1087,9 @@ decided by the owner:
   recorded is refused when it is resent. The phone says to do it again and
   to say how it was paid.
 
-**Waiting for the owner's confirmation.** These are built as the design
-recommended, or as the build read the rules; each is cheap to change before
-going live:
+**Confirmed by the owner on 2026-10-08, all 36 as built.** They were built
+as the design recommended, or as the build read the rules, and were put to
+the owner in Ukrainian, four to a question:
 1. An order collected in parts: the part paid now may be any of the five
    ways, in advance or on delivery included. (G2)
 2. An order paid partly in advance and the rest on delivery is recorded as
@@ -1324,15 +1327,15 @@ How it is carried out, not decided by the owner:
 - **The paper's time may be up to 5 minutes ahead** of the server's clock,
   for clocks that differ; any later is refused.
 
-**Waiting for the owner's confirmation.** Not asked: these are built as the
-design recommended ([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md)),
-and each is cheap to change. G14 and G20 are stated on the sellers' page
-([paper-when-the-server-is-down.md](paper-when-the-server-is-down.md)),
-which stays a draft until both are confirmed. The four answers of
-2026-10-08 above (a lost phone's lines, a kept return confirmed by the
-phone, a store blocked or a warehouse closed while a phone keeps an
-operation there, the app that does not open at all) are decided, and are
-not waiting.
+**Confirmed by the owner on 2026-10-08, all fourteen as built.** They were
+built as the design recommended ([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md))
+without being asked; each was then put to the owner with the question under
+it, and each answer was the recommended one. G14 and G20 confirm the sellers'
+page ([paper-when-the-server-is-down.md](paper-when-the-server-is-down.md)),
+which is no longer a draft. The four answers of 2026-10-08 above (a lost
+phone's lines, a kept return confirmed by the phone, a store blocked or a
+warehouse closed while a phone keeps an operation there, the app that does
+not open at all) were decided before.
 1. A paper sale of a model the ledger holds only «без розміру» is typed as
    «розмір невідомий»: in paper mode the till does not offer the size from
    the label. (G3)
@@ -1458,3 +1461,20 @@ not waiting.
 
 Built on 2026-10-08; see the [report](outage-fallback-report.md) and
 [ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md).
+
+## Owner decision — 2026-10-08 (the shops' existing stock)
+
+Asked after PR #70, when the owner chose what comes next. It answers "which
+of the two ways" of 2026-10-01 ("going live").
+
+- **The shops' existing stock goes in by photos → parser → JSON.** The shops
+  photograph their notebooks and tables, a parser reads them into JSON, and
+  the app imports the JSON. The owner chose this over lists typed by hand.
+  The «Початкові залишки» screen stays in the app.
+- **Birka defines the JSON's format.** The format is described here and the
+  import is built into the app; the parser, whoever makes it, produces that
+  file.
+- **Not decided yet,** and asked before the import is built: what a line
+  holds, and whether the lines pass through review before approval. Until
+  then the rules of 2026-09-29 stand: an opening balance only into a
+  warehouse with no history, and only as the answer to a list.

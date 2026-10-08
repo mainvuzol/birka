@@ -235,9 +235,6 @@ owner's list.
 
 - **Nothing has run in production,** and the bot's message has not reached a
   real Telegram: it is tested against fakes.
-- **The readings the owner has not confirmed yet** are listed in the
-  business rules ("carried out", 2026-10-04). Each is built as recommended
-  and cheap to change before going live.
 - **The carrier's cash on delivery is not checked** against what the carrier
   paid out. It is later work.
 - **Fiscal receipts (ПРРО)** are out of scope.

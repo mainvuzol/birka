@@ -257,15 +257,16 @@ so does an approved list: each warehouse takes one. Both stores sell from
 the one shared warehouse, so a single delivery received there ends this way
 in for everything the shops already hold.
 
-On 2026-10-01 the owner allowed two ways in, and has not yet chosen between
-them (business rules, "going live"). Ask which, before anything else:
+On 2026-10-01 the owner allowed two ways in, and on 2026-10-08 chose the
+second (business rules, "going live" and "the shops' existing stock"):
 - **lists with review**, which the app has: «Початкові залишки»;
-- **photos of the notebooks**, read by a separate parser into JSON. That
-  does not exist yet. If the owner picks it, the rules that stand keep each
-  warehouse untouched until its JSON goes in as its opening balance. The
-  JSON's shape, and whether its lines pass through review, are not decided.
+- **photos of the notebooks**, read by a parser into JSON, in a format Birka
+  defines. The import does not exist yet. Until it does, the rules that
+  stand keep each warehouse untouched until its stock goes in as its opening
+  balance. What a JSON line holds, and whether the lines pass through
+  review, are not decided yet.
 
-If the owner chooses lists, then for each warehouse, in this order:
+With lists, for each warehouse, in this order:
 
 1. **The count.** Count the goods, or take the notebooks as they stand on
    one day. The shop goes on selling on paper and keeps those sales.

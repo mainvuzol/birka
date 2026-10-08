@@ -308,8 +308,9 @@ See the [report](opening-stock-screen-report.md).
 - **Goods found later are received as ordinary receipts** (owner,
   2026-10-02): a delivery that day, a purchase when a seller enters them.
   Nothing tells them apart from goods bought that day.
-- **The photos → parser → JSON way does not exist yet.** Its JSON is not to
-  be loaded as stock directly, or the review would be bypassed. Unless the
+- **The photos → parser → JSON way, chosen on 2026-10-08, does not exist
+  yet.** Birka defines its format; the import is not built. Its JSON is not
+  to be loaded as stock directly, or the review would be bypassed. Unless the
   owner decides otherwise, it becomes a list's lines and passes through the
   same review.
 - **A slow review is the price of no invented counts.** Hundreds of lines on
@@ -805,10 +806,10 @@ the review of the built change raised.
     in «Борги» for debt payments (owner, 2026-10-08): «Звіт» shows debt
     payments only as one sum, so checking it alone could type a recorded
     payment a second time.
-- **The mark is the typist's word** (G5, awaiting the owner). Nothing checks
-  the named seller or the paper's time against anything. A wrong mark, a
-  live sale made with the switch still on, is permanent: the database
-  refuses any change to it. The pay buttons read «З паперу · …» with the
+- **The mark is the typist's word** (G5, accepted by the owner on
+  2026-10-08). Nothing checks the named seller or the paper's time against
+  anything. A wrong mark, a live sale made with the switch still on, is
+  permanent: the database refuses any change to it. The pay buttons read «З паперу · …» with the
   seller and the warehouse, so a forgotten switch is seen before the press
   (owner, 2026-10-07).
 - **A paper sale typed without the switch** is an ordinary sale. On a
@@ -816,8 +817,8 @@ the review of the built change raised.
   never there, against the owner's rule that goods gone are fixed by a
   manager first. Unticking the switch clears a basket built in paper mode,
   but a basket built without the switch from the start cannot be told from
-  a live sale. The sellers' page says to switch it on always (G20, awaiting
-  the owner).
+  a live sale. The sellers' page says to switch it on always (G20, accepted
+  by the owner on 2026-10-08).
 - **A card charged during the outage may be charged again** by a seller who
   follows a terminal prompt. Cards are taken during an outage (owner,
   2026-10-07): a marked receipt, and a kept card operation confirmed later,

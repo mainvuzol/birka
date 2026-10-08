@@ -276,7 +276,7 @@ The shops sell on paper, and type the sales in when the server answers
   answers again «продажі з паперу можна вносити».
 - **The sellers' page,** to print:
   [paper-when-the-server-is-down.md](.ai/project-memory/paper-when-the-server-is-down.md),
-  a draft until the owner confirms it.
+  confirmed by the owner on 2026-10-08.
 
 See the [server runbook](.ai/project-memory/server-runbook.md#when-the-server-does-not-answer)
 and the [report](.ai/project-memory/outage-fallback-report.md).
