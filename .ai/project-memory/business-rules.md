@@ -1492,6 +1492,13 @@ lines pass through review.
   the photo's name and its line number on it, to find it again.
 - **The file is uploaded in the app,** in «Початкові залишки», by whoever may
   import a list today (the owner or a manager).
+- **A file added by mistake is removed** (asked later the same day): the
+  wrong notebook, or the wrong warehouse. While the list is not approved, the
+  owner or a manager removes that one file, with its lines and the answers
+  given to them. The list's history keeps who removed it and when, and the
+  rest of the list stays as it was.
+- **The owner and the managers review the lines,** as in «Початкові залишки»
+  today; sellers do not. Only the owner approves the list.
 
 Until the import is built, the rules of 2026-09-29 stand: an opening balance
 only into a warehouse with no history, and only as the answer to a list.
