@@ -423,6 +423,15 @@ curl -fsS https://<domain>/api/v1/ready
 docker image prune -f && docker builder prune -f --filter until=720h   # what the old images left
 ```
 
+**The backup tools are installed once and reused.** The `ops` image installs
+the PostgreSQL 17 client and `age` before the code, so a release reuses them
+rather than downloading them again. Refresh them every month or so, and after
+a PostgreSQL security release, so the server runs what CI's fresh build does:
+
+```sh
+docker compose --profile ops build --no-cache ops
+```
+
 **If `alembic upgrade head` fails, do not run `up -d`.** The running version
 still matches the database. New code on a schema not brought up to date
 fails every request; `/api/v1/ready` would then answer `schema`, and the bot

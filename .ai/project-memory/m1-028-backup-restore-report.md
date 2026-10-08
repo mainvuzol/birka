@@ -2,7 +2,8 @@
 
 Baseline: `614ba35` (PR #42).
 Status: merged in PR #43 (`8d59454`). Verified locally on PostgreSQL 16.2;
-encryption and PostgreSQL 17 by CI on every push. No migration, no API change.
+encryption and PostgreSQL 17 by CI on every pull request and every push to
+main. No migration, no API change.
 
 ## Why this was next
 
