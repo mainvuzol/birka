@@ -124,9 +124,9 @@ editor is now a container, not a form, and the E2E journeys found it.
 ## Not covered here
 
 - **The second way, photos → parser → JSON,** was chosen by the owner on
-  2026-10-08, in a format Birka defines; it is not built yet. Its lines are
-  to become a list's lines and pass through this same review (owner,
-  2026-10-08).
+  2026-10-08, in a format Birka defines. Its lines become a list's lines and
+  pass through this same review (owner, 2026-10-08). Built the same day: see
+  the [JSON stock import report](json-stock-import-report.md).
 - **A model not in the catalogue is created in «Каталог» first,** as when
   receiving. Then return to the line.
 - **Nothing tells in advance whether a warehouse has history.** The hint

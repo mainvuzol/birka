@@ -184,8 +184,8 @@ def test_a_list_takes_what_its_approval_was_measured_to_write() -> None:
     PostgreSQL 16 refuses past about 6 500 (2026-10-08 measurement). A raise
     needs a new measurement, not an edit here."""
     assert service.MAX_LIST_ALLOCATIONS == 5_000
-    assert service.MAX_LIST_LINES == service.MAX_LIST_ALLOCATIONS // 2 == 2_500
-    assert service.MAX_LIST_ROWS == 3 * service.MAX_LIST_LINES == 7_500
+    assert service.MAX_LIST_LINES == service.MAX_LIST_ALLOCATIONS == 5_000
+    assert service.MAX_LIST_ROWS == 2 * service.MAX_LIST_LINES == 10_000
     assert service.MAX_LIST_PARTS == 1_000
     # A list's line numbers stay within the API's bounds.
     assert service.MAX_LIST_ROWS >= service.MAX_LIST_LINES >= MAX_PART_LINES

@@ -1,6 +1,6 @@
 # ADR-0005 — Legacy snapshot import and opening balances
 
-Status: **Accepted, 2026-09-28 (M1-023).** Implemented and verified. See the [M1-023 report](../project-memory/m1-023-snapshot-import-report.md). **Amended 2026-09-29** with the owner's answers to the five open questions (§11).
+Status: **Accepted, 2026-09-28 (M1-023).** Implemented and verified. See the [M1-023 report](../project-memory/m1-023-snapshot-import-report.md). **Amended 2026-09-29** with the owner's answers to the five open questions (§11). **Amended 2026-10-08 by [ADR-0014](ADR-0014-opening-stock-from-a-json-file.md)** (the shops' existing stock from a parser's files): a list is filled by parts and a wrong file is removed (§2, §8–§10), its limits are measured (§2, §3), a split a file line's text shows is stated by size (§3), and several documents for one warehouse go into one list (Consequences).
 
 An independent design review found two major defects in the first draft, and three consequences that needed a guard or an owner decision. All five are resolved below; the review is summarised in the report.
 
@@ -39,7 +39,7 @@ Import stores every line as an append-only `RawInput` (`source_kind = SNAPSHOT_I
 - A count no stock could be (over 10 000) is kept as evidence and never taken as the line's total *(code review)*.
 - Lines with identical text are shown as repeats. Which kind of repeat it is — one line per piece, or a transcription slip — only a person can say.
 
-An import holds at most 1 000 lines, 500 characters per line and 100 000 characters in all. Its lines are parsed in a worker thread, because the parser's cost grows faster than a line's length. Real lines are a few dozen characters. *(security review)*
+A part — a pasted text or a parser's file — holds at most 1 000 lines, 500 characters per line and 100 000 characters in all; a list holds what ADR-0014 §10 measured: 5 000 lines not removed, in at most 1 000 parts. Its lines are parsed in a worker thread, because the parser's cost grows faster than a line's length. Real lines are a few dozen characters. *(security review; amended by ADR-0014)*
 
 Import writes no catalog identity, no match decision, no stock and no alias.
 
@@ -49,7 +49,8 @@ A row is resolved in one of two ways.
 
 **Allocations.** One or more `(variant, size, quantity)` stated explicitly (`inventory_snapshot_allocation`), with a **quantity basis**:
 
-- `STATED`: exactly the one count the line states, in one allocation. A split across sizes or colours is never "stated", because the parser reads no per-size counts.
+- `STATED`: exactly the one count the line states, in one allocation. A split across sizes or colours is never "stated", because the parser reads no per-size counts — except a split a file line's text shows, each size with its count (`STATED_BY_SIZE`, ADR-0014 §5; owner, 2026-10-08).
+- `STATED_BY_SIZE`: only for a line from a parser's file whose text writes each size joined to its count by a sign («S-1 M-2 L-1», «Лоран M-3»). One model, one allocation per size, each with exactly its count; never preselected (ADR-0014 §5).
 - `LINE_IMPLIES_ONE`: a line with no number that could be a count, taken as one piece. A count is never assumed: a person states it, and this basis records only that the line itself reads as one piece. The owner left this to what a correct system does (question 3, §11), and this is it. It excludes:
   - a line in which the parser found any quantity, however unsure — two counts, or a negated one;
   - a line with a number the parser could not classify (`3 куртки`, `Куртка 1636`). Such a number may be a count, a size or an item code, so it needs a note *(code review)*.
@@ -63,7 +64,7 @@ The approver sees how many lines and units rest on each basis.
 - receipts and positive adjustments refuse the size;
 - «фізично є» never adds it (§7).
 
-A list takes at most 5 000 allocations in all. That bounds the approval, which holds the warehouse exclusively, and every read of what the list became *(security review)*.
+A list takes at most `MAX_LIST_ALLOCATIONS` allocations in all, 5 000, as measured (ADR-0014 §10). That bounds the approval, which holds the warehouse exclusively, and every read of what the list became *(security review)*.
 
 **Skip.** The line is not stock (a heading, a note, goods that are gone), with a written reason.
 
@@ -123,6 +124,8 @@ Trigger `inventory_snapshot_is_final` refuses any change to an applied or reject
 
 The list is read under a share lock, so a decision cannot commit between the check and the write. With CHECK `applied_names_place_and_store` and the `RESTRICT` lot link, the provenance of an opening balance cannot be rewritten after the fact.
 
+**Parts are frozen with their list** (ADR-0014 §14). A list's parts are never deleted, and a decided list's parts never change. A removed part is final: its rows become `REMOVED`, keep their evidence and take no allocation, and it never comes back; the same file comes back only as a new part.
+
 Like the ledger's append-only triggers (`0002`), it guards rows, not `TRUNCATE`. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
 
 ### 9. Identity, retries and access
@@ -141,10 +144,14 @@ Every replay re-checks current permissions first (I13).
 | Action | Permission (in the list's store) | Warehouse access |
 |---|---|---|
 | Import | `snapshot:import` | `can_receive` and the private-warehouse rule |
+| Add a part, a file or hand-typed lines (ADR-0014 §8) | `snapshot:import` | `can_receive` and the private-warehouse rule |
+| Remove a part, with its answers (ADR-0014 §9) | `snapshot:import` | `can_receive` and the private-warehouse rule |
 | Review | `snapshot:import` | `can_receive` and the private-warehouse rule |
 | Approve | `snapshot:approve` | `can_receive` and the private-warehouse rule |
 | Read | either permission | reach only |
 | Reject | either permission | reach only, so a list for a paused warehouse can still be abandoned |
+
+**Through another store** (ADR-0014 §7, §12): every action above may also be taken through another store that holds `can_receive` at the list's warehouse, with the permission held there under the private-warehouse rule; reads and rejection too. A list of the shared warehouse thus belongs to both stores (owner, 2026-10-08). The list's `acting_store_id`, and the store its opening movements name, do not change.
 
 The acting store is stored as `acting_store_id`: ADR-0004 retired `store_id` on this table, and `0006`'s downgrade recreates it.
 
@@ -157,6 +164,8 @@ The list of a store's lists leaves out a list at a warehouse the person may not 
 | Operation | Locks, in order |
 |---|---|
 | Import | advisory lock on `(organization, command_id)`, scoped exactly like the unique key |
+| Adding a part (ADR-0014 §8) | the same advisory lock on `(organization, command_id)`, then the list `FOR UPDATE`; no warehouse lock |
+| Removing a part (ADR-0014 §9) | list `FOR UPDATE`, then the part `FOR UPDATE` |
 | Resolution | list `FOR UPDATE`, then row `FOR UPDATE` |
 | Approval | list `FOR UPDATE`; exclusive warehouse advisory lock; inventory keys in the global order; lots, movements, allocation links, and status last (the freeze trigger allows the links only while the list is under review) |
 | Rejection | list `FOR UPDATE` |
@@ -242,7 +251,7 @@ Positive:
 
 Negative:
 
-- **One-way opening** (confirmed by the owner, 2026-09-29). A warehouse that has recorded anything cannot take an opening balance. With the seed granting `can_sell` from day one, a single «фізично є», receipt or transfer before approval closes that door for good, since the ledger is append-only. Warehouses holding test data can never take one. Several documents for one warehouse must go into one import. Paper sales made between the count and the approval are entered afterwards, as sales, and are dated when they are entered (§11).
+- **One-way opening** (confirmed by the owner, 2026-09-29). A warehouse that has recorded anything cannot take an opening balance. With the seed granting `can_sell` from day one, a single «фізично є», receipt or transfer before approval closes that door for good, since the ledger is append-only. Warehouses holding test data can never take one. Several documents for one warehouse must go into one list, as its parts: pasted texts or parser's files (ADR-0014). Paper sales made between the count and the approval are entered afterwards, as sales, and are dated when they are entered (§11).
 - **Manual work.** Resolving a legacy list is manual, and this increment has no UI. Some lines that plainly mean one piece still need a note: a bare number or two counts may mean anything.
 - **Sizes not known.** A seller gives such a coat its size while selling it (§11). Outside a sale, reclassification still has no command.
 - **Every stock command takes one more lock.** It is a shared advisory lock per warehouse — cheap, but on the hot path. It has not been measured against the `POST /sales` p95 budget, which was itself never measured.

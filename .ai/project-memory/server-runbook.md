@@ -259,50 +259,128 @@ in for everything the shops already hold.
 
 On 2026-10-01 the owner allowed two ways in, and on 2026-10-08 chose the
 second (business rules, "going live" and "the shops' existing stock"):
-- **lists with review**, which the app has: «Початкові залишки»;
-- **photos of the notebooks**, read by a parser into JSON, in a format Birka
-  defines. The import does not exist yet. Until it does, the rules that
-  stand keep each warehouse untouched until its stock goes in as its opening
-  balance. Its lines are to go into the warehouse's list and be reviewed
-  there, and several files may fill one list (owner, 2026-10-08).
+photos of the notebooks, read by a parser into files in Birka's format,
+which go into the warehouse's list in «Початкові залишки» and are reviewed
+there, line by line. Lines typed or pasted in the app remain, and may join
+the same list: a page the parser could not read is typed by hand (owner,
+2026-10-08). Nothing in a file becomes stock on its own word.
 
-The steps below are for lists typed in the app, the way it has today; the
-JSON way's steps are written when its import is built. With lists, for each
-warehouse, in this order:
+**First, the largest warehouse is counted** (owner, 2026-10-08). Before
+anything is photographed for a list, the shops count the notebooks of their
+largest warehouse roughly: pages × lines per page. If it comes out above
+5 000, stop: the limit is raised first, by a separate change to the ledger
+(the approval and its reading of the reservations), before going live. A
+warehouse is not taken in parts across several lists: it takes one list,
+once. See "how large a list may be", below.
 
-1. **The count.** Count the goods, or take the notebooks as they stand on
-   one day. The shop goes on selling on paper and keeps those sales.
-2. **The catalogue.** A line is answered by picking a model, so every model
-   the list names is created in «Каталог» first. Sellers may do this too.
-3. **The list.** The owner or a manager (`snapshot:import`) types or pastes
-   it in «Початкові залишки» for that warehouse, then answers every line:
+For each warehouse, in this order:
+
+1. **The count.** Photograph the notebooks and tables as they stand on one
+   day. The shop goes on selling on paper and keeps those sales. The photos
+   stay with the shop: Birka keeps only each photo's name and the line's
+   number on it, so the photos keep the names the parser read them under.
+2. **The files.** The parser reads the photos into files in Birka's format
+   ([`formats/birka-stock-list/`](../../formats/birka-stock-list/README.md)):
+   one notebook a file, or one file per group of whole photos, at most
+   1 000 lines each. Check every file before it goes to the shop, with the
+   reference validator, from `backend/` of the repository with its
+   requirements installed:
+
+   ```bash
+   python -m scripts.check_stock_file FILE.json
+   ```
+
+   It prints `OK` with the file's lines and photos; otherwise it prints every
+   problem with its line, and exits 1. The file then reaches the phone of
+   whoever uploads it, saved to the phone's files (from a Telegram chat,
+   say). Until the drill on an Android and an iPhone has passed (release
+   checklist, row 26), Telegram Desktop is the sure way in.
+3. **The catalogue.** A line is answered by picking a model, so every model
+   the list names is created in «Каталог», before or during the review.
+   Sellers may do this too. A split confirmed by a tap (step 5) needs each of
+   its sizes in the catalogue under the same spelling.
+4. **The list.** The owner or a manager (`snapshot:import`):
+   - in «Початкові залишки», «Новий список», chooses the warehouse and
+     «Завантажити файл» with the first file. Before it is sent, the app
+     shows its lines, photos and price kind, and the warehouse it goes to;
+   - in the list, «Додати файл» for every further file, and «Додати рядки
+     вручну» for a page the parser could not read;
+   - «Прибрати файл» for a file put in by mistake, the wrong notebook or the
+     wrong warehouse: its lines and their answers go, and the rest of the
+     list stays. No reason is asked; the history shows who and when. The
+     last file is not removed: reject the list instead, which releases the
+     warehouse. A removed file may be added again, as a new file.
+
+   The same file is refused a second time. A file whose photos and lines
+   are already in another file of the list is taken, and the app says how
+   many: remove it if it is a repeat. A list typed by hand starts with
+   «Вставити текст» instead, and takes files the same way.
+5. **The review.** Answer every line, file by file:
    - the model;
    - the size, or «Розмір невідомий»;
    - where the count came from;
    - or «Це не товар», with a reason.
 
-   **A warehouse's stock fits in one list**, since it takes one:
-   - at most 1 000 lines and 100 000 characters;
-   - at most 5 000 answers of a model, a size and a count.
-4. **The approval.** The owner (`snapshot:approve`) approves the list, and
+   Each line shows its photo and line («Фото: IMG_0412.jpg, рядок 4») and
+   the parser's reading, as a hint. The parser's count is only a hint unless
+   the line itself says «шт»: a person states the count, with a note. A line
+   that writes each size joined to its count by a sign («S-1 M-2 L-1»,
+   «Лоран M-3») is confirmed by a tap, «Як у рядку, по розмірах»; «M 3»,
+   with a space alone, is a bare number. Headings, totals and crossed-out
+   lines come with the parser's note, and a person decides each (owner,
+   2026-10-08).
+6. **The approval.** The owner (`snapshot:approve`) approves the list, and
    it becomes the warehouse's stock. It cannot be undone. A rejected list
-   changes nothing, and a new one may be typed.
+   changes nothing, and a new one may be started.
 
    **A child store's own warehouse** (`--with-child-warehouse`) is private
-   to `SECOND` (step 6). Its list is typed and answered by someone holding
+   to `SECOND` (step 6). Its list is filled and answered by someone holding
    `snapshot:import` in `SECOND` itself, and approved by whoever holds the
    owner's role there (Q5). The network's owner and managers do not reach
    it through their network-wide roles.
-5. **The paper sales.** Sales made on paper since the count are entered at
+7. **The paper sales.** Sales made on paper since the count are entered at
    the till as ordinary sales, only after the approval (Q2). Each is dated
    the day it is entered. One entered before the approval closes the
    warehouse to its list.
-6. **Only then** are new deliveries received and sales made in the app.
+8. **Only then** are new deliveries received and sales made in the app.
 
-**While a list waits, the warehouse waits** (owner, 2026-10-02). The app
-refuses every receipt, sale and correction there until the list is approved
-or rejected, and says so. A list typed for a warehouse that already has
-history holds nothing back.
+**How large a list may be.** One list opens a warehouse, once, and its
+approval writes it in one transaction (ADR-0014 §10, measured 2026-10-08;
+the owner kept the limit the same day):
+- at most **5 000 lines**, a removed file's lines not counted, and **5 000
+  answers** of a model, a size and a count; a line naming several sizes
+  takes one answer per size, so count each size of such a line;
+- each file, or each text typed in, at most 1 000 lines and 100 000
+  characters; at most 1 000 files.
+
+The list shows how much of both is used.
+
+**A warehouse larger than that cannot be taken in one list yet,** and a
+warehouse takes only one: never in parts across lists. The shops' rough
+count comes first (above); the validator then gives each file's exact lines
+before the first is uploaded. Above 5 000, the limit is raised first, by a
+separate change to the ledger under its own review, measured again, before
+going live (owner, 2026-10-08). Above about 6 500 answers the ledger's own
+read of the reservations fails, whatever limit the code sets.
+
+**The shared warehouse's list belongs to both stores** (owner, 2026-10-08).
+The managers of either store who may import lists there see it in
+«Початкові залишки», add files to it and answer its lines, and the owner
+approves it from either store. The app offers no second list for a
+warehouse whose list waits: it names that list and opens it. Two people
+starting lists for one warehouse at the same moment from the two stores
+can still make two. Only one can be approved: reject the other, and add
+its files to the first. While the warehouse is paused, its list is seen
+only from the store that started it. And the list needs that store
+trading: while it is blocked or archived, the list is neither approved nor
+rejected, and the warehouse waits for both stores, until it trades again.
+
+**While a list waits, the warehouse waits** (owner, 2026-10-02), for the
+whole review, even days (owner, 2026-10-08). The app refuses every receipt,
+sale and correction there until the list is approved or rejected, and says
+so; the shops sell from it on paper meanwhile, and those sales are typed
+after the approval. So start the list when its files are ready. A list
+typed for a warehouse that already has history holds nothing back.
 
 **A delivery that arrives after the count** is received only after the
 approval (Q1). Keeping that order is the responsibility of whoever enters the

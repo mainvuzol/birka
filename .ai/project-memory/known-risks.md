@@ -64,12 +64,12 @@ See the [report](m1-023-snapshot-import-report.md) and [ADR-0005](../decisions/A
 
 Found by the independent code reviews (2026-09-28). The fixes are in the report; these remain.
 
-- **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a list) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
+- **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a part: a pasted text or a file) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
 - **No request-size limit or rate limit in front of the API.** Closed on 2026-10-03: Caddy refuses a body over 1 MB, and the API limits sign-ins per address ([before the public domain](#before-the-public-domain--2026-10-03)). Signed-in requests are still not limited per person.
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
-- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`, and it is not measured. By definition nothing else has written to that warehouse yet.
+- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; see [the JSON stock import](#the-json-stock-import--2026-10-08).
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
-- **Lines are stored verbatim, including bidirectional and zero-width characters.** Nothing renders them today. A future review screen must neutralise them.
+- **Lines are stored verbatim, including bidirectional and zero-width characters.** Since 2026-10-08 «Початкові залишки» shows every line, and every string from a file, through a guard that marks them visibly (ADR-0014 §15). The catalogue screens still show raw text unguarded; they are left for a change of their own.
 - **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
 
 ## The till — 2026-09-29
@@ -308,10 +308,10 @@ See the [report](opening-stock-screen-report.md).
 - **Goods found later are received as ordinary receipts** (owner,
   2026-10-02): a delivery that day, a purchase when a seller enters them.
   Nothing tells them apart from goods bought that day.
-- **The photos → parser → JSON way, chosen on 2026-10-08, does not exist
-  yet.** Birka defines its format; the import is not built. Its JSON is
-  never loaded as stock directly: its lines become a list's lines and pass
-  through the same review (owner, 2026-10-08).
+- **The photos → parser → JSON way, chosen on 2026-10-08, is built** the
+  same day ([the JSON stock import](#the-json-stock-import--2026-10-08)).
+  Its JSON is never loaded as stock directly: its lines become a list's
+  lines and pass through the same review (owner, 2026-10-08).
 - **A slow review is the price of no invented counts.** Hundreds of lines on
   a phone take time. Not measured with real notebooks.
 
@@ -895,3 +895,86 @@ the review of the built change raised.
   marked sale recorded by the new code whose answer was lost, resent to the
   old code, is refused before its lookup and stays kept until the server is
   upgraded again.
+
+## The JSON stock import — 2026-10-08
+
+See the [report](json-stock-import-report.md) and
+[ADR-0014](../decisions/ADR-0014-opening-stock-from-a-json-file.md). The
+owner chose on 2026-10-08 that the shops' existing stock goes in from photos,
+through a parser, as files in Birka's format, every line reviewed by a
+person; the same day the owner answered the design's questions.
+
+- **The evidence is a transcription.** A line from a file is what the
+  parser wrote, kept exactly; the original is the photo, and only the shop
+  keeps it. Birka cannot check the one against the other. The line's photo
+  name and line number lead a person back to it, and only at the shop.
+- **The parser's precision is unknown.** No real file exists yet, and no
+  parser either. Its reading is shown only as a hint, and its count is taken
+  only when the text says it with «шт»; but how often it misreads a line,
+  a photo's name or a line's number is unmeasured.
+- **Tables of numbers mean notes.** A count without «шт» is a bare number:
+  the person states it with a note (owner, 2026-10-08). Notebooks kept as
+  tables may have many such lines, and their review is slower for it. Not
+  measured with real notebooks.
+- **A size range written with a sign can pass for a split.** «42-44» read
+  by the parser as size 42 with a count of 44 passes the check of a split
+  the text shows (ADR-0014 §5). The person still taps, and sees the text and
+  the photo's line; nothing else catches it.
+- **The limit, and a warehouse larger than it.** A list takes at most 5 000
+  answers and 5 000 lines, and a warehouse takes one list, once. The owner
+  kept 5 000 on 2026-10-08: the shops first count their largest warehouse
+  roughly (pages × lines per page), and above 5 000 the limit is raised by
+  a separate change to the ledger before going live. The count is rough,
+  and a notebook line may name several sizes, each its own answer, so a
+  warehouse counted just under 5 000 may still not fit, unless the count
+  counts each size of such a line. Raising the limit needs the ledger changed first:
+  above about 6 500 answers its read of the reservations
+  (`inventory.repository.reserved_quantities`) fails with "stack depth
+  limit exceeded", whatever the limit is set to. 5 000 is about 23 % under
+  that ceiling.
+- **Measured on PostgreSQL 16 on the laptop, not on the server.** The
+  approval took 7.6 s at 5 000 answers on the local 16.2 cluster; the server
+  runs 17, on hardware not yet chosen (release checklist, row 16). Both the
+  timing and the ledger's ceiling may differ there. The client waits 60 s
+  for the approval, eight times the figure measured.
+- **The warehouse is held for the whole review,** even for days (owner,
+  2026-10-08). The shared warehouse sells only on paper meanwhile, and those
+  sales are typed after the approval. Nothing reminds anyone of a list left
+  waiting.
+- **Two lists at once from two stores.** The app offers no second list for
+  a warehouse whose list waits, but its check is not atomic: two people
+  starting lists for one warehouse at the same moment from the two stores
+  can make two. Only one can be approved; the other is rejected, and its
+  files are added to the first, its lines answered again.
+- **A shared list whose own store stops trading holds the warehouse.** The
+  list's opening movements name the store that started it (ADR-0005 §4),
+  and every command on the list, rejection included, needs that store
+  trading. If it is blocked or archived while the list waits, the list can
+  be neither approved nor rejected through either store, and the shared
+  warehouse waits for both stores until that store trades again. Through
+  the other store the server answers only 404, "Unknown store". Rare; put to
+  the owner (business rules, "how it is carried out", 8).
+- **A store that may sell at the shared warehouse but not receive there**
+  gets `OPENING_LIST_PENDING` at its till, which points to «Початкові
+  залишки», but its managers do not see the list there. In both seeds both
+  stores may receive, so this bites only after an access row is changed.
+- **A paused warehouse's list is seen from its own store only.** `can_receive`
+  through the other store needs the warehouse open.
+- **The Telegram file picker is unproven on a phone.** iOS opens Files;
+  Android depends on Telegram's WebView; a file received in a chat must
+  first be saved to the phone. The drill on an Android and an iPhone is
+  release checklist row 26; Telegram Desktop works meanwhile.
+- **The slow call has no journey.** Creating a list from a file, adding a
+  file and approving wait 60 s and their own timeout is not taken as the
+  server being down (ADR-0014 §16); this is reviewed in the code, not
+  proven by an E2E journey.
+- **A removed file's lines are kept as evidence,** with their text and
+  parse, and count nowhere. A list holds at most 10 000 rows with them, about
+  2–3 KB each, so backups grow with removed files too.
+- **The catalogue screens still show raw text** unguarded; only
+  «Початкові залишки» marks bidirectional and invisible characters.
+- **The edge's new check.** CI's `edge` job now sends 999 000 bytes and
+  expects the API's own refusal, and 1 000 001 bytes and expects 413, never
+  a 502, which the phone would read as an outage. Until that job has run, in
+  CI or on the local runner, the Caddyfile's limit against a real file part
+  is not verified.

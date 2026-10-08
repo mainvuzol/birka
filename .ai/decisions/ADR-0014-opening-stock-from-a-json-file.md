@@ -1,6 +1,8 @@
 # ADR-0014: Opening stock from a JSON file
 
-Status: Proposed (2026-10-08)
+Status: Accepted (2026-10-08). Built on `feat/json-stock-import`; see the
+[report](../project-memory/json-stock-import-report.md). Amended the same day
+with what the build found (§1, §4, §5, §7, §10, §13).
 Owner decisions: business-rules.md, "the shops' existing stock" (2026-10-08),
 with the answers to the design's questions the same day; "going live"
 (2026-10-01); "the first days" (2026-10-02).
@@ -68,9 +70,9 @@ accepted.
 
 | Key | Type | Rule |
 |---|---|---|
-| `$schema` | string | optional, ignored: editors add it |
+| `$schema` | string 1..2 000 | optional, ignored: editors add it |
 | `format` | `"birka.stock-list"` | required |
-| `version` | `1` | required; another version is refused by name |
+| `version` | `1` | required, written as an integer (`true` and `1.0` are refused); another version is refused by name |
 | `source` | string 1..300 | optional: which notebook, as people call it |
 | `counted_on` | string 1..40 | optional, free text, like a list's date today |
 | `price_kind` | `"sale"` or `"purchase"` | optional: the kind of every price in the file (owner: one notebook, one kind) |
@@ -87,7 +89,7 @@ accepted.
 | `model` | string 1..200 | optional: the model as read |
 | `colours` | array of 1..10 strings, each 1..60 | optional: each colour as written |
 | `sizes` | array of 1..10 strings, each 1..20 | optional: each size as written, when no count is written per size |
-| `size_counts` | array of 2..10 `{size, count}` | optional: each size as written with its own count (1..10 000). Never beside `sizes` |
+| `size_counts` | array of 1..10 `{size, count}` | optional: each size as written with its own count (1..10 000). One size with its count counts too («Лоран M-3»; owner, 2026-10-08). Never beside `sizes` |
 | `count` | integer 1..10 000 | optional: the line's written total, a single integer («3+2» is no count) |
 | `price` | string 1..40 | optional, as written. Never parsed |
 | `note` | string 1..200 | optional: the parser's word to the reviewer («закреслено», «нерозбірливо») |
@@ -116,14 +118,17 @@ accepted.
 today. A file put into the wrong warehouse's list is removed (§9).
 
 **The pydantic model `StockFileV1` is the format.** Parser authors get one
-package:
-- a description in Ukrainian with English keys;
+package, [`formats/birka-stock-list/`](../../formats/birka-stock-list/):
+- a description in English, with Ukrainian examples;
 - a JSON Schema generated from the model;
 - an example file;
-- a reference validator that checks what the schema cannot express (the
+- a reference validator, `backend/scripts/check_stock_file.py`, that reads a
+  file through the model and checks what the schema cannot express (the
   rules above, duplicate keys, integer literals, the byte bound).
 
-A test keeps the schema and the example equal to the model.
+A test (`tests/unit/test_stock_file_package.py`) keeps the schema byte for
+byte equal to the model's, the example valid and each of its lines what the
+description says, and the validator in agreement with the server.
 
 ### 2. A list is filled by parts
 
@@ -185,9 +190,12 @@ doubt, with one narrow exception (§5).
 | no count | given | `UNKNOWN_QUANTITY`, no total, reason `FILE_COUNT_HINT` (owner: a number without «шт» is not a count by itself) |
 
 Then:
-- **Several options.** A line whose file lists several sizes or colours,
-  or whose text Birka reads as several, is `UNKNOWN_DISTRIBUTION`. Its total
-  is kept if there is one: the `Лоран S M L 3 шт` rule.
+- **Several options.** A line whose file lists several sizes or colours
+  (two or more `sizes`, `colours` or `size_counts`), or whose text Birka
+  reads as several, is `UNKNOWN_DISTRIBUTION`. Its total is kept if there is
+  one: the `Лоран S M L 3 шт` rule. A single size with its count whose text
+  does not show it so gets `FILE_SPLIT_NOT_IN_TEXT` and keeps Birka's own
+  reading.
 - **A note goes to review.** A line with a `note` gets `FILE_NOTE`.
 - **Status.** Any file reason, like any parser reason, makes the line
   `NEEDS_REVIEW`.
@@ -230,17 +238,18 @@ these hold:
    Birka read a count with its unit, it is exactly one, equals the sum, and
    is unsure of nothing.
 5. **One colour, no slash.** The line names at most one colour, in the file
-   and in Birka's reading, and Birka found no slash options. A slash is
-   contextual (constitution §21).
+   and in Birka's reading, and Birka found no slash options, nor flagged a
+   lone «/» for review. A slash is contextual (constitution §21).
 
 When it holds, the row keeps `shown_split`. With two or more sizes it is
 `UNKNOWN_DISTRIBUTION` with the sum as its total; with one size it stays as
-Birka read it, so `STATED` is never offered on the file's word.
+Birka read it, so `STATED` is never offered on the file's word. When it does
+not, the file's counts are a hint, with reason `FILE_SPLIT_NOT_IN_TEXT`, and
+the line is answered as any split is: with a note.
+
 **A size range written with a sign** (`42-44`) can pass this check if the
 parser misreads it as size 42 with a count of 44. The person still taps, and
-sees the text and the photo reference; the risk register names it. When it does not, the file's counts are a hint,
-with reason `FILE_SPLIT_NOT_IN_TEXT`, and the line is answered as any split
-is: with a note.
+sees the text and the photo reference; the risk register names it.
 
 Hand-typed lines carry no file reading, so they never have a shown split.
 
@@ -309,8 +318,16 @@ own store (`acting_store_id`).
 A child store's own warehouse is reached by that store alone, so its list
 stays its own (Q5).
 
+**A paused warehouse's list is seen from its own store only.** `can_receive`
+through another store also needs the warehouse open, so while it is paused
+the other store neither sees the list nor acts on it. Its own store still
+reads it and may reject it, under reach (ADR-0005 §9).
+
 **What does not change.**
-- The list's `acting_store_id` is still the store that created it.
+- The list's `acting_store_id` is still the store that created it. Lines
+  added through another store name that store on their `RawInput`, and the
+  audit entries of adding, removing, approving and rejecting name the store
+  acted through (`via_store_id`).
 - The opening movements' acting store is still `acting_store_id`, as
   ADR-0005 §4 writes them.
 - A command still needs that store trading.
@@ -383,7 +400,8 @@ names its first part.
 
 ### 9. Removing a part
 
-**The call.** `POST /snapshots/{id}/parts/{part_id}/remove`, no body.
+**The call.** `POST /snapshots/{id}/parts/{part_id}/remove`, with no body
+or `{}`.
 - **Who.** The same rights as adding (§7, §12): any owner or manager who
   holds them, not only whoever added the file. No reason (owner).
 - **Which part.** It is found by its id and its list. Another list's, or
@@ -429,22 +447,25 @@ as a new part with new lines, answered anew (owner).
 | `MAX_LINE_CHARS` | 500 | 500 |
 | `MAX_PART_TEXT_CHARS` (was `MAX_LIST_CHARS`) | 100 000 per import | 100 000 of `text` per part |
 | `MAX_PART_BYTES` | none | 950 000, a file part as compact UTF-8 JSON |
-| `MAX_LIST_ALLOCATIONS` | 5 000 | **set by measurement**: the largest of 2 000, 5 000 and 10 000 that passes |
-| `MAX_LIST_LINES` | 1 000 | `MAX_LIST_ALLOCATIONS // 2`, lines not removed |
-| `MAX_LIST_ROWS` | none | `3 × MAX_LIST_LINES`, removed lines included; bounds `line_no` |
+| `MAX_LIST_ALLOCATIONS` | 5 000 | **5 000, measured**: the largest of 2 000, 5 000 and 10 000 that passes |
+| `MAX_LIST_LINES` | 1 000 | 5 000: `MAX_LIST_ALLOCATIONS`, lines not removed |
+| `MAX_LIST_ROWS` | none | 10 000: `2 × MAX_LIST_LINES`, removed lines included; bounds `line_no` |
 | `MAX_LIST_PARTS` | none | 1 000, removed parts included |
 | `MAX_ALLOCATIONS` (per line) | 50 | 50 |
 
-**Two answers per line.** Lines are capped at half the allocations. A line
-naming several sizes takes one allocation per size, and a list whose last
-lines cannot be answered can only be rejected. The summary shows both
-headrooms («рядків 1 840 з 2 500 · відповідей 3 120 з 5 000»).
+**As many lines as answers.** The owner heard the limit as 5 000 lines of
+one size each (2026-10-08), and the measurement approved exactly that, so
+lines are capped at the allocations. A line naming several sizes takes one
+allocation per size, so a list full of such lines can run out of answers
+before its last line is answered, and then can only be rejected or lose a
+file. The shops' count counts each size of such a line, and the summary
+shows both headrooms («рядків 1 840 з 5 000 · відповідей 3 120 з 5 000»).
 
 **The approval is the bound.** It writes the whole list in one transaction
 under the warehouse's exclusive lock (ADR-0005 §4, §5). It makes about five
 or six statements per allocation: two per stock key in `lock_stock`, two per
-movement, and one per key to reconcile. The 5 000 that holds today was never
-measured.
+movement, and one per key to reconcile. The 5 000 that held before was never
+measured; it is now (below).
 
 **The measurement.** A script approves lists of 2 000, 5 000 and 10 000
 allocations, three runs each, on the local PostgreSQL test cluster. Each
@@ -453,14 +474,51 @@ writes its evidence to `output/verification/<date>-json-import-approval/`.
 
 **A size passes** when its slowest approval is at most 10 s and no
 statement takes over 5 s. The client then waits 60 s (§16), six times that.
-- `MAX_LIST_ALLOCATIONS` is the largest size that passes. Until it is run,
-  the constant stays 5 000 and the lines 2 500.
+- `MAX_LIST_ALLOCATIONS` is the largest size that passes.
 - **If 2 000 fails,** today's limit is already too high. The work stops,
   and the opening path is batched in `inventory` under its own review
   before any limit is set.
 - **Never in parts, never in the background.** The approval is never split
   into transactions: it applies all or nothing. It is never made a
   background job: that is new infrastructure (constitution §14).
+
+**Measured on 2026-10-08**
+([evidence](../../output/verification/2026-10-08-json-import-approval/README.md)),
+on the local PostgreSQL 16.2 cluster (Apple M5, `fsync` on), through the app
+in process, each allocation its own stock key:
+
+| Answers | Approvals, 3 runs | Statements | Slowest statement | Verdict |
+|---|---|---|---|---|
+| 2 000 | 2.76 s, 2.70 s, 2.68 s | 14 042 | 0.073 s | passes |
+| 5 000 | 7.07 s, 7.62 s, 7.63 s | 35 045 | 0.150 s | passes |
+| 10 000 | refused: HTTP 500 after 7.30 s | — | 0.090 s | fails |
+
+- **`MAX_LIST_ALLOCATIONS` stays 5 000**, and so does `MAX_LIST_LINES`;
+  `MAX_LIST_ROWS` is 10 000 and `MAX_LIST_PARTS` 1 000. A unit test pins
+  them. The pages were read at 6 000 rows; the rows' bound beyond that only
+  stops files removed and added again without end.
+- **10 000 cannot be approved at any speed.** The ledger reads every
+  allocation's reservation in one statement
+  (`inventory.repository.reserved_quantities`, a row-value `IN` of one
+  `(location, variant, size)` per key). PostgreSQL refuses it as too
+  complex, "stack depth limit exceeded" (`max_stack_depth` 2048kB): on the
+  same cluster it works at 6 523 keys and fails at 6 562. 5 000 is about
+  23 % under that ceiling. Raising the cap needs that read batched, or
+  `= ANY(array)`, in `inventory` first, under its own review.
+- **Everything else passes with room.** Adding a 1 000-line file to a full
+  list takes 0.25–0.33 s and removing it about 0.05 s; every page reads in
+  at most 0.118 s; the approval's reply is 1 108 bytes at every size.
+- **PostgreSQL 16 here, 17 on the server,** on hardware not yet chosen. The
+  ceiling may sit elsewhere on 17, and the timings differ; the 60 s the
+  client waits (§16) is eight times the slowest approval measured.
+
+**The owner kept 5 000** (2026-10-08, after hearing the measurement). The
+limit stays at 5 000 answers per list in this change. The shops first count
+the notebooks of their largest warehouse roughly (pages × lines per page);
+if it comes out above 5 000, the limit is raised by a separate change to the
+ledger (the approval and its reading of the reservations), before going
+live. The count counts each size of a line that names several, since each
+takes an answer.
 
 **A hard ceiling.** `validate_lot_references` binds one parameter per lot,
 and asyncpg allows 32 767. A cap above about 30 000 needs `= ANY(array)`.
@@ -566,8 +624,19 @@ through (§7).
 docstring prescribes.
 
 **A file's 422** keeps FastAPI's shape. Under `file`:
-- every refusal carries a stable `type` and its line (`ctx.line`);
-- the `input` echo is dropped, so a bad file is not sent back.
+- every refusal carries a stable `type`; inside `lines` it also carries its
+  line, 1-based, as `ctx.line`, pydantic's own refusals included. A file
+  over the byte bound (`stock_file_too_large`, `ctx {limit, bytes}`) and a
+  refusal of a top-level key name no line;
+- the `input` echo and `url` are dropped, so a bad file is not sent back.
+
+Reading a file's text (`load_stock_file_text`, for the reference validator
+and the tests) adds `stock_file_duplicate_key` (`ctx.key`),
+`stock_file_not_finite` (`NaN`, `Infinity`; `ctx.constant`) and
+`json_invalid`. A lone surrogate is pydantic's `string_unicode`.
+
+**`GET /snapshots/{id}/application`** on a list not applied answers an empty
+page.
 
 ### 14. The database's guarantees
 
@@ -777,8 +846,10 @@ every page.
   review is slower for it, and no count is assumed.
 - **A warehouse larger than the cap cannot be taken in at all.** One list
   opens a warehouse, once (Q1), and the cap is what the approval can do in
-  one transaction. The owner does not yet know how many lines the largest
-  warehouse holds.
+  one transaction: 5 000 lines and 5 000 answers. Above about 6 500 answers
+  the ledger's own reservation read fails (§10). So the shops count their
+  largest warehouse first, and above 5 000 the limit is raised by a change
+  to the ledger before going live (owner, 2026-10-08).
 - **The warehouse waits for the whole review,** possibly days. The shared
   warehouse sells on paper meanwhile, and those sales are typed after the
   approval (owner).
@@ -786,8 +857,13 @@ every page.
   at the same moment from two stores. Only one can be approved. The other
   is rejected, and its lines are answered again in the first, by adding its
   file there.
-- **A line is about 2–3 KB of evidence.** A list at 5 000 lines is about
-  15 MB.
+- **A shared list whose own store stops trading holds the warehouse.** Every
+  command on the list, rejection included, needs that store trading (§7).
+  While it is blocked or archived, the list is neither approved nor
+  rejected through either store, and the warehouse waits for both.
+- **A line is about 2–3 KB of evidence.** A list at its 5 000 lines is
+  about 10–15 MB, and up to about 30 MB with its 10 000 rows, removed files
+  included.
 - **The Telegram file picker is unproven on a phone.** iOS opens Files;
   Android depends on Telegram's WebView; a file received in a chat must
   first be saved to the phone. A release drill tries both, and Telegram

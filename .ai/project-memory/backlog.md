@@ -1,9 +1,10 @@
 # What to build next
 
 Work the owner asked for, or that waits on the owner, and is not built yet.
-Of the work here, only the JSON stock import blocks the release: the owner
-chose it as the way in on 2026-10-08 (row 15 of the
-[release checklist](release-checklist.md)).
+None of it blocks the release ([release checklist](release-checklist.md)),
+unless the shops' count of their largest warehouse comes out above 5 000:
+then raising the opening list's limit (below) comes before going live
+(owner, 2026-10-08).
 Before anything here is built, the owner answers the open questions under it.
 Nothing is invented in the meantime.
 
@@ -12,18 +13,20 @@ What is built leaves this list for its report. Where an order goes is built
 shop ([report](borrowed-goods-report.md)) and the sales report the owner
 chose next ([report](sales-report-report.md)). Settling money between the
 network's stores left it too: the owner decided on 2026-10-01 that stores of
-one network do not settle with each other.
+one network do not settle with each other. The JSON stock import, which
+blocked the release, is built ([report](json-stock-import-report.md)).
 
-## The JSON stock import
+## Raising the opening list's limit above 5 000 answers
 
-Existing stock from photos of the notebooks: a separate parser turns them
-into JSON, which the app imports (owner, 2026-10-01). The owner chose this
-way on 2026-10-08 and answered what it needs (business rules, "the shops'
-existing stock"): Birka defines the JSON's format; a line names the model,
-size and count, sometimes a colour and a price, which is only shown; every
-line is reviewed by a person; several files fill one warehouse's list; the
-photos stay with the shops; the file is uploaded in the app. Nothing is
-built yet.
+A warehouse's list takes at most 5 000 answers and 5 000 lines, measured
+on 2026-10-08, and a warehouse takes one list, once (ADR-0014 §10). The
+owner kept that limit the same day: the shops first count the notebooks of
+their largest warehouse roughly (pages × lines per page), and if it comes
+out above 5 000, the limit is raised by a separate change to the ledger
+before going live. **Waiting on the shops' count.** The change: the
+approval and its read of the reservations, which fails above about 6 500
+answers, batched in `inventory` under their own review, and the approval
+measured again. Nothing is built for it.
 
 ## An offline mode, judged on real outages
 

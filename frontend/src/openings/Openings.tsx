@@ -1,17 +1,33 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, SlowAnswer, api, errorText } from "@/shared/api";
 import type { Location, Store } from "@/orders/types";
 import { CatalogPicker } from "@/inventory/CatalogPicker";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
+import { visible } from "@/shared/visible";
+import { FileChooser } from "./FileChooser";
+import { fileProblemTexts } from "./fileErrors";
+import { AddFile, AddLines, PartsSection, partName } from "./Parts";
+import { MAX_BODY_BYTES, TOO_LARGE, bodyBytes } from "./stockFile";
+import type { StockFileRead } from "./stockFile";
 import {
   basisLabels,
+  fileReasonLabels,
   lineStatusLabels,
   listStatusLabels,
+  priceKindLabels,
+  sizesWithCounts,
   sourceQuantity,
 } from "./types";
-import type { Basis, LineStatus, ListLine, StockList } from "./types";
+import type {
+  Basis,
+  LineStatus,
+  ListLine,
+  Reading,
+  StockList,
+  StockPart,
+} from "./types";
 
 /**
  * «Початкові залишки»: the goods already in a shop, entered as a list.
@@ -21,10 +37,21 @@ import type { Basis, LineStatus, ListLine, StockList } from "./types";
  * its numbers came from, and an owner approves the whole list into the
  * warehouse's opening balance — once, into a warehouse with no history.
  *
+ * A list is typed, or filled from a parser's files (owner decision,
+ * 2026-10-08; ADR-0014): the shops photograph their notebooks, a parser reads
+ * them into Birka's format, and each file joins the warehouse's one list.
+ * The parser's reading is shown beside each line as a hint, never as the
+ * answer. A shared warehouse's list belongs to both stores, so every call on
+ * a list names the store acted through (`store_id`).
+ *
  * Every command here is safe to send twice — the list by its `command_id`, a
  * line's answer by the line, an approval by the review revision it approves —
  * so no journal is kept: a lost answer is resent, or the list read again. The
- * list being typed is kept on this phone until the server has it.
+ * list being typed is kept on this phone until the server has it; a file's
+ * name and fingerprint are, never its content.
+ *
+ * Every text from a file, and every line of a list, is shown through
+ * `visible()`: what reorders or hides characters is shown as a mark.
  */
 export function Openings({
   store,
@@ -90,16 +117,17 @@ export function Openings({
       </div>
       <p className="hint">
         Товар, що вже лежить у магазині, вноситься списком — рядок за рядком, як
-        у зошиті. Кожен рядок розбирає людина, потім власник затверджує список,
-        і він стає початковим залишком складу. Склад має бути без жодного руху
-        товару: поки список чекає рішення, на такому складі нічого не приймають,
-        не продають і не виправляють.
+        у зошиті: текстом або файлом від парсера. Кожен рядок розбирає людина,
+        потім власник затверджує список, і він стає початковим залишком складу.
+        Склад має бути без жодного руху товару: поки список чекає рішення, на
+        такому складі нічого не приймають, не продають і не виправляють.
       </p>
       {canImport &&
         (creating ? (
           <NewList
             store={store}
             token={token}
+            scopeKey={scopeKey}
             locations={(locations.data ?? []).filter(
               (l) => l.is_active && l.can_receive && !l.damaged_returns,
             )}
@@ -108,6 +136,12 @@ export function Openings({
               setCreating(false);
               void lists.refetch().then(() => {
                 setOpenId(list.snapshot_id);
+              });
+            }}
+            openList={(id) => {
+              setCreating(false);
+              void lists.refetch().then(() => {
+                setOpenId(id);
               });
             }}
             cancel={() => {
@@ -138,10 +172,12 @@ export function Openings({
             aria-label={`Список ${list.source_document_ref ?? ""}`.trim()}
           >
             <strong>
-              {list.source_document_ref ?? "Список без назви"} · склад «
-              {warehouse(list.location_id)}»
+              {listName(list)} · склад «{warehouse(list.location_id)}»
             </strong>
             <span className="badge">{listStatusLabels[list.status]}</span>
+            {list.store_id !== store.id && (
+              <small>Веде магазин «{list.store_name ?? "—"}»</small>
+            )}
             <small>
               Рядків: {list.summary.lines} · розібрано{" "}
               {list.summary.resolved + list.summary.skipped} · одиниць{" "}
@@ -162,32 +198,54 @@ export function Openings({
   );
 }
 
+/** A list's name, as the shop called it; guarded, since a file may name it. */
+function listName(list: StockList): string {
+  return list.source_document_ref === null
+    ? "Список без назви"
+    : visible(list.source_document_ref);
+}
+
 interface Draft {
   command_id: string;
   location_id: string;
   source: string;
   captured: string;
   text: string;
+  /** Typed in, or a parser's file. */
+  mode: "text" | "file";
+  /** The file last picked, by name and the sha256 of its bytes — never its
+   * content: picked again after a lost answer, it is the same command. */
+  file_name: string | null;
+  file_sha256: string | null;
 }
 
 function draftKey(store: Store): string {
   return `birka:stock-list-draft:${store.id}`;
 }
 
-function loadDraft(store: Store): Draft {
-  try {
-    const stored = window.localStorage.getItem(draftKey(store));
-    if (stored) return JSON.parse(stored) as Draft;
-  } catch {
-    /* A fresh list: the server has not seen this one. */
-  }
+function freshDraft(): Draft {
   return {
     command_id: crypto.randomUUID(),
     location_id: "",
     source: "",
     captured: "",
     text: "",
+    mode: "text",
+    file_name: null,
+    file_sha256: null,
   };
+}
+
+function loadDraft(store: Store): Draft {
+  try {
+    const stored = window.localStorage.getItem(draftKey(store));
+    // A draft kept before files were taken has no mode: it was typed.
+    if (stored)
+      return { ...freshDraft(), ...(JSON.parse(stored) as Partial<Draft>) };
+  } catch {
+    /* A fresh list: the server has not seen this one. */
+  }
+  return freshDraft();
 }
 
 function saveDraft(store: Store, draft: Draft | null): void {
@@ -205,28 +263,59 @@ function listLines(text: string): string[] {
   return text.split("\n").filter((line) => line.trim() !== "");
 }
 
+/** A file's own name for itself, taken as the list's if it fits. */
+function fits(value: string | null, limit: number): value is string {
+  return value !== null && value.trim() !== "" && value.length <= limit;
+}
+
 function NewList({
   store,
   token,
+  scopeKey,
   locations,
   blocked,
   done,
+  openList,
   cancel,
 }: {
   store: Store;
   token: string;
+  scopeKey: string;
   locations: Location[];
   blocked: boolean;
   done: (list: StockList) => void;
+  /** Open a list already waiting at the chosen warehouse. */
+  openList: (id: string) => void;
   cancel: () => void;
 }): JSX.Element {
   const [draft, setDraftState] = useState<Draft>(() => loadDraft(store));
+  const [read, setRead] = useState<StockFileRead | null>(null);
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
   const lines = listLines(draft.text);
   const tooLong = lines.find((line) => line.length > 500);
-  const ready =
-    draft.location_id !== "" && lines.length > 0 && !tooLong && !busy;
+  const warehouse =
+    locations.find((l) => l.id === draft.location_id)?.name ?? null;
+  // The owner's rule (2026-10-08): a warehouse whose list waits gets no
+  // second one from the app — its files go into the list that waits. The
+  // list this very draft created, its answer lost, is no second list.
+  const waiting = useQuery({
+    queryKey: ["stock-list-waiting", scopeKey, store.id, draft.location_id],
+    queryFn: () =>
+      api<{ items: StockList[] }>(
+        `/snapshots?store_id=${store.id}&location_id=${draft.location_id}&status=IN_REVIEW&limit=20`,
+        token,
+      ),
+    enabled: draft.location_id !== "",
+    retry: false,
+  });
+  const other = waiting.data?.items.find(
+    (list) => list.command_id !== draft.command_id,
+  );
+  const checked = waiting.isSuccess && other === undefined;
+  const content =
+    draft.mode === "text" ? lines.length > 0 && !tooLong : read?.ok === true;
+  const ready = draft.location_id !== "" && checked && content && !busy;
 
   function setDraft(change: Partial<Draft>): void {
     const next = { ...draft, ...change };
@@ -234,27 +323,82 @@ function NewList({
     saveDraft(store, next);
   }
 
+  function picked(next: StockFileRead): void {
+    setRead(next);
+    setProblems([]);
+    if (!next.ok) return;
+    // The same file again, after an answer that was lost: the same command.
+    const same =
+      next.sha256 !== null &&
+      next.sha256 === draft.file_sha256 &&
+      next.name === draft.file_name;
+    // The file's own name and date fill the list's, unless the person typed
+    // their own; a file picked instead of another replaces what it filled.
+    const filled = read?.ok ? read.summary : null;
+    const { source, counted_on } = next.summary;
+    setDraft({
+      command_id: same ? draft.command_id : crypto.randomUUID(),
+      file_name: next.name,
+      file_sha256: next.sha256,
+      ...((draft.source.trim() === "" || draft.source === filled?.source) &&
+      fits(source, 300)
+        ? { source }
+        : {}),
+      ...((draft.captured.trim() === "" ||
+        draft.captured === filled?.counted_on) &&
+      fits(counted_on, 40)
+        ? { captured: counted_on }
+        : {}),
+    });
+  }
+
   async function send(): Promise<void> {
+    const envelope = {
+      command_id: draft.command_id,
+      store_id: store.id,
+      location_id: draft.location_id,
+      source_document_ref: draft.source.trim() || null,
+      captured_at: draft.captured.trim() || null,
+    };
+    const body =
+      draft.mode === "file" && read?.ok
+        ? { ...envelope, file: read.file, file_name: read.name }
+        : { ...envelope, lines };
+    if (draft.mode === "file" && bodyBytes(body) > MAX_BODY_BYTES) {
+      setProblems([TOO_LARGE]);
+      return;
+    }
     setBusy(true);
-    setProblem(null);
+    setProblems([]);
     try {
-      const list = await api<StockList>("/snapshots", token, {
-        command_id: draft.command_id,
-        store_id: store.id,
-        location_id: draft.location_id,
-        source_document_ref: draft.source.trim() || null,
-        captured_at: draft.captured.trim() || null,
-        lines,
-      });
+      const list = await api<StockList>(
+        "/snapshots",
+        token,
+        body,
+        undefined,
+        "POST",
+        // A file of a thousand lines may take longer than 20 s to take in.
+        { slow: draft.mode === "file" },
+      );
       saveDraft(store, null);
       done(list);
     } catch (error) {
-      setProblem(
-        !(error instanceof ApiError)
-          ? "Невідомо, чи збережено список. Натисніть ще раз — той самий список не збережеться двічі."
-          : error.code === "IDEMPOTENCY_CONFLICT"
-            ? "Цей список уже збережено, але в іншому вигляді. Знайдіть його в переліку, або почніть новий."
-            : errorText(error),
+      const refused =
+        error instanceof ApiError ? fileProblemTexts(error.validation) : [];
+      setProblems(
+        error instanceof SlowAnswer
+          ? [errorText(error)]
+          : !(error instanceof ApiError)
+            ? [
+                "Невідомо, чи збережено список. Натисніть ще раз — той самий список не збережеться двічі.",
+              ]
+            : error.code === "IDEMPOTENCY_CONFLICT"
+              ? [
+                  "Цей список уже збережено, але в іншому вигляді. Знайдіть його в переліку, або почніть новий.",
+                ]
+              : refused.length > 0
+                ? refused
+                : [errorText(error)],
       );
     } finally {
       setBusy(false);
@@ -287,6 +431,81 @@ function NewList({
           ))}
         </select>
       </label>
+      {draft.location_id !== "" &&
+        (waiting.isPending ? (
+          <p role="status">Перевіряємо, чи на складі не чекає список…</p>
+        ) : waiting.error ? (
+          <div role="alert">
+            <p>{errorText(waiting.error)}</p>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                void waiting.refetch();
+              }}
+            >
+              Перевірити ще раз
+            </button>
+          </div>
+        ) : (
+          other && (
+            <div className="notice" role="status">
+              <p>
+                {`На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${other.store_name ?? "—"}»). Другий список для нього не створюють — додайте файл до наявного.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  openList(other.snapshot_id);
+                }}
+              >
+                Відкрити список
+              </button>
+            </div>
+          )
+        ))}
+      <fieldset>
+        <legend>Як внести список</legend>
+        <label className="check">
+          <input
+            type="radio"
+            name="stock-list-mode"
+            checked={draft.mode === "text"}
+            onChange={() => {
+              setDraft({ mode: "text" });
+              setProblems([]);
+            }}
+          />
+          Вставити текст
+        </label>
+        <label className="check">
+          <input
+            type="radio"
+            name="stock-list-mode"
+            checked={draft.mode === "file"}
+            onChange={() => {
+              setDraft({ mode: "file" });
+              setProblems([]);
+            }}
+          />
+          Завантажити файл
+        </label>
+      </fieldset>
+      {draft.mode === "file" && (
+        <>
+          <FileChooser
+            read={read}
+            onRead={picked}
+            warehouse={warehouse}
+            disabled={busy}
+          />
+          {read === null && draft.file_name !== null && (
+            <p className="hint">
+              {`Раніше обрано файл «${visible(draft.file_name)}». Оберіть його ще раз — той самий файл не збережеться двічі.`}
+            </p>
+          )}
+        </>
+      )}
       <label>
         Звідки список (необов’язково)
         <input
@@ -309,27 +528,45 @@ function NewList({
           }}
         />
       </label>
-      <label>
-        Рядки списку — кожен товар з нового рядка, як написано
-        <textarea
-          value={draft.text}
-          rows={10}
-          onChange={(event) => {
-            setDraft({ text: event.target.value });
-          }}
-        />
-      </label>
-      <p className="hint">
-        Рядків: {lines.length}. Порожні рядки не зберігаються.
-      </p>
-      {tooLong && (
-        <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
+      {draft.mode === "text" && (
+        <>
+          <label>
+            Рядки списку — кожен товар з нового рядка, як написано
+            <textarea
+              value={draft.text}
+              rows={10}
+              onChange={(event) => {
+                setDraft({ text: event.target.value });
+              }}
+            />
+          </label>
+          <p className="hint">
+            Рядків: {lines.length}. Порожні рядки не зберігаються.
+          </p>
+          {tooLong && (
+            <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
+          )}
+        </>
       )}
-      {problem && <p role="alert">{problem}</p>}
+      {problems.length === 1 ? (
+        <p role="alert">{visible(problems[0] ?? "")}</p>
+      ) : (
+        problems.length > 1 && (
+          <div role="alert">
+            <ul>
+              {problems.map((problem, index) => (
+                <li key={index}>{visible(problem)}</li>
+              ))}
+            </ul>
+          </div>
+        )
+      )}
       <div className="actions">
-        <button type="submit" disabled={!ready || blocked}>
-          Зберегти список
-        </button>
+        {!other && (
+          <button type="submit" disabled={!ready || blocked}>
+            Зберегти список
+          </button>
+        )}
         <button
           type="button"
           className="quiet"
@@ -338,14 +575,14 @@ function NewList({
         >
           Закрити
         </button>
-        {problem && (
+        {problems.length > 0 && (
           <button
             type="button"
             className="quiet"
             disabled={busy}
             onClick={() => {
               setDraft({ command_id: crypto.randomUUID() });
-              setProblem(null);
+              setProblems([]);
             }}
           >
             Почати як новий список
@@ -389,13 +626,32 @@ function ListView({
   const [filter, setFilter] = useState<LineStatus | null>(
     list.summary.needs_review > 0 ? "NEEDS_REVIEW" : "PENDING",
   );
+  // One file's lines only, or every file's.
+  const [partFilter, setPartFilter] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
+  const [adding, setAdding] = useState<"file" | "lines" | null>(null);
   const lines = useQuery({
-    queryKey: ["stock-list-lines", scopeKey, list.snapshot_id, filter, offset],
+    queryKey: [
+      "stock-list-lines",
+      scopeKey,
+      list.snapshot_id,
+      filter,
+      partFilter,
+      offset,
+    ],
     queryFn: () =>
       api<{ items: ListLine[]; has_more: boolean }>(
-        `/snapshots/${list.snapshot_id}/lines?limit=${String(linesPerPage)}&offset=${String(offset)}${filter ? `&status=${filter}` : ""}`,
+        `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(offset)}${filter ? `&status=${filter}` : ""}${partFilter ? `&part_id=${partFilter}` : ""}`,
+        token,
+      ),
+    retry: false,
+  });
+  const parts = useQuery({
+    queryKey: ["stock-list-parts", scopeKey, list.snapshot_id],
+    queryFn: () =>
+      api<{ items: StockPart[] }>(
+        `/snapshots/${list.snapshot_id}/parts?store_id=${store.id}`,
         token,
       ),
     retry: false,
@@ -407,33 +663,56 @@ function ListView({
     enabled: canPick && list.status === "IN_REVIEW",
     retry: false,
   });
+  const allParts = parts.data?.items ?? [];
+  const editable = list.status === "IN_REVIEW" && canImport;
+  const statusFilters: { status: LineStatus | null; label: string }[] =
+    list.summary.parts_removed > 0
+      ? [...lineFilters, { status: "REMOVED", label: "Прибрані" }]
+      : lineFilters;
 
   async function refresh(): Promise<void> {
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["stock-lists"] }),
       cache.invalidateQueries({ queryKey: ["stock-list-lines"] }),
+      cache.invalidateQueries({ queryKey: ["stock-list-parts"] }),
       cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
     ]);
+  }
+
+  function showPart(id: string | null): void {
+    setPartFilter(id);
+    // A file's lines, all of them: a removed file's are only «Прибрано».
+    if (id !== null) setFilter(null);
+    setOffset(0);
+    setEditing(null);
   }
 
   return (
     <section>
       <div className="toolbar">
-        <h2>{list.source_document_ref ?? "Список без назви"}</h2>
+        <h2>{listName(list)}</h2>
         <button className="quiet" onClick={close}>
           До списків
         </button>
       </div>
       <p>
         Склад «{warehouse}» · {listStatusLabels[list.status]}
-        {list.captured_at ? ` · перелічено ${list.captured_at}` : ""}
+        {list.captured_at ? ` · перелічено ${visible(list.captured_at)}` : ""}
       </p>
+      {list.store_id !== store.id && (
+        <p className="hint">Веде магазин «{list.store_name ?? "—"}»</p>
+      )}
       <p className="hint">
         Рядків: {list.summary.lines} · розібрано {list.summary.resolved} · не
         товар {list.summary.skipped} · чекають{" "}
         {list.summary.pending + list.summary.needs_review} · одиниць{" "}
         {list.summary.units}
       </p>
+      {list.status === "IN_REVIEW" && (
+        <p className="hint">
+          {`Місце у списку: рядків ${String(list.summary.lines)} з ${String(list.summary.limits.lines)} · відповідей ${String(list.summary.allocations)} з ${String(list.summary.limits.allocations)}`}
+        </p>
+      )}
       {list.status === "APPLIED" && (
         <p role="status">
           Затверджено: {list.application?.units ?? list.summary.units} од. стали
@@ -456,6 +735,7 @@ function ListView({
       {list.status === "IN_REVIEW" && canApprove && (
         <Approval
           list={list}
+          store={store}
           token={token}
           warehouse={warehouse}
           blocked={blocked}
@@ -467,8 +747,81 @@ function ListView({
           Щоб розбирати рядки, потрібне право приймати товар у цьому магазині.
         </p>
       )}
+      {parts.error ? (
+        <p role="alert">{errorText(parts.error)}</p>
+      ) : (
+        // A list typed in one go is one part: nothing to tell apart.
+        (allParts.length > 1 || allParts[0]?.kind === "FILE") && (
+          <PartsSection
+            list={list}
+            store={store}
+            token={token}
+            parts={allParts}
+            editable={editable}
+            blocked={blocked || editing !== null}
+            show={(part) => {
+              showPart(part.part_id);
+            }}
+            refresh={refresh}
+          />
+        )
+      )}
+      {editable &&
+        (adding === "file" ? (
+          <AddFile
+            list={list}
+            store={store}
+            token={token}
+            warehouse={warehouse}
+            blocked={blocked}
+            done={async () => {
+              setAdding(null);
+              await refresh();
+            }}
+            refresh={refresh}
+            cancel={() => {
+              setAdding(null);
+            }}
+          />
+        ) : adding === "lines" ? (
+          <AddLines
+            list={list}
+            store={store}
+            token={token}
+            blocked={blocked}
+            done={async () => {
+              setAdding(null);
+              await refresh();
+            }}
+            refresh={refresh}
+            cancel={() => {
+              setAdding(null);
+            }}
+          />
+        ) : (
+          <div className="actions">
+            <button
+              className="quiet"
+              disabled={blocked}
+              onClick={() => {
+                setAdding("file");
+              }}
+            >
+              Додати файл
+            </button>
+            <button
+              className="quiet"
+              disabled={blocked}
+              onClick={() => {
+                setAdding("lines");
+              }}
+            >
+              Додати рядки вручну
+            </button>
+          </div>
+        ))}
       <nav aria-label="Рядки списку">
-        {lineFilters.map(({ status, label }) => (
+        {statusFilters.map(({ status, label }) => (
           <button
             key={label}
             className={filter === status ? "active" : "quiet"}
@@ -482,6 +835,24 @@ function ListView({
           </button>
         ))}
       </nav>
+      {allParts.length > 1 && (
+        <label>
+          Файл
+          <select
+            value={partFilter ?? ""}
+            onChange={(event) => {
+              showPart(event.target.value === "" ? null : event.target.value);
+            }}
+          >
+            <option value="">Усі файли</option>
+            {allParts.map((part) => (
+              <option key={part.part_id} value={part.part_id}>
+                {`${String(part.part_no)}. ${partName(part)}${part.removed_at === null ? "" : " (прибрано)"}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {lines.isPending ? (
         <p role="status">Завантажуємо рядки…</p>
       ) : lines.error ? (
@@ -500,6 +871,7 @@ function ListView({
                 token={token}
                 scopeKey={scopeKey}
                 sizes={sizes.data ?? []}
+                listParts={allParts}
                 blocked={blocked}
                 done={() => {
                   setEditing(null);
@@ -513,8 +885,12 @@ function ListView({
               <LineCard
                 key={line.line_no}
                 line={line}
+                parts={allParts}
                 answer={
-                  list.status === "IN_REVIEW" && canImport && canPick
+                  list.status === "IN_REVIEW" &&
+                  canImport &&
+                  canPick &&
+                  line.status !== "REMOVED"
                     ? () => {
                         setEditing(line.line_no);
                       }
@@ -554,12 +930,81 @@ function sizeText(code: string | null): string {
   return code === null || code === "UNKNOWN" ? "розмір невідомий" : code;
 }
 
+/** «Лоран · шоколад · M × 1, L × 2»: what the parser read, field by field. */
+function readingText(reading: Reading): string {
+  const sizes = reading.sizes
+    ? reading.sizes.join(", ")
+    : reading.size_counts
+      ? sizesWithCounts(reading.size_counts)
+      : null;
+  return [reading.model, reading.colours?.join(", ") ?? null, sizes]
+    .filter((part): part is string => part !== null && part !== "")
+    .map(visible)
+    .join(" · ");
+}
+
+/**
+ * Where a line from a file was written, and what the parser read of it: a
+ * hint beside the line, never its answer (ADR-0014 §6). Every string through
+ * `visible()`. Shown on the line's card and in its editor alike.
+ */
+function FileEvidence({
+  line,
+  parts,
+}: {
+  line: ListLine;
+  parts: StockPart[];
+}): JSX.Element {
+  const part = parts.find((p) => p.part_id === line.part_id);
+  const reading = line.reading;
+  const read = reading ? readingText(reading) : "";
+  return (
+    <>
+      {line.photo_name !== null && line.photo_line !== null && (
+        <small>
+          Фото: {visible(line.photo_name)}, рядок {line.photo_line}
+        </small>
+      )}
+      {part && (part.kind === "FILE" || parts.length > 1) && (
+        <small>Файл: {partName(part)}</small>
+      )}
+      {read !== "" && <small>Прочитано: {read}</small>}
+      {reading?.count != null && (
+        <small>Парсер прочитав кількість: {reading.count}</small>
+      )}
+      {reading?.price != null && (
+        <small>
+          Ціна з зошита: {visible(reading.price)}
+          {line.price_kind ? ` (${priceKindLabels[line.price_kind]})` : ""}
+        </small>
+      )}
+      {line.file_reasons.map((reason) =>
+        reason === "FILE_NOTE" ? (
+          <small key={reason}>
+            Примітка парсера: {visible(reading?.note ?? "")}
+          </small>
+        ) : (
+          <small key={reason}>{fileReasonLabels[reason] ?? reason}</small>
+        ),
+      )}
+      {line.same_photo_lines > 1 && (
+        <small>
+          Цей рядок того самого фото у списку — {line.same_photo_lines} разів:
+          можливо, фото прочитано двічі або додано у двох файлах.
+        </small>
+      )}
+    </>
+  );
+}
+
 function LineCard({
   line,
+  parts,
   answer,
   blocked,
 }: {
   line: ListLine;
+  parts: StockPart[];
   answer: (() => void) | null;
   blocked: boolean;
 }): JSX.Element {
@@ -569,10 +1014,11 @@ function LineCard({
       aria-label={`Рядок ${String(line.line_no)}`}
     >
       <strong className="catalog-raw">
-        {line.line_no}. {line.raw_text ?? "—"}
+        {line.line_no}. {line.raw_text === null ? "—" : visible(line.raw_text)}
       </strong>
       <span className="badge">{lineStatusLabels[line.status]}</span>
-      <small>{sourceQuantity(line)}</small>
+      <small>{visible(sourceQuantity(line))}</small>
+      <FileEvidence line={line} parts={parts} />
       {line.same_text_lines > 1 && (
         <small>
           Такий самий рядок у списку — {line.same_text_lines} разів: це може
@@ -624,6 +1070,7 @@ function LineEditor({
   token,
   scopeKey,
   sizes,
+  listParts,
   blocked,
   done,
   cancel,
@@ -634,14 +1081,23 @@ function LineEditor({
   token: string;
   scopeKey: string;
   sizes: SizeOption[];
+  listParts: StockPart[];
   blocked: boolean;
   done: () => void;
   cancel: () => void;
 }): JSX.Element {
   const stated =
     line.quantity_state === "KNOWN" && line.quantity_total !== null;
+  // The split the line's text shows, each size with its count (ADR-0014
+  // §5): offered as it is only when every size is the catalogue's own, and
+  // never chosen for the person.
+  const split = line.shown_split ?? [];
+  const bySizeOffered =
+    split.length > 0 && split.every((size) => size.size_id !== null);
+  const missing = split.filter((size) => size.size_id === null);
   const allowed: Basis[] = [
     ...(stated ? (["STATED"] as const) : []),
+    ...(bySizeOffered ? (["STATED_BY_SIZE"] as const) : []),
     ...(line.may_imply_one ? (["LINE_IMPLIES_ONE"] as const) : []),
     "RECOUNTED",
     "OWNER_KNOWLEDGE",
@@ -682,14 +1138,19 @@ function LineEditor({
   );
   const duplicate = new Set(keys).size !== keys.length;
   const needsNote = basis === "RECOUNTED" || basis === "OWNER_KNOWLEDGE";
+  // As the line shows it: one model, each size with its own count.
+  const bySize = basis === "STATED_BY_SIZE";
+  const model = parts[0]?.variant ?? null;
   const complete =
     basis === "SKIP"
       ? reason.trim() !== ""
-      : basis !== "" &&
-        shown.every((p) => p.variant !== null && p.size !== "") &&
-        quantities.every((q) => Number.isInteger(q) && q > 0 && q <= 10000) &&
-        !duplicate &&
-        (!needsNote || note.trim() !== "");
+      : bySize
+        ? model !== null
+        : basis !== "" &&
+          shown.every((p) => p.variant !== null && p.size !== "") &&
+          quantities.every((q) => Number.isInteger(q) && q > 0 && q <= 10000) &&
+          !duplicate &&
+          (!needsNote || note.trim() !== "");
 
   function update(index: number, change: Partial<Part>): void {
     setParts(parts.map((p, i) => (i === index ? { ...p, ...change } : p)));
@@ -701,19 +1162,30 @@ function LineEditor({
     const body =
       basis === "SKIP"
         ? { skip_reason: reason.trim() }
-        : {
-            allocations: shown.map((p, i) => ({
-              product_variant_id: p.variant?.product_variant_id,
-              size_id: p.size === "UNKNOWN" ? null : p.size,
-              size_unknown: p.size === "UNKNOWN",
-              quantity: quantities[i],
-            })),
-            quantity_basis: basis,
-            note: note.trim() || null,
-          };
+        : bySize
+          ? {
+              allocations: split.map((size) => ({
+                product_variant_id: model?.product_variant_id,
+                size_id: size.size_id,
+                size_unknown: false,
+                quantity: size.count,
+              })),
+              quantity_basis: basis,
+              note: note.trim() || null,
+            }
+          : {
+              allocations: shown.map((p, i) => ({
+                product_variant_id: p.variant?.product_variant_id,
+                size_id: p.size === "UNKNOWN" ? null : p.size,
+                size_unknown: p.size === "UNKNOWN",
+                quantity: quantities[i],
+              })),
+              quantity_basis: basis,
+              note: note.trim() || null,
+            };
     try {
       await api(
-        `/snapshots/${list.snapshot_id}/lines/${String(line.line_no)}`,
+        `/snapshots/${list.snapshot_id}/lines/${String(line.line_no)}?store_id=${store.id}`,
         token,
         body,
         undefined,
@@ -724,11 +1196,13 @@ function LineEditor({
       setProblem(
         !(error instanceof ApiError)
           ? "Немає відповіді сервера. Натисніть ще раз — повторна відповідь безпечна."
-          : error.code === "SNAPSHOT_CONFLICT"
-            ? "Список уже затвердили або відхилили — відповідь не збережено."
-            : error.code === "NOT_FOUND"
-              ? "Товар або розмір більше недоступний. Оберіть інший."
-              : errorText(error),
+          : error.details.reason === "PART_REMOVED"
+            ? "Файл цього рядка прибрали — відповідь не збережено."
+            : error.code === "SNAPSHOT_CONFLICT"
+              ? "Список уже затвердили або відхилили — відповідь не збережено."
+              : error.code === "NOT_FOUND"
+                ? "Товар або розмір більше недоступний. Оберіть інший."
+                : errorText(error),
       );
     } finally {
       setBusy(false);
@@ -744,9 +1218,10 @@ function LineEditor({
       aria-label={`Розбір рядка ${String(line.line_no)}`}
     >
       <strong className="catalog-raw">
-        {line.line_no}. {line.raw_text ?? "—"}
+        {line.line_no}. {line.raw_text === null ? "—" : visible(line.raw_text)}
       </strong>
-      <small>{sourceQuantity(line)}</small>
+      <small>{visible(sourceQuantity(line))}</small>
+      <FileEvidence line={line} parts={listParts} />
       <fieldset>
         <legend>Звідки кількість</legend>
         {allowed.map((option) => (
@@ -761,7 +1236,9 @@ function LineEditor({
             />
             {option === "STATED"
               ? `${basisLabels.STATED}: ${String(line.quantity_total)} шт`
-              : basisLabels[option]}
+              : option === "STATED_BY_SIZE"
+                ? `${basisLabels.STATED_BY_SIZE}: ${visible(sizesWithCounts(split))}`
+                : basisLabels[option]}
           </label>
         ))}
         <label className="check">
@@ -776,12 +1253,19 @@ function LineEditor({
           Це не товар
         </label>
       </fieldset>
-      {line.quantity_state !== "KNOWN" && !line.may_imply_one && (
+      {missing.length > 0 && (
         <p className="hint">
-          Список не каже, скільки тут штук і якого розміру. Вкажіть, хто
-          перелічив, або звідки це відомо.
+          {`Рядок показує кількість по розмірах (${visible(sizesWithCounts(split))}), але ${missing.length === 1 ? "розміру" : "розмірів"} ${missing.map((size) => `«${visible(size.size)}»`).join(", ")} немає в каталозі. Створіть розмір або вкажіть, звідки відома кількість.`}
         </p>
       )}
+      {line.quantity_state !== "KNOWN" &&
+        !line.may_imply_one &&
+        split.length === 0 && (
+          <p className="hint">
+            Список не каже, скільки тут штук і якого розміру. Вкажіть, хто
+            перелічив, або звідки це відомо.
+          </p>
+        )}
       {basis === "SKIP" ? (
         <label>
           Чому це не товар
@@ -794,6 +1278,55 @@ function LineEditor({
             }}
           />
         </label>
+      ) : bySize ? (
+        <>
+          <div className="section-block">
+            {(parts[0]?.picking ?? true) || model === null ? (
+              <CatalogPicker
+                store={store}
+                token={token}
+                scopeKey={scopeKey}
+                variant={model}
+                initialSearch={
+                  line.reading?.model ?? line.candidates.concept?.[0] ?? ""
+                }
+                onVariant={(variant) => {
+                  update(0, { variant, picking: variant === null });
+                }}
+              />
+            ) : (
+              <div className="fields">
+                <span>{model.display_name}</span>
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => {
+                    update(0, { picking: true });
+                  }}
+                >
+                  Інший товар
+                </button>
+              </div>
+            )}
+            <ul aria-label="Розміри й кількість, як у рядку">
+              {split.map((size) => (
+                <li key={size.size}>
+                  {visible(size.size)} × {size.count}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <label>
+            Примітка (необов’язково)
+            <input
+              value={note}
+              maxLength={1000}
+              onChange={(event) => {
+                setNote(event.target.value);
+              }}
+            />
+          </label>
+        </>
       ) : (
         <>
           {shown.map((part, index) => (
@@ -804,7 +1337,9 @@ function LineEditor({
                   token={token}
                   scopeKey={scopeKey}
                   variant={part.variant}
-                  initialSearch={line.candidates.concept?.[0] ?? ""}
+                  initialSearch={
+                    line.reading?.model ?? line.candidates.concept?.[0] ?? ""
+                  }
                   onVariant={(variant) => {
                     update(index, { variant, picking: variant === null });
                   }}
@@ -931,12 +1466,14 @@ function LineEditor({
 
 function Approval({
   list,
+  store,
   token,
   warehouse,
   blocked,
   refresh,
 }: {
   list: StockList;
+  store: Store;
   token: string;
   warehouse: string;
   blocked: boolean;
@@ -956,27 +1493,33 @@ function Approval({
     setProblem(null);
     try {
       await api(
-        `/snapshots/${list.snapshot_id}/${action}`,
+        `/snapshots/${list.snapshot_id}/${action}?store_id=${store.id}`,
         token,
         action === "approve"
           ? { expected_review_revision: list.review_revision }
           : { reason: reason.trim() },
+        undefined,
+        "POST",
+        // A large list's approval may take longer than 20 s (ADR-0014 §16).
+        { slow: action === "approve" },
       );
     } catch (error) {
       const reasonCode =
         error instanceof ApiError ? error.details.reason : undefined;
       setProblem(
-        !(error instanceof ApiError)
-          ? "Немає відповіді сервера. Оновіть список і подивіться, чи рішення збережено."
-          : error.code === "OPENING_BALANCE_CONFLICT"
-            ? `У складі «${warehouse}» уже був рух товару, тому початковий залишок туди внести не можна. Відхиліть цей список, а відсутній товар прийміть через «Приймання».`
-            : reasonCode === "REVISION_CHANGED"
-              ? "Поки ви дивились, хтось змінив відповідь у списку. Перегляньте підсумок ще раз."
-              : reasonCode === "ROWS_NEED_REVIEW"
-                ? "Ще не всі рядки розібрано."
-                : reasonCode === "ALREADY_DECIDED"
-                  ? "Цей список уже затвердили або відхилили."
-                  : errorText(error),
+        error instanceof SlowAnswer
+          ? errorText(error)
+          : !(error instanceof ApiError)
+            ? "Немає відповіді сервера. Оновіть список і подивіться, чи рішення збережено."
+            : error.code === "OPENING_BALANCE_CONFLICT"
+              ? `У складі «${warehouse}» уже був рух товару, тому початковий залишок туди внести не можна. Відхиліть цей список, а відсутній товар прийміть через «Приймання».`
+              : reasonCode === "REVISION_CHANGED"
+                ? "Поки ви дивились, хтось змінив відповідь у списку. Перегляньте підсумок ще раз."
+                : reasonCode === "ROWS_NEED_REVIEW"
+                  ? "Ще не всі рядки розібрано."
+                  : reasonCode === "ALREADY_DECIDED"
+                    ? "Цей список уже затвердили або відхилили."
+                    : errorText(error),
       );
     } finally {
       setAsking(null);
@@ -991,6 +1534,9 @@ function Approval({
       <p>
         Стане початковим залишком складу «{warehouse}»:{" "}
         <strong>{list.summary.units} од.</strong>
+      </p>
+      <p>
+        {`Файлів у списку: ${String(list.summary.parts)}${list.summary.parts_removed > 0 ? ` · прибрано: ${String(list.summary.parts_removed)}` : ""}`}
       </p>
       {bases.length > 0 && (
         <ul>

@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "SizeCountV1": {
+      "additionalProperties": false,
+      "description": "One size as written, with its own count: «M-2» is `{\"size\": \"M\", \"count\": 2}`.",
+      "properties": {
+        "size": {
+          "maxLength": 20,
+          "minLength": 1,
+          "title": "Size",
+          "type": "string"
+        },
+        "count": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "count"
+      ],
+      "title": "SizeCountV1",
+      "type": "object"
+    },
+    "StockFileLineV1": {
+      "additionalProperties": false,
+      "description": "One written line, as the parser read it. Only `text` is evidence; the\nrest is the parser's reading of it, a hint for the person who reviews.",
+      "properties": {
+        "text": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "photo": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Photo",
+          "type": "string"
+        },
+        "photo_line": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Photo Line",
+          "type": "integer"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "colours": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 10,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colours"
+        },
+        "sizes": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 10,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sizes"
+        },
+        "size_counts": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SizeCountV1"
+              },
+              "maxItems": 10,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Counts"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "maximum": 10000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Price"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "text",
+        "photo",
+        "photo_line"
+      ],
+      "title": "StockFileLineV1",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A file of one notebook, or of whole photos of one. The warehouse is\nnot in it: a person chooses the warehouse in the app (ADR-0014 §1).",
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "$Schema"
+    },
+    "format": {
+      "const": "birka.stock-list",
+      "title": "Format",
+      "type": "string"
+    },
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source"
+    },
+    "counted_on": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Counted On"
+    },
+    "price_kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "sale",
+            "purchase"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Price Kind"
+    },
+    "parser": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parser"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/StockFileLineV1"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Lines",
+      "type": "array"
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "lines"
+  ],
+  "title": "StockFileV1",
+  "type": "object"
+}

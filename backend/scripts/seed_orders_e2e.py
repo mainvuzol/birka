@@ -88,6 +88,27 @@ async def main() -> None:
         # A seventh, empty too: a list typed for it holds it, and nothing
         # moves there until the list is decided (owner decision, 2026-10-02).
         waiting = StockLocation(organization_id=org.id, name="Склад, що чекає", code="E2E-WAITING")
+        # Empty ones for lists filled from a parser's file (ADR-0014), one per
+        # journey, so each list waits at a warehouse of its own: one approved
+        # from files, one where a file is removed and added again, one for the
+        # files refused before they are sent, and one where an answer is slow.
+        file_opening = StockLocation(
+            organization_id=org.id, name="Склад для файлу", code="E2E-FILE"
+        )
+        file_removal = StockLocation(
+            organization_id=org.id, name="Склад, де прибирають файл", code="E2E-FILE-REMOVE"
+        )
+        file_checks = StockLocation(
+            organization_id=org.id, name="Склад для перевірки файлів", code="E2E-FILE-CHECKS"
+        )
+        file_slow = StockLocation(
+            organization_id=org.id, name="Склад повільних відповідей", code="E2E-FILE-SLOW"
+        )
+        # And one both stores may import into: its list belongs to both
+        # (owner decision, 2026-10-08).
+        shared_opening = StockLocation(
+            organization_id=org.id, name="Спільний новий склад", code="E2E-SHARED-OPENING"
+        )
         # A second store of the network, with its own warehouse, that also
         # sells from the returns warehouse: where goods come from that are
         # taken back at the first (owner decisions, 2026-10-01).
@@ -117,6 +138,11 @@ async def main() -> None:
                 damaged,
                 opening,
                 waiting,
+                file_opening,
+                file_removal,
+                file_checks,
+                file_slow,
+                shared_opening,
                 second,
                 second_own,
                 concept,
@@ -136,7 +162,20 @@ async def main() -> None:
             product_family_id=family.id, color_term_id=colour.id, length_cm=Decimal("70")
         )
         session.add(variant)
-        for reachable in (location, till, counted, legacy, returns, opening, waiting):
+        for reachable in (
+            location,
+            till,
+            counted,
+            legacy,
+            returns,
+            opening,
+            waiting,
+            file_opening,
+            file_removal,
+            file_checks,
+            file_slow,
+            shared_opening,
+        ):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -156,7 +195,7 @@ async def main() -> None:
                 damaged_returns=True,
             )
         )
-        for reachable in (second_own, returns):
+        for reachable in (second_own, returns, shared_opening):
             session.add(
                 StoreLocationAccess(
                     organization_id=org.id,
@@ -217,6 +256,11 @@ async def main() -> None:
             "bin_location_id": str(damaged.id),
             "opening_location_id": str(opening.id),
             "waiting_location_id": str(waiting.id),
+            "file_location_id": str(file_opening.id),
+            "file_removal_location_id": str(file_removal.id),
+            "file_checks_location_id": str(file_checks.id),
+            "file_slow_location_id": str(file_slow.id),
+            "shared_opening_location_id": str(shared_opening.id),
             "second_store_id": str(second.id),
             "second_location_id": str(second_own.id),
             "variant_id": str(variant.id),

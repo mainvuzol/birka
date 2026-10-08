@@ -17,6 +17,12 @@ had never been measured.
 **`MAX_LIST_ALLOCATIONS` stays 5 000**: the largest size that passes. So
 `MAX_LIST_LINES` = 2 500 and `MAX_LIST_ROWS` = 7 500 (ADR-0014 §10).
 
+> **Changed on 2026-10-09, after this run:** `MAX_LIST_LINES` = 5 000 (as
+> many lines as answers) and `MAX_LIST_ROWS` = 10 000. The owner had heard
+> the limit as 5 000 lines of one size, and this run approved exactly that:
+> 5 000 lines of one answer each, plus a 1 000-line file added and removed
+> (6 000 rows). The figures below are unchanged.
+
 **10 000 cannot be approved at all, at any speed.** The ledger reads every
 allocation's reservation in one statement (`inventory.repository.
 reserved_quantities`, a row-value `IN` of one `(location, variant, size)`

@@ -9,19 +9,21 @@ correct.
 ## Status
 
 **Milestone 1 is not complete.**
-- **What a shop needs on day one is built and verified**, except the way in
-  the owner chose on 2026-10-08 for the shops' existing stock: photos →
-  parser → JSON, in a format Birka defines, not built yet. Lists with
-  review, «Початкові залишки», are built.
+- **What a shop needs on day one is built and verified,** the way in the
+  owner chose on 2026-10-08 for the shops' existing stock included: photos
+  → parser → JSON files in Birka's format
+  ([`formats/birka-stock-list/`](formats/birka-stock-list/README.md)), which
+  fill a warehouse's list in «Початкові залишки», every line reviewed by a
+  person ([report](.ai/project-memory/json-stock-import-report.md)).
 - **The catalogue's verified promotion (M1-021/022) is still partial.** It
   waits for human-confirmed data.
-- **The release is blocked** on the JSON stock import (release checklist,
-  row 15), and on steps only the owner, an administrator with a server, or
-  the shops can take: a server and the bot, the real organization
-  and its people, backups there, the shops' existing stock, a sale timed in
-  the shop, and the owner's sign-off. The hot path's release reading, every
-  case gated, was taken again on 2026-10-08, after the outage work's mark
-  on a sale: every case passes (release checklist, row 22).
+- **The release is blocked** on steps only the owner, an administrator with
+  a server, or the shops can take: a server and the bot, the real
+  organization and its people, backups there, the shops' existing stock
+  (the parser's files, and a file picked on a real phone in Telegram), a
+  sale timed in the shop, and the owner's sign-off. The hot path's release
+  reading, every case gated, was taken again on 2026-10-08, after the outage
+  work's mark on a sale: every case passes (release checklist, row 22).
 - **The shops' existing stock goes in before anything else moves** in a
   warehouse. The first delivery or sale there closes it to an opening list
   for good ([server runbook, step 9](.ai/project-memory/server-runbook.md#9-the-shops-existing-stock-before-anything-moves)).
@@ -35,7 +37,8 @@ CI verifies every pull request, at each push to it, and every push to main
 (a pull request with a merge conflict runs nothing until its base is merged
 in; CI can also be run on a branch by hand, from the Actions tab):
 - every backend test, on PostgreSQL 17 with the production locale;
-- 249 Playwright journeys on a phone profile, against the real API;
+- TODO(final) Playwright journeys on a phone profile, against the real API
+  (249 before the JSON stock import);
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;
 - lint, strict types, the architecture contracts and the frontend build.
@@ -605,36 +608,66 @@ unknown descriptors, including rare item codes. It does not create products,
 choose matches or change inventory. Slash lists require review; quantities are
 never divided automatically. See [scope and verification](.ai/project-memory/m1-020-parser-report.md).
 
-## Legacy stock lists → opening balances (M1-023)
+## Legacy stock lists → opening balances (M1-023, ADR-0014)
 
-A paper or PDF availability list becomes stock in three steps, never one
-([ADR-0005](.ai/decisions/ADR-0005-legacy-snapshot-import.md)).
+A paper or PDF availability list, or a parser's files read from photos of
+the notebooks, becomes stock in three steps, never one
+([ADR-0005](.ai/decisions/ADR-0005-legacy-snapshot-import.md),
+[ADR-0014](.ai/decisions/ADR-0014-opening-stock-from-a-json-file.md)).
 
 **In the app,** «Початкові залишки» does all three:
-- the owner or a manager types the list;
+- the owner or a manager fills the list: a parser's file, further files, and
+  lines typed by hand; a file put in by mistake is removed, with its answers;
 - the owner or a manager answers each line;
 - the owner approves the list or rejects it.
 
-See the [opening stock report](.ai/project-memory/opening-stock-screen-report.md).
+See the [opening stock report](.ai/project-memory/opening-stock-screen-report.md)
+and the [JSON stock import report](.ai/project-memory/json-stock-import-report.md).
+The parser's author needs only the format package,
+[`formats/birka-stock-list/`](formats/birka-stock-list/README.md): its
+description, JSON Schema, example and reference validator
+(`python -m scripts.check_stock_file FILE.json`).
 Through the API:
 
 1. `POST /api/v1/snapshots` with a client `command_id` (unique within the
-   organization; a retry repeats it), `store_id`, `location_id` and up to 1000
-   `lines` of at most 500 characters (100 000 in all), kept verbatim and
-   parsed. Nothing is matched, created or counted. The response's
-   `snapshot_id` names the list from then on. `snapshot:import` (manager,
-   owner).
+   organization; a retry repeats it), `store_id`, `location_id` and exactly
+   one of:
+   - up to 1 000 `lines` of at most 500 characters (100 000 in all), kept
+     verbatim and parsed;
+   - a `file` in Birka's format, `birka.stock-list` version 1, with its
+     `file_name`: each line keeps its text, its photo's name and line, and
+     the parser's reading as a hint. A file's refusal (422) names its line
+     and never echoes the file.
+
+   Nothing is matched, created or counted. The response's `snapshot_id`
+   names the list from then on. `snapshot:import` (manager, owner).
+
+   A list is filled by parts, each a file or a typed text of up to 1 000
+   lines:
+   - `POST .../parts` adds one, with its own `command_id` (201, or 200 on a
+     retry); the same file twice in one list is refused
+     (`SNAPSHOT_CONFLICT`, `PART_DUPLICATE`);
+   - `POST .../parts/{part_id}/remove` removes one with its answers, never
+     the last (`LAST_PART`); its lines stay as evidence, `REMOVED`;
+   - `GET .../parts` lists them, with who added and removed each.
+
+   A list holds at most 5 000 lines not removed and 5 000 allocations, as
+   measured (ADR-0014 §10), and the owner kept that limit (2026-10-08); over
+   that, `LIST_FULL`.
 2. `PUT /api/v1/snapshots/{id}/lines/{line_no}`: say what the line is. That is
    either `allocations` (`product_variant_id`, `size_id` or
    `size_unknown: true`, `quantity`) with a `quantity_basis`, or a
    `skip_reason`:
    - `STATED` — exactly the line's own count, in one allocation; never for a
      line naming several sizes or colours;
+   - `STATED_BY_SIZE` — only for a file line whose text writes each size
+     joined to its count by a sign («S-1 M-2 L-1», «Лоран M-3»): one model,
+     one allocation per size with exactly its count;
    - `LINE_IMPLIES_ONE` — a line with no number that could be a count, taken
      as one piece;
    - `RECOUNTED` or `OWNER_KNOWLEDGE` — with a `note`.
 
-   A list takes at most 5 000 allocations in all.
+   A removed line is refused (`PART_REMOVED`).
 3. `POST /api/v1/snapshots/{id}/approve` with `expected_review_revision`.
    This writes `OPENING_BALANCE` lots and movements, only into a warehouse
    with **no stock history**. `snapshot:approve` (owner). For a child store's
@@ -653,13 +686,19 @@ is refused with `409 OPENING_LIST_PENDING` until the list is approved or
 rejected. A list for a warehouse that already has history holds nothing back.
 Goods found later go in through «Приймання», with their size.
 
-`GET /api/v1/snapshots?store_id=`, `GET /api/v1/snapshots/{id}` and
-`GET .../lines` read lists, their summary by basis, and each line's evidence and
-answer. A decided list is frozen by the database.
+`GET /api/v1/snapshots?store_id=` (optionally `&location_id=`),
+`GET /api/v1/snapshots/{id}` and `GET .../lines` (optionally `?part_id=`)
+read lists, their summary by basis, and each line's evidence and answer.
+`GET .../application` pages what an approved list became. Every route on a
+list takes `?store_id=`, the store acted through: a list of the shared
+warehouse is reached from either store that may receive there. A decided
+list, and its parts, are frozen by the database.
 
 Apply migration `0015` in a maintenance window, with no older instance of the
 app running. It adds CHECKs to `stock_movement` and `stock_lot` under an
-exclusive lock, and code before it takes no warehouse lock.
+exclusive lock, and code before it takes no warehouse lock. Migration `0037`
+(a list's parts) also runs in a maintenance window: it locks the three
+snapshot tables, and makes each existing list its first part.
 
 Related changes elsewhere:
 

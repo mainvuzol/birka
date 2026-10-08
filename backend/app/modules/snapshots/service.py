@@ -121,11 +121,17 @@ MAX_ALLOCATIONS = 50
 # output/verification/2026-10-08-json-import-approval/. Raise it only with a
 # new measurement, and that read batched first.
 MAX_LIST_ALLOCATIONS = 5_000
-# Two answers per line: a line naming several sizes takes one allocation per
-# size, and a list whose last lines cannot be answered can only be rejected.
-MAX_LIST_LINES = MAX_LIST_ALLOCATIONS // 2
-# Every row ever added, removed ones included: it bounds `line_no`.
-MAX_LIST_ROWS = 3 * MAX_LIST_LINES
+# As many lines as answers: the owner heard the limit as 5 000 lines of one
+# size each, and the shops count their largest warehouse before its files go
+# in (owner, 2026-10-08). A line naming several sizes takes one answer per
+# size, so a list full of such lines can run out of answers before its last
+# line is answered; the screen shows both, and the shops' count counts each
+# size of such a line. The measurement approved 5 000 lines of one answer.
+MAX_LIST_LINES = MAX_LIST_ALLOCATIONS
+# Every row ever added, removed ones included: it bounds `line_no`. Twice the
+# lines leaves room for files removed and added again; the measurement read
+# pages of a 6 000-row list in at most 0.12 s.
+MAX_LIST_ROWS = 2 * MAX_LIST_LINES
 # Every part ever added, removed ones included.
 MAX_LIST_PARTS = 1_000
 MAX_FILE_NAME = 200
@@ -448,7 +454,7 @@ async def _summary(session: AsyncSession, snapshot_id: uuid.UUID) -> dict[str, A
         "units_by_basis": units_by_basis,
         "parts": int(parts),
         "parts_removed": int(parts_removed),
-        # Both headrooms: «рядків 1 840 з 2 500 · відповідей 3 120 з 5 000».
+        # Both headrooms: «рядків 1 840 з 5 000 · відповідей 3 120 з 5 000».
         "limits": {"lines": MAX_LIST_LINES, "allocations": MAX_LIST_ALLOCATIONS},
     }
 

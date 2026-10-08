@@ -6,6 +6,8 @@ import { create } from "zustand";
  *
  * `api()` notes every outcome: no answer, the 20 s timeout, a page that is
  * not the API's, or a 502, 503 or 504 set `down`; any other answer ends it.
+ * A call declared slow that runs out of its own 60 s notes nothing: the
+ * server may still be working on it (`SlowAnswer`, ADR-0014 §16).
  * `since` is when it went down, kept from the first failure until an answer.
  * Only in memory: a reopened app starts by asking.
  */

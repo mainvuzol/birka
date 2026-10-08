@@ -1473,8 +1473,9 @@ lines pass through review.
   photograph their notebooks and tables, a parser reads them into JSON, and
   the app imports the JSON. The owner chose this over lists typed by hand.
 - **Birka defines the JSON's format.** Birka describes the format and builds
-  the import into the app; neither is done yet. The parser, whoever makes
-  it, produces that file.
+  the import into the app; neither was done yet when this was decided (both
+  built on 2026-10-08, below). The parser, whoever makes it, produces that
+  file.
 - **What a line holds.** A notebook line names the model, its size and its
   count, and sometimes its colour and a price.
 - **The price is only shown.** It is the sale price or the purchase price,
@@ -1541,5 +1542,114 @@ Answered the same day, to the design's questions:
   lines. The app does not offer to start a second list for a warehouse whose
   list is waiting.
 
+Answered later the same day, after hearing the measurement (ADR-0014 §10):
+- **The limit stays at 5 000 answers per list** in this change. The shops
+  first count the notebooks of their largest warehouse roughly (pages ×
+  lines per page). If it comes out above 5 000, the limit is raised by a
+  separate change to the ledger (the approval and its reading of the
+  reservations), before going live.
+
 Until the import is built, the rules of 2026-09-29 stand: an opening balance
 only into a warehouse with no history, and only as the answer to a list.
+With the import built, they still stand: its files fill such a list.
+
+How it is carried out, not decided by the owner
+([ADR-0014](../decisions/ADR-0014-opening-stock-from-a-json-file.md)):
+- **The file's format is strict.** Birka describes it for the parser's
+  author ([`formats/birka-stock-list/`](../../formats/birka-stock-list/README.md)):
+  a key it does not know, a number written as text or as `3.0`, an empty
+  value, a line break inside a line, or the same photo and line twice is
+  refused, and the refusal names the line. The phone checks a file before
+  sending it; the server decides.
+- **Birka reads each line's text itself.** The parser's count is taken only
+  when Birka's own reading of the text finds the same count with «шт»; the
+  file can never make a count certain on its own word.
+- **A split counts as shown** only when each size stands in the text once,
+  as a whole word, joined to its count by one sign (`-`, a dash, a minus,
+  `:` or `=`), the counts add up to any total the line gives, and the line
+  names at most one colour and no «/» options. «M 3» never counts, nor
+  «462» as size 46 with 2.
+- **A removed file's lines stay in the list as «Прибрано»,** with their
+  text, and count nowhere. The answers given to them are deleted; each stays
+  in the list's history.
+- **A file is sent once.** A resend after a lost answer adds nothing twice,
+  and a file whose content is already in the list is refused.
+- **Line numbers continue across files,** so a removed file leaves a gap.
+- **Through the other store,** a list is reached when that store may receive
+  goods into the warehouse and the person may import lists there, as in
+  their own store. The list keeps the store that started it, and so do the
+  opening movements of its approval; lines added through the other store
+  name it in their evidence.
+- **The approval writes the whole list at once,** or nothing. Its limit was
+  measured: 7.6 s at 5 000 answers, while 10 000 fails in the ledger
+  (ADR-0014 §10); the owner kept 5 000 (above).
+- **What a person sees is guarded:** bidirectional and invisible characters
+  in a line are shown as marks, never applied.
+
+**Answered by the owner on 2026-10-09.** Built as the design read the rules,
+without being asked, then each put to the owner with the question under it.
+Seven were confirmed as built; two changed (5 and 8).
+1. While a warehouse is paused, its list is seen and changed only from the
+   store that started it; the other store sees it again once the warehouse
+   reopens.
+   - Питання: «Поки склад призупинено, його список видно й можна змінювати
+     лише з магазину, який цей список почав. Так?»
+2. The same file is refused a second time in one list, whatever its name,
+   while it is not removed. A file whose photos and lines are partly in
+   another file of the list is taken, and the app says how many. Lines typed
+   by hand are not checked, and the same file may go into another
+   warehouse's list.
+   - Питання: «Той самий файл двічі в один список не приймаємо; файл, що
+     частково повторює інший (ті самі фото й рядки), приймаємо й кажемо,
+     скільки рядків повторюється. Так?»
+3. Beside the 5 000 answers the owner kept, a list holds at most 5 000
+   lines, as many as answers; a file at most 1 000 lines; a list at most
+   1 000 files, removed ones included. A line naming several sizes takes one
+   answer per size, so a list full of such lines can run out of answers
+   before its last line, and the shops' count counts each such size.
+   - Питання: «Список бере до 5 000 рядків і 5 000 відповідей; рядок із
+     кількома розмірами бере по відповіді на розмір, тож у підрахунку зошитів
+     такий рядок рахується стільки разів, скільки в ньому розмірів. Файл — до
+     1 000 рядків, у списку до 1 000 файлів. Так?»
+4. A split is confirmed by a tap only when each of its sizes is already in
+   the catalogue under that spelling; otherwise the size is created first, or
+   the line is answered with a note.
+   - Питання: «Розподіл по розмірах підтверджується одним натиском, лише коли
+     всі його розміри вже є в каталозі; якщо розміру немає — спершу створити
+     його або відповісти з приміткою. Так?»
+5. «42-44» may pass for size 42 with 44 pieces when the parser reads it so.
+   **Changed by the owner:** when a size with its count may also be read as a
+   range of sizes, the app asks the person what the record means, and the
+   person chooses; the tap is offered only after «розмір 42 — 44 шт» is
+   chosen.
+   - Питання: «Запис "42-44" застосунок може прийняти за "розмір 42 — 44
+     шт", якщо так його прочитав парсер; людина бачить рядок і фото й
+     натискає сама. Прийнятно?»
+6. A removed file's lines stay in the list, shown as «Прибрано», and count
+   nowhere.
+   - Питання: «Рядки прибраного файлу лишаються в списку з позначкою
+     "Прибрано" — їх видно, але ніде не рахують. Так?»
+7. Two people starting lists for one warehouse at the same moment from the
+   two stores can still make two. Only one can be approved; the other is
+   rejected, and its files are added to the first.
+   - Питання: «Якщо двоє в різних магазинах в ту саму мить почнуть список
+     для одного складу, буде два списки: затвердити можна лише один, другий
+     відхиляють, а його файли додають до першого. Прийнятно?»
+8. A shared warehouse's list whose own store is blocked or archived before
+   the approval can be neither approved nor rejected, through either store,
+   until that store trades again; the warehouse waits meanwhile, for both
+   stores. **Changed by the owner:** the other store's manager, or the
+   owner, may reject it, which releases the warehouse; its files then go
+   into a new list started from the other store. It still cannot be
+   approved while its own store does not trade.
+   - Питання: «Якщо магазин, що почав список спільного складу, заблокують чи
+     заархівують до затвердження, список не можна ні затвердити, ні
+     відхилити, доки магазин знову не запрацює, — і склад чекає для обох
+     магазинів. Прийнятно?»
+9. The prices from the notebooks, purchase prices included, are seen by
+   everyone who reviews lists: the owner and the managers.
+   - Питання: «Ціни з зошитів, зокрема закупівельні, бачать усі, хто
+     розбирає списки, — власник і менеджери. Так?»
+
+Built on 2026-10-08; see the [report](json-stock-import-report.md) and
+[ADR-0014](../decisions/ADR-0014-opening-stock-from-a-json-file.md).

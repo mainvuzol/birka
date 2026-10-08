@@ -280,6 +280,16 @@ nav {
 .catalog-raw {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* A line's own direction never reorders what stands around it
+     (ADR-0014 §15). */
+  unicode-bidi: isolate;
+}
+/* A file taken out of its list: kept as history, muted (ADR-0014 §15). */
+.part-removed {
+  opacity: 0.6;
+}
+.part-removed strong {
+  text-decoration: line-through;
 }
 .catalog-card {
   overflow-wrap: anywhere;
