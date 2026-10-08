@@ -172,6 +172,17 @@ frontend's typecheck, lint, build (no chunk over 500 kB) and format.
 31 import contracts, as before: `app.modules.sales.outage` joins two
 forbidden lists, and no contract is added.
 
+**The edge, on Docker** (Docker Desktop 29.8.1, Compose v5.5.1, the
+isolated compose project with Caddy on other ports), at `826f3d5`, since
+GitHub did not start PR #69's jobs (an account billing hold). CI's `edge`
+job's steps ran as written, and every step passed: the Caddyfile validated;
+only Caddy publishes a port; the images built and the stack started,
+migrating to `0036` in the production image; the API ready behind Caddy,
+healthy to Docker, its internals kept in; the headers; sign-ins counted per
+real address; no query string in Caddy's log; a republish keeping the
+previous bundle. Evidence:
+[`output/verification/2026-10-08-edge/`](../../output/verification/2026-10-08-edge/).
+
 **The hot path's release reading** (checklist row 22), taken again: three
 runs on fresh databases, every case gated, all 8 pass every run; worst p95
 93.9 ms against 500, one seller about 11 ms. Main's own code, read
@@ -391,4 +402,5 @@ commit: 73 changed and 16 new, beside the release reading's evidence.
   10, 22, 24, 25, and what does not block), the hot path report, the
   glossary, the backlog, the README.
 - Evidence: the hot path's release reading and the A/B against main,
-  `output/verification/2026-10-08-hot-path/`.
+  `output/verification/2026-10-08-hot-path/`; the edge on Docker,
+  `output/verification/2026-10-08-edge/`.
