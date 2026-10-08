@@ -191,6 +191,30 @@ def test_both_backend_images_carry_the_version_after_their_slow_layers() -> None
         assert all(at < stage.index("ARG BIRKA_RELEASE=dev") for at in runs), name
 
 
+def test_both_backend_images_hold_the_same_code_and_run_as_birka() -> None:
+    """The ops tools go in before the code (2026-10-08), so the code and its
+    user are written out in both final stages. They stay the same lines: the
+    backup runs on the code the API runs, and neither image runs as root."""
+    stages = _stages(DOCKERFILE)
+
+    def code_and_user(name: str) -> list[str]:
+        stage = stages[name]
+        first = next(at for at, line in enumerate(stage) if line.startswith("COPY "))
+        return stage[first : stage.index("USER birka") + 1]
+
+    def copies(name: str) -> list[str]:
+        return [line for line in stages[name] if line.startswith("COPY ")]
+
+    assert code_and_user("ops") == code_and_user("api")
+    assert copies("ops") == copies("api")
+    for name in ("ops", "api"):
+        users = [line for line in stages[name] if line.startswith("USER ")]
+        assert users[-1] == "USER birka", name
+    assert not any(line.startswith(("COPY app ", "USER ")) for line in stages["base"]), (
+        "the shared stage holds no code and stays root, so the ops tools install before the code"
+    )
+
+
 def test_the_bundle_is_built_with_the_version_and_the_published_stage_needs_none() -> None:
     build, published = _stages(ROOT / "frontend" / "Dockerfile").values()
     at = build.index("ARG BIRKA_RELEASE=dev")
