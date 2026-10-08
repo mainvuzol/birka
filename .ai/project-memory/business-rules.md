@@ -1526,6 +1526,15 @@ Answered the same day, to the design's questions:
   given once per file.
 - **The warehouse waits for the whole review,** even when it takes days: the
   rule of 2026-10-02 stands, and the shops sell from it on paper meanwhile.
+- **A number without «шт» is not a count by itself,** even when the parser
+  says it is («Бомбер M 3 1200», the parser reading 3 as the count). The
+  parser's number is shown as a hint; the person states the count with a
+  note, as today for a bare number. Notebooks kept as tables may have many
+  such lines.
+- **A list of the shared warehouse belongs to both stores:** the managers of
+  either store who may import lists see it, add files to it and review its
+  lines. The app does not offer to start a second list for a warehouse whose
+  list is waiting.
 
 Until the import is built, the rules of 2026-09-29 stand: an opening balance
 only into a warehouse with no history, and only as the answer to a list.
