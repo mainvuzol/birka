@@ -168,7 +168,8 @@ and settings. Evidence:
   it is not noise.
 - **The sale's new command lock** costs nothing visible.
 
-**PostgreSQL 17 now has its own CI job**, `hot-path`. It runs on every push:
+**PostgreSQL 17 now has its own CI job**, `hot-path`. It runs on every pull
+request and every push to main:
 - the same harness;
 - through one uvicorn process, as the server runs it;
 - on PostgreSQL 17 with the production locale.

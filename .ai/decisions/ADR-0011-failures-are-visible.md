@@ -219,7 +219,7 @@ captures it. The app shows the first eight characters: «Номер запиту
 
 Every case gates the release, six sellers included (owner, 2026-10-03). The
 harness gains the sale paid in parts. The release reading is taken on the
-laptop, as before. CI still gates one seller per push. A breach under
+laptop, as before. CI still gates one seller, in every run. A breach under
 concurrency is now also an annotation and a line in the run's summary,
 where before it was only in the artifact.
 

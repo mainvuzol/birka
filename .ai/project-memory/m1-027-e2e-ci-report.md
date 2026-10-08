@@ -16,7 +16,7 @@ behaviour.
 
 ## What exists now
 
-A CI job, `e2e`, runs on every push and pull request:
+A CI job, `e2e`, runs on every pull request and every push to main:
 
 1. It starts PostgreSQL 17 with the production locale (ICU `uk-UA`). The
    service is shaped exactly as the seed demands: user `birka_review`, no

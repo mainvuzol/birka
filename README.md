@@ -27,7 +27,7 @@ See the
 [server runbook](.ai/project-memory/server-runbook.md) covers installing,
 the shops' existing stock, updating and going back.
 
-CI verifies every push:
+CI verifies every pull request, at each push to it, and every push to main:
 - every backend test, on PostgreSQL 17 with the production locale;
 - 182 Playwright journeys on a phone profile, against the real API;
 - the nightly backup and its restore drill, from the `ops` image;
@@ -279,7 +279,8 @@ rollback refuses existing order/reservation history.
 
 ## Checks
 
-Everything below runs in CI on every push, and all of it must pass.
+Everything below runs in CI on every pull request and every push to main,
+and all of it must pass.
 
 ```bash
 backend/.venv/Scripts/python.exe -m ruff check . ; backend/.venv/Scripts/python.exe -m ruff format --check .
@@ -538,10 +539,10 @@ shortage is recorded, and the rest is sold. When nothing is left to sell,
 basket's own `command_id`. A basket becomes a sale or an empty shelf, never
 both. See the [report](.ai/project-memory/empty-shelf-report.md).
 
-Every Playwright journey also runs in CI (job `e2e`) on every push and pull
-request. It uses the real API and PostgreSQL 17 with the production locale,
-on a Pixel 7 profile. The job's steps are the recipe for a local run; see the
-[E2E in CI report](.ai/project-memory/m1-027-e2e-ci-report.md).
+Every Playwright journey also runs in CI (job `e2e`) on every pull request
+and every push to main. It uses the real API and PostgreSQL 17 with the
+production locale, on a Pixel 7 profile. The job's steps are the recipe for a
+local run; see the [E2E in CI report](.ai/project-memory/m1-027-e2e-ci-report.md).
 
 
 ## Catalog parser preview (M1-020)
