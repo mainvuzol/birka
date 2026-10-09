@@ -73,7 +73,10 @@ queues what is due (`app.modules.cash.messages.queue_due`) and sends it with
 the same silent sender, retried for a day like a backup's message.
 
 It also deletes expired idempotency records once an hour
-(`app.core.idempotency.purge_expired`). Each look runs under a time limit; a
+(`app.core.idempotency.purge_expired`), and once an hour erases the customers
+of debts whose term has run out: a year after a debt was paid or returned,
+three after it was written off (owner decisions, 2026-10-09;
+`app.modules.credit.erasure`). Each look runs under a time limit; a
 look that hangs is logged as one that failed. Errors go to Sentry when a DSN
 is set (`app.core.sentry`).
 """
@@ -129,6 +132,7 @@ from app.modules.backups.service import Send, deliver, overview, queue_alert, qu
 from app.modules.backups.status import State
 from app.modules.cash.messages import deliver as deliver_cash
 from app.modules.cash.messages import queue_due
+from app.modules.credit.erasure import erase_expired
 from app.modules.telegram.messages import (
     BotTokenRefusedError,
     UndeliverableError,
@@ -181,6 +185,7 @@ ReadStatus = Callable[[], Awaitable[ApiStatus | None]]
 Measure = Callable[[], Sequence[Disk]]
 Check = Callable[[], Awaitable[None]]
 Purge = Callable[..., Awaitable[int]]
+Erase = Callable[..., Awaitable[int]]
 Job = Callable[[datetime], Awaitable[object]]
 
 
@@ -274,6 +279,17 @@ async def purge_idempotency(
         await session.commit()
     logger.info("backup_watch.idempotency_purged", deleted=deleted)
     return deleted
+
+
+async def erase_customers(
+    maker: async_sessionmaker[AsyncSession], now: datetime, erase: Erase = erase_expired
+) -> int:
+    """Erase the customers whose debts have been closed long enough."""
+    async with maker() as session:
+        erased = await erase(session, now=now)
+    if erased:
+        logger.info("backup_watch.customers_erased", erased=erased)
+    return erased
 
 
 # --- the server -----------------------------------------------------------------------
@@ -642,6 +658,13 @@ async def watch(
             PURGE_EVERY,
             PURGE_TIMEOUT,
             lambda now: purge_idempotency(maker, now),
+            stop,
+        ),
+        every(
+            "customers",
+            PURGE_EVERY,
+            PURGE_TIMEOUT,
+            lambda now: erase_customers(maker, now),
             stop,
         ),
     ]

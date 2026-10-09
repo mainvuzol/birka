@@ -188,14 +188,27 @@ its own.
 - **By customer:** `GET /api/v1/credits/customers?store_id=` groups a store's
   debts by customer, where one phone is one customer.
   `GET /api/v1/credits/summary?store_id=` says what the store is owed in all.
+- **The customer erased** (owner decisions, 2026-10-09;
+  [ADR-0015](.ai/decisions/ADR-0015-customer-data-retention.md)): a year
+  after a debt was paid or returned, three after a write-off, the
+  `backup-watch` service erases the name and phone hourly, with a
+  write-off's reason; every sum stays. The network's owner
+  (`credit:erase_customer`, network-wide only) erases a customer who asks
+  at `POST /api/v1/credits/{id}/erase-customer`: every closed debt of the
+  network under the same phone; an open one is refused, `STILL_OWED`. An
+  erased debt reads `customer_name`, `customer_phone` and, by customer,
+  `phone_digits` as `null`, with `customer_erased_at`, and is found by
+  neither.
 - **Orders:** `POST /api/v1/orders/{id}/collect` takes the same `credit` as a
   sale.
 
 In the app: «Оплата частинами» at the till and on collecting an order, and a
 «Борги» section for `sale:credit`, where «Готівка», «Картка» and «Переказ»
-take a payment. Only `credit:write_off` writes a debt off. See the
-[credit report](.ai/project-memory/customer-credit-report.md) and the
-[credit screens report](.ai/project-memory/credit-screens-report.md).
+take a payment. Only `credit:write_off` writes a debt off, and only the
+network's owner erases a customer («Стерти дані покупця»). See the
+[credit report](.ai/project-memory/customer-credit-report.md), the
+[credit screens report](.ai/project-memory/credit-screens-report.md) and the
+[customers' data report](.ai/project-memory/customer-data-retention-report.md).
 
 ## Cash and card, the day's close
 
@@ -658,7 +671,8 @@ Through the API:
    - `GET .../parts` lists them, with who added and removed each.
 
    A list holds at most 5 000 lines not removed and 5 000 allocations, as
-   measured (ADR-0014 §10), and the owner kept that limit (2026-10-08). A
+   measured (ADR-0014 §10), and the owner kept that limit (2026-10-08): the
+   shops' largest warehouse comes to at most that (owner, 2026-10-09). A
    part over the lines, the 10 000 rows with removed files' lines, or the
    1 000 parts is refused with `409 SNAPSHOT_CONFLICT`, `LIST_FULL`; an
    answer over the allocations, at step 2, with `422 VALIDATION_ERROR`,
@@ -768,7 +782,9 @@ Every night the server:
 4. keeps every daily copy 7 days and each month's first copy 3 months.
 
 The owner's own computer collects the encrypted copies with
-`infra/pull-backups.sh`. Only the owner holds the private key.
+`infra/pull-backups.sh`, and deletes its nights older than 3 months, keeping
+the newest that can be restored (owner, 2026-10-09). Only the owner holds
+the private key.
 
 ```sh
 docker compose --profile ops run --rm ops         # the nightly run, as cron runs it

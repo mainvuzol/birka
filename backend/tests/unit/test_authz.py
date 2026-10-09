@@ -92,6 +92,9 @@ EXPECTED_OWNER = EXPECTED_MANAGER | {
     Permission.BACKUP_VIEW,
     # Owner decision, 2026-10-01: the owner writes off a debt, with a reason.
     Permission.CREDIT_WRITE_OFF,
+    # Owner decision, 2026-10-09: the owner erases a customer who asks.
+    # Honoured network-wide only.
+    Permission.CREDIT_ERASE_CUSTOMER,
     # Owner decision, 2026-10-01: the owner blocks, archives and reopens a
     # store. Honoured network-wide only.
     Permission.STORE_MANAGE,
@@ -182,6 +185,14 @@ def test_a_seller_sells_in_parts_and_only_the_owner_writes_a_debt_off() -> None:
         assert Permission.SALE_CREDIT in DEFAULT_ROLE_PERMISSIONS[role]
     assert Permission.CREDIT_WRITE_OFF in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
     assert Permission.CREDIT_WRITE_OFF not in DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER]
+
+
+def test_only_the_owner_erases_a_customer() -> None:
+    """Owner decision, 2026-10-09: a customer who asks is erased on the
+    owner's word."""
+    assert Permission.CREDIT_ERASE_CUSTOMER in DEFAULT_ROLE_PERMISSIONS[RoleCode.OWNER]
+    for role in (RoleCode.MANAGER, RoleCode.SELLER):
+        assert Permission.CREDIT_ERASE_CUSTOMER not in DEFAULT_ROLE_PERMISSIONS[role]
 
 
 def test_only_the_owner_sees_the_backups() -> None:

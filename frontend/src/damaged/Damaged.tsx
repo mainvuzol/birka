@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText, unreachable } from "@/shared/api";
+import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { Location, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import { sizeLabel } from "@/returns/types";
@@ -192,6 +193,7 @@ function Unit({
     body?: Record<string, unknown>,
   ) => void;
 }): JSX.Element {
+  const hint = useId();
   const [asking, setAsking] = useState<
     "return" | "confirm" | "write-off" | "supplier" | null
   >(null);
@@ -293,10 +295,12 @@ function Unit({
             <textarea
               value={note}
               maxLength={1000}
+              aria-describedby={hint}
               onChange={(event) => {
                 setNote(event.target.value);
               }}
             />
+            <NoCustomerData id={hint} />
           </label>
           <button
             disabled={busy || supplierId === ""}
@@ -327,10 +331,12 @@ function Unit({
             <textarea
               value={note}
               maxLength={1000}
+              aria-describedby={hint}
               onChange={(event) => {
                 setNote(event.target.value);
               }}
             />
+            <NoCustomerData id={hint} />
           </label>
           <button
             disabled={busy}

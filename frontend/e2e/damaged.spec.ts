@@ -216,6 +216,9 @@ test("a coat confirmed damaged stays, marked, until it is written off", async ({
   const unit = units(page, model);
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
   await unit.getByRole("button", { name: "Брак підтверджений" }).click();
+  await expect(
+    unit.getByLabel("Що з товаром (необов’язково)"),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
   await unit
     .getByLabel("Що з товаром (необов’язково)")
     .fill("пропалений рукав");
@@ -227,6 +230,9 @@ test("a coat confirmed damaged stays, marked, until it is written off", async ({
   expect(await held(page, token, fixture.bin_location_id, variant)).toBe(1);
 
   await unit.getByRole("button", { name: "Списати" }).click();
+  await expect(
+    unit.getByLabel("Чому списуємо (необов’язково)"),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
   await unit
     .getByLabel("Чому списуємо (необов’язково)")
     .fill("не ремонтується");

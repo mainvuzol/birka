@@ -35,8 +35,14 @@ export interface Credit {
    * store of the network that trades takes the payments. */
   store_name: string;
   store_state: StoreState;
-  customer_name: string;
-  customer_phone: string;
+  /**
+   * Null once the customer is erased: a year after the debt was paid or
+   * returned, three after it was written off, or at once by the network's
+   * owner when the customer asks (owner decisions, 2026-10-09; ADR-0015).
+   */
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_erased_at: string | null;
   /** What was agreed: the sale's total. */
   amount: string;
   currency_code: string;
@@ -64,11 +70,14 @@ export interface CreditPage {
  * one customer (owner decision, 2026-10-01), however each sale wrote the name.
  */
 export interface Customer {
-  /** The number in its own ten digits for a Ukrainian one. */
-  phone_digits: string;
+  /**
+   * The number in its own ten digits for a Ukrainian one. Null for a debt
+   * whose customer is erased, which stands alone.
+   */
+  phone_digits: string | null;
   /** As the newest of these debts wrote them. */
-  customer_name: string;
-  customer_phone: string;
+  customer_name: string | null;
+  customer_phone: string | null;
   owed: string;
   open_debts: number;
   credits: Credit[];
@@ -78,6 +87,18 @@ export interface CustomerPage {
   items: Customer[];
   has_more: boolean;
 }
+
+/** `POST /credits/{id}/erase-customer`: what the owner's erasure did. */
+export interface Erasure {
+  /** Closed debts of the network whose customer was erased now. */
+  erased: number;
+  /** The customer's open debts, which keep them until they are closed. */
+  still_open: number;
+  credit: Credit;
+}
+
+/** What an erased customer's debt reads instead of a name. */
+export const erasedCustomer = "Покупця стерто";
 
 /** `GET /credits/summary`: what the store is owed now, by store only. */
 export interface StoreDebts {

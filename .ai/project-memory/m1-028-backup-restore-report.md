@@ -49,7 +49,8 @@ Asked, not guessed; recorded in business-rules.md, "backups".
 - **`infra/pull-backups.sh`** runs on the owner's machine. It takes only
   encrypted archives with their records, over SSH restricted to read-only
   `rrsync`. It never deletes anything, and it checks every archive against
-  the recorded checksum.
+  the recorded checksum. *Since 2026-10-09 it deletes its nights older than
+  3 months (owner decision; [ADR-0015](../decisions/ADR-0015-customer-data-retention.md)).*
 - **The `ops` image** is the API image plus the PostgreSQL 17 client tools
   and `age`, run as a compose profile. It receives the database URL and the
   owner's *public* key — no bot token, no session secret, never the private

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
+import { NoCustomerData } from "@/shared/NoCustomerData";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { isTillMethod, refundHow, tillMethods } from "@/shared/payment";
@@ -417,6 +418,7 @@ function ReturnForm({
   settled: (refund: Refund, sent: ReturnPart[]) => void;
   back: () => void;
 }): JSX.Element {
+  const hint = useId();
   const { busy, pending } = useReturnCommand();
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [counts, setCounts] = useState<Counts>({});
@@ -621,10 +623,12 @@ function ReturnForm({
           <textarea
             value={reason}
             maxLength={1000}
+            aria-describedby={hint}
             onChange={(event) => {
               setReason(event.target.value);
             }}
           />
+          <NoCustomerData id={hint} />
         </label>
         <fieldset>
           <legend>

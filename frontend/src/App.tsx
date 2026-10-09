@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { ComponentProps, JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
@@ -64,6 +64,7 @@ import {
   resolveCreditCommand,
   useCreditCommand,
 } from "@/credits/commands";
+import { erasedCustomer } from "@/credits/types";
 import type { Credit } from "@/credits/types";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
@@ -105,6 +106,7 @@ import {
   returnErrorText,
   saleErrorText,
 } from "@/cash/errors";
+import { NoCustomerData } from "@/shared/NoCustomerData";
 import "./styles.css";
 
 /**
@@ -1311,8 +1313,8 @@ function Workspace({
             {creditSettled.amount !== null && creditSettled.way !== null
               ? `: ${money(creditSettled.amount)} ${methodHow[creditSettled.way]}`
               : ""}
-            . {creditSettled.credit.customer_name}: залишок боргу{" "}
-            {money(creditSettled.credit.owed)}.
+            . {creditSettled.credit.customer_name ?? erasedCustomer}: залишок
+            боргу {money(creditSettled.credit.owed)}.
             {creditSettled.amount !== null &&
               creditSettled.way === "CARD" &&
               ` ${chargeOnce(creditSettled.amount)}`}
@@ -1501,6 +1503,9 @@ function Workspace({
             readOnly={!trading}
             networkOwner={me.organization_permissions.includes(
               "credit:write_off",
+            )}
+            mayErase={me.organization_permissions.includes(
+              "credit:erase_customer",
             )}
             blocked={
               storageError ||
@@ -1878,6 +1883,7 @@ function OrderDetail({
   action: (action: string, extra?: Record<string, unknown>) => void;
   refresh: () => void;
 }): JSX.Element {
+  const hint = useId();
   const [reason, setReason] = useState("");
   const [received, setReceived] = useState(false);
   const [returning, setReturning] = useState(false);
@@ -1995,10 +2001,16 @@ function OrderDetail({
               value={sentWith}
               maxLength={order.destination === "ABROAD" ? 1000 : 64}
               disabled={blocked}
+              aria-describedby={
+                order.destination === "ABROAD" ? `${hint}-sent` : undefined
+              }
               onChange={(event) => {
                 setSentWith(event.target.value);
               }}
             />
+            {order.destination === "ABROAD" && (
+              <NoCustomerData id={`${hint}-sent`} />
+            )}
           </label>
         )}
       {problem && <p role="alert">{problem}</p>}
@@ -2115,10 +2127,12 @@ function OrderDetail({
             <textarea
               maxLength={1000}
               value={reason}
+              aria-describedby={`${hint}-return`}
               onChange={(e) => {
                 setReason(e.target.value);
               }}
             />
+            <NoCustomerData id={`${hint}-return`} />
           </label>
           <label className="check">
             <input
@@ -2529,6 +2543,7 @@ function ShippingForm({
   cancel: () => void;
   save: (shipping: Record<string, unknown>) => void;
 }): JSX.Element {
+  const hint = useId();
   const [destination, setDestination] = useState<Destination>(
     order.destination ?? "UKRAINE",
   );
@@ -2565,10 +2580,12 @@ function ShippingForm({
           <textarea
             value={note}
             maxLength={1000}
+            aria-describedby={hint}
             onChange={(event) => {
               setNote(event.target.value);
             }}
           />
+          <NoCustomerData id={hint} />
         </label>
       )}
       {problem && <p role="alert">{problem}</p>}

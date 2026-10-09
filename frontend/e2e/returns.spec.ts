@@ -176,6 +176,9 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
 
   await page.getByLabel("Цілих").fill("1");
   await page.getByLabel("Пошкоджених").fill("1");
+  await expect(
+    page.getByLabel("Причина повернення (необов’язково)"),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
   await page
     .getByLabel("Причина повернення (необов’язково)")
     .fill("не підійшов");

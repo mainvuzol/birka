@@ -169,6 +169,11 @@ test("an order abroad says where and how it went, in one line", async ({
   expect(body?.destination).toBe("ABROAD");
   expect(body).not.toHaveProperty("carrier");
 
+  await expect(
+    page.getByLabel(
+      "Куди і як відправили: місто, країна, спосіб (можна дописати пізніше)",
+    ),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
   await page
     .getByLabel(
       "Куди і як відправили: місто, країна, спосіб (можна дописати пізніше)",
@@ -200,6 +205,16 @@ test("where an order goes is corrected while it is open, and every version stays
   await expect(page.getByText("Відправлено", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Змінити доставку" }).click();
+  const where = page.getByRole("combobox", { name: "Куди", exact: true });
+  await where.selectOption("ABROAD");
+  // The hint describes the field and stays out of its name.
+  await expect(
+    page.getByRole("textbox", {
+      name: "Куди і як відправили: місто, країна, спосіб",
+      exact: true,
+    }),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
+  await where.selectOption("UKRAINE");
   await page
     .getByRole("combobox", { name: "Перевізник", exact: true })
     .selectOption("MEEST");

@@ -234,6 +234,9 @@ test.describe("«Оля»'s day at «Каса»", () => {
     ).toBeVisible();
     const ways = page.getByRole("group", { name: "Новий спосіб оплати" });
     await expect(ways.getByRole("radio")).toHaveCount(2);
+    await expect(
+      page.getByLabel("Пояснення (необов’язково)"),
+    ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
     await ways.getByRole("radio", { name: "Готівка", exact: true }).check();
     await page.getByRole("button", { name: "Так, змінити" }).click();
     await expect(
@@ -262,6 +265,9 @@ test.describe("«Оля»'s day at «Каса»", () => {
     ).toBeVisible();
     await kinds.getByRole("radio", { name: "Витрати", exact: true }).check();
     await page.getByLabel("Сума, грн").fill("150");
+    await expect(
+      page.getByLabel("На що (необов’язково)"),
+    ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
     await page.getByLabel("На що (необов’язково)").fill("пакети");
     // The first answer, made up here, is the server's refusal when a close
     // the form did not show came in between and is not the newest one made
@@ -367,6 +373,9 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // The reason is required: until it is written, only «Каса» is open.
     const reason = page.getByLabel("Чому не збігається? (обов’язково)");
     await expect(reason).toBeVisible();
+    await expect(reason).toHaveAccessibleDescription(
+      "Без імен і телефонів покупців.",
+    );
     for (const name of otherTabs)
       await expect(
         page.getByRole("button", { name, exact: true }),

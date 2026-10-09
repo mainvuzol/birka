@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import {
   useInfiniteQuery,
@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, errorText, unreachable } from "@/shared/api";
+import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -885,6 +886,7 @@ function ReasonForm({
   send: (reason: string) => Promise<void>;
 }): JSX.Element {
   const [reason, setReason] = useState("");
+  const hint = useId();
   return (
     <fieldset disabled={disabled}>
       <label>
@@ -892,10 +894,12 @@ function ReasonForm({
         <textarea
           value={reason}
           maxLength={1000}
+          aria-describedby={hint}
           onChange={(event) => {
             setReason(event.target.value);
           }}
         />
+        <NoCustomerData id={hint} />
       </label>
       <div className="actions">
         {outageReasons.map((text) => (
@@ -949,6 +953,7 @@ function MoveStep({
   send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
   back: (done: string | null) => void;
 }): JSX.Element {
+  const hint = useId();
   const kinds = drawer.movement_kinds.filter(
     (kind) => directionOf(kind) === direction,
   );
@@ -1047,10 +1052,12 @@ function MoveStep({
           <input
             value={note}
             maxLength={200}
+            aria-describedby={hint}
             onChange={(event) => {
               setNote(event.target.value);
             }}
           />
+          <NoCustomerData id={hint} />
         </label>
         {drawer.may_correct && closes.length > 0 && (
           <label>
@@ -1410,6 +1417,7 @@ function WayChoice({
   const [to, setTo] = useState<PaymentMethod | null>(null);
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  const hint = useId();
   return (
     <fieldset disabled={disabled}>
       <p>
@@ -1441,10 +1449,12 @@ function WayChoice({
         <input
           value={note}
           maxLength={200}
+          aria-describedby={hint}
           onChange={(event) => {
             setNote(event.target.value);
           }}
         />
+        <NoCustomerData id={hint} />
       </label>
       {problem && <p role="alert">{problem}</p>}
       <button

@@ -18,7 +18,12 @@ The owner decided on 2026-10-01 (business-rules.md, "paying in parts"):
 **One `customer_credit` per such sale**, holding the agreed amount — the
 sale's own total, never changed — and whether anything is still owed.
 
-**`credit_entry` is its ledger, append-only** like the stock ledger. Each row
+The customer's name and phone are erased a year after the debt was paid or
+returned, three after it was written off, or at once on the owner's word
+once it is closed; every sum stays (owner decisions, 2026-10-09; ADR-0015).
+
+**`credit_entry` is its ledger, append-only** like the stock ledger — but for
+a write-off's reason, erased with the customer. Each row
 lowers what is owed by its `amount`:
 - a payment, by what was paid;
 - a return, by the part of the returned goods' worth that was still owed;
@@ -83,11 +88,13 @@ class CustomerCredit(UUIDPrimaryKey, TimestampMixin, Base):
     sale_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("sale.id", ondelete="RESTRICT"), nullable=False
     )
-    customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # NULL once the customer is erased (ADR-0015), with the phone and its
+    # digits: all three, or none.
+    customer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # As the seller typed it, and its digits alone, which is what a search
     # compares: "+38 (067) 123-45-67" and "0671234567" are one customer.
-    customer_phone: Mapped[str] = mapped_column(String(40), nullable=False)
-    phone_digits: Mapped[str] = mapped_column(String(20), nullable=False)
+    customer_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    phone_digits: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # The sale's total: what was agreed, frozen like the receipt (I8).
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
@@ -100,6 +107,19 @@ class CustomerCredit(UUIDPrimaryKey, TimestampMixin, Base):
         nullable=False,
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # When the customer's name and phone were erased (owner decisions,
+    # 2026-10-09): a year after the debt was paid or returned, three after it
+    # was written off, or at once on the owner's word. Every sum stays.
+    customer_erased_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # The owner who erased on the customer's request; NULL when the term ran
+    # out.
+    customer_erased_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -114,6 +134,29 @@ class CustomerCredit(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint("(status = 'OPEN') = (closed_at IS NULL)", name="closed_when_not_open"),
         Index("ix_customer_credit_store_id_status", "store_id", "status"),
         Index("ix_customer_credit_organization_id_phone_digits", "organization_id", "phone_digits"),
+        # ADR-0015 §3: the name, the phone and its digits, or none, exactly
+        # when erased; never an open debt; the erasing owner only with it. A
+        # trigger keeps an erased customer erased (`0038`).
+        CheckConstraint(
+            "(customer_erased_at IS NULL AND customer_name IS NOT NULL "
+            "AND customer_phone IS NOT NULL AND phone_digits IS NOT NULL) "
+            "OR (customer_erased_at IS NOT NULL AND customer_name IS NULL "
+            "AND customer_phone IS NULL AND phone_digits IS NULL)",
+            name="customer_erased_whole",
+        ),
+        CheckConstraint(
+            "customer_erased_at IS NULL OR status <> 'OPEN'", name="customer_erased_when_closed"
+        ),
+        CheckConstraint(
+            "customer_erased_by_user_id IS NULL OR customer_erased_at IS NOT NULL",
+            name="customer_erased_by_when_erased",
+        ),
+        # What the hourly erasure reads.
+        Index(
+            "ix_customer_credit_kept_closed",
+            "closed_at",
+            postgresql_where=text("customer_erased_at IS NULL AND status <> 'OPEN'"),
+        ),
     )
 
 
@@ -148,7 +191,7 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("app_user.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    # A write-off's reason.
+    # A write-off's reason; NULL once its customer is erased.
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # A payment taken by another store, because the one that sold was not
@@ -180,7 +223,9 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
             "(kind = 'RETURN') = (command_id IS NULL AND command_fingerprint IS NULL)",
             name="command_names_payment",
         ),
-        CheckConstraint("(kind = 'WRITE_OFF') = (note IS NOT NULL)", name="write_off_says_why"),
+        # A write-off says why when it is written (`credit_entry_guard`, on
+        # insert); its reason is erased with its customer (ADR-0015).
+        CheckConstraint("kind = 'WRITE_OFF' OR note IS NULL", name="only_a_write_off_says_why"),
         CheckConstraint(
             "taken_at_store_id IS NULL OR kind = 'PAYMENT'", name="only_a_payment_is_taken"
         ),

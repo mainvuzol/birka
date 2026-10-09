@@ -104,7 +104,8 @@ Asked as the runbook's five questions. See the
   - The first backup of each calendar month is kept 3 months.
 
   Roughly ten copies at a time. Nothing else is ever deleted, and nothing is
-  deleted on a night whose run failed.
+  deleted on a night whose run failed. *Amended on 2026-10-09:* the owner's
+  own copies are deleted when older than 3 months too ("customers' data").
 - **How long the shop may be without the app: no fixed target.** A new
   store opens when the owner decides, and the shop means to use the app
   every day. A restore the same day is enough; the restore itself takes
@@ -1549,6 +1550,15 @@ Answered later the same day, after hearing the measurement (ADR-0014 §10):
   separate change to the ledger (the approval and its reading of the
   reservations), before going live.
 
+Answered on 2026-10-09:
+- **The largest warehouse comes to at most 5 000** (the owner's answer: «До
+  5 000»). So the limit is not raised before going live, and raising it
+  stays in the [backlog](backlog.md), for a warehouse whose files still
+  come out above 5 000.
+  The validator still gives each file's exact lines before the first is
+  uploaded, and a file or an answer that would take a list past 5 000 is
+  refused, saying the list is full (`LIST_FULL`).
+
 Until the import is built, the rules of 2026-09-29 stand: an opening balance
 only into a warehouse with no history, and only as the answer to a list.
 With the import built, they still stand: its files fill such a list.
@@ -1784,3 +1794,107 @@ Built on 2026-10-08, readings 5 and 8 on 2026-10-09, and what the review of
 the built change found the same day; see the
 [report](json-stock-import-report.md) and
 [ADR-0014](../decisions/ADR-0014-opening-stock-from-a-json-file.md).
+
+## Owner decision — 2026-10-09 (customers' data)
+
+Asked when the owner chose it as the next work: a sale paid in parts records
+the customer's name and phone (2026-10-01), and nothing removed them, so
+after going live they would only pile up, in every backup too. Only a debt
+holds them: an order keeps no name, phone or address, the receipt and the
+audit log leave them out (2026-10-01), and so do the logs and Sentry
+(2026-10-03). Each answer below is quoted with the description its option
+carried.
+
+- **A debt paid or returned keeps the customer's name and phone a year**
+  after it closed.
+  - Питання: «Борг закрито: покупець сплатив усе або повернув товар. Скільки
+    зберігати його ім'я й телефон?» Answer: «1 рік після закриття».
+- **A written-off debt keeps them three years** after the write-off.
+  - Питання: «Борг списано: покупець не заплатив. Скільки зберігати його
+    ім'я й телефон?» Answer: «3 роки після списання» — about as long as a
+    debt can still be claimed (to be checked with a lawyer), and whom not
+    to sell to in parts again stays visible.
+- **Then the name and phone are erased, and every sum stays.** The debt
+  reads «Покупця стерто», with its date and sums; the drawer and the reports
+  do not change. Deleting the debt whole was not offered: the money in the
+  reports would change.
+  - Питання: «Строк минув. Що стає з боргом?» Answer: «Стерти ім'я й
+    телефон, суми лишити».
+- **A customer who asks is erased at once, on the owner's word,** from their
+  paid, returned and written-off debts. An open debt is not erased until it
+  is closed.
+  - Питання: «Покупець просить стерти його дані раніше строку. Що можна?»
+    Answer: «Власник стирає закриті борги» — «Сплачені, повернені й
+    списані борги стираються одразу, на слово власника. Відкритий борг не
+    стирається, доки його не закрито.» Offered beside it: «Лише сплачені й
+    повернені» (a written-off debt kept to the end of its term) and «Не
+    передбачати».
+- **The owner's own copies of the backups, older than 3 months, are
+  deleted,** as on the server, so an erased name leaves every copy within 3
+  months. A restore can then go back at most 3 months.
+  - Питання: «Копії на вашому комп'ютері чи NAS зараз не видаляються
+    ніколи, тож стерте ім'я лишається в старих копіях. Як їх тримати?»
+    Answer: «Видаляти старші за 3 місяці».
+- **Under the fields where people explain something, «Без імен і телефонів
+  покупців»; and a write-off's reason is erased with the customer's name.**
+  Other explanations stay.
+  - Питання: «У поясненнях (причина списання боргу, причина повернення)
+    люди іноді пишуть ім'я чи телефон покупця. Що робити?» Answer:
+    «Підказка і стирати причину списання» — «Під полями пояснень написано
+    «Без імен і телефонів». Причина списання боргу стирається разом з
+    ім'ям покупця. Інші пояснення лишаються.»
+
+How it is carried out, not decided by the owner
+([ADR-0015](../decisions/ADR-0015-customer-data-retention.md)):
+- **"A year after" is the same date a year later;** 29 February is
+  28 February then. The erasure runs once an hour, so a name past its term
+  is gone within the hour, and from the next night's backup.
+- **"On the owner's word" is the network's owner,** who holds the owner's
+  role network-wide (`credit:erase_customer`), since the erasure reaches
+  every store. A store-level owner's role, such as the owner's role in a
+  child store alone, is not enough (reading C-c, awaiting the owner, below).
+- **The customer is everyone under their phone,** one phone being one
+  customer (2026-10-01): the owner's erasure reaches every closed debt of
+  the network with that phone, in every store, a blocked or archived one
+  too, and a couple sharing a phone are erased together. It is asked from a
+  closed debt; the answer says how many of the customer's debts are still
+  open (reading C-a, awaiting the owner, below).
+- **An open debt of a customer who asked keeps them once it closes,** until
+  its own term runs out or the owner erases it again: nothing keeps a
+  record that the customer asked, since that record would itself say who
+  they are (reading C-b, awaiting the owner, below).
+- **An erased debt is found by neither the name nor the phone,** and stands
+  alone in «Борги». A return of its goods is still taken.
+- **The hint is under** the explanations about a customer's purchase or
+  money: a return's reason at the till and on an order, a debt's write-off,
+  a drawer's difference, a corrected way of paying, cash taken out or put
+  in, where an order went abroad, and «Брак»'s notes, the one for the
+  supplier included, since «Брак» came back from a customer. Supplier,
+  invoice, catalogue, store and stock notes are not about a customer and
+  have none (reading C-d, awaiting the owner, below).
+- **The owner's copies keep the newest night that can be restored,
+  whatever its age,** as the server keeps its newest, so a collector that
+  stopped hearing from the server never ends up with nothing. Older nights
+  go by date on every run, also one that could not reach the server or found
+  a damaged copy; such a run then fails, saying why.
+- **A write-off's reason is no longer copied into the audit log,** which can
+  never be changed; the debt keeps it until it is erased. The audit log says
+  that a customer was erased, never who.
+- **After a restore,** the term's erasure runs again by itself; an erasure
+  on request made after the restored night is repeated by the owner
+  (backup runbook, "restoring for real").
+- **Three years is the owner's estimate** of how long an unpaid debt can
+  still be claimed; the owner checks it with a lawyer (release checklist).
+
+Readings of how it is carried out, awaiting the owner (asked at the end of
+the build):
+- **C-a.** The owner's erasure reaches every closed debt of the whole
+  network under the customer's phone, a couple sharing a phone together.
+- **C-b.** An open debt of a customer who asked keeps them once it closes,
+  until its term runs out or the owner erases it again.
+- **C-c.** Only the network's owner erases; the owner's role in one store
+  alone does not.
+- **C-d.** Which fields carry the hint (above).
+
+Built on 2026-10-09; see the [report](customer-data-retention-report.md)
+and [ADR-0015](../decisions/ADR-0015-customer-data-retention.md).

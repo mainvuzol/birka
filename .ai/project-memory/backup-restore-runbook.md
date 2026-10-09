@@ -20,7 +20,7 @@ and the [alerts report](m1-028-backup-alerts-report.md).
 |---|---|
 | How often | every day, at night |
 | Kept on the server | every daily backup for 7 days; the first backup of each month for 3 months (about ten files) |
-| Leaves the server | encrypted to the owner's age public key; the owner's own computer or NAS collects it |
+| Leaves the server | encrypted to the owner's age public key; the owner's own computer or NAS collects it, and deletes its nights older than 3 months (owner, 2026-10-09) |
 | Private key | only the owner: password manager plus paper or a USB stick; never on the server or the NAS |
 | At most lost in a restore | one day |
 | Restore time | no fixed target; the same day. The restore itself takes seconds |
@@ -180,9 +180,25 @@ sh infra/pull-backups.sh
 ```
 
 It collects only encrypted archives with their manifests and drill reports,
-never a plaintext archive. It deletes nothing, so this copy outlives the
-server's retention. It checks every archive against the checksum the server
-recorded, and fails if one arrived damaged.
+never a plaintext archive, and never overwrites a copy. It checks every
+archive against the checksum the server recorded, and fails if one arrived
+damaged.
+
+Then it deletes the nights older than 3 months, as the server counts them
+(owner, 2026-10-09; [ADR-0015](../decisions/ADR-0015-customer-data-retention.md)):
+a customer's name erased in the app leaves every copy within 3 months. It
+keeps the newest night whose archive is whole, whatever its age, and
+touches only files named by a night's stamp. It deletes by date on every
+run, also one that failed, and a failed run says why:
+- `NOT COLLECTED: rsync exited …`: the server could not be reached. The
+  copies here are checked and old nights deleted as usual; the next run
+  collects what was missed.
+- `DAMAGED OR MISSING: …dump.age`: that archive does not match its manifest,
+  and is never collected again on its own. Delete that night's files here
+  (`birka-<time>.*`) and run again: it is collected again while the server
+  still has it.
+
+A copy moved elsewhere by hand is the owner's to delete.
 
 Run it daily, some hours after the server's night:
 - on macOS, a launchd job or the Shortcuts app;
@@ -218,5 +234,25 @@ Not yet rehearsed on a production server. The nightly drill uses the same
    ```
 6. `docker compose up -d`, then sign in and open a stock view. Delete the
    plaintext `birka.dump` once the shop is running.
+7. **Customers erased since that night** (owner, 2026-10-09;
+   [ADR-0015](../decisions/ADR-0015-customer-data-retention.md)). The
+   `backup-watch` service erases again, within the hour of starting, every
+   customer whose term has run out. A customer erased on request after that
+   night is back. If the old server's database can still be read, list
+   those erasures there before it goes:
+   ```sql
+   SELECT entity_id AS credit_id, created_at FROM audit_log
+   WHERE action = 'credit.customer_erased' AND after->>'by' = 'request'
+     AND created_at > '<the night restored>'
+   ORDER BY created_at;
+   ```
+   On the restored server, where those names are back, read them for the
+   owner:
+   ```sql
+   SELECT id, customer_name FROM customer_credit WHERE id IN ('<credit_id>', …);
+   ```
+   The owner finds each in «Борги» by the name and presses «Стерти дані
+   покупця» again. If the old database is gone, the owner repeats the ones
+   they remember: from the newest night, at most a day of them.
 
 Anything written after that night is lost: at most one day, by the policy.

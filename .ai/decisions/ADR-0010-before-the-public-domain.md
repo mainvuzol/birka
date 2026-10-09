@@ -4,7 +4,9 @@ Status: Accepted (2026-10-03)
 Owner decisions: business-rules.md, "before the public domain" (2026-10-03).
 Closes: R1's Python part, R2 and R3 (milestone-1-plan.md §17.5). R4 stays
 accepted, narrowed.
-Amended by: ADR-0014 (2026-10-08), §2's largest body.
+Amended by: ADR-0014 (2026-10-08), §2's largest body; ADR-0015
+(2026-10-09), how long §1's customer data is kept, and a write-off's reason
+no longer copied into the audit log.
 
 ## Context
 

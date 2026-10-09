@@ -63,6 +63,9 @@ FROZEN: dict[str, str] = {
     ),
     "0035_cash_and_card.py": ("7fcb33ba82c6b01bd7dcf3c334f26efdae3586d3aaa1300445d11db49fd685c9"),
     "0036_outage_mark.py": ("798bf72981f313bc65d959174cba641818ade3354fe46aa271612974c3de35e6"),
+    "0037_stock_list_parts.py": (
+        "fcafd9f61a23868ba73708e25fed79deb7a222728e035c5756824d0562a3b250"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),
