@@ -79,4 +79,14 @@ started was removed; Docker was stopped as it was found.
 - **A copy older than the newest night, and a dump with years of data.**
   The rehearsal restored one night of a small shop.
 
+## CI, run locally
+
+The change touches the docs, one shell script and its tests, so CI's backend
+job ran on `146d035` (GitHub Actions is held by billing): passed with its
+declared gap, 3 286 passed on PostgreSQL 17, 19 skipped (the backup tests:
+no PostgreSQL 17 tools on this Mac); on 16.2, 18 of those passed, 1 skipped
+(`age`) ([evidence](../../output/verification/2026-10-09-restore-rehearsal-ci-local/summary.md)).
+The collector also ran under `/bin/dash`, with and without `HOME`, and a
+mutant of its `HOME` check was caught.
+
 Row 20 stays open: the sequence is to run once on the real server.
