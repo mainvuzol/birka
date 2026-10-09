@@ -100,8 +100,9 @@ export function Openings({
       api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
     retry: false,
   });
+  // Only ever shown, so guarded once here for every place it reaches.
   const warehouse = (id: string): string =>
-    locations.data?.find((l) => l.id === id)?.name ?? "склад";
+    visible(locations.data?.find((l) => l.id === id)?.name ?? "склад");
   const open = lists.data?.items.find((l) => l.snapshot_id === openId);
 
   if (open)
@@ -186,7 +187,7 @@ export function Openings({
           <article
             className="line catalog-card"
             key={list.snapshot_id}
-            aria-label={`Список ${list.source_document_ref ?? ""}`.trim()}
+            aria-label={`Список ${visible(list.source_document_ref ?? "")}`.trim()}
           >
             <strong>
               {listName(list)} · склад «{warehouse(list.location_id)}»
@@ -353,8 +354,8 @@ function NewList({
   const [problems, setProblems] = useState<string[]>([]);
   const lines = listLines(draft.text);
   const tooLong = lines.find((line) => line.length > 500);
-  const warehouse =
-    locations.find((l) => l.id === draft.location_id)?.name ?? null;
+  const chosen = locations.find((l) => l.id === draft.location_id);
+  const warehouse = chosen ? visible(chosen.name) : null;
   // The owner's rule (2026-10-08): a warehouse whose list waits gets no
   // second one from the app — its files go into the list that waits. The
   // list this very draft created, its answer lost, is no second list.
@@ -527,7 +528,7 @@ function NewList({
           <option value="">Оберіть склад</option>
           {locations.map((location) => (
             <option key={location.id} value={location.id}>
-              {location.name}
+              {visible(location.name)}
             </option>
           ))}
         </select>
@@ -1085,7 +1086,9 @@ function ListView({
 }
 
 function sizeText(code: string | null): string {
-  return code === null || code === "UNKNOWN" ? "розмір невідомий" : code;
+  return code === null || code === "UNKNOWN"
+    ? "розмір невідомий"
+    : visible(code);
 }
 
 /** «Лоран · шоколад · M × 1, L × 2»: what the parser read, field by field. */
@@ -1194,7 +1197,7 @@ function LineCard({
         <>
           {line.allocations.map((a) => (
             <small key={`${a.product_variant_id}:${a.size_id}`}>
-              → {a.display_name ?? "товар"}, {sizeText(a.size_code)} ×{" "}
+              → {visible(a.display_name ?? "товар")}, {sizeText(a.size_code)} ×{" "}
               {a.quantity}
             </small>
           ))}
@@ -1202,12 +1205,12 @@ function LineCard({
             <small>Звідки кількість: {basisLabels[line.quantity_basis]}</small>
           )}
           {line.resolution_note && (
-            <small>Примітка: {line.resolution_note}</small>
+            <small>Примітка: {visible(line.resolution_note)}</small>
           )}
         </>
       )}
       {line.status === "SKIPPED" && line.resolution_note && (
-        <small>Не товар: {line.resolution_note}</small>
+        <small>Не товар: {visible(line.resolution_note)}</small>
       )}
       {answer && (
         <button className="quiet" disabled={blocked} onClick={answer}>
@@ -1621,7 +1624,7 @@ function LineEditor({
               />
             ) : (
               <div className="fields">
-                <span>{model.display_name}</span>
+                <span>{visible(model.display_name)}</span>
                 <button
                   type="button"
                   className="quiet"
@@ -1671,7 +1674,7 @@ function LineEditor({
                 />
               ) : (
                 <div className="fields">
-                  <span>{part.variant.display_name}</span>
+                  <span>{visible(part.variant.display_name)}</span>
                   <button
                     type="button"
                     className="quiet"
@@ -1696,7 +1699,7 @@ function LineEditor({
                     <option value="">Оберіть розмір</option>
                     {sizes.map((size) => (
                       <option key={size.size_id} value={size.size_id}>
-                        {size.code}
+                        {visible(size.code)}
                       </option>
                     ))}
                     <option value="UNKNOWN">Розмір невідомий</option>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import type { StoreState } from "@/orders/types";
 import {
   resolveStateCommand,
@@ -46,7 +47,9 @@ export function Stores({
   const [done, setDone] = useState<string | null>(null);
 
   async function settled(record: StoreRecord): Promise<void> {
-    setDone(`«${record.name}»: ${stateLabels[record.state].toLowerCase()}.`);
+    setDone(
+      `«${visible(record.name)}»: ${stateLabels[record.state].toLowerCase()}.`,
+    );
     await cache.invalidateQueries({ queryKey: ["stores"] });
     changed();
   }
@@ -177,9 +180,12 @@ function StoreCard({
       ? (refusal.details.leftovers as Leftover[])
       : null;
   return (
-    <article className="order-card" aria-label={`Магазин ${store.name}`}>
-      <strong>{store.name}</strong>
-      <small>{store.code}</small>
+    <article
+      className="order-card"
+      aria-label={`Магазин ${visible(store.name)}`}
+    >
+      <strong>{visible(store.name)}</strong>
+      <small>{visible(store.code)}</small>
       <p>
         <span className="badge" data-state={store.state}>
           {stateLabels[store.state]}
@@ -189,7 +195,7 @@ function StoreCard({
         )}
       </p>
       {latest && store.state !== "ACTIVE" && (
-        <p className="hint">Причина: {latest.reason}</p>
+        <p className="hint">Причина: {visible(latest.reason)}</p>
       )}
       {asking ? (
         <div className="notice">
@@ -231,7 +237,7 @@ function StoreCard({
                 });
               }}
             >
-              {confirmLabels[asking]} «{store.name}»
+              {confirmLabels[asking]} «{visible(store.name)}»
             </button>
             <button
               className="quiet"
@@ -272,7 +278,7 @@ function StoreCard({
                 ) : (
                   <li key={left.location_id}>
                     {left.kind === "DAMAGED" ? "Брак" : "Власний склад"} «
-                    {left.name}»: {left.units} од.
+                    {visible(left.name)}»: {left.units} од.
                   </li>
                 ),
               )}
@@ -283,11 +289,12 @@ function StoreCard({
       {store.changes.length > 0 && (
         <details>
           <summary>Історія змін</summary>
-          <ul aria-label={`Історія: ${store.name}`}>
+          <ul aria-label={`Історія: ${visible(store.name)}`}>
             {store.changes.map((item, index) => (
               <li key={`${item.at}:${String(index)}`}>
                 {when(item.at)} · {stateLabels[item.from_state]} →{" "}
-                {stateLabels[item.to_state]} · {item.by} · {item.reason}
+                {stateLabels[item.to_state]} · {visible(item.by)} ·{" "}
+                {visible(item.reason)}
               </li>
             ))}
           </ul>

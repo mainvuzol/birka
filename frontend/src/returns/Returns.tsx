@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
+import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { isTillMethod, refundHow, tillMethods } from "@/shared/payment";
@@ -244,7 +245,7 @@ function SaleCard({
       <strong>
         {when(sale.sold_at)} · {money(sale.total)}
       </strong>
-      {!here && <span>Продано в магазині «{sale.store_name}»</span>}
+      {!here && <span>Продано в магазині «{visible(sale.store_name)}»</span>}
       {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
       {soldDuringOutage(sale) && (
         <span className="badge">Продано під час збою</span>
@@ -252,7 +253,8 @@ function SaleCard({
       <ul>
         {sale.items.map((item) => (
           <li key={item.id}>
-            {item.display_name}, {sizeLabel(item.size)} — {item.quantity} шт
+            {visible(item.display_name)}, {sizeLabel(item.size)} —{" "}
+            {item.quantity} шт
             {item.refunded > 0 && <small> (повернено {item.refunded})</small>}
           </li>
         ))}
@@ -346,7 +348,7 @@ export function Done({
   );
   const chosen =
     named.length === placed.size
-      ? named.map((location) => location.name).join("», «")
+      ? named.map((location) => visible(location.name)).join("», «")
       : undefined;
   const { credit } = refund;
   const elsewhere =
@@ -537,7 +539,7 @@ function ReturnForm({
       </div>
       <p>
         Продаж {when(sale.sold_at)} на {money(sale.total)}
-        {elsewhere && ` у магазині «${sale.store_name}»`}.
+        {elsewhere && ` у магазині «${visible(sale.store_name)}»`}.
       </p>
       {elsewhere && (
         <p className="hint">
@@ -560,7 +562,7 @@ function ReturnForm({
           return (
             <div className="line-return" key={item.id}>
               <h3>
-                {item.display_name}, {sizeLabel(item.size)}
+                {visible(item.display_name)}, {sizeLabel(item.size)}
               </h3>
               <p className="hint">
                 {money(item.final_unit_price)} за одиницю · продано{" "}
@@ -605,7 +607,7 @@ function ReturnForm({
                     <option value="">Оберіть склад</option>
                     {(ownPlaces.data ?? []).map((location) => (
                       <option key={location.id} value={location.id}>
-                        {location.name}
+                        {visible(location.name)}
                       </option>
                     ))}
                   </select>
@@ -653,7 +655,7 @@ function ReturnForm({
         {ownPlaces.error && <p role="alert">{errorText(ownPlaces.error)}</p>}
         {problems.map((problem) => (
           <p key={problem} role="alert">
-            {problem}
+            {visible(problem)}
           </p>
         ))}
         <button

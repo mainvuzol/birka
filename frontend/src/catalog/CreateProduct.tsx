@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
+import { visible } from "@/shared/visible";
 import { forgetCatalogRefusal } from "./commands";
 import { FamilySearch, familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
@@ -151,8 +152,10 @@ export function CreateProduct({
                   .filter((c) => c.family_id !== searchedFamily?.family_id)
                   .map((c) => (
                     <option key={c.family_id} value={c.family_id}>
-                      {c.display_name}
-                      {c.distinction_note ? ` — ${c.distinction_note}` : ""}
+                      {visible(c.display_name)}
+                      {c.distinction_note
+                        ? ` — ${visible(c.distinction_note)}`
+                        : ""}
                     </option>
                   ))}
               </select>

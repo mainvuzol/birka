@@ -69,7 +69,7 @@ Found by the independent code reviews (2026-09-28). The fixes are in the report;
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
 - **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; on 2026-10-09, with every answer by size read again at the approval, at most 8.6 s, and the 2026-10-08 method up to 9.5 s the same hour on a busier laptop; measured again in the review's third round the same day, by size at most 8.48 s and the 2026-10-08 method up to 9.87 s, 0.13 s under the 10 s rule ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)); see [the JSON stock import](#the-json-stock-import--2026-10-08).
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
-- **Lines are stored verbatim, including bidirectional and zero-width characters.** Since 2026-10-08 «Початкові залишки» shows every line, and every string from a file, through a guard that marks them visibly (ADR-0014 §15). The catalogue screens still show raw text unguarded; they are left for a change of their own.
+- **Lines are stored verbatim, including bidirectional and zero-width characters.** Since 2026-10-08 «Початкові залишки» shows every line, and every string from a file, through a guard that marks them visibly (ADR-0014 §15). The catalogue screens showed raw text unguarded until 2026-10-10; now every screen marks text from outside (ADR-0018), and what is stored still holds the characters.
 - **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. Since 2026-10-09 the API's own role may not truncate at all (ADR-0016); the owner still may. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
 
 ## The till — 2026-09-29
@@ -1136,8 +1136,12 @@ person; the same day the owner answered the design's questions.
 - **A removed file's lines are kept as evidence,** with their text and
   parse, and count nowhere. A list holds at most 10 000 rows with them, about
   2–3 KB each, so backups grow with removed files too.
-- **The catalogue screens still show raw text** unguarded; only
-  «Початкові залишки» marks control, bidirectional and invisible characters.
+- **The catalogue screens showed raw text** unguarded; only «Початкові
+  залишки» marked control, bidirectional and invisible characters. **Closed
+  on 2026-10-10** ([ADR-0018](../decisions/ADR-0018-outside-text-shown-as-it-is.md)):
+  every text from outside is marked on every screen, as the owner chose; a
+  field opened to edit it still holds it as typed, and a new screen needs
+  `visible()` of its own: nothing checks that by itself. Before:
   It marks them by Unicode's classes since the review (2026-10-09), the line
   and paragraph separators included; a variation selector right after a
   pictograph or in a keycap, and the joiner between two pictographs, are

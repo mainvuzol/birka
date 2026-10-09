@@ -1,5 +1,6 @@
 import type { OutageMark } from "@/sales/types";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
+import { visible } from "@/shared/visible";
 
 /**
  * `GET /sales`: a store's sales, newest first, as a seller looks one up. It
@@ -148,5 +149,7 @@ export interface CreditSettlement {
 }
 
 export function sizeLabel(size: string | null): string {
-  return size === null || size === "UNKNOWN" ? "розмір невідомий" : size;
+  return size === null || size === "UNKNOWN"
+    ? "розмір невідомий"
+    : visible(size);
 }

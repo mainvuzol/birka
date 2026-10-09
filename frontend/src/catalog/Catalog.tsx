@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
 import { keptText, useAutoCheck } from "@/shared/reach";
+import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import {
   CANCEL_CREATION_REASON,
@@ -300,7 +301,9 @@ export function Catalog({
                   }}
                 >
                   <span className="badge">{statusLabels[d.status]}</span>
-                  <strong>{d.preview.raw_text}</strong>
+                  <strong className="catalog-raw">
+                    {visible(d.preview.raw_text)}
+                  </strong>
                 </button>
               ))}
               <div className="toolbar">
@@ -389,9 +392,9 @@ function Detail({
       </div>
       <span className="badge">{statusLabels[decision.status]}</span>
       <h4>Оригінальний опис</h4>
-      <p className="catalog-raw">{decision.preview.raw_text}</p>
+      <p className="catalog-raw">{visible(decision.preview.raw_text)}</p>
       {decision.rejection && (
-        <p>Причина відхилення: {decision.rejection.reason}</p>
+        <p>Причина відхилення: {visible(decision.rejection.reason)}</p>
       )}
       <ul>
         {[...new Set(decision.preview.review_reasons.map(reviewText))].map(
@@ -432,9 +435,9 @@ function Detail({
       )}
       {decision.creation && (
         <p>
-          Збережений товар: {decision.creation.display_name}. Розміри:{" "}
+          Збережений товар: {visible(decision.creation.display_name)}. Розміри:{" "}
           {decision.creation.sizes
-            .map((s) => `${s.code} (${s.system})`)
+            .map((s) => `${visible(s.code)} (${s.system})`)
             .join(", ")}
         </p>
       )}
@@ -444,7 +447,7 @@ function Detail({
         .filter((s) => s.typed && s.typed !== s.code)
         .map((s) => (
           <p key={s.code} role="status">
-            Набрано «{s.typed}» — це розмір «{s.code}».
+            Набрано «{visible(s.typed ?? "")}» — це розмір «{visible(s.code)}».
           </p>
         ))}
       {open ? (
@@ -468,10 +471,10 @@ function Detail({
                     setVariant(c.variant_id);
                   }}
                 />
-                <strong>{c.display_name}</strong>
+                <strong>{visible(c.display_name)}</strong>
               </span>
               {c.distinction_note && (
-                <span>Відмінність моделі: {c.distinction_note}</span>
+                <span>Відмінність моделі: {visible(c.distinction_note)}</span>
               )}
               {c.conflicts.length > 0 && (
                 <span>
@@ -530,11 +533,13 @@ function Detail({
             <>
               <p>
                 Обраний товар:{" "}
-                {decision.creation?.display_name ??
-                  candidates.find(
-                    (c) => c.variant_id === decision.resolved_variant_id,
-                  )?.display_name ??
-                  "Підтверджений товар"}
+                {visible(
+                  decision.creation?.display_name ??
+                    candidates.find(
+                      (c) => c.variant_id === decision.resolved_variant_id,
+                    )?.display_name ??
+                    "Підтверджений товар",
+                )}
               </p>
               <label className="check">
                 <input
@@ -574,8 +579,10 @@ function Detail({
                 .filter((c) => c.variant_id !== decision.resolved_variant_id)
                 .map((c) => (
                   <option key={c.variant_id} value={c.variant_id}>
-                    {c.display_name}
-                    {c.distinction_note ? ` — ${c.distinction_note}` : ""}
+                    {visible(c.display_name)}
+                    {c.distinction_note
+                      ? ` — ${visible(c.distinction_note)}`
+                      : ""}
                   </option>
                 ))}
             </select>

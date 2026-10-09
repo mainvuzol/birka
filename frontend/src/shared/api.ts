@@ -1,5 +1,6 @@
 import { fileProblemText, isFileIssue } from "@/openings/fileErrors";
 import { noteAnswered, noteUnreachable } from "@/shared/reach";
+import { visible } from "@/shared/visible";
 
 /**
  * What the seller is told when the server does not answer, in the owner's
@@ -283,14 +284,16 @@ export function errorText(error: unknown): string {
   if (error.status === 409)
     return "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
   // A stock list's file refused: which line, and what is wrong in it
-  // (ADR-0014 §15). Every other 422 reads as before.
+  // (ADR-0014 §15). Every other 422 reads as before. It names the file's own
+  // keys and values, so it is shown as `visible()` shows them.
   const fileIssue = error.validation.find(isFileIssue);
-  if (error.status === 422 && fileIssue) return fileProblemText(fileIssue);
+  if (error.status === 422 && fileIssue)
+    return visible(fileProblemText(fileIssue));
   if (error.status === 422)
     return "Перевірте дані та поточний статус замовлення.";
   // A server error is logged under the request's number: the seller can
   // quote its start to whoever reads the log.
   if (error.status >= 500 && error.requestId)
-    return `Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: ${error.requestId.slice(0, 8)}.`;
+    return `Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: ${visible(error.requestId.slice(0, 8))}.`;
   return "Не вдалося виконати операцію. Спробуйте ще раз.";
 }

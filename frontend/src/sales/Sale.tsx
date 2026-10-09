@@ -12,6 +12,7 @@ import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import { visible } from "@/shared/visible";
 import { submitSale, useSaleCommand } from "./commands";
 import { setPaper, setSoldBy, usePaper } from "./paper";
 import type {
@@ -409,7 +410,7 @@ export function Sale({
     if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
       if (outcome.kind === "sold") {
         setReceipt(outcome.sale);
-        setDropped(empty.map((d) => `${d.name} · ${d.size}`));
+        setDropped(empty.map((d) => `${visible(d.name)} · ${visible(d.size)}`));
       } else {
         setNothingSold(outcome.shelf);
       }
@@ -578,7 +579,7 @@ export function Sale({
                 <option value="">Не вказано</option>
                 {(sellers.data?.sellers ?? []).map((seller) => (
                   <option key={seller.user_id} value={seller.user_id}>
-                    {seller.display_name}
+                    {visible(seller.display_name)}
                   </option>
                 ))}
               </select>
@@ -645,7 +646,7 @@ export function Sale({
                   value={location.id}
                   disabled={!location.is_active || !location.can_sell}
                 >
-                  {location.name}
+                  {visible(location.name)}
                   {!location.is_active
                     ? " — на паузі"
                     : !location.can_sell
@@ -700,10 +701,10 @@ export function Sale({
                       key={`${item.product_variant_id}:${item.size_id}`}
                       value={`${item.product_variant_id}:${item.size_id}`}
                     >
-                      {item.display_name} ·{" "}
+                      {visible(item.display_name)} ·{" "}
                       {item.size_is_unknown
                         ? "розмір невідомий"
-                        : item.size_label}{" "}
+                        : visible(item.size_label)}{" "}
                       · доступно {item.available_quantity}
                     </option>
                   ))}
@@ -740,7 +741,7 @@ export function Sale({
                     <option value="">Не читали — продати без розміру</option>
                     {(sizes.data ?? []).map((size) => (
                       <option key={size.size_id} value={size.size_id}>
-                        {size.code}
+                        {visible(size.code)}
                       </option>
                     ))}
                   </select>
@@ -825,7 +826,7 @@ export function Sale({
         {draft.map((d, index) => (
           <div className="line" key={stockKey(d.line)}>
             <strong>
-              {d.name} · {d.size}
+              {visible(d.name)} · {visible(d.size)}
             </strong>
             <span>
               {d.line.quantity} × {money(d.line.unit_price)}
@@ -855,7 +856,7 @@ export function Sale({
                 replaceDraft(draft.filter((_, i) => i !== index));
               }}
             >
-              Прибрати {d.name}
+              Прибрати {visible(d.name)}
             </button>
           </div>
         ))}
@@ -892,9 +893,9 @@ export function Sale({
           // Seen before the press: a forgotten switch marks a live sale for
           // good, with a colleague's name (G6).
           <p>
-            Продавець: {named?.display_name ?? "не вказано"}
+            Продавець: {named ? visible(named.display_name) : "не вказано"}
             {from.length > 0 &&
-              ` · ${from.length > 1 ? "склади" : "склад"}: ${from.join(", ")}`}
+              ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
           </p>
         )}
         <p className="hint">
@@ -920,8 +921,9 @@ export function Sale({
           ) : (
             <>
               <p>
-                {shortDraft.name} · {shortDraft.size}: у кошику{" "}
-                {shortfall.requested}, в обліку доступно {shortfall.available}.
+                {visible(shortDraft.name)} · {visible(shortDraft.size)}: у
+                кошику {shortfall.requested}, в обліку доступно{" "}
+                {shortfall.available}.
               </p>
               {paper ? (
                 // Nothing that describes the shelf now (§6, §7).
@@ -939,7 +941,7 @@ export function Sale({
                       <p>
                         Ця модель є на складі з невідомим розміром. Якщо у вас
                         одна з тих одиниць, уточніть її розмір — вона продасться
-                        як {shortDraft.size}.
+                        як {visible(shortDraft.size)}.
                       </p>
                       <button
                         type="button"
@@ -954,7 +956,8 @@ export function Sale({
                           answer(found, missing, next);
                         }}
                       >
-                        Це товар без розміру — продати як {shortDraft.size}
+                        Це товар без розміру — продати як{" "}
+                        {visible(shortDraft.size)}
                         {how}
                       </button>
                     </>
@@ -1123,7 +1126,7 @@ function Receipt({
       )}
       {receipt.items.map((item) => (
         <div className="line" key={item.id}>
-          <strong>{item.display_name}</strong>
+          <strong>{visible(item.display_name)}</strong>
           <span>
             {item.quantity} × {money(item.final_unit_price)} ={" "}
             {money(item.line_total)}
@@ -1187,7 +1190,7 @@ function NothingSold({
           key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
         >
           <strong>
-            {line.display_name} · {sizeLabel(line.size)}
+            {visible(line.display_name)} · {sizeLabel(line.size)}
           </strong>
           <span>
             {line.removed > 0

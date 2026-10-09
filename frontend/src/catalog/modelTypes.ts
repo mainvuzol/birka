@@ -1,4 +1,5 @@
 import { ApiError } from "@/shared/api";
+import { visible } from "@/shared/visible";
 
 /** Correcting the catalogue (owner decision, 2026-10-03; ADR-0008). */
 export type ModelStatus = "ACTIVE" | "NEEDS_REVIEW" | "RETIRED" | "MERGED";
@@ -106,6 +107,7 @@ function places(blocker: Blocker): string {
     ? (blocker.locations as { name?: unknown }[])
         .map((place) => (typeof place.name === "string" ? place.name : ""))
         .filter(Boolean)
+        .map(visible)
     : [];
   return named.length ? `: ${named.join(", ")}` : "";
 }
@@ -183,9 +185,10 @@ export function similarFrom(error: unknown): SimilarWord[] | null {
 /** One line per similar word: what was typed, and what is in use. */
 export function similarText(word: SimilarWord): string {
   const label = wordLabels[word.field] ?? word.field;
+  const typed = visible(word.typed);
   if (word.left_by_merge)
-    return `${label}: «${word.typed}» лишилося від моделі, яку об’єднали з іншою.`;
+    return `${label}: «${typed}» лишилося від моделі, яку об’єднали з іншою.`;
   if (word.existing.length)
-    return `${label}: «${word.typed}» схоже на «${word.existing.join("», «")}», що вже є в каталозі.`;
-  return `${label}: «${word.typed}» схоже на назву, що вже є в каталозі.`;
+    return `${label}: «${typed}» схоже на «${word.existing.map(visible).join("», «")}», що вже є в каталозі.`;
+  return `${label}: «${typed}» схоже на назву, що вже є в каталозі.`;
 }

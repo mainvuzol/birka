@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
+import { visible } from "@/shared/visible";
 import { submitReturnToSupplier } from "./commands";
 import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
 import type { Borrowed as Lot, BorrowedPage } from "./types";
@@ -124,7 +125,7 @@ export function Borrowed({
                 );
                 if (outcome.kind === "done") {
                   await changed(
-                    `Продано ${String(quantity)} од.: у «Накладних» борг «${lot.supplier.name}» ${money(outcome.result.amount)}.`,
+                    `Продано ${String(quantity)} од.: у «Накладних» борг «${visible(lot.supplier.name)}» ${money(outcome.result.amount)}.`,
                   );
                   return null;
                 }
@@ -157,7 +158,7 @@ export function Borrowed({
                 );
                 if (outcome.kind === "done") {
                   await changed(
-                    `Повернено постачальнику «${lot.supplier.name}»: ${String(quantity)} од.`,
+                    `Повернено постачальнику «${visible(lot.supplier.name)}»: ${String(quantity)} од.`,
                   );
                   return null;
                 }
@@ -217,14 +218,15 @@ function LotCard({
   return (
     <article
       className="order-card"
-      aria-label={`${lot.display_name}, ${lot.size ?? ""} від ${lot.supplier.name}`}
+      aria-label={`${visible(lot.display_name)}, ${visible(lot.size ?? "")} від ${visible(lot.supplier.name)}`}
     >
       <strong>
-        {lot.display_name}, {lot.size ?? "розмір не вказано"}
+        {visible(lot.display_name)}, {visible(lot.size ?? "розмір не вказано")}
       </strong>
       <small>
         {lot.acquisition_type === "BORROWED" ? "Позичено" : "Під реалізацію"} у
-        «{lot.supplier.name}» · {when(lot.at)} · {lot.location_name}
+        «{visible(lot.supplier.name)}» · {when(lot.at)} ·{" "}
+        {visible(lot.location_name)}
       </small>
       <p>
         {lot.unit_cost ? `${money(lot.unit_cost)} за од. · ` : ""}взято{" "}

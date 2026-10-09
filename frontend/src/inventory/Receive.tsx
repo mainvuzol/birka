@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
 import { SuggestedPrice } from "@/prices/SuggestedPrice";
@@ -225,15 +226,15 @@ export function Receive({
       <section>
         <h2>Товар прийнято</h2>
         <p>
-          {received.warehouse} · позицій: {received.receipt.lines.length} ·
-          одиниць:{" "}
+          {visible(received.warehouse)} · позицій:{" "}
+          {received.receipt.lines.length} · одиниць:{" "}
           {received.receipt.lines.reduce((s, l) => s + l.quantity_received, 0)}
         </p>
         {received.receipt.lines.map((line, index) => (
           <div className="line" key={line.stock_lot_id}>
             <strong>
-              {received.names[index]?.name ?? "Товар"} ·{" "}
-              {received.names[index]?.size ?? ""}
+              {visible(received.names[index]?.name ?? "Товар")} ·{" "}
+              {visible(received.names[index]?.size ?? "")}
             </strong>
             <span>
               +{line.quantity_received} · тепер на складі {line.quantity_after}
@@ -307,7 +308,7 @@ export function Receive({
                     location.damaged_returns
                   }
                 >
-                  {location.name}
+                  {visible(location.name)}
                   {!location.is_active
                     ? " — на паузі"
                     : location.damaged_returns
@@ -348,7 +349,7 @@ export function Receive({
             <option value="">Оберіть розмір</option>
             {(sizes.data ?? []).map((size) => (
               <option key={size.size_id} value={size.size_id}>
-                {size.code}
+                {visible(size.code)}
               </option>
             ))}
           </select>
@@ -451,7 +452,7 @@ export function Receive({
             key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
           >
             <strong>
-              {d.name} · {d.size}
+              {visible(d.name)} · {visible(d.size)}
             </strong>
             <span>
               {d.line.quantity} од. ·{" "}
@@ -466,7 +467,7 @@ export function Receive({
                 replaceDraft(draft.filter((_, i) => i !== index));
               }}
             >
-              Прибрати {d.name}
+              Прибрати {visible(d.name)}
             </button>
           </div>
         ))}

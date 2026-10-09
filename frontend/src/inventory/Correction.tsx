@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { errorText } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import { submitAdjustment, useAdjustmentCommand } from "./adjustmentCommands";
 import { reasonLabels } from "./adjustmentTypes";
@@ -158,7 +159,7 @@ export function Correction({
   return (
     <fieldset disabled={working}>
       <legend>
-        Виправити залишок: {target.name} · {target.size}
+        Виправити залишок: {visible(target.name)} · {visible(target.size)}
       </legend>
       <p>
         В обліку: <strong>{system}</strong>

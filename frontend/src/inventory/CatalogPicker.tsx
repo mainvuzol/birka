@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import type { ReceivableVariant } from "./receiptTypes";
 
@@ -111,7 +112,7 @@ export function CatalogPicker({
                     onVariant(item);
                   }}
                 >
-                  {item.display_name}
+                  {visible(item.display_name)}
                 </button>
               ))}
             </div>
@@ -139,7 +140,9 @@ export function CatalogPicker({
             </div>
           </>
         ))}
-      {variant && <p className="hint">Обрано: {variant.display_name}</p>}
+      {variant && (
+        <p className="hint">Обрано: {visible(variant.display_name)}</p>
+      )}
     </>
   );
 }

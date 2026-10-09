@@ -5,6 +5,7 @@ import { ApiError, api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
 import type { StockOption, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
+import { visible } from "@/shared/visible";
 import {
   resolveReturnToSupplier,
   submitReturnToSupplier,
@@ -64,7 +65,7 @@ export function Suppliers({
   async function settled(result: SupplierReturn): Promise<void> {
     setMaking(false);
     setDone(
-      `Повернено постачальнику «${result.supplier.name}»: ${String(
+      `Повернено постачальнику «${visible(result.supplier.name)}»: ${String(
         result.lines.reduce((units, line) => units + line.quantity, 0),
       )} од.`,
     );
@@ -165,7 +166,7 @@ export function Suppliers({
           <option value="">Усі постачальники</option>
           {(suppliers.data ?? []).map((supplier) => (
             <option key={supplier.id} value={supplier.id}>
-              {supplier.name}
+              {visible(supplier.name)}
             </option>
           ))}
         </select>
@@ -291,7 +292,7 @@ function NewReturn({
       const option = all.find((item) => key(item) === line.id);
       if (option && line.quantity > option.available_quantity) {
         setProblem(
-          `${option.display_name}, ${option.size_label}: вільно лише ${String(option.available_quantity)} од.`,
+          `${visible(option.display_name)}, ${visible(option.size_label)}: вільно лише ${String(option.available_quantity)} од.`,
         );
         return;
       }
@@ -333,7 +334,7 @@ function NewReturn({
           <option value="">Оберіть склад</option>
           {(places.data ?? []).map((place) => (
             <option key={place.id} value={place.id}>
-              {place.name}
+              {visible(place.name)}
             </option>
           ))}
         </select>
@@ -368,11 +369,11 @@ function NewReturn({
               {options.map((option) => (
                 <li key={key(option)}>
                   <label>
-                    {option.display_name}, {option.size_label} · вільно{" "}
-                    {option.available_quantity}
+                    {visible(option.display_name)}, {visible(option.size_label)}{" "}
+                    · вільно {option.available_quantity}
                     <input
                       inputMode="numeric"
-                      aria-label={`Повернути: ${option.display_name}, ${option.size_label}`}
+                      aria-label={`Повернути: ${visible(option.display_name)}, ${visible(option.size_label)}`}
                       value={counts[key(option)] ?? ""}
                       placeholder="0"
                       onChange={(event) => {
@@ -471,22 +472,22 @@ function ReturnCard({
   return (
     <article
       className="order-card"
-      aria-label={`Повернення ${item.supplier.name} від ${when(item.at)}`}
+      aria-label={`Повернення ${visible(item.supplier.name)} від ${when(item.at)}`}
     >
-      <strong>{item.supplier.name}</strong>
+      <strong>{visible(item.supplier.name)}</strong>
       <small>
         {when(item.at)} · {item.damaged_unit_id ? "з «Брак»" : "склад"} «
-        {item.location_name}» · {item.by}
+        {visible(item.location_name)}» · {visible(item.by)}
       </small>
       <ul aria-label="Що повернули">
         {item.lines.map((line) => (
           <li key={`${line.product_variant_id}:${line.size_id}`}>
-            {line.display_name}, {line.size ?? "розмір не вказано"} ×{" "}
-            {line.quantity}
+            {visible(line.display_name)},{" "}
+            {visible(line.size ?? "розмір не вказано")} × {line.quantity}
           </li>
         ))}
       </ul>
-      {item.note && <p className="hint">{item.note}</p>}
+      {item.note && <p className="hint">{visible(item.note)}</p>}
       {item.set_offs.length > 0 && (
         <ul aria-label="Зараховано в накладні">
           {item.set_offs.map((setOff) => (
@@ -499,14 +500,14 @@ function ReturnCard({
       )}
       {item.cancelled ? (
         <p className="badge">
-          Скасовано {when(item.cancelled.at)} · {item.cancelled.reason} ·{" "}
-          {item.cancelled.by}
+          Скасовано {when(item.cancelled.at)} · {visible(item.cancelled.reason)}{" "}
+          · {visible(item.cancelled.by)}
         </p>
       ) : asking ? (
         <div className="notice">
           <p>
             Товар повернеться {item.damaged_unit_id ? "у «Брак»" : "на склад"} «
-            {item.location_name}». Скасувати можна лише раз.
+            {visible(item.location_name)}». Скасувати можна лише раз.
           </p>
           <label>
             Чому скасовуємо
@@ -595,7 +596,7 @@ function SupplierList({
     } catch (error) {
       setProblem(
         error instanceof ApiError && error.details.reason === "DUPLICATE"
-          ? `«${String(error.details.name)}» уже є у списку.`
+          ? `«${visible(String(error.details.name))}» уже є у списку.`
           : errorText(error),
       );
     }
@@ -648,8 +649,8 @@ function SupplierList({
               </div>
             ) : (
               <>
-                {supplier.name}
-                {supplier.phone && ` · ${supplier.phone}`}{" "}
+                {visible(supplier.name)}
+                {supplier.phone && ` · ${visible(supplier.phone)}`}{" "}
                 <button
                   className="quiet"
                   onClick={() => {
@@ -659,7 +660,7 @@ function SupplierList({
                     setPhone(supplier.phone ?? "");
                   }}
                 >
-                  Змінити {supplier.name}
+                  Змінити {visible(supplier.name)}
                 </button>
               </>
             )}

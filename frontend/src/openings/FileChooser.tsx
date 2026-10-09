@@ -66,7 +66,7 @@ export function FileChooser({
             {`Файл «${visible(read.name)}»: рядків ${String(read.summary.lines)}, фото ${String(read.summary.photos)}${read.summary.price_kind ? `, ${priceKinds[read.summary.price_kind]}` : ""}. `}
             {warehouse === null
               ? "Оберіть склад, до списку якого піде файл."
-              : `Піде до списку складу «${warehouse}».`}
+              : `Піде до списку складу «${visible(warehouse)}».`}
           </p>
         ) : (
           <div role="alert">

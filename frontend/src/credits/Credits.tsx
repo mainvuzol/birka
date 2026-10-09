@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
+import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
@@ -245,9 +246,11 @@ export function Credits({
               className="order-card"
               key={customer.phone_digits ?? customer.credits[0]?.id}
             >
-              <strong>{customer.customer_name ?? erasedCustomer}</strong>
+              <strong>
+                {visible(customer.customer_name ?? erasedCustomer)}
+              </strong>
               {customer.customer_phone && (
-                <span>{customer.customer_phone}</span>
+                <span>{visible(customer.customer_phone)}</span>
               )}
               <p>
                 {customer.open_debts > 0 ? (
@@ -261,7 +264,7 @@ export function Credits({
                 )}
               </p>
               <ul
-                aria-label={`Борги: ${customer.customer_name ?? erasedCustomer}`}
+                aria-label={`Борги: ${visible(customer.customer_name ?? erasedCustomer)}`}
               >
                 {customer.credits.map((credit) => (
                   <li key={credit.id}>
@@ -272,11 +275,11 @@ export function Credits({
                     </p>
                     {credit.store_id !== store.id && (
                       <p className="hint">
-                        Продано в магазині «{credit.store_name}»
+                        Продано в магазині «{visible(credit.store_name)}»
                       </p>
                     )}
                     <p className="hint">
-                      {credit.goods.join(", ")} · продано{" "}
+                      {credit.goods.map(visible).join(", ")} · продано{" "}
                       {when(credit.opened_at)}
                       {credit.last_payment_at &&
                         ` · останній внесок ${when(credit.last_payment_at)}`}
@@ -288,7 +291,7 @@ export function Credits({
                       }}
                     >
                       {customer.customer_name
-                        ? `Відкрити борг ${customer.customer_name} від ${when(credit.opened_at)}`
+                        ? `Відкрити борг ${visible(customer.customer_name)} від ${when(credit.opened_at)}`
                         : `Відкрити борг (покупця стерто) від ${when(credit.opened_at)}`}
                     </button>
                   </li>
@@ -537,11 +540,11 @@ function Debt({
           До списку боргів
         </button>
       </div>
-      <h3>{credit.customer_name ?? erasedCustomer}</h3>
+      <h3>{visible(credit.customer_name ?? erasedCustomer)}</h3>
       {credit.customer_phone ? (
         <p>
           <a href={`tel:${credit.customer_phone.replace(/[^\d+]/g, "")}`}>
-            {credit.customer_phone}
+            {visible(credit.customer_phone)}
           </a>
         </p>
       ) : (
@@ -553,13 +556,15 @@ function Debt({
         )
       )}
       <p className="hint">
-        {credit.goods.join(", ")} · продано {when(credit.opened_at)}
+        {credit.goods.map(visible).join(", ")} · продано{" "}
+        {when(credit.opened_at)}
       </p>
       {elsewhere && (
         <p className="notice">
-          Продано в магазині «{credit.store_name}», який зараз{" "}
+          Продано в магазині «{visible(credit.store_name)}», який зараз{" "}
           {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
-          Внесок приймає цей магазин; борг лишається за «{credit.store_name}».
+          Внесок приймає цей магазин; борг лишається за «
+          {visible(credit.store_name)}».
         </p>
       )}
       <dl className="debt">
@@ -740,9 +745,10 @@ function Debt({
         {credit.entries.map((entry, index) => (
           <li key={`${entry.at}:${String(index)}`}>
             {when(entry.at)} · {entryLabels[entry.kind]} {money(entry.amount)}
-            {entryWay(entry)} · {entry.by}
-            {entry.taken_at && ` · прийняв магазин «${entry.taken_at}»`}
-            {entry.note && ` · ${entry.note}`}
+            {entryWay(entry)} · {visible(entry.by)}
+            {entry.taken_at &&
+              ` · прийняв магазин «${visible(entry.taken_at)}»`}
+            {entry.note && ` · ${visible(entry.note)}`}
             {entry.kind === "WRITE_OFF" &&
               entry.note === null &&
               " · причину стерто разом з даними покупця"}

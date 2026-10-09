@@ -1,6 +1,7 @@
 import { ApiError, errorText, recordedNothing } from "@/shared/api";
 import { methodLabels, notStated } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import { visible } from "@/shared/visible";
 import { refusalText as debtRefusalText } from "@/credits/Credits";
 import { refusalText as correctionRefusalText } from "@/inventory/Correction";
 import { refusalText as returnRefusalText } from "@/returns/Returns";
@@ -36,7 +37,8 @@ export function dayOf(day: string): string {
 
 /** Who and when, from a refusal's details: «20:05 · Олена». */
 function closedBy(details: Record<string, unknown>): string {
-  const by = typeof details.closed_by === "string" ? details.closed_by : "—";
+  const by =
+    typeof details.closed_by === "string" ? visible(details.closed_by) : "—";
   return `${timeOf(details.closed_at)} · ${by}`;
 }
 

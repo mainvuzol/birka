@@ -1403,6 +1403,7 @@ every page.
   other commands until one is tried.
 - **The display guard is new to every list.** Raw text was shown unguarded
   since «Початкові залишки» was built; now it is not. The catalogue screens
-  still show raw text, and are left for a change of their own. Since the
+  still show raw text, and are left for a change of their own (since
+  2026-10-10 every screen marks text from outside: ADR-0018). Since the
   review the guard marks by Unicode's classes, but for an emoji's own
   selector and joiner, so a person's name with an emoji reads as written.

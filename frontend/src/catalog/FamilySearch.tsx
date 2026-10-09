@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 
 export interface Family {
   family_id: string;
@@ -19,7 +20,8 @@ export function familyLabel(family: Family): string {
     family.garment_type_name,
     family.distinction_note,
   ]
-    .filter(Boolean)
+    .filter((part): part is string => Boolean(part))
+    .map(visible)
     .join(" — ");
 }
 export function FamilySearch({

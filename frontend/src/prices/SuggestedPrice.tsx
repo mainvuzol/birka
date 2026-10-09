@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import type { AppliesTo, Prices } from "./types";
@@ -236,13 +237,15 @@ function Form({
             }}
           >
             <option value="ORGANIZATION">Спільну — для всіх магазинів</option>
-            <option value="STORE">Лише для магазину «{store.name}»</option>
+            <option value="STORE">
+              Лише для магазину «{visible(store.name)}»
+            </option>
           </select>
         </label>
       ) : (
         <p className="hint">
-          Ця ціна діятиме лише в магазині «{store.name}». Спільну ціну для всіх
-          магазинів тут змінити не можна.
+          Ця ціна діятиме лише в магазині «{visible(store.name)}». Спільну ціну
+          для всіх магазинів тут змінити не можна.
         </p>
       )}
       <p className="hint">
@@ -331,7 +334,7 @@ function priceKey(
 /** What the till suggests here, and where that price comes from. */
 function describe(prices: Prices, store: Store): string {
   if (prices.store_price !== null)
-    return `${money(prices.store_price)} — ціна магазину «${store.name}»`;
+    return `${money(prices.store_price)} — ціна магазину «${visible(store.name)}»`;
   if (prices.shared_price !== null)
     return `${money(prices.shared_price)} — спільна для всіх магазинів`;
   return "не задана";
