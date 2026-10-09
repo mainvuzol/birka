@@ -22,8 +22,12 @@ container, and no memory limit.
     `DAC_READ_SEARCH`, `FOWNER`, `SETGID`, `SETUID`);
   - Caddy keeps `NET_BIND_SERVICE`, for ports 80 and 443;
   - the API and the watcher hold none at all, and run as their own user.
-- **A memory limit each**, from measurement: about 2.5 to 4 times the most
-  each reached under the heaviest work.
+- **A memory limit each**, swap included, from measurement: at least about
+  2.5 times the most each reached under the heaviest work.
+- **Never privileged**, nor sharing the host's processes or network.
+- **In CI** the `edge` job checks each container as Docker runs it, and the
+  restore drill runs the night's backup, its drill and the watcher held as
+  compose holds them; a test keeps the two equal.
 
 ## How it was found and measured
 
@@ -80,6 +84,21 @@ not of memory.
   needs `httpx`, which only the tests install; the server's images hold the
   app's locked packages alone. The runbook and the hot path report now say
   so, and that the reading stays the laptop's and CI's.
+
+## Review of the built change
+
+An independent review (2026-10-09) found nothing that stops the stack, the
+backup or a restore, and these gaps, all closed:
+
+| Finding | Fixed |
+|---|---|
+| **The night's backup and the watcher never ran with the limits in CI**: the restore drill runs them by `docker run`, and the `edge` job does not start the watcher. A write somewhere new in them would pass CI and fail at night. | The restore drill holds them as compose does; a test keeps CI's settings equal to compose's. |
+| **`privileged: true` would have passed** the test and the `edge` job, and given a container every privilege back; so would the host's processes, IPC or network, devices, another user. | The test refuses each of those keys; the `edge` job reads `Privileged`. |
+| **Swap doubled every limit** on a server with swap. | `memswap_limit` equal to each limit, pinned. |
+| Only "some" `/tmp` mount was checked, so a mount making the code writable would pass. | Every service's mounts pinned in full. |
+| The runbook's signs missed a database backend killed (the container stays up), the night's log, and a full `/tmp`. | Named, with the kernel's own log. |
+| Caddy, root without root's privileges, can no longer read a Caddyfile only its owner may. | The runbook's step 1 says to check it. |
+| Smaller: the "2.5 to 4 times" said of Caddy (12 times), the checklist's server reading, the `edge` check passing on any failed write, `psql`'s history in a read-only container. | Reworded; the check needs "Read-only file system"; the restore's step 7 says the warning is harmless. |
 
 ## Evidence
 

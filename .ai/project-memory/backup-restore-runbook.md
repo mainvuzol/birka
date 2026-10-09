@@ -268,6 +268,8 @@ passed restores with them.
    ```sql
    SELECT id, customer_name FROM customer_credit WHERE id IN ('<credit_id>', …);
    ```
+   On leaving, `psql` may say it could not save its history: the
+   database's container is read-only (ADR-0017), and nothing is lost.
    The owner finds each in «Борги» by the name and presses «Стерти дані
    покупця» again. If the old database is gone, the owner repeats the ones
    they remember: from the newest night, at most a day of them.

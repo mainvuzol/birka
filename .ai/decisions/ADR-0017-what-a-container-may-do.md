@@ -40,7 +40,11 @@ What each service needs was checked in Docker on 2026-10-09:
   `web` writes only its volume.
 - **No kernel privilege** (`cap_drop: [ALL]`) but the one it uses (§2).
 - **None gained by running a program** (`no-new-privileges`).
-- **A memory limit** (§3).
+- **A memory limit** (§3), swap included (`memswap_limit` the same), or a
+  server with swap would let each use twice its limit.
+- **Never** privileged, nor sharing the host's processes, IPC or network,
+  nor given devices or another user: each would give back what the rest
+  takes away. A test holds every service to all of this.
 
 ### 2. The privileges kept
 
@@ -67,8 +71,10 @@ most each container reached under the heaviest work Birka does. In MiB:
 | Caddy | 21 | | 256 MiB |
 | `web` | — | copying the bundle | 128 MiB |
 
-Each limit is about 2.5 to 4 times its peak: a Python process grows over
-weeks, and the database's figure counts the cache it may give back. They
+Each limit is at least about 2.5 times its peak (Caddy's more: 256 MiB is
+the least worth setting for a server facing the internet): a Python process
+grows over weeks, and the database's figure counts the cache it may give
+back. They
 are **ceilings for a process run away, not shares**: together they exceed
 a 2 GB server's memory, and need not fit in it. The same work then ran
 again under these limits (pass 2), and nothing was killed.
@@ -82,11 +88,17 @@ server holds the four long-running containers in about 650 MiB.
   privilege. Its volumes stay writable: the database's data, Caddy's
   certificates, the backups for `ops`.
 - A process that runs away is killed at its own limit, and Docker restarts
-  it (`unless-stopped`); the others keep their memory. The watcher tells of
-  an API that stops answering (ADR-0011).
-- A new release that needs more memory, or a write outside its volumes,
-  fails here first: CI's `edge` job runs the stack with these settings, and
-  checks each container as Docker runs it.
+  it (`unless-stopped`); the others keep their memory. In the database the
+  kernel kills a single backend, and PostgreSQL restarts its others. The
+  watcher tells of an API that stops answering (ADR-0011).
+- A new release that writes outside its volumes fails in CI first: the
+  `edge` job runs the stack with these settings and checks each container
+  as Docker runs it, and the restore drill runs the night's backup, its
+  drill and the watcher held the same way (a test keeps CI's settings equal
+  to compose's). One that needs more memory only under the heaviest work
+  does not: CI does not do that work, which was measured once.
+- Caddy, root without root's privileges, reads `infra/Caddyfile` only if
+  everyone may (server runbook, step 1).
 - PostgreSQL's five privileges, and Caddy's one, are what remains; Caddy and
   `web` still run as root, without privileges.
 

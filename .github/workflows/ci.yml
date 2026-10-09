@@ -196,10 +196,13 @@ jobs:
           print(len(locked), "packages, exactly as locked")'
 
       - name: Migrate, seed, and run the nightly backup as the schedule would
+        # Held as compose holds `ops` (ADR-0017): a read-only image, no
+        # kernel privilege, its /tmp and its memory (a test keeps them equal).
         run: |
           mkdir -p backups keys && chmod 777 backups keys
           ops() {
             docker run --rm --network host -v "$PWD/backups:/backups" -v "$PWD/keys:/keys" \
+              --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:size=64m --memory 512m --memory-swap 512m \
               -e BIRKA_DATABASE_URL=postgresql+asyncpg://birka:birka@localhost:5432/birka \
               -e BIRKA_RESTORE_SCRATCH_URL=postgresql+asyncpg://birka:birka@localhost:5432/postgres \
               -e BIRKA_BACKUP_AGE_RECIPIENTS="${RECIPIENT:-}" \
@@ -222,12 +225,14 @@ jobs:
         # it connects: as `birka_app` (ADR-0016). The night above must read
         # as OK. Then the watcher runs a few looks — nothing is news, so
         # nothing goes to Telegram — and is stopped as Docker stops it:
-        # SIGTERM to PID 1, which it must honour, not wait out.
+        # SIGTERM to PID 1, which it must honour, not wait out. Held as
+        # compose holds `backup-watch` (ADR-0017; a test keeps them equal).
         run: |
           DB=postgresql+asyncpg://birka_app:ci-app-role-password-made-long-enough-32@localhost:5432/birka
-          docker run --rm --network host -e BIRKA_DATABASE_URL=$DB birka-api \
+          held="--read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:size=16m --memory 512m --memory-swap 512m"
+          docker run --rm --network host $held -e BIRKA_DATABASE_URL=$DB birka-api \
             python -m scripts.backup_watch --status
-          docker run -d --name watch --network host -e BIRKA_DATABASE_URL=$DB \
+          docker run -d --name watch --network host $held -e BIRKA_DATABASE_URL=$DB \
             -e BIRKA_TELEGRAM_BOT_TOKEN=123456:ci-not-a-real-token birka-api \
             python -m scripts.backup_watch --every 2
           sleep 6
@@ -682,18 +687,19 @@ jobs:
               *) kept="[]" ;;
             esac
             for id in $ids; do
-              shape=$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.CapAdd}} {{.HostConfig.SecurityOpt}} {{.HostConfig.Memory}}' "$id")
+              shape=$(docker inspect -f '{{.HostConfig.Privileged}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.CapAdd}} {{.HostConfig.SecurityOpt}} {{.HostConfig.Memory}}' "$id")
               echo "$service: $shape"
               case "$shape" in
-                "true [ALL] $kept [no-new-privileges:true] 0") fail "$service has no memory limit" ;;
-                "true [ALL] $kept [no-new-privileges:true] "*) ;;
+                "false true [ALL] $kept [no-new-privileges:true] 0") fail "$service has no memory limit" ;;
+                "false true [ALL] $kept [no-new-privileges:true] "*) ;;
                 *) fail "$service is not limited as compose says: $shape" ;;
               esac
             done
           done
-          if docker compose exec -T api sh -c 'touch /app/probe' 2>/dev/null; then
+          if refusal=$(docker compose exec -T api sh -c 'touch /app/probe' 2>&1); then
             fail "the API can write its own image"
           fi
+          grep -q "Read-only file system" <<<"$refusal" || fail "the write was refused, but not for its image: $refusal"
           docker compose exec -T api sh -c 'touch /tmp/probe' || fail "the API has no /tmp to write"
           caps=$(docker compose exec -T api grep CapEff /proc/1/status)
           echo "$caps"

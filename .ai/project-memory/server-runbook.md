@@ -56,6 +56,12 @@ cd /srv/birka && git checkout <the release commit>
 
 Deploy a commit whose CI passed, all of it.
 
+Caddy reads `infra/Caddyfile` without any privilege of root's
+([ADR-0017](../decisions/ADR-0017-what-a-container-may-do.md)): the file
+must be readable by everyone, as a checkout with the usual umask leaves it
+(`ls -l infra/Caddyfile` shows `-rw-r--r--`; else `chmod 644
+infra/Caddyfile`).
+
 ### 2. The settings
 
 ```sh
@@ -724,10 +730,18 @@ that is wanted, it is the laptop's and CI's.
 - **No container may change its image, gain a privilege, or grow past its
   memory** ([ADR-0017](../decisions/ADR-0017-what-a-container-may-do.md)):
   read-only images, every kernel privilege dropped but the one each uses,
-  and a memory limit each. A service that writes somewhere new, or needs
-  more memory, fails in CI's `edge` job first; on the server,
-  `docker compose logs <service>` says `Read-only file system`, or
-  `docker inspect -f '{{.State.OOMKilled}}' <container>` says `true`.
+  and a memory limit each, swap included. A service that writes somewhere
+  new fails in CI first (the `edge` job runs the stack, the restore drill
+  the night's backup and the watcher, both held so); one that needs more
+  memory under the heaviest work does not, since CI does not do that work.
+  On the server, the signs:
+  - `docker compose logs <service>` says `Read-only file system` (a write
+    outside its volumes), or `No space left on device` (its `/tmp` full);
+  - killed for its memory: `docker inspect -f '{{.State.OOMKilled}}'
+    <container>` says `true`; in the database a single backend is killed
+    instead, and `docker compose logs db` says `terminated by signal 9:
+    Killed`; the night's backup says so in `/var/log/birka-backup.log`;
+    the kernel's own word: `journalctl -k | grep -i oom`.
 - **The API and `backup-watch` connect as `birka_app`**, which reads and
   writes rows and nothing more: it may not truncate, create, or alter, drop
   or disable a table or a trigger, so the ledger's triggers hold even
