@@ -1046,6 +1046,16 @@ async def test_a_list_opens_a_warehouse_with_a_bounded_number_of_allocations(wor
 
     assert full.status_code == 200, full.text
     assert over.status_code == 422, over.text
+    # Still a 422, named as a full list is (review, 2026-10-09): what is full,
+    # its limit, what the other lines hold and what this answer adds.
+    assert over.json()["code"] == "VALIDATION_ERROR"
+    assert over.json()["details"] == {
+        "reason": "LIST_FULL",
+        "what": "allocations",
+        "limit": 3,
+        "now": 3,
+        "adding": 1,
+    }
     assert fewer.status_code == 200, fewer.text
     assert fits.status_code == 200, fits.text
     assert fits.json()["snapshot"]["summary"]["allocations"] == 3

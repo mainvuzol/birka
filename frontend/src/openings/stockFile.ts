@@ -1,4 +1,4 @@
-import { limited } from "./fileErrors";
+import { limited, named } from "./fileErrors";
 
 /**
  * A parser's file, read on the phone before it is sent (ADR-0014 §1, §15).
@@ -12,12 +12,16 @@ import { limited } from "./fileErrors";
  * - **the bytes**, decoded as UTF-8 strictly: `file.text()` would quietly
  *   turn a bad byte into U+FFFD, and a line would be kept as it was never
  *   written. A BOM is allowed;
- * - **a repeated key, and a number written with a point or an exponent**
- *   where the format takes a whole number («3.0» is not 3): `JSON.parse`
- *   keeps the last of two keys and reads 3.0 as 3, so a scan of the text
- *   finds them before it;
- * - **the format, its version, how many lines**, and the size of what would
- *   be sent: the edge refuses a body over 1 000 000 bytes (§11).
+ * - **a repeated key, a number written with a point or an exponent**
+ *   where the format takes a whole number («3.0» is not 3), **and a number
+ *   too large to be one** anywhere in the file («1e400»): `JSON.parse` keeps
+ *   the last of two keys, reads 3.0 as 3 and 1e400 as Infinity, which is
+ *   sent as `null` and so left out, where the validator refuses the file. A
+ *   scan of the text finds them before it;
+ * - **the format, its version, how many lines**, the file's own size as the
+ *   server measures it (`MAX_PART_BYTES`: the file compact, without its
+ *   nulls), and the size of what would be sent: the edge refuses a body over
+ *   1 000 000 bytes (§11).
  *
  * The file's content is never kept on the phone: a draft keeps its name and
  * its sha256, to send the same command again for the same file.
@@ -25,6 +29,9 @@ import { limited } from "./fileErrors";
 
 /** A file larger than this is not read at all. */
 export const MAX_FILE_BYTES = 4_000_000;
+/** The largest file the server takes into a list (`stock_file.MAX_PART_BYTES`),
+ * written compact and without its nulls (review, 2026-10-09). */
+export const MAX_PART_BYTES = 950_000;
 /** The largest request the phone sends; the edge refuses over 1 000 000. */
 export const MAX_BODY_BYTES = 990_000;
 export const MAX_PART_LINES = 1000;
@@ -116,10 +123,17 @@ function where(path: Path): string {
 /** The scan gave up: the text is not JSON, and `JSON.parse` will say so. */
 class Broken extends Error {}
 
+/** The key a path ends at, inside its arrays: «colours» for a colour. */
+function keyOf(path: Path): string | null {
+  const keys = path.filter((part): part is string => typeof part === "string");
+  return keys[keys.length - 1] ?? null;
+}
+
 /**
  * The problems `JSON.parse` would hide, where they stand: a key twice in one
- * object, and a number with a point or an exponent where the format takes a
- * whole number. A text that is not JSON gives none here.
+ * object, a number with a point or an exponent where the format takes a whole
+ * number, and a number too large for the phone to read, wherever it stands.
+ * A text that is not JSON gives none here.
  */
 export function scanJson(text: string): string[] {
   const problems: string[] = [];
@@ -160,7 +174,7 @@ export function scanJson(text: string): string[] {
         if (text.charAt(at) !== '"') throw new Broken();
         const key = string();
         if (seen.has(key))
-          problems.push(`${where(path)}: ключ «${key}» повторюється.`);
+          problems.push(`${where(path)}: ключ «${named(key)}» повторюється.`);
         seen.add(key);
         space();
         if (text.charAt(at) !== ":") throw new Broken();
@@ -197,10 +211,19 @@ export function scanJson(text: string): string[] {
     while (at < text.length && /[-+0-9.eEa-z]/.test(text.charAt(at))) at += 1;
     const literal = text.slice(start, at);
     if (literal === "") throw new Broken();
-    if (/^-?\d/.test(literal) && /[.eE]/.test(literal) && wholeNumberAt(path)) {
+    if (!/^-?\d/.test(literal)) return;
+    // 1e400, or four hundred digits: Infinity to `JSON.parse`, then `null`.
+    if (!Number.isFinite(Number(literal))) {
+      const key = keyOf(path);
+      // Four hundred digits are not read out: their start is enough.
+      const shown = literal.length > 20 ? `${literal.slice(0, 20)}…` : literal;
+      problems.push(
+        `${where(path)}: ${key === null ? "" : `у «${named(key)}» `}записано ${shown} — завелике число, застосунок його не прочитає.`,
+      );
+    } else if (/[.eE]/.test(literal) && wholeNumberAt(path)) {
       const key = path[path.length - 1];
       problems.push(
-        `${where(path)}: «${String(key)}» має бути цілим числом, а записано ${literal}.`,
+        `${where(path)}: «${named(String(key))}» має бути цілим числом, а записано ${literal}.`,
       );
     }
   }
@@ -297,8 +320,9 @@ export async function readStockFile(file: File): Promise<StockFileRead> {
     );
   const kept = withoutNulls(parsed) as Record<string, unknown>;
   delete kept.$schema;
-  // Said now rather than at sending: the request is larger still.
-  if (bodyBytes(kept) > MAX_BODY_BYTES) return refused(TOO_LARGE);
+  // The file as the server measures it: compact, its nulls and `$schema`
+  // left out. Said now rather than at sending.
+  if (bodyBytes(kept) > MAX_PART_BYTES) return refused(TOO_LARGE);
   const items = kept.lines as unknown[];
   const priceKind = kept.price_kind;
   return {

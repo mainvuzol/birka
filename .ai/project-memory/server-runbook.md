@@ -293,8 +293,9 @@ For each warehouse, in this order:
    It prints `OK` with the file's lines and photos; otherwise it prints every
    problem with its line, and exits 1. The file then reaches the phone of
    whoever uploads it, saved to the phone's files (from a Telegram chat,
-   say). Until the drill on an Android and an iPhone has passed (release
-   checklist, row 26), Telegram Desktop is the sure way in.
+   say). The drill on an Android, an iPhone and Telegram Desktop (release
+   checklist, row 26) has not been run yet: Telegram Desktop is expected to
+   work but has not been tried either.
 3. **The catalogue.** A line is answered by picking a model, so every model
    the list names is created in «Каталог», before or during the review.
    Sellers may do this too. A split confirmed by a tap (step 5) needs each of
@@ -325,13 +326,24 @@ For each warehouse, in this order:
    the parser's reading, as a hint. The parser's count is only a hint unless
    the line itself says «шт»: a person states the count, with a note. A line
    that writes each size joined to its count by a sign («S-1 M-2 L-1»,
-   «Лоран M-3») is confirmed by a tap, «Як у рядку, по розмірах»; «M 3»,
-   with a space alone, is a bare number. A record that may also be a range
-   of sizes («42-44», when 44 or «42-44» is a size of the catalogue) is
-   asked about first, «Запис «42-44» — це:»: the tap is offered only after
-   «Розмір 42 — 44 шт» is chosen; a range is answered with the sizes and a
-   note (owner, 2026-10-09). Headings, totals and crossed-out lines come
-   with the parser's note, and a person decides each (owner, 2026-10-08).
+   «Лоран M-3»), and nothing beside them but a price, a count with «шт» or
+   a length, is confirmed by a tap, «Як у рядку, по розмірах»; «M 3», with
+   a space alone, is a bare number, and «S-1 M-2 L-1 разом 5» is answered
+   with a note. A record that may also be a range of sizes is asked about
+   first, «Запис «42-44» — це:»: a number size whose count, also a number,
+   reads as a larger size after it («42-44», «98-104»), whatever the
+   catalogue holds, or a record whose count or whole is a size of the
+   catalogue («M-3» with a size «3»). The tap is offered only
+   after «Розмір 42 — 44 шт» is chosen; a range is answered with the sizes
+   and a note (owner, 2026-10-09). Headings, totals and crossed-out lines
+   come with the parser's note, and a person decides each (owner,
+   2026-10-08).
+
+   **Create sizes before answering by size.** A size created after a line
+   is answered by size can make its record a possible range («M-3» once a
+   size «3» exists): the approval is then refused, naming the lines, «Рядки
+   … треба розібрати ще раз: запис у них тепер може бути діапазоном
+   розмірів.» Open each, say what the record means, and approve again.
 6. **The approval.** The owner (`snapshot:approve`) approves the list, and
    it becomes the warehouse's stock. It cannot be undone. A rejected list
    changes nothing, and a new one may be started.
@@ -389,6 +401,13 @@ only «Відхилити список». Then:
 
 If the warehouse is paused too, the other store does not reach the list:
 open the warehouse first, or let the store trade again.
+
+**The same, when that store may no longer receive goods there** (review,
+2026-10-09), its access row to the warehouse having been changed. Through
+the other store the list is then only rejected too, and a refused command
+says «Магазин «…», що почав цей список, більше не може приймати товар на цей
+склад: список можна лише відхилити.» Reject it, and start the new list, as
+above.
 
 **While a list waits, the warehouse waits** (owner, 2026-10-02), for the
 whole review, even days (owner, 2026-10-08). The app refuses every receipt,

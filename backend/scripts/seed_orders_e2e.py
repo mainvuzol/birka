@@ -109,6 +109,23 @@ async def main() -> None:
         file_range = StockLocation(
             organization_id=org.id, name="Склад для діапазону", code="E2E-FILE-RANGE"
         )
+        # Three more, one per journey of the review's fixes (2026-10-09): one
+        # where answers are lost and a removed file comes back, one seen on
+        # a narrow phone, and one where a list is made but its answer is late.
+        file_lost = StockLocation(
+            organization_id=org.id, name="Склад, де губляться відповіді", code="E2E-FILE-LOST"
+        )
+        file_narrow = StockLocation(
+            organization_id=org.id, name="Склад для вузького екрана", code="E2E-FILE-NARROW"
+        )
+        file_late = StockLocation(
+            organization_id=org.id, name="Склад, де відповідь запізнилась", code="E2E-FILE-LATE"
+        )
+        # And one where the list is made only after the phone stopped
+        # waiting: no new list is offered meanwhile (review, 2026-10-09).
+        file_later = StockLocation(
+            organization_id=org.id, name="Склад, де список зберігся пізніше", code="E2E-FILE-LATER"
+        )
         # And one both stores may import into: its list belongs to both
         # (owner decision, 2026-10-08).
         shared_opening = StockLocation(
@@ -148,6 +165,10 @@ async def main() -> None:
                 file_checks,
                 file_slow,
                 file_range,
+                file_lost,
+                file_narrow,
+                file_late,
+                file_later,
                 shared_opening,
                 second,
                 second_own,
@@ -181,6 +202,10 @@ async def main() -> None:
             file_checks,
             file_slow,
             file_range,
+            file_lost,
+            file_narrow,
+            file_late,
+            file_later,
             shared_opening,
         ):
             session.add(
@@ -268,6 +293,10 @@ async def main() -> None:
             "file_checks_location_id": str(file_checks.id),
             "file_slow_location_id": str(file_slow.id),
             "file_range_location_id": str(file_range.id),
+            "file_lost_location_id": str(file_lost.id),
+            "file_narrow_location_id": str(file_narrow.id),
+            "file_late_location_id": str(file_late.id),
+            "file_later_location_id": str(file_later.id),
             "shared_opening_location_id": str(shared_opening.id),
             "second_store_id": str(second.id),
             "second_location_id": str(second_own.id),

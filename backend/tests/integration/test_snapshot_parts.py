@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.errors import ValidationFailedError
 from app.modules.audit.models import AuditLog
 from app.modules.authz.service import resolve_scope
 from app.modules.catalog.evidence import (
@@ -47,7 +48,7 @@ from app.modules.catalog.evidence import (
 from app.modules.catalog.models import EntityStatus, ProductVariant
 from app.modules.catalog.raw_lines import record_lines
 from app.modules.identity.models import AppUser
-from app.modules.inventory.models import MovementType, StockLot
+from app.modules.inventory.models import MovementType, OpeningListHold, StockLot
 from app.modules.snapshots import service as snapshot_service
 from app.modules.snapshots.models import (
     InventorySnapshot,
@@ -1716,6 +1717,10 @@ async def numeric_model(
 
 # «42-44» as the parser read it: size 42, 44 pieces.
 RANGE_LIKE = stock_file(file_line("Парка 42-44", size_counts=counts(("42", 44))))
+# The same line, read from another photo, for a second file.
+ONE_SIZE_ELSEWHERE = stock_file(
+    file_line("Лоран M-3", photo="IMG_0009.jpg", size_counts=counts(("M", 3)))
+)
 
 
 async def test_a_record_that_may_be_a_range_of_sizes_is_stated_by_size_only_when_said_so(world):
@@ -1772,32 +1777,247 @@ async def test_a_record_that_may_be_a_range_of_sizes_is_stated_by_size_only_when
     assert entry.after["quantity_basis"] == "STATED_BY_SIZE"
 
 
+# «Лоран M-3»: size M, 3 pieces, which only a size «3» makes a possible range.
+ONE_SIZE = stock_file(file_line("Лоран M-3", size_counts=counts(("M", 3))))
+
+
 async def test_a_size_created_after_the_import_makes_a_record_a_possible_range(world):
     """Read at every look, and again at the answer: a person who saw no
-    question before the size 44 was created is asked after."""
+    question before the size 3 was created is asked after."""
     w = world
     async with w.client() as client:
-        parka, sizes = await numeric_model(client, w, "Парка", "42")
-        view = await created_from_file(client, w, RANGE_LIKE)
+        view = await created_from_file(client, w, ONE_SIZE)
         snapshot_id = view["snapshot_id"]
         [before] = await lines_of(client, snapshot_id)
-        # Another model brings the size 44 into the catalogue.
-        await numeric_model(client, w, "Жилет", "44")
+        # Another model brings the size 3 into the catalogue.
+        await numeric_model(client, w, "Жилет", "3")
         refused = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=by_size(w, ("M", 3)),
+            quantity_basis="STATED_BY_SIZE",
+        )
+        [after] = await lines_of(client, snapshot_id)
+
+    assert [pair["may_be_range"] for pair in before["shown_split"]] == [False]
+    assert (refused.status_code, refused.json()["details"]) == (
+        422,
+        {"reason": "SPLIT_MAY_BE_RANGE", "records": ["M-3"]},
+    )
+    assert [pair["may_be_range"] for pair in after["shown_split"]] == [True]
+
+
+async def test_a_number_size_with_a_larger_count_is_asked_about_whatever_the_catalogue(world):
+    """Review, 2026-10-09, of the owner's rule of that day: «42-44» may be the
+    sizes 42 to 44 with no size 44 in the catalogue yet, so the tap waits for
+    the person's word; «46-2» is a size with its count."""
+    w = world
+    file = stock_file(
+        file_line("Парка 42-44", size_counts=counts(("42", 44))),
+        file_line("Парка 46-2", photo_line=2, size_counts=counts(("46", 2))),
+    )
+    async with w.client() as client:
+        parka, sizes = await numeric_model(client, w, "Парка", "42", "46")
+        view = await created_from_file(client, w, file)
+        snapshot_id = view["snapshot_id"]
+        ranged, plain = await lines_of(client, snapshot_id)
+        unsaid = await resolve(
             client,
             snapshot_id,
             1,
             allocations=[allocation(parka, sizes["42"], 44)],
             quantity_basis="STATED_BY_SIZE",
         )
-        [after] = await lines_of(client, snapshot_id)
+        tapped = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=[allocation(parka, sizes["46"], 2)],
+            quantity_basis="STATED_BY_SIZE",
+        )
 
-    assert [pair["may_be_range"] for pair in before["shown_split"]] == [False]
-    assert (refused.status_code, refused.json()["details"]["reason"]) == (
+    assert [(pair["written"], pair["may_be_range"]) for pair in ranged["shown_split"]] == [
+        ("42-44", True)
+    ]
+    assert [(pair["written"], pair["may_be_range"]) for pair in plain["shown_split"]] == [
+        ("46-2", False)
+    ]
+    assert (unsaid.status_code, unsaid.json()["details"]) == (
         422,
-        "SPLIT_MAY_BE_RANGE",
+        {"reason": "SPLIT_MAY_BE_RANGE", "records": ["42-44"]},
     )
-    assert [pair["may_be_range"] for pair in after["shown_split"]] == [True]
+    assert tapped.status_code == 200, tapped.text
+    assert tapped.json()["line"]["split_read_as"] is None
+
+
+async def test_an_answer_by_size_is_read_again_at_the_approval(world):
+    """Review, 2026-10-09: a line tapped while its record could be read only
+    one way, and made ambiguous by a size created after, is not approved on
+    that tap. The approval names the line; once the person says the record is
+    a size with its count, it passes."""
+    w = world
+    async with w.client() as client:
+        view = await created_from_file(client, w, ONE_SIZE)
+        snapshot_id = view["snapshot_id"]
+        tapped = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=by_size(w, ("M", 3)),
+            quantity_basis="STATED_BY_SIZE",
+        )
+        assert tapped.status_code == 200, tapped.text
+        revision = tapped.json()["snapshot"]["review_revision"]
+        # A size «3» comes into the catalogue after the tap.
+        await numeric_model(client, w, "Жилет", "3")
+        refused = await approve(client, snapshot_id, revision)
+        unchanged = await view_of(client, snapshot_id)
+        said = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=by_size(w, ("M", 3)),
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+        )
+        approved = await approve(client, snapshot_id, said.json()["snapshot"]["review_revision"])
+
+    assert tapped.json()["line"]["split_read_as"] is None
+    assert conflict(refused, "SPLIT_MAY_BE_RANGE") == {
+        "reason": "SPLIT_MAY_BE_RANGE",
+        "count": 1,
+        "line_nos": [1],
+    }
+    assert (unchanged["status"], unchanged["review_revision"]) == ("IN_REVIEW", revision)
+    # The same answer with the person's word is a new answer: it is kept.
+    assert said.status_code == 200, said.text
+    assert said.json()["line"]["split_read_as"] == "SIZE_WITH_COUNT"
+    assert said.json()["snapshot"]["review_revision"] == revision + 1
+    assert approved.status_code == 200, approved.text
+    assert await stock(w) == {(w.coat, w.sizes["M"]): 3}
+    entries = await audit_of(w, "snapshot.line_resolved")
+    assert [(e.before["split_read_as"], e.after["split_read_as"]) for e in entries] == [
+        (None, None),
+        (None, "SIZE_WITH_COUNT"),
+    ]
+
+
+async def test_the_person_s_word_covers_the_records_it_was_said_of_and_no_other(world):
+    """Review, 2026-10-09: the question is asked per record, so the answer
+    keeps the records it was said of. «Куртка 42-44 46-2» answered for
+    «42-44» is not approved once a size «2» makes «46-2» a possible range
+    too: nobody was asked about it. Said again, for both, it passes."""
+    w = world
+    file = stock_file(file_line("Куртка 42-44 46-2", size_counts=counts(("42", 44), ("46", 2))))
+    async with w.client() as client:
+        jacket, sizes = await numeric_model(client, w, "Куртка", "42", "46")
+        view = await created_from_file(client, w, file)
+        snapshot_id = view["snapshot_id"]
+        [before] = await lines_of(client, snapshot_id)
+        answer = [allocation(jacket, sizes["42"], 44), allocation(jacket, sizes["46"], 2)]
+        said = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+        )
+        assert said.status_code == 200, said.text
+        [first] = await rows_of(w, snapshot_id)
+        # The records go with the person's word and only with it, as a list.
+        for change in ("split_read_records = NULL", "split_read_records = '{}'::jsonb"):
+            await refused_by_the_database(
+                w,
+                # Constants of this test, not input.
+                f"UPDATE inventory_snapshot_row SET {change} WHERE id = :id",  # noqa: S608
+                "split_read_with_its_records",
+                id=first.id,
+            )
+        # Another model brings the size «2» into the catalogue.
+        await numeric_model(client, w, "Жилет", "2")
+        [after] = await lines_of(client, snapshot_id)
+        revision = said.json()["snapshot"]["review_revision"]
+        refused = await approve(client, snapshot_id, revision)
+        again = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+        )
+        [second] = await rows_of(w, snapshot_id)
+        approved = await approve(client, snapshot_id, again.json()["snapshot"]["review_revision"])
+
+    assert [(pair["written"], pair["may_be_range"]) for pair in before["shown_split"]] == [
+        ("42-44", True),
+        ("46-2", False),
+    ]
+    assert first.split_read_records == ["42-44"]
+    assert [(pair["written"], pair["may_be_range"]) for pair in after["shown_split"]] == [
+        ("42-44", True),
+        ("46-2", True),
+    ]
+    # The line's word is there, but not for «46-2».
+    assert conflict(refused, "SPLIT_MAY_BE_RANGE") == {
+        "reason": "SPLIT_MAY_BE_RANGE",
+        "count": 1,
+        "line_nos": [1],
+    }
+    # The same answer said of both records is a new answer.
+    assert again.status_code == 200, again.text
+    assert again.json()["snapshot"]["review_revision"] == revision + 1
+    assert second.split_read_records == ["42-44", "46-2"]
+    assert approved.status_code == 200, approved.text
+    entries = await audit_of(w, "snapshot.line_resolved")
+    assert [entry.after["split_read_records"] for entry in entries] == [
+        ["42-44"],
+        ["42-44", "46-2"],
+    ]
+
+
+async def test_what_a_person_said_of_a_split_goes_with_an_answer_by_size_only(world):
+    """The database keeps `split_read_as` only beside `STATED_BY_SIZE`, and a
+    removed file's line drops it with its answer."""
+    w = world
+    async with w.client() as client:
+        view = await created_from_file(client, w, ONE_SIZE)
+        snapshot_id = view["snapshot_id"]
+        part = await added(await add_file(client, snapshot_id, ONE_SIZE_ELSEWHERE))
+        said = await resolve(
+            client,
+            snapshot_id,
+            2,
+            allocations=by_size(w, ("M", 3)),
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+        )
+        assert said.status_code == 200, said.text
+        assert (await remove(client, snapshot_id, part["part_id"])).status_code == 200
+        answered = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=by_size(w, ("M", 3)),
+            quantity_basis="OWNER_KNOWLEDGE",
+            note="так на фото",
+        )
+        assert answered.status_code == 200, answered.text
+
+    first, second = await rows_of(w, snapshot_id)
+    assert (second.status, second.split_read_as, second.split_read_records) == (
+        SnapshotRowStatus.REMOVED,
+        None,
+        None,
+    )
+    await refused_by_the_database(
+        w,
+        "UPDATE inventory_snapshot_row SET split_read_as = 'SIZE_WITH_COUNT' WHERE id = :id",
+        "split_read_only_by_size",
+        id=first.id,
+    )
 
 
 async def test_a_record_written_as_a_size_of_its_own_may_be_a_range_whatever_its_dashes(world):
@@ -1884,6 +2104,10 @@ async def test_a_file_error_names_its_line_and_never_echoes_the_file(world):
         elsewhere = await client.post(
             "/api/v1/snapshots", json={**import_body(w, LIST), "command_id": secret}
         )
+        outside = await client.post(
+            f"/api/v1/stores/{w.main}/state",
+            json={"command_id": str(uuid.uuid4()), "state": secret, "reason": "перевірка"},
+        )
 
     for response in (created, adding):
         assert response.status_code == 422, response.text
@@ -1902,10 +2126,167 @@ async def test_a_file_error_names_its_line_and_never_echoes_the_file(world):
         ["body", "file", "lines", 1, "photo_line"],
         {"line": 2, "first_line": 1},
     )
-    # Nothing else changes its shape: a refusal outside a file still says
-    # what it refused.
+    # A stock list's request is not echoed either when the refusal is about
+    # the request around the file (review, 2026-10-09).
     assert elsewhere.status_code == 422
-    assert elsewhere.json()["detail"][0]["input"] == secret
+    [error] = elsewhere.json()["detail"]
+    assert (error["type"], error["loc"]) == ("uuid_parsing", ["body", "command_id"])
+    assert secret not in elsewhere.text and "input" not in error and "url" not in error
+    # Nothing else changes its shape: elsewhere, a refusal still says what
+    # it refused.
+    assert outside.status_code == 422
+    assert outside.json()["detail"][0]["input"] == secret
+
+
+async def test_a_file_s_name_holds_no_control_character_nor_line_separator(world):
+    """The file's name is held to the file's own rule (review, 2026-10-09):
+    no C0 or C1 control (U+0085 among them), and no line or paragraph
+    separator, which a screen breaks a line at as at a line break."""
+    w = world
+    async with w.client() as client:
+        view = await imported(client, w)
+        refused = {
+            character: (
+                await from_file(client, w, NOTEBOOK, file_name=f"зошит{character}1.json"),
+                await add_file(client, view["snapshot_id"], file_name=f"зошит{character}2.json"),
+            )
+            for character in ("\n", "\x85", "\x9f", "\u2028", "\u2029")
+        }
+        kept = await from_file(client, w, NOTEBOOK, file_name="зошит\xa01 (копія).json")
+
+    for character, responses in refused.items():
+        for response in responses:
+            assert response.status_code == 422, (hex(ord(character)), response.text)
+            [error] = response.json()["detail"]
+            assert error["loc"] == ["body", "file_name"], hex(ord(character))
+    assert kept.status_code == 201, kept.text
+    # The service holds a caller that skips the request's checks to it too.
+    for character in ("\x85", "\u2028"):
+        with pytest.raises(ValidationFailedError):
+            snapshot_service._file_name(f"зошит{character}.json")
+
+
+async def test_a_new_list_parses_its_lines_before_it_holds_the_warehouse(world, monkeypatch):
+    """Review, 2026-10-09 (the ledger's minor 4): creating a list parses its
+    first part while nobody else can see the list, and only then holds the
+    warehouse under its exclusive lock, as adding a part never takes it."""
+    w = world
+    holds_while_parsing: list[int] = []
+    parse = snapshot_service.record_lines
+
+    async def parsing(session: AsyncSession, **kwargs: Any) -> Any:
+        holds_while_parsing.append(
+            int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(OpeningListHold)
+                    .where(OpeningListHold.location_id == w.shared)
+                )
+                or 0
+            )
+        )
+        return await parse(session, **kwargs)
+
+    monkeypatch.setattr(snapshot_service, "record_lines", parsing)
+    async with w.client() as client:
+        view = await created_from_file(client, w)
+
+    assert holds_while_parsing == [0]
+    async with w.maker() as session:
+        held = await session.scalar(
+            select(OpeningListHold.snapshot_id).where(OpeningListHold.location_id == w.shared)
+        )
+    assert str(held) == view["snapshot_id"]
+
+
+async def test_no_refusal_of_a_stock_list_s_request_echoes_it(world):
+    """Review, 2026-10-09: a refusal of the request around a file stands at
+    `["body"]`, and its `input` was the whole body, file included: a file
+    without its name, a file with lines, a file added with `source`, or a
+    body that is not an object at all. None is echoed, and each answer stays
+    small however large the file."""
+    w = world
+    secret = "Наталія-0671234567"
+    big = stock_file(*[file_line(f"{secret} Лоран {n} шт", photo_line=n) for n in range(1, 301)])
+    async with w.client() as client:
+        view = await imported(client, w)
+        snapshot_id = view["snapshot_id"]
+        refused = {
+            "a file without its name": await client.post(
+                "/api/v1/snapshots",
+                json={key: value for key, value in import_body(w, LIST).items() if key != "lines"}
+                | {"file": big},
+            ),
+            "a file and lines": await from_file(client, w, big, lines=[secret]),
+            "an added file without its name": await client.post(
+                f"/api/v1/snapshots/{snapshot_id}/parts",
+                json={"command_id": str(uuid.uuid4()), "file": big},
+            ),
+            "an added file with a source": await client.post(
+                f"/api/v1/snapshots/{snapshot_id}/parts",
+                json={
+                    "command_id": str(uuid.uuid4()),
+                    "file": big,
+                    "file_name": FILE_NAME,
+                    "source": secret,
+                    "counted_on": secret,
+                },
+            ),
+            "a body that is a list": await client.post("/api/v1/snapshots", json=[big, secret]),
+            "a body that is a string": await client.post(
+                f"/api/v1/snapshots/{snapshot_id}/parts", json=secret
+            ),
+            "an answer that is a list": await client.put(
+                f"/api/v1/snapshots/{snapshot_id}/lines/1", json=[secret]
+            ),
+            "an answer with a stray key": await resolve(
+                client, snapshot_id, 1, skip_reason="не товар", why=secret
+            ),
+            # A key the format does not know is named, by its first sixty
+            # characters only.
+            "a file line with a key that runs on": await from_file(
+                client, w, stock_file({**file_line("Лоран M-1"), "x" * 60 + secret: 1})
+            ),
+            "a file line with a key of 300 000 characters": await from_file(
+                client, w, stock_file({**file_line("Лоран M-1"), "k" * 300_000: 1})
+            ),
+        }
+
+    for case, response in refused.items():
+        assert response.status_code == 422, (case, response.text)
+        assert secret not in response.text, case
+        assert len(response.content) < 2_000, (case, len(response.content))
+        for error in response.json()["detail"]:
+            assert "input" not in error and "url" not in error, case
+    [unknown] = refused["a file line with a key that runs on"].json()["detail"]
+    assert (unknown["type"], unknown["loc"]) == (
+        "extra_forbidden",
+        ["body", "file", "lines", 0, "x" * 60 + "…"],
+    )
+
+
+async def test_a_422_lists_at_most_fifty_refusals_and_counts_the_rest(world):
+    """Review, 2026-10-09: a small body of many unknown keys answered with
+    every refusal, megabytes of them. On every route, at most fifty are sent,
+    and `detail_truncated` says how many more there were."""
+    w = world
+    unknown = {f"key_{n}": n for n in range(120)}
+    async with w.client() as client:
+        list_body = await client.post("/api/v1/snapshots", json=unknown)
+        store_body = await client.post(f"/api/v1/stores/{w.main}/state", json=unknown)
+        few = await client.post("/api/v1/snapshots", json={"key": 1})
+
+    # 120 unknown keys, and three required ones missing.
+    for response, refusals in ((list_body, 123), (store_body, 123)):
+        assert response.status_code == 422, response.text
+        body = response.json()
+        assert len(body["detail"]) == 50
+        assert body["detail_truncated"] == refusals - 50
+    assert [error["type"] for error in list_body.json()["detail"][:3]] == ["missing"] * 3
+    assert "input" in store_body.json()["detail"][-1]
+    assert few.status_code == 422
+    assert "detail_truncated" not in few.json()
+    assert len(few.json()["detail"]) == 4
 
 
 # ---------------------------------------------------------------------------
@@ -1972,6 +2353,11 @@ async def test_a_shared_warehouse_s_list_is_seen_and_filled_from_either_store(wo
             )
         )
         assert stores == {w.second}
+    # The answer's history names the store it was given through, as adding
+    # and removing do (review, 2026-10-09).
+    [entry] = await audit_of(w, "snapshot.line_resolved")
+    assert entry.after["via_store_id"] == str(w.second)
+    assert entry.actor_user_id == w.users["child_manager"]
 
 
 async def resolve_through(
@@ -2174,6 +2560,59 @@ async def test_a_list_whose_own_store_trades_again_is_approved_as_before(world):
     conflict(refused, "LIST_STORE_NOT_TRADING")
     assert approved.status_code == 200, approved.text
     assert approved.json()["store_state"] == "ACTIVE"
+
+
+async def test_a_shared_list_whose_own_store_may_no_longer_receive_there_is_only_rejected(world):
+    """Review, 2026-10-09: the list's own store acts in the ledger, so once it
+    loses `can_receive` at the warehouse, no command but a rejection passes
+    through either store. Through its own store the access row refuses it, as
+    before; through the other store the list's store is named."""
+    w = world
+    reason = "магазин більше не приймає на цей склад"
+    async with w.client("manager") as client:
+        view = await prepared(client, w)
+        snapshot_id = view["snapshot_id"]
+        [part] = await parts_of(client, snapshot_id)
+    async with w.maker.begin() as session:
+        await session.execute(
+            update(StoreLocationAccess)
+            .where(
+                StoreLocationAccess.store_id == w.main,
+                StoreLocationAccess.location_id == w.shared,
+            )
+            .values(can_receive=False)
+        )
+    async with w.client() as client:
+        approved_through_own = await decide(
+            client, snapshot_id, "approve", w.main, expected_review_revision=3
+        )
+        approved_through_other = await decide(
+            client, snapshot_id, "approve", w.second, expected_review_revision=3
+        )
+    async with w.client("child_manager") as client:
+        seen = await view_of(client, snapshot_id, store=w.second)
+        answered = await resolve_through(
+            client, snapshot_id, 3, w.second, skip_reason="не товар, перевірила Ніна"
+        )
+        filled = await add_lines(client, snapshot_id, ["Шуба"], store=w.second)
+        emptied = await remove(client, snapshot_id, part["part_id"], store=w.second)
+        rejected = await decide(client, snapshot_id, "reject", w.second, reason=reason)
+
+    assert (approved_through_own.status_code, approved_through_own.json()["code"]) == (
+        403,
+        "LOCATION_ACCESS_DENIED",
+    )
+    for refused in (approved_through_other, answered, filled, emptied):
+        assert conflict(refused, "LIST_STORE_CANNOT_RECEIVE") == {
+            "reason": "LIST_STORE_CANNOT_RECEIVE",
+            "store_id": str(w.main),
+            "location_id": str(w.shared),
+        }
+    assert seen["review_revision"] == 3
+    assert rejected.status_code == 200, rejected.text
+    assert (rejected.json()["status"], rejected.json()["review_revision"]) == ("REJECTED", 3)
+    assert await audit_of(w, "snapshot.applied") == []
+    assert await movements(w) == []
 
 
 async def test_who_added_and_who_removed_a_file_are_named(world):

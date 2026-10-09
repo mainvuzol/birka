@@ -7,7 +7,9 @@ The parser's reading only adds doubt, and never makes a line `KNOWN`:
   2026-10-08: «Бомбер M 3 1200» is a bare number, answered with a note);
 - a split the text shows, each size joined to its count by a sign, one
   size or several («S-1 M-2 L-1», «Лоран M-3»), is kept for a tap; a space
-  alone joins nothing («M 3»; owner, 2026-10-08);
+  alone joins nothing («M 3»; owner, 2026-10-08); and the text shows nothing
+  beside it: no other size, no other size with a count, no number but the
+  price, a count with «шт» or a length (review, 2026-10-09);
 - a record of it that may also be a range of sizes («42-44») is asked about
   first (owner, 2026-10-09).
 
@@ -195,6 +197,55 @@ def test_a_split_the_text_shows_is_kept(
 @pytest.mark.parametrize(
     ("text", "pairs", "reading"),
     [
+        ("S-1 M-2 L-1", (("S", 1), ("M", 2), ("L", 1)), {}),
+        ("Лоран бежевий S-1 M-2 L-1", (("S", 1), ("M", 2), ("L", 1)), {}),
+        ("M-3", (("M", 3),), {}),
+        ("Лоран M-3", (("M", 3),), {}),
+        ("m:3 l = 12", (("M", 3), ("L", 12)), {}),
+        ("42-44", (("42", 44),), {}),
+        ("46-1 48-2", (("46", 1), ("48", 2)), {}),
+        ("M:3 3 шт", (("M", 3),), {}),
+        ("M=1", (("M", 1),), {}),
+        ("S-1,M-2", (("S", 1), ("M", 2)), {}),
+        ("S-1, M-2", (("S", 1), ("M", 2)), {}),
+        ("Лоран M-3 шт", (("M", 3),), {}),
+        # The file's price, as its digits are written; a count with «шт»
+        # equal to the sum; a length Birka reads.
+        ("Лоран бежевий S-1 M-2 L-1 1850", (("S", 1), ("M", 2), ("L", 1)), {"price": "1850"}),
+        ("Лоран M-3 1850 грн", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3 1850", (("M", 3),), {"price": "1850 грн"}),
+        ("Лоран M-1 L-2 3 шт 1200", (("M", 1), ("L", 2)), {"price": "1200"}),
+        ("Пальто 110 см S-1 M-2", (("S", 1), ("M", 2)), {}),
+        # A comma or a point lists on: no fraction without a digit right
+        # after it.
+        ("Лоран бежевий S-1, M-2, L-1, 1850", (("S", 1), ("M", 2), ("L", 1)), {"price": "1850"}),
+        ("Лоран M-3. 1850", (("M", 3),), {"price": "1850"}),
+        # The parser's preposition «с» is no size S; a digit of another
+        # script is a digit.
+        ("Куртка с капюшоном M-3", (("M", 3),), {}),
+        ("Лоран M-３", (("M", 3),), {}),
+        # The price is the parser's word: a number the file calls the price
+        # is excused, whatever else it might be (ADR-0014 §5; a reading
+        # awaiting the owner, R-f).
+        ("Лоран 46-2 48", (("46", 2),), {"price": "48"}),
+    ],
+)
+def test_a_split_shown_with_nothing_beside_it_but_a_price_a_count_or_a_length(
+    text: str, pairs: tuple[tuple[str, int], ...], reading: dict[str, Any]
+) -> None:
+    """Review, 2026-10-09: the text shows the split and nothing beside it.
+    Every number in it is the split's, or the file's price, a count with its
+    unit or a length Birka read."""
+    found = evidence(text, size_counts=counts(*pairs), **reading)
+
+    assert split(text, size_counts=counts(*pairs), **reading) == pairs
+    assert found.shown_split == pairs
+    assert FILE_SPLIT_NOT_IN_TEXT not in found.reasons
+
+
+@pytest.mark.parametrize(
+    ("text", "pairs", "reading"),
+    [
         # A size written twice.
         ("Лоран M-1 M-2 L-1", (("M", 1), ("L", 1)), {}),
         # A count that differs from the text's.
@@ -233,6 +284,80 @@ def test_a_split_the_text_shows_is_kept(
         # Places that overlap are not two sizes with their counts.
         ("Лоран 46-48-2 48-1", (("46-48", 2), ("48", 1)), {}),
         ("Лоран M-1-2", (("M-1", 2), ("M", 1)), {}),
+        # A count that does not end with its digits is no count (review,
+        # 2026-10-09): a sum, a fraction, a decimal or a product.
+        ("Лоран M-3+2", (("M", 3),), {}),
+        ("Лоран M-3 +2", (("M", 3),), {}),
+        ("Лоран M-3,5", (("M", 3),), {}),
+        ("Лоран M-3.5", (("M", 3),), {}),
+        ("Лоран M-3/2", (("M", 3),), {}),
+        ("Лоран M-3х2", (("M", 3),), {}),
+        ("Лоран M-3Х2", (("M", 3),), {}),
+        ("Лоран M-3x2", (("M", 3),), {}),
+        ("Лоран M-3×2", (("M", 3),), {}),
+        ("Лоран M-3*2", (("M", 3),), {}),
+        ("Лоран M-3-2", (("M", 3),), {}),
+        ("Лоран M-3·2", (("M", 3),), {}),
+        # A sum or a product with spaces about its sign.
+        ("Лоран M-3 + 2", (("M", 3),), {}),
+        ("Лоран M-3 x 2", (("M", 3),), {}),
+        ("Лоран M-3 * 2", (("M", 3),), {}),
+        # A numeral that is no digit (review, 2026-10-09): a fraction, a
+        # superscript, a circled number, a Roman numeral sign.
+        ("Лоран M-3½", (("M", 3),), {}),
+        ("Лоран M-3²", (("M", 3),), {}),
+        ("Лоран M-3 ①", (("M", 3),), {}),
+        ("Лоран M-3 ²", (("M", 3),), {}),
+        ("Лоран M-3 Ⅲ", (("M", 3),), {}),
+        ("Лоран M-3 + ½", (("M", 3),), {}),
+        ("Лоран M-3,½", (("M", 3),), {}),
+        # ...even when the number after it is accounted for, here as the price.
+        ("Лоран M-3+2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3х2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3,5", (("M", 3),), {"price": "5"}),
+        ("Лоран M-3 + 2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3·2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3½", (("M", 3),), {"price": "½"}),
+        ("Лоран M-3½", (("M", 3),), {"price": "3½"}),
+        ("Лоран M-3 + ①", (("M", 3),), {"price": "①"}),
+        # The size written once more, with a count or without.
+        ("Лоран M-3 M 2", (("M", 3),), {}),
+        ("Лоран M-3 (M)", (("M", 3),), {}),
+        ("Лоран S-1 M-2 s", (("S", 1), ("M", 2)), {}),
+        # Another size Birka reads in the text.
+        ("Лоран S M-3", (("M", 3),), {}),
+        ("Лоран M-3 L", (("M", 3),), {}),
+        # Another letter size by its spelling, though the parser reads only
+        # XS to XXL (review, 2026-10-09): written out, with a Cyrillic letter,
+        # or counted.
+        ("Лоран S-1 M-2 XXXL", (("S", 1), ("M", 2)), {}),
+        ("Лоран M-3 XXXL", (("M", 3),), {}),
+        ("Лоран M-3 XXS", (("M", 3),), {}),
+        ("Лоран M-3 XXXXL", (("M", 3),), {}),
+        ("Лоран M-3 4XL", (("M", 3),), {}),
+        ("Лоран M-3 ХL", (("M", 3),), {}),
+        ("Лоран M-3 XL-XXL", (("M", 3),), {}),
+        ("Лоран M-3 XXXL 1", (("M", 3),), {"price": "1"}),
+        # The split's own size once more, in another spelling of it.
+        ("Лоран M-3 М", (("M", 3),), {}),
+        ("Лоран XXL-1 2XL", (("XXL", 1),), {}),
+        ("Лоран XL-2 хл", (("XL", 2),), {}),
+        ("Лоран OS-3 ＯＳ", (("OS", 3),), {}),
+        # Another size with its count, of a letter size or a number one.
+        ("Лоран S-1 M-2 L-4", (("S", 1), ("M", 2)), {}),
+        ("Лоран M-3 L-5", (("M", 3),), {}),
+        ("Лоран M-3 L-1200", (("M", 3),), {"price": "1200"}),
+        ("Лоран 46-2 48-1200", (("46", 2),), {"price": "1200"}),
+        # Another number: a bare total, a size whose count is lost, a price
+        # the file does not give, or gives otherwise, or written twice.
+        ("Лоран S-1 M-2 L-1 разом 5", (("S", 1), ("M", 2), ("L", 1)), {}),
+        ("S-1 M-2 L-1 разом 5", (("S", 1), ("M", 2), ("L", 1)), {}),
+        ("Лоран 46-2 48", (("46", 2),), {}),
+        ("46-2 48", (("46", 2),), {}),
+        ("Лоран M-3 1850", (("M", 3),), {}),
+        ("Лоран M-3 1850", (("M", 3),), {"price": "1200"}),
+        ("Лоран M-3 1850 1850", (("M", 3),), {"price": "1850"}),
+        ("Лоран 2 в 1 M-3", (("M", 3),), {}),
     ],
 )
 def test_a_split_is_shown_only_when_each_size_appears_once_with_its_count(
@@ -402,10 +527,36 @@ def test_a_record_that_is_itself_a_size_may_be_a_range() -> None:
 
 
 def test_a_record_neither_way_a_size_is_a_size_with_its_count() -> None:
-    assert ranges("Парка 42-44", (("42", 44),), "42", "46", "M") == [False]
+    assert ranges("Парка 46-2", (("46", 2),), "46", "2-4", "M") == [False]
     assert ranges("Лоран M-1 L-2", (("M", 1), ("L", 2)), "M", "L", "XL") == [False, False]
     # The size itself is no range: «42» alone answers nothing.
     assert ranges("Парка 42-1", (("42", 1),), "42") == [False]
+
+
+@pytest.mark.parametrize(
+    ("text", "pairs", "asked"),
+    [
+        ("Парка 42-44", (("42", 44),), [True]),
+        ("Парка 42-58", (("42", 58),), [True]),
+        ("Парка 98-104", (("98", 104),), [True]),
+        ("Парка 42 – 44 46-2", (("42", 44), ("46", 2)), [True, False]),
+        # A count smaller than the size, or shorter, reads as no size after it.
+        ("Парка 46-2", (("46", 2),), [False]),
+        ("Парка 48-12", (("48", 12),), [False]),
+        ("Парка 104-98", (("104", 98),), [False]),
+        ("Лоран M-3", (("M", 3),), [False]),
+        ("Лоран M-30", (("M", 30),), [False]),
+    ],
+)
+def test_a_number_size_whose_count_reads_as_a_larger_size_may_be_a_range(
+    text: str, pairs: tuple[tuple[str, int], ...], asked: list[bool]
+) -> None:
+    """Review, 2026-10-09, of the owner's rule of that day: «42-44» may be the
+    sizes 42 to 44 whatever the catalogue holds, so it is asked about even
+    with no size 44 or «42-44» in it."""
+    assert split(text, size_counts=counts(*pairs)) == pairs
+    assert ranges(text, pairs) == asked
+    assert ranges(text, pairs, *(size for size, _ in pairs)) == asked
 
 
 def test_a_possible_range_is_found_under_any_spelling_of_the_size() -> None:

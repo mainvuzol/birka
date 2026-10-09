@@ -266,9 +266,9 @@ No new tap anywhere.
    `useReach { down, since }`. Every outcome of `api()` notes it: unreachable
    sets `down`, keeping `since` from the first; any other answer clears it.
    *Amended 2026-10-08 by ADR-0014 §16:* a call declared slow (creating a
-   list from a file, adding a file, approving a list) waits 60 s, and its own
-   timeout is not taken as the server being down. A fetch that fails
-   outright still is.
+   list from a file; adding a part, a file or typed lines; approving a
+   list) waits 60 s, and its own timeout is not taken as the
+   server being down. A fetch that fails outright still is.
 3. **It checks when the server is back.** `useAutoCheck(checks)`. Each
    check's `run` is exactly the handler the banner's button calls: an
    identical resend.

@@ -14,7 +14,8 @@ written, and still does: `text` is stored verbatim):
 - unknown keys are refused at every level, except `$schema`;
 - types are strict: `"7"` is not `7`, `true` is not `1`, `3.0` is not `3`;
 - an optional key is absent or `null`, never `""` or `[]`;
-- no string holds a control character, so no line break inside `text`;
+- no string holds a control character, C0 or C1, so no line break inside
+  `text`;
 - `(photo, photo_line)` appears once per file, and a `size_counts` names
   each size once, ignoring case;
 - a file holds at most 100 000 characters of `text`, and at most 950 000
@@ -104,13 +105,35 @@ def _refusal(kind: str, **context: Any) -> PydanticCustomError:
     return PydanticCustomError(kind, MESSAGES[kind], context)
 
 
-def _plain(value: str, info: ValidationInfo) -> str:
-    """No control character, U+0000–U+001F and U+007F, in any string.
+# The line and paragraph separators: no control characters by their class,
+# but a line break wherever Unicode's line breaking or `str.splitlines` reads
+# one (review, 2026-10-09).
+_SEPARATORS = "\u2028\u2029"
 
-    A line break inside `text` would show one written line as two. Then the
-    rule every stored text follows: nothing PostgreSQL cannot hold.
+
+def _control(character: str) -> bool:
+    """A C0 or C1 control character, U+0000–U+001F and U+007F–U+009F, or a
+    line or paragraph separator, U+2028 and U+2029."""
+    return character < " " or "\x7f" <= character <= "\x9f" or character in _SEPARATORS
+
+
+def has_control(value: str) -> bool:
+    """Whether a text holds a character `_plain` refuses: the file's name,
+    beside the file, is held to the same rule."""
+    return any(_control(character) for character in value)
+
+
+def _plain(value: str, info: ValidationInfo) -> str:
+    """No control character, C0 or C1 (U+0000–U+001F, U+007F–U+009F), and
+    no line or paragraph separator (U+2028, U+2029), in any string.
+
+    A line break inside `text` would show one written line as two, and so
+    would U+0085, the next-line character, or U+2028, on a screen that
+    breaks there; on one that does not, «Лоран\\u0085M-1» reads «ЛоранM-1»
+    (review, 2026-10-09). Then the rule every stored text follows: nothing
+    PostgreSQL cannot hold.
     """
-    if any(character < " " or character == "\x7f" for character in value):
+    if has_control(value):
         raise _refusal("stock_file_control_character", field=info.field_name)
     return reject_unstorable(value)
 
@@ -462,5 +485,6 @@ __all__ = [
     "canonical_bytes",
     "content_fingerprint_of_file",
     "content_fingerprint_of_lines",
+    "has_control",
     "load_stock_file_text",
 ]

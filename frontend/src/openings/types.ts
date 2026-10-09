@@ -1,4 +1,5 @@
 import type { StoreState } from "@/orders/types";
+import { visible } from "@/shared/visible";
 
 /** `/snapshots`: a legacy stock list, reviewed line by line (ADR-0005). */
 export type ListStatus = "IN_REVIEW" | "APPLIED" | "REJECTED";
@@ -195,11 +196,11 @@ export const priceKindLabels: Record<PriceKind, string> = {
  */
 export const fileReasonLabels: Record<string, string> = {
   FILE_COUNT_HINT:
-    "У рядку ця кількість без «шт» — це лише підказка. Вкажіть кількість і звідки вона відома.",
+    "Парсер прочитав кількість, але в рядку вона не написана зі «шт» — це лише підказка. Вкажіть кількість і звідки вона відома.",
   FILE_COUNT_DIFFERS:
     "Рядок каже про кількість інакше, ніж парсер. Подивіться фото й вкажіть, звідки відома кількість.",
   FILE_SPLIT_NOT_IN_TEXT:
-    "Парсер прочитав кількість по розмірах, але рядок її так не показує. Вкажіть, звідки відомо.",
+    "Парсер прочитав кількість по розмірах, але рядок показує її не так або не лише її — одним натиском її не підтвердити. Вкажіть, звідки відома кількість.",
 };
 
 /** «M × 1, L × 2»: sizes, each with its count. */
@@ -221,4 +222,37 @@ export function sourceQuantity(line: ListLine): string {
       ? "у списку кілька розмірів чи кольорів, без поділу"
       : `у списку: ${String(line.quantity_total)} шт, але не сказано, скільки якого розміру чи кольору`;
   return "кількість у списку не вказана";
+}
+
+/** A count as a person reads it: «5 000». */
+export function number(count: number): string {
+  return count.toLocaleString("uk-UA");
+}
+
+/** The noun for a count: «1 раз», «2 рази», «5 разів», «21 раз». */
+export function plural(
+  count: number,
+  one: string,
+  few: string,
+  many: string,
+): string {
+  const tens = count % 100;
+  const units = count % 10;
+  if (units === 1 && tens !== 11) return one;
+  if (units >= 2 && units <= 4 && (tens < 12 || tens > 14)) return few;
+  return many;
+}
+
+/** «3 рази»: how many times a line stands in the list. */
+export function times(count: number): string {
+  return `${number(count)} ${plural(count, "раз", "рази", "разів")}`;
+}
+
+/**
+ * The store that started the list may no longer receive goods into its
+ * warehouse (`LIST_STORE_CANNOT_RECEIVE`): the list is only rejected, from
+ * either store (review, 2026-10-09). The page learns it from the refusal.
+ */
+export function cannotReceiveText(list: StockList): string {
+  return `Магазин «${visible(list.store_name ?? "—")}», що почав цей список, більше не може приймати товар на цей склад: список можна лише відхилити.`;
 }

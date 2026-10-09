@@ -19,8 +19,9 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import ColumnElement, ScalarSelect, Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import QueryableAttribute
 
 from app.core.errors import ValidationFailedError
 from app.modules.catalog.evidence import (
@@ -191,6 +192,22 @@ async def read_lines(
     }
 
 
+def text_of(
+    raw_input_id: ColumnElement[uuid.UUID] | QueryableAttribute[uuid.UUID],
+    *,
+    organization_id: uuid.UUID,
+) -> ScalarSelect[str]:
+    """The exact text of the line `raw_input_id` names, tenant-scoped,
+    without its parse, as a column of the caller's own query: a check over
+    every line of a long list reads each text beside its row, in the one
+    statement that reads the rows (review, 2026-10-09)."""
+    return (
+        select(RawInput.raw_text)
+        .where(RawInput.id == raw_input_id, RawInput.organization_id == organization_id)
+        .scalar_subquery()
+    )
+
+
 async def repeated_lines(
     session: AsyncSession,
     *,
@@ -258,4 +275,5 @@ __all__ = [
     "read_lines",
     "record_lines",
     "repeated_lines",
+    "text_of",
 ]

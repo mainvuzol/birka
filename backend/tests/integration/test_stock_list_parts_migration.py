@@ -425,6 +425,19 @@ PLANTED: list[tuple[str, str, list[str], list[str]]] = [
         )
     ],
     (
+        "what a person said of a split",
+        "said a record of its split means",
+        [
+            "UPDATE inventory_snapshot_row SET quantity_basis = 'STATED_BY_SIZE', "
+            "split_read_as = 'SIZE_WITH_COUNT', split_read_records = '[]'::jsonb "
+            "WHERE id = :answered"
+        ],
+        [
+            "UPDATE inventory_snapshot_row SET quantity_basis = 'STATED', "
+            "split_read_as = NULL, split_read_records = NULL WHERE id = :answered"
+        ],
+    ),
+    (
         "an answer by size",
         "by size, a basis 0036 does not know",
         [

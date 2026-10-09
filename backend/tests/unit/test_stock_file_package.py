@@ -241,7 +241,7 @@ BAD = {
     "3.0 for a count": (
         '{"format":"birka.stock-list","version":1,"lines":'
         '[{"text":"a","photo":"p","photo_line":1,"count":3.0}]}',
-        "рядок 1: int_type: кількість — має бути цілим числом",
+        "рядок 1: int_type: поле «кількість» має бути цілим числом",
     ),
     "NaN": (
         '{"format":"birka.stock-list","version":1,"lines":'
@@ -285,7 +285,7 @@ BAD = {
     ),
     "an empty list": (
         written(a_file({**a_line(), "colours": []})),
-        "рядок 1: too_short: кольори — порожнє",
+        "рядок 1: too_short: поле «кольори» порожнє",
     ),
     "an unknown key": (
         written(a_file({**a_line(), "qty": 3})),
@@ -293,8 +293,8 @@ BAD = {
     ),
     "too much text": (
         written(a_file(*[{**a_line(n), "text": "Л" * 500} for n in range(1, 202)])),
-        f"рядок 201: stock_file_text_too_long_in_all: у файлі забагато тексту: "
-        f"не більше {MAX_PART_TEXT_CHARS} символів",
+        "рядок 201: stock_file_text_too_long_in_all: у файлі забагато тексту: "
+        f"не більше {MAX_PART_TEXT_CHARS:,} символів".replace(",", " "),
     ),
     "over the byte bound": (
         written(a_file(*[_heavy(n) for n in range(1, 251)])),
@@ -302,7 +302,7 @@ BAD = {
     ),
     "too many lines": (
         written(a_file(*[a_line(n) for n in range(1, MAX_PART_LINES + 2)])),
-        "файл: too_long: рядки — задовге",
+        "файл: too_long: поле «рядки» задовге",
     ),
     "another version": (
         written({**a_file(), "version": 2}),
@@ -340,6 +340,73 @@ def test_the_byte_bound_is_the_compact_encoding_not_the_file_on_disk(
     )
     code, out = run(capsys, tmp_path, pretty)
     assert (code, out.startswith("OK:")) == (0, True), out
+
+
+WORDED = {
+    "a key missing": (
+        written({"format": "birka.stock-list", "lines": [a_line()]}),
+        "файл: missing: поле «версія формату» відсутнє",
+    ),
+    "a line's key missing": (
+        written(a_file({"text": "Лоран", "photo_line": 1})),
+        "рядок 1: missing: поле «фото» відсутнє",
+    ),
+    "a text too long": (
+        written(a_file({**a_line(), "text": "Л" * 501})),
+        "рядок 1: string_too_long: поле «текст» задовге",
+    ),
+    "a size of a split too long": (
+        written(a_file({**a_line(), "size_counts": [{"size": "M" * 21, "count": 1}]})),
+        "рядок 1: string_too_long: поле «розмір» задовге",
+    ),
+    "a kind of price unknown": (
+        written({**a_file(), "price_kind": "retail"}),
+        "файл: literal_error: поле «вид цін» має недопустиме значення",
+    ),
+    "a line that is no object": (
+        written(a_file(a_line(), "Лоран M-1")),  # type: ignore[arg-type]
+        "рядок 2: model_type: рядок має бути об’єктом",
+    ),
+    "a file that is no object": (written([a_file()]), "файл: model_type: файл має бути об’єктом"),
+}
+
+
+@pytest.mark.parametrize("case", list(WORDED), ids=list(WORDED))
+def test_each_field_is_named_as_a_field_and_said_in_agreement_with_it(
+    case: str, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Review, 2026-10-09: «поле «…» відсутнє», never «фото — немає»; a size
+    is «розмір», and the version is «версія формату»."""
+    text, said = WORDED[case]
+    code, out = run(capsys, tmp_path, text.encode("utf-8"))
+    assert (code, out) == (1, f"{tmp_path / 'file.json'}: {said}\n")
+
+
+def test_a_size_in_bytes_is_grouped_and_agrees_with_its_number() -> None:
+    assert [
+        validator._bytes(count)
+        for count in (1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 111, 961_204, 1_000_001)
+    ] == [
+        "1 байт",
+        "2 байти",
+        "4 байти",
+        "5 байтів",
+        "11 байтів",
+        "12 байтів",
+        "14 байтів",
+        "21 байт",
+        "22 байти",
+        "25 байтів",
+        "111 байтів",
+        "961 204 байти",
+        "1 000 001 байт",
+    ]
+    assert validator.describe(
+        {"type": "stock_file_too_large", "loc": (), "ctx": {"limit": 950_000, "bytes": 961_204}}
+    ) == (
+        "файл: stock_file_too_large: файл завеликий (961 204 байти, можна не більше 950 000) "
+        "— розділіть його на два"
+    )
 
 
 def test_bytes_that_are_not_utf8_are_refused(

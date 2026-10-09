@@ -379,12 +379,17 @@ class SnapshotConflictError(DomainError):
     naming it), `LIST_FULL` (no room: `details.what` is `lines`, `rows` or
     `parts`, with the limit and the counts), `LAST_PART` (the last file is
     not removed; the list is rejected instead), `PART_REMOVED` (a removed
-    file's line takes no answer) and `LIST_STORE_NOT_TRADING` (the store that
+    file's line takes no answer), `LIST_STORE_NOT_TRADING` (the store that
     started a shared warehouse's list is blocked or archived, with its
     `store_id` and `state`: the list is only rejected, through the other
-    store; owner, 2026-10-09). One code with a reason rather than a code
-    each, because a client does the same thing for all of them — show the
-    list again — and says the reason in its own words.
+    store; owner, 2026-10-09), `LIST_STORE_CANNOT_RECEIVE` (that store no
+    longer holds `can_receive` at the list's warehouse, with its `store_id`
+    and the `location_id`: likewise only rejected) and, at an approval,
+    `SPLIT_MAY_BE_RANGE` (lines answered by size whose record may now be a
+    range of sizes, and nobody said it is not: `details.line_nos`, the
+    first 50, and `count`). One code with a reason rather than a code each,
+    because a client does the same thing for all of them — show the list
+    again — and says the reason in its own words.
     """
 
     code = "SNAPSHOT_CONFLICT"

@@ -284,6 +284,20 @@ nav {
      (ADR-0014 §15). */
   unicode-bidi: isolate;
 }
+/* «Початкові залишки»: a file's name, its photo's or a line's text may be
+   one long word («IMG_20261008_…_зошит_2.json»), and so may a list's date or
+   the reason it was rejected. It breaks anywhere rather than push the
+   phone's page sideways (review, 2026-10-09); other screens keep their own
+   wrapping. */
+.openings .line,
+.openings .notice,
+.openings .hint,
+.openings p,
+.openings [role="alert"],
+.openings [role="status"],
+.openings h2 {
+  overflow-wrap: anywhere;
+}
 /* A file taken out of its list: kept as history, muted (ADR-0014 §15). */
 .part-removed {
   opacity: 0.6;

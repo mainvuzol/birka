@@ -62,7 +62,7 @@ from app.modules.snapshots.service import (
     remove_part,
     resolve_row,
 )
-from app.modules.snapshots.stock_file import StockFileV1
+from app.modules.snapshots.stock_file import StockFileV1, has_control
 from app.modules.tenancy.models import StoreState
 
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
@@ -77,7 +77,9 @@ LineText = Annotated[
 
 
 def _no_control_character(value: str) -> str:
-    if any(character < " " or character == "\x7f" for character in value):
+    """The file's name, as the file's own strings: no C0 or C1 control, no
+    line or paragraph separator (`stock_file.has_control`)."""
+    if has_control(value):
         raise ValueError("A file's name holds no control character")
     return value
 
@@ -357,6 +359,12 @@ class LineResponse(BaseModel):
     candidates: dict[str, list[str]]
     unclassified: list[str]
     quantity_basis: SnapshotQuantityBasis | None
+    # What the person said a record of the line's split means, with an
+    # answer `STATED_BY_SIZE`: `SIZE_WITH_COUNT`, or null when nobody was
+    # asked. A line answered so whose record may now be a range, and was
+    # never said to be a size with its count, stops the approval
+    # (`SPLIT_MAY_BE_RANGE`; owner, 2026-10-09).
+    split_read_as: SplitReading | None
     allocations: list[AllocationResponse]
     resolution_note: str | None
     resolved_by_user_id: uuid.UUID | None

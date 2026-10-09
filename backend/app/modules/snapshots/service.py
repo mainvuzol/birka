@@ -30,7 +30,8 @@ store needs `can_receive` at the list's warehouse and the person the action's
 permission there (ADR-0014 §7). The list's own store still acts in the ledger.
 While the list's own store does not trade, the list can only be rejected,
 through the other store, which releases its warehouse (owner decision,
-2026-10-09).
+2026-10-09); so too while it no longer holds `can_receive` at the list's
+warehouse (review, 2026-10-09).
 
 The caller owns the transaction.
 """
@@ -64,7 +65,13 @@ from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.evidence import RawInputSource
-from app.modules.catalog.raw_lines import mark_lines, read_lines, record_lines, repeated_lines
+from app.modules.catalog.raw_lines import (
+    mark_lines,
+    read_lines,
+    record_lines,
+    repeated_lines,
+    text_of,
+)
 from app.modules.catalog.read import describe_variants, size_labels, sizes_by_spelling
 from app.modules.catalog.service import ensure_unknown_size
 from app.modules.catalog.validation import require_active_variants, validate_stock_references
@@ -110,6 +117,7 @@ from app.modules.snapshots.stock_file import (
     StockFileV1,
     canonical,
     content_fingerprint_of_file,
+    has_control,
 )
 from app.modules.tenancy.models import StoreState
 from app.modules.tenancy.service import (
@@ -126,11 +134,13 @@ MAX_ALLOCATIONS = 50
 # exclusively — and every read of what it became. Set by measurement
 # (ADR-0014 §10): the largest of 2 000, 5 000 and 10 000 allocations whose
 # slowest approval took at most 10 s, with no statement over 5 s. 5 000 took
-# at most 7.5 s; 10 000 was refused outright, since the ledger reads every
+# at most 7.6 s; 10 000 was refused outright, since the ledger reads every
 # allocation's reservation in one statement, which PostgreSQL 16 refuses past
 # about 6 500 keys (`max_stack_depth`). Measured 2026-10-08:
-# output/verification/2026-10-08-json-import-approval/. Raise it only with a
-# new measurement, and that read batched first.
+# output/verification/2026-10-08-json-import-approval/. Again on 2026-10-09
+# with every answer by size, which the approval reads again: at most 8.6 s,
+# the read itself 0.2 s (…/2026-10-09-json-import-approval-by-size/). Raise
+# it only with a new measurement, and that read batched first.
 MAX_LIST_ALLOCATIONS = 5_000
 # As many lines as answers: the owner heard the limit as 5 000 lines of one
 # size each, and the shops count their largest warehouse before its files go
@@ -229,7 +239,7 @@ def _file_name(value: str | None) -> str:
         not value.strip()
         or len(value) > MAX_FILE_NAME
         or not is_storable(value)
-        or any(character < " " or character == "\x7f" for character in value)
+        or has_control(value)
     ):
         raise ValidationFailedError(
             f"The file's name must contain 1 to {MAX_FILE_NAME} valid characters"
@@ -337,11 +347,13 @@ async def _authorize(
     import there shares the list (ADR-0014 §7). A child store's own
     warehouse is reached by that store alone, so its list stays its own.
 
-    A command also needs the list's own store trading, since it acts in the
-    ledger. Through that store, the scope has already refused it by name
-    (`STORE_NOT_TRADING`); through the other store, it is refused here as
-    `LIST_STORE_NOT_TRADING`, naming the list's store and its state: such a
-    list can only be rejected (`reject_snapshot`; owner, 2026-10-09).
+    A command also needs the list's own store trading, and still holding
+    `can_receive` at the list's warehouse, since it acts in the ledger.
+    Through that store, the scope and its access row have already refused
+    it by name (`STORE_NOT_TRADING`, `LOCATION_ACCESS_DENIED`); through the
+    other store, it is refused here as `LIST_STORE_NOT_TRADING` or
+    `LIST_STORE_CANNOT_RECEIVE`, naming the list's store: such a list can
+    only be rejected (`reject_snapshot`; owner, 2026-10-09).
     """
     assert snapshot.acting_store_id is not None and snapshot.location_id is not None
     through = _acting_through(snapshot, via_store_id)
@@ -356,11 +368,14 @@ async def _authorize(
     )
     if command:
         # The list's own store acts in the ledger, whoever acts through which
-        # store; both must trade.
+        # store; both must trade, and the list's store must still receive
+        # goods at its warehouse.
         await validate_active_stores(
             session, organization_id=scope.organization_id, store_ids={through}
         )
         await _require_own_store_trading(session, snapshot=snapshot)
+        if not own:
+            await _require_own_store_receiving(session, snapshot=snapshot)
 
 
 async def _require_own_store_trading(session: AsyncSession, *, snapshot: InventorySnapshot) -> None:
@@ -378,6 +393,33 @@ async def _require_own_store_trading(session: AsyncSession, *, snapshot: Invento
             reason="LIST_STORE_NOT_TRADING",
             store_id=str(snapshot.acting_store_id),
             state=state.value,
+        )
+
+
+async def _require_own_store_receiving(
+    session: AsyncSession, *, snapshot: InventorySnapshot
+) -> None:
+    """The store that started the list still holds `can_receive` at its
+    warehouse, the access row its own commands are checked against, or the
+    list is refused by name: `LIST_STORE_CANNOT_RECEIVE`, with that store and
+    the warehouse. Its opening movements act through that store (ADR-0005
+    §4), so a list whose store may no longer receive goods there is not
+    filled, answered or approved through the other store either: it can only
+    be rejected (review, 2026-10-09)."""
+    assert snapshot.acting_store_id is not None and snapshot.location_id is not None
+    receiving = await accessible_locations(
+        session,
+        organization_id=snapshot.organization_id,
+        store_id=snapshot.acting_store_id,
+        capability=LocationCapability.RECEIVE,
+    )
+    if snapshot.location_id not in receiving:
+        raise SnapshotConflictError(
+            "The store that started this list can no longer receive goods into its "
+            "warehouse; the list can only be rejected",
+            reason="LIST_STORE_CANNOT_RECEIVE",
+            store_id=str(snapshot.acting_store_id),
+            location_id=str(snapshot.location_id),
         )
 
 
@@ -806,6 +848,7 @@ async def _row_views(
                 and countless(line.parsed if line else None, row.reading),
                 **_parse_summary(line.parsed if line else None),
                 "quantity_basis": row.quantity_basis,
+                "split_read_as": row.split_read_as,
                 "allocations": by_row.get(row.id, []),
                 "resolution_note": row.resolution_note,
                 "resolved_by_user_id": row.resolved_by_user_id,
@@ -1104,14 +1147,9 @@ async def import_snapshot(
     )
     session.add(snapshot)
     await session.flush()
-    # Nothing moves in the warehouse until the list is decided, while it has
-    # no history (owner decision, 2026-10-02).
-    await hold_for_opening_list(
-        session,
-        organization_id=scope.organization_id,
-        location_id=location_id,
-        snapshot_id=snapshot.id,
-    )
+    # The lines are parsed and kept first, while nobody else can see the
+    # list: the warehouse's lock is not held over the parse of a thousand
+    # lines, as it is not to add a part (ADR-0014 §8; review, 2026-10-09).
     part = await _record_part(
         session,
         scope=scope,
@@ -1124,6 +1162,15 @@ async def import_snapshot(
         file_name=file_name,
         source=checked.source if checked is not None else None,
         counted_on=checked.counted_on if checked is not None else None,
+    )
+    # Nothing moves in the warehouse until the list is decided, while it has
+    # no history (owner decision, 2026-10-02). A stock command there lands
+    # wholly before the hold, and the approval finds its history, or after.
+    await hold_for_opening_list(
+        session,
+        organization_id=scope.organization_id,
+        location_id=location_id,
+        snapshot_id=snapshot.id,
     )
     await audit.record(
         session,
@@ -1389,6 +1436,8 @@ async def remove_part(
         .values(
             status=SnapshotRowStatus.REMOVED,
             quantity_basis=None,
+            split_read_as=None,
+            split_read_records=None,
             resolution_note=None,
             resolved_by_user_id=None,
             resolved_at=None,
@@ -1482,6 +1531,12 @@ async def _normalize_allocations(
     )
 
 
+def _record_key(pair: dict[str, Any]) -> str:
+    """A record of a shown split as the person was asked about it: as the
+    text writes it («42-44»), or its size when the text no longer shows it."""
+    return str(pair["written"] or pair["size"])
+
+
 def _stated_split(
     split: Sequence[dict[str, Any]] | None, read_as: SplitReading | None
 ) -> list[tuple[uuid.UUID, int]] | None:
@@ -1503,7 +1558,7 @@ def _stated_split(
                 "A size of this line is not in the catalogue", size=pair["size"]
             )
         shown.append((pair["size_id"], int(pair["count"])))
-    ranges = [pair["written"] or pair["size"] for pair in split if pair["may_be_range"]]
+    ranges = [_record_key(pair) for pair in split if pair["may_be_range"]]
     if ranges and read_as is not SplitReading.SIZE_WITH_COUNT:
         raise ValidationFailedError(
             "A record of this line may also be a range of sizes; say what it means",
@@ -1519,6 +1574,8 @@ def _row_state(
     return {
         "status": row.status.value,
         "quantity_basis": row.quantity_basis.value if row.quantity_basis else None,
+        "split_read_as": row.split_read_as,
+        "split_read_records": row.split_read_records,
         "resolution_note": row.resolution_note,
         "allocations": [
             {"product_variant_id": str(variant_id), "size_id": str(size_id), "quantity": quantity}
@@ -1550,7 +1607,11 @@ async def resolve_row(
 
     `split_read_as` is what the person said a record of the line's split
     means, when it may also be a range of sizes (`_stated_split`): it goes
-    only with `STATED_BY_SIZE`, and the answer's audit entry keeps it.
+    only with `STATED_BY_SIZE`, and the line and the answer's audit entry
+    keep it, with the records it was said of (`split_read_records`: those
+    that may be a range as the person answers). The approval reads each
+    record again, since a size created after the answer can make another
+    record a possible range (`approve_snapshot`).
     """
     observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
     await _authorize(
@@ -1592,6 +1653,7 @@ async def resolve_row(
     if split_read_as is not None and quantity_basis is not SnapshotQuantityBasis.STATED_BY_SIZE:
         raise ValidationFailedError("What a record of the split means goes only with its split")
     read: dict[str, Any] = {}
+    read_records: list[str] | None = None
     desired: list[tuple[uuid.UUID, uuid.UUID, int]]
     basis: SnapshotQuantityBasis | None
     if skip_reason is not None:
@@ -1628,7 +1690,9 @@ async def resolve_row(
             shown = _stated_split(split, split_read_as)
             if split_read_as is not None:
                 # What the person said the record means, beside the records
-                # that could be read otherwise when they said it.
+                # that could be read otherwise when they said it: those, and
+                # only those, it was said of.
+                read_records = [_record_key(pair) for pair in split or () if pair["may_be_range"]]
                 read = {
                     "split_read_as": split_read_as.value,
                     "split_may_be_range": [
@@ -1657,9 +1721,16 @@ async def resolve_row(
             )
         )
         if (elsewhere or 0) + len(desired) > MAX_LIST_ALLOCATIONS:
+            # Still a 422, as every refusal of an answer is, and named as a
+            # full list is: what is full, its limit, what the other lines
+            # hold and what this answer adds (owner's limit, 2026-10-08).
             raise ValidationFailedError(
                 f"A stock list takes at most {MAX_LIST_ALLOCATIONS} allocations in all",
-                allocations_elsewhere=elsewhere,
+                reason="LIST_FULL",
+                what="allocations",
+                limit=MAX_LIST_ALLOCATIONS,
+                now=int(elsewhere or 0),
+                adding=len(desired),
             )
 
     current_rows = list(
@@ -1675,9 +1746,12 @@ async def resolve_row(
         (allocation.product_variant_id, allocation.size_id, allocation.quantity)
         for allocation in current_rows
     )
+    read_as = split_read_as.value if split_read_as is not None else None
     unchanged = (
         row.status is new_status
         and row.quantity_basis is basis
+        and row.split_read_as == read_as
+        and row.split_read_records == read_records
         and row.resolution_note == new_note
         and current == desired
     )
@@ -1699,6 +1773,8 @@ async def resolve_row(
         )
         row.status = new_status
         row.quantity_basis = basis
+        row.split_read_as = read_as
+        row.split_read_records = read_records
         row.resolution_note = new_note
         row.resolved_by_user_id = scope.user_id
         row.resolved_at = _now()
@@ -1722,6 +1798,7 @@ async def resolve_row(
                 **_row_state(row, desired),
                 "review_revision": snapshot.review_revision,
                 **read,
+                "via_store_id": str(_acting_through(snapshot, via_store_id)),
             },
             reason=new_note,
         )
@@ -1754,6 +1831,57 @@ def _counted_allocations(snapshot_id: uuid.UUID) -> Any:
     )
 
 
+async def _splits_unsaid(
+    session: AsyncSession, *, organization_id: uuid.UUID, snapshot_id: uuid.UUID
+) -> list[int]:
+    """The lines answered `STATED_BY_SIZE` whose split holds a record that may
+    now be a range of sizes, and nobody said that record is a size with its
+    count.
+
+    A record is read against the catalogue as it is now (`_shown_splits`),
+    as at every look: a size created after the answer makes «M-3» ambiguous
+    from then on, with a size «3» (owner, 2026-10-09). The person's word
+    covers the records it was said of (`split_read_records`), never one that
+    became ambiguous after it: «Куртка 42-44 46-2», answered for «42-44»,
+    is asked again once a size «2» makes «46-2» a range too (review,
+    2026-10-09). Only lines that count: resolved, of parts not removed.
+
+    The rows and their texts are read in one statement (`text_of`).
+    """
+    found = await session.execute(
+        select(
+            InventorySnapshotRow,
+            text_of(InventorySnapshotRow.raw_input_id, organization_id=organization_id),
+        )
+        .join(InventorySnapshotPart, InventorySnapshotPart.id == InventorySnapshotRow.part_id)
+        .where(
+            InventorySnapshotRow.inventory_snapshot_id == snapshot_id,
+            InventorySnapshotRow.status == SnapshotRowStatus.RESOLVED,
+            InventorySnapshotRow.quantity_basis == SnapshotQuantityBasis.STATED_BY_SIZE,
+            InventorySnapshotPart.removed_at.is_(None),
+        )
+        .order_by(InventorySnapshotRow.line_no)
+        .execution_options(populate_existing=True)
+    )
+    rows = list(found.tuples().all())
+    if not rows:
+        return []
+    splits = await _shown_splits(session, organization_id=organization_id, rows=rows)
+    unsaid = []
+    for row, _ in rows:
+        said = (
+            set(row.split_read_records or ())
+            if row.split_read_as == SplitReading.SIZE_WITH_COUNT
+            else set()
+        )
+        if any(
+            pair["may_be_range"] and _record_key(pair) not in said
+            for pair in splits.get(row.id, ())
+        ):
+            unsaid.append(row.line_no)
+    return unsaid
+
+
 async def _application(session: AsyncSession, *, snapshot: InventorySnapshot) -> dict[str, Any]:
     """What an applied list became, in all: units and allocations. The lines
     themselves are read by pages (`list_application`)."""
@@ -1781,7 +1909,9 @@ async def approve_snapshot(
     revision is refused. Invariant I17 holds by construction: the only thing
     this can write is `OPENING_BALANCE` (`inventory.apply_opening_balance`),
     and the database refuses an opening balance that names no list. A
-    removed file's lines are not part of it.
+    removed file's lines are not part of it. A line answered by size whose
+    record may now be a range of sizes, without the person having said it is
+    a size with its count, is refused by name (`SPLIT_MAY_BE_RANGE`).
     """
     if expected_revision < 0:
         raise ValidationFailedError("A review revision is never negative")
@@ -1841,6 +1971,20 @@ async def approve_snapshot(
             reason="ROWS_NEED_REVIEW",
             count=len(open_lines),
             line_nos=open_lines[:50],
+        )
+    # Answered by size, checked at the answer, and read again now: a size
+    # created since can make a record a possible range, and the person must
+    # say what it means before it opens the warehouse (owner, 2026-10-09).
+    unsaid = await _splits_unsaid(
+        session, organization_id=scope.organization_id, snapshot_id=snapshot_id
+    )
+    if unsaid:
+        raise SnapshotConflictError(
+            "Some lines answered by size may now be read as ranges of sizes; "
+            "say what their records mean",
+            reason="SPLIT_MAY_BE_RANGE",
+            count=len(unsaid),
+            line_nos=unsaid[:50],
         )
     allocations = list(
         (

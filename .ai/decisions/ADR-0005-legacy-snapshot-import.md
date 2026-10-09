@@ -151,7 +151,7 @@ Every replay re-checks current permissions first (I13).
 | Read | either permission | reach only |
 | Reject | either permission | reach only, so a list for a paused warehouse can still be abandoned |
 
-**Through another store** (ADR-0014 §7, §12): every action above may also be taken through another store that holds `can_receive` at the list's warehouse, with the permission held there under the private-warehouse rule; reads and rejection too. A list of the shared warehouse thus belongs to both stores (owner, 2026-10-08). The list's `acting_store_id`, and the store its opening movements name, do not change.
+**Through another store** (ADR-0014 §7, §12): every action above may also be taken through another store that holds `can_receive` at the list's warehouse, with the permission held there under the private-warehouse rule; reads and rejection too. A list of the shared warehouse thus belongs to both stores (owner, 2026-10-08). The list's `acting_store_id`, and the store its opening movements name, do not change. While the list's own store is blocked or archived, only rejection passes, through the other store (ADR-0014 §7; owner, 2026-10-09); so too while it no longer holds `can_receive` at the list's warehouse (ADR-0014 §7; review, 2026-10-09).
 
 The acting store is stored as `acting_store_id`: ADR-0004 retired `store_id` on this table, and `0006`'s downgrade recreates it.
 
@@ -163,7 +163,7 @@ The list of a store's lists leaves out a list at a warehouse the person may not 
 
 | Operation | Locks, in order |
 |---|---|
-| Import | advisory lock on `(organization, command_id)`, scoped exactly like the unique key |
+| Import | advisory lock on `(organization, command_id)`, scoped exactly like the unique key; then, once the first part's lines are parsed and kept, the warehouse's advisory lock exclusively, to hold it (§12; the parse is not under it since the review of 2026-10-09, ADR-0014 §8) |
 | Adding a part (ADR-0014 §8) | the same advisory lock on `(organization, command_id)`, then the list `FOR UPDATE`; no warehouse lock |
 | Removing a part (ADR-0014 §9) | list `FOR UPDATE`, then the part `FOR UPDATE` |
 | Resolution | list `FOR UPDATE`, then row `FOR UPDATE` |

@@ -1558,9 +1558,11 @@ How it is carried out, not decided by the owner
 - **The file's format is strict.** Birka describes it for the parser's
   author ([`formats/birka-stock-list/`](../../formats/birka-stock-list/README.md)):
   a key it does not know, a number written as text or as `3.0`, an empty
-  value, a line break inside a line, or the same photo and line twice is
-  refused, and the refusal names the line. The phone checks a file before
-  sending it; the server decides.
+  value, a line break, a line separator or another control character inside
+  a line, or the same photo and line twice is refused, and the refusal
+  names the line. The phone checks a file before sending it; the server
+  decides. A refusal never sends the file back; a key it names is cut to
+  its first 60 characters.
 - **Birka reads each line's text itself.** The parser's count is taken only
   when Birka's own reading of the text finds the same count with «шт»; the
   file can never make a count certain on its own word.
@@ -1568,7 +1570,27 @@ How it is carried out, not decided by the owner
   as a whole word, joined to its count by one sign (`-`, a dash, a minus,
   `:` or `=`), the counts add up to any total the line gives, and the line
   names at most one colour and no «/» options. «M 3» never counts, nor
-  «462» as size 46 with 2.
+  «462» as size 46 with 2. Since the review of 2026-10-09, also:
+  - the count ends with its digits: «M-3+2», «M-3 + 2», «M-3,5», «M-3/2»,
+    «M-3х2» or «M-3½» holds no count of M;
+  - the size stands in the text once in any of its spellings: «M-3 М» with
+    a Cyrillic М writes M twice;
+  - the text shows nothing beside the split: no other size, whether the
+    parser reads it («Лоран S M-3») or it is a letter size the parser does
+    not know («Лоран S-1 M-2 XXXL», «M-3 XXS»); no other size with a count
+    («Лоран S-1 M-2 L-4» when the parser gave only S and M); and no other
+    number, of any script, but the file's price, a count with «шт» or a
+    length («S-1 M-2 L-1 разом 5» and «46-2 48» are answered with a note).
+    A number the file calls the price is excused on the parser's word, so
+    «46-2 48» with the price 48 shows its split (reading R-f, awaiting the
+    owner, below).
+- **A list's lines over its whole life** are at most 10 000, removed files'
+  lines included, twice the 5 000 that count (reading R-b, awaiting the
+  owner, below).
+- **Lines typed by hand are removed as a file is,** with the answers given
+  to them (reading R-c, awaiting the owner, below).
+- **A file may leave the kind of its prices out;** the prices are then
+  shown without a kind (reading R-d, awaiting the owner, below).
 - **A removed file's lines stay in the list as «Прибрано»,** with their
   text, and count nowhere. The answers given to them are deleted; each stays
   in the list's history.
@@ -1579,22 +1601,37 @@ How it is carried out, not decided by the owner
   goods into the warehouse and the person may import lists there, as in
   their own store. The list keeps the store that started it, and so do the
   opening movements of its approval; lines added through the other store
-  name it in their evidence.
+  name it in their evidence, and so does the history of every answer given
+  through it.
+- **While the store that started a list may no longer receive goods into
+  its warehouse,** the list is only rejected through the other store, as
+  while that store does not trade (reading 8): its approval would act
+  through that store (review, 2026-10-09).
 - **The approval writes the whole list at once,** or nothing. Its limit was
   measured: 7.6 s at 5 000 answers, while 10 000 fails in the ledger
-  (ADR-0014 §10); the owner kept 5 000 (above).
-- **What a person sees is guarded:** bidirectional and invisible characters
-  in a line are shown as marks, never applied.
+  (ADR-0014 §10); the owner kept 5 000 (above). Measured again on
+  2026-10-09 with every answer by size, which the approval reads again: at
+  most 8.6 s, within the 10 s rule.
+- **What a person sees is guarded:** control, invisible and bidirectional
+  characters in a line, and in the names and reasons shown beside it, are
+  shown as marks, never applied; the joiner and selector inside an emoji of
+  a person's name («Оля ❤️») are left as they are.
 
 **Answered by the owner on 2026-10-09.** Built as the design read the rules,
 without being asked, then each put to the owner with the question under it.
 Seven were confirmed as built; two changed (5 and 8), and both changes were
-built the same day.
-1. While a warehouse is paused, its list is seen and changed only from the
-   store that started it; the other store sees it again once the warehouse
-   reopens.
-   - Питання: «Поки склад призупинено, його список видно й можна змінювати
-     лише з магазину, який цей список почав. Так?»
+built the same day. The review of the built change, the same day, found
+that reading 1's question did not say what is built: it is put again (R-a,
+below).
+1. While a warehouse is paused, its list is seen only from the store that
+   started it, and there it can only be rejected. Files are added, lines
+   answered and the list approved again once the warehouse reopens, when the
+   other store sees it again too. **To be put again, awaiting the owner**
+   (review, 2026-10-09): the owner confirmed it on the question below, which
+   said the list could be changed there, while the build lets that store
+   only reject it. The question as built is R-a.
+   - Питання (2026-10-09): «Поки склад призупинено, його список видно й
+     можна змінювати лише з магазину, який цей список почав. Так?»
 2. The same file is refused a second time in one list, whatever its name,
    while it is not removed. A file whose photos and lines are partly in
    another file of the list is taken, and the app says how many. Lines typed
@@ -1612,6 +1649,10 @@ built the same day.
      кількома розмірами бере по відповіді на розмір, тож у підрахунку зошитів
      такий рядок рахується стільки разів, скільки в ньому розмірів. Файл — до
      1 000 рядків, у списку до 1 000 файлів. Так?»
+   - The question did not say that removed files count among the 1 000
+     files: that part **is put again, awaiting the owner** (R-e, below;
+     review, 2026-10-09). The like bound of lines, 10 000 with removed
+     files' lines, was not among the readings; it is R-b.
 4. A split is confirmed by a tap only when each of its sizes is already in
    the catalogue under that spelling; otherwise the size is created first, or
    the line is answered with a note.
@@ -1622,15 +1663,28 @@ built the same day.
    **Changed by the owner:** when a size with its count may also be read as a
    range of sizes, the app asks the person what the record means, and the
    person chooses; the tap is offered only after «розмір 42 — 44 шт» is
-   chosen. **Built** (2026-10-09; ADR-0014 §5): a record may be a range when
-   its count, or the whole record, is also a size of the catalogue under
-   one spelling («42-44» with a size 44, or a size «42-44»). The line's
-   editor then asks «Запис «42-44» — це:», «Розмір 42 — 44 шт» or
-   «Діапазон розмірів 42–44»; read as a range, the line is answered with
-   another basis and a note. The server refuses the tap without that choice,
-   checks it again at the answer, and keeps the choice in the line's
-   history. A range whose end is not a size of the catalogue yet is not
-   asked about (known risks).
+   chosen. **Built** (2026-10-09; ADR-0014 §5), and widened after the review
+   the same day. A record may be a range when any one of these holds:
+   - its size and count are both numbers, and the count, as written, reads
+     as a larger size after it («42-44», «42-58», «98-104»), whatever the
+     catalogue holds;
+   - its count is a size of the catalogue under one spelling («M-3» with a
+     size «3»);
+   - the whole record is («42-44», a size of its own).
+
+   The line's editor then asks «Запис «42-44» — це:», «Розмір 42 — 44 шт»
+   or «Діапазон розмірів 42–44». Read as a range, nothing of that choice is
+   sent: the line is answered with another basis and a note. The server
+   refuses the tap without the choice «розмір 42 — 44 шт», checks it at the
+   answer, and keeps that choice on the line and in its history, with the
+   records it was said of. A size created after the answer can make a
+   record a possible range, so the approval reads every such line again,
+   record by record, and is refused, naming the lines, until each record
+   that may be a range by then has the person's word: «Куртка 42-44 46-2»,
+   answered for «42-44», is asked again once a size «2» makes «46-2» a range
+   too. A record of a letter size, or of a number size with a count no
+   larger than it («46-2», «48-12»), is asked about only when the catalogue
+   makes it a range (known risks).
    - Питання: «Запис "42-44" застосунок може прийняти за "розмір 42 — 44
      шт", якщо так його прочитав парсер; людина бачить рядок і фото й
      натискає сама. Прийнятно?»
@@ -1667,5 +1721,59 @@ built the same day.
    - Питання: «Ціни з зошитів, зокрема закупівельні, бачать усі, хто
      розбирає списки, — власник і менеджери. Так?»
 
-Built on 2026-10-08; see the [report](json-stock-import-report.md) and
+**Awaiting the owner** (the review of the built change, 2026-10-09; R-e
+and R-f from its second round, the same day). Built as Birka reads the
+rules; not asked on 2026-10-09, and to be asked with the question under
+each. Until the owner answers, each stands as built, and nothing more is
+assumed.
+- **R-a** (reading 1, put again as built). While a warehouse is paused, its
+  list is seen only from the store that started it, and there it can only
+  be rejected; files are added, lines answered and the list approved again
+  once the warehouse reopens.
+  - Питання: «Поки склад призупинено, його список видно лише з магазину,
+    який цей список почав, і там його можна лише відхилити. Додавати файли,
+    розбирати рядки й затверджувати можна знову, коли склад відкриють.
+    Так?»
+- **R-b.** A list takes at most 10 000 lines over its whole life, the lines
+  of removed files included: twice the 5 000 that count. It guards against
+  a file removed and added again without end. When that room is used up,
+  the list takes no more lines: to add more, it is rejected and a new one
+  started.
+  - Питання: «У список за весь час можна додати до 10 000 рядків, рахуючи й
+    рядки прибраних файлів (це вдвічі більше за 5 000 діючих). Це захист від
+    безкінечного «прибрати — додати знову». Якщо місце вичерпано, список
+    відхиляють і починають новий. Так?»
+- **R-c.** Lines typed by hand, added to a list as a part of their own, are
+  removed as a file is, with the answers given to them. The owner decided
+  removal for files (2026-10-08).
+  - Питання: «Рядки, додані вручну (не файлом), можна прибрати так само, як
+    файл: разом із відповідями на них. Так?»
+- **R-d.** A parser may leave the kind of prices out of a file when nobody
+  knows which prices a notebook holds. The prices are then shown without a
+  kind: «Ціна з зошита: 1200». The owner decided one kind per file
+  (2026-10-08).
+  - Питання: «Вид цін у файлі (продажу чи закупівлі) парсер може не
+    вказати, якщо ніхто не знає, які ціни в зошиті. Тоді ціни показуються
+    без виду: «Ціна з зошита: 1200». Так?»
+- **R-e** (reading 3, its part the question left out). A list takes at most
+  1 000 files over its whole life, removed files included, as it takes at
+  most 10 000 lines (R-b). When that room is used up, the list takes no
+  more files: to add more, it is rejected and a new one started.
+  - Питання: «У список за весь час можна додати до 1 000 файлів, рахуючи й
+    прибрані. Якщо місце вичерпано, список відхиляють і починають новий.
+    Так?»
+- **R-f.** A split the line shows is confirmed by a tap only when every
+  other number in the line is accounted for. A number the file calls the
+  price is taken as the price on the parser's word alone, wherever it
+  stands in the line: «46-2 48» with the price 48 shows its split, as does
+  «Лоран S-1 M-2 L-1 1850» with the price 1850. Taking the price only where
+  the line marks it («грн», «₴», «ціна») would ask more lines for a note.
+  - Питання: «Якщо парсер записав число з рядка як ціну, застосунок вважає
+    його ціною й дає підтвердити розподіл одним натиском — навіть у
+    «46-2 48», коли ціна у файлі 48. Так, чи вважати число ціною, лише коли
+    поруч написано «грн», «₴» або «ціна»?»
+
+Built on 2026-10-08, readings 5 and 8 on 2026-10-09, and what the review of
+the built change found the same day; see the
+[report](json-stock-import-report.md) and
 [ADR-0014](../decisions/ADR-0014-opening-stock-from-a-json-file.md).

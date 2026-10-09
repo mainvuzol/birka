@@ -15,12 +15,14 @@ export function isFileIssue(issue: ValidationIssue): boolean {
   return issue.loc[0] === "body" && issue.loc[1] === "file";
 }
 
+/** The fields as the validator names them (`check_stock_file.FIELDS`). */
 const fieldNames: Record<string, string> = {
   text: "текст",
   photo: "фото",
   photo_line: "номер рядка на фото",
   count: "кількість",
   size_counts: "кількість по розмірах",
+  size: "розмір",
   sizes: "розміри",
   colours: "кольори",
   price: "ціна",
@@ -35,39 +37,61 @@ const fieldNames: Record<string, string> = {
   lines: "рядки",
 };
 
+/**
+ * What is wrong, said of «поле «…»» and agreeing with it («поле «текст»
+ * задовге»), as the validator says it (`check_stock_file.PROBLEMS`).
+ */
 const typeTexts: Record<string, string> = {
-  missing: "немає",
-  extra_forbidden: "невідоме поле",
+  missing: "відсутнє",
   int_type: "має бути цілим числом",
   string_type: "має бути текстом",
+  string_unicode: "має символ, якого не може бути в тексті",
+  list_type: "має бути списком",
+  model_type: "має бути об’єктом",
+  dict_type: "має бути об’єктом",
   string_too_short: "порожнє",
   too_short: "порожнє",
   string_too_long: "задовге",
   too_long: "задовге",
   greater_than_equal: "поза межами",
   less_than_equal: "поза межами",
-  literal_error: "недопустиме значення",
-  list_type: "має бути списком",
-  model_type: "має бути об’єктом",
-  dict_type: "має бути об’єктом",
+  literal_error: "має недопустиме значення",
 };
 
 function text(value: unknown): string {
   return typeof value === "string" || typeof value === "number"
-    ? String(value)
+    ? named(String(value))
     : "";
 }
 
+/** The most of a key or a value a sentence names, as the server does. */
+const NAMED = 60;
+
 /**
- * Where the refusal stands in the file: the line, 1-based, and the key the
- * line (or the file, outside its lines) was refused for.
+ * A key or a value from the file as a sentence names it: whole up to sixty
+ * characters, then cut with «…» (review, 2026-10-09). A key of 300 000
+ * characters is not printed into an alert.
+ */
+export function named(value: string): string {
+  // By code points, as the server counts: a cut never splits a pair.
+  const characters = Array.from(value);
+  return characters.length > NAMED
+    ? `${characters.slice(0, NAMED).join("")}…`
+    : value;
+}
+
+/**
+ * Where the refusal stands in the file: the line, 1-based, and what it is
+ * about — a field, named by its last key as the validator names it
+ * («size_counts», 0, «size» is «розмір»), or the line or the file itself.
  */
 function place(issue: ValidationIssue): {
   line: number | null;
   key: string | null;
+  subject: string;
 } {
-  // After `body`, `file`: either `lines`, the line's index and its key, or a
-  // key of the file itself.
+  // After `body`, `file`: either `lines`, the line's index and its keys, or
+  // a key of the file itself.
   const rest = issue.loc.slice(2);
   const atLines = rest[0] === "lines" && typeof rest[1] === "number";
   const stated = issue.ctx.line;
@@ -77,26 +101,31 @@ function place(issue: ValidationIssue): {
       : atLines
         ? Number(rest[1]) + 1
         : null;
-  const keys = (atLines ? rest.slice(2) : rest).filter(
-    (part): part is string => typeof part === "string",
-  );
-  return { line, key: keys[0] ?? null };
+  const keys = rest.filter((part): part is string => typeof part === "string");
+  const last = rest[rest.length - 1];
+  const key = keys[keys.length - 1] ?? null;
+  const subject =
+    key === null
+      ? "файл"
+      : key === "lines" && typeof last === "number"
+        ? "рядок"
+        : `поле «${fieldNames[key] ?? named(key)}»`;
+  return { line, key, subject };
 }
 
-function fieldName(key: string | null): string {
-  if (key === null) return "рядок";
-  return fieldNames[key] ?? `«${key}»`;
+function fieldName(key: string): string {
+  return fieldNames[key] ?? named(key);
 }
 
 /** One refusal of a file, as one sentence. */
 export function fileProblemText(issue: ValidationIssue): string {
-  const { line, key } = place(issue);
+  const { line, key, subject } = place(issue);
   const where = line === null ? "Файл" : `Рядок ${String(line)} файлу`;
   switch (issue.type) {
     case "stock_file_text_blank":
       return `${where}: текст порожній.`;
     case "stock_file_control_character":
-      return `${where}: у полі «${fieldName(text(issue.ctx.field) || key)}» є службовий символ (перенесення рядка чи табуляція).`;
+      return `${where}: у полі «${fieldName(text(issue.ctx.field) || (key ?? ""))}» є службовий символ (перенесення рядка чи табуляція).`;
     case "stock_file_photo_line_repeated":
       return `${where}: те саме фото й рядок, що в рядку ${text(issue.ctx.first_line)}.`;
     case "stock_file_sizes_and_size_counts":
@@ -106,31 +135,45 @@ export function fileProblemText(issue: ValidationIssue): string {
     case "stock_file_duplicate_key":
       return `${where}: ключ «${text(issue.ctx.key)}» повторюється.`;
     case "stock_file_text_too_long_in_all":
-      return `У файлі забагато тексту: не більше ${text(issue.ctx.limit)} символів.`;
+      return `У файлі забагато тексту: не більше ${grouped(issue.ctx.limit)} символів.`;
     case "stock_file_too_large":
       return "Файл завеликий — розділіть його на два.";
+    case "extra_forbidden":
+      // An unknown key is named as written: it is not a field of the format.
+      if (key !== null) return `${where}: невідоме поле «${named(key)}».`;
   }
   const said = typeTexts[issue.type] ?? "не відповідає формату";
-  // An unknown key is named as written: it is not a field of the format.
-  const field =
-    issue.type === "extra_forbidden" && key !== null
-      ? `«${key}»`
-      : fieldName(key);
-  return `${where}: ${field} — ${said}.`;
+  // The file itself, refused as a whole: «Файл має бути об’єктом».
+  if (line === null && subject === "файл") return `Файл ${said}.`;
+  return `${where}: ${subject} ${said}.`;
+}
+
+/** A count as a person reads it: «100 000». */
+function grouped(value: unknown): string {
+  return typeof value === "number"
+    ? value.toLocaleString("uk-UA")
+    : text(value);
 }
 
 /** The most a screen lists; the rest are counted. */
 const SHOWN = 10;
 
-/** Every refusal of a file, one per line, at most ten and how many more. */
-export function fileProblemTexts(issues: ValidationIssue[]): string[] {
+/**
+ * Every refusal of a file, one per line, at most ten and how many more —
+ * those the server counted without listing them too.
+ */
+export function fileProblemTexts(
+  issues: ValidationIssue[],
+  more = 0,
+): string[] {
   const texts = issues.filter(isFileIssue).map(fileProblemText);
-  return limited(texts);
+  return texts.length > 0 ? limited(texts, more) : [];
 }
 
 /** At most ten problems, and «…і ще {k}» for the rest. */
-export function limited(texts: string[]): string[] {
-  return texts.length > SHOWN
-    ? [...texts.slice(0, SHOWN), `…і ще ${String(texts.length - SHOWN)}`]
+export function limited(texts: string[], more = 0): string[] {
+  const rest = Math.max(texts.length - SHOWN, 0) + more;
+  return rest > 0
+    ? [...texts.slice(0, SHOWN), `…і ще ${rest.toLocaleString("uk-UA")}`]
     : texts;
 }

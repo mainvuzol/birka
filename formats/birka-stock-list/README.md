@@ -44,9 +44,11 @@ The warehouse is not in the file: a person chooses it in the app.
 - **JSON** ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)). Spaces and
   line breaks between values are free: pretty-print it or not.
 - **Characters raw or escaped,** alike: `"Лоран"` and `"\u041b\u043e\u0440\u0430\u043d"` are the same.
-- **No control character in any string,** U+0000–U+001F and U+007F, written
-  raw or escaped. So no `\n` and no `\t` inside `text`: one written line is
-  one JSON line, never two.
+- **No control character in any string,** C0 or C1: U+0000–U+001F and
+  U+007F–U+009F, written raw or escaped, **nor a line or paragraph
+  separator,** U+2028 or U+2029. So no `\n`, no `\t`, no U+0085 (the
+  next-line character) and no U+2028 inside `text`: one written line is one
+  JSON line, never two.
 - **No lone surrogate** (`"\ud800"` alone).
 
 ## 3. The file
@@ -60,7 +62,7 @@ One JSON object:
 | `version` | `1` | **yes** | always `1`; another version is refused by name |
 | `source` | string, 1..300 | no | which notebook, as people at the shop call it: `"Зошит 1, куртки"`. The app offers it as the list's name |
 | `counted_on` | string, 1..40 | no | when it was counted, free text: `"осінь 2025"` |
-| `price_kind` | `"sale"` or `"purchase"` | no | the kind of every price in the file. One notebook holds one kind of price (owner, 2026-10-08), so it is given once, for the whole file. Leave it out when nobody knows; the price is then shown without its kind |
+| `price_kind` | `"sale"` or `"purchase"` | no | the kind of every price in the file. One notebook holds one kind of price (owner, 2026-10-08), so it is given once, for the whole file. Leave it out when nobody knows; the price is then shown without its kind (Birka's reading, awaiting the owner's confirmation) |
 | `parser` | string, 1..100 | no | which parser, and which version of it, wrote the file: `"photo-reader 0.3"` |
 | `lines` | array of 1..1 000 lines | **yes** | every written line, in reading order |
 
@@ -93,8 +95,9 @@ reference validator (§9), naming the line.
    (`stock_file_sizes_and_size_counts`)
 3. **`size_counts` names each size once,** ignoring case: `M` and `m` are one
    size. (`stock_file_size_repeated`)
-4. **No control characters** in any string (§2), so no line break inside
-   `text`. (`stock_file_control_character`)
+4. **No control characters,** C0 or C1, nor line or paragraph separators
+   (U+2028, U+2029), in any string (§2), so no line break inside `text`.
+   (`stock_file_control_character`)
 5. **`text` is not blank:** spaces alone are not a line.
    (`stock_file_text_blank`)
 6. **No key written twice** in one object. Most JSON readers silently keep
@@ -135,10 +138,14 @@ reference validator (§9), naming the line.
 - **`size_counts` whenever the line writes a count per size,** each size
   exactly as written: «S-1 M-2 L-1», «Лоран M-3», «46-1 48-2». Birka decides
   from `text` whether the split is shown (§7); give what you read.
+- **`price` whenever the line writes one,** exactly as written. A split is
+  confirmed by a tap only when every other number in `text` is accounted
+  for, and the price is one of them when its digits stand in the text as
+  one number (§7).
 - **`photo` exactly as the shop's file is named,** so the shop finds it.
 - **One notebook, one file,** or one file per group of whole photos when a
-  notebook is longer than 1 000 lines. **Never split a photo's lines across
-  files.**
+  notebook is longer than 1 000 lines. Do not split a photo's lines across
+  files. This is guidance: Birka does not check it.
 - **One `price_kind` for the file,** from the notebook.
 
 ## 7. What Birka does with a line
@@ -168,8 +175,39 @@ sign**, the person confirms the split with one tap, «Як у рядку, по
 - **A space alone is not a sign.** «M 3» is a size and a bare number, not a
   size with its count: the line is answered with a note.
 - Each size must appear **once** in `text`, as a whole word, written as in
-  `size_counts` (case aside), followed by its sign and exactly its count:
-  `462` is never «46, 2».
+  `size_counts` (case aside), with its count or without, and in no other
+  spelling of the same size: «Лоран M-3 M 2» and «Лоран M-3 (M)» write M
+  twice, and so do «Лоран M-3 М» with a Cyrillic М and «XXL-1 2XL». That one
+  place is followed by its sign and exactly its count: `462` is never «46,
+  2».
+- **The count ends with its number.** A count followed by `.` or `,` and a
+  digit right after it is a fraction; one followed by `+`, `/`, `×`, `*`,
+  `x`, `х`, `·` or `⋅` and a digit, with or without spaces about the sign,
+  is a sum or a product. Neither is a count: «M-3+2», «M-3 + 2», «M-3,5»,
+  «M-3.5», «M-3/2», «M-3х2» hold no count of M. A numeral of any script is a
+  digit here: «M-3½», «M-3²». «S-1, M-2» and «L-1, 1850» list on.
+- **The text shows the split and nothing beside it:**
+  - no other size Birka reads in `text`: «Лоран S M-3» names S without a
+    count; nor any other word that is a letter size as Birka spells sizes,
+    though its parser reads only XS to XXL: «Лоран S-1 M-2 XXXL», «M-3
+    XXS», «M-3 4XL», «M-3 ХL» with a Cyrillic Х. A lowercase Cyrillic «с»
+    is a preposition, not S;
+  - no other size, or number, joined to digits by a sign: «Лоран S-1 M-2
+    L-4» with `size_counts` for S and M only, «Лоран M-3 L-5» with M only,
+    «Лоран M-3-2»;
+  - no other number, of any script («３», «½», «①»), except the file's
+    `price` where its digits stand in the text as one number, once («1850»
+    for `"1850"` or `"1850 грн"`), a count with «шт» that Birka reads («3
+    шт», equal to the sum), and a length that Birka reads («110 см»). «S-1
+    M-2 L-1 разом 5» and «46-2 48» show no split: 5 may be another count,
+    and 48 a size whose count is lost. Nor does «Лоран M-3 1850» when the
+    file gives no `price`, or a price written in the text with a gap or a
+    point («1 850», «1850.50»).
+  - **Write `price` only for a price.** Birka takes the number `price`
+    names as the price, on your word: a number in `text` that is a total, a
+    count or a size written into `price` makes a split look shown that is
+    not («46-2 48» with `"price": "48"`). When you cannot tell, leave
+    `price` out: the line then goes to a person with a note.
 - The totals must agree: `count`, if given, equals the sum, and so does a
   «N шт» in the text.
 - At most one colour, and no options with «/».
@@ -178,11 +216,15 @@ sign**, the person confirms the split with one tap, «Як у рядку, по
   answered with a note.
 - **A size range written with a sign makes the app ask.** «42-44» may be
   size 42 with 44 pieces, or the sizes 42 to 44: a parser that reads it as
-  `{"size": "42", "count": 44}` passes every check above. So when the count,
-  or the whole record («42-44»), is also a size in the shop's catalogue, the
-  app asks the person what the record means, and offers the tap only after
-  «розмір 42 — 44 шт» is chosen; a range is answered with a note (owner,
-  2026-10-09). A record you read as a range is not a size with its count:
+  `{"size": "42", "count": 44}` passes every check above. So the app asks the
+  person what the record means, and offers the tap only after «розмір 42 —
+  44 шт» is chosen; a range is answered with a note (owner, 2026-10-09). It
+  asks when the size and the count are both numbers and the count, as
+  written, reads as a larger size after it («42-44», «42-58», «98-104»,
+  whatever the catalogue holds), and when the count, or the whole record, is
+  also a size in the shop's catalogue («M-3» with a size «3», a size
+  «42-44»). A size created after the answer brings the question back before
+  the approval, for every record the person's answer did not cover. A record you read as a range is not a size with its count:
   keep it in `text`, never in `size_counts`.
 - Otherwise the split is only a hint, and the person answers it with a note.
 
@@ -265,7 +307,8 @@ twice, `3.0`). It prints, in Ukrainian, as the app words it:
 ```
 OK: зошит-1.json: 11 рядків, 2 фото
 зошит-2.json: рядок 3: stock_file_photo_line_repeated: те саме фото й рядок, що в рядку 1
-зошит-2.json: файл: stock_file_too_large: файл завеликий (961204 байтів, можна не більше 950000) — розділіть його на два
+зошит-3.json: рядок 4: missing: поле «фото» відсутнє
+зошит-4.json: файл: stock_file_too_large: файл завеликий (961 204 байти, можна не більше 950 000) — розділіть його на два
 ```
 
 Exit 0 when every file is valid, 1 when any is not, 2 when called wrongly.
@@ -286,7 +329,7 @@ stands inside `lines`, and its `type`, which never changes:
 | `stock_file_duplicate_key` | a key written twice in one object |
 | `stock_file_not_finite` | `NaN` or `Infinity` |
 | `stock_file_text_blank` | `text` is spaces alone |
-| `stock_file_control_character` | a control character in a string |
+| `stock_file_control_character` | a control character, C0 or C1, or U+2028 or U+2029, in a string |
 | `stock_file_photo_line_repeated` | this photo and line are already another line of the file |
 | `stock_file_sizes_and_size_counts` | a line gives `sizes` and `size_counts` |
 | `stock_file_size_repeated` | `size_counts` names a size twice |

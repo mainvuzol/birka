@@ -254,15 +254,36 @@ STRING_FIELDS = [
 ]
 
 
-@pytest.mark.parametrize("character", ["\n", "\r", "\t", "\x00", "\x1f", "\x7f"])
+@pytest.mark.parametrize(
+    "character",
+    ["\n", "\r", "\t", "\x00", "\x1f", "\x7f", "\x80", "\x85", "\x9b", "\x9f", "\u2028", "\u2029"],
+)
 @pytest.mark.parametrize(("field", "build"), STRING_FIELDS, ids=[f for f, _ in STRING_FIELDS])
 def test_control_characters_are_refused_in_every_string(
     field: str, build: Any, character: str
 ) -> None:
-    """A line break inside `text` would show one written line as two."""
+    """A line break inside `text` would show one written line as two, and
+    so would U+0085, the next-line character, or the line and paragraph
+    separators U+2028 and U+2029; every C0 and C1 control is refused, and
+    so are those two (review, 2026-10-09)."""
     [error] = refusals(build(character))
     assert error["type"] == "stock_file_control_character"
     assert error["ctx"]["field"] == field
+
+
+def test_every_c0_and_c1_control_is_refused_and_its_neighbours_are_not() -> None:
+    controls = [chr(code) for code in (*range(0x00, 0x20), *range(0x7F, 0xA0), 0x2028, 0x2029)]
+    for character in controls:
+        [error] = refusals(a_file(a_line(), a_line(photo_line=2, text=f"Лоран{character}M-1")))
+        assert (error["type"], error["loc"], error["ctx"]) == (
+            "stock_file_control_character",
+            ("lines", 1, "text"),
+            {"field": "text", "line": 2},
+        ), hex(ord(character))
+    # The characters around them are text: a space, U+00A0, «~» and the
+    # neighbours of the separators are kept.
+    for character in (" ", "~", "\xa0", "\xad", "\u2027", "\u202f"):
+        StockFileV1.model_validate(a_file(a_line(text=f"Лоран{character}M-1")))
 
 
 def test_a_blank_text_is_refused() -> None:

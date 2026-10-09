@@ -16,7 +16,12 @@ added by the list's creator at its creation.
 
 **`inventory_snapshot_row`** gains its part (a composite link, so a row's
 part is in its own list), the photo's name and line, the parser's `reading`,
-the `file_reasons` it raised and the `shown_split`.
+the `file_reasons` it raised and the `shown_split`; and `split_read_as`, what
+the person said a record of that split means when it may also be a range of
+sizes, kept with an answer `STATED_BY_SIZE` only, with `split_read_records`,
+the records it was said of, so that the approval can read them again, record
+by record (owner, 2026-10-09; review, 2026-10-09). Both are part of the
+answer, not of the evidence, and change with the answer.
 
 **The enums.** `snapshot_row_status` gains `REMOVED` and
 `snapshot_quantity_basis` gains `STATED_BY_SIZE`. Neither value can be used
@@ -56,7 +61,8 @@ could not hold it. Such a list needs a person.
 
 **Downgrade** refuses what `0036` cannot hold: a file, a list of more than
 one part, a removed part or line, a line with a photo, a reading or a shown
-split, an answer `STATED_BY_SIZE`. Otherwise it drops what this adds; a list
+split, what a person said a split's record means, an answer
+`STATED_BY_SIZE`. Otherwise it drops what this adds; a list
 of one pasted part, decided or not, goes down and comes back with the same
 fingerprints. The enums' labels stay, as `0031`'s downgrade leaves its own.
 
@@ -217,6 +223,16 @@ FUNCTIONS = (
 ROW_CHECKS = {
     "photo_named_with_its_line": "(photo_name IS NULL) = (photo_line IS NULL)",
     "photo_line_positive": "photo_line IS NULL OR photo_line >= 1",
+    # The basis is compared as text: `STATED_BY_SIZE` cannot be used as an
+    # enum value before this revision commits.
+    "split_read_only_by_size": (
+        "split_read_as IS NULL OR (split_read_as = 'SIZE_WITH_COUNT' "
+        "AND quantity_basis::text = 'STATED_BY_SIZE')"
+    ),
+    "split_read_with_its_records": (
+        "(split_read_as IS NULL) = (split_read_records IS NULL) "
+        "AND (split_read_records IS NULL OR jsonb_typeof(split_read_records) = 'array')"
+    ),
 }
 
 
@@ -379,6 +395,13 @@ def upgrade() -> None:
         "inventory_snapshot_row",
         sa.Column("shown_split", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     )
+    op.add_column(
+        "inventory_snapshot_row", sa.Column("split_read_as", sa.String(20), nullable=True)
+    )
+    op.add_column(
+        "inventory_snapshot_row",
+        sa.Column("split_read_records", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    )
 
     # --- every list here becomes one pasted part ---------------------------------
     # Its command id and fingerprint are the list's, so a retry of the import
@@ -496,6 +519,12 @@ def downgrade() -> None:
             "reading or a split its text shows, which 0036 cannot hold. Keep this revision.",
         ),
         (
+            "EXISTS (SELECT 1 FROM inventory_snapshot_row WHERE split_read_as IS NOT NULL "
+            "OR split_read_records IS NOT NULL)",
+            "Cannot downgrade 0037_stock_list_parts: a stock list line keeps what a person "
+            "said a record of its split means, which 0036 cannot hold. Keep this revision.",
+        ),
+        (
             "EXISTS (SELECT 1 FROM inventory_snapshot_row "
             "WHERE quantity_basis::text = 'STATED_BY_SIZE')",
             "Cannot downgrade 0037_stock_list_parts: a stock list line is answered as its "
@@ -520,7 +549,16 @@ def downgrade() -> None:
     op.drop_constraint(
         "fk_inventory_snapshot_row_part", "inventory_snapshot_row", type_="foreignkey"
     )
-    for column in ("shown_split", "file_reasons", "reading", "photo_line", "photo_name", "part_id"):
+    for column in (
+        "split_read_records",
+        "split_read_as",
+        "shown_split",
+        "file_reasons",
+        "reading",
+        "photo_line",
+        "photo_name",
+        "part_id",
+    ):
         op.drop_column("inventory_snapshot_row", column)
 
     op.drop_index("uq_inventory_snapshot_part_active_file", table_name="inventory_snapshot_part")

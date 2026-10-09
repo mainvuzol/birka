@@ -57,15 +57,15 @@ FIELDS = {
     "price_kind": "вид цін",
     "parser": "парсер",
     "format": "формат",
-    "version": "версія",
+    "version": "версія формату",
     "lines": "рядки",
     "$schema": "$schema",
 }
 
-# Pydantic's own refusals, as the app words them.
+# Pydantic's own refusals, as the app words them: each says what is wrong
+# with «поле «…»», and agrees with it («поле «текст» задовге»).
 PROBLEMS = {
-    "missing": "немає",
-    "extra_forbidden": "невідоме поле",
+    "missing": "відсутнє",
     "int_type": "має бути цілим числом",
     "string_type": "має бути текстом",
     "string_unicode": "має символ, якого не може бути в тексті",
@@ -78,7 +78,7 @@ PROBLEMS = {
     "too_long": "задовге",
     "greater_than_equal": "поза межами",
     "less_than_equal": "поза межами",
-    "literal_error": "недопустиме значення",
+    "literal_error": "має недопустиме значення",
 }
 
 # The format's own refusals (`stock_file.MESSAGES`), as the app words them.
@@ -92,7 +92,7 @@ REFUSALS = {
     "stock_file_size_repeated": "розмір «{size}» двічі",
     "stock_file_text_too_long_in_all": "у файлі забагато тексту: не більше {limit} символів",
     "stock_file_too_large": (
-        "файл завеликий ({bytes} байтів, можна не більше {limit}) — розділіть його на два"
+        "файл завеликий ({bytes}, можна не більше {limit}) — розділіть його на два"
     ),
     "stock_file_duplicate_key": "ключ «{key}» повторюється",
     "stock_file_not_finite": "{constant} — не число, яке може бути у файлі",
@@ -100,18 +100,41 @@ REFUSALS = {
 }
 
 
+def _number(count: int) -> str:
+    """Digits grouped by three: «961 204», «100 000»."""
+    return f"{count:,}".replace(",", " ")
+
+
+def _counted(count: int, one: str, few: str, many: str) -> str:
+    """The number with its noun: «1 рядок», «2 рядки», «5 рядків», «11 рядків»."""
+    if count % 10 == 1 and count % 100 != 11:
+        noun = one
+    elif 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
+        noun = few
+    else:
+        noun = many
+    return f"{_number(count)} {noun}"
+
+
 def _lines(count: int) -> str:
     """«1 рядок», «2 рядки», «5 рядків»."""
-    if count % 10 == 1 and count % 100 != 11:
-        return f"{count} рядок"
-    if 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
-        return f"{count} рядки"
-    return f"{count} рядків"
+    return _counted(count, "рядок", "рядки", "рядків")
 
 
-def _field(location: Sequence[str | int]) -> str:
+def _bytes(count: int) -> str:
+    """«1 байт», «961 204 байти», «5 байтів»."""
+    return _counted(count, "байт", "байти", "байтів")
+
+
+def _subject(location: Sequence[str | int]) -> str:
+    """What a refusal is about: «поле «кількість»», or a line or the file
+    itself when no field is named («рядок має бути об’єктом»)."""
     names = [part for part in location if isinstance(part, str)]
-    return FIELDS.get(names[-1], names[-1]) if names else "файл"
+    if not names:
+        return "файл"
+    if names[-1] == "lines" and isinstance(location[-1], int):
+        return "рядок"
+    return f"поле «{FIELDS.get(names[-1], names[-1])}»"
 
 
 def describe(error: Any) -> str:
@@ -127,6 +150,10 @@ def describe(error: Any) -> str:
     if kind in REFUSALS:
         if "field" in context:
             context["field"] = FIELDS.get(context["field"], context["field"])
+        if kind == "stock_file_too_large":
+            context["bytes"] = _bytes(int(context["bytes"]))
+        if isinstance(context.get("limit"), int):
+            context["limit"] = _number(context["limit"])
         text = REFUSALS[kind].format(**context)
     elif kind == "literal_error" and tuple(location) == ("format",):
         text = f"це не файл формату Бірки («{FORMAT}»)"
@@ -135,8 +162,8 @@ def describe(error: Any) -> str:
     elif kind == "extra_forbidden" and location:
         text = f"невідоме поле «{location[-1]}»"
     else:
-        problem = PROBLEMS.get(kind, error.get("msg", kind))
-        text = f"{_field(location)} — {problem}"
+        problem = PROBLEMS.get(kind, f"не відповідає формату ({error.get('msg', kind)})")
+        text = f"{_subject(location)} {problem}"
     where = f"рядок {line}" if line is not None else "файл"
     return f"{where}: {kind}: {text}"
 

@@ -358,6 +358,15 @@ test("approving is for whoever may approve, and the section for whoever handles 
     page.getByRole("button", { name: "Розібрати рядок" }),
   ).toBeVisible();
   await expect(page.getByLabel("Затвердження списку")).toHaveCount(0);
+  // Whoever handles a list may still reject it (review, 2026-10-09).
+  await expect(
+    page
+      .getByLabel("Рішення щодо списку")
+      .getByRole("button", { name: "Відхилити список" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Затвердити список" }),
+  ).toHaveCount(0);
 
   drop = ["snapshot:approve", "snapshot:import"];
   await page.reload();

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { JSX } from "react";
 import { ApiError, SlowAnswer, api, errorText } from "@/shared/api";
 import type { Store } from "@/orders/types";
@@ -7,6 +7,7 @@ import { FileChooser } from "./FileChooser";
 import { fileProblemTexts } from "./fileErrors";
 import { MAX_BODY_BYTES, TOO_LARGE, bodyBytes } from "./stockFile";
 import type { StockFileRead } from "./stockFile";
+import { cannotReceiveText, number } from "./types";
 import type { StockList, StockPart } from "./types";
 
 /**
@@ -36,10 +37,40 @@ export function partName(part: StockPart): string {
 
 export const LAST_PART =
   "Це останній файл списку. Якщо він помилковий — відхиліть список: склад звільниться.";
+/** The same, of a list's last part when it is lines typed by hand. */
+export const LAST_TYPED_PART =
+  "Це останні рядки списку. Якщо вони помилкові — відхиліть список: склад звільниться.";
+
+/**
+ * What removing a part asks, and its button: a file by its name, typed
+ * lines as typed lines (review, 2026-10-09).
+ */
+function removal(
+  part: StockPart,
+  answered: number,
+): {
+  button: string;
+  question: string;
+} {
+  const lines = String(part.lines);
+  const answers = String(answered);
+  return part.kind === "FILE"
+    ? {
+        button: "Прибрати файл",
+        question: `Прибрати файл ${partName(part)}? Рядки цього файлу (${lines}) не увійдуть до затвердження, а відповіді на них (${answers}) зникнуть; рядки буде видно як прибрані. Інші файли лишаться.`,
+      }
+    : {
+        button: "Прибрати рядки",
+        question: `Прибрати рядки, внесені вручну? Ці рядки (${lines}) не увійдуть до затвердження, а відповіді на них (${answers}) зникнуть; їх буде видно як прибрані. Інші файли лишаться.`,
+      };
+}
 
 /** A list with no room for a part, as the server counted it. */
 function listFull(details: Record<string, unknown>): string {
-  const limit = String(details.limit);
+  const limit =
+    typeof details.limit === "number"
+      ? number(details.limit)
+      : String(details.limit);
   return details.what === "parts"
     ? `Список повний: не більше ${limit} файлів.`
     : details.what === "rows"
@@ -47,8 +78,17 @@ function listFull(details: Record<string, unknown>): string {
       : `Список повний: не більше ${limit} рядків.`;
 }
 
-/** Why a part was not added, in words; one line each. */
-function refusal(error: unknown, unknownOutcome: string): string[] {
+/**
+ * Why a part was not added, in words; one line each. `unknownOutcome`: what
+ * is said when the answer never came; `resent`: what is said when the same
+ * command was sent before in another form, and is now sent as a new one.
+ */
+function refusal(
+  error: unknown,
+  list: StockList,
+  unknownOutcome: string,
+  resent: string,
+): string[] {
   if (error instanceof SlowAnswer) return [errorText(error)];
   if (!(error instanceof ApiError)) return [unknownOutcome];
   const reason = error.details.reason;
@@ -59,11 +99,9 @@ function refusal(error: unknown, unknownOutcome: string): string[] {
   if (reason === "LIST_FULL") return [listFull(error.details)];
   if (reason === "ALREADY_DECIDED")
     return ["Цей список уже затвердили або відхилили."];
-  if (error.code === "IDEMPOTENCY_CONFLICT")
-    return [
-      "Це вже надсилали, але в іншому вигляді. Оберіть файл чи введіть рядки ще раз — їх буде надіслано як нові.",
-    ];
-  const problems = fileProblemTexts(error.validation);
+  if (reason === "LIST_STORE_CANNOT_RECEIVE") return [cannotReceiveText(list)];
+  if (error.code === "IDEMPOTENCY_CONFLICT") return [resent];
+  const problems = fileProblemTexts(error.validation, error.validationMore);
   return problems.length > 0 ? problems : [errorText(error)];
 }
 
@@ -121,12 +159,18 @@ export function PartsSection({
         error instanceof ApiError ? error.details.reason : undefined;
       setProblem(
         !(error instanceof ApiError)
-          ? "Невідомо, чи файл прибрано. Оновіть список і подивіться; повторити безпечно."
+          ? part.kind === "FILE"
+            ? "Невідомо, чи файл прибрано. Оновіть список і подивіться; повторити безпечно."
+            : "Невідомо, чи рядки прибрано. Оновіть список і подивіться; повторити безпечно."
           : reason === "LAST_PART"
-            ? LAST_PART
+            ? part.kind === "FILE"
+              ? LAST_PART
+              : LAST_TYPED_PART
             : reason === "ALREADY_DECIDED"
               ? "Цей список уже затвердили або відхилили."
-              : errorText(error),
+              : reason === "LIST_STORE_CANNOT_RECEIVE"
+                ? cannotReceiveText(list)
+                : errorText(error),
       );
     } finally {
       setAsking(null);
@@ -143,6 +187,7 @@ export function PartsSection({
         const removed = part.removed_at !== null;
         const last = !removed && live.length === 1;
         const answered = part.progress.resolved + part.progress.skipped;
+        const asked = removal(part, answered);
         return (
           <article
             key={part.part_id}
@@ -162,11 +207,13 @@ export function PartsSection({
                 : ` · розібрано ${String(answered)} з ${String(part.lines)}`}
             </small>
             <small>
-              Додано: {part.added_by_name ?? "—"}, {when(part.added_at)}
+              Додано: {visible(part.added_by_name ?? "—")},{" "}
+              {when(part.added_at)}
             </small>
             {part.removed_at !== null && (
               <small>
-                Прибрано: {part.removed_by_name ?? "—"}, {when(part.removed_at)}
+                Прибрано: {visible(part.removed_by_name ?? "—")},{" "}
+                {when(part.removed_at)}
               </small>
             )}
             {!removed && part.photo_lines_elsewhere > 0 && (
@@ -194,16 +241,18 @@ export function PartsSection({
                     setAsking(part.part_id);
                   }}
                 >
-                  Прибрати файл
+                  {asked.button}
                 </button>
               )}
             </div>
-            {editable && last && <p className="hint">{LAST_PART}</p>}
+            {editable && last && (
+              <p className="hint">
+                {part.kind === "FILE" ? LAST_PART : LAST_TYPED_PART}
+              </p>
+            )}
             {asking === part.part_id && !last && (
-              <div className="notice" aria-label="Прибрати файл?">
-                <p>
-                  {`Прибрати файл ${partName(part)}? Рядки цього файлу (${String(part.lines)}) не увійдуть до затвердження, а відповіді на них (${String(answered)}) зникнуть; рядки буде видно як прибрані. Інші файли лишаться.`}
-                </p>
+              <div className="notice" aria-label={`${asked.button}?`}>
+                <p>{asked.question}</p>
                 <div className="actions">
                   <button
                     disabled={busy || blocked}
@@ -243,6 +292,11 @@ function partKey(listId: string, read: StockFileRead): string | null {
  * is kept on the phone, by the list and the file's bytes and name, until the
  * server has answered it: the same file picked again after a lost answer is
  * the same command, never a second part.
+ *
+ * A kept command may name a part removed since its answer was lost: the
+ * server then answers with that part, removed, and the file is sent again as
+ * a new command — a removed file comes back only as a new one (owner,
+ * 2026-10-08; review, 2026-10-09).
  */
 export function AddFile({
   list,
@@ -268,11 +322,17 @@ export function AddFile({
   const [read, setRead] = useState<StockFileRead | null>(null);
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
-  // Where storage cannot keep it, the command lives as long as this form.
-  const [fallback] = useState(() => crypto.randomUUID());
+  // Where storage cannot keep it, the command lives as long as this form,
+  // until the server answers it.
+  const fallback = useRef<string | null>(null);
+
+  function formCommand(): string {
+    fallback.current ??= crypto.randomUUID();
+    return fallback.current;
+  }
 
   function commandId(key: string | null): string {
-    if (key === null) return fallback;
+    if (key === null) return formCommand();
     try {
       const kept = window.localStorage.getItem(key);
       if (kept) return kept;
@@ -280,11 +340,13 @@ export function AddFile({
       window.localStorage.setItem(key, fresh);
       return fresh;
     } catch {
-      return fallback;
+      return formCommand();
     }
   }
 
+  /** The server answered the command: the next press is a new one. */
   function forget(key: string | null): void {
+    fallback.current = null;
     if (key === null) return;
     try {
       window.localStorage.removeItem(key);
@@ -293,7 +355,8 @@ export function AddFile({
     }
   }
 
-  async function send(): Promise<void> {
+  /** `again`: sent once more, the kept command having named a removed part. */
+  async function send(again = false): Promise<void> {
     if (!read?.ok) return;
     const key = partKey(list.snapshot_id, read);
     const body = {
@@ -307,8 +370,9 @@ export function AddFile({
     }
     setBusy(true);
     setProblems([]);
+    let removed = false;
     try {
-      await api(
+      const added = await api<{ part: StockPart }>(
         `/snapshots/${list.snapshot_id}/parts?store_id=${store.id}`,
         token,
         body,
@@ -317,20 +381,25 @@ export function AddFile({
         { slow: true },
       );
       forget(key);
-      await done();
+      // The kept command named a part removed since: sent again, as new.
+      removed = added.part.removed_at !== null && !again;
+      if (!removed) await done();
     } catch (error) {
       // Answered: a second press is a new command. Not answered: the same.
       if (error instanceof ApiError) forget(key);
       setProblems(
         refusal(
           error,
+          list,
           "Невідомо, чи додано файл. Натисніть ще раз — той самий файл не додасться двічі.",
+          "Цей файл уже надсилали, але в іншому вигляді. Натисніть «Додати до списку» ще раз — його буде надіслано як новий.",
         ),
       );
       if (error instanceof SlowAnswer) await refresh();
     } finally {
       setBusy(false);
     }
+    if (removed) await send(true);
   }
 
   return (
@@ -404,6 +473,11 @@ function saveLines(listId: string, draft: LinesDraft | null): void {
  * «Додати рядки вручну»: a page the parser could not read, typed into the
  * list as a part of its own (owner, 2026-10-08). No photo reference; each
  * line is reviewed like any other. Kept on the phone until the server has it.
+ *
+ * Sent again after a lost answer, with the text changed meanwhile, the same
+ * command is refused as another one (`IDEMPOTENCY_CONFLICT`): what was sent
+ * first is in the list, so the text is kept and goes as a new command at the
+ * next press (review, 2026-10-09).
  */
 export function AddLines({
   list,
@@ -431,9 +505,13 @@ export function AddLines({
   const tooLong = lines.find((line) => line.length > 500);
 
   function setDraft(change: Partial<LinesDraft>): void {
-    const next = { ...draft, ...change };
-    setDraftState(next);
-    saveLines(list.snapshot_id, next);
+    // From the draft as it is now: typing may go on while an answer is
+    // awaited, and a new command id must not undo it.
+    setDraftState((current) => {
+      const next = { ...current, ...change };
+      saveLines(list.snapshot_id, next);
+      return next;
+    });
   }
 
   async function send(): Promise<void> {
@@ -456,10 +534,16 @@ export function AddLines({
       saveLines(list.snapshot_id, null);
       await done();
     } catch (error) {
+      if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT") {
+        setDraft({ command_id: crypto.randomUUID() });
+        await refresh();
+      }
       setProblems(
         refusal(
           error,
+          list,
           "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
+          "Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них. Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.",
         ),
       );
       if (error instanceof SlowAnswer) await refresh();

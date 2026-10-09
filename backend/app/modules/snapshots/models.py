@@ -402,6 +402,19 @@ class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
     shown_split: Mapped[list[dict[str, Any]] | None] = mapped_column(
         postgresql.JSONB, nullable=True
     )
+    # What the person said a record of that split means when it may also be
+    # a range of sizes («42-44»): `SIZE_WITH_COUNT` (`file_lines.SplitReading`),
+    # with an answer `STATED_BY_SIZE` only. Part of the answer, not of the
+    # evidence: the approval reads it again (owner, 2026-10-09).
+    split_read_as: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # The records it was said of, as the text writes them (`["42-44"]`): those
+    # that could be read otherwise when the person answered. A record that
+    # may be a range by the approval and is not among them was never asked
+    # about, and the approval refuses it (review, 2026-10-09). None is SQL
+    # NULL, never a JSON null: the two columns are NULL together.
+    split_read_records: Mapped[list[str] | None] = mapped_column(
+        postgresql.JSONB(none_as_null=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("inventory_snapshot_id", "line_no", name="uq_snapshot_row_line"),
@@ -443,6 +456,16 @@ class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint(
             "(status IN ('RESOLVED', 'SKIPPED')) = (resolved_at IS NOT NULL)",
             name="verdict_has_time",
+        ),
+        CheckConstraint(
+            "split_read_as IS NULL OR (split_read_as = 'SIZE_WITH_COUNT' "
+            "AND quantity_basis::text = 'STATED_BY_SIZE')",
+            name="split_read_only_by_size",
+        ),
+        CheckConstraint(
+            "(split_read_as IS NULL) = (split_read_records IS NULL) "
+            "AND (split_read_records IS NULL OR jsonb_typeof(split_read_records) = 'array')",
+            name="split_read_with_its_records",
         ),
     )
 

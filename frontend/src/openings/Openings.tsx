@@ -13,12 +13,16 @@ import { MAX_BODY_BYTES, TOO_LARGE, bodyBytes } from "./stockFile";
 import type { StockFileRead } from "./stockFile";
 import {
   basisLabels,
+  cannotReceiveText,
   fileReasonLabels,
   lineStatusLabels,
   listStatusLabels,
+  number,
+  plural,
   priceKindLabels,
   sizesWithCounts,
   sourceQuantity,
+  times,
 } from "./types";
 import type {
   Basis,
@@ -52,8 +56,9 @@ import type {
  * list being typed is kept on this phone until the server has it; a file's
  * name and fingerprint are, never its content.
  *
- * Every text from a file, and every line of a list, is shown through
- * `visible()`: what reorders or hides characters is shown as a mark.
+ * Every text from a file, every line of a list, and every name and reason
+ * people gave it is shown through `visible()`: what reorders or hides
+ * characters is shown as a mark.
  *
  * While the store that started a shared warehouse's list does not trade,
  * the list is only rejected, through the other store, which releases the
@@ -108,7 +113,7 @@ export function Openings({
       />
     );
   return (
-    <section>
+    <section className="openings">
       <div className="toolbar">
         <h2>Початкові залишки</h2>
         <button
@@ -182,7 +187,7 @@ export function Openings({
             </strong>
             <span className="badge">{listStatusLabels[list.status]}</span>
             {list.store_id !== store.id && (
-              <small>Веде магазин «{list.store_name ?? "—"}»</small>
+              <small>Веде магазин «{visible(list.store_name ?? "—")}»</small>
             )}
             <small>
               Рядків: {list.summary.lines} · розібрано{" "}
@@ -223,6 +228,10 @@ interface Draft {
    * content: picked again after a lost answer, it is the same command. */
   file_name: string | null;
   file_sha256: string | null;
+  /** The last send got no answer, or none in time: the server may have
+   * made the list, so the command stays the same whatever file is picked,
+   * and no second list is started at the warehouse (review, 2026-10-09). */
+  unsettled: boolean;
 }
 
 function draftKey(store: Store): string {
@@ -239,6 +248,7 @@ function freshDraft(): Draft {
     mode: "text",
     file_name: null,
     file_sha256: null,
+    unsettled: false,
   };
 }
 
@@ -254,10 +264,33 @@ function loadDraft(store: Store): Draft {
   return freshDraft();
 }
 
-function saveDraft(store: Store, draft: Draft | null): void {
+/**
+ * Keep the draft on this phone — never anything of a file's content: a name
+ * or a date the file filled in is left out, and filled in again when the
+ * file is picked again (review, 2026-10-09). What the person typed is kept.
+ */
+function saveDraft(
+  store: Store,
+  draft: Draft | null,
+  file: StockFileRead | null = null,
+): void {
+  const filled = file?.ok ? file.summary : null;
   try {
     if (draft)
-      window.localStorage.setItem(draftKey(store), JSON.stringify(draft));
+      window.localStorage.setItem(
+        draftKey(store),
+        JSON.stringify({
+          ...draft,
+          source:
+            filled !== null && draft.source === filled.source
+              ? ""
+              : draft.source,
+          captured:
+            filled !== null && draft.captured === filled.counted_on
+              ? ""
+              : draft.captured,
+        }),
+      );
     else window.localStorage.removeItem(draftKey(store));
   } catch {
     /* Typing still works; only a reload loses it. */
@@ -318,15 +351,32 @@ function NewList({
   const other = waiting.data?.items.find(
     (list) => list.command_id !== draft.command_id,
   );
-  const checked = waiting.isSuccess && other === undefined;
+  // The list this draft's command made, its answer lost or too slow: the
+  // person is taken to it, rather than send again (review, 2026-10-09).
+  const mine = waiting.data?.items.find(
+    (list) => list.command_id === draft.command_id,
+  );
+  // Read and not being read again: a list found by a re-read in flight
+  // would come too late to stop a second one.
+  const checked =
+    waiting.isSuccess &&
+    !waiting.isFetching &&
+    other === undefined &&
+    mine === undefined;
   const content =
     draft.mode === "text" ? lines.length > 0 && !tooLong : read?.ok === true;
   const ready = draft.location_id !== "" && checked && content && !busy;
 
-  function setDraft(change: Partial<Draft>): void {
-    const next = { ...draft, ...change };
-    setDraftState(next);
-    saveDraft(store, next);
+  /**
+   * `file`: the file whose name and date are not kept on the phone. Merged
+   * into the draft as it is now: a file is read while the person types.
+   */
+  function setDraft(change: Partial<Draft>, file = read): void {
+    setDraftState((current) => {
+      const next = { ...current, ...change };
+      saveDraft(store, next, file);
+      return next;
+    });
   }
 
   function picked(next: StockFileRead): void {
@@ -334,28 +384,36 @@ function NewList({
     setProblems([]);
     if (!next.ok) return;
     // The same file again, after an answer that was lost: the same command.
+    // So is any file while the last send is unsettled: the list it may have
+    // made is found by its command, never started twice.
     const same =
-      next.sha256 !== null &&
-      next.sha256 === draft.file_sha256 &&
-      next.name === draft.file_name;
+      draft.unsettled ||
+      (next.sha256 !== null &&
+        next.sha256 === draft.file_sha256 &&
+        next.name === draft.file_name);
     // The file's own name and date fill the list's, unless the person typed
     // their own; a file picked instead of another replaces what it filled.
     const filled = read?.ok ? read.summary : null;
     const { source, counted_on } = next.summary;
-    setDraft({
-      command_id: same ? draft.command_id : crypto.randomUUID(),
-      file_name: next.name,
-      file_sha256: next.sha256,
-      ...((draft.source.trim() === "" || draft.source === filled?.source) &&
-      fits(source, 300)
-        ? { source }
-        : {}),
-      ...((draft.captured.trim() === "" ||
-        draft.captured === filled?.counted_on) &&
-      fits(counted_on, 40)
-        ? { captured: counted_on }
-        : {}),
-    });
+    setDraft(
+      {
+        command_id: same ? draft.command_id : crypto.randomUUID(),
+        file_name: next.name,
+        file_sha256: next.sha256,
+        ...((draft.source.trim() === "" || draft.source === filled?.source) &&
+        fits(source, 300)
+          ? { source }
+          : {}),
+        ...((draft.captured.trim() === "" ||
+          draft.captured === filled?.counted_on) &&
+        fits(counted_on, 40)
+          ? { captured: counted_on }
+          : {}),
+      },
+      next,
+    );
+    // Whether the unsettled send made a list here, read again.
+    if (draft.unsettled && draft.location_id !== "") void waiting.refetch();
   }
 
   async function send(): Promise<void> {
@@ -389,8 +447,20 @@ function NewList({
       saveDraft(store, null);
       done(list);
     } catch (error) {
+      // An answer settles the command; none, or none in time, does not.
+      // A slow one may have made the list, and a command refused as sent
+      // before in another form did: the warehouse is read again, and the
+      // list made is offered rather than a second one.
+      setDraft({ unsettled: !(error instanceof ApiError) });
+      if (
+        error instanceof SlowAnswer ||
+        (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
+      )
+        void waiting.refetch();
       const refused =
-        error instanceof ApiError ? fileProblemTexts(error.validation) : [];
+        error instanceof ApiError
+          ? fileProblemTexts(error.validation, error.validationMore)
+          : [];
       setProblems(
         error instanceof SlowAnswer
           ? [errorText(error)]
@@ -453,13 +523,29 @@ function NewList({
               Перевірити ще раз
             </button>
           </div>
+        ) : mine ? (
+          <div className="notice" role="status">
+            <p>
+              {`Список «${listName(mine)}» уже збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші файли чи рядки додайте вже до нього.`}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                // Made: nothing of this draft is to be sent again.
+                saveDraft(store, null);
+                openList(mine.snapshot_id);
+              }}
+            >
+              Відкрити список
+            </button>
+          </div>
         ) : (
           other && (
             <div className="notice" role="status">
               <p>
                 {other.store_state === "ACTIVE"
-                  ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${other.store_name ?? "—"}»). Другий список для нього не створюють — додайте файл до наявного.`
-                  : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${other.store_name ?? "—"}», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`}
+                  ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${visible(other.store_name ?? "—")}»). Другий список для нього не створюють — додайте файл до наявного.`
+                  : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${visible(other.store_name ?? "—")}», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`}
               </p>
               <button
                 type="button"
@@ -570,7 +656,7 @@ function NewList({
         )
       )}
       <div className="actions">
-        {!other && (
+        {!other && !mine && (
           <button type="submit" disabled={!ready || blocked}>
             Зберегти список
           </button>
@@ -583,14 +669,20 @@ function NewList({
         >
           Закрити
         </button>
-        {problems.length > 0 && (
+        {/* Only after an answer: while the last send is unsettled, the list
+            it may have made is found by its command, and a new command
+            would start a second list beside it (review, 2026-10-09). */}
+        {problems.length > 0 && !draft.unsettled && (
           <button
             type="button"
             className="quiet"
             disabled={busy}
             onClick={() => {
-              setDraft({ command_id: crypto.randomUUID() });
+              setDraft({ command_id: crypto.randomUUID(), unsettled: false });
               setProblems([]);
+              // A list made since the last read is found before the new
+              // command can be sent.
+              if (draft.location_id !== "") void waiting.refetch();
             }}
           >
             Почати як новий список
@@ -599,6 +691,23 @@ function NewList({
       </div>
     </form>
   );
+}
+
+/**
+ * What the person is asked to do about a waiting list, by what they may do
+ * (review, 2026-10-09): approving takes its own right, rejecting is open to
+ * whoever may add a file, and someone who may do neither is asked nothing.
+ */
+function decisionText(
+  trading: boolean,
+  canApprove: boolean,
+  canImport: boolean,
+): string {
+  if (!canApprove && !canImport) return "";
+  if (!trading) return " Відхиліть його, щоб склад звільнився.";
+  return canApprove
+    ? " Затвердіть або відхиліть його."
+    : " Затверджує той, хто має право затверджувати списки; відхилити його можна й вам.";
 }
 
 const lineFilters: { status: LineStatus | null; label: string }[] = [
@@ -700,7 +809,7 @@ function ListView({
   }
 
   return (
-    <section>
+    <section className="openings">
       <div className="toolbar">
         <h2>{listName(list)}</h2>
         <button className="quiet" onClick={close}>
@@ -712,11 +821,11 @@ function ListView({
         {list.captured_at ? ` · перелічено ${visible(list.captured_at)}` : ""}
       </p>
       {list.store_id !== store.id && (
-        <p className="hint">Веде магазин «{list.store_name ?? "—"}»</p>
+        <p className="hint">Веде магазин «{visible(list.store_name ?? "—")}»</p>
       )}
       {list.status === "IN_REVIEW" && !trading && (
         <p className="notice" role="status">
-          {`Магазин «${list.store_name ?? "—"}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
+          {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
         </p>
       )}
       <p className="hint">
@@ -727,7 +836,7 @@ function ListView({
       </p>
       {list.status === "IN_REVIEW" && (
         <p className="hint">
-          {`Місце у списку: рядків ${String(list.summary.lines)} з ${String(list.summary.limits.lines)} · відповідей ${String(list.summary.allocations)} з ${String(list.summary.limits.allocations)}`}
+          {`Місце у списку: рядків ${number(list.summary.lines)} з ${number(list.summary.limits.lines)} · відповідей ${number(list.summary.allocations)} з ${number(list.summary.limits.allocations)}`}
         </p>
       )}
       {list.status === "APPLIED" && (
@@ -738,31 +847,32 @@ function ListView({
       )}
       {list.status === "REJECTED" && (
         <p role="status">
-          Відхилено{list.rejection_reason ? `: ${list.rejection_reason}` : ""}.
+          Відхилено
+          {list.rejection_reason ? `: ${visible(list.rejection_reason)}` : ""}.
           Залишків цей список не змінив.
         </p>
       )}
       {list.status === "IN_REVIEW" && (
         <p className="notice">
           Поки список чекає рішення, на складі «{warehouse}», де ще не було руху
-          товару, нічого не приймають, не продають і не виправляють.{" "}
-          {trading
-            ? "Затвердіть або відхиліть його."
-            : "Відхиліть його, щоб склад звільнився."}
+          товару, нічого не приймають, не продають і не виправляють.
+          {decisionText(trading, canApprove, canImport)}
         </p>
       )}
-      {list.status === "IN_REVIEW" &&
-        (canApprove || (!trading && canImport)) && (
-          <Approval
-            list={list}
-            store={store}
-            token={token}
-            warehouse={warehouse}
-            approvable={trading && canApprove}
-            blocked={blocked}
-            refresh={refresh}
-          />
-        )}
+      {/* Whoever may add or remove a file may reject the list too: a list
+          whose last file is wrong is rejected (owner, 2026-10-08), so the
+          button the hint names is there. Approving takes its own right. */}
+      {list.status === "IN_REVIEW" && (canApprove || canImport) && (
+        <Approval
+          list={list}
+          store={store}
+          token={token}
+          warehouse={warehouse}
+          approvable={trading && canApprove}
+          blocked={blocked}
+          refresh={refresh}
+        />
+      )}
       {list.status === "IN_REVIEW" && trading && canImport && !canPick && (
         <p role="alert">
           Щоб розбирати рядки, потрібне право приймати товар у цьому магазині.
@@ -1007,7 +1117,7 @@ function FileEvidence({
       )}
       {line.same_photo_lines > 1 && (
         <small>
-          Цей рядок того самого фото у списку — {line.same_photo_lines} разів:
+          Цей рядок того самого фото у списку — {times(line.same_photo_lines)}:
           можливо, фото прочитано двічі або додано у двох файлах.
         </small>
       )}
@@ -1046,7 +1156,7 @@ function LineCard({
         ))}
       {line.same_text_lines > 1 && (
         <small>
-          Такий самий рядок у списку — {line.same_text_lines} разів: це може
+          Такий самий рядок у списку — {times(line.same_text_lines)}: це може
           бути по рядку на кожну одиницю, або помилка переписування.
         </small>
       )}
@@ -1078,6 +1188,36 @@ function LineCard({
       )}
     </article>
   );
+}
+
+/**
+ * No room for another answer: a list takes so many in all (`LIST_FULL`,
+ * `allocations`), each size of a line one (review, 2026-10-09).
+ */
+function noRoomText(limit: unknown): string {
+  const most =
+    typeof limit === "number"
+      ? `${number(limit)} ${plural(limit, "відповідь", "відповіді", "відповідей")}`
+      : `${String(limit)} відповідей`;
+  return `У списку вже ${most} — більше він не вміщує, тож цю відповідь не збережено. Рядок із кількома розмірами бере відповідь на кожен розмір. Звільнити місце можна, прибравши файл.`;
+}
+
+/**
+ * Lines answered by size whose record may now be a range of sizes, a size
+ * having been created since (`SPLIT_MAY_BE_RANGE` at an approval; owner,
+ * 2026-10-09): «Рядки 3, 7 треба розібрати ще раз…».
+ */
+function rangeAgainText(details: Record<string, unknown>): string {
+  const listed = Array.isArray(details.line_nos)
+    ? details.line_nos.filter((n): n is number => typeof n === "number")
+    : [];
+  const count =
+    typeof details.count === "number" ? details.count : listed.length;
+  const rest = count - listed.length;
+  const named = `${listed.map(String).join(", ")}${rest > 0 ? ` і ще ${number(rest)}` : ""}`;
+  return count === 1
+    ? `Рядок ${named} треба розібрати ще раз: запис у ньому тепер може бути діапазоном розмірів.`
+    : `Рядки ${named} треба розібрати ще раз: запис у них тепер може бути діапазоном розмірів.`;
 }
 
 /** A record of a split as the line writes it: «42-44». Guarded. */
@@ -1240,20 +1380,27 @@ function LineEditor({
       );
       done();
     } catch (error) {
+      const reason =
+        error instanceof ApiError ? error.details.reason : undefined;
       setProblem(
         !(error instanceof ApiError)
           ? "Немає відповіді сервера. Натисніть ще раз — повторна відповідь безпечна."
-          : error.details.reason === "PART_REMOVED"
+          : reason === "PART_REMOVED"
             ? "Файл цього рядка прибрали — відповідь не збережено."
-            : error.details.reason === "SPLIT_MAY_BE_RANGE"
+            : reason === "SPLIT_MAY_BE_RANGE"
               ? "Запис у рядку тепер може означати й діапазон розмірів. Скасуйте, відкрийте рядок знову й вкажіть, що він означає."
-              : error.details.reason === "LIST_STORE_NOT_TRADING"
+              : reason === "LIST_STORE_NOT_TRADING"
                 ? errorText(error)
-                : error.code === "SNAPSHOT_CONFLICT"
-                  ? "Список уже затвердили або відхилили — відповідь не збережено."
-                  : error.code === "NOT_FOUND"
-                    ? "Товар або розмір більше недоступний. Оберіть інший."
-                    : errorText(error),
+                : reason === "LIST_STORE_CANNOT_RECEIVE"
+                  ? cannotReceiveText(list)
+                  : reason === "LIST_FULL" &&
+                      error.details.what === "allocations"
+                    ? noRoomText(error.details.limit)
+                    : error.code === "SNAPSHOT_CONFLICT"
+                      ? "Список уже затвердили або відхилили — відповідь не збережено."
+                      : error.code === "NOT_FOUND"
+                        ? "Товар або розмір більше недоступний. Оберіть інший."
+                        : errorText(error),
       );
     } finally {
       setBusy(false);
@@ -1560,9 +1707,11 @@ function LineEditor({
 }
 
 /**
- * The owner's decision on a list: approve it, or reject it. While the store
- * that started it does not trade, it is only rejected (`approvable` false),
- * by the other store's managers or the owner (owner decision, 2026-10-09).
+ * The decision on a list: approve it, or reject it. Approval is for whoever
+ * may approve, while the store that started the list trades (owner decision,
+ * 2026-10-09); rejection is for them and for whoever may add and remove the
+ * list's files, so a list whose last file is wrong is rejected where it is
+ * looked at (owner, 2026-10-08; review, 2026-10-09).
  */
 function Approval({
   list,
@@ -1622,7 +1771,11 @@ function Approval({
                   ? "Ще не всі рядки розібрано."
                   : reasonCode === "ALREADY_DECIDED"
                     ? "Цей список уже затвердили або відхилили."
-                    : errorText(error),
+                    : reasonCode === "SPLIT_MAY_BE_RANGE"
+                      ? rangeAgainText(error.details)
+                      : reasonCode === "LIST_STORE_CANNOT_RECEIVE"
+                        ? cannotReceiveText(list)
+                        : errorText(error),
       );
     } finally {
       setAsking(null);

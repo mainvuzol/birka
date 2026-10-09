@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import type { Locator, Page, Route } from "@playwright/test";
+import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -24,6 +24,10 @@ interface Fixture {
   file_checks_location_id: string;
   file_slow_location_id: string;
   file_range_location_id: string;
+  file_lost_location_id: string;
+  file_narrow_location_id: string;
+  file_late_location_id: string;
+  file_later_location_id: string;
   shared_opening_location_id: string;
   network_owner_telegram_user_id: string;
   network_north_store_id: string;
@@ -40,6 +44,18 @@ const fixture = JSON.parse(
 
 /** RIGHT-TO-LEFT OVERRIDE: makes «12 шт» read «шт 21» where it stands. */
 const RLO = String.fromCodePoint(0x202e);
+/** SOFT HYPHEN: prints nothing, and makes a text differ from its look. */
+const SHY = String.fromCodePoint(0x00ad);
+/** VARIATION SELECTOR-16: a part of an emoji after a pictograph, hidden after a letter. */
+const VS16 = String.fromCodePoint(0xfe0f);
+/** LINE SEPARATOR: a line break by Unicode's rules. */
+const LINE_SEPARATOR = String.fromCodePoint(0x2028);
+/** Emoji a person's name may hold: a heart, a family joined, a keycap. */
+const HEART = `${String.fromCodePoint(0x2764)}${VS16}`;
+const FAMILY = [0x1f468, 0x1f469, 0x1f467]
+  .map((code) => String.fromCodePoint(code))
+  .join(String.fromCodePoint(0x200d));
+const KEYCAP_ONE = `1${VS16}${String.fromCodePoint(0x20e3)}`;
 /** A JSON escape's backslash, written out: the file holds `\` + `u0078`. */
 const BACKSLASH = String.fromCharCode(92);
 const SLOW =
@@ -274,7 +290,11 @@ test("a file fills a new list: lines show their photo and reading, a split the l
           photo_line: 3,
           note: "заголовок",
         },
-        { text: `Куртка ${RLO}абв 1 шт`, photo: "IMG_0001.jpg", photo_line: 4 },
+        {
+          text: `Куртка ${RLO}абв${SHY} 1 шт`,
+          photo: "IMG_0001.jpg",
+          photo_line: 4,
+        },
         {
           text: `${coat} сірий M-1 4XL-2`,
           photo: "IMG_0001.jpg",
@@ -299,6 +319,15 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   await expect(form.getByLabel("Коли перелічено (необов’язково)")).toHaveValue(
     "жовтень",
   );
+  // The draft kept on the phone holds the file's name, nothing of its
+  // content: the name and date it filled in come back with the file.
+  const kept = await page.evaluate(
+    (key) => window.localStorage.getItem(key),
+    `birka:stock-list-draft:${fixture.store_id}`,
+  );
+  expect(kept).toContain("зошит-1.json");
+  expect(kept).not.toContain("Зошит 1");
+  expect(kept).not.toContain("жовтень");
   await form.getByRole("button", { name: "Зберегти список" }).click();
   await expect(page.getByRole("heading", { name: "Зошит 1" })).toBeVisible();
   // The room left, as the server measures it: no cap is the phone's own.
@@ -313,7 +342,7 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   ).items[0]?.summary ?? { limits: { lines: -1, allocations: -1 } };
   await expect(
     page.getByText(
-      `Місце у списку: рядків 5 з ${String(limits.lines)} · відповідей 0 з ${String(limits.allocations)}`,
+      `Місце у списку: рядків 5 з ${limits.lines.toLocaleString("uk-UA")} · відповідей 0 з ${limits.allocations.toLocaleString("uk-UA")}`,
     ),
   ).toBeVisible();
   await page.getByRole("button", { name: "Усі", exact: true }).click();
@@ -330,14 +359,16 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   const hinted = card(page, 2);
   await expect(hinted).toContainText("Парсер прочитав кількість: 3");
   await expect(hinted).toContainText(
-    "У рядку ця кількість без «шт» — це лише підказка.",
+    "Парсер прочитав кількість, але в рядку вона не написана зі «шт» — це лише підказка. Вкажіть кількість і звідки вона відома.",
   );
   await expect(hinted).toContainText("Ціна з зошита: 1200 (закупівельна)");
   await expect(card(page, 3)).toContainText("Примітка парсера: заголовок");
-  // A character that reorders the line is shown as a mark, and kept as is.
+  // What reorders the line, or prints nothing, is shown as a mark, and the
+  // line kept as is.
   const reordered = card(page, 4).locator(".catalog-raw");
-  await expect(reordered).toHaveText("4. Куртка ⟦U+202E⟧абв 1 шт");
+  await expect(reordered).toHaveText("4. Куртка ⟦U+202E⟧абв⟦U+00AD⟧ 1 шт");
   expect(await card(page, 4).innerText()).not.toContain(RLO);
+  expect(await card(page, 4).innerText()).not.toContain(SHY);
 
   // The count the parser read is never offered as stated, nor one piece.
   let editor = await answer(page, 2);
@@ -482,7 +513,7 @@ test("a file fills a new list: lines show their photo and reading, a split the l
     items: { line_no: number; raw_text: string }[];
   };
   expect(items.find((line) => line.line_no === 4)?.raw_text).toBe(
-    `Куртка ${RLO}абв 1 шт`,
+    `Куртка ${RLO}абв${SHY} 1 шт`,
   );
 });
 
@@ -661,6 +692,15 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
       ),
       "Рядок 2 файлу: ключ «text» повторюється.",
     ],
+    // A key that runs on is named by its first sixty characters (review,
+    // 2026-10-09).
+    [
+      "runs-on.json",
+      Buffer.from(
+        `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"a.jpg","photo_line":1,"${"к".repeat(90)}":1,"${"к".repeat(90)}":2}]}`,
+      ),
+      `Рядок 1 файлу: ключ «${"к".repeat(60)}…» повторюється.`,
+    ],
     [
       "float.json",
       Buffer.from(
@@ -681,6 +721,43 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
         `{"format":"birka.stock-list","version":1.0,"lines":[{"text":"А 1 шт","photo":"a.jpg","photo_line":1}]}`,
       ),
       "Файл: «version» має бути цілим числом, а записано 1.0.",
+    ],
+    // A number too large to read is Infinity to the phone, then null, then
+    // left out: refused wherever it stands, as the validator refuses it.
+    [
+      "model.json",
+      Buffer.from(
+        `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"a.jpg","photo_line":1,"model":1e400}]}`,
+      ),
+      "Рядок 1 файлу: у «model» записано 1e400 — завелике число, застосунок його не прочитає.",
+    ],
+    [
+      "price.json",
+      Buffer.from(
+        `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"a.jpg","photo_line":1},{"text":"Б 1 шт","photo":"a.jpg","photo_line":2,"price":-1e999}]}`,
+      ),
+      "Рядок 2 файлу: у «price» записано -1e999 — завелике число, застосунок його не прочитає.",
+    ],
+    [
+      "counts.json",
+      Buffer.from(
+        `{"format":"birka.stock-list","version":1,"lines":[{"text":"А M-1","photo":"a.jpg","photo_line":1,"size_counts":1e400}]}`,
+      ),
+      "Рядок 1 файлу: у «size_counts» записано 1e400 — завелике число, застосунок його не прочитає.",
+    ],
+    [
+      "note.json",
+      Buffer.from(
+        `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"a.jpg","photo_line":1,"note":2e308}]}`,
+      ),
+      "Рядок 1 файлу: у «note» записано 2e308 — завелике число, застосунок його не прочитає.",
+    ],
+    [
+      "digits.json",
+      Buffer.from(
+        `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"a.jpg","photo_line":1${"0".repeat(400)}}]}`,
+      ),
+      `Рядок 1 файлу: у «photo_line» записано 1${"0".repeat(19)}… — завелике число, застосунок його не прочитає.`,
     ],
     [
       "long.json",
@@ -744,21 +821,26 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
     "Цей файл уже є в списку: «перевірка.json». Двічі його не додають.",
   );
 
-  // What only the server checks is named by its line, from the server.
+  // What only the server checks is named by its line, from the server; a
+  // key that runs on is named by its first sixty characters (review,
+  // 2026-10-09).
+  const runsOn = "з".repeat(80);
   await choose(
     adding,
     "службові.json",
     Buffer.from(
-      `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"b.jpg","photo_line":1},{"text":"Б\\t2 шт","photo":"b.jpg","photo_line":2},{"text":"В 1 шт","photo":"b.jpg","photo_line":3,"colour":"сірий"}]}`,
+      `{"format":"birka.stock-list","version":1,"lines":[{"text":"А 1 шт","photo":"b.jpg","photo_line":1},{"text":"Б\\t2 шт","photo":"b.jpg","photo_line":2},{"text":"В 1 шт","photo":"b.jpg","photo_line":3,"colour":"сірий"},{"text":"Г 1 шт","photo":"b.jpg","photo_line":4,"${runsOn}":1}]}`,
     ),
   );
   await adding.getByRole("button", { name: "Додати до списку" }).click();
   await expect(adding.getByRole("alert").getByRole("listitem")).toHaveText([
     "Рядок 2 файлу: у полі «текст» є службовий символ (перенесення рядка чи табуляція).",
-    "Рядок 3 файлу: «colour» — невідоме поле.",
+    "Рядок 3 файлу: невідоме поле «colour».",
+    `Рядок 4 файлу: невідоме поле «${"з".repeat(60)}…».`,
   ]);
 
-  // A refusal that names no line in its context is placed by its index.
+  // A refusal that names no line in its context is placed by its index;
+  // those the server counted without listing them are counted too.
   await page.route("**/api/v1/snapshots/*/parts?*", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     await route.fulfill({
@@ -770,7 +852,13 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
             loc: ["body", "file", "lines", 4, "photo"],
             msg: "Field required",
           },
+          {
+            type: "string_too_long",
+            loc: ["body", "file", "lines", 4, "size_counts", 0, "size"],
+            msg: "String should have at most 20 characters",
+          },
         ],
+        detail_truncated: 3,
       },
     });
   });
@@ -786,27 +874,46 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
     ),
   );
   await adding.getByRole("button", { name: "Додати до списку" }).click();
-  await expect(adding.getByRole("alert")).toHaveText(
-    "Рядок 5 файлу: фото — немає.",
-  );
+  await expect(adding.getByRole("alert").getByRole("listitem")).toHaveText([
+    "Рядок 5 файлу: поле «фото» відсутнє.",
+    "Рядок 5 файлу: поле «розмір» задовге.",
+    "…і ще 3",
+  ]);
   await page.unrouteAll({ behavior: "wait" });
 
-  // A request the edge would refuse is not sent: said by the phone.
+  // A file larger than the server takes is not sent: said by the phone. The
+  // file as the server measures it — compact, its nulls left out — may be
+  // 950 000 bytes, and not one more.
   const before = sent.length;
   const near = { ...line, photo: "d.jpg" };
   const base = Buffer.byteLength(
-    JSON.stringify({ format: "birka.stock-list", version: 1, lines: [near] }),
+    JSON.stringify({
+      format: "birka.stock-list",
+      version: 1,
+      parser: "",
+      lines: [near],
+    }),
   );
-  const padded = stockFile([near], {
-    $schema: undefined,
-    parser: "x".repeat(989_990 - base - `,"parser":""`.length),
-  });
-  await choose(adding, "межа.json", padded);
+  const padded = (bytes: number): Buffer =>
+    stockFile([near], {
+      $schema: undefined,
+      parser: "x".repeat(bytes - base),
+    });
+  await choose(adding, "межа.json", padded(950_000));
   await expect(adding.getByLabel("Що у файлі")).toBeVisible();
-  await adding.getByRole("button", { name: "Додати до списку" }).click();
-  await expect(adding.getByRole("alert")).toHaveText(
+  await expect(
+    adding.getByRole("button", { name: "Додати до списку" }),
+  ).toBeEnabled();
+  await choose(adding, "за-межею.json", padded(950_001));
+  await expect(adding.getByRole("alert")).toContainText(
+    "Файл «за-межею.json» не прийнято:",
+  );
+  await expect(adding.getByRole("alert")).toContainText(
     "Файл завеликий — розділіть його на два.",
   );
+  await expect(
+    adding.getByRole("button", { name: "Додати до списку" }),
+  ).toBeDisabled();
   expect(sent).toHaveLength(before);
 });
 
@@ -908,6 +1015,34 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   expect(answers).toHaveLength(2);
   expect(answers[1]).toMatchObject({ quantity_basis: "OWNER_KNOWLEDGE" });
   expect(answers[1]).not.toHaveProperty("split_read_as");
+
+  // A size created since may make a record answered by size a range after
+  // all: the approval names the lines to answer again (owner decision,
+  // 2026-10-09). The server's refusal, as it words it.
+  const refusals = [
+    { count: 1, line_nos: [1] },
+    { count: 3, line_nos: [1, 2] },
+  ];
+  await page.route("**/api/v1/snapshots/*/approve?*", async (route) => {
+    await route.fulfill({
+      status: 409,
+      json: {
+        code: "SNAPSHOT_CONFLICT",
+        message: "Some lines answered by size may now be read as ranges",
+        details: { reason: "SPLIT_MAY_BE_RANGE", ...refusals.shift() },
+      },
+    });
+  });
+  const approval = page.getByLabel("Затвердження списку");
+  for (const said of [
+    "Рядок 1 треба розібрати ще раз: запис у ньому тепер може бути діапазоном розмірів.",
+    "Рядки 1, 2 і ще 1 треба розібрати ще раз: запис у них тепер може бути діапазоном розмірів.",
+  ]) {
+    await approval.getByRole("button", { name: "Затвердити список" }).click();
+    await approval.getByRole("button", { name: "Так, затвердити" }).click();
+    await expect(approval.getByRole("alert")).toHaveText(said);
+  }
+  await page.unrouteAll({ behavior: "wait" });
 });
 
 test("the shared warehouse's list is seen and filled from the other store, and no second list is offered for it", async ({
@@ -1110,10 +1245,16 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await page.getByRole("button", { name: "Новий список" }).click();
     const fresh = page.getByRole("form", { name: "Новий список" });
     await fresh.getByLabel("Склад").selectOption(between);
+    await fresh.getByLabel("Завантажити файл").check();
+    await choose(
+      fresh,
+      "заново.json",
+      stockFile([{ text: "Пальто сіре 2 шт", photo: "N1.jpg", photo_line: 1 }]),
+    );
+    await expect(fresh.getByLabel("Що у файлі")).toBeVisible();
     await fresh
       .getByLabel("Звідки список (необов’язково)")
       .fill(`${name}, заново`);
-    await fresh.getByLabel(/Рядки списку/).fill("Пальто сіре 2 шт");
     await fresh.getByRole("button", { name: "Зберегти список" }).click();
     await expect(
       page.getByRole("heading", { name: `${name}, заново` }),
@@ -1121,6 +1262,40 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await expect(page.getByText("Веде магазин «Північний»")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Додати файл" }),
+    ).toBeVisible();
+
+    // Its one file is the last: a manager is told to reject the list
+    // instead, and the button to is there. Approving is not theirs, and
+    // they are not asked to (review, 2026-10-09).
+    await expect(page.getByRole("article", { name: "Файл 1" })).toContainText(
+      LAST,
+    );
+    await expect(
+      page.getByRole("button", { name: "Затвердити список" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "Затверджує той, хто має право затверджувати списки; відхилити його можна й вам.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Затвердіть або відхиліть його.")).toHaveCount(
+      0,
+    );
+    const own = page.getByLabel("Рішення щодо списку");
+    await own.getByRole("button", { name: "Відхилити список" }).click();
+    // A character that reorders a reason is shown as a mark, and so is a
+    // line separator and a selector after a letter; an emoji's own
+    // selector and joiner are not (review, 2026-10-09).
+    await own
+      .getByLabel("Чому відхиляємо")
+      .fill(
+        `Не той файл ${RLO}12 ${HEART} ${FAMILY} ${KEYCAP_ONE}${LINE_SEPARATOR}M${VS16}`,
+      );
+    await own.getByRole("button", { name: "Так, відхилити" }).click();
+    await expect(
+      page.getByText(
+        `Відхилено: Не той файл ⟦U+202E⟧12 ${HEART} ${FAMILY} ${KEYCAP_ONE}⟦U+2028⟧M⟦U+FE0F⟧. Залишків цей список не змінив.`,
+      ),
     ).toBeVisible();
   } finally {
     await settle(page, north, "ACTIVE");
@@ -1172,6 +1347,29 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
 }) => {
   const coat = await model(page);
   await noListWaits(page, fixture.file_slow_location_id);
+  const commands: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/snapshots"))
+      commands.push(
+        (request.postDataJSON() as { command_id: string }).command_id,
+      );
+  });
+  // Every read of the warehouse's waiting lists, and those not yet answered.
+  let asked = 0;
+  let reading = 0;
+  const warehouseRead = (url: string): boolean =>
+    url.includes("/api/v1/snapshots?") &&
+    url.includes(`location_id=${fixture.file_slow_location_id}`);
+  page.on("request", (request) => {
+    if (!warehouseRead(request.url())) return;
+    asked += 1;
+    reading += 1;
+  });
+  const settled = (request: Request): void => {
+    if (warehouseRead(request.url())) reading -= 1;
+  };
+  page.on("requestfinished", settled);
+  page.on("requestfailed", settled);
   await page.clock.install();
   const create = hold(page, "**/api/v1/snapshots");
   await create.ready;
@@ -1199,6 +1397,24 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
     await expect(form.getByRole("alert")).toHaveText(SLOW);
     expect(await down(page)).toBe(false);
 
+    // Another file picked meanwhile is the same command: whatever the
+    // server made of the first, it makes no second list of this one. The
+    // warehouse is read again on the way.
+    const before = asked;
+    await choose(
+      form,
+      "повільний-інший.json",
+      stockFile(
+        [{ text: `${coat} сірий M 1 шт`, photo: "Z0.jpg", photo_line: 1 }],
+        { source: "Повільний зошит" },
+      ),
+    );
+    await expect(form.getByLabel("Що у файлі")).toContainText(
+      "Файл «повільний-інший.json»",
+    );
+    await expect.poll(() => asked).toBeGreaterThan(before);
+    await expect.poll(() => reading).toBe(0);
+
     // No answer at all is still no answer.
     create.mode("abort");
     await form.getByRole("button", { name: "Зберегти список" }).click();
@@ -1214,6 +1430,8 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
       page.getByRole("heading", { name: "Повільний зошит" }),
     ).toBeVisible();
     expect(await down(page)).toBe(false);
+    expect(commands).toHaveLength(3);
+    expect(new Set(commands).size).toBe(1);
   } finally {
     await create.release();
   }
@@ -1265,4 +1483,451 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
   } finally {
     await approve.release();
   }
+});
+
+test("answers lost on their way back: a file removed since comes back as a new one, and lines changed before they are sent again go as new", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  // A name of this run's own: the lists of runs before stay in the overview.
+  const source = `Зошит загублених відповідей ${word()}`;
+  await noListWaits(page, fixture.file_lost_location_id);
+  // The server records the next `lose` additions, and their answers are lost.
+  const posted: string[] = [];
+  let lose = 0;
+  await page.route("**/api/v1/snapshots/*/parts?*", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    posted.push(
+      (route.request().postDataJSON() as { command_id: string }).command_id,
+    );
+    if (lose === 0) return route.continue();
+    lose -= 1;
+    await route.fetch();
+    await route.abort("failed");
+  });
+  await openings(page);
+  const form = await newFromFile(page, fixture.file_lost_location_id);
+  await choose(
+    form,
+    "перший.json",
+    stockFile(
+      [
+        { text: `${coat} сірий M 2 шт`, photo: "L1.jpg", photo_line: 1 },
+        // The split read is not the line's: «3+2» is no count of 3.
+        {
+          text: `${coat} сірий M-3+2`,
+          photo: "L1.jpg",
+          photo_line: 2,
+          model: coat,
+          size_counts: [{ size: "M", count: 3 }],
+        },
+      ],
+      { source },
+    ),
+  );
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+
+  // A split the line does not show as the parser read it is offered no tap.
+  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await expect(card(page, 2)).toContainText(
+    "Парсер прочитав кількість по розмірах, але рядок показує її не так або не лише її — одним натиском її не підтвердити. Вкажіть, звідки відома кількість.",
+  );
+  const editor = await answer(page, 2);
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await editor.getByRole("button", { name: "Скасувати" }).click();
+
+  // A file added, its answer lost: the person leaves it at that.
+  const second = stockFile([
+    { text: `${coat} сірий L 1 шт`, photo: "L2.jpg", photo_line: 1 },
+  ]);
+  lose = 1;
+  await page.getByRole("button", { name: "Додати файл" }).click();
+  let adding = page.getByRole("form", { name: "Додати файл" });
+  await choose(adding, "другий.json", second);
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding.getByRole("alert")).toHaveText(
+    "Невідомо, чи додано файл. Натисніть ще раз — той самий файл не додасться двічі.",
+  );
+  await adding.getByRole("button", { name: "Закрити" }).click();
+
+  // Read again, the list has it; it is removed as a mistake.
+  await page.getByRole("button", { name: "До списків" }).click();
+  await page
+    .getByRole("article", { name: `Список ${source}` })
+    .getByRole("button", { name: "Відкрити" })
+    .click();
+  const two = page.getByRole("article", { name: "Файл 2" });
+  await expect(two).toContainText("2. «другий.json»");
+  await two.getByRole("button", { name: "Прибрати файл" }).click();
+  await two.getByRole("button", { name: "Так, прибрати" }).click();
+  await expect(two).toContainText(/Прибрано: Оля, /);
+
+  // Added again: the command kept for it names the removed file, so it is
+  // sent once more as a new one, and a new file joins.
+  await page.getByRole("button", { name: "Додати файл" }).click();
+  adding = page.getByRole("form", { name: "Додати файл" });
+  await choose(adding, "другий.json", second);
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(page.getByRole("article", { name: "Файл 3" })).toContainText(
+    "Рядки 4–4 · розібрано 0 з 1",
+  );
+  expect(posted).toHaveLength(3);
+  expect(posted[1]).toBe(posted[0]);
+  expect(posted[2]).not.toBe(posted[0]);
+
+  // Lines typed by hand, their answer lost; changed, then sent again.
+  lose = 1;
+  await page.getByRole("button", { name: "Додати рядки вручну" }).click();
+  const typing = page.getByRole("form", { name: "Додати рядки вручну" });
+  const text = typing.getByLabel(/Рядки — кожен товар/);
+  await text.fill(`${coat} сірий M 1 шт`);
+  await typing.getByRole("button", { name: "Додати рядки" }).click();
+  await expect(typing.getByRole("alert")).toHaveText(
+    "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
+  );
+  const changed = `${coat} сірий M 1 шт\n${coat} сірий L 3 шт`;
+  await text.fill(changed);
+  await typing.getByRole("button", { name: "Додати рядки" }).click();
+  // What went first is in the list; the text is kept, and goes as new.
+  await expect(typing.getByRole("alert")).toHaveText(
+    "Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них. Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.",
+  );
+  await expect(page.getByRole("article", { name: "Файл 4" })).toContainText(
+    "4. Рядки, внесені вручну",
+  );
+  await expect(text).toHaveValue(changed);
+  await typing.getByRole("button", { name: "Додати рядки" }).click();
+  const typed = page.getByRole("article", { name: "Файл 5" });
+  await expect(typed).toContainText("Рядки 6–7 · розібрано 0 з 2");
+  // Typed lines are removed as typed lines, never called a file (review,
+  // 2026-10-09).
+  await expect(
+    typed.getByRole("button", { name: "Прибрати файл" }),
+  ).toHaveCount(0);
+  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
+  await expect(
+    typed.getByLabel("Прибрати рядки?", { exact: true }).locator("p"),
+  ).toHaveText(
+    "Прибрати рядки, внесені вручну? Ці рядки (2) не увійдуть до затвердження, а відповіді на них (0) зникнуть; їх буде видно як прибрані. Інші файли лишаться.",
+  );
+  await typed.getByRole("button", { name: "Скасувати" }).click();
+  expect(posted).toHaveLength(6);
+  expect(posted[4]).toBe(posted[3]);
+  expect(posted[5]).not.toBe(posted[3]);
+
+  // The same text twice in the list is said, with its count.
+  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await expect(card(page, 6)).toContainText(
+    "Такий самий рядок у списку — 2 рази: це може бути по рядку на кожну одиницю, або помилка переписування.",
+  );
+});
+
+/** Whether the page fits the phone's width: nothing scrolls it sideways. */
+async function fitsWidth(page: Page): Promise<boolean> {
+  return page.evaluate(
+    () =>
+      document.documentElement.scrollWidth <=
+      document.documentElement.clientWidth,
+  );
+}
+
+test("on a narrow phone a file's long name breaks, never pushes the page sideways; an answer the list has no room for says so", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const coat = await model(page);
+  await noListWaits(page, fixture.file_narrow_location_id);
+  // A camera's name, one word of sixty characters.
+  const long = `${"IMG_20261008_123456_".repeat(3).slice(0, 55)}.json`;
+  const other = `${"SCAN_20261009_654321_".repeat(3).slice(0, 55)}.json`;
+  expect(long).toHaveLength(60);
+  await openings(page);
+  const form = await newFromFile(page, fixture.file_narrow_location_id);
+  await choose(form, long, Buffer.from("не JSON"));
+  await expect(form.getByRole("alert")).toContainText(
+    `Файл «${long}» не прийнято:`,
+  );
+  expect(await fitsWidth(page)).toBe(true);
+  // Its date, one word of forty wide characters, fills the list's (review,
+  // 2026-10-09).
+  const date = `30.09.2026_${"Ш".repeat(29)}`;
+  expect(date).toHaveLength(40);
+  await choose(
+    form,
+    long,
+    stockFile([{ text: `${coat} сірий M 1 шт`, photo: long, photo_line: 1 }], {
+      source: "Вузький зошит",
+      counted_on: date,
+    }),
+  );
+  await expect(form.getByLabel("Що у файлі")).toContainText(`Файл «${long}»`);
+  expect(await fitsWidth(page)).toBe(true);
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Вузький зошит" }),
+  ).toBeVisible();
+  await expect(page.getByRole("article", { name: "Файл 1" })).toContainText(
+    long,
+  );
+  await expect(page.getByText(`перелічено ${date}`)).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+
+  // A second file, and the question before one is removed, name it whole.
+  await page.getByRole("button", { name: "Додати файл" }).click();
+  const adding = page.getByRole("form", { name: "Додати файл" });
+  await choose(
+    adding,
+    other,
+    stockFile([{ text: `${coat} сірий L 1 шт`, photo: other, photo_line: 1 }]),
+  );
+  expect(await fitsWidth(page)).toBe(true);
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  const two = page.getByRole("article", { name: "Файл 2" });
+  await two.getByRole("button", { name: "Прибрати файл" }).click();
+  await expect(two.getByLabel("Прибрати файл?", { exact: true })).toContainText(
+    `Прибрати файл «${other}»?`,
+  );
+  expect(await fitsWidth(page)).toBe(true);
+  await two.getByRole("button", { name: "Скасувати" }).click();
+
+  // The line's editor names the file and the photo.
+  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  const editor = await answer(page, 1);
+  await expect(editor).toContainText(`Файл: «${long}»`);
+  await expect(editor).toContainText(`Фото: ${long}, рядок 1`);
+  expect(await fitsWidth(page)).toBe(true);
+
+  // The list has no room for another answer, or its store may no longer
+  // receive goods there: each said as the server says it.
+  const refusals = [
+    {
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "A stock list takes at most 5000 allocations in all",
+        details: {
+          reason: "LIST_FULL",
+          what: "allocations",
+          limit: 5000,
+          now: 5000,
+          adding: 1,
+        },
+      },
+    },
+    {
+      status: 409,
+      json: {
+        code: "SNAPSHOT_CONFLICT",
+        message: "The store that started this list can no longer receive",
+        details: {
+          reason: "LIST_STORE_CANNOT_RECEIVE",
+          store_id: fixture.store_id,
+          location_id: fixture.file_narrow_location_id,
+        },
+      },
+    },
+  ];
+  await page.route("**/api/v1/snapshots/*/lines/*", async (route) => {
+    if (route.request().method() !== "PUT") return route.continue();
+    await route.fulfill(refusals.shift() ?? { status: 500 });
+  });
+  await expect(editor.getByLabel("Як у списку: 1 шт")).toBeChecked();
+  await pickModel(editor, coat);
+  await editor.getByLabel("Розмір").selectOption({ label: "M" });
+  const save = editor.getByRole("button", { name: "Зберегти відповідь" });
+  await save.click();
+  await expect(editor.getByRole("alert")).toHaveText(
+    "У списку вже 5 000 відповідей — більше він не вміщує, тож цю відповідь не збережено. Рядок із кількома розмірами бере відповідь на кожен розмір. Звільнити місце можна, прибравши файл.",
+  );
+  await save.click();
+  await expect(editor.getByRole("alert")).toHaveText(
+    "Магазин «Основний», що почав цей список, більше не може приймати товар на цей склад: список можна лише відхилити.",
+  );
+  await page.unrouteAll({ behavior: "wait" });
+  await editor.getByRole("button", { name: "Скасувати" }).click();
+
+  // A reason given as one long word, a link, breaks too (review,
+  // 2026-10-09).
+  const link = `https://example.com/${"zoshyt_2_storinky_1-4_".repeat(4)}`;
+  const decision = page.getByLabel("Затвердження списку");
+  await decision.getByRole("button", { name: "Відхилити список" }).click();
+  await decision.getByLabel("Чому відхиляємо").fill(link);
+  await decision.getByRole("button", { name: "Так, відхилити" }).click();
+  await expect(page.getByText(`Відхилено: ${link}.`)).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+});
+
+test("an answer too slow to wait for, its list made meanwhile: another file picked keeps the command, and the list made is opened, never a second", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.file_late_location_id);
+  await page.clock.install();
+  // The server makes the list; its answer never reaches the phone.
+  const commands: string[] = [];
+  let free: () => void = () => undefined;
+  const freed = new Promise<void>((resolve) => {
+    free = resolve;
+  });
+  await page.route("**/api/v1/snapshots", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    commands.push(
+      (route.request().postDataJSON() as { command_id: string }).command_id,
+    );
+    await route.fetch();
+    await freed;
+    await route.abort("failed").catch(() => undefined);
+  });
+  try {
+    await openings(page);
+    const form = await newFromFile(page, fixture.file_late_location_id);
+    await choose(
+      form,
+      "пізній.json",
+      stockFile(
+        [{ text: `${coat} сірий M 1 шт`, photo: "T1.jpg", photo_line: 1 }],
+        { source: "Пізній зошит" },
+      ),
+    );
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect.poll(() => commands.length).toBe(1);
+    // The list is made before the phone stops waiting.
+    await expect
+      .poll(async () => {
+        const lists = await page.request.get(
+          `/api/v1/snapshots?store_id=${fixture.store_id}&location_id=${fixture.file_late_location_id}&status=IN_REVIEW&limit=5`,
+          { headers: { Authorization: `Bearer ${await token(page)}` } },
+        );
+        return ((await lists.json()) as { items: unknown[] }).items.length;
+      })
+      .toBe(1);
+    await page.clock.fastForward("01:01");
+    await expect(form.getByRole("alert")).toHaveText(SLOW);
+
+    // The warehouse read again: the list made is named, and opened.
+    const made = form.getByRole("status");
+    await expect(made).toContainText(
+      "Список «Пізній зошит» уже збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші файли чи рядки додайте вже до нього.",
+    );
+    await expect(
+      form.getByRole("button", { name: "Зберегти список" }),
+    ).toHaveCount(0);
+    // Another file picked keeps the command the list was made by.
+    await choose(
+      form,
+      "пізній-2.json",
+      stockFile([
+        { text: `${coat} сірий L 1 шт`, photo: "T2.jpg", photo_line: 1 },
+      ]),
+    );
+    const draft = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `birka:stock-list-draft:${fixture.store_id}`,
+    );
+    expect(
+      (JSON.parse(draft ?? "{}") as { command_id?: string }).command_id,
+    ).toBe(commands[0]);
+    await made.getByRole("button", { name: "Відкрити список" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Пізній зошит" }),
+    ).toBeVisible();
+    expect(commands).toHaveLength(1);
+  } finally {
+    free();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  // One list waits there, and the phone keeps no draft of it.
+  const lists = await page.request.get(
+    `/api/v1/snapshots?store_id=${fixture.store_id}&location_id=${fixture.file_late_location_id}&status=IN_REVIEW&limit=5`,
+    { headers: { Authorization: `Bearer ${await token(page)}` } },
+  );
+  expect(((await lists.json()) as { items: unknown[] }).items).toHaveLength(1);
+  expect(
+    await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `birka:stock-list-draft:${fixture.store_id}`,
+    ),
+  ).toBeNull();
+});
+
+test("an answer too slow to wait for, its list made only after: no new list is offered meanwhile, and saving again opens the one list", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.file_later_location_id);
+  await page.clock.install();
+  // The phone's request never reaches the server; the same request does,
+  // after the phone stopped waiting and read the warehouse again.
+  const sent: { command_id: string }[] = [];
+  let free: () => void = () => undefined;
+  const freed = new Promise<void>((resolve) => {
+    free = resolve;
+  });
+  await page.route("**/api/v1/snapshots", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    sent.push(route.request().postDataJSON() as { command_id: string });
+    if (sent.length > 1) return route.continue();
+    await freed;
+    await route.abort("failed").catch(() => undefined);
+  });
+  const listed = async (): Promise<number> => {
+    const lists = await page.request.get(
+      `/api/v1/snapshots?store_id=${fixture.store_id}&location_id=${fixture.file_later_location_id}&status=IN_REVIEW&limit=5`,
+      { headers: { Authorization: `Bearer ${await token(page)}` } },
+    );
+    return ((await lists.json()) as { items: unknown[] }).items.length;
+  };
+  try {
+    await openings(page);
+    const form = await newFromFile(page, fixture.file_later_location_id);
+    await choose(
+      form,
+      "пізніший.json",
+      stockFile(
+        [{ text: `${coat} сірий M 1 шт`, photo: "U1.jpg", photo_line: 1 }],
+        { source: "Пізніший зошит" },
+      ),
+    );
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    await page.clock.fastForward("01:01");
+    await expect(form.getByRole("alert")).toHaveText(SLOW);
+    // Read again, the warehouse holds no list yet; still the send is
+    // unsettled, so no new list is offered beside it (review, 2026-10-09).
+    await expect(
+      form.getByRole("button", { name: "Зберегти список" }),
+    ).toBeEnabled();
+    await expect(
+      form.getByRole("button", { name: "Почати як новий список" }),
+    ).toHaveCount(0);
+
+    // The server takes the same request in, late.
+    const late = await page.request.post("/api/v1/snapshots", {
+      data: sent[0],
+      headers: { Authorization: `Bearer ${await token(page)}` },
+    });
+    expect(late.status()).toBe(201);
+    expect(await listed()).toBe(1);
+
+    // Saved again, the same command answers with the list made.
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Пізніший зошит" }),
+    ).toBeVisible();
+    expect(sent.map((body) => body.command_id)).toEqual([
+      sent[0]?.command_id,
+      sent[0]?.command_id,
+    ]);
+  } finally {
+    free();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  expect(await listed()).toBe(1);
+  expect(
+    await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `birka:stock-list-draft:${fixture.store_id}`,
+    ),
+  ).toBeNull();
 });

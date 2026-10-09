@@ -14,8 +14,15 @@ had never been measured.
 | 5 000 | 7.07 s, 7.62 s, 7.63 s | 35 045 | 0.150 s | **PASS** |
 | 10 000 | refused: HTTP 500 after 7.30 s, at statement 40 039 | — | 0.090 s | **FAIL** |
 
-**`MAX_LIST_ALLOCATIONS` stays 5 000**: the largest size that passes. So
-`MAX_LIST_LINES` = 2 500 and `MAX_LIST_ROWS` = 7 500 (ADR-0014 §10).
+**`MAX_LIST_ALLOCATIONS` stays 5 000**: the largest size that passes.
+
+> **Measured again on 2026-10-09,** with every answer by size, which the
+> approval has read again since the review: 7.79–8.55 s, the second reading
+> itself about 0.2 s, and this run's method 6.94–9.50 s the same hour on a
+> busier laptop. Still within the rule:
+> [2026-10-09-json-import-approval-by-size](../2026-10-09-json-import-approval-by-size/README.md). At
+the time of this run, `MAX_LIST_LINES` was 2 500 and `MAX_LIST_ROWS` 7 500
+(ADR-0014 §10).
 
 > **Changed on 2026-10-09, after this run:** `MAX_LIST_LINES` = 5 000 (as
 > many lines as answers) and `MAX_LIST_ROWS` = 10 000. The owner had heard

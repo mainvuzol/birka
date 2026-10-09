@@ -9,12 +9,17 @@ correct.
 ## Status
 
 **Milestone 1 is not complete.**
-- **What a shop needs on day one is built and verified,** the way in the
-  owner chose on 2026-10-08 for the shops' existing stock included: photos
-  → parser → JSON files in Birka's format
+- **What a shop needs on day one is built and verified,** except, for the
+  way in the owner chose on 2026-10-08 for the shops' existing stock, its
+  final local CI run, the edge's body check, and a file picked on a real
+  phone in Telegram (release checklist, row 26), still to come. That way in
+  is built: photos → parser → JSON files in Birka's format
   ([`formats/birka-stock-list/`](formats/birka-stock-list/README.md)), which
   fill a warehouse's list in «Початкові залишки», every line reviewed by a
-  person ([report](.ai/project-memory/json-stock-import-report.md)).
+  person ([report](.ai/project-memory/json-stock-import-report.md)). It was
+  reviewed adversarially on 2026-10-09; its findings fixed, or kept with the
+  reason (report, "Review of the built change"). Six readings of how it is
+  carried out await the owner.
 - **The catalogue's verified promotion (M1-021/022) is still partial.** It
   waits for human-confirmed data.
 - **The release is blocked** on steps only the owner, an administrator with
@@ -636,8 +641,9 @@ Through the API:
      verbatim and parsed;
    - a `file` in Birka's format, `birka.stock-list` version 1, with its
      `file_name`: each line keeps its text, its photo's name and line, and
-     the parser's reading as a hint. A file's refusal (422) names its line
-     and never echoes the file.
+     the parser's reading as a hint. A file's refusal (422) names its line.
+     No 422 on a list's routes echoes the request, and a 422 on any route
+     lists at most 50 refusals, `detail_truncated` counting the rest.
 
    Nothing is matched, created or counted. The response's `snapshot_id`
    names the list from then on. `snapshot:import` (manager, owner).
@@ -652,8 +658,11 @@ Through the API:
    - `GET .../parts` lists them, with who added and removed each.
 
    A list holds at most 5 000 lines not removed and 5 000 allocations, as
-   measured (ADR-0014 §10), and the owner kept that limit (2026-10-08); over
-   that, `LIST_FULL`.
+   measured (ADR-0014 §10), and the owner kept that limit (2026-10-08). A
+   part over the lines, the 10 000 rows with removed files' lines, or the
+   1 000 parts is refused with `409 SNAPSHOT_CONFLICT`, `LIST_FULL`; an
+   answer over the allocations, at step 2, with `422 VALIDATION_ERROR`,
+   reason `LIST_FULL`, `what: "allocations"`.
 2. `PUT /api/v1/snapshots/{id}/lines/{line_no}`: say what the line is. That is
    either `allocations` (`product_variant_id`, `size_id` or
    `size_unknown: true`, `quantity`) with a `quantity_basis`, or a
@@ -661,13 +670,18 @@ Through the API:
    - `STATED` — exactly the line's own count, in one allocation; never for a
      line naming several sizes or colours;
    - `STATED_BY_SIZE` — only for a file line whose text writes each size
-     joined to its count by a sign («S-1 M-2 L-1», «Лоран M-3»): one model,
-     one allocation per size with exactly its count. A record that may also
-     be a range of sizes (`shown_split[].may_be_range`: «42-44», its count
-     or the whole record being a size too) needs
+     joined to its count by a sign («S-1 M-2 L-1», «Лоран M-3»), and
+     nothing beside them but a price, a count with «шт» or a length: one
+     model, one allocation per size with exactly its count. A record that
+     may also be a range of sizes (`shown_split[].may_be_range`: a number
+     size whose count, also a number, reads as a larger size after it
+     («42-44», «98-104»), whatever the catalogue holds, or a record whose
+     count or whole is a size of the catalogue) needs
      `split_read_as: "SIZE_WITH_COUNT"`, what the person chose; without it
      the answer is refused (422, `SPLIT_MAY_BE_RANGE`), checked again at the
-     answer (owner decision, 2026-10-09);
+     answer (owner decision, 2026-10-09). The line keeps it
+     (`split_read_as`), with the records it was said of
+     (`split_read_records`), and the approval reads each again;
    - `LINE_IMPLIES_ONE` — a line with no number that could be a count, taken
      as one piece;
    - `RECOUNTED` or `OWNER_KNOWLEDGE` — with a `note`.
@@ -678,12 +692,17 @@ Through the API:
    with **no stock history**. `snapshot:approve` (owner). For a child store's
    private warehouse, the approver must hold the owner's role in the child
    store itself. Alternatively, `POST .../reject` with a `reason` keeps
-   everything as evidence.
+   everything as evidence. A line answered by size whose record has since
+   become a possible range, a size having been created, stops the approval:
+   `409 SNAPSHOT_CONFLICT`, `SPLIT_MAY_BE_RANGE`, with its `line_nos`, until
+   it is answered again (review, 2026-10-09).
 
    A list whose own store is blocked or archived (`store_state`) is rejected
    through the other store, which releases its warehouse; nothing else is
    done to it, through either store: through the other one the refusal is
    `SNAPSHOT_CONFLICT`, `LIST_STORE_NOT_TRADING` (owner decision,
+   2026-10-09). So too while that store no longer holds `can_receive` at the
+   warehouse: `SNAPSHOT_CONFLICT`, `LIST_STORE_CANNOT_RECEIVE` (review,
    2026-10-09).
 
 Approve a warehouse's list before anything else is recorded there. Paper sales

@@ -2,8 +2,13 @@
 
 Status: Accepted (2026-10-08). Built on `feat/json-stock-import`; see the
 [report](../project-memory/json-stock-import-report.md). Amended the same day
-with what the build found (§1, §4, §5, §7, §10, §13), and on 2026-10-09 with
-the owner's two changed readings (§5, §7, §12, §13, Consequences).
+with what the build found (§1, §4, §5, §7, §10, §13). Amended on 2026-10-09:
+- the lines raised to as many as the answers, 5 000 (§10);
+- the owner's two changed readings (§5, §7, §12, §13, Consequences);
+- what the review of the built change found (§1, §2, §5–§8, §10–§17,
+  Consequences; the report's "Review of the built change"), in two
+  rounds. Six readings of how it is carried out await the owner (business
+  rules, R-a to R-f).
 Owner decisions: business-rules.md, "the shops' existing stock" (2026-10-08),
 with the answers to the design's questions the same day, and the readings of
 "how it is carried out" answered on 2026-10-09; "going live" (2026-10-01);
@@ -77,7 +82,7 @@ accepted.
 | `version` | `1` | required, written as an integer (`true` and `1.0` are refused); another version is refused by name |
 | `source` | string 1..300 | optional: which notebook, as people call it |
 | `counted_on` | string 1..40 | optional, free text, like a list's date today |
-| `price_kind` | `"sale"` or `"purchase"` | optional: the kind of every price in the file (owner: one notebook, one kind) |
+| `price_kind` | `"sale"` or `"purchase"` | optional: the kind of every price in the file (owner: one notebook, one kind). Left out when nobody knows: the prices are then shown without a kind (reading R-d, awaiting the owner) |
 | `parser` | string 1..100 | optional: which parser and version wrote it |
 | `lines` | array of 1..1 000 lines | required, in reading order |
 
@@ -103,18 +108,26 @@ accepted.
 - **A duplicate key** is refused.
 - **Empty and null.** An optional key may be absent or `null`, never `""`
   or `[]`.
-- **No string holds a control character** (U+0000–U+001F, U+007F). That
-  includes a line break inside `text`, which would show one written line as
-  two. This is a rule of a machine's output, not of a shop's text, so the
-  reasoning of `core/text.py` does not apply. Lone surrogates are refused,
-  as everywhere.
+- **No string holds a control character,** C0 or C1 (U+0000–U+001F,
+  U+007F–U+009F), **nor a line or paragraph separator** (U+2028, U+2029).
+  That includes a line break inside `text`, which would show one written
+  line as two, U+0085, the next-line character, which some screens break at
+  and others drop (`"Лоран\u0085M-1"` read as «ЛоранM-1»), and the two
+  separators, which Unicode's line breaking and `str.splitlines` break at
+  (review, 2026-10-09). This is a rule of a machine's output, not of a
+  shop's text, so the reasoning of `core/text.py` does not apply. Lone
+  surrogates are refused, as everywhere. The file's name, sent beside the
+  file, is held to the same rule (`stock_file.has_control`).
 - **Pairs and sizes are unique.** `(photo, photo_line)` appears once per
   file. A `size_counts` names each size once, ignoring case.
 - **A file is bounded.** At most 100 000 characters of `text` in all, and
   at most 950 000 bytes as compact UTF-8 JSON without its nulls (§11).
-- **Splitting.** A photo's lines are never split across files: a notebook
-  is one file, or one file per group of whole photos.
 - **New needs make a new `version`,** never a silent extension.
+
+**Guidance, not checked.** A photo's lines are not split across files: a
+notebook is one file, or one file per group of whole photos. Birka takes a
+file that splits one; the description says it as advice to the parser's
+author.
 
 **The warehouse is not in the file.** A person chooses it in the app, as
 today. A file put into the wrong warehouse's list is removed (§9).
@@ -135,7 +148,9 @@ description says, and the validator in agreement with the server.
 ### 2. A list is filled by parts
 
 **A part** is one file or one hand-typed text: the unit that is added,
-shown and removed. A part keeps:
+shown and removed. That a hand-typed part is removed as a file is, with the
+answers on its lines, is Birka's reading: the owner decided it for files
+(reading R-c, awaiting the owner). A part keeps:
 - its own `command_id` and request fingerprint;
 - for a file, a content fingerprint;
 - its kind (`FILE` or `PASTED`);
@@ -231,10 +246,20 @@ these hold:
    - not preceded by a letter or digit;
    - followed by optional spaces or tabs;
    - then exactly one sign from `-‐‑‒–—―−:=`: spaces alone are not a sign;
-   - then optional spaces or tabs, and a run of digits not followed by a
-     digit, whose value is the count.
+   - then optional spaces or tabs, and a run of digits, whose value is the
+     count, that **ends there** (review, 2026-10-09): not followed by a
+     digit; nor by optional spaces or tabs, `.` or `,` and a digit right
+     after it (a fraction); nor by one of `+ / × * x х · ⋅` (either case)
+     with optional spaces or tabs on either side and a digit (a sum or a
+     product). A numeral of any script counts as a digit there
+     (`str.isnumeric`: «½», «²», «①», «Ⅲ»). «M-3+2», «M-3 + 2», «M-3,5»,
+     «M-3.5», «M-3/2», «M-3х2», «M-3·2» and «M-3½» hold no count of M;
+     «S-1, M-2» and «L-1, 1850» list on.
 
-   So `462` is never «46, 2», and `M 3` is never «M, 3».
+   And the size stands in the text as a whole word **exactly once**, with a
+   count or without, in any of its spellings (ADR-0009): «M-3 M 2» and
+   «M-3 (M)» write M twice, and so do «M-3 М» with a Cyrillic М and
+   «XXL-1 2XL». So `462` is never «46, 2», and `M 3` is never «M, 3».
 3. **The places do not overlap.**
 4. **The totals agree.** If the file gives `count`, it equals the sum. If
    Birka read a count with its unit, it is exactly one, equals the sum, and
@@ -242,26 +267,67 @@ these hold:
 5. **One colour, no slash.** The line names at most one colour, in the file
    and in Birka's reading, and Birka found no slash options, nor flagged a
    lone «/» for review. A slash is contextual (constitution §21).
+6. **Nothing beside it** (review, 2026-10-09). The text shows the split and
+   nothing that could be more of it:
+   - **no other size.** Birka's own parse of the text, spelled with
+     `spell_size`, reads no size outside the split: «Лоран S M-3» names S
+     without a count. Nor is any other word a letter size by Birka's own
+     spelling (`spell_size`, `letter_rank`), whether the parser reads it or
+     not: the parser reads XS to XXL only, so «Лоран S-1 M-2 XXXL», «M-3
+     XXS», «M-3 4XL» and «M-3 ХL» with a Cyrillic Х name a size it does not
+     see. A lowercase Cyrillic «с» is the parser's preposition, never S
+     («куртка с капюшоном M-3» shows its split);
+   - **no other record.** Every size with a count in the text is one of
+     the pairs. A record is a word Birka's parser reads as a size on its
+     own, or a run of digits, joined by one sign to a run of digits,
+     overlapping ones included: «Лоран S-1 M-2 L-4» with pairs for S and M,
+     «Лоран M-3 L-5» with M, and «M-3-2», which holds «3-2», show none;
+   - **no other number.** Every other run of numerals in the text, of any
+     script («３», «½», «①», «Ⅲ»), is the file's `price` as its digits are
+     written («1850» for `"1850"` or `"1850 грн"`), once; or part of a count
+     with its unit Birka read («3 шт», which must equal the sum, as in 4); or
+     a length Birka read («110 см»). «S-1 M-2 L-1 разом 5» and «46-2 48»
+     show no split: the 5 may be another count, and the 48 a size whose
+     count is lost. Nor does a price the file leaves out, or one the text
+     writes with a gap or a point («1 850», «1850.50»): such a line is
+     answered with a note, the conservative side.
+
+   **What this does not see** (review, 2026-10-09). A size only the
+   organization's catalogue knows, not a letter size («OS», «єдиний»); a
+   number written as a word («і ще два») or in Latin letters («III»); and
+   **a number the file calls the price**. The price is the parser's
+   reading, and the rule excuses one number on that word alone: «46-2 48»
+   with a `price` of `"48"`, or «S-1 M-2 L-1 разом 5» with `"5"`, shows its
+   split. Excusing the price only where the text marks it («грн», «₴»,
+   «ціна») would close it at the cost of taps on lines such as «Лоран S-1
+   M-2 L-1 1850»; that is the owner's to weigh, a reading awaiting the
+   owner (business rules, R-f). The risk register names all three.
 
 When it holds, the row keeps `shown_split`. With two or more sizes it is
 `UNKNOWN_DISTRIBUTION` with the sum as its total; with one size it stays as
 Birka read it, so `STATED` is never offered on the file's word. When it does
 not, the file's counts are a hint, with reason `FILE_SPLIT_NOT_IN_TEXT`, and
-the line is answered as any split is: with a note.
+the line is answered as any split is: with a note. No line of the published
+example changed its outcome under 2 and 6.
 
 **A size range written with a sign** (`42-44`) can pass this check if the
 parser misreads it as size 42 with a count of 44. **The app asks** (owner,
 2026-10-09: "if such cases occur, the app asks the person what the record
 means, and the person chooses"). A pair of a shown split **may be a range**
-when, in the organization's catalogue, under one spelling (ADR-0009:
-`spell_size`, ignoring case):
-- its count, as the text writes it («44»), is itself a size; or
-- its record, the size, the sign and the count as the text writes them
-  («42-44», «42 – 44»), is itself a size.
+when any one of these holds:
+- **its numbers make it one** (review, 2026-10-09): the size and the count
+  as the text writes it are both digits, the count has at least as many
+  digits as the size, and it is larger («42-44», «42-58», «98-104»),
+  whatever the catalogue holds. «46-2», «48-12» and «M-3» are not;
+- **its count is a size.** In the organization's catalogue, under one
+  spelling (ADR-0009: `spell_size`, ignoring case), its count as the text
+  writes it is itself a size («M-3» with a size «3»);
+- **its record is a size.** The size, the sign and the count as the text
+  writes them («42-44», «42 – 44») are themselves a size of the catalogue.
 
-It is read at every look, never kept: the catalogue decides it, as it
-decides the pair's `size_id`, so a size created after the import makes a
-pair ambiguous from then on.
+The catalogue's part is read at every look, never kept, as the catalogue
+decides the pair's `size_id`: a size created after the import makes a pair
+ambiguous from then on.
 - **The editor asks first,** per such pair: «Запис «42-44» — це:», with
   «Розмір 42 — 44 шт» and «Діапазон розмірів 42–44», the record as written.
   Only once every such pair is read as a size with its count is
@@ -272,10 +338,29 @@ pair ambiguous from then on.
   with such a pair needs `split_read_as: "SIZE_WITH_COUNT"`; without it the
   answer is refused (422 `VALIDATION_ERROR`, reason `SPLIT_MAY_BE_RANGE`,
   naming the records), as every refusal of a basis is. `split_read_as` goes
-  with `STATED_BY_SIZE` only. The answer's audit entry keeps it, with the
-  records that could be read otherwise.
-- A range whose count is no size of the catalogue yet («42-58», no size 58)
-  is not asked about; the risk register names it.
+  with `STATED_BY_SIZE` only. The line keeps it (`split_read_as`, part of
+  the answer, not of the evidence), and so does the answer's audit entry,
+  with the records that could be read otherwise. A choice of a range is
+  never sent: the line is answered with another basis and a note.
+- **And again at the approval, record by record** (review, 2026-10-09). A
+  size created after the answer can make a record a possible range. The
+  person's word covers the records it was said of: the line keeps them
+  beside `split_read_as` (`split_read_records`: the records, as the text
+  writes them, that may be a range when the person answers; NULL exactly
+  when `split_read_as` is). The approval reads every line answered
+  `STATED_BY_SIZE`, of parts not removed, against the catalogue as it is
+  then; a line with a pair that may be a range and is not among the
+  records its word was said of stops it: 409 `SNAPSHOT_CONFLICT`, reason
+  `SPLIT_MAY_BE_RANGE`, with `count` and the first 50 `line_nos`, as for a
+  line still open. «Куртка 42-44 46-2», answered for «42-44», is asked
+  again once a size «2» makes «46-2» a range too. The line is answered
+  again, with the choice or another basis, and the approval sent with the
+  new `review_revision`. The rows and their texts are read in one
+  statement.
+- **Not asked about:** a record of a letter size («M-3»), or of a number
+  size whose count is written with fewer digits or is not larger («46-2»,
+  «48-12»), while neither its count nor the record is a size of the
+  catalogue. The risk register names it.
 
 Hand-typed lines carry no file reading, so they never have a shown split.
 
@@ -303,8 +388,12 @@ Each answer is the same `PUT` as today, with the same bases and the new one.
 - «Фото: IMG_1234.jpg, рядок 7»;
 - «Прочитано: Лоран · чорна · S, M, L»;
 - the parser's count as a hint;
-- «Ціна з зошита: 1200 (продажна | закупівельна)»;
-- the file reasons in words;
+- «Ціна з зошита: 1200 (продажна | закупівельна)», or «Ціна з зошита:
+  1200» when the file gives no kind (reading R-d, awaiting the owner);
+- the file reasons in words, such as `FILE_COUNT_HINT`: «Парсер прочитав
+  кількість, але в рядку вона не написана зі «шт» — це лише підказка.
+  Вкажіть кількість і звідки вона відома.» (worded so since the review,
+  2026-10-09);
 - the file the line came from.
 
 **The editor:**
@@ -369,16 +458,36 @@ It still cannot be approved while its own store does not trade").
 - **Its files go into a new list** started from the other store, their lines
   answered anew: nothing is carried over.
 
+**While the list's own store may no longer receive goods there** (review,
+2026-10-09), the same holds. The opening movements act through that store,
+so every command but a rejection, through the other store, also needs the
+list's own store to hold `can_receive` at the warehouse, the access row its
+own commands are checked against. Without it: 409 `SNAPSHOT_CONFLICT`,
+reason `LIST_STORE_CANNOT_RECEIVE`, with that store's `store_id` and the
+`location_id`, after the check of trading (`LIST_STORE_NOT_TRADING` comes
+first). Through the list's own store, its access row refuses the command as
+before (403 `LOCATION_ACCESS_DENIED`). Rejection is unaffected. The list
+carries no flag for it: the page learns it from the refusal, and says
+«Магазин «…», що почав цей список, більше не може приймати товар на цей
+склад: список можна лише відхилити.» This is how it is carried out, not an
+owner's decision: it keeps reading 8's ground, that the list acts in the
+ledger through its own store.
+
 **A paused warehouse's list is seen from its own store only.** `can_receive`
 through another store also needs the warehouse open, so while it is paused
 the other store neither sees the list nor acts on it. Its own store still
-reads it and may reject it, under reach (ADR-0005 §9).
+reads it and may reject it, under reach (ADR-0005 §9), and nothing else:
+adding, removing, answering and approving need `can_receive`, which needs
+the warehouse open. They pass again, from either store, once it reopens.
+The owner confirmed reading 1 on a question that said the list could be
+changed there; it is put again as built (reading R-a, awaiting the owner).
 
 **What does not change.**
 - The list's `acting_store_id` is still the store that created it. Lines
   added through another store name that store on their `RawInput`, and the
-  audit entries of adding, removing, approving and rejecting name the store
-  acted through (`via_store_id`).
+  audit entries of adding, removing, answering, approving and rejecting
+  name the store acted through (`via_store_id`; answering since the review,
+  2026-10-09).
 - The opening movements' acting store is still `acting_store_id`, as
   ADR-0005 §4 writes them.
 - A command still needs that store trading, a rejection apart (above).
@@ -406,7 +515,7 @@ stores can still make two, and only one of them can be approved
 the list's first part, or one added part. Never both, and never parts of two
 lists.
 - **One lock.** Creating a list and adding a part take the same advisory
-  lock, `_lock_key(organization, command_id)` (`snapshots/service.py:206-212`).
+  lock, `_lock_key(organization, command_id)` (`snapshots.service._lock_key`).
 - **Creating** looks up lists and parts by the id. A part found means
   409 `IDEMPOTENCY_CONFLICT`.
 - **Adding** looks up parts by the id:
@@ -419,7 +528,8 @@ lists.
 - **A list's first part** takes the list's own `command_id` and request
   fingerprint.
 - **Creating with `lines` keeps today's fingerprint exactly**
-  (`service.py:546-552`), so a retry across the deploy still replays.
+  (`snapshots.rules.lines_import_request`), so a retry across the deploy
+  still replays.
 
 **The same file is not added twice to one list.** The content fingerprint is
 sha256 of the canonical lines: no file name, no envelope, key order
@@ -435,7 +545,8 @@ the reply counts them, so the person can remove it at once.
 
 **Room** (§10): a list over its lines, rows or parts refuses the part with
 409 `SNAPSHOT_CONFLICT`, reason `LIST_FULL`, naming the limit and the
-counts.
+counts. An answer over the list's allocations is refused at the answer
+(§10).
 
 **Locks, in order:**
 1. the command lock;
@@ -444,6 +555,15 @@ counts.
 The ledger's warehouse lock is not taken: the list's hold already exists.
 Approval takes the list first too, so an add after an approval finds the
 list decided and is refused. Parsing runs off the event loop, as today.
+
+**Creating a list parses before the warehouse is held** (review,
+2026-10-09). The first part's lines are parsed and kept while nobody else
+can see the list, and only then is the hold taken, under the warehouse's
+exclusive lock (`inventory.hold_for_opening_list`). Before, M1-023's order
+held that lock over the parse of up to a thousand lines, the order refused
+above for adding a part. A stock command at the warehouse still lands
+wholly before the hold, and the approval finds its history, or wholly
+after it, and is refused.
 
 **What it records:** `review_revision` + 1, and an audit entry
 `snapshot.part_added`. Creating a list keeps `snapshot.imported`, which now
@@ -500,17 +620,34 @@ as a new part with new lines, answered anew (owner).
 | `MAX_PART_BYTES` | none | 950 000, a file part as compact UTF-8 JSON |
 | `MAX_LIST_ALLOCATIONS` | 5 000 | **5 000, measured**: the largest of 2 000, 5 000 and 10 000 that passes |
 | `MAX_LIST_LINES` | 1 000 | 5 000: `MAX_LIST_ALLOCATIONS`, lines not removed |
-| `MAX_LIST_ROWS` | none | 10 000: `2 × MAX_LIST_LINES`, removed lines included; bounds `line_no` |
+| `MAX_LIST_ROWS` | none | 10 000: `2 × MAX_LIST_LINES`, removed lines included; bounds `line_no` (reading R-b, awaiting the owner) |
 | `MAX_LIST_PARTS` | none | 1 000, removed parts included |
 | `MAX_ALLOCATIONS` (per line) | 50 | 50 |
 
 **As many lines as answers.** The owner heard the limit as 5 000 lines of
 one size each (2026-10-08), and the measurement approved exactly that, so
-lines are capped at the allocations. A line naming several sizes takes one
-allocation per size, so a list full of such lines can run out of answers
-before its last line is answered, and then can only be rejected or lose a
-file. The shops' count counts each size of such a line, and the summary
-shows both headrooms («рядків 1 840 з 5 000 · відповідей 3 120 з 5 000»).
+on 2026-10-09 the lines were raised from half the allocations, 2 500, to
+the allocations, and the rows from 7 500 to 10 000. A line naming several
+sizes takes one allocation per size, so a list full of such lines can run
+out of answers before its last line is answered, and then can only be
+rejected or lose a file. The shops' count counts each size of such a line,
+and the list shows both headrooms: «Місце у списку: рядків 1 840 з 5 000 ·
+відповідей 3 120 з 5 000».
+
+**An answer with no room** is refused as every refusal of an answer is, 422
+`VALIDATION_ERROR`, and named as a full list is: reason `LIST_FULL`, `what`
+`allocations`, `limit`, `now` (the answers on the other lines) and `adding`
+(this answer's). The editor says «У списку вже 5 000 відповідей — більше він
+не вміщує, тож цю відповідь не збережено. Рядок із кількома розмірами бере
+відповідь на кожен розмір. Звільнити місце можна, прибравши файл.» (review,
+2026-10-09; before, the generic text of a 422).
+
+**The rows' bound counts removed files.** A list takes at most 10 000 lines
+over its whole life, the lines of removed files included, twice the 5 000
+that count. It stops a file removed and added again without end. A list
+that runs out of that room takes no more parts: to add more, it is rejected
+and a new one started. That is Birka's reading, not yet the owner's
+(reading R-b).
 
 **The approval is the bound.** It writes the whole list in one transaction
 under the warehouse's exclusive lock (ADR-0005 §4, §5). It makes about five
@@ -559,6 +696,13 @@ in process, each allocation its own stock key:
 - **Everything else passes with room.** Adding a 1 000-line file to a full
   list takes 0.25–0.33 s and removing it about 0.05 s; every page reads in
   at most 0.118 s; the approval's reply is 1 108 bytes at every size.
+- **Measured again on 2026-10-09,** with every answer `STATED_BY_SIZE`,
+  which the approval reads again since the review (§5;
+  [evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)):
+  approvals 8.55, 8.16 and 7.79 s, 35 049 statements, the slowest 0.157 s,
+  the second reading itself 0.14–0.19 s. The method above, the same hour
+  on a busier laptop, took 7.78, 6.94 and 9.50 s. Both pass, with less room
+  than the first run showed.
 - **PostgreSQL 16 here, 17 on the server,** on hardware not yet chosen. The
   ceiling may sit elsewhere on 17, and the timings differ; the 60 s the
   client waits (§16) is eight times the slowest approval measured.
@@ -591,8 +735,14 @@ lines. The app reads only the units.
   differ, but not its length.
 - **The rest of the body** is at most about 2 500 bytes: the command, the
   stores, the list's name and date, the file's name.
-- **The phone refuses** a body over 990 000 bytes before sending:
-  «Файл завеликий — розділіть його на два».
+- **The phone refuses the file** when it reads it, above 950 000 bytes
+  measured as the server measures it, compact and without its nulls and
+  `$schema`: «Файл завеликий — розділіть його на два.» Before the review
+  (2026-10-09) it measured the file against the request's 990 000, so a
+  file between the two was sent and refused by the server.
+- **The phone refuses a body** over 990 000 bytes before sending, with the
+  same words. A file within 950 000 bytes and its envelope stay under it,
+  so this is a guard, no longer reached from the screen.
 
 A unit test pins `MAX_PART_BYTES` + the largest envelope < 990 000 < 1 000 000.
 
@@ -616,9 +766,16 @@ part of an opening stock list, is under 0.96 MB.
 | Approve | `snapshot:approve` | as above |
 | Read, reject | either | the list's own store: reach. Another store: `can_receive` |
 
-Every command but a rejection also needs the list's own store trading; a
-rejection needs only the store acted through trading (§7; owner,
-2026-10-09).
+Every command but a rejection also needs the list's own store trading
+(owner, 2026-10-09) and, through another store, still holding
+`can_receive` at the warehouse (review, 2026-10-09); a rejection needs only
+the store acted through trading (§7).
+
+**On the screen** (review, 2026-10-09): whoever may add and remove the
+list's files may also reject it, so the list whose last file is wrong is
+rejected where it is looked at, with the button the hint names. «Затвердити
+список» shows only to whoever may approve, while the list's own store
+trades.
 
 **No new permission.** Managers and owners hold `snapshot:import`; sellers
 hold neither.
@@ -668,12 +825,21 @@ out `REMOVED`, unless `part_id` names a removed part. Its offset and the
 - `shown_split [{size, count, size_id, written, may_be_range}]`, where
   `size_id` is null when the catalogue lacks the size, `written` is the
   record as the text writes it, and `may_be_range` says the person is asked
-  first (§5);
+  first (§5), read against the catalogue as it is now;
+- `split_read_as`, `"SIZE_WITH_COUNT"` or null: what the answer said of
+  its records (§5);
 - `same_photo_lines`.
 
 **`PUT /snapshots/{id}/lines/{line_no}`** gains `split_read_as`
 (`"SIZE_WITH_COUNT"`), with `STATED_BY_SIZE` only; a line with a pair that
-may be a range needs it (`SPLIT_MAY_BE_RANGE`, §5).
+may be a range needs it (`SPLIT_MAY_BE_RANGE`, §5). An answer the list has
+no room for is a 422 with reason `LIST_FULL` (§10). A re-answer that
+differs only in `split_read_as` is a new answer: `review_revision` + 1.
+
+**`POST /snapshots/{id}/approve`** is also refused, 409
+`SNAPSHOT_CONFLICT`, reason `SPLIT_MAY_BE_RANGE`, with `count` and the first
+50 `line_nos`, when a line answered by size may now be a range and was not
+said to be a size with its count (§5).
 
 **A list** gains `store_state`, its own store's: `ACTIVE`, `BLOCKED` or
 `ARCHIVED` (§7).
@@ -684,15 +850,34 @@ through (§7).
 **`GET /snapshots`** gains `location_id`.
 
 **New `SNAPSHOT_CONFLICT` reasons:** `PART_DUPLICATE`, `LIST_FULL`,
-`LAST_PART`, `PART_REMOVED`, and `LIST_STORE_NOT_TRADING` (§7). One code
-with a reason, as that error's docstring prescribes.
+`LAST_PART`, `PART_REMOVED`, `LIST_STORE_NOT_TRADING` and
+`LIST_STORE_CANNOT_RECEIVE` (§7), and `SPLIT_MAY_BE_RANGE` at an approval
+(§5). One code with a reason, as that error's docstring prescribes.
 
-**A file's 422** keeps FastAPI's shape. Under `file`:
-- every refusal carries a stable `type`; inside `lines` it also carries its
-  line, 1-based, as `ctx.line`, pydantic's own refusals included. A file
-  over the byte bound (`stock_file_too_large`, `ctx {limit, bytes}`) and a
-  refusal of a top-level key name no line;
-- the `input` echo and `url` are dropped, so a bad file is not sent back.
+**A file's 422** keeps FastAPI's shape. Under `file`, every refusal carries
+a stable `type`; inside `lines` it also carries its line, 1-based, as
+`ctx.line`, pydantic's own refusals included. A file over the byte bound
+(`stock_file_too_large`, `ctx {limit, bytes}`) and a refusal of a top-level
+key name no line.
+
+**No 422 of a list's request echoes it** (review, 2026-10-09). On every
+route under `/api/v1/snapshots`, every refusal loses its `input` echo and
+its `url`, wherever it stands: in the file, in the body around it (a file
+without `file_name`, a file and `lines` together, a file with `source`), or
+the body itself when it is not an object. A notebook's lines may name
+customers (ADR-0010), and a refused file of up to a megabyte is not sent
+back. Before, only refusals under `file` lost them, and a file refused for
+the body around it came back whole. What a refusal names to be found is
+kept, cut short: a key the format does not know, in `loc`, and a value in
+`ctx` (a repeated size), by their first 60 characters and «…» (`MAX_NAMED`;
+review, 2026-10-09). A key of 300 000 characters is not sent back whole;
+a short one is named as the file writes it, as the person needs it to fix
+the file. The phone cuts what it prints the same way.
+
+**A 422 lists at most 50 refusals,** on every route, and
+`detail_truncated` counts the rest (review, 2026-10-09): a small body of
+many unknown keys answered with megabytes before. The phone adds that count
+to its «…і ще k».
 
 Reading a file's text (`load_stock_file_text`, for the reference validator
 and the tests) adds `stock_file_duplicate_key` (`ctx.key`),
@@ -723,6 +908,12 @@ Its user links are `ON DELETE RESTRICT`.
 - refuses any change to a `REMOVED` row;
 - lets a row become `REMOVED` only when its part is removed and no
   allocation of it remains.
+
+**What a person said of a split goes with an answer by size.** The row's
+`split_read_as` (review, 2026-10-09) is part of the answer, not of the
+evidence, and changes with it. CHECK `split_read_only_by_size` holds it
+null, or `SIZE_WITH_COUNT` with the basis `STATED_BY_SIZE` (compared as
+text, as below). Removing a part clears it with the rest of the answer.
 
 **A removed line takes no allocation.**
 `inventory_snapshot_allocation_row_is_live()`, before insert or update,
@@ -758,40 +949,109 @@ Neither value can be used before 0037 commits, so no constraint or index in
   JSON reported as `application/octet-stream`.
 - **The phone reads the bytes strictly.** It decodes with a strict UTF-8
   decoder; `file.text()` would silently turn bad bytes into U+FFFD. Then a
-  small scanner refuses duplicate keys and non-integer numbers for integer
-  keys. Then it checks the format, version, lines and size.
-- **A summary before sending**: lines, photos, the price kind, and «Файл
-  піде до списку складу «…»».
+  small scanner refuses duplicate keys, non-integer numbers for integer
+  keys, and, anywhere in the file, a number too large to be one («1e400»,
+  «-1e999», four hundred digits), which `JSON.parse` reads as Infinity and
+  the phone would send as nothing (review, 2026-10-09): «Рядок 1 файлу: у
+  «model» записано 1e400 — завелике число, застосунок його не прочитає.»
+  Then it checks the format, version, lines and the file's size (§11).
+- **A summary before sending**: «Файл «…»: рядків N, фото M, ціни
+  закупівельні. Піде до списку складу «…».»
 - **The list's name** is prefilled from the file's `source`, and can be
   changed.
-- **A warehouse whose list waits** is named with that list and an
-  «Відкрити» button. No second list is offered.
-- **A kept draft** holds the `command_id`, warehouse, name, date, the file's
-  name and its sha256, never its content. Picking the same file again after
-  a lost answer resends the same command.
+- **A warehouse whose list waits** is named with that list, «На складі «…»
+  уже чекає список «…» (веде магазин «…»). Другий список для нього не
+  створюють — додайте файл до наявного.», and a «Відкрити список» button.
+  No second list is offered.
+- **A kept draft** holds the `command_id`, warehouse, the file's name and
+  its sha256, and the list's name and date only as the person typed them,
+  never anything of the file's content: a name or a date the file filled in
+  is left out, and filled in again when the file is picked again (review,
+  2026-10-09). Picking the same file again after a lost answer resends the
+  same command; so does picking any file while the last send is unsettled
+  (§16).
 
 **The list.**
 - **A «Файли списку» section**, one entry per part:
-  - its name, «рядки 1001–1874», «розібрано X з Y»;
+  - its name, «Рядки 1001–1874 · розібрано X з Y»;
   - «Додано: <ім’я>, <дата>», or, muted, «Прибрано: <ім’я>, <дата>»;
-  - the overlap warning.
+  - the overlap warning, «Рядків цього файлу, що вже є в інших файлах
+    списку (те саме фото й рядок): N. Якщо файл додано помилково, приберіть
+    його.»
 - **«Показати рядки»** filters by file.
-- **«Прибрати файл»** asks first: «Прибрати файл «…»? Його N рядків не
-  увійдуть до затвердження, а M відповідей на них зникнуть; рядки буде
-  видно як прибрані. Інші файли лишаться.».
+- **«Прибрати файл»** asks first: «Прибрати файл «…»? Рядки цього файлу (N)
+  не увійдуть до затвердження, а відповіді на них (M) зникнуть; рядки буде
+  видно як прибрані. Інші файли лишаться.» Lines typed by hand are removed
+  as typed lines, never called a file (review, 2026-10-09): «Прибрати
+  рядки» asks «Прибрати рядки, внесені вручну? Ці рядки (N) не увійдуть до
+  затвердження, а відповіді на них (M) зникнуть; їх буде видно як
+  прибрані. Інші файли лишаться.», and, when they are the list's last
+  part, «Це останні рядки списку. Якщо вони помилкові — відхиліть список:
+  склад звільниться.»
+- **What the person is asked to do** with a waiting list follows what they
+  may do (review, 2026-10-09): «Затвердіть або відхиліть його.» to whoever
+  may approve; «Затверджує той, хто має право затверджувати списки;
+  відхилити його можна й вам.» to a manager who may add files but not
+  approve; «Відхиліть його, щоб склад звільнився.» when the list's store
+  does not trade; and nothing to someone who may do neither.
 - **«Додати файл»** and «Додати рядки вручну». «Додати файл» keeps its
-  `command_id` per list and file.
+  `command_id` per list and file until the server answers it. If the kept
+  command names a part removed since its answer was lost, the server
+  replays that part, removed, and the phone sends the file once more as a
+  new command: a removed file comes back only as a new one (review,
+  2026-10-09).
+- **«Додати рядки вручну»** keeps its text and command until the server has
+  them. Sent again after a lost answer with the text changed meanwhile, the
+  same command is a different request (409 `IDEMPOTENCY_CONFLICT`): the
+  phone keeps the text, takes a new command, reads the list again and says
+  «Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них.
+  Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від
+  тих.» (review, 2026-10-09; before, it stayed refused for good).
 - **The approval** shows the files and each basis, `STATED_BY_SIZE`
-  included.
+  included. Its panel shows to whoever may approve or add files (§12).
+- **The room**: «Місце у списку: рядків 1 840 з 5 000 · відповідей 3 120 з
+  5 000», numbers grouped as Ukrainian writes them.
 
-**A 422** is mapped to «Рядок N файлу: …» by its `type`.
+**A refusal is said in words.**
+- **A 422** is mapped to «Рядок N файлу: …» by its `type`, in the
+  validator's words: «Рядок 5 файлу: поле «фото» відсутнє.», «…поле «розмір»
+  задовге.», «Рядок 3 файлу: невідоме поле «colour».», «Файл має бути
+  об’єктом.» At most ten, then «…і ще k», counting what the server did not
+  list (§13).
+- **409 `LIST_STORE_CANNOT_RECEIVE`**, adding or removing a file, answering
+  a line or approving: «Магазин «…», що почав цей список, більше не може
+  приймати товар на цей склад: список можна лише відхилити.»
+- **409 `SPLIT_MAY_BE_RANGE` at the approval**: «Рядки 1, 2 і ще 1 треба
+  розібрати ще раз: запис у них тепер може бути діапазоном розмірів.»
+  («Рядок 1 … у ньому …» for one).
+- **422 `LIST_FULL` at an answer**: the text of §10.
+- **A line's repeats** agree with their number: «— 2 рази», «— 5 разів».
 
-**What a person sees is guarded.** Every string from a file, and every line
-of any list, is shown through `visible()`. It replaces bidirectional
-controls (U+202A–202E, U+2066–2069, U+200E, U+200F, U+061C), invisible ones
-(U+200B–200D, U+2060, U+FEFF) and CR, LF and TAB with visible marks such as
-`⟦U+202E⟧`. `.catalog-raw` gets `unicode-bidi: isolate`. Nothing stored
-changes.
+**What a person sees is guarded.** Every string from a file, every line of
+any list, and the names and reasons people gave beside them («Додано:»,
+«Прибрано:», a store's name, a rejection's reason) are shown through
+`visible()`. It replaces, by Unicode's own classes (review, 2026-10-09):
+- every control character (`Cc`): CR, LF and TAB, and U+0080–U+009F;
+- the line and paragraph separators (`Zl`, `Zp`: U+2028, U+2029);
+- every default-ignorable code point: the zero-width ones (U+200B–200D,
+  U+2060, U+FEFF), the soft hyphen, the variation selectors, the tag
+  characters and the rest;
+- every bidirectional control (U+202A–202E, U+2066–2069, U+200E, U+200F,
+  U+061C);
+
+with visible marks such as `⟦U+202E⟧`. Two are left where they are a part
+of an emoji, since there they neither hide nor reorder anything: a
+variation selector right after a pictograph or inside a keycap («❤️»,
+«1️⃣»), and the zero-width joiner between two pictographs («👨‍👩‍👧»). A
+name such as «Оля ❤️» reads as written; after a letter or a bare digit
+they are still marked («M-1⟦U+FE0F⟧»). `.catalog-raw` gets `unicode-bidi:
+isolate`. Nothing stored changes.
+
+**A long word breaks.** On the list overview and the list page
+(`.openings`), a line, a notice, a hint, a paragraph, an alert, a status
+and the heading break anywhere (`overflow-wrap: anywhere`), so a file's long
+name, a list's date or a rejection's reason never pushes a 375 px phone's
+page sideways (review, 2026-10-09). Other screens keep their own wrapping.
 
 ### 16. A slow call is not an outage
 
@@ -806,6 +1066,32 @@ down. The screen says «Сервер ще не відповів. Оновіть 
 
 **A real outage still counts.** A fetch that fails outright still marks the
 server down.
+
+**A slow answer starts no second list** (review, 2026-10-09). The server may
+have made the list while the phone stopped waiting. So after a slow answer,
+or none at all, «Новий список» marks its draft unsettled, and the draft
+keeps its `command_id` whatever file is then picked, until the server
+answers a send. «Почати як новий список» is not offered while the draft is
+unsettled, only after an answered refusal, and pressing it reads the
+warehouse again before «Зберегти список» can send the new command (review,
+2026-10-09): the list a slow send makes may land after the phone read the
+warehouse, and a new command then would start a second list beside it.
+The waiting lists of the warehouse are read again after a slow answer,
+after a resend refused as another request, when a file is picked while
+unsettled, and when a new list is started; «Зберегти список» waits while
+they are read. If a list made by this command waits there, the form says
+«Список «…» уже збережено, хоч відповідь сервера й не дійшла вчасно.
+Відкрийте його — інші файли чи рядки додайте вже до нього.», offers
+«Відкрити список», and hides «Зберегти список». If none waits yet, saving
+again sends the same command, which the server answers with the list once
+made. Before, another file picked after a slow answer took a new command,
+and could start a second list at the warehouse.
+
+**Proven with a browser clock.** Three journeys hold the server's answer
+and move the page's clock past 20 s and 60 s (`openings-file.spec.ts`: "a
+slow answer is no outage…", "an answer too slow to wait for, its list made
+meanwhile…" and "…its list made only after…"). None is a phone on a slow
+network.
 
 **ADR-0013 §4.2 is amended:** a slow call's own timeout is not an outage.
 
@@ -836,6 +1122,7 @@ server down.
   - a list with more than one part;
   - a removed part or a `REMOVED` row;
   - a row with a photo, a reading or a shown split;
+  - a row keeping what a person said of its split (`split_read_as`);
   - an answer on `STATED_BY_SIZE`.
 - **Otherwise drops** what 0037 added. The enum values stay, as `0031`'s
   downgrade leaves its own. A list of one pasted part, decided or not, goes
@@ -928,16 +1215,32 @@ every page.
   again. If the warehouse is paused too, the other store does not reach the
   list, and it waits until one of the two changes.
 - **A record that may be a range of sizes costs a question** (owner,
-  2026-10-09). «42-44», with a size 44 or «42-44» in the catalogue, is asked
-  about before the tap; a range not in the catalogue («42-58») still passes
-  as a size with its count, the person seeing the text and the photo line.
+  2026-10-09). «42-44», «42-58» and «98-104» are asked about before the tap
+  whatever the catalogue holds, and «M-3» once the catalogue has a size
+  «3»; a size created after the answer stops the approval until the line
+  is answered again for each record the person's word did not cover. A record of a number size with a smaller count
+  («46-2») is asked about only when the catalogue makes it a range.
+- **A tap needs a line that shows its split and nothing else** (review,
+  2026-10-09). A line with another size (a letter size the parser does not
+  read included), another size with a count, or a number of any script
+  Birka cannot account for («разом 5», «½», a price the file leaves out) is
+  answered with a note. More lines need a note than before. One thing is
+  still taken on the parser's word: the number it calls the price (§5;
+  reading R-f, awaiting the owner).
 - **A line is about 2–3 KB of evidence.** A list at its 5 000 lines is
   about 10–15 MB, and up to about 30 MB with its 10 000 rows, removed files
   included.
 - **The Telegram file picker is unproven on a phone.** iOS opens Files;
   Android depends on Telegram's WebView; a file received in a chat must
-  first be saved to the phone. A release drill tries both, and Telegram
-  Desktop works meanwhile.
+  first be saved to the phone. A release drill tries both (release
+  checklist, row 26). Telegram Desktop is expected to work but has not been
+  tried; the drill tries it too.
+- **A shared list whose own store may no longer receive there** is only
+  rejected too (review, 2026-10-09), and the page learns it from the
+  refusal, not from the list: it shows the reason, but still offers the
+  other commands until one is tried.
 - **The display guard is new to every list.** Raw text was shown unguarded
   since «Початкові залишки» was built; now it is not. The catalogue screens
-  still show raw text, and are left for a change of their own.
+  still show raw text, and are left for a change of their own. Since the
+  review the guard marks by Unicode's classes, but for an emoji's own
+  selector and joiner, so a person's name with an emoji reads as written.

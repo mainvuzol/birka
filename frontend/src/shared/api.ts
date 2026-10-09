@@ -93,6 +93,9 @@ export class ApiError extends Error {
     // A 422's refusals of the request's shape, each where it stands: a stock
     // list's file names the line refused (ADR-0014 §15).
     public validation: ValidationIssue[] = [],
+    // How many more refusals the server counted than it listed: a 422 lists
+    // at most 50 (`detail_truncated`; review, 2026-10-09).
+    public validationMore = 0,
   ) {
     super(code);
   }
@@ -151,13 +154,16 @@ export async function api<T>(
       error?: { code?: string };
       details?: Record<string, unknown>;
       detail?: unknown;
+      detail_truncated?: unknown;
     } | null;
+    const more = data?.detail_truncated;
     const error = new ApiError(
       response.status,
       data?.code ?? data?.error?.code ?? "HTTP_ERROR",
       data?.details ?? {},
       response.headers.get("X-Request-ID"),
       validationIssues(data?.detail),
+      typeof more === "number" && Number.isInteger(more) && more > 0 ? more : 0,
     );
     // Whether the server is reachable, for the phone's own checks
     // (ADR-0013 §4.2).
