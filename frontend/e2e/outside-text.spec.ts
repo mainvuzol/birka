@@ -34,9 +34,9 @@ const fixture = JSON.parse(
 ) as Fixture;
 const backend = fileURLToPath(new URL("../../backend", import.meta.url));
 
-const RLO = "‮"; // right-to-left override: «12 шт» reads «шт 21»
-const ZWSP = "​"; // zero width: two names that look the same differ
-const LRI = "⁦"; // left-to-right isolate, left open
+const RLO = "\u202E"; // right-to-left override: «21 шт» after it reads «тш 12»
+const ZWSP = "\u200B"; // zero width: two names that look the same differ
+const LRI = "\u2066"; // left-to-right isolate, left open
 const marks = { [RLO]: "⟦U+202E⟧", [ZWSP]: "⟦U+200B⟧", [LRI]: "⟦U+2066⟧" };
 // What `visible()` marks.
 const HIDDEN =
