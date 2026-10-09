@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import { familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
@@ -45,17 +46,19 @@ type Command =
     >;
 
 function doneText(correction: Correction): string {
+  const before = visible(correction.name_before);
+  const after = visible(correction.name_after);
   switch (correction.kind) {
     case "RENAME":
       return correction.correction_id === null
         ? "Назва та сама — нічого не змінено."
-        : `Назву змінено: «${correction.name_before}» → «${correction.name_after}».`;
+        : `Назву змінено: «${before}» → «${after}».`;
     case "MERGE":
-      return `Об’єднано: «${correction.name_before}» тепер веде до «${correction.name_after}». Залишок і ціни перенесено.`;
+      return `Об’єднано: «${before}» тепер веде до «${after}». Залишок і ціни перенесено.`;
     case "RETIRE":
-      return `«${correction.name_after}» прибрано: залишок продають, нового не приймають.`;
+      return `«${after}» прибрано: залишок продають, нового не приймають.`;
     case "RESTORE":
-      return `«${correction.name_after}» повернуто: її знову приймають.`;
+      return `«${after}» повернуто: її знову приймають.`;
   }
 }
 
@@ -126,7 +129,7 @@ function ModelSearch({
                     choose(item);
                   }}
                 >
-                  {item.display_name}
+                  {visible(item.display_name)}
                   {item.status !== "ACTIVE" && (
                     <small> — {statusText[item.status]}</small>
                   )}
@@ -430,7 +433,8 @@ function Stock({ lines }: { lines: StockLine[] }): JSX.Element {
     <ul>
       {lines.map((line) => (
         <li key={`${line.location_id}:${line.size_id}`}>
-          {line.location_name} · {line.size_label ?? "розмір"} ·{" "}
+          {visible(line.location_name)} ·{" "}
+          {line.size_label === null ? "розмір" : visible(line.size_label)} ·{" "}
           {line.quantity === null
             ? "є залишок (кількість не видно)"
             : `${String(line.quantity)} шт.`}
@@ -493,13 +497,13 @@ function Merge({
           <dl>
             <dt>Дублікат — зникне</dt>
             <dd>
-              {preview.data.duplicate.display_name}
+              {visible(preview.data.duplicate.display_name)}
               {preview.data.duplicate.shared_price &&
                 ` · ціна ${preview.data.duplicate.shared_price}`}
             </dd>
             <dt>Лишається</dt>
             <dd>
-              {preview.data.into.display_name}
+              {visible(preview.data.into.display_name)}
               {preview.data.into.shared_price &&
                 ` · ціна ${preview.data.into.shared_price}`}
               {preview.data.into.status === "RETIRED" && " · прибрана"}
@@ -717,12 +721,14 @@ export function Models({
       {selected && card.isError && <p role="alert">{errorText(card.error)}</p>}
       {selected && card.data && (
         <section>
-          <h3>{card.data.display_name}</h3>
+          <h3>{visible(card.data.display_name)}</h3>
           <p>
             <span className="badge">{statusText[card.data.status]}</span>
           </p>
           {card.data.merged_into && (
-            <p>Веде до моделі «{card.data.merged_into.display_name}».</p>
+            <p>
+              Веде до моделі «{visible(card.data.merged_into.display_name)}».
+            </p>
           )}
           {card.data.status !== "MERGED" && (
             <div className="toolbar">

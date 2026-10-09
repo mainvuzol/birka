@@ -1914,3 +1914,21 @@ answered by the owner the same day:
 
 Built on 2026-10-09; see the [report](customer-data-retention-report.md)
 and [ADR-0015](../decisions/ADR-0015-customer-data-retention.md).
+
+## Owner decision — 2026-10-10 (text from outside, shown as it is)
+
+Chosen on 2026-10-09 as the last of three risks left before the public
+domain: «Початкові залишки» already showed a character that hides or
+reorders text as its code. Asked on 2026-10-10, once a map showed a model's
+name on some 60 places and other text from outside on some 90 more.
+
+- **Every text from outside is shown that way, on every screen:** model and
+  colour names, sizes, a parser's lines, people's names (which come from
+  their Telegram), suppliers', customers' and stores' names, notes and
+  reasons. A character that hides or reorders text shows as its code,
+  «⟦U+202E⟧»; an emoji reads as written.
+- **Only shown so.** Nothing is refused when it is typed, and nothing stored
+  changes. A field opened to edit a name holds it as it is.
+
+Built on 2026-10-10; see the [report](outside-text-report.md) and
+[ADR-0018](../decisions/ADR-0018-outside-text-shown-as-it-is.md).

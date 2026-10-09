@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import type { Store } from "@/orders/types";
+import { visible } from "@/shared/visible";
 import type { Supplier } from "./types";
 
 /** The network's suppliers, as whoever returns goods in this store sees them. */
@@ -64,7 +65,7 @@ export function SupplierPicker({
         change(String(error.details.supplier_id));
         setAdding(false);
         setNote(
-          `«${String(error.details.name)}» уже є у списку — обрано його.`,
+          `«${visible(String(error.details.name))}» уже є у списку — обрано його.`,
         );
       } else setNote(errorText(error));
     } finally {
@@ -86,8 +87,8 @@ export function SupplierPicker({
           <option value="">Оберіть постачальника</option>
           {(suppliers.data ?? []).map((supplier) => (
             <option key={supplier.id} value={supplier.id}>
-              {supplier.name}
-              {supplier.phone ? ` · ${supplier.phone}` : ""}
+              {visible(supplier.name)}
+              {supplier.phone ? ` · ${visible(supplier.phone)}` : ""}
             </option>
           ))}
         </select>

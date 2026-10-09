@@ -13,6 +13,7 @@ import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { methodLabels, notStated } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { visible } from "@/shared/visible";
 import {
   resolveCashCommand,
   submitCashCommand,
@@ -216,7 +217,8 @@ function CloseDetails({ close }: { close: Close }): JSX.Element {
       <p>Переказ: {signed(close.transfer.net)}.</p>
       {close.reason !== null ? (
         <p>
-          Причина: «{close.reason}»{close.reason_by && ` · ${close.reason_by}`}
+          Причина: «{visible(close.reason)}»
+          {close.reason_by && ` · ${visible(close.reason_by)}`}
         </p>
       ) : (
         close.reason_required && <p>Причину не вказано.</p>
@@ -282,8 +284,8 @@ function CloseDetails({ close }: { close: Close }): JSX.Element {
           {close.explanations.map((item, index) => (
             <li key={`${item.at}:${String(index)}`}>
               {whenOf(item.at)} · {explanationLabels[item.kind]} ·{" "}
-              {moved(item.cash)} · {item.by}
-              {item.text && ` · ${item.text}`}
+              {moved(item.cash)} · {visible(item.by)}
+              {item.text && ` · ${visible(item.text)}`}
             </li>
           ))}
         </ul>
@@ -700,8 +702,8 @@ export function Cash({
 }
 
 function movementLine(movement: Movement): string {
-  return `${whenOf(movement.at)} · ${movementLabels[movement.kind]} ${money(movement.amount)} · ${movement.by}${
-    movement.note ? ` · ${movement.note}` : ""
+  return `${whenOf(movement.at)} · ${movementLabels[movement.kind]} ${money(movement.amount)} · ${visible(movement.by)}${
+    movement.note ? ` · ${visible(movement.note)}` : ""
   }${movement.for_day ? ` · до закриття ${dayOf(movement.for_day)}` : ""}`;
 }
 
@@ -751,13 +753,14 @@ function Status({
   if (drawer.closed_today && last)
     return (
       <p>
-        Касу сьогодні закрито о {timeOf(last.closed_at)} · {last.closed_by}.
+        Касу сьогодні закрито о {timeOf(last.closed_at)} ·{" "}
+        {visible(last.closed_by)}.
       </p>
     );
   if (!drawer.may_close)
     return last ? (
       <p>
-        Останнє закриття: {whenOf(last.closed_at)} · {last.closed_by}
+        Останнє закриття: {whenOf(last.closed_at)} · {visible(last.closed_by)}
       </p>
     ) : (
       <></>
@@ -767,7 +770,7 @@ function Status({
       <p>
         {drawer.next_is_opening || !last
           ? "Каса ще не рахувалась — цей підрахунок запише, скільки в ній зараз"
-          : `Останнє закриття: ${whenOf(last.closed_at)} · ${last.closed_by}`}
+          : `Останнє закриття: ${whenOf(last.closed_at)} · ${visible(last.closed_by)}`}
       </p>
       <p className="hint">
         Перед підрахунком запишіть гроші, взяті з каси чи внесені в неї.
@@ -1231,7 +1234,8 @@ function FixStep({
                   });
                 }}
               >
-                {timeOf(event.at)} · {targetLabels[event.target]}: {event.label}
+                {timeOf(event.at)} · {targetLabels[event.target]}:{" "}
+                {visible(event.label)}
               </button>
             </li>
           ))}
@@ -1294,7 +1298,7 @@ function CorrectStep({
       {chosen ? (
         <>
           <p>
-            {timeOf(chosen.at)} · {chosen.label} · {chosen.by}
+            {timeOf(chosen.at)} · {visible(chosen.label)} · {visible(chosen.by)}
           </p>
           <WayChoice
             title={targetLabels[chosen.target]}
@@ -1377,9 +1381,10 @@ function CorrectStep({
                     }}
                   >
                     {timeOf(event.at)} · {targetLabels[event.target]}:{" "}
-                    {event.label} · {money(event.amount)} ·{" "}
+                    {visible(event.label)} · {money(event.amount)} ·{" "}
                     {wayName(event.method)}
-                    {event.corrected ? " (виправлено)" : ""} · {event.by}
+                    {event.corrected ? " (виправлено)" : ""} ·{" "}
+                    {visible(event.by)}
                   </button>
                 </li>
               ))}
@@ -1566,7 +1571,7 @@ function HistoryRow({ close }: { close: Close }): JSX.Element {
     <>
       <li aria-label={`Закриття ${dayOf(close.business_day)}`}>
         <strong>
-          {dayOf(close.business_day)} · {close.closed_by}
+          {dayOf(close.business_day)} · {visible(close.closed_by)}
         </strong>{" "}
         <small>о {timeOf(close.closed_at)}</small>
         <p>

@@ -1,5 +1,6 @@
 import type { Line } from "@/orders/types";
 import type { PaymentMethod } from "@/shared/payment";
+import { visible } from "@/shared/visible";
 
 /** A sale line is shaped exactly like an order line; the command differs. */
 export type SaleLine = Line;
@@ -85,7 +86,7 @@ export function markText(mark: {
   sold_at: string | null;
 }): string {
   const parts = ["Продано під час збою"];
-  if (mark.sold_by !== null) parts.push(`продавець: ${mark.sold_by}`);
+  if (mark.sold_by !== null) parts.push(`продавець: ${visible(mark.sold_by)}`);
   if (mark.sold_at !== null && !Number.isNaN(Date.parse(mark.sold_at))) {
     const at = new Date(mark.sold_at);
     parts.push(

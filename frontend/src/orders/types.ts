@@ -1,4 +1,5 @@
 import type { PaymentMethod } from "@/shared/payment";
+import { visible } from "@/shared/visible";
 
 /**
  * Whether a store trades (owner decisions, 2026-10-01). A blocked or archived
@@ -178,11 +179,11 @@ export function shippingText(shipping: Shipping): string {
   if (!shipping.destination) return "Доставку не вказано";
   if (shipping.destination === "ABROAD")
     return shipping.abroad_note
-      ? `За кордон · ${shipping.abroad_note}`
+      ? `За кордон · ${visible(shipping.abroad_note)}`
       : "За кордон";
   const carrier = shipping.carrier ? carrierLabels[shipping.carrier] : "";
   return shipping.waybill
-    ? `${carrier} · ТТН ${shipping.waybill}`
+    ? `${carrier} · ТТН ${visible(shipping.waybill)}`
     : `${carrier} · ТТН ще немає`;
 }
 export const statusLabels: Record<Status, string> = {

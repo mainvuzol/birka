@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import { PriceEditor } from "@/prices/SuggestedPrice";
@@ -169,7 +170,7 @@ export function Stock({
               <option value="">Оберіть склад</option>
               {locations.data.map((location) => (
                 <option key={location.id} value={location.id}>
-                  {location.name}
+                  {visible(location.name)}
                   {location.damaged_returns ? " — брак, не продається" : ""}
                   {!location.is_active ? " — на паузі" : ""}
                 </option>
@@ -181,7 +182,7 @@ export function Stock({
           )}
           {selected && (
             <>
-              <h3>{selected.name}</h3>
+              <h3>{visible(selected.name)}</h3>
               {!selected.is_active && (
                 <p className="notice">
                   Склад на паузі. Залишки доступні для перегляду.
@@ -200,13 +201,16 @@ export function Stock({
               )}
               {corrected && (
                 <p role="status">
-                  Коригування записано: {corrected.target.name} ·{" "}
-                  {corrected.target.size} — {reasonLabels[corrected.reason]},
-                  облік {corrected.adjustment.quantity_before} →{" "}
+                  Коригування записано: {visible(corrected.target.name)} ·{" "}
+                  {visible(corrected.target.size)} —{" "}
+                  {reasonLabels[corrected.reason]}, облік{" "}
+                  {corrected.adjustment.quantity_before} →{" "}
                   {corrected.adjustment.quantity_after}.
                 </p>
               )}
-              {priced && <p role="status">Ціну продажу збережено: {priced}.</p>}
+              {priced && (
+                <p role="status">Ціну продажу збережено: {visible(priced)}.</p>
+              )}
               {refreshing || stock.isPending ? (
                 <p role="status">Завантажуємо залишки…</p>
               ) : stock.error ? (
@@ -229,14 +233,14 @@ export function Stock({
                     <article
                       className="line"
                       key={`${item.product_variant_id}:${item.size_id}`}
-                      aria-label={`${item.display_name} · ${item.size_is_unknown ? "розмір невідомий" : item.size_label}`}
+                      aria-label={`${visible(item.display_name)} · ${item.size_is_unknown ? "розмір невідомий" : visible(item.size_label)}`}
                       style={{ overflowWrap: "anywhere" }}
                     >
-                      <strong>{item.display_name}</strong>
+                      <strong>{visible(item.display_name)}</strong>
                       <span>
                         {item.size_is_unknown
                           ? "Розмір невідомий"
-                          : `Розмір: ${item.size_label}`}
+                          : `Розмір: ${visible(item.size_label)}`}
                       </span>
                       <span>
                         На складі: <strong>{item.quantity}</strong>
@@ -468,7 +472,7 @@ function FoundGoods({
           <option value="">Оберіть розмір</option>
           {(sizes.data ?? []).map((option) => (
             <option key={option.size_id} value={option.size_id}>
-              {option.code}
+              {visible(option.code)}
             </option>
           ))}
         </select>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
+import { visible } from "@/shared/visible";
 
 /**
  * Whether the server answers, as this phone last saw it (ADR-0013 §4.2).
@@ -206,7 +207,7 @@ export function keptText(since: string | undefined, person: string): string {
     since !== undefined && !Number.isNaN(Date.parse(since))
       ? `Чекає відповіді сервера з ${clockOf(since)}. `
       : "";
-  return `${waits}Запишіть цю операцію на папері з позначкою «у телефоні — ${person}» і не вносьте її з паперу: телефон перевірить її сам. Вносьте з паперу, лише якщо застосунок скаже «не записано».`;
+  return `${waits}Запишіть цю операцію на папері з позначкою «у телефоні — ${visible(person)}» і не вносьте її з паперу: телефон перевірить її сам. Вносьте з паперу, лише якщо застосунок скаже «не записано».`;
 }
 
 /** An optional `since` read back from storage: absent, or a moment. */

@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { visible } from "@/shared/visible";
 import { similarText } from "./modelTypes";
 import type { SimilarWord } from "./modelTypes";
 
@@ -23,7 +24,9 @@ export function Similar({
           {word.models.length > 0 && (
             <p>
               {word.left_by_merge ? "Тепер це модель:" : "Моделі з нею:"}{" "}
-              {word.models.map((model) => model.display_name).join("; ")}
+              {word.models
+                .map((model) => visible(model.display_name))
+                .join("; ")}
             </p>
           )}
           {word.existing.map((spelling) => (
@@ -35,7 +38,7 @@ export function Similar({
                 take(word.field, spelling);
               }}
             >
-              Взяти «{spelling}»
+              Взяти «{visible(spelling)}»
             </button>
           ))}
         </div>

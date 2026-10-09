@@ -6,6 +6,7 @@ import { methodHow } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
+import { visible } from "@/shared/visible";
 import {
   connectTelegram,
   telegramInitData,
@@ -211,7 +212,7 @@ export function App(): JSX.Element {
             birka <span> / магазин</span>
           </h1>
         </div>
-        <span>{me.data.display_name}</span>
+        <span>{visible(me.data.display_name)}</span>
       </header>
       {!store ? (
         <section>
@@ -228,8 +229,8 @@ export function App(): JSX.Element {
                   setStoreId(s.id);
                 }}
               >
-                {s.name}
-                <small>{s.code}</small>
+                {visible(s.name)}
+                <small>{visible(s.code)}</small>
                 {s.state !== "ACTIVE" && <small>{stateText(s)}</small>}
               </button>
             ))
@@ -240,7 +241,7 @@ export function App(): JSX.Element {
         // decision, 2026-10-01).
         <section>
           <div className="toolbar">
-            <h2>{store.name}</h2>
+            <h2>{visible(store.name)}</h2>
             <button
               className="quiet"
               onClick={() => {
@@ -897,7 +898,7 @@ function Workspace({
   return (
     <>
       <div className="toolbar">
-        <h2>{store.name}</h2>
+        <h2>{visible(store.name)}</h2>
         <button className="quiet" disabled={blocked} onClick={changeStore}>
           Змінити магазин
         </button>
@@ -1313,8 +1314,8 @@ function Workspace({
             {creditSettled.amount !== null && creditSettled.way !== null
               ? `: ${money(creditSettled.amount)} ${methodHow[creditSettled.way]}`
               : ""}
-            . {creditSettled.credit.customer_name ?? erasedCustomer}: залишок
-            боргу {money(creditSettled.credit.owed)}.
+            . {visible(creditSettled.credit.customer_name ?? erasedCustomer)}:
+            залишок боргу {money(creditSettled.credit.owed)}.
             {creditSettled.amount !== null &&
               creditSettled.way === "CARD" &&
               ` ${chargeOnce(creditSettled.amount)}`}
@@ -1771,7 +1772,9 @@ function Workspace({
                 >
                   <span className="badge">{statusLabels[order.status]}</span>
                   <strong>
-                    {order.items.map((item) => item.display_name).join(", ")}
+                    {order.items
+                      .map((item) => visible(item.display_name))
+                      .join(", ")}
                   </strong>
                   <span>
                     {order.items.reduce((n, item) => n + item.quantity, 0)} шт.
@@ -1924,9 +1927,10 @@ function OrderDetail({
       )}
       {order.items.map((item) => (
         <div className="line" key={item.id}>
-          <strong>{item.display_name}</strong>
+          <strong>{visible(item.display_name)}</strong>
           <span>
-            Розмір: {item.size_label ?? "Не вказано"} · {item.quantity} шт.
+            Розмір: {visible(item.size_label ?? "Не вказано")} · {item.quantity}{" "}
+            шт.
           </span>
           <span>
             {money(item.unit_price)} за одиницю
@@ -2112,7 +2116,7 @@ function OrderDetail({
                   timeStyle: "short",
                 })}{" "}
                 · {shippingKinds[change.kind]} · {shippingText(change)} ·{" "}
-                {change.by}
+                {visible(change.by)}
               </li>
             ))}
           </ul>
@@ -2302,7 +2306,7 @@ function NewOrder({
                   value={l.id}
                   disabled={!l.is_active || !l.can_sell}
                 >
-                  {l.name}
+                  {visible(l.name)}
                   {!l.is_active
                     ? " — на паузі"
                     : !l.can_sell
@@ -2343,8 +2347,8 @@ function NewOrder({
                       value={`${item.product_variant_id}:${item.size_id}`}
                       disabled={item.available_quantity <= 0}
                     >
-                      {item.display_name} · {item.size_label} · доступно{" "}
-                      {item.available_quantity}
+                      {visible(item.display_name)} · {visible(item.size_label)}{" "}
+                      · доступно {item.available_quantity}
                     </option>
                   ))}
                 </select>
@@ -2426,10 +2430,11 @@ function NewOrder({
             key={`${d.line.source_location_id}:${d.line.product_variant_id}:${d.line.size_id}`}
           >
             <strong>
-              {d.name} · {d.size}
+              {visible(d.name)} · {visible(d.size)}
             </strong>
             <span>
-              {d.warehouse} · {d.line.quantity} × {money(d.line.unit_price)}
+              {visible(d.warehouse)} · {d.line.quantity} ×{" "}
+              {money(d.line.unit_price)}
             </span>
             <button
               className="quiet"
@@ -2437,7 +2442,7 @@ function NewOrder({
                 setDraft(draft.filter((_, i) => i !== index));
               }}
             >
-              Видалити {d.name}
+              Видалити {visible(d.name)}
             </button>
           </div>
         ))}

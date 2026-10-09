@@ -5,6 +5,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
 import { markText } from "@/sales/types";
+import { visible } from "@/shared/visible";
 import {
   isTillMethod,
   methodHow,
@@ -251,7 +252,7 @@ export function SalesReport({
           {report.data.stores.map((store) => (
             <Summary
               key={store.store_id}
-              title={store.store_name}
+              title={visible(store.store_name)}
               state={stateLabels[store.store_state]}
               figures={store}
             />
@@ -276,7 +277,7 @@ export function SalesReport({
                 <option value="">Усі магазини</option>
                 {report.data.stores.map((store) => (
                   <option key={store.store_id} value={store.store_id}>
-                    {store.store_name}
+                    {visible(store.store_name)}
                   </option>
                 ))}
               </select>
@@ -421,7 +422,7 @@ function ModelList({
         <ul className="nights" aria-label="Моделі">
           {models.data.models.map((model) => (
             <li key={model.product_variant_id}>
-              <strong>{model.display_name}</strong>
+              <strong>{visible(model.display_name)}</strong>
               <br />
               {model.units} шт. на {money(model.sold)}
               {model.returned_units > 0 &&
@@ -458,16 +459,16 @@ function entryNote(entry: Entry, everyStore: boolean): string {
     const paid = entry.paid_in_parts
       ? `частинами, внесено ${money(entry.money)}${wayText(entry)}`
       : `оплачено повністю${wayText(entry)}`;
-    return everyStore ? `${paid} · «${entry.store_name}»` : paid;
+    return everyStore ? `${paid} · «${visible(entry.store_name)}»` : paid;
   }
   const handed =
     entry.money === "0.00"
       ? "лише зменшило борг"
       : `віддано ${money(entry.money)}${wayText(entry)}`;
   return entry.taken_at_store_id && entry.taken_at_store_id !== entry.store_id
-    ? `${handed} · продав «${entry.store_name}», прийняв «${entry.taken_at_store_name ?? ""}»`
+    ? `${handed} · продав «${visible(entry.store_name)}», прийняв «${visible(entry.taken_at_store_name ?? "")}»`
     : everyStore
-      ? `${handed} · «${entry.store_name}»`
+      ? `${handed} · «${visible(entry.store_name)}»`
       : handed;
 }
 
@@ -483,7 +484,7 @@ function OutageLine({ entry }: { entry: Entry }): JSX.Element | null {
     <>
       <br />
       <small>
-        {markText(outage)} · внесено: {entry.by}
+        {markText(outage)} · внесено: {visible(entry.by)}
       </small>
     </>
   );
@@ -525,10 +526,10 @@ function EntryList({
                     dateStyle: "short",
                     timeStyle: "short",
                   })}{" "}
-                  · {entry.by}
+                  · {visible(entry.by)}
                 </small>
                 <br />
-                {entry.goods.join(", ")}
+                {entry.goods.map(visible).join(", ")}
                 <br />
                 <small>{entryNote(entry, everyStore)}</small>
                 <OutageLine entry={entry} />

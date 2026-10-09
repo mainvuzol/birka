@@ -5,6 +5,7 @@ import { ApiError, api, errorText } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
+import { visible } from "@/shared/visible";
 import {
   resolveInvoiceCommand,
   submitInvoiceCommand,
@@ -255,7 +256,7 @@ export function Invoices({
             <ul aria-label="Борги за постачальниками">
               {summary.data.suppliers.map((debt) => (
                 <li key={debt.supplier.id}>
-                  {debt.supplier.name} — {money(debt.owed)}
+                  {visible(debt.supplier.name)} — {money(debt.owed)}
                   {debt.invoices > 1 &&
                     ` · накладних: ${String(debt.invoices)}`}
                 </li>
@@ -299,7 +300,7 @@ export function Invoices({
           <option value="">Усі постачальники</option>
           {(suppliers.data ?? []).map((supplier) => (
             <option key={supplier.id} value={supplier.id}>
-              {supplier.name}
+              {visible(supplier.name)}
             </option>
           ))}
         </select>
@@ -335,23 +336,23 @@ export function Invoices({
             <article
               className="order-card"
               key={invoice.id}
-              aria-label={`Накладна ${invoice.supplier.name} від ${when(invoice.at)}`}
+              aria-label={`Накладна ${visible(invoice.supplier.name)} від ${when(invoice.at)}`}
             >
-              <strong>{invoice.supplier.name}</strong>
+              <strong>{visible(invoice.supplier.name)}</strong>
               <small>
-                {when(invoice.at)} · {invoice.by}
+                {when(invoice.at)} · {visible(invoice.by)}
                 {invoice.store_id !== store.id &&
-                  ` · магазин «${invoice.store_name}»`}
+                  ` · магазин «${visible(invoice.store_name)}»`}
               </small>
               <p>
                 {invoice.status === "OPEN"
                   ? `Винні ${money(invoice.owed)} з ${money(invoice.amount)}`
                   : `${statusLabels[invoice.status]} · ${money(invoice.amount)}`}
               </p>
-              {invoice.note && <p className="hint">{invoice.note}</p>}
+              {invoice.note && <p className="hint">{visible(invoice.note)}</p>}
               {invoice.sold && (
                 <p className="hint">
-                  За продане позичене: {invoice.sold.label} ×{" "}
+                  За продане позичене: {visible(invoice.sold.label)} ×{" "}
                   {invoice.sold.quantity}
                 </p>
               )}
@@ -362,7 +363,8 @@ export function Invoices({
                   setSelected(invoice);
                 }}
               >
-                Відкрити накладну {invoice.supplier.name} від {when(invoice.at)}
+                Відкрити накладну {visible(invoice.supplier.name)} від{" "}
+                {when(invoice.at)}
               </button>
             </article>
           ))}
@@ -580,23 +582,24 @@ function InvoiceDetail({
           До списку накладних
         </button>
       </div>
-      <h3>{invoice.supplier.name}</h3>
+      <h3>{visible(invoice.supplier.name)}</h3>
       <p className="hint">
-        Записано {when(invoice.at)} · {invoice.by}
-        {invoice.note && ` · ${invoice.note}`}
+        Записано {when(invoice.at)} · {visible(invoice.by)}
+        {invoice.note && ` · ${visible(invoice.note)}`}
       </p>
       {invoice.sold && (
         <p>
-          За продане позичене: {invoice.sold.label} × {invoice.sold.quantity}.
-          Якщо позначили помилково — скасуйте накладну, і товар знову буде «на
-          руках».
+          За продане позичене: {visible(invoice.sold.label)} ×{" "}
+          {invoice.sold.quantity}. Якщо позначили помилково — скасуйте накладну,
+          і товар знову буде «на руках».
         </p>
       )}
       {elsewhere && (
         <p className="notice">
-          Накладна магазину «{invoice.store_name}», який зараз{" "}
+          Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
           {invoice.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
-          Сплачує цей магазин; борг лишається за «{invoice.store_name}».
+          Сплачує цей магазин; борг лишається за «{visible(invoice.store_name)}
+          ».
         </p>
       )}
       <dl className="debt">
@@ -625,7 +628,7 @@ function InvoiceDetail({
         <p className="badge">
           {statusLabels[invoice.status]}
           {invoice.cancelled &&
-            ` ${when(invoice.cancelled.at)} · ${invoice.cancelled.reason} · ${invoice.cancelled.by}`}
+            ` ${when(invoice.cancelled.at)} · ${visible(invoice.cancelled.reason)} · ${visible(invoice.cancelled.by)}`}
         </p>
       )}
       {done && <p role="status">{done}</p>}
@@ -875,8 +878,8 @@ function SetOffForm({
         <p role="alert">{errorText(returns.error)}</p>
       ) : standing.length === 0 ? (
         <p>
-          Цей магазин нічого не повертав постачальнику «{invoice.supplier.name}
-          ».
+          Цей магазин нічого не повертав постачальнику «
+          {visible(invoice.supplier.name)}».
         </p>
       ) : (
         <label>
@@ -957,13 +960,13 @@ function EntryRow({
   return (
     <li>
       {when(entry.at)} · {entryLabels[entry.kind]} {money(entry.amount)} ·{" "}
-      {entry.by}
-      {entry.paid_at && ` · сплатив магазин «${entry.paid_at}»`}
-      {entry.note && ` · ${entry.note}`}
+      {visible(entry.by)}
+      {entry.paid_at && ` · сплатив магазин «${visible(entry.paid_at)}»`}
+      {entry.note && ` · ${visible(entry.note)}`}
       {entry.cancelled ? (
         <p className="badge">
-          Скасовано {when(entry.cancelled.at)} · {entry.cancelled.reason} ·{" "}
-          {entry.cancelled.by}
+          Скасовано {when(entry.cancelled.at)} ·{" "}
+          {visible(entry.cancelled.reason)} · {visible(entry.cancelled.by)}
         </p>
       ) : (
         cancellable && (
@@ -1098,7 +1101,7 @@ function doneText(invoice: Invoice, command: Command): string {
       : `Залишок ${money(invoice.owed)}.`;
   switch (command.kind) {
     case "invoice":
-      return `Накладну «${invoice.supplier.name}» на ${money(invoice.amount)} записано. ${rest}`;
+      return `Накладну «${visible(invoice.supplier.name)}» на ${money(invoice.amount)} записано. ${rest}`;
     case "payment":
       return `Оплату ${money(command.amount)} записано. ${rest}`;
     case "set-off":
@@ -1106,7 +1109,7 @@ function doneText(invoice: Invoice, command: Command): string {
     case "write-off":
       return `Списано ${money(invoice.written_off)}.`;
     case "sold":
-      return `Продано з позиченого: ${invoice.sold?.label ?? ""} × ${String(command.quantity)}. Борг «${invoice.supplier.name}» ${money(invoice.amount)} — у «Накладних».`;
+      return `Продано з позиченого: ${visible(invoice.sold?.label ?? "")} × ${String(command.quantity)}. Борг «${visible(invoice.supplier.name)}» ${money(invoice.amount)} — у «Накладних».`;
   }
 }
 

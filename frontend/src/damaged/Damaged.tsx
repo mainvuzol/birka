@@ -7,6 +7,7 @@ import type { Location, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import { sizeLabel } from "@/returns/types";
 import { SupplierPicker } from "@/suppliers/Picker";
+import { visible } from "@/shared/visible";
 import type { DamagedUnit } from "./types";
 
 /**
@@ -203,20 +204,20 @@ function Unit({
   const trimmed = note.trim();
   const placeName = places.find((location) => location.id === place)?.name;
   return (
-    <article className="damaged-unit" aria-label={unit.display_name}>
+    <article className="damaged-unit" aria-label={visible(unit.display_name)}>
       <strong>
-        {unit.display_name}, {sizeLabel(unit.size)}
+        {visible(unit.display_name)}, {sizeLabel(unit.size)}
       </strong>
       <small>
         Повернули {when(unit.returned_at)} · продано зі складу «
-        {unit.sold_from_location_name}»
+        {visible(unit.sold_from_location_name)}»
       </small>
       {unit.status === "INSPECTING" && unit.status_by && unit.status_at && (
         <small>
-          На перевірці: {unit.status_by}, з {when(unit.status_at)}
+          На перевірці: {visible(unit.status_by)}, з {when(unit.status_at)}
         </small>
       )}
-      {unit.note && <small>Примітка: {unit.note}</small>}
+      {unit.note && <small>Примітка: {visible(unit.note)}</small>}
       {readOnly ? null : asking === "return" && !unit.back_to_sold_from ? (
         <div className="actions">
           <label>
@@ -230,7 +231,7 @@ function Unit({
               <option value="">Оберіть склад</option>
               {places.map((location) => (
                 <option key={location.id} value={location.id}>
-                  {location.name}
+                  {visible(location.name)}
                 </option>
               ))}
             </select>
@@ -245,7 +246,9 @@ function Unit({
               act("return-to-sale", { destination_location_id: place });
             }}
           >
-            {placeName ? `Так, повернути на «${placeName}»` : "Оберіть склад"}
+            {placeName
+              ? `Так, повернути на «${visible(placeName)}»`
+              : "Оберіть склад"}
           </button>
           <button
             className="quiet"
@@ -259,8 +262,8 @@ function Unit({
       ) : asking === "return" ? (
         <div className="actions">
           <p>
-            Повернути в продаж на склад «{unit.sold_from_location_name}», звідки
-            його продали?
+            Повернути в продаж на склад «{visible(unit.sold_from_location_name)}
+            », звідки його продали?
           </p>
           <button
             disabled={busy}
@@ -270,7 +273,7 @@ function Unit({
               });
             }}
           >
-            Так, повернути на «{unit.sold_from_location_name}»
+            Так, повернути на «{visible(unit.sold_from_location_name)}»
           </button>
           <button
             className="quiet"
