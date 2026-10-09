@@ -707,35 +707,27 @@ unsafe (below).
 
 ## The hot path on this server (optional)
 
-The release reading (checklist row 22) is taken on a laptop. Before the
-shops start, it can be repeated on the server itself, in a database of its
-own that is dropped afterwards, while nobody uses the app. Untried on a
-server; the commands are those of the
-[hot path report](hot-path-budget-report.md):
-
-```sh
-docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" birka_perf'
-docker compose run -d --name birka-perf-api --no-deps \
-  -e BIRKA_APP_ENV=ci -e BIRKA_LOG_LEVEL=WARNING \
-  -e BIRKA_DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/birka_perf \
-  api sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 58043 --no-access-log"
-docker compose run --rm --no-deps \
-  -e BIRKA_PERF_DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/birka_perf \
-  -e BIRKA_PERF_API_URL=http://birka-perf-api:58043 -e BIRKA_PERF_GATE=all \
-  api python -m scripts.measure_hot_path
-docker rm -f birka-perf-api
-docker compose exec db sh -c 'dropdb -U "$POSTGRES_USER" birka_perf'
-```
-
-`<user>` and `<password>` are `POSTGRES_USER` and `POSTGRES_PASSWORD` from
-`.env`. Both containers run with the server's own bot token, which the
-harness signs its launch data with. Every case must pass (owner, 2026-10-03).
+The release reading (checklist row 22) is taken on a laptop and in CI, and
+there every case must pass (owner, 2026-10-03). It cannot be repeated on
+the server with the server's own images: the harness
+(`scripts.measure_hot_path`) needs `httpx`, which only the tests install,
+and the images hold the app's locked packages alone (tried in Docker on
+2026-10-09, [report](container-limits-report.md)). Measuring on the server
+would need the harness's own image, or the harness on another client; until
+that is wanted, it is the laptop's and CI's.
 
 ## Security
 
 - **SSH:** keys only. Run `ufw` or the provider's firewall with 22, 80 and
   443 open (`ufw allow 443`, which covers TCP and UDP).
 - **The database** listens only on the compose network.
+- **No container may change its image, gain a privilege, or grow past its
+  memory** ([ADR-0017](../decisions/ADR-0017-what-a-container-may-do.md)):
+  read-only images, every kernel privilege dropped but the one each uses,
+  and a memory limit each. A service that writes somewhere new, or needs
+  more memory, fails in CI's `edge` job first; on the server,
+  `docker compose logs <service>` says `Read-only file system`, or
+  `docker inspect -f '{{.State.OOMKilled}}' <container>` says `true`.
 - **The API and `backup-watch` connect as `birka_app`**, which reads and
   writes rows and nothing more: it may not truncate, create, or alter, drop
   or disable a table or a trigger, so the ledger's triggers hold even

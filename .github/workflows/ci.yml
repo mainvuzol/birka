@@ -666,6 +666,39 @@ jobs:
           docker compose ps -a
           fail "the API is not healthy to Docker after 3 minutes (last: $health)"
 
+      - name: No container may change its image, gain a privilege, or grow past its memory
+        # ADR-0017, as Docker runs it: a read-only image, every kernel
+        # privilege dropped but the one each keeps, none gained by running a
+        # program, and a memory limit. Then, inside the API, a write to its
+        # image refused and no privilege held at all.
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          for service in db api caddy web; do
+            ids=$(docker compose ps -a -q "$service")
+            test -n "$ids" || fail "$service did not run"
+            case "$service" in
+              db) kept="[CAP_CHOWN CAP_DAC_READ_SEARCH CAP_FOWNER CAP_SETGID CAP_SETUID]" ;;
+              caddy) kept="[CAP_NET_BIND_SERVICE]" ;;
+              *) kept="[]" ;;
+            esac
+            for id in $ids; do
+              shape=$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.CapAdd}} {{.HostConfig.SecurityOpt}} {{.HostConfig.Memory}}' "$id")
+              echo "$service: $shape"
+              case "$shape" in
+                "true [ALL] $kept [no-new-privileges:true] 0") fail "$service has no memory limit" ;;
+                "true [ALL] $kept [no-new-privileges:true] "*) ;;
+                *) fail "$service is not limited as compose says: $shape" ;;
+              esac
+            done
+          done
+          if docker compose exec -T api sh -c 'touch /app/probe' 2>/dev/null; then
+            fail "the API can write its own image"
+          fi
+          docker compose exec -T api sh -c 'touch /tmp/probe' || fail "the API has no /tmp to write"
+          caps=$(docker compose exec -T api grep CapEff /proc/1/status)
+          echo "$caps"
+          grep -q '0000000000000000' <<<"$caps" || fail "the API holds a kernel privilege: $caps"
+
       - name: What the edge sends
         run: |
           fail() { echo "::error::$*"; exit 1; }
