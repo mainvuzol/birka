@@ -140,7 +140,7 @@ The live E2E log holds no query string at all.
   - launch data replayed within its hour;
   - the lost phone's Telegram session;
   - no per-person limit once signed in;
-  - the API as the database's owner;
+  - the API as the database's owner (closed on 2026-10-09: ADR-0016);
   - container defaults;
   - a strict content security policy;
   - floating images;

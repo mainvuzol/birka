@@ -240,9 +240,13 @@ passed restores with them.
    `$POSTGRES_PASSWORD` typed there is empty, and `pg_restore` would ask for
    a password, or wait for ever unattended (rehearsal, 2026-10-09). No output
    means it held.
-5. If the code is newer than the backup:
+5. Bring the schema up to the code, when the code is newer than the
+   backup (nothing happens when it is not), and give the app's role its
+   rights: a backup holds none, and the API cannot work without them
+   ([ADR-0016](../decisions/ADR-0016-the-apps-database-role.md)):
    ```sh
-   docker compose run --rm --no-deps api alembic upgrade head
+   docker compose --profile ops run --rm --no-deps ops alembic upgrade head
+   docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role
    ```
 6. `docker compose up -d`, then sign in and open a stock view. Delete the
    plaintext `birka.dump` once the shop is running.

@@ -68,6 +68,7 @@ In `.env`:
 | `BIRKA_APP_ENV` | `production`, the default since 2026-10-03. The API then refuses to start without the bot token and a session secret of at least 32 bytes, and hides its API docs. |
 | `BIRKA_DOMAIN` | the domain, e.g. `shop.example.com` |
 | `POSTGRES_PASSWORD` | long and random: `openssl rand -base64 32` |
+| `BIRKA_APP_DB_PASSWORD` | another, the same way. The API and `backup-watch` connect as `birka_app`, which reads and writes rows and may change nothing else; the owner above migrates and backs up ([ADR-0016](../decisions/ADR-0016-the-apps-database-role.md)) |
 | `BIRKA_TELEGRAM_BOT_TOKEN` | from @BotFather |
 | `BIRKA_SESSION_SECRET` | `openssl rand -base64 48` |
 | `BIRKA_BACKUP_AGE_RECIPIENTS` | the owner's public key, `age1…` |
@@ -84,12 +85,16 @@ export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)   # the version
 docker compose build
 docker compose --profile ops build ops
 docker compose up -d --wait db
-docker compose run --rm --no-deps api alembic upgrade head
-docker compose run --rm --no-deps api alembic check     # "No new upgrade operations detected."
+docker compose --profile ops run --rm --no-deps ops alembic upgrade head
+docker compose --profile ops run --rm --no-deps ops alembic check     # "No new upgrade operations detected."
+docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role   # "birka_app: created", "… tables: read and write"
 ```
 
 Migrations never run by themselves when the API starts. Each one is a step
-a person takes.
+a person takes, from `ops`, as the database's owner: the API's own role may
+not change the schema. `scripts.app_role` gives that role, `birka_app`, its
+password from `.env` and its rights, and changes nothing when run again
+(ADR-0016).
 
 ### 4. Start it
 
@@ -255,7 +260,7 @@ What each message means, for whoever looks after the server:
 | The bot says | Look at |
 |---|---|
 | the app's server does not answer | `docker compose ps` and `docker compose logs --since 15m api`: a setting the API refuses to start with is named in its last lines |
-| the database does not answer | `docker compose ps db`, `docker compose logs --since 15m db`, and the disk (`df -h /`) |
+| the database does not answer | `docker compose ps db`, `docker compose logs --since 15m db`, and the disk (`df -h /`). If `docker compose logs --since 15m api` says `InvalidPasswordError` or `InsufficientPrivilegeError` beside `database.unreachable`, the database answers but refuses the API's role: missing, as after a restore, or without its rights, or with a password not the one in `.env`. Then `docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role` |
 | the database is not updated for this version | the migration was not run, or failed: [a new version](#a-new-version) |
 | the disk is running out | `docker system df`, then `docker image prune -f && docker builder prune -f --filter until=720h`; the backups directory; a night that kept failing keeps every copy (backup runbook) |
 | nobody can sign in, maybe the clock | `timedatectl`: `System clock synchronized: yes` |
@@ -551,11 +556,17 @@ docker compose --profile ops run --rm ops                 # a backup now, before
 git -C /srv/birka fetch && git -C /srv/birka checkout <the new release commit>
 export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)
 docker compose build && docker compose --profile ops build ops
-docker compose run --rm --no-deps api alembic upgrade head   # if this fails, stop here: see below
+docker compose --profile ops run --rm --no-deps ops alembic upgrade head   # if this fails, stop here: see below
+docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role   # the rights, new tables too
 docker compose up -d
 curl -fsS --retry 30 --retry-delay 2 --retry-all-errors https://<domain>/api/v1/ready   # 502 while the API starts
 docker image prune -f && docker builder prune -f --filter until=720h   # what the old images left
 ```
+
+**Once, from a release before the app's own role** (none is installed):
+`BIRKA_APP_DB_PASSWORD` goes into `.env` before the update (step 2). Without
+it compose refuses every command, naming it; the update's `scripts.app_role`
+then creates the role ([ADR-0016](../decisions/ADR-0016-the-apps-database-role.md)).
 
 **The backup tools are installed once and reused.** The `ops` image installs
 the PostgreSQL 17 client and `age` before the code, so a release reuses them
@@ -655,7 +666,7 @@ unsafe (below).
      only then the old code is checked out:
      ```sh
      docker compose --profile ops run --rm ops       # a backup first
-     docker compose run --rm --no-deps api alembic downgrade <the previous release's head revision>
+     docker compose --profile ops run --rm --no-deps ops alembic downgrade <the previous release's head revision>
      git -C /srv/birka checkout <the previous release commit>
      export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)
      docker compose build && docker compose --profile ops build ops
@@ -680,10 +691,13 @@ unsafe (below).
      docker compose rm -sf db && docker volume rm birka_db_data   # the database, and every row since the backup
      docker compose up -d --wait db
      docker compose exec -T db sh -c 'pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --exit-on-error --single-transaction --no-owner --no-privileges' < backups/birka.dump
+     docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role   # a backup holds no rights
      docker compose up -d
      curl -fsS --retry 30 --retry-delay 2 --retry-all-errors https://<domain>/api/v1/ready
      ```
-     `birka_db_data` is the database's volume (`docker volume ls`). Then
+     `birka_db_data` is the database's volume (`docker volume ls`). A
+     release before the app's own role has no `scripts.app_role`, and needs
+     none: its API connects as the database's owner. Skip that line there. Then
      restoring for real's step 7, the customers erased since that night
      (on a release before `0038` there is no erasing: the owner erases them
      after the next update); cron and the owner's computer go on as before.
@@ -720,6 +734,12 @@ harness signs its launch data with. Every case must pass (owner, 2026-10-03).
 - **SSH:** keys only. Run `ufw` or the provider's firewall with 22, 80 and
   443 open (`ufw allow 443`, which covers TCP and UDP).
 - **The database** listens only on the compose network.
+- **The API and `backup-watch` connect as `birka_app`**, which reads and
+  writes rows and nothing more: it may not truncate, create, or alter, drop
+  or disable a table or a trigger, so the ledger's triggers hold even
+  against the API ([ADR-0016](../decisions/ADR-0016-the-apps-database-role.md)).
+  The owner, a superuser of the database's container, is used only by `ops`
+  and the `db` container: migrations, backups, restores.
 - **`.env`** is `chmod 600`. The bot token and session secret are in it,
   and nowhere in the repository.
 - **Only Telegram may show the app in a frame** (`frame-ancestors`). The

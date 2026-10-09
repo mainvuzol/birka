@@ -70,7 +70,7 @@ Found by the independent code reviews (2026-09-28). The fixes are in the report;
 - **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; on 2026-10-09, with every answer by size read again at the approval, at most 8.6 s, and the 2026-10-08 method up to 9.5 s the same hour on a busier laptop; measured again in the review's third round the same day, by size at most 8.48 s and the 2026-10-08 method up to 9.87 s, 0.13 s under the 10 s rule ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)); see [the JSON stock import](#the-json-stock-import--2026-10-08).
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
 - **Lines are stored verbatim, including bidirectional and zero-width characters.** Since 2026-10-08 «Початкові залишки» shows every line, and every string from a file, through a guard that marks them visibly (ADR-0014 §15). The catalogue screens still show raw text unguarded; they are left for a change of their own.
-- **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
+- **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. Since 2026-10-09 the API's own role may not truncate at all (ADR-0016); the owner still may. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
 
 ## The till — 2026-09-29
 
@@ -612,9 +612,25 @@ See the [report](public-hardening-report.md) and
   still keep the API busy: the catalogue parser runs on the only event loop.
   Since 2026-10-03 a statement is cancelled after 30 seconds, so the
   database is not held for long.
-- **The API connects to PostgreSQL as the owner of every table.** The
-  append-only triggers do not stop a compromised API. A separate role with
-  only what the app needs is a change of its own.
+- **The API connected to PostgreSQL as the owner of every table**, in fact
+  as a superuser, the official image's `POSTGRES_USER`. **Closed on
+  2026-10-09** ([ADR-0016](../decisions/ADR-0016-the-apps-database-role.md)):
+  the API and `backup-watch` connect as `birka_app`, which reads and writes
+  rows and may not truncate, create, or alter, drop or disable a table or a
+  trigger, nor make a temporary table that a trigger would read in a real
+  one's place. What stays:
+  - a compromised API still reads and writes every row the app can, the
+    customers' names and phones among them; it may change its own password
+    and defaults until the command runs again, connect to the cluster's
+    other databases, where it holds no table, and make large objects;
+  - `ops` and the database's container hold the superuser's password;
+  - a restore that skips `scripts.app_role` leaves the API refused: every
+    request fails until it is run, and the bot says the database does not
+    answer (the API's log says `InvalidPasswordError` or
+    `InsufficientPrivilegeError`);
+  - the trigger functions name their tables without a schema: safe while
+    the role may create nothing in the app's database, which the command
+    checks each time it runs.
 - **Containers run with Docker's defaults:** a writable root filesystem, the
   default capabilities, no memory limits.
 - **The content security policy names only `frame-ancestors`.** A strict one

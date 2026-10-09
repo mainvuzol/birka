@@ -66,7 +66,11 @@ services:
       # server whose .env forgot the line is still guarded; only a laptop
       # sets `local`.
       BIRKA_APP_ENV: ${BIRKA_APP_ENV:-production}
-      BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
+      # As `birka_app`, which reads and writes rows and nothing more: not the
+      # database's owner, who alone may change the schema, truncate, or turn
+      # off the triggers that keep the ledger (ADR-0016). Its rights are
+      # given by `scripts.app_role`, from `ops`.
+      BIRKA_DATABASE_URL: postgresql+asyncpg://birka_app:${BIRKA_APP_DB_PASSWORD:?BIRKA_APP_DB_PASSWORD is required (server runbook, step 2)}@db:5432/${POSTGRES_DB:-birka}
       BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN:?bot token is required}
       BIRKA_SESSION_SECRET: ${BIRKA_SESSION_SECRET:?session secret is required}
       BIRKA_SENTRY_DSN: ${BIRKA_SENTRY_DSN:-}
@@ -97,6 +101,9 @@ services:
   # The nightly backup, and restore drills (backup-restore-runbook.md):
   #   docker compose --profile ops run --rm ops          # what cron runs daily
   #   docker compose --profile ops run --rm ops python -m scripts.restore_drill /backups/<file>.dump
+  # And what only the database's owner may do (server runbook):
+  #   docker compose --profile ops run --rm --no-deps ops alembic upgrade head
+  #   docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role
   # It needs the database and the owner's age public key, nothing else: no
   # bot token, no session secret, and never the owner's private key. Each
   # night it writes one row, its own record, to `backup_run`, which is all
@@ -117,7 +124,10 @@ services:
       db:
         condition: service_healthy
     environment:
+      # As the database's owner: the backup, its drill, the migrations, and
+      # the rights of `birka_app`, whose password it sets (ADR-0016).
       BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
+      BIRKA_APP_DB_PASSWORD: ${BIRKA_APP_DB_PASSWORD:-}
       BIRKA_RESTORE_SCRATCH_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/postgres
       # Unset, the nightly run fails: copies leave the server only encrypted.
       BIRKA_BACKUP_AGE_RECIPIENTS: ${BIRKA_BACKUP_AGE_RECIPIENTS:-}
@@ -145,7 +155,8 @@ services:
     command: ["python", "-m", "scripts.backup_watch"]
     environment:
       BIRKA_APP_ENV: ${BIRKA_APP_ENV:-production}
-      BIRKA_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-birka}
+      # As `birka_app`, like the API: it reads and writes rows (ADR-0016).
+      BIRKA_DATABASE_URL: postgresql+asyncpg://birka_app:${BIRKA_APP_DB_PASSWORD:?BIRKA_APP_DB_PASSWORD is required (server runbook, step 2)}@db:5432/${POSTGRES_DB:-birka}
       BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN:?bot token is required}
       # The site whose certificate it watches (owner decision, 2026-10-03:
       # the bot tells the owner a week before it runs out). It asks Caddy on

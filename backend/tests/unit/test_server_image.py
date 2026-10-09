@@ -259,6 +259,28 @@ def test_the_running_api_and_watcher_never_hide_the_build_they_are() -> None:
         assert environment["BIRKA_RELEASE"] is None, name
 
 
+# --- who connects as whom (ADR-0016) -------------------------------------------
+
+
+def test_what_faces_the_shops_connects_as_birka_app_and_only_ops_as_the_owner() -> None:
+    """The API and the watcher read and write rows as `birka_app`; the
+    owner, a superuser of the database's container, is for `ops` alone:
+    the migrations, the backups, and the role's own rights."""
+    services = _services()
+    for name in ("api", "backup-watch"):
+        environment = services[name]["environment"]
+        url = environment["BIRKA_DATABASE_URL"]
+        assert url.startswith("postgresql+asyncpg://birka_app:${BIRKA_APP_DB_PASSWORD:?"), name
+        assert "POSTGRES_PASSWORD" not in url and "POSTGRES_USER" not in url, name
+        assert "BIRKA_APP_DB_PASSWORD" not in environment, name
+    ops = services["ops"]["environment"]
+    assert ops["BIRKA_DATABASE_URL"].startswith(
+        "postgresql+asyncpg://${POSTGRES_USER:-birka}:${POSTGRES_PASSWORD}@db"
+    )
+    assert ops["BIRKA_APP_DB_PASSWORD"] == "${BIRKA_APP_DB_PASSWORD:-}"
+    assert "app_db_password" in Settings.model_fields
+
+
 # --- the watcher --------------------------------------------------------------
 
 

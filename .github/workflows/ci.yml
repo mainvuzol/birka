@@ -166,7 +166,7 @@ jobs:
       - name: The server's compose file is valid, every service and profile
         # Nothing else reads it before a server does (server-runbook.md).
         run: |
-          POSTGRES_PASSWORD=ci BIRKA_TELEGRAM_BOT_TOKEN=ci BIRKA_SESSION_SECRET=ci \
+          POSTGRES_PASSWORD=ci BIRKA_APP_DB_PASSWORD=ci BIRKA_TELEGRAM_BOT_TOKEN=ci BIRKA_SESSION_SECRET=ci \
             docker compose -f infra/docker-compose.yml --profile ops config --quiet
 
       - name: Build the ops image, and the API image beside it
@@ -203,9 +203,12 @@ jobs:
               -e BIRKA_DATABASE_URL=postgresql+asyncpg://birka:birka@localhost:5432/birka \
               -e BIRKA_RESTORE_SCRATCH_URL=postgresql+asyncpg://birka:birka@localhost:5432/postgres \
               -e BIRKA_BACKUP_AGE_RECIPIENTS="${RECIPIENT:-}" \
+              -e BIRKA_APP_DB_PASSWORD=ci-app-role-password-made-long-enough-32 \
               birka-ops "$@"
           }
           ops alembic upgrade head
+          # The rights of `birka_app`, which the watcher below connects as.
+          ops python -m scripts.app_role
           ops python -m scripts.seed_organization --telegram-user-id 1000001
           # The owner's key pair: made here only because CI plays the owner.
           # age-keygen prints the public key on stderr; the key file is 0600.
@@ -215,12 +218,13 @@ jobs:
           cat backups/last-run.json
 
       - name: The owner's section sees the night, and the watcher starts and stops cleanly
-        # What the `backup-watch` service runs, from the API image. The night
-        # above must read as OK. Then the watcher runs a few looks — nothing
-        # is news, so nothing goes to Telegram — and is stopped as Docker
-        # stops it: SIGTERM to PID 1, which it must honour, not wait out.
+        # What the `backup-watch` service runs, from the API image, and as
+        # it connects: as `birka_app` (ADR-0016). The night above must read
+        # as OK. Then the watcher runs a few looks — nothing is news, so
+        # nothing goes to Telegram — and is stopped as Docker stops it:
+        # SIGTERM to PID 1, which it must honour, not wait out.
         run: |
-          DB=postgresql+asyncpg://birka:birka@localhost:5432/birka
+          DB=postgresql+asyncpg://birka_app:ci-app-role-password-made-long-enough-32@localhost:5432/birka
           docker run --rm --network host -e BIRKA_DATABASE_URL=$DB birka-api \
             python -m scripts.backup_watch --status
           docker run -d --name watch --network host -e BIRKA_DATABASE_URL=$DB \
@@ -457,12 +461,17 @@ jobs:
         working-directory: backend
         run: |
           alembic upgrade head
+          BIRKA_APP_DB_PASSWORD=ci-e2e-app-role-password-long-enough-32 python -m scripts.app_role
           python -m scripts.seed_orders_e2e
           test -s "$BIRKA_E2E_FIXTURE"
 
       - name: Start the API
         working-directory: backend
+        # As `birka_app`, as on the server: every journey proves its rights
+        # are enough (ADR-0016). The seed and the specs' server commands
+        # stay the owner.
         run: |
+          BIRKA_DATABASE_URL=postgresql+asyncpg://birka_app@127.0.0.1:55442/birka_orders_ui \
           nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 58042 \
             > /tmp/birka-e2e-api.log 2>&1 &
           for attempt in $(seq 30); do
@@ -554,6 +563,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: ci-edge
+      BIRKA_APP_DB_PASSWORD: ci-edge-app-role-password-long-enough-32
       BIRKA_TELEGRAM_BOT_TOKEN: "123456:ci-not-a-real-token"
       # 32 bytes or more, or the API refuses to start as `production`.
       BIRKA_SESSION_SECRET: ci-edge-session-secret-that-is-long-enough-32
@@ -600,14 +610,32 @@ jobs:
           status_of() { curl -s -o /dev/null -w '%{http_code}' "$@" || true; }
           base=http://localhost
 
-          # Ready means migrated too, so the schema first, as the runbook does.
-          docker compose run --rm --no-deps api alembic upgrade head
+          # Ready means migrated, and the API's role given its rights, so
+          # both first, from `ops`, as the runbook does.
+          docker compose --profile ops run --rm --no-deps ops alembic upgrade head
+          docker compose --profile ops run --rm --no-deps ops python -m scripts.app_role
           for attempt in $(seq 15); do
             code=$(status_of "$base/api/v1/ready")
             if [ "$code" = 200 ]; then break; fi
             sleep 2
           done
           test "$code" = 200 || fail "/api/v1/ready answered $code through Caddy, not 200"
+
+          # The API connects as `birka_app`, which is no superuser (ADR-0016).
+          who=$(docker compose exec -T api python -c "
+          import asyncio
+          from sqlalchemy import text
+          from app.core.config import get_settings
+          from app.core.db import create_engine
+          async def main():
+              engine = create_engine(get_settings())
+              async with engine.connect() as connection:
+                  row = (await connection.execute(text(
+                      'SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user'))).one()
+              await engine.dispose()
+              print(*row)
+          asyncio.run(main())")
+          test "$who" = "birka_app False" || fail "the API connects as '$who', not as birka_app"
 
           # The API's own status is for backup-watch on the compose network:
           # it answers there, and never through Caddy.
