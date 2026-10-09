@@ -52,7 +52,7 @@ it (Risks).
 |---|---|
 | A year after a debt was paid or returned, three after a write-off | `credit/erasure.py` `erase_expired`, run hourly by the `backup-watch` service, and at once when it starts; 500 debts a transaction, `SKIP LOCKED` |
 | The name and phone erased, every sum kept | `customer_credit.customer_name`, `customer_phone`, `phone_digits` set to NULL with `customer_erased_at`; the ledger and the sums untouched |
-| On the customer's request, by the owner | `POST /credits/{id}/erase-customer`, `credit:erase_customer` (the owner's role, network-wide): every closed debt of the network under the same phone; an open debt refused, `STILL_OWED`; «Стерти дані покупця» on a closed debt |
+| On the customer's request, by the owner | `POST /credits/{id}/erase-customer`, `credit:erase_customer` (the owner's role): the network's owner erases every closed debt of the network under the same phone, a store's owner every closed debt of that store; an open debt refused, `STILL_OWED`; «Стерти дані покупця» on a closed debt |
 | A write-off's reason erased with the name | `credit_entry.note` set to NULL in the same transaction; the reason no longer copied into the audit log |
 | The hint | `shared/NoCustomerData`: «Без імен і телефонів покупців.» under ten fields (ADR-0015 §7) |
 | The owner's copies kept 3 months | `infra/pull-backups.sh` deletes the nights older than 3 months on every run, keeping the newest night that can be restored; a run that could not reach the server or found a damaged copy still deletes by date, then fails saying why |
@@ -78,27 +78,29 @@ On the laptop, in the isolated environment (PostgreSQL 16.2), 2026-10-09:
   clean. Its downgrade refuses once a customer is erased, and changes
   nothing (`test_0038_goes_down_only_while_no_customer_is_erased`).
 - **Backend:** the full suite, 3 296 passed, 1 skipped, before the review's
-  fixes; then the touched files again. New: `test_customer_erasure.py` (18
+  fixes; then the touched files again. New: `test_customer_erasure.py` (19
   tests: the terms to the second, 29 February, batches and a held debt, the
   owner's erasure across stores and spellings of a phone and not another
-  network, every refusal, the reads after, a return after, each database
+  network, a store owner's within their store, every refusal, the reads after, a return after, each database
   guard, the race of the two erasures, the watcher erasing as it starts,
   the downgrade), `test_pull_backups.py` (10, 7 new), the watcher's job, the
   role matrix.
 - **E2E:** the touched specs, 51 journeys, on a phone profile against the
   real API: the owner erasing, «Скасувати», the erased card and its search,
-  a written-off debt's reason, no button for a store-level owner or on an
-  open debt, and the hint as each field's description and not its name.
+  a written-off debt's reason, a store's owner erasing in their store, no
+  button without the permission or on an open debt, and the hint as each
+  field's description and not its name.
 - **Mutation testing,** each mutant alone, its file restored and the tree
   compared with a checksum after:
-  - 23 in the server (terms, boundaries, locking, the eraser, open debts,
+  - 27 in the server (terms, boundaries, locking, the eraser, open debts,
     permissions, spellings, networks, grouping, search, the audit, batches,
-    the commit, the watcher, the downgrade): all caught, one after a test
-    was added for the flat list's search;
+    the commit, the watcher, the downgrade, and after C-c a store owner's
+    reach and refusal): all caught, two after tests were added (the flat
+    list's search; a refusal before any debt is looked for);
   - 8 in the database's guards, each in a scratch database of its own, with
     an unchanged control that passed: all caught;
   - 10 in the collector: all caught;
-  - 12 in the screens, each after a fresh E2E database, with an unchanged
+  - 14 in the screens, each after a fresh E2E database, with an unchanged
     control that passed: all caught.
 
 The whole of CI, run locally: below.
@@ -132,10 +134,11 @@ chose said so in its description («Сплачені, повернені й сп
 стираються одразу…», «Причина списання боргу стирається разом з ім'ям
 покупця»). The business rules now quote each option's description.
 
-**Readings awaiting the owner** (business rules, C-a to C-d): the request
-reaching the whole network by phone; an open debt keeping the customer once
-it closes; only the network's owner erasing; which fields carry the hint.
-Each is built as the recommended reading.
+**Four readings, asked at the end** (business rules, C-a to C-d): the
+request reaching the whole network by phone, an open debt keeping the
+customer once it closes, and the fields with the hint were confirmed as
+built. **C-c was changed by the owner:** a store's owner erases too, in
+their own store; built the same day, with its tests and mutants.
 
 ## Where the build departs from the design
 

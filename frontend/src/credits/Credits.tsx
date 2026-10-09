@@ -49,9 +49,10 @@ const minSearch = 2;
  * ADR-0012 §B12, G23).
  *
  * A closed debt's customer is erased a year after it was paid or returned,
- * three after it was written off, or at once by the network's owner when the
- * customer asks; the debt then reads «Покупця стерто», with every sum (owner
- * decisions, 2026-10-09; ADR-0015).
+ * three after it was written off, or at once by the owner when the customer
+ * asks: the network's owner in every store, a store's owner in that store.
+ * The debt then reads «Покупця стерто», with every sum (owner decisions,
+ * 2026-10-09; ADR-0015).
  */
 export function Credits({
   store,
@@ -70,7 +71,10 @@ export function Credits({
   readOnly?: boolean;
   /** The owner of the network, who writes off a debt of a store that does not trade. */
   networkOwner?: boolean;
-  /** The network's owner, who erases a closed debt's customer who asks. */
+  /**
+   * The network's owner, who erases a closed debt's customer who asks in
+   * every store; a store's owner does it in that store alone.
+   */
   mayErase?: boolean;
 }): JSX.Element {
   const cache = useQueryClient();
@@ -324,7 +328,7 @@ function erasedText(result: Erasure): string {
       ? ` Відкритих боргів цього покупця: ${String(result.still_open)}. З них дані не стирають; коли їх закриють, стерти можна так само.`
       : "";
   return result.erased > 0
-    ? `Дані покупця стерто із закритих боргів: ${String(result.erased)}.${open}`
+    ? `Дані покупця стерто із закритих боргів${result.network ? "" : " цього магазину"}: ${String(result.erased)}.${open}`
     : `Дані покупця вже стерто.${open}`;
 }
 
@@ -406,6 +410,12 @@ function Debt({
       : networkOwner;
   const owed = kopecks(credit.owed) ?? 0n;
   const working = busy || pending !== null;
+  // A store's owner erases in their store, while it trades (owner,
+  // 2026-10-09); the network's owner anywhere.
+  const erasesHere =
+    !readOnly &&
+    !elsewhere &&
+    store.permissions.includes("credit:erase_customer");
 
   async function send(
     body:
@@ -678,7 +688,7 @@ function Debt({
           )}
         </fieldset>
       )}
-      {mayErase &&
+      {(mayErase || erasesHere) &&
         credit.status !== "OPEN" &&
         credit.customer_erased_at === null && (
           <fieldset disabled={working || erasing === "sending"}>
@@ -686,8 +696,9 @@ function Debt({
             {erasing ? (
               <div className="notice">
                 <p>
-                  Ім’я й телефон покупця зникнуть з усіх закритих боргів мережі
-                  з цим телефоном. Суми лишаються. Скасувати це не можна.
+                  Ім’я й телефон покупця зникнуть з усіх закритих боргів{" "}
+                  {mayErase ? "мережі" : "цього магазину"} з цим телефоном. Суми
+                  лишаються. Скасувати це не можна.
                 </p>
                 <div className="actions">
                   <button

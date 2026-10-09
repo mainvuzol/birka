@@ -192,10 +192,11 @@ its own.
   [ADR-0015](.ai/decisions/ADR-0015-customer-data-retention.md)): a year
   after a debt was paid or returned, three after a write-off, the
   `backup-watch` service erases the name and phone hourly, with a
-  write-off's reason; every sum stays. The network's owner
-  (`credit:erase_customer`, network-wide only) erases a customer who asks
-  at `POST /api/v1/credits/{id}/erase-customer`: every closed debt of the
-  network under the same phone; an open one is refused, `STILL_OWED`. An
+  write-off's reason; every sum stays. The owner (`credit:erase_customer`)
+  erases a customer who asks at `POST /api/v1/credits/{id}/erase-customer`:
+  every closed debt under the same phone, the network's owner in the whole
+  network, a store's owner in that store (`network` in the answer); an open
+  one is refused, `STILL_OWED`. An
   erased debt reads `customer_name`, `customer_phone` and, by customer,
   `phone_digits` as `null`, with `customer_erased_at`, and is found by
   neither.
@@ -205,7 +206,8 @@ its own.
 In the app: «Оплата частинами» at the till and on collecting an order, and a
 «Борги» section for `sale:credit`, where «Готівка», «Картка» and «Переказ»
 take a payment. Only `credit:write_off` writes a debt off, and only the
-network's owner erases a customer («Стерти дані покупця»). See the
+owner erases a customer («Стерти дані покупця»), a store's owner in that
+store. See the
 [credit report](.ai/project-memory/customer-credit-report.md), the
 [credit screens report](.ai/project-memory/credit-screens-report.md) and the
 [customers' data report](.ai/project-memory/customer-data-retention-report.md).

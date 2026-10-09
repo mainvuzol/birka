@@ -92,8 +92,10 @@ export interface CustomerPage {
 export interface Erasure {
   /** Closed debts of the network whose customer was erased now. */
   erased: number;
-  /** The customer's open debts, which keep them until they are closed. */
+  /** The customer's open debts within the same reach, which keep them. */
   still_open: number;
+  /** The whole network (its owner's), or the debt's store alone (a store's owner's). */
+  network: boolean;
   credit: Credit;
 }
 

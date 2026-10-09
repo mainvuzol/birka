@@ -70,8 +70,9 @@ class Permission(StrEnum):
     SALE_CREDIT = "sale:credit"
     # Writing off what a customer will not pay, with a reason. The owner's.
     CREDIT_WRITE_OFF = "credit:write_off"
-    # Erase a closed debt's customer at their request (owner decision,
-    # 2026-10-09; ADR-0015): network-wide only.
+    # Erase a closed debt's customer at their request (owner decisions,
+    # 2026-10-09; ADR-0015): network-wide in the whole network, in one
+    # store in that store.
     CREDIT_ERASE_CUSTOMER = "credit:erase_customer"
 
     # Returning goods to a supplier, cancelling such a return, and keeping

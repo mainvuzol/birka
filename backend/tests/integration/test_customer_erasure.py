@@ -5,7 +5,8 @@ and the watcher's erasure against real PostgreSQL.
   closed; a written-off one three.
 - Then the name and phone are erased, and every sum stays.
 - The owner erases a closed debt's customer at once when the customer asks:
-  every closed debt of the network under their phone. An open debt keeps them.
+  every closed debt under their phone, the network's owner in the network,
+  a store's owner in that store. An open debt keeps them.
 - A write-off's reason is erased with the customer, and never copied to the
   audit log.
 
@@ -333,7 +334,7 @@ async def test_the_owner_erases_every_closed_debt_of_the_network_under_the_custo
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert (body["erased"], body["still_open"]) == (3, 1)
+    assert (body["erased"], body["still_open"], body["network"]) == (3, 1, True)
     assert body["credit"]["customer_name"] is None
     assert (await row(maker, there)).customer_name is None
     assert (await read(maker, shops, unpaid))["entries"][-1]["note"] is None
@@ -363,32 +364,60 @@ async def test_an_open_debt_keeps_its_customer_even_when_asked(maker):
     assert (await row(maker, credit_id)).customer_name == NAME
 
 
-async def test_only_the_networks_owner_erases_a_customer(maker):
+async def test_only_an_owner_erases_a_customer(maker):
     shops = await make_two_shops(maker)
     credit_id = await in_parts(maker, shops)
     await paid_off(maker, shops, credit_id)
 
     by_seller = await erase_on_request(maker, shops.scope(shops.primary_store), credit_id)
-    by_store_owner = await erase_on_request(
-        maker, shops.scope(shops.primary_store, OWNER), credit_id
+    # Refused before any debt is looked for.
+    unknown_to_a_seller = await erase_on_request(
+        maker, shops.scope(shops.primary_store), str(uuid.uuid4())
     )
-    by_network_manager = await erase_on_request(
-        maker,
-        RequestScope(
-            user_id=shops.user_id,
-            organization_id=shops.organization_id,
-            org_permissions=DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER],
-        ),
-        credit_id,
+    network_manager = RequestScope(
+        user_id=shops.user_id,
+        organization_id=shops.organization_id,
+        org_permissions=DEFAULT_ROLE_PERMISSIONS[RoleCode.MANAGER],
+    )
+    by_network_manager = await erase_on_request(maker, network_manager, credit_id)
+    unknown_to_a_manager = await erase_on_request(maker, network_manager, str(uuid.uuid4()))
+    by_the_other_stores_owner = await erase_on_request(
+        maker, shops.scope(shops.child_store, OWNER), credit_id
     )
     other = await make_two_shops(maker)
     by_another_network = await erase_on_request(maker, network_owner(other), credit_id)
 
     assert by_seller.status_code == 403
-    assert by_store_owner.status_code == 403
+    assert unknown_to_a_seller.status_code == 403
     assert by_network_manager.status_code == 403
+    assert unknown_to_a_manager.status_code == 403
+    assert by_the_other_stores_owner.status_code == 403
     assert by_another_network.status_code == 404
     assert (await row(maker, credit_id)).customer_name == NAME
+
+
+async def test_a_stores_owner_erases_the_customer_in_that_store_alone(maker):
+    """Owner, 2026-10-09 (C-c): the owner of one store erases its debts; the
+    network's owner, every store's."""
+    shops = await make_two_shops(maker)
+    here = await in_parts(maker, shops)
+    owing_here = await in_parts(maker, shops)
+    there = await in_parts(maker, shops, store=shops.child_store, phone="0671234567")
+    await paid_off(maker, shops, here)
+    await paid_off(maker, shops, there, store=shops.child_store)
+
+    response = await erase_on_request(maker, shops.scope(shops.primary_store, OWNER), here)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["erased"], body["still_open"], body["network"]) == (1, 1, False)
+    assert (await row(maker, here)).customer_erased_by_user_id == shops.user_id
+    assert (await row(maker, owing_here)).customer_name == NAME
+    assert (await row(maker, there)).customer_name == NAME
+
+    by_network_owner = await erase_on_request(maker, network_owner(shops), there)
+    assert by_network_owner.json()["network"] is True
+    assert (await row(maker, there)).customer_name is None
 
 
 # --- what reads after --------------------------------------------------------------

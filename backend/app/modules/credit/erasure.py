@@ -8,8 +8,10 @@ ADR-0015):
 - then the name and phone are erased, and every sum stays: the debt reads
   «Покупця стерто», and neither the drawer nor a report changes;
 - a customer who asks is erased at once, on the owner's word, from every
-  closed debt of the network under their phone; an open debt keeps them until
-  it is closed, and then its own term runs;
+  closed debt under their phone: the network's owner in the whole network,
+  a store's owner in that store (2026-10-09, readings C-a and C-c); an open
+  debt keeps them, then its own term runs, or the owner erases it again once
+  it is closed (C-b);
 - a write-off's reason is erased with the customer: people write names in it.
 
 The database keeps an erased customer erased, and lets nothing but the
@@ -49,8 +51,10 @@ class Erased:
 
     # Closed debts whose customer was erased now.
     erased: int
-    # The same customer's open debts: they keep the customer until closed.
+    # The same customer's open debts: they keep the customer.
     still_open: int
+    # The whole network, or only the debt's store.
+    network: bool
     # The debt the owner erased from, as it reads now.
     credit: CreditView
 
@@ -149,14 +153,20 @@ async def erase_expired(session: AsyncSession, *, now: datetime, batch: int = BA
 async def erase_customer(
     session: AsyncSession, *, scope: RequestScope, credit_id: uuid.UUID
 ) -> Erased:
-    """The owner erases this debt's customer at their request: from every
-    closed debt of the network under the same phone, one phone being one
-    customer (owner decision, 2026-10-01). Asked of an open debt, it is
-    refused; the customer's other open debts are counted and kept.
+    """The owner erases this debt's customer at their request, from every
+    closed debt under the same phone, one phone being one customer (owner
+    decision, 2026-10-01): the network's owner in every store of the network,
+    the owner of one store in the debt's store (owner, 2026-10-09, C-a and
+    C-c). Asked of an open debt, it is refused; the customer's other open
+    debts within that reach are counted and kept.
 
     Asked again, it finds the customer already erased and erases nothing."""
-    # The network's owner: the customer is erased in every store.
-    scope.require(Permission.CREDIT_ERASE_CUSTOMER)
+    network = scope.can(Permission.CREDIT_ERASE_CUSTOMER)
+    if not network and not any(
+        scope.can(Permission.CREDIT_ERASE_CUSTOMER, store_id) for store_id in scope.store_ids
+    ):
+        # Refused before the debt is even looked for.
+        scope.require(Permission.CREDIT_ERASE_CUSTOMER)
     credit = await session.scalar(
         select(CustomerCredit).where(
             CustomerCredit.id == credit_id,
@@ -165,24 +175,24 @@ async def erase_customer(
     )
     if credit is None:
         raise NotFoundError("Unknown debt", credit_id=str(credit_id))
+    if not network:
+        # A store's owner, in their store; a blocked or archived one is the
+        # network owner's.
+        scope.require(Permission.CREDIT_ERASE_CUSTOMER, credit.store_id)
     if credit.phone_digits is None:
-        return Erased(erased=0, still_open=0, credit=await view(session, credit))
+        return Erased(erased=0, still_open=0, network=network, credit=await view(session, credit))
     if credit.status == CreditStatus.OPEN.value:
         raise ValidationFailedError(
             "An open debt keeps its customer until it is closed", reason="STILL_OWED"
         )
-    theirs = (
-        await session.scalars(
-            select(CustomerCredit)
-            .where(
-                CustomerCredit.organization_id == scope.organization_id,
-                CustomerCredit.customer_erased_at.is_(None),
-                CUSTOMER == customer_key(credit.phone_digits),
-            )
-            .order_by(CustomerCredit.id)
-            .with_for_update()
-        )
-    ).all()
+    reach = select(CustomerCredit).where(
+        CustomerCredit.organization_id == scope.organization_id,
+        CustomerCredit.customer_erased_at.is_(None),
+        CUSTOMER == customer_key(credit.phone_digits),
+    )
+    if not network:
+        reach = reach.where(CustomerCredit.store_id == credit.store_id)
+    theirs = (await session.scalars(reach.order_by(CustomerCredit.id).with_for_update())).all()
     closed = [debt for debt in theirs if debt.status != CreditStatus.OPEN.value]
     if closed:
         await _erase(session, closed, now=datetime.now(tz=UTC), by=scope.user_id)
@@ -192,10 +202,12 @@ async def erase_customer(
         credit_id=str(credit.id),
         erased=len(closed),
         still_open=len(theirs) - len(closed),
+        network=network,
     )
     return Erased(
         erased=len(closed),
         still_open=len(theirs) - len(closed),
+        network=network,
         credit=await view(session, credit),
     )
 

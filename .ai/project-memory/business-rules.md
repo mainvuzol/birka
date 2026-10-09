@@ -1849,20 +1849,21 @@ How it is carried out, not decided by the owner
 - **"A year after" is the same date a year later;** 29 February is
   28 February then. The erasure runs once an hour, so a name past its term
   is gone within the hour, and from the next night's backup.
-- **"On the owner's word" is the network's owner,** who holds the owner's
-  role network-wide (`credit:erase_customer`), since the erasure reaches
-  every store. A store-level owner's role, such as the owner's role in a
-  child store alone, is not enough (reading C-c, awaiting the owner, below).
+- **"On the owner's word" is the network's owner, or a store's owner in that
+  store** (`credit:erase_customer`; reading C-c, as the owner changed it,
+  below). The network's owner erases in every store, a blocked or archived
+  one too; the owner of one store, such as a child store, erases that
+  store's debts while it trades.
 - **The customer is everyone under their phone,** one phone being one
-  customer (2026-10-01): the owner's erasure reaches every closed debt of
-  the network with that phone, in every store, a blocked or archived one
-  too, and a couple sharing a phone are erased together. It is asked from a
-  closed debt; the answer says how many of the customer's debts are still
-  open (reading C-a, awaiting the owner, below).
+  customer (2026-10-01): the network owner's erasure reaches every closed
+  debt of the network with that phone, a store owner's every closed debt of
+  that store, and a couple sharing a phone are erased together. It is asked
+  from a closed debt; the answer says how many of the customer's debts are
+  still open within that reach (reading C-a, confirmed, below).
 - **An open debt of a customer who asked keeps them once it closes,** until
   its own term runs out or the owner erases it again: nothing keeps a
   record that the customer asked, since that record would itself say who
-  they are (reading C-b, awaiting the owner, below).
+  they are (reading C-b, confirmed, below).
 - **An erased debt is found by neither the name nor the phone,** and stands
   alone in «Борги». A return of its goods is still taken.
 - **The hint is under** the explanations about a customer's purchase or
@@ -1871,7 +1872,7 @@ How it is carried out, not decided by the owner
   in, where an order went abroad, and «Брак»'s notes, the one for the
   supplier included, since «Брак» came back from a customer. Supplier,
   invoice, catalogue, store and stock notes are not about a customer and
-  have none (reading C-d, awaiting the owner, below).
+  have none (reading C-d, confirmed, below).
 - **The owner's copies keep the newest night that can be restored,
   whatever its age,** as the server keeps its newest, so a collector that
   stopped hearing from the server never ends up with nothing. Older nights
@@ -1884,17 +1885,32 @@ How it is carried out, not decided by the owner
   on request made after the restored night is repeated by the owner
   (backup runbook, "restoring for real").
 - **Three years is the owner's estimate** of how long an unpaid debt can
-  still be claimed; the owner checks it with a lawyer (release checklist).
+  still be claimed; the owner checks it with a lawyer (known risks).
 
-Readings of how it is carried out, awaiting the owner (asked at the end of
-the build):
-- **C-a.** The owner's erasure reaches every closed debt of the whole
-  network under the customer's phone, a couple sharing a phone together.
-- **C-b.** An open debt of a customer who asked keeps them once it closes,
-  until its term runs out or the owner erases it again.
-- **C-c.** Only the network's owner erases; the owner's role in one store
-  alone does not.
-- **C-d.** Which fields carry the hint (above).
+Readings of how it is carried out, asked at the end of the build and
+answered by the owner the same day:
+- **C-a, confirmed.** The owner's erasure reaches every closed debt of the
+  whole network under the customer's phone, a couple sharing a phone
+  together.
+  - Питання: «Покупець просить стерти дані. Застосунок стирає ім'я й
+    телефон з усіх закритих боргів мережі (обох магазинів) за цим
+    телефоном — бо один телефон — один покупець. Подружжя з одним
+    телефоном стирається разом. Так?» Answer: «Так, з усієї мережі».
+- **C-b, confirmed.** An open debt of a customer who asked keeps them once
+  it closes, until its term runs out or the owner erases it again.
+  - Питання: «Покупець, що просив стерти дані, ще має відкритий борг. Коли
+    його закриють, ім'я й телефон лишаються на звичайний строк (рік чи
+    три), доки власник не натисне «Стерти дані покупця» ще раз. Так?»
+    Answer: «Так, власник стирає ще раз».
+- **C-c, changed by the owner.** Built first for the network's owner alone;
+  the owner chose that a store's owner erases too, the debts of their own
+  store.
+  - Питання: «Стирати дані на прохання покупця може лише власник мережі.
+    Хто має роль власника лише в одному магазині — не може, бо стирання
+    діє в усій мережі. Так?» Answer: «І власник магазину» — «Власник
+    окремого магазину стирає борги свого магазину.»
+- **C-d, confirmed.** Which fields carry the hint (above).
+  - Питання: the list of fields above, «Так?» Answer: «Так».
 
 Built on 2026-10-09; see the [report](customer-data-retention-report.md)
 and [ADR-0015](../decisions/ADR-0015-customer-data-retention.md).

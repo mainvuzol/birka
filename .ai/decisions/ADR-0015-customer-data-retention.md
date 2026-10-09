@@ -106,32 +106,41 @@ hourly upkeep against the database, it is restarted by Docker, and a failure
 reaches Sentry. A name past its term is erased within the hour, and so
 leaves the next night's backup.
 
-### 5. On the customer's request: the network's owner
+### 5. On the customer's request: the owner
 
 `POST /credits/{id}/erase-customer`, under the new `credit:erase_customer`,
-held network-wide by the owner's role (granted, like `credit:write_off`, to
-every role that manages people). A store-level owner's role is not enough:
-the erasure reaches every store.
+held by the owner's role (granted, like `credit:write_off`, to every role
+that manages people). Its reach follows where the role is held (owner,
+2026-10-09, reading C-c, changed by the owner from the network's owner
+alone):
+- **the network's owner**, holding it network-wide, erases the customer
+  from **every closed debt of the network under the same phone** (C-a);
+- **a store's owner**, holding it in one store, erases them from every
+  closed debt of **that store** under the phone, asked from a debt of that
+  store while it trades. The answer says which (`network`).
 
-- It erases the customer from **every closed debt of the network under the
-  same phone**, one phone being one customer (owner, 2026-10-01). A couple
-  sharing a phone are one customer here too.
+One phone is one customer (owner, 2026-10-01), so a couple sharing a phone
+are one customer here too. Anyone holding the permission nowhere is refused
+before any debt is looked for.
+
 - Asked of an open debt, it is refused (`STILL_OWED`), and nothing changes.
 - The customer's other open debts keep them. Once one closes, its own term
   runs, or the owner erases it again: nothing records that the customer
   asked, since that record would itself say who they are. The answer says
   how many are open.
-- It reaches the debts of a blocked or archived store too, as the term's
-  erasure does.
+- The network owner's reaches the debts of a blocked or archived store too,
+  as the term's erasure does; a blocked store's own owner does nothing
+  there, as in everything else.
 - Asked again, it finds the customer erased and erases nothing. It needs no
   command id: the result is the same however often it is sent, so it is
   sent directly, not through the phone's journal.
 - It locks the customer's debts, and the hourly erasure skips what is
   locked, so the two never both erase one debt.
 
-In the app: «Стерти дані покупця» on a closed debt, for the network's owner
-only, with a confirmation that says it reaches every closed debt of the
-network with that phone, that the sums stay, and that it cannot be undone.
+In the app: «Стерти дані покупця» on a closed debt, for the network's owner,
+and for a store's owner on their store's debts, with a confirmation that
+says it reaches every closed debt of the network (or of this store) with
+that phone, that the sums stay, and that it cannot be undone.
 
 ### 6. The audit log
 

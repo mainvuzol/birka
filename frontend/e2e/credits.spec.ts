@@ -993,20 +993,54 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   ).toBe("2000.00");
 });
 
-test("erasing is the network owner's, and only of a closed debt", async ({
+test("a store's owner erases in that store, and nobody erases an open debt", async ({
   page,
 }) => {
   const name = customer();
   const closed = await onCredit(page, name);
   await payOff(page, closed.token, closed.sale.credit.credit_id);
 
-  // «Оля» holds every permission, but in her stores, not network-wide.
+  // «Оля» holds every permission in her stores, not network-wide: her
+  // store's debts only (owner, 2026-10-09).
   await everyDebtOf(page, name);
   await page.getByRole("button", { name: `Відкрити борг ${name}` }).click();
+  await page.getByRole("button", { name: "Стерти дані покупця" }).click();
+  await expect(
+    page.getByText(
+      "Ім’я й телефон покупця зникнуть з усіх закритих боргів цього магазину з цим телефоном. Суми лишаються. Скасувати це не можна.",
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Так, стерти дані покупця" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "Дані покупця стерто із закритих боргів цього магазину: 1.",
+  );
+
+  // Without the permission, no button.
+  const kept = customer();
+  const other = await onCredit(page, kept);
+  await payOff(page, other.token, other.sale.credit.credit_id);
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      organization_permissions: string[];
+      stores: { permissions: string[] }[];
+    };
+    body.organization_permissions = body.organization_permissions.filter(
+      (p) => p !== "credit:erase_customer",
+    );
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (p) => p !== "credit:erase_customer",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await everyDebtOf(page, kept);
+  await page.getByRole("button", { name: `Відкрити борг ${kept}` }).click();
   await expect(page.locator("p.badge")).toHaveText("Сплачено");
   await expect(
     page.getByRole("button", { name: "Стерти дані покупця" }),
   ).toHaveCount(0);
+  await page.unroute("**/api/v1/me");
 
   const open = customer();
   await onCredit(page, open);
