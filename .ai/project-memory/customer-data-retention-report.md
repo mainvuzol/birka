@@ -2,9 +2,12 @@
 
 Baseline: `6867576` (the shops' existing stock from a JSON file, merged as
 PR #74).
-Status: implemented locally; reviewed and mutation-tested as below.
+Status: implemented locally; reviewed independently and mutation-tested;
+verified as below, the last time by the whole of CI run locally on `51af2a9`
+(2026-10-09, [evidence](../../output/verification/2026-10-09-customer-data-retention-ci-local/summary.md)).
 Migration `0038`.
-Branch: `feat/customer-data-retention`.
+Branch: `feat/customer-data-retention`: `a2ed2d6` (the owner's rules), then
+`51af2a9` (reading C-c as the owner changed it).
 Design: [ADR-0015](../decisions/ADR-0015-customer-data-retention.md).
 Owner decisions: business rules, "customers' data" (2026-10-09).
 
@@ -103,7 +106,18 @@ On the laptop, in the isolated environment (PostgreSQL 16.2), 2026-10-09:
   - 14 in the screens, each after a fresh E2E database, with an unchanged
     control that passed: all caught.
 
-The whole of CI, run locally: below.
+**The whole of CI, run locally on `51af2a9`** (GitHub Actions is still held
+by billing): exit 2, every job passed, the backend with its declared gap.
+
+| job | result |
+|---|---|
+| backend | 3 285 passed on PostgreSQL 17, 19 skipped: the backup tests, a declared gap (no PostgreSQL 17 tools on this Mac); on 16.2, 18 of those passed, 1 skipped (`age`) |
+| restore-drill | 7/7 |
+| e2e | 264 passed (261 before) |
+| frontend | eslint 0, tsc 0, npm audit 0 vulnerabilities, build ok |
+| python-audit | 0 known vulnerabilities |
+| edge | 8/8 |
+| hot-path | 8 cases; worst p95 70.2 ms of 300 (catalogue read), 113.6 ms of 500 (`POST /sales`) |
 
 ## Review (2026-10-09)
 
