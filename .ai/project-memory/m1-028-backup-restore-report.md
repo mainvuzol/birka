@@ -149,7 +149,9 @@ copy too. The drill now fails on any disabled trigger.
   - the owner's collection schedule.
 
   The real restore uses the drill's `pg_restore` flags but has not been
-  rehearsed end to end.
+  rehearsed end to end. *Rehearsed on a laptop on 2026-10-09
+  ([report](restore-rehearsal-report.md)): its restore command fixed, and
+  setting backups up again added.*
 - **The owner did not yet hear about a failed night.** The section and the
   Telegram message followed the same day, in the
   [alerts report](m1-028-backup-alerts-report.md).

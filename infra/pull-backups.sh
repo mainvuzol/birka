@@ -22,7 +22,8 @@ set -eu
 
 source="${BIRKA_BACKUP_SOURCE:?set BIRKA_BACKUP_SOURCE, e.g. birka-backup@shop.example.com:}"
 dest="${BIRKA_BACKUP_DEST:?set BIRKA_BACKUP_DEST, e.g. \$HOME/birka-backups}"
-key="${BIRKA_BACKUP_SSH_KEY:-$HOME/.ssh/birka_backup}"
+# A NAS's task scheduler may run this without HOME: then name the key.
+key="${BIRKA_BACKUP_SSH_KEY:-${HOME:?set HOME, or BIRKA_BACKUP_SSH_KEY to the SSH key}/.ssh/birka_backup}"
 # The moment now, as the server stamps its nights; set only by the tests.
 now="${BIRKA_BACKUP_NOW:-$(date -u +%Y%m%dT%H%M%SZ)}"
 months=3

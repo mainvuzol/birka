@@ -223,7 +223,11 @@ daily, 7 days plus 3 monthly, encrypted, collected by the owner's machine.
   password manager and on paper or a USB stick.
 - **A real restore has not been rehearsed on a server.** The drill uses the
   same `pg_restore` flags; the runbook's full sequence has not run in
-  production.
+  production. It ran end to end on a laptop, in Docker, on 2026-10-09,
+  which fixed its restore command and added setting backups up again
+  ([report](restore-rehearsal-report.md)). Not rehearsed there: the SSH
+  leg to the owner's computer, a real domain's certificate, and a server's
+  own disk and cron.
 - **`.env` is not in the backup.** Keep it in the password manager too.
 
 ## Returns at the till — 2026-10-01
