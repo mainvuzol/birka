@@ -1,7 +1,9 @@
 # What the server is built from, named exactly — 2026-10-10
 
 Baseline: `6136cfe` (text from outside, merged as PR #81).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, the
+images rebuilt and refusing a file the lock does not name, and twenty-five
+ways of loosening a pin each caught.
 Branch: `chore/pinned-build`. Decision: [ADR-0019](../decisions/ADR-0019-what-the-server-is-built-from.md);
 owner: business-rules.md, "what the server is built from" (2026-10-10).
 
@@ -119,7 +121,26 @@ the lock.
 
 ## Evidence
 
-TODO(final)
+All under [`output/verification/2026-10-10-pinned-build/`](../../output/verification/2026-10-10-pinned-build/),
+each beside the script that wrote it:
+- `digests.txt`: the five pinned digests on Docker Hub, read only: each a
+  multi-arch index serving amd64 and arm64; four tags still name them,
+  Caddy's has moved on.
+- `hashes.txt`: all 72 pins' hashes equal PyPI's list of that version's
+  files; the runtime lock's 43 equal the dev lock's.
+- `refusal.txt`: one lock line installed four ways in the API image.
+- `platforms.txt`: the dev lock on Windows, Linux and macOS, hashes
+  required, 71 packages each.
+- `mutants.txt`: twenty-five pins loosened one at a time, each caught.
+- **CI, run locally at `c9f0425`** ([summary](../../output/verification/2026-10-10-pinned-build-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 320 on PostgreSQL 17;
+  - restore drill: 7/7, its images built offline from the pinned bases,
+    the API's libraries installed by hash;
+  - e2e: 265 journeys;
+  - edge: 9/9, the stack built and run from the pinned images and bases;
+  - hot path: worst p95 65.0 ms (catalogue read) and 99.5 ms
+    (`POST /sales`), within 300 and 500.
 
 ## Not covered here
 

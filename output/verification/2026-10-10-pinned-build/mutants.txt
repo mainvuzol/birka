@@ -1,0 +1,27 @@
+# Each pin loosened alone, at c9f0425, 2026-10-10 02:26 EEST
+- compose: PostgreSQL by tag alone: caught by test_every_image_compose_runs_is_pinned_by_its_digest
+- compose: Caddy on another digest than CI's check: caught by test_a_name_and_tag_carry_one_digest_everywhere
+- dev compose: PostgreSQL by tag alone: caught by test_every_image_compose_runs_is_pinned_by_its_digest
+- CI: one job's PostgreSQL service by tag alone: caught by test_every_image_ci_starts_is_pinned_by_its_digest
+- CI: the Caddyfile checked with Caddy by tag: caught by test_every_known_image_named_in_text_is_pinned
+- backend Dockerfile: Python by tag alone: caught by test_every_dockerfile_base_is_pinned_or_a_stage
+- frontend Dockerfile: Alpine by tag alone: caught by test_every_dockerfile_base_is_pinned_or_a_stage
+- frontend Dockerfile: a new base, unpinned: caught by test_every_dockerfile_base_is_pinned_or_a_stage
+- CI: an action by its tag: caught by test_every_action_is_pinned_by_a_commit
+- CI: an action's commit without its release: caught by test_every_action_is_pinned_by_a_commit
+- CI: one job on ubuntu-latest: caught by test_ci_runs_on_a_named_ubuntu[ci.yml]
+- CI: Python 3.12, not the image's: caught by test_ci_sets_up_the_python_and_node_the_images_hold
+- CI: Node 24, not exact: caught by test_ci_sets_up_the_python_and_node_the_images_hold
+- CI: Node of another major: caught by test_ci_sets_up_the_python_and_node_the_images_hold
+- image: the lock installed without hashes required: caught by test_the_image_and_ci_install_the_locks_by_hash
+- CI: a lock installed without hashes required: caught by test_the_image_and_ci_install_the_locks_by_hash
+- CI: the backend with its dependencies, beside the lock: caught by test_ci_installs_the_backend_with_a_lock
+- runtime lock: one pin without its hashes: caught by test_every_pin_carries_its_hashes[requirements.lock]
+- dev lock: a hash that is not the runtime lock's: caught by test_both_locks_hold_the_same_hashes_for_a_runtime_pin
+- dev compose: a new service pulled by tag: caught by test_every_image_compose_runs_is_pinned_by_its_digest
+- compose: PostgreSQL by Docker Hub's full name, by tag: caught by test_every_image_compose_runs_is_pinned_by_its_digest
+- CI: a job inside a container by tag: caught by test_every_image_ci_starts_is_pinned_by_its_digest
+- CI: a Docker action by tag: caught by test_every_action_is_pinned_by_a_commit
+- a second workflow, .yaml, by tags: caught by test_every_action_is_pinned_by_a_commit
+- web image: its Node named apart from CI's: caught by test_ci_sets_up_the_python_and_node_the_images_hold
+25 of 25 caught
