@@ -42,7 +42,7 @@ CI verifies every pull request, at each push to it, and every push to main
 (a pull request with a merge conflict runs nothing until its base is merged
 in; CI can also be run on a branch by hand, from the Actions tab):
 - every backend test, on PostgreSQL 17 with the production locale;
-- TODO(final) Playwright journeys on a phone profile, against the real API
+- 261 Playwright journeys on a phone profile, against the real API
   (249 before the JSON stock import);
 - the nightly backup and its restore drill, from the `ops` image;
 - the hot-path budgets;

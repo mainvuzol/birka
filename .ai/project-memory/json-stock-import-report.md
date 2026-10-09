@@ -4,7 +4,8 @@ Baseline: `c44f49a` (the owner's readings confirmed, and the JSON way
 chosen, merged as PR #73).
 Status: implemented locally; reviewed adversarially on 2026-10-09; its
 findings fixed, or kept with the reason ("Review of the built change",
-below); verified as below, the final run's figures marked TODO(final).
+below); verified as below, the last time by the whole of CI run locally on
+`6aecb9b` (2026-10-09, [evidence](../../output/verification/2026-10-09-json-stock-import-ci-local/summary.md)).
 Migration `0037`.
 Branch: `feat/json-stock-import`, after `0a8adba`, `1e8ab6c`, `663a52d` and
 `9ca87fe` (the owner's answers of 2026-10-08) and `8b32a05` (the design);
@@ -241,11 +242,18 @@ statement over 5 s; adding a file at most 5 s; a page at most 0.5 s.
   `test_file_lines.py` (192), `test_stock_file_package.py` (60);
   integration `test_snapshot_parts.py` (57),
   `test_stock_list_parts_migration.py` (4).
-- The full suite at the end: TODO(final).
+- The full suite at the end, on a fresh `birka_test` (PostgreSQL 16.2,
+  2026-10-09, after the fourth round): 3 274 passed, 1 skipped (`age`), the
+  catalogue evaluation included. In CI run locally on `6aecb9b`, on
+  PostgreSQL 17 with the production locale: 3 256 passed, 19 skipped (the
+  backup tests' declared tool gap), and those 19 on PostgreSQL 16.2: 18
+  passed, 1 skipped (`age`).
 
 **Gates,** on this tree on 2026-10-08: ruff and format (330 files), mypy
 (156 files), 31 import contracts kept, none added. `alembic check` and the
-`0037` round trip, with the full run: TODO(final).
+`0037` round trip, with the full run (2026-10-09, after the fourth round):
+`alembic check` clean at head, `0037` down to `0036` and up again, clean
+again.
 
 **Mutation testing** of the server's rules, by the builder: 53 mutants of
 the shown split, a file line's count, `check_basis` and the format; 52
@@ -305,13 +313,17 @@ right to approve still sees «Відхилити список».
 On a fresh seed: 249 before this change; 254 with journeys 1–3, 5 and 7;
 256 with 4 and 6 (2026-10-09); 259 after the review's fixes (2026-10-09,
 run locally), 260 after its second round and 261 after its third. The
-final count, with the full run: TODO(final). Frontend
-typecheck, lint, build and Prettier passed after the fixes on 2026-10-09;
-with the final run: TODO(final).
+final count: 261 passed on a fresh seed after the fourth round, and 261 in
+CI run locally on `6aecb9b` (PostgreSQL 17). Frontend typecheck, lint,
+build and Prettier passed after the fixes on 2026-10-09, and again in the
+final run, with `npm audit` finding 0 vulnerabilities.
 
 **The edge.** CI's `edge` job now sends 999 000 bytes and expects the API's
-own refusal, and 1 000 001 bytes and expects 413. Not run yet: TODO(final),
-with the local CI run.
+own refusal, and 1 000 001 bytes and expects 413. Run locally on `6aecb9b`
+(2026-10-09): all 8 steps passed, the body check among them; the restore
+drill passed 7 of 7, the hot path within budget (worst p95 74.3 ms of 300
+for the catalogue, 117.3 ms of 500 for `POST /sales`), and `pip-audit` found
+no known vulnerability.
 
 ## Independent review
 
@@ -398,7 +410,7 @@ of a count. Every finding, and what was done:
 
 | Finding | What was done |
 |---|---|
-| **Fidelity major 5.** The release verdict, row 11a, the README and three documents claimed what is not verified: the final run, the edge's body check, Telegram Desktop working. | **Fixed:** each says what is still to come, TODO(final) for the final run and the edge job; Telegram Desktop is "expected to work, not tried", and row 26 tries it too. |
+| **Fidelity major 5.** The release verdict, row 11a, the README and three documents claimed what is not verified: the final run, the edge's body check, Telegram Desktop working. | **Fixed:** each said what was still to come, the final run and the edge job, both since run and filled in (2026-10-09); Telegram Desktop is "expected to work, not tried", and row 26 tries it too. |
 | **Fidelity major 6.** This report called the E2E journeys planned and counted them run. | **Fixed:** "Verification", above. |
 | **Fidelity minors 4, 5.** "A photo's lines are never split across files" read as a checked rule; "the slow call has no journey" was false. | **Fixed:** guidance, not checked; proven with a browser clock, not on a phone. |
 | **Fidelity minors 8–18.** The evidence's line cap as if current; the cap's raise dated to the first day; `0a8adba` left out of the baseline; "no independent review"; reading 5 saying a range choice is kept; "built on 2026-10-08" alone; the ADR's quotes of the screens and its old line numbers; ADR-0005 and ADR-0013 not amended to match; the checklist's header. | **Fixed,** each where it stood. |
@@ -693,4 +705,4 @@ slow call proven with a browser clock only.
   its part about removed files (R-e); the other five stand confirmed.
 - **This change's final run:** the full backend suite, the E2E count,
   `alembic check` and the `0037` round trip, the frontend's gates, and the
-  edge job: TODO(final), under "Verification".
+  edge job: all passed on 2026-10-09, under "Verification".
