@@ -1,7 +1,9 @@
 # The app's own database role — 2026-10-09
 
 Baseline: `65546f6` (the first install rehearsed, merged as PR #78).
-Status: built; TODO(final).
+Status: built, reviewed and rehearsed: the whole CI run locally passed,
+and a first install, an update from main, going back and a restore onto a
+new server held with the role, on a laptop in Docker.
 Branch: `feat/app-db-role`. Decision: [ADR-0016](../decisions/ADR-0016-the-apps-database-role.md).
 
 ## Why this was next
@@ -66,7 +68,52 @@ four small; all fixed:
 
 ## Evidence
 
-TODO(final)
+- **Tests:** `tests/integration/test_app_role.py`, 17 tests. They give the
+  role its rights as on the server, sign in as it, and try what it must not
+  do. They also run on a database shaped otherwise and with a grant from
+  another role, and check the verifier against the one PostgreSQL makes. A
+  wrong password is refused where passwords are asked for. They passed on
+  the local PostgreSQL 16, which trusts every connection, and on a
+  throwaway PostgreSQL in the scratchpad that asks for passwords. One test
+  in `test_server_image.py` pins who connects as whom in compose. Backend
+  locally: 3 322 passed.
+- **Mutation:** 36 mutants of `scripts/app_role.py` and the readiness log
+  line, every one caught. On the way, five survivors showed the tests were
+  hidden by grants an earlier run had left. The final check had looked
+  unreachable until the review showed a right given by another role
+  reaches it.
+- **CI, run locally at `2701706`** ([summary](../../output/verification/2026-10-09-app-db-role-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 304 on PostgreSQL 17, which asks for passwords;
+  - e2e: 264 journeys, the API as `birka_app`;
+  - edge: the API `birka_app`, no superuser;
+  - restore-drill: the watcher signing in as `birka_app`;
+  - hot path: worst p95 68.9 ms and 127.6 ms.
+- **Rehearsals** ([evidence](../../output/verification/2026-10-09-app-db-role-rehearsal/), drivers beside it):
+  - **A first install by the runbook**, steps 3 to 10 as the install
+    rehearsal ran them. The migration, its check and the command ran from
+    `ops`; the API and the watcher connected as `birka_app`. The old
+    downgrade from `api` was refused, the schema unchanged. The people's
+    and stores' commands, the night, the watcher's incident, the stock list
+    and the check all held.
+  - **An update from main** (`65546f6`, the API a superuser) to `2701706`,
+    `.env` given its new line first. The data stayed; the app worked as
+    `birka_app`: a sale, a payment, a customer erased on request. Turning
+    off the ledger's triggers from the API's own connection was refused,
+    "must be owner of table credit_entry". The night was backed up.
+  - **Going back by the code alone** to main: its API was the owner again,
+    the data the same; forward again.
+  - **Restoring for real** onto a new server from that night. Started
+    before the command, the API was not ready, «database», and its log
+    said `InvalidPasswordError`: on an empty volume the role is not there
+    yet, as the review had said. After the command it was ready, as
+    `birka_app`, with the night's stock and sales, the erased customer
+    still erased, and a new sale.
+  - The update and restore's first run stopped on two faults of the
+    driver, not of the server; kept as `first-run.md`.
+
+Everything the rehearsals started was removed, and Docker stopped as it
+was found. The containers had no way out of their network.
 
 ## Not covered here
 

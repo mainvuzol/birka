@@ -42,7 +42,9 @@ first night, an administrator and the trouble the watcher records, the
 shops' existing stock from a parser's file, and the check. Telegram itself
 was not reached: no message left the rehearsal's network. Restoring and
 updating were rehearsed the same day (backup runbook; [a new
-version](#a-new-version)).
+version](#a-new-version)). All three again the same evening with the app's
+own database role, step 3's commands from `ops`, as they now stand
+([report](app-db-role-report.md)).
 
 ### 1. The code
 
