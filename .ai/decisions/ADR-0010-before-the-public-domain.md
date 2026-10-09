@@ -4,6 +4,7 @@ Status: Accepted (2026-10-03)
 Owner decisions: business-rules.md, "before the public domain" (2026-10-03).
 Closes: R1's Python part, R2 and R3 (milestone-1-plan.md §17.5). R4 stays
 accepted, narrowed.
+Amended by: ADR-0014 (2026-10-08), §2's largest body.
 
 ## Context
 
@@ -57,7 +58,8 @@ The owner decided:
 ### 2. What anyone may send
 
 - **A body of at most 1 MB**, refused by Caddy with 413. The largest
-  legitimate body, an opening stock list, is under 0.4 MB.
+  legitimate body, one part of an opening stock list from a file, is under
+  0.96 MB (ADR-0014 §11; amended 2026-10-08). `1MB` is 1 000 000 bytes.
 - **30 sign-ins a minute from one address**, with a burst of 30, in the API
   (`app/core/rate_limit.py`, one process, in memory, bounded). A shop behind
   one address never reaches it. Refused with 429 `RATE_LIMITED` and

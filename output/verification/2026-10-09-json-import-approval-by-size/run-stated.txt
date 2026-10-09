@@ -1,0 +1,13 @@
+5 000 allocations, every line answered STATED (the 2026-10-08 method)
+machine: macOS-26.7.1-arm64-arm-64bit (arm64), 10 CPUs, Apple M5, 32 GiB
+python: 3.12.14 (CPython)
+postgresql: PostgreSQL 16.2 on aarch64-apple-darwin23.5.0, compiled by Apple clang version 15.0.0 (clang-1500.0.40.1), 64-bit
+settings: fsync on, synchronous_commit on, shared_buffers 128MB, work_mem 4MB, max_wal_size 1GB, statement_timeout 30s
+  run 1: built 5000 lines in 94.2 s (slowest part added through the service 0.42 s)
+  run 1: approve 7.78 s, 35048 statements, slowest 0.147 s, reply 1131 bytes
+  run 2: built 5000 lines in 91.8 s (slowest part added through the service 0.43 s)
+  run 2: approve 6.94 s, 35048 statements, slowest 0.174 s, reply 1131 bytes
+  run 3: built 5000 lines in 100.3 s (slowest part added through the service 0.38 s)
+  run 3: approve 9.50 s, 35048 statements, slowest 0.214 s, reply 1131 bytes
+slowest approval 9.50 s, slowest statement 0.214 s -> PASS
+re-check (_splits_unsaid) per approval: 0.002 s, 0.001 s, 0.002 s

@@ -1,3 +1,4 @@
+import { fileProblemText, isFileIssue } from "@/openings/fileErrors";
 import { noteAnswered, noteUnreachable } from "@/shared/reach";
 
 /**
@@ -24,6 +25,59 @@ export class Unreachable extends Error {
   }
 }
 
+/**
+ * A call declared slow ran out of its own 60 s with no answer (ADR-0014
+ * §16): adding a stock list's file, creating a list from one, approving a
+ * list. The server may still be working on it, so this is not an outage —
+ * the phone is not marked as having lost the server — and the call is safe to
+ * repeat: each of them is.
+ */
+export class SlowAnswer extends Error {
+  constructor(cause: unknown) {
+    super("SLOW_ANSWER", { cause });
+    this.name = "SlowAnswer";
+  }
+}
+
+/** How long a call declared slow waits for its answer (ADR-0014 §16). */
+export const SLOW_TIMEOUT_MS = 60_000;
+
+/**
+ * One refusal of a request's shape, as FastAPI reports it in its 422
+ * `detail`: where (`loc`), what (`type`) and its particulars (`ctx`). A
+ * stock list's file names its line as `ctx.line` (ADR-0014 §13).
+ */
+export interface ValidationIssue {
+  loc: (string | number)[];
+  type: string;
+  msg: string;
+  ctx: Record<string, unknown>;
+}
+
+function validationIssues(detail: unknown): ValidationIssue[] {
+  if (!Array.isArray(detail)) return [];
+  return detail.flatMap((item: unknown) => {
+    if (typeof item !== "object" || item === null) return [];
+    const { loc, type, msg, ctx } = item as Record<string, unknown>;
+    return [
+      {
+        loc: Array.isArray(loc)
+          ? loc.filter(
+              (part): part is string | number =>
+                typeof part === "string" || typeof part === "number",
+            )
+          : [],
+        type: typeof type === "string" ? type : "",
+        msg: typeof msg === "string" ? msg : "",
+        ctx:
+          typeof ctx === "object" && ctx !== null
+            ? (ctx as Record<string, unknown>)
+            : {},
+      },
+    ];
+  });
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -36,10 +90,26 @@ export class ApiError extends Error {
     // answer carried none (the edge's own 502). A seller quotes it when a
     // server error is shown, so the log line can be found.
     public requestId: string | null = null,
+    // A 422's refusals of the request's shape, each where it stands: a stock
+    // list's file names the line refused (ADR-0014 §15).
+    public validation: ValidationIssue[] = [],
+    // How many more refusals the server counted than it listed: a 422 lists
+    // at most 50 (`detail_truncated`; review, 2026-10-09).
+    public validationMore = 0,
   ) {
     super(code);
   }
 }
+
+/** A timeout's own abort, as `fetch` rejects with it. */
+function timedOut(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
 export async function api<T>(
   path: string,
   token?: string,
@@ -50,7 +120,12 @@ export async function api<T>(
   // A body is POSTed unless this says otherwise: a stock list's line is
   // answered by a PUT, which replaces its previous answer.
   method: "POST" | "PUT" = "POST",
+  // `slow`: a call that may take longer than 20 s on a server that answers
+  // (ADR-0014 §16). It waits 60 s, and running out of them is `SlowAnswer`,
+  // not an outage. Only a call that is safe to repeat may declare it.
+  options: { slow?: boolean } = {},
 ): Promise<T> {
+  const slow = options.slow === true;
   // Built before the request: what fails here is the app's own, never the
   // connection.
   const init: RequestInit = {
@@ -61,12 +136,14 @@ export async function api<T>(
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(slow ? SLOW_TIMEOUT_MS : 20000),
   };
   let response: Response;
   try {
     response = await fetch(`/api/v1${path}`, init);
   } catch (error) {
+    // A slow call's own 60 s ran out: the server may still be at it.
+    if (slow && timedOut(error)) throw new SlowAnswer(error);
     // `fetch`'s own rejection, or the 20 s abort: no answer.
     noteUnreachable();
     throw new Unreachable(error);
@@ -76,12 +153,17 @@ export async function api<T>(
       code?: string;
       error?: { code?: string };
       details?: Record<string, unknown>;
+      detail?: unknown;
+      detail_truncated?: unknown;
     } | null;
+    const more = data?.detail_truncated;
     const error = new ApiError(
       response.status,
       data?.code ?? data?.error?.code ?? "HTTP_ERROR",
       data?.details ?? {},
       response.headers.get("X-Request-ID"),
+      validationIssues(data?.detail),
+      typeof more === "number" && Number.isInteger(more) && more > 0 ? more : 0,
     );
     // Whether the server is reachable, for the phone's own checks
     // (ADR-0013 §4.2).
@@ -93,6 +175,8 @@ export async function api<T>(
   try {
     data = (await response.json()) as T;
   } catch (error) {
+    // The answer began, and a slow call's 60 s ran out while it arrived.
+    if (slow && timedOut(error)) throw new SlowAnswer(error);
     // A 2xx that is not the API's JSON: a page answering for the server.
     noteUnreachable();
     throw new Unreachable(error);
@@ -130,6 +214,9 @@ export function recordedNothing(error: unknown): boolean {
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;
+  // A slow call's own time ran out: not an outage (ADR-0014 §16).
+  if (error instanceof SlowAnswer)
+    return "Сервер ще не відповів. Оновіть список і перевірте, чи це збережено; повторити безпечно.";
   // The app's own failure, or a journal's: nothing to do with the connection.
   if (!(error instanceof ApiError))
     return "Не вдалося виконати операцію. Спробуйте ще раз.";
@@ -137,6 +224,10 @@ export function errorText(error: unknown): string {
   // A warehouse waits for its opening list (owner decision, 2026-10-02).
   if (error.code === "OPENING_LIST_PENDING")
     return "На цьому складі чекає список початкових залишків. Спершу затвердіть або відхиліть його в «Початкових залишках».";
+  // A shared warehouse's list whose own store does not trade is only
+  // rejected, through the other store (owner decision, 2026-10-09).
+  if (error.details.reason === "LIST_STORE_NOT_TRADING")
+    return "Магазин, що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.";
   // The sales report: one day to a year (owner decisions, 2026-10-02).
   if (error.details.reason === "PERIOD")
     return "Оберіть період від одного дня до року; перший день — не пізніше останнього.";
@@ -191,6 +282,10 @@ export function errorText(error: unknown): string {
     return "Попередня спроба ще виконується. Зачекайте кілька секунд і перевірте результат.";
   if (error.status === 409)
     return "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
+  // A stock list's file refused: which line, and what is wrong in it
+  // (ADR-0014 §15). Every other 422 reads as before.
+  const fileIssue = error.validation.find(isFileIssue);
+  if (error.status === 422 && fileIssue) return fileProblemText(fileIssue);
   if (error.status === 422)
     return "Перевірте дані та поточний статус замовлення.";
   // A server error is logged under the request's number: the seller can

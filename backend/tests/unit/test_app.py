@@ -192,3 +192,31 @@ def test_validation_errors_preserve_safe_input_details(client: TestClient) -> No
     response = client.post("/api/v1/auth/telegram", json={"init_data": original})
     assert response.status_code == 422
     assert response.json()["detail"][0]["input"] == original
+
+
+def test_a_stock_list_s_refusal_names_a_key_or_a_value_by_sixty_characters_at_most() -> None:
+    """Review, 2026-10-09: on `/api/v1/snapshots` a refusal loses its
+    `input` and `url`, and each string of its `loc` and `ctx` is cut to its
+    first sixty characters and «…»; what is short, and what is no string,
+    stays as it is."""
+    from app.main import MAX_NAMED, _without_input
+
+    long = "з" * 300
+    error = {
+        "type": "stock_file_size_repeated",
+        "loc": ("body", "file", "lines", 0, long),
+        "msg": "The size is named twice",
+        "input": {"text": long},
+        "ctx": {"size": long, "line": 1, "field": "size"},
+        "url": "https://errors.pydantic.dev",
+    }
+
+    assert MAX_NAMED == 60
+    assert _without_input(error) == {
+        "type": "stock_file_size_repeated",
+        "loc": ["body", "file", "lines", 0, "з" * 60 + "…"],
+        "msg": "The size is named twice",
+        "ctx": {"size": "з" * 60 + "…", "line": 1, "field": "size"},
+    }
+    assert _without_input({"loc": ("body",), "ctx": None}) == {"loc": ["body"], "ctx": None}
+    assert _without_input("not a refusal") == "not a refusal"

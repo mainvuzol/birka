@@ -12,8 +12,13 @@ page, a PDF, a stock sheet — never reconstructed purchase or sale history
 * the **allocations**: the `(variant, size, quantity)` a person stated the line
   means. Only these ever become stock, and only by approval.
 
+A list is filled by **parts** (ADR-0014 §2): a parser's file, or lines typed
+by hand. A part is added, shown and removed as one; a removed part's lines
+stay as evidence and count nowhere.
+
 Once a list is decided — applied or rejected — the database freezes it, its
-rows and its allocations (trigger `inventory_snapshot_is_final`, `0015`).
+rows and its allocations (trigger `inventory_snapshot_is_final`, `0015`), and
+its parts (`inventory_snapshot_part_is_final`, `0037`).
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -34,6 +40,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -77,12 +84,17 @@ class SnapshotQuantityState(StrEnum):
 class SnapshotRowStatus(StrEnum):
     """`PENDING` and `NEEDS_REVIEW` both block approval; the difference is
     triage — the parser flagged something in the second. `RESOLVED` has
-    allocations; `SKIPPED` is "not stock", with a written reason."""
+    allocations; `SKIPPED` is "not stock", with a written reason.
+
+    `REMOVED`: its file was removed; the answer is gone, the line kept as
+    evidence (ADR-0014 §9). It counts nowhere and is never answered again.
+    """
 
     PENDING = "PENDING"
     RESOLVED = "RESOLVED"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     SKIPPED = "SKIPPED"
+    REMOVED = "REMOVED"
 
 
 class SnapshotQuantityBasis(StrEnum):
@@ -93,19 +105,41 @@ class SnapshotQuantityBasis(StrEnum):
 
     * `STATED` — the line states the total, and the answer is that total, in
       one allocation. Nothing was added to what the list says.
+    * `STATED_BY_SIZE` — a line from a file whose text shows each size beside
+      its count («S-1 M-2 L-1», «Лоран M-3»), answered as it shows: one model,
+      one allocation per size, each with its count (ADR-0014 §5).
     * `LINE_IMPLIES_ONE` — the line states no count, and it is taken as one
       piece. Recorded as the convention it is, pending the owner's answer.
     * `RECOUNTED` — someone counted the goods. A note says who and when.
     * `OWNER_KNOWLEDGE` — known some other way. A note says how.
 
     A split across sizes or colours is never `STATED`: the parser reads no
-    per-size counts, so any split is somebody's knowledge, and says so.
+    per-size counts, so any split is somebody's knowledge, and says so. The
+    one exception is a split the line's own text shows, each size with its
+    count, which is `STATED_BY_SIZE` (owner, 2026-10-08).
     """
 
     STATED = "STATED"
     LINE_IMPLIES_ONE = "LINE_IMPLIES_ONE"
     RECOUNTED = "RECOUNTED"
     OWNER_KNOWLEDGE = "OWNER_KNOWLEDGE"
+    STATED_BY_SIZE = "STATED_BY_SIZE"
+
+
+class SnapshotPartKind(StrEnum):
+    """`FILE`: a parser's file (`birka.stock-list`). `PASTED`: lines typed or
+    pasted by hand, as every list was before ADR-0014."""
+
+    FILE = "FILE"
+    PASTED = "PASTED"
+
+
+class SnapshotPriceKind(StrEnum):
+    """The kind of every price in one file: one notebook, one kind (owner,
+    2026-10-08). The price is only shown, never a price in Birka."""
+
+    SALE = "SALE"
+    PURCHASE = "PURCHASE"
 
 
 class InventorySnapshot(UUIDPrimaryKey, TimestampMixin, Base):
@@ -199,8 +233,114 @@ class InventorySnapshot(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
 
+class InventorySnapshotPart(UUIDPrimaryKey, TimestampMixin, Base):
+    """One part of a list: a parser's file, or lines typed by hand (ADR-0014 §2).
+
+    The unit that is added, shown and removed. Its lines are contiguous in
+    the list's own numbering (`first_line_no`..`last_line_no`), which stays
+    list-wide: a removed part leaves a gap.
+
+    `command_id` is the client's permanent name for adding it, unique within
+    the organization like a list's. A list's first part takes the list's own
+    command id and fingerprint, so a stock-list command id names one list or
+    one added part, never both (§8). `content_fingerprint` is what a file
+    says, line by line; one list never holds the same file twice while
+    neither is removed (`uq_inventory_snapshot_part_active_file`).
+
+    Removing a part only stamps `removed_at` and `removed_by_user_id`, once;
+    the database refuses any other change, any delete, and any change at all
+    once the list is decided (`inventory_snapshot_part_is_final`, `0037`).
+    """
+
+    __tablename__ = "inventory_snapshot_part"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    inventory_snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("inventory_snapshot.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    part_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    command_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
+    # sha256 of the request that added it. NULL only for the part a list
+    # restored by a downgrade was given: such a list cannot be replayed.
+    command_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # sha256 of a file's lines (`stock_file.content_fingerprint_of_file`);
+    # none for hand-typed lines, which may go into two lists as before.
+    content_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kind: Mapped[SnapshotPartKind] = mapped_column(
+        Enum(SnapshotPartKind, name="snapshot_part_kind", native_enum=True), nullable=False
+    )
+    # What the file said of itself, as it said it.
+    file_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    counted_on: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    price_kind: Mapped[SnapshotPriceKind | None] = mapped_column(
+        Enum(SnapshotPriceKind, name="snapshot_price_kind", native_enum=True), nullable=True
+    )
+    parser: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    format_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Who added and who removed it are history: their links restrict. NULL
+    # only for the first part of a list whose creator is gone.
+    added_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="RESTRICT"), nullable=True
+    )
+    removed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="RESTRICT"), nullable=True
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "command_id", name="uq_inventory_snapshot_part_org_command"
+        ),
+        UniqueConstraint("inventory_snapshot_id", "part_no", name="uq_inventory_snapshot_part_no"),
+        # What a row's composite link to its part names: a row's part is in
+        # the row's own list.
+        UniqueConstraint("inventory_snapshot_id", "id", name="uq_inventory_snapshot_part_list_id"),
+        CheckConstraint("part_no >= 1", name="part_no_positive"),
+        CheckConstraint("line_count BETWEEN 1 AND 1000", name="line_count_bounded"),
+        CheckConstraint("first_line_no >= 1", name="first_line_positive"),
+        CheckConstraint("last_line_no = first_line_no + line_count - 1", name="lines_contiguous"),
+        CheckConstraint(
+            "(kind = 'FILE') = (file_name IS NOT NULL AND format_version IS NOT NULL"
+            " AND content_fingerprint IS NOT NULL)",
+            name="file_names_itself",
+        ),
+        CheckConstraint(
+            "kind = 'FILE' OR (price_kind IS NULL AND parser IS NULL)",
+            name="only_a_file_has_a_parser",
+        ),
+        CheckConstraint(
+            "(removed_at IS NULL) = (removed_by_user_id IS NULL)", name="removal_names_who"
+        ),
+        # One file is in a list once while neither copy is removed. A removed
+        # file may come back, as a new part (owner, 2026-10-08).
+        Index(
+            "uq_inventory_snapshot_part_active_file",
+            "inventory_snapshot_id",
+            "content_fingerprint",
+            unique=True,
+            postgresql_where=text("removed_at IS NULL AND kind = 'FILE'"),
+        ),
+    )
+
+
 class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
-    """One source line, kept verbatim even when nobody can interpret it."""
+    """One source line, kept verbatim even when nobody can interpret it.
+
+    A line from a file also keeps where it was written — the photo's name
+    and its line on it — and what the parser read of it, written once and
+    never changed (ADR-0014 §3). Nothing of that reading reaches the
+    catalogue or a price.
+    """
 
     __tablename__ = "inventory_snapshot_row"
 
@@ -209,6 +349,9 @@ class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
         ForeignKey("inventory_snapshot.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # The part the line came in. With the list it names the part's own
+    # list, by a composite link (`fk_inventory_snapshot_row_part`).
+    part_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), nullable=False)
     line_no: Mapped[int] = mapped_column(Integer, nullable=False)
     raw_input_id: Mapped[uuid.UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -243,9 +386,52 @@ class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
         postgresql.UUID(as_uuid=True), ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A line from a file: where it was written, so a person can go back to
+    # the photo (Birka keeps none), and what the parser read, exactly as the
+    # file said it (`model`, `colours`, `sizes`, `size_counts`, `count`,
+    # `price`, `note`). A hint, never an answer.
+    photo_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    photo_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reading: Mapped[dict[str, Any] | None] = mapped_column(postgresql.JSONB, nullable=True)
+    # Why the reading sends the line to a person (`file_lines.FILE_REASONS`).
+    file_reasons: Mapped[list[str]] = mapped_column(
+        postgresql.ARRAY(String(40)), nullable=False, server_default=text("'{}'")
+    )
+    # The split the line's text shows, each size beside its count, as
+    # `[{"size": "M", "count": 2}]`: what `STATED_BY_SIZE` may answer.
+    shown_split: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        postgresql.JSONB, nullable=True
+    )
+    # What the person said a record of that split means when it may also be
+    # a range of sizes («42-44»): `SIZE_WITH_COUNT` (`file_lines.SplitReading`),
+    # with an answer `STATED_BY_SIZE` only. Part of the answer, not of the
+    # evidence: the approval reads it again (owner, 2026-10-09).
+    split_read_as: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # The records it was said of, as the text writes them (`["42-44"]`): those
+    # that could be read otherwise when the person answered. A record that
+    # may be a range by the approval and is not among them was never asked
+    # about, and the approval refuses it (review, 2026-10-09). None is SQL
+    # NULL, never a JSON null: the two columns are NULL together.
+    split_read_records: Mapped[list[str] | None] = mapped_column(
+        postgresql.JSONB(none_as_null=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("inventory_snapshot_id", "line_no", name="uq_snapshot_row_line"),
+        ForeignKeyConstraint(
+            ["inventory_snapshot_id", "part_id"],
+            ["inventory_snapshot_part.inventory_snapshot_id", "inventory_snapshot_part.id"],
+            name="fk_inventory_snapshot_row_part",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_inventory_snapshot_row_part", "part_id"),
+        Index(
+            "ix_inventory_snapshot_row_photo", "inventory_snapshot_id", "photo_name", "photo_line"
+        ),
+        CheckConstraint(
+            "(photo_name IS NULL) = (photo_line IS NULL)", name="photo_named_with_its_line"
+        ),
+        CheckConstraint("photo_line IS NULL OR photo_line >= 1", name="photo_line_positive"),
         UniqueConstraint("raw_input_id", name="uq_inventory_snapshot_row_raw_input_id"),
         CheckConstraint(
             "quantity_total IS NULL OR quantity_total >= 0", name="quantity_not_negative"
@@ -270,6 +456,16 @@ class InventorySnapshotRow(UUIDPrimaryKey, TimestampMixin, Base):
         CheckConstraint(
             "(status IN ('RESOLVED', 'SKIPPED')) = (resolved_at IS NOT NULL)",
             name="verdict_has_time",
+        ),
+        CheckConstraint(
+            "split_read_as IS NULL OR (split_read_as = 'SIZE_WITH_COUNT' "
+            "AND quantity_basis::text = 'STATED_BY_SIZE')",
+            name="split_read_only_by_size",
+        ),
+        CheckConstraint(
+            "(split_read_as IS NULL) = (split_read_records IS NULL) "
+            "AND (split_read_records IS NULL OR jsonb_typeof(split_read_records) = 'array')",
+            name="split_read_with_its_records",
         ),
     )
 
@@ -336,7 +532,10 @@ class InventorySnapshotAllocation(UUIDPrimaryKey, TimestampMixin, Base):
 __all__ = [
     "InventorySnapshot",
     "InventorySnapshotAllocation",
+    "InventorySnapshotPart",
     "InventorySnapshotRow",
+    "SnapshotPartKind",
+    "SnapshotPriceKind",
     "SnapshotQuantityBasis",
     "SnapshotQuantityState",
     "SnapshotRowStatus",

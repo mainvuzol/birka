@@ -59,6 +59,7 @@ from app.modules.sales.models import Sale, SaleItem
 from app.modules.snapshots.models import (
     InventorySnapshot,
     InventorySnapshotAllocation,
+    InventorySnapshotPart,
     InventorySnapshotRow,
 )
 from app.modules.suppliers.models import (
@@ -106,6 +107,7 @@ __all__ = [
     "Inventory",
     "InventorySnapshot",
     "InventorySnapshotAllocation",
+    "InventorySnapshotPart",
     "InventorySnapshotRow",
     "Membership",
     "OrderCommand",

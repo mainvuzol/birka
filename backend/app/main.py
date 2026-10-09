@@ -25,6 +25,14 @@ from app.core.sentry import install_sentry
 
 logger = get_logger(__name__)
 
+# The most refusals one 422 lists; `detail_truncated` counts the rest.
+MAX_DETAIL = 50
+# Every route of a stock list: a parser's file, typed lines, their answers.
+STOCK_LISTS = "/api/v1/snapshots"
+# The most of a key or a value a stock list's refusal names, in its `loc` or
+# its `ctx`: enough to find it in the file, never the file (review, 2026-10-09).
+MAX_NAMED = 60
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -77,7 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error_handler(
-        _request: Request, exc: RequestValidationError
+        request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         """Refuse malformed input without crashing on it.
 
@@ -90,10 +98,59 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         The shape FastAPI produces is kept exactly — clients already parse it —
         and only values that cannot be encoded are replaced.
+
+        At most `MAX_DETAIL` refusals are sent, and `detail_truncated` says how
+        many more there were: a small body of many unknown keys would
+        otherwise answer with megabytes (review, 2026-10-09).
+
+        A stock list's request (ADR-0014 §13) is never sent back: on
+        `/api/v1/snapshots`, each refusal keeps its `type`, `loc`, `msg` and
+        `ctx` (a file's line, as `ctx.line`), and loses `input` and `url`,
+        wherever it stands — in the file, in the body around it, or the body
+        itself. A notebook's lines may name customers, and a refused file of
+        up to a megabyte is not echoed to the phone that sent it. A key the
+        format does not know is named in `loc`, and a size in `ctx`, by at
+        most their first `MAX_NAMED` characters and «…»: a key of 300 000
+        characters is not sent back whole either.
         """
-        return JSONResponse(status_code=422, content={"detail": _encodable(exc.errors())})
+        errors = exc.errors()
+        shown = errors[:MAX_DETAIL]
+        if _is_stock_list(request):
+            shown = [_without_input(error) for error in shown]
+        content: dict[str, Any] = {"detail": _encodable(shown)}
+        if len(errors) > MAX_DETAIL:
+            content["detail_truncated"] = len(errors) - MAX_DETAIL
+        return JSONResponse(status_code=422, content=content)
 
     return app
+
+
+def _is_stock_list(request: Request) -> bool:
+    path: str = request.scope.get("path", "")
+    return path == STOCK_LISTS or path.startswith(STOCK_LISTS + "/")
+
+
+def _without_input(error: Any) -> Any:
+    """A refusal without the value it refused, nor the link to pydantic's
+    page about it, and with each name in its `loc` and `ctx` cut to
+    `MAX_NAMED` characters: a stock list's request never comes back in its
+    422."""
+    if not isinstance(error, dict):
+        return error
+    kept = {key: item for key, item in error.items() if key not in ("input", "url")}
+    if isinstance(kept.get("loc"), list | tuple):
+        kept["loc"] = [_named(part) for part in kept["loc"]]
+    if isinstance(kept.get("ctx"), dict):
+        kept["ctx"] = {key: _named(item) for key, item in kept["ctx"].items()}
+    return kept
+
+
+def _named(value: Any) -> Any:
+    """A key or a value as a refusal names it: whole up to `MAX_NAMED`
+    characters, then cut, with «…» to say so."""
+    if isinstance(value, str) and len(value) > MAX_NAMED:
+        return value[:MAX_NAMED] + "…"
+    return value
 
 
 def _encodable(value: Any) -> Any:

@@ -1,0 +1,22 @@
+{
+  "$schema": "./birka-stock-list-v1.schema.json",
+  "format": "birka.stock-list",
+  "version": 1,
+  "source": "Зошит 1, куртки",
+  "counted_on": "осінь 2025",
+  "price_kind": "purchase",
+  "parser": "example-parser 0.1",
+  "lines": [
+    {"text": "Куртки жіночі", "photo": "IMG_0412.jpg", "photo_line": 1, "note": "заголовок"},
+    {"text": "Лоран шоколад M 3 шт 1850", "photo": "IMG_0412.jpg", "photo_line": 2, "model": "Лоран", "colours": ["шоколад"], "sizes": ["M"], "count": 3, "price": "1850"},
+    {"text": "Бомбер чорний M 3 1200", "photo": "IMG_0412.jpg", "photo_line": 3, "model": "Бомбер", "colours": ["чорний"], "sizes": ["M"], "count": 3, "price": "1200"},
+    {"text": "Лоран бежевий S-1 M-2 L-1", "photo": "IMG_0412.jpg", "photo_line": 4, "model": "Лоран", "colours": ["бежевий"], "size_counts": [{"size": "S", "count": 1}, {"size": "M", "count": 2}, {"size": "L", "count": 1}]},
+    {"text": "Лоран M-3", "photo": "IMG_0412.jpg", "photo_line": 5, "model": "Лоран", "size_counts": [{"size": "M", "count": 3}]},
+    {"text": "Парка хакі S M L 3 шт 2400", "photo": "IMG_0412.jpg", "photo_line": 6, "model": "Парка", "colours": ["хакі"], "sizes": ["S", "M", "L"], "count": 3, "price": "2400"},
+    {"text": "Пальто сіре 46 1 шт", "photo": "IMG_0412.jpg", "photo_line": 7, "model": "Пальто", "colours": ["сіре"], "sizes": ["46"], "count": 1, "note": "закреслено"},
+    {"text": "Тренч бежевий 44", "photo": "IMG_0413.jpg", "photo_line": 1, "model": "Тренч", "colours": ["бежевий"], "sizes": ["44"]},
+    {"text": "Пуховик сірий 2 шт", "photo": "IMG_0413.jpg", "photo_line": 2, "model": "Пуховик", "count": 2, "note": "нерозбірливо: колір"},
+    {"text": "Бомбер M 2 L 1", "photo": "IMG_0413.jpg", "photo_line": 3, "model": "Бомбер", "size_counts": [{"size": "M", "count": 2}, {"size": "L", "count": 1}]},
+    {"text": "Разом 15 шт", "photo": "IMG_0413.jpg", "photo_line": 4, "note": "підсумок сторінки"}
+  ]
+}

@@ -866,6 +866,9 @@ async def test_numbers_must_say_where_they_came_from(world):
         "LINE_IMPLIES_ONE": 1,
         "RECOUNTED": 1,
         "OWNER_KNOWLEDGE": 0,
+        # The basis a file's shown split is answered with (ADR-0014 §5);
+        # no line typed by hand can rest on it.
+        "STATED_BY_SIZE": 0,
     }
 
 
@@ -1043,6 +1046,16 @@ async def test_a_list_opens_a_warehouse_with_a_bounded_number_of_allocations(wor
 
     assert full.status_code == 200, full.text
     assert over.status_code == 422, over.text
+    # Still a 422, named as a full list is (review, 2026-10-09): what is full,
+    # its limit, what the other lines hold and what this answer adds.
+    assert over.json()["code"] == "VALIDATION_ERROR"
+    assert over.json()["details"] == {
+        "reason": "LIST_FULL",
+        "what": "allocations",
+        "limit": 3,
+        "now": 3,
+        "adding": 1,
+    }
     assert fewer.status_code == 200, fewer.text
     assert fits.status_code == 200, fits.text
     assert fits.json()["snapshot"]["summary"]["allocations"] == 3
@@ -1214,15 +1227,21 @@ async def test_approval_turns_the_list_into_opening_stock_and_nothing_else(world
     async with w.client() as client:
         view = await prepared(client, w, captured_at="2025-10-01")
         response = await approve(client, view["snapshot_id"], view["review_revision"])
+        # What the list became is read by pages (ADR-0014 §10).
+        page = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}/application")
 
     assert response.status_code == 200, response.text
+    assert page.status_code == 200, page.text
     body = response.json()
+    applied = page.json()["items"]
     snapshot_id = uuid.UUID(body["snapshot_id"])
     assert body["status"] == "APPLIED"
     assert body["approved_by_user_id"] == str(w.users["owner"])
     assert body["decided_at"] is not None
-    assert body["application"]["units"] == 5
-    assert [line["line_no"] for line in body["application"]["lines"]] == [1, 1, 1, 2]
+    assert body["application"] == {"units": 5, "allocations": 4}
+    assert page.json()["has_more"] is False
+    assert sum(line["quantity"] for line in applied) == 5
+    assert [line["line_no"] for line in applied] == [1, 1, 1, 2]
     assert await stock(w) == {
         (w.coat, w.sizes["S"]): 1,
         (w.coat, w.sizes["M"]): 1,
@@ -1240,9 +1259,7 @@ async def test_approval_turns_the_list_into_opening_stock_and_nothing_else(world
     }
     assert {m.acting_store_id for m in ledger} == {w.main}
     assert {m.actor_user_id for m in ledger} == {w.users["owner"]}
-    assert {line["movement_id"] for line in body["application"]["lines"]} == {
-        str(m.id) for m in ledger
-    }
+    assert {line["movement_id"] for line in applied} == {str(m.id) for m in ledger}
     async with w.maker() as session:
         lots = list(
             await session.scalars(
@@ -1250,9 +1267,7 @@ async def test_approval_turns_the_list_into_opening_stock_and_nothing_else(world
             )
         )
         assert {lot.acquisition_type for lot in lots} == {AcquisitionType.OPENING_BALANCE}
-        assert {str(lot.id) for lot in lots} == {
-            line["stock_lot_id"] for line in body["application"]["lines"]
-        }
+        assert {str(lot.id) for lot in lots} == {line["stock_lot_id"] for line in applied}
         # Every quantity is explained by the ledger (invariant I3).
         assert await find_divergences(session, organization_id=w.org) == []
         entry = await session.scalar(
@@ -1313,13 +1328,18 @@ async def test_approving_again_returns_exactly_what_was_done(world):
     async with w.client() as client:
         view = await prepared(client, w)
         first = await approve(client, view["snapshot_id"], view["review_revision"])
+        done = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}/application")
         again = await approve(client, view["snapshot_id"], view["review_revision"])
         other = await approve(client, view["snapshot_id"], view["review_revision"] - 1)
         read = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}")
+        redone = await client.get(f"/api/v1/snapshots/{view['snapshot_id']}/application")
 
     assert again.status_code == 200, again.text
     assert again.json()["application"] == first.json()["application"]
     assert read.json()["application"] == first.json()["application"]
+    # Line by line, the replay changed nothing: the same lots, the same movements.
+    assert redone.json() == done.json()
+    assert len(done.json()["items"]) == 4
     assert len(await movements(w)) == 4
     assert (other.status_code, other.json()["details"]["reason"]) == (409, "ALREADY_DECIDED")
 

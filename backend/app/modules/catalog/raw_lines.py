@@ -19,8 +19,9 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, ScalarSelect, Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import QueryableAttribute
 
 from app.core.errors import ValidationFailedError
 from app.modules.catalog.evidence import (
@@ -191,20 +192,78 @@ async def read_lines(
     }
 
 
+def text_of(
+    raw_input_id: ColumnElement[uuid.UUID] | QueryableAttribute[uuid.UUID],
+    *,
+    organization_id: uuid.UUID,
+) -> ScalarSelect[str]:
+    """The exact text of the line `raw_input_id` names, tenant-scoped,
+    without its parse, as a column of the caller's own query: a check over
+    every line of a long list reads each text beside its row, in the one
+    statement that reads the rows (review, 2026-10-09).
+
+    Found by its primary key alone. The tenant is checked in a form no index
+    serves (`IS NOT DISTINCT FROM`; the column is never null, so it is `=`),
+    so no statistics can lead the planner to read the organization's lines
+    by their index for each row instead: with the statistics a test suite
+    left, that took 1.4 s at 5 000 lines (review, third round, 2026-10-09).
+    A line of another organization reads as no text."""
+    return (
+        select(RawInput.raw_text)
+        .where(
+            RawInput.id == raw_input_id,
+            RawInput.organization_id.is_not_distinct_from(organization_id),
+        )
+        .scalar_subquery()
+    )
+
+
 async def repeated_lines(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID,
     raw_input_ids: Collection[uuid.UUID],
+    among: Select[tuple[uuid.UUID]] | None = None,
 ) -> dict[uuid.UUID, int]:
     """For each line, how many of the given lines have exactly its text.
 
     A list may repeat a line on purpose — one line per piece — or by a slip of
     transcription. Which, only a person can say; this only makes the repeat
     visible, beside each line it concerns.
+
+    `among` counts across the lines it selects instead (a query of raw input
+    ids), in the database: a page of a long list is then compared with the
+    whole list without sending every line of it on every page (ADR-0014 §18).
+    A given line it does not select is counted among them all the same, and
+    may be counted 0 times.
     """
     if not raw_input_ids:
         return {}
+    if among is not None:
+        given = (
+            await session.execute(
+                select(RawInput.id, RawInput.content_hash).where(
+                    RawInput.id.in_(list(raw_input_ids)),
+                    RawInput.organization_id == organization_id,
+                )
+            )
+        ).all()
+        counted = dict(
+            (
+                await session.execute(
+                    select(RawInput.content_hash, func.count())
+                    .where(
+                        RawInput.id.in_(among),
+                        RawInput.organization_id == organization_id,
+                        RawInput.content_hash.in_({content_hash for _, content_hash in given}),
+                    )
+                    .group_by(RawInput.content_hash)
+                )
+            )
+            .tuples()
+            .all()
+        )
+        return {raw_input_id: counted.get(content_hash, 0) for raw_input_id, content_hash in given}
     rows = (
         await session.execute(
             select(RawInput.id, RawInput.content_hash).where(
@@ -226,4 +285,5 @@ __all__ = [
     "read_lines",
     "record_lines",
     "repeated_lines",
+    "text_of",
 ]

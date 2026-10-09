@@ -311,6 +311,9 @@ forbidden_modules = [
 # approved answers as opening stock, and it does nothing else: it sells
 # nothing, returns nothing, moves nothing between warehouses and takes no
 # orders. Anything more would be a second, unreviewed way into the ledger.
+# A list now also takes a parser's files and hand-typed parts (ADR-0014);
+# that changes nothing here: who added a file is named by the API, through
+# `identity`, never by this module.
 [[tool.importlinter.contracts]]
 name = "a legacy stock list opens a ledger and does nothing else"
 type = "forbidden"

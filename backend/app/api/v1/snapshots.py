@@ -3,8 +3,16 @@
 Every command is identified by what it names rather than by an
 `Idempotency-Key` header, like the catalog review commands: the import by its
 client-generated `command_id` (unique within the organization, as for a sale),
-a line's answer by the line itself, an approval by the review revision it
-approves, a rejection by its reason. Each can be repeated safely. See ADR-0005.
+an added part by its own `command_id`, a line's answer by the line itself, a
+removal by the part it removes, an approval by the review revision it
+approves, a rejection by its reason. Each can be repeated safely. See ADR-0005
+and ADR-0014.
+
+A list is filled by parts: lines typed by hand, or a parser's file in Birka's
+format (`birka.stock-list`, `app.modules.snapshots.stock_file`). Every route
+on one list takes `store_id`, the store the person acts through, which is
+the list's own store when left out: a shared warehouse's list belongs to
+both stores (owner decision, 2026-10-08).
 """
 
 from __future__ import annotations
@@ -13,7 +21,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, Body, Path, Query, Response, status
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -25,7 +33,11 @@ from pydantic import (
 
 from app.api.deps import ScopeDep, SessionDep
 from app.core.text import CleanText, reject_unstorable
+from app.modules.identity.service import display_names
+from app.modules.snapshots.file_lines import SplitReading
 from app.modules.snapshots.models import (
+    SnapshotPartKind,
+    SnapshotPriceKind,
     SnapshotQuantityBasis,
     SnapshotQuantityState,
     SnapshotRowStatus,
@@ -34,17 +46,24 @@ from app.modules.snapshots.models import (
 from app.modules.snapshots.service import (
     MAX_ALLOCATIONS,
     MAX_LINE_CHARS,
-    MAX_LINES,
-    MAX_LIST_CHARS,
+    MAX_LIST_ROWS,
+    MAX_PART_LINES,
+    MAX_PART_TEXT_CHARS,
     AllocationInput,
+    add_part,
     approve_snapshot,
     get_snapshot,
     import_snapshot,
+    list_application,
     list_lines,
+    list_parts,
     list_snapshots,
     reject_snapshot,
+    remove_part,
     resolve_row,
 )
+from app.modules.snapshots.stock_file import MAX_LIST_ITEMS, StockFileV1, has_control
+from app.modules.tenancy.models import StoreState
 
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
 
@@ -57,7 +76,40 @@ LineText = Annotated[
 ]
 
 
+def _no_control_character(value: str) -> str:
+    """The file's name, as the file's own strings: no C0 or C1 control, no
+    line or paragraph separator (`stock_file.has_control`)."""
+    if has_control(value):
+        raise ValueError("A file's name holds no control character")
+    return value
+
+
+# The file's name as the phone read it, shown beside the part.
+FileName = Annotated[
+    CleanText,
+    StringConstraints(min_length=1, max_length=200),
+    AfterValidator(_no_control_character),
+]
+# The store the person acts through: the list's own when left out (ADR-0014 §7).
+ActingThrough = Annotated[uuid.UUID | None, Query(alias="store_id")]
+
+
 # --- requests ------------------------------------------------------------------
+
+
+def _bounded(lines: list[str] | None) -> None:
+    if lines is not None and sum(len(line) for line in lines) > MAX_PART_TEXT_CHARS:
+        raise ValueError(f"A part of a stock list holds at most {MAX_PART_TEXT_CHARS} characters")
+
+
+def _lines_or_a_file(
+    lines: list[str] | None, file: StockFileV1 | None, file_name: str | None
+) -> None:
+    if (lines is None) == (file is None):
+        raise ValueError("Give lines or a file — exactly one")
+    if (file is None) != (file_name is None):
+        raise ValueError("A file comes with its file_name, and only a file does")
+    _bounded(lines)
 
 
 class ImportRequest(BaseModel):
@@ -71,13 +123,43 @@ class ImportRequest(BaseModel):
     location_id: uuid.UUID
     source_document_ref: CleanText | None = Field(default=None, min_length=1, max_length=300)
     captured_at: CleanText | None = Field(default=None, min_length=1, max_length=40)
-    lines: list[LineText] = Field(min_length=1, max_length=MAX_LINES)
+    # The list's first part: lines typed by hand, or a parser's file.
+    lines: list[LineText] | None = Field(default=None, min_length=1, max_length=MAX_PART_LINES)
+    file: StockFileV1 | None = None
+    file_name: FileName | None = None
 
     @model_validator(mode="after")
-    def _bounded(self) -> ImportRequest:
-        if sum(len(line) for line in self.lines) > MAX_LIST_CHARS:
-            raise ValueError(f"A stock list holds at most {MAX_LIST_CHARS} characters")
+    def _one_source(self) -> ImportRequest:
+        _lines_or_a_file(self.lines, self.file, self.file_name)
         return self
+
+
+class AddPartRequest(BaseModel):
+    """A file with its name, or lines typed by hand with where they came from."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # The client's permanent name for adding this part, as for an import.
+    command_id: uuid.UUID
+    lines: list[LineText] | None = Field(default=None, min_length=1, max_length=MAX_PART_LINES)
+    file: StockFileV1 | None = None
+    file_name: FileName | None = None
+    # A file says these itself; hand-typed lines may.
+    source: CleanText | None = Field(default=None, min_length=1, max_length=300)
+    counted_on: CleanText | None = Field(default=None, min_length=1, max_length=40)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> AddPartRequest:
+        _lines_or_a_file(self.lines, self.file, self.file_name)
+        if self.file is not None and (self.source is not None or self.counted_on is not None):
+            raise ValueError("A file says where it came from itself")
+        return self
+
+
+class RemovePartRequest(BaseModel):
+    """No body is needed, and none may say more: no reason (owner, 2026-10-08)."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AllocationPayload(BaseModel):
@@ -107,6 +189,19 @@ class ResolutionRequest(BaseModel):
     quantity_basis: SnapshotQuantityBasis | None = None
     note: CleanText | None = Field(default=None, min_length=1, max_length=1000)
     skip_reason: CleanText | None = Field(default=None, min_length=1, max_length=1000)
+    # What a record of the line's split means when it may also be a range of
+    # sizes («42-44», `may_be_range`): only `SIZE_WITH_COUNT`, and only with
+    # `STATED_BY_SIZE`, which such a line needs it for (owner, 2026-10-09).
+    split_read_as: SplitReading | None = None
+    # The records it was said of: those the editor asked about, each as the
+    # line's `shown_split` writes it (`written`), or by its `size` when
+    # `written` is null, a record the text no longer shows (`_record_key`).
+    # Goes with `split_read_as` and only with it; every record that may be a
+    # range when the answer arrives must be among them (review, third round,
+    # 2026-10-09).
+    split_read_records: list[LineText] | None = Field(
+        default=None, min_length=1, max_length=MAX_LIST_ITEMS
+    )
 
     @model_validator(mode="after")
     def _one_answer(self) -> ResolutionRequest:
@@ -118,6 +213,19 @@ class ResolutionRequest(BaseModel):
             self.note is not None or self.quantity_basis is not None
         ):
             raise ValueError("A skipped line is explained by its skip_reason alone")
+        if (
+            self.split_read_as is not None
+            and self.quantity_basis is not SnapshotQuantityBasis.STATED_BY_SIZE
+        ):
+            raise ValueError("split_read_as goes only with STATED_BY_SIZE")
+        if (self.split_read_as is None) != (self.split_read_records is None):
+            raise ValueError(
+                "split_read_as goes with split_read_records, the records it was said of"
+            )
+        if self.split_read_records is not None and len(set(self.split_read_records)) != len(
+            self.split_read_records
+        ):
+            raise ValueError("Each record of split_read_records once")
         return self
 
 
@@ -137,7 +245,14 @@ class RejectionRequest(BaseModel):
 # --- responses -----------------------------------------------------------------
 
 
+class SummaryLimits(BaseModel):
+    # The most lines that count, and the most answers, one list takes.
+    lines: int
+    allocations: int
+
+
 class SnapshotSummary(BaseModel):
+    # Every count but `parts_removed` leaves a removed file's lines out.
     lines: int
     pending: int
     needs_review: int
@@ -150,6 +265,9 @@ class SnapshotSummary(BaseModel):
     # each basis (ADR-0005 §3).
     lines_by_basis: dict[SnapshotQuantityBasis, int]
     units_by_basis: dict[SnapshotQuantityBasis, int]
+    parts: int
+    parts_removed: int
+    limits: SummaryLimits
 
 
 class ApplicationLine(BaseModel):
@@ -163,14 +281,27 @@ class ApplicationLine(BaseModel):
 
 
 class Application(BaseModel):
-    lines: list[ApplicationLine]
+    """What an applied list became, in all. Its lines are read by pages."""
+
     units: int
+    allocations: int
+
+
+class ApplicationPage(BaseModel):
+    items: list[ApplicationLine]
+    has_more: bool
 
 
 class SnapshotResponse(BaseModel):
     snapshot_id: uuid.UUID
     command_id: uuid.UUID
     store_id: uuid.UUID
+    # The list's own store, by name: a shared warehouse's list is seen from
+    # the other store too.
+    store_name: str | None
+    # Whether that store trades. While it does not, the list is only
+    # rejected, through the other store (owner decision, 2026-10-09).
+    store_state: StoreState
     location_id: uuid.UUID
     status: SnapshotStatus
     source_document_ref: str | None
@@ -197,6 +328,37 @@ class AllocationResponse(BaseModel):
     stock_lot_id: uuid.UUID | None
 
 
+class SizeCountResponse(BaseModel):
+    size: str
+    count: int
+
+
+class ReadingResponse(BaseModel):
+    """What the parser read of a line, exactly as the file said it. A hint."""
+
+    model: str | None = None
+    colours: list[str] | None = None
+    sizes: list[str] | None = None
+    size_counts: list[SizeCountResponse] | None = None
+    count: int | None = None
+    price: str | None = None
+    note: str | None = None
+
+
+class SplitResponse(BaseModel):
+    size: str
+    count: int
+    # The catalogue's size of this spelling; null when it has none, and then
+    # the split cannot be confirmed by a tap.
+    size_id: uuid.UUID | None
+    # The record as the line's text writes it («42-44»).
+    written: str | None
+    # Whether that record may also be a range of sizes: its count, or the
+    # whole record, is a size of the catalogue too. Then the person says
+    # what it means before the tap (`split_read_as`; owner, 2026-10-09).
+    may_be_range: bool
+
+
 class LineResponse(BaseModel):
     line_no: int
     raw_input_id: uuid.UUID
@@ -214,10 +376,32 @@ class LineResponse(BaseModel):
     candidates: dict[str, list[str]]
     unclassified: list[str]
     quantity_basis: SnapshotQuantityBasis | None
+    # What the person said a record of the line's split means, with an
+    # answer `STATED_BY_SIZE`: `SIZE_WITH_COUNT`, or null when nobody was
+    # asked. A line answered so whose record may now be a range, and was
+    # never said to be a size with its count, stops the approval
+    # (`SPLIT_MAY_BE_RANGE`; owner, 2026-10-09).
+    split_read_as: SplitReading | None
     allocations: list[AllocationResponse]
     resolution_note: str | None
     resolved_by_user_id: uuid.UUID | None
     resolved_at: datetime | None
+    # The part the line came in, and for a line from a file: where it was
+    # written, what the parser read, the kind of its price, and why the
+    # reading needs a person's eye (ADR-0014 §6).
+    part_id: uuid.UUID
+    part_no: int
+    photo_name: str | None
+    photo_line: int | None
+    reading: ReadingResponse | None
+    price_kind: SnapshotPriceKind | None
+    file_reasons: list[str]
+    # The split the line's text shows, each size with its count: what
+    # `STATED_BY_SIZE` answers, never preselected.
+    shown_split: list[SplitResponse] | None
+    # How many lines that count name this photo and line; more than one is
+    # a photo read twice, or put in two files.
+    same_photo_lines: int
 
 
 class LinePage(BaseModel):
@@ -235,6 +419,67 @@ class SnapshotPage(BaseModel):
     has_more: bool
 
 
+class PartProgress(BaseModel):
+    pending: int
+    needs_review: int
+    resolved: int
+    skipped: int
+
+
+class PartResponse(BaseModel):
+    part_id: uuid.UUID
+    part_no: int
+    kind: SnapshotPartKind
+    file_name: str | None
+    source: str | None
+    counted_on: str | None
+    price_kind: SnapshotPriceKind | None
+    parser: str | None
+    format_version: int | None
+    lines: int
+    first_line_no: int
+    last_line_no: int
+    added_by_user_id: uuid.UUID | None
+    added_by_name: str | None
+    added_at: datetime
+    removed_by_user_id: uuid.UUID | None
+    removed_by_name: str | None
+    removed_at: datetime | None
+    progress: PartProgress
+    # Lines of this part whose photo and line another part names too.
+    photo_lines_elsewhere: int
+
+
+class PartPage(BaseModel):
+    items: list[PartResponse]
+
+
+class PartChangeResponse(BaseModel):
+    snapshot: SnapshotResponse
+    part: PartResponse
+
+
+async def _named(session: SessionDep, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Who added and who removed each part, by name (ADR-0014 §12)."""
+    names = await display_names(
+        session,
+        {
+            user_id
+            for part in parts
+            for user_id in (part["added_by_user_id"], part["removed_by_user_id"])
+            if user_id is not None
+        },
+    )
+    return [
+        {
+            **part,
+            "added_by_name": names.get(part["added_by_user_id"]),
+            "removed_by_name": names.get(part["removed_by_user_id"]),
+        }
+        for part in parts
+    ]
+
+
 # --- routes ----------------------------------------------------------------------
 
 
@@ -242,7 +487,8 @@ class SnapshotPage(BaseModel):
 async def import_list(
     payload: ImportRequest, scope: ScopeDep, session: SessionDep, response: Response
 ) -> dict[str, Any]:
-    """Keep a legacy stock list as evidence. Nothing becomes stock yet."""
+    """Keep a legacy stock list as evidence: typed lines or a parser's file.
+    Nothing becomes stock yet."""
     view, created = await import_snapshot(
         session,
         scope=scope,
@@ -250,6 +496,8 @@ async def import_list(
         store_id=payload.store_id,
         location_id=payload.location_id,
         lines=payload.lines,
+        file=payload.file,
+        file_name=payload.file_name,
         source_document_ref=payload.source_document_ref,
         captured_at=payload.captured_at,
     )
@@ -265,17 +513,27 @@ async def list_lists(
     scope: ScopeDep,
     session: SessionDep,
     status: SnapshotStatus | None = None,
+    location_id: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> dict[str, Any]:
+    """The store's own lists, and every list at a warehouse it may import into."""
     return await list_snapshots(
-        session, scope=scope, store_id=store_id, status=status, limit=limit, offset=offset
+        session,
+        scope=scope,
+        store_id=store_id,
+        status=status,
+        location_id=location_id,
+        limit=limit,
+        offset=offset,
     )
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotResponse)
-async def read_list(snapshot_id: uuid.UUID, scope: ScopeDep, session: SessionDep) -> dict[str, Any]:
-    return await get_snapshot(session, scope=scope, snapshot_id=snapshot_id)
+async def read_list(
+    snapshot_id: uuid.UUID, scope: ScopeDep, session: SessionDep, via: ActingThrough = None
+) -> dict[str, Any]:
+    return await get_snapshot(session, scope=scope, snapshot_id=snapshot_id, via_store_id=via)
 
 
 @router.get("/{snapshot_id}/lines", response_model=LinePage)
@@ -283,22 +541,34 @@ async def read_lines(
     snapshot_id: uuid.UUID,
     scope: ScopeDep,
     session: SessionDep,
+    via: ActingThrough = None,
     status: SnapshotRowStatus | None = None,
+    part_id: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0, le=MAX_LINES)] = 0,
+    offset: Annotated[int, Query(ge=0, le=MAX_LIST_ROWS)] = 0,
 ) -> dict[str, Any]:
+    """A page of lines. A removed file's lines only when asked for: by
+    `status=REMOVED`, or by `part_id` naming that file."""
     return await list_lines(
-        session, scope=scope, snapshot_id=snapshot_id, status=status, limit=limit, offset=offset
+        session,
+        scope=scope,
+        snapshot_id=snapshot_id,
+        status=status,
+        part_id=part_id,
+        via_store_id=via,
+        limit=limit,
+        offset=offset,
     )
 
 
 @router.put("/{snapshot_id}/lines/{line_no}", response_model=ResolutionResponse)
 async def resolve_line(
     snapshot_id: uuid.UUID,
-    line_no: Annotated[int, Path(ge=1, le=MAX_LINES)],
+    line_no: Annotated[int, Path(ge=1, le=MAX_LIST_ROWS)],
     payload: ResolutionRequest,
     scope: ScopeDep,
     session: SessionDep,
+    via: ActingThrough = None,
 ) -> dict[str, Any]:
     """Say what one line means. Replaces the line's previous answer, if any."""
     result = await resolve_row(
@@ -320,14 +590,79 @@ async def resolve_line(
         quantity_basis=payload.quantity_basis,
         skip_reason=payload.skip_reason,
         note=payload.note,
+        via_store_id=via,
+        split_read_as=payload.split_read_as,
+        split_read_records=payload.split_read_records,
     )
     await session.commit()
     return result
 
 
+@router.get("/{snapshot_id}/parts", response_model=PartPage)
+async def read_parts(
+    snapshot_id: uuid.UUID, scope: ScopeDep, session: SessionDep, via: ActingThrough = None
+) -> dict[str, Any]:
+    """Every file and hand-typed part of the list, removed ones included."""
+    parts = await list_parts(session, scope=scope, snapshot_id=snapshot_id, via_store_id=via)
+    return {"items": await _named(session, parts)}
+
+
+@router.post(
+    "/{snapshot_id}/parts",
+    response_model=PartChangeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_list_part(
+    snapshot_id: uuid.UUID,
+    payload: AddPartRequest,
+    scope: ScopeDep,
+    session: SessionDep,
+    response: Response,
+    via: ActingThrough = None,
+) -> dict[str, Any]:
+    """Add a file, or lines typed by hand, to a list under review."""
+    result, created = await add_part(
+        session,
+        scope=scope,
+        snapshot_id=snapshot_id,
+        command_id=payload.command_id,
+        via_store_id=via,
+        lines=payload.lines,
+        file=payload.file,
+        file_name=payload.file_name,
+        source=payload.source,
+        counted_on=payload.counted_on,
+    )
+    await session.commit()
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return {"snapshot": result["snapshot"], "part": (await _named(session, [result["part"]]))[0]}
+
+
+@router.post("/{snapshot_id}/parts/{part_id}/remove", response_model=PartChangeResponse)
+async def remove_list_part(
+    snapshot_id: uuid.UUID,
+    part_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    via: ActingThrough = None,
+    payload: Annotated[RemovePartRequest | None, Body()] = None,
+) -> dict[str, Any]:
+    """Take a file added by mistake out of the list, with its lines' answers."""
+    result = await remove_part(
+        session, scope=scope, snapshot_id=snapshot_id, part_id=part_id, via_store_id=via
+    )
+    await session.commit()
+    return {"snapshot": result["snapshot"], "part": (await _named(session, [result["part"]]))[0]}
+
+
 @router.post("/{snapshot_id}/approve", response_model=SnapshotResponse)
 async def approve_list(
-    snapshot_id: uuid.UUID, payload: ApprovalRequest, scope: ScopeDep, session: SessionDep
+    snapshot_id: uuid.UUID,
+    payload: ApprovalRequest,
+    scope: ScopeDep,
+    session: SessionDep,
+    via: ActingThrough = None,
 ) -> dict[str, Any]:
     """Turn the whole list into opening stock at its warehouse, or nothing."""
     result = await approve_snapshot(
@@ -335,18 +670,44 @@ async def approve_list(
         scope=scope,
         snapshot_id=snapshot_id,
         expected_revision=payload.expected_review_revision,
+        via_store_id=via,
     )
     await session.commit()
     return result
 
 
+@router.get("/{snapshot_id}/application", response_model=ApplicationPage)
+async def read_application(
+    snapshot_id: uuid.UUID,
+    scope: ScopeDep,
+    session: SessionDep,
+    via: ActingThrough = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """What an applied list became, a page at a time: each answer, the lot it
+    became and the movement that brought it in."""
+    return await list_application(
+        session,
+        scope=scope,
+        snapshot_id=snapshot_id,
+        via_store_id=via,
+        offset=offset,
+        limit=limit,
+    )
+
+
 @router.post("/{snapshot_id}/reject", response_model=SnapshotResponse)
 async def reject_list(
-    snapshot_id: uuid.UUID, payload: RejectionRequest, scope: ScopeDep, session: SessionDep
+    snapshot_id: uuid.UUID,
+    payload: RejectionRequest,
+    scope: ScopeDep,
+    session: SessionDep,
+    via: ActingThrough = None,
 ) -> dict[str, Any]:
     """Close a list without turning any of it into stock. The evidence stays."""
     result = await reject_snapshot(
-        session, scope=scope, snapshot_id=snapshot_id, reason=payload.reason
+        session, scope=scope, snapshot_id=snapshot_id, reason=payload.reason, via_store_id=via
     )
     await session.commit()
     return result

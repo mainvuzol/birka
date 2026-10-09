@@ -64,12 +64,12 @@ See the [report](m1-023-snapshot-import-report.md) and [ADR-0005](../decisions/A
 
 Found by the independent code reviews (2026-09-28). The fixes are in the report; these remain.
 
-- **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a list) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
+- **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a part: a pasted text or a file) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
 - **No request-size limit or rate limit in front of the API.** Closed on 2026-10-03: Caddy refuses a body over 1 MB, and the API limits sign-ins per address ([before the public domain](#before-the-public-domain--2026-10-03)). Signed-in requests are still not limited per person.
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
-- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`, and it is not measured. By definition nothing else has written to that warehouse yet.
+- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; on 2026-10-09, with every answer by size read again at the approval, at most 8.6 s, and the 2026-10-08 method up to 9.5 s the same hour on a busier laptop; measured again in the review's third round the same day, by size at most 8.48 s and the 2026-10-08 method up to 9.87 s, 0.13 s under the 10 s rule ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)); see [the JSON stock import](#the-json-stock-import--2026-10-08).
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
-- **Lines are stored verbatim, including bidirectional and zero-width characters.** Nothing renders them today. A future review screen must neutralise them.
+- **Lines are stored verbatim, including bidirectional and zero-width characters.** Since 2026-10-08 «Початкові залишки» shows every line, and every string from a file, through a guard that marks them visibly (ADR-0014 §15). The catalogue screens still show raw text unguarded; they are left for a change of their own.
 - **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
 
 ## The till — 2026-09-29
@@ -308,10 +308,10 @@ See the [report](opening-stock-screen-report.md).
 - **Goods found later are received as ordinary receipts** (owner,
   2026-10-02): a delivery that day, a purchase when a seller enters them.
   Nothing tells them apart from goods bought that day.
-- **The photos → parser → JSON way, chosen on 2026-10-08, does not exist
-  yet.** Birka defines its format; the import is not built. Its JSON is
-  never loaded as stock directly: its lines become a list's lines and pass
-  through the same review (owner, 2026-10-08).
+- **The photos → parser → JSON way, chosen on 2026-10-08, is built** the
+  same day ([the JSON stock import](#the-json-stock-import--2026-10-08)).
+  Its JSON is never loaded as stock directly: its lines become a list's
+  lines and pass through the same review (owner, 2026-10-08).
 - **A slow review is the price of no invented counts.** Hundreds of lines on
   a phone take time. Not measured with real notebooks.
 
@@ -895,3 +895,220 @@ the review of the built change raised.
   marked sale recorded by the new code whose answer was lost, resent to the
   old code, is refused before its lookup and stays kept until the server is
   upgraded again.
+
+## The JSON stock import — 2026-10-08
+
+See the [report](json-stock-import-report.md) and
+[ADR-0014](../decisions/ADR-0014-opening-stock-from-a-json-file.md). The
+owner chose on 2026-10-08 that the shops' existing stock goes in from photos,
+through a parser, as files in Birka's format, every line reviewed by a
+person; the same day the owner answered the design's questions.
+
+- **The evidence is a transcription.** A line from a file is what the
+  parser wrote, kept exactly; the original is the photo, and only the shop
+  keeps it. Birka cannot check the one against the other. The line's photo
+  name and line number lead a person back to it, and only at the shop.
+- **The parser's precision is unknown.** No real file exists yet, and no
+  parser either. Its reading is shown only as a hint, and its count is taken
+  only when the text says it with «шт»; but how often it misreads a line,
+  a photo's name or a line's number is unmeasured.
+- **Tables of numbers mean notes.** A count without «шт» is a bare number:
+  the person states it with a note (owner, 2026-10-08). Notebooks kept as
+  tables may have many such lines, and their review is slower for it. Not
+  measured with real notebooks.
+- **A size range written with a sign can pass for a split.** «42-44» read
+  by the parser as size 42 with a count of 44 passes the check of a split
+  the text shows (ADR-0014 §5). *Asked since 2026-10-09 (owner), widened
+  after the review the same day:* the app asks what the record means when
+  its size and count are both numbers and the count reads as a larger size
+  after it («42-44», «42-58», «98-104»), whatever the catalogue holds, and
+  when its count, or the whole record, is one of the organization's sizes
+  («M-3» with a size «3»). The tap is offered only once the person chooses
+  «розмір 42 — 44 шт»; the server refuses the tap without that choice
+  (`SPLIT_MAY_BE_RANGE`), and, since the review's third round, without
+  each record that may be a range as the answer arrives among the records
+  the answer names (the ones the editor asked about), so a size created
+  while the person answers is never credited to their word. It keeps the
+  choice on the line and in the answer's history with exactly the records
+  named, and reads every such line again at the approval, record by
+  record: a size created after the answer that makes a
+  record the person's word did not cover a possible range stops the
+  approval, naming the line, until it is answered again («Куртка 42-44
+  46-2», answered for «42-44», once a size «2» exists).
+  What is left: a record of a letter size, or of a number size with a count
+  no larger than it («46-2», «48-12»), is read as a size with its count
+  unless the catalogue makes it a range, the person seeing the text and the
+  photo's line.
+- **A split «shown» by more than the parser read** *(narrowed on
+  2026-10-09, review, in four rounds; not closed).* The check once took a
+  split when each of the parser's sizes stood once with its count, whatever
+  else the text held: «Лоран S-1 M-2 L-4» with only S and M read, «Лоран
+  M-3+2», «Лоран S M-3», «S-1 M-2 L-1 разом 5» and «Лоран 46-2 48» were
+  tapped on the parser's pairs. Now a count ends with its number, a sum or
+  a product with any whitespace about its sign included, the sign in
+  either case and ✕ ✖ ⨯ among them («M-3 + 2», «M-3X2», «M-3 Х 2» with
+  no-break spaces, «M-3✕2»; third round); since the fourth round what may
+  end a count is named, and any other sign before a numeral is no end, so
+  signs of another width or kind, a dash with no-break spaces about it, and
+  a character that prints nothing between them no longer hide a sum
+  («M-3＋2», «M-3∗2», «M-3 – 2», «M-3，5», «M-3x2» with a zero-width space;
+  «M-3 @1850», «M-3 #1850», «M-3 №1850» and any other sign before a
+  numeral go to a note too, and so do «46-2;48-1», «M-3;2» and «M-3)2»,
+  read strictly on purpose though they may be a list: «46-2; 48-1» with
+  its space keeps the tap); after the fourth round, a letter that looks
+  like `x` (the Greek `χ`, the Cyrillic `ҳ` `ӽ` `ӿ`, either case, or `x`
+  with a mark) and a combining mark on the count or after it no longer
+  hide a product either («M-3Χ2», «M-3ҳ2»); each size stands in the text once, in
+  any of its spellings («M-3 М» with a Cyrillic М writes M twice); and the text holds no other size, whether the parser
+  reads it or it is a letter size the parser does not know («Лоран S-1 M-2
+  XXXL», «M-3 XXS», «M-3 ХL»), no other size with a count, and no number,
+  of any script («½», «①»), Birka cannot account for (the file's price, a
+  count with «шт», a length). Otherwise the line is answered with a note.
+  What is left:
+  - **a number the file calls the price is excused on the parser's word.**
+    «46-2 48» with a `price` of `"48"`, «S-1 M-2 L-1 разом 5» with `"5"`,
+    or «Лоран M-3 3» with `"3"` shows its split: a parser that cannot tell
+    the 48 from a price may well write it as the price. Reading R-f, awaiting
+    the owner: excusing the price only where the text marks it («грн»,
+    «₴», «ціна») would close it, at the cost of taps;
+  - a size only the organization's catalogue knows, not a letter size
+    («Лоран M-3 OS», «єдиний»), and a number written as a word («і ще два»)
+    or in Latin letters («III»), are not seen beside a split;
+  - **a lowercase «с» is the parser's preposition,** wherever it stands.
+    So «Лоран M-3 с», where the «с» may be the size S with its count lost,
+    shows the split of M, as Birka's parser reads the line. A capital «С»
+    is read more strictly than the parser reads it (fourth round,
+    2026-10-09): it is the preposition only where it begins a phrase
+    Birka's parse reads («Куртка С капюшоном M-3» keeps its tap, as
+    «куртка с капюшоном M-3» does), and S anywhere else, so «Лоран С M-3»,
+    «Лоран M-3 С 1850», «Лоран M-3 С без кількості» and «Куртка С поясом
+    M-3» go to a note. In the third round a capital «С» with any word after
+    it was the preposition, as the parser reads it, and a «С» before a
+    price hid a size;
+  - the conservative side: a price the file leaves out, or one the text
+    writes with a gap («1 850»), and a word that spells a letter size («м»
+    for metres, «л»), send a line that does show its split to a note. A
+    capital «С» outside a phrase Birka reads is S, so «Куртка С поясом M-3»
+    goes to a note; and a word joined by an apostrophe is one word only as
+    a Ukrainian word is, a Cyrillic letter before it and «я», «ю», «є» or
+    «ї» after it: «Лоран м'ята M-3» and «м’ятний» keep their tap, while
+    «M-3'L», «L'S» and «XL’XXL» each write a size and go to a note (fourth
+    round; the third round joined any two words at an apostrophe and hid
+    those sizes). A modifier letter that writes an apostrophe or another
+    sign (U+02B9 to U+02C1, U+02C6 to U+02D1, U+02EC, U+02EE; `ʼ`, U+02BC,
+    among them) is a sign, not a letter, though Unicode counts it one, so
+    «M-3ʼL», «LʼS», «XLʼXXL», «LʼL» and «СʼЛ» write sizes and go to a note
+    too, while «Лоран мʼята M-3» keeps its tap (after the fourth round;
+    before it, those were one word each and hid the sizes).
+  - **Left as they are after the fourth round** (2026-10-09, the review
+    rounds stopped there): an apostrophe-like letter outside that range
+    (U+0374 among them, though it equals U+02B9) still joins a size to the
+    word before it; an «x» look-alike outside x, х, χ, ҳ, ӽ and ӿ before a
+    numeral still reads as a letter, so «M-3» beside the price may keep its
+    tap; and a spacing or enclosing mark (Mc, Me) right after a count is not
+    pinned by a test. A parser that writes what the notebook shows does not
+    produce these; the person still taps, seeing the line and its photo.
+- **The limit, and a warehouse larger than it.** A list takes at most 5 000
+  answers and 5 000 lines, and a warehouse takes one list, once. The owner
+  kept 5 000 on 2026-10-08: the shops first count their largest warehouse
+  roughly (pages × lines per page), and above 5 000 the limit is raised by
+  a separate change to the ledger before going live. The count is rough,
+  and a notebook line may name several sizes, each its own answer, so a
+  warehouse counted just under 5 000 may still not fit, unless the count
+  counts each size of such a line. Raising the limit needs the ledger changed first:
+  above about 6 500 answers its read of the reservations
+  (`inventory.repository.reserved_quantities`) fails with "stack depth
+  limit exceeded", whatever the limit is set to. 5 000 is about 23 % under
+  that ceiling.
+- **Measured on PostgreSQL 16 on the laptop, not on the server.** The
+  approval took 7.6 s at 5 000 answers on the local 16.2 cluster, and up to
+  9.5 s on 2026-10-09 with the laptop busier (every answer by size: 8.6 s).
+  Measured again in the review's third round, after the re-check's text
+  read stopped depending on the planner's statistics, it took up to 9.87 s
+  by the 2026-10-08 method, 0.13 s under the 10 s rule, and 8.48 s by size
+  (the
+  [evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md));
+  the server runs 17, on hardware not yet chosen (release checklist, row
+  16). Both the timing and the ledger's ceiling may differ there, and the
+  room under the 10 s rule is smaller than the first figure said. The client
+  waits 60 s for the approval, six times the slowest figure measured
+  (9.87 s).
+- **The warehouse is held for the whole review,** even for days (owner,
+  2026-10-08). The shared warehouse sells only on paper meanwhile, and those
+  sales are typed after the approval. Nothing reminds anyone of a list left
+  waiting.
+- **Two lists at once from two stores.** The app offers no second list for
+  a warehouse whose list waits, but its check is not atomic: two people
+  starting lists for one warehouse at the same moment from the two stores
+  can make two. Only one can be approved; the other is rejected, and its
+  files are added to the first, its lines answered again.
+- **A shared list whose own store stops trading** *(resolved for rejection
+  on 2026-10-09, owner).* The list's opening movements name the store that
+  started it (ADR-0005 §4), so it is still not approved, nor changed, while
+  that store is blocked or archived: through the other store the server
+  says so, `LIST_STORE_NOT_TRADING`, no longer a bare 404. It is rejected
+  through the other store, by its managers or the owner, which releases
+  the warehouse; its files are added again to a new list started there,
+  and their lines answered anew (server runbook, step 9). What is left: a
+  warehouse that is also paused is not reached through the other store
+  (below), so such a list waits until the warehouse reopens or the store
+  trades again. *Since the review, 2026-10-09,* the same holds while that
+  store may no longer receive goods into the warehouse
+  (`LIST_STORE_CANNOT_RECEIVE`). The list carries no flag for it, so its
+  page says so only once a command is refused, and until then still offers
+  the commands.
+- **A store that may sell at the shared warehouse but not receive there**
+  gets `OPENING_LIST_PENDING` at its till, which points to «Початкові
+  залишки», but its managers do not see the list there. In both seeds both
+  stores may receive, so this bites only after an access row is changed.
+- **A paused warehouse's list is seen from its own store only.** `can_receive`
+  through the other store needs the warehouse open, and there it can only be
+  rejected until the warehouse reopens. The owner confirmed this reading on
+  a question that said the list could be changed there; it was put again as
+  built and confirmed on 2026-10-09 (business rules, R-a).
+- **Readings confirmed as built on 2026-10-09** (business rules, R-a to
+  R-f), each a risk the owner accepted: reading 1
+  put again as built; the 10 000 lines a list takes over its life, removed
+  files' included; lines typed by hand removed as a file is; a file without
+  the kind of its prices; the 1 000 parts — files and lines typed by hand —
+  a list takes over its life, removed ones included; a number the file
+  calls the price excused beside a split on the parser's word.
+- **The Telegram file picker is unproven on a phone.** iOS opens Files;
+  Android depends on Telegram's WebView; a file received in a chat must
+  first be saved to the phone. The drill on an Android and an iPhone is
+  release checklist row 26. Telegram Desktop is expected to work but has
+  not been tried; the drill tries it too.
+- **The slow call is proven with a browser clock, not on a phone.**
+  Creating a list from a file, adding a part (a file or typed lines) and
+  approving wait 60 s, and their own timeout is not taken as the server
+  being down (ADR-0014 §16). Three E2E journeys hold the answer and move
+  the page's clock, one with the list made only after the phone stopped
+  waiting; a fourth loses the answers on their way back from the server
+  itself, a gateway's 504 among them; a phone on a slow network has not
+  been tried.
+- **A draft whose send was lost is settled by the server's word.** After
+  no answer, none in time or a gateway's 502, 503 or 504, «Новий список»
+  keeps the draft's command whatever is picked, and offers no new list. A
+  refusal as the same command sent before in another form settles it,
+  whatever became of the list that command made (waiting, rejected,
+  approved, or at another warehouse), and a list it made, opened from the
+  overview, ends the draft (fourth round, 2026-10-09). In the third round
+  only a waiting list found at the draft's warehouse settled it: a draft
+  whose list was rejected or approved offered no new list, even after a
+  reload. What is left: a draft is the phone's own, so another phone, or
+  this one after its storage is cleared, knows nothing of a lost send.
+- **A removed file's lines are kept as evidence,** with their text and
+  parse, and count nowhere. A list holds at most 10 000 rows with them, about
+  2–3 KB each, so backups grow with removed files too.
+- **The catalogue screens still show raw text** unguarded; only
+  «Початкові залишки» marks control, bidirectional and invisible characters.
+  It marks them by Unicode's classes since the review (2026-10-09), the line
+  and paragraph separators included; a variation selector right after a
+  pictograph or in a keycap, and the joiner between two pictographs, are
+  left as they are, so «Оля ❤️» and «👨‍👩‍👧» read as written. A selector after
+  a letter or a bare digit is still marked.
+- **The edge's new check.** CI's `edge` job now sends 999 000 bytes and
+  expects the API's own refusal, and 1 000 001 bytes and expects 413, never
+  a 502, which the phone would read as an outage. Until that job has run, in
+  CI or on the local runner, the Caddyfile's limit against a real file part
+  is not verified.

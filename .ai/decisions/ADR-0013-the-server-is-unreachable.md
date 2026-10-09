@@ -9,6 +9,8 @@ Builds on: ADR-0003 (a command's permanent identity), ADR-0008 §9
 never cached), ADR-0011 (the watcher, and every answer has a number),
 ADR-0012 (the drawer by commit order, §8 refusals after the lookup, the
 prints).
+Amended by: ADR-0014 (2026-10-08), §4.2: a slow call's own timeout is not
+an outage.
 
 ## Context
 
@@ -214,8 +216,9 @@ The phone reads a 503 as unreachable, so the seller sees the paper text
 - **When.** `api()` itself says which failures are the connection, so
   nothing downstream guesses from an error's class. It throws `Unreachable`
   for `fetch`'s own rejection (no network, a reset connection, the edge
-  dead), for its 20-second abort, and for a 2xx whose body is not JSON (a
-  captive portal, or an operator's page answering for the server).
+  dead), for its 20-second abort (not a slow call's own timeout: §4.2), and
+  for a 2xx whose body is not JSON (a captive portal, or an operator's page
+  answering for the server).
   `unreachable(error)` is an `Unreachable`, or an answer 502, 503 or 504.
 - **A bug is not an outage.** A `TypeError` from the app's own code (an old
   WebView without `crypto.randomUUID`, say) reads «Не вдалося виконати
@@ -262,6 +265,10 @@ No new tap anywhere.
 2. **The phone knows whether the server answers.** `shared/reach.ts` keeps
    `useReach { down, since }`. Every outcome of `api()` notes it: unreachable
    sets `down`, keeping `since` from the first; any other answer clears it.
+   *Amended 2026-10-08 by ADR-0014 §16:* a call declared slow (creating a
+   list from a file; adding a part, a file or typed lines; approving a
+   list) waits 60 s, and its own timeout is not taken as the
+   server being down. A fetch that fails outright still is.
 3. **It checks when the server is back.** `useAutoCheck(checks)`. Each
    check's `run` is exactly the handler the banner's button calls: an
    identical resend.

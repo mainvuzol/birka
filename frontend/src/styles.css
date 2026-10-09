@@ -280,6 +280,30 @@ nav {
 .catalog-raw {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* A line's own direction never reorders what stands around it
+     (ADR-0014 §15). */
+  unicode-bidi: isolate;
+}
+/* «Початкові залишки»: a file's name, its photo's or a line's text may be
+   one long word («IMG_20261008_…_зошит_2.json»), and so may a list's date or
+   the reason it was rejected. It breaks anywhere rather than push the
+   phone's page sideways (review, 2026-10-09); other screens keep their own
+   wrapping. */
+.openings .line,
+.openings .notice,
+.openings .hint,
+.openings p,
+.openings [role="alert"],
+.openings [role="status"],
+.openings h2 {
+  overflow-wrap: anywhere;
+}
+/* A file taken out of its list: kept as history, muted (ADR-0014 §15). */
+.part-removed {
+  opacity: 0.6;
+}
+.part-removed strong {
+  text-decoration: line-through;
 }
 .catalog-card {
   overflow-wrap: anywhere;
@@ -367,6 +391,14 @@ nav {
 .line-return .fields label,
 .line-return .fields label:first-child {
   flex: 1;
+}
+/* A list line's size and its count: the size takes two shares, so its
+   choice reads whole on a phone («Оберіть розмір», «Розмір невідомий»). */
+.fields.size-count label {
+  flex: 1 1 0;
+}
+.fields.size-count label:first-child {
+  flex: 2 1 0;
 }
 
 /* A unit in «Брак»: what it is, where it came from, who is looking. */

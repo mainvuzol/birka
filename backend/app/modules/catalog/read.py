@@ -8,10 +8,12 @@ the narrow, read-only surface it goes through instead.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.catalog.models import (
@@ -26,7 +28,7 @@ from app.modules.catalog.models import (
     SizeSystemCode,
     SourceIdentity,
 )
-from app.modules.catalog.sizes import letter_rank
+from app.modules.catalog.sizes import letter_rank, spell_size
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +166,36 @@ async def unknown_size_ids(session: AsyncSession, *, organization_id: uuid.UUID)
     )
 
 
+async def sizes_by_spelling(
+    session: AsyncSession, *, organization_id: uuid.UUID, written: Collection[str]
+) -> dict[str, uuid.UUID]:
+    """The organization's own size for each size as written, by its one spelling.
+
+    The key `uq_size_org_spelling` (ADR-0009) finds it: `lower()` of the
+    spelling, compared by the database itself, among ordinary sizes. "Size
+    not known" is never one of them. A written size the catalogue lacks is
+    left out of the answer, never created or guessed.
+    """
+    spelled = {typed: spell_size(typed) for typed in written}
+    if not spelled:
+        return {}
+    wanted = (
+        select(
+            func.unnest(postgresql.array(list(spelled))).label("typed"),
+            func.unnest(postgresql.array(list(spelled.values()))).label("spelling"),
+        )
+    ).subquery()
+    rows = await session.execute(
+        select(wanted.c.typed, Size.id).join(
+            Size,
+            (func.lower(Size.code) == func.lower(wanted.c.spelling))
+            & (Size.organization_id == organization_id)
+            & Size.is_unknown.is_(False),
+        )
+    )
+    return dict(rows.tuples().all())
+
+
 async def current_variants(
     session: AsyncSession, *, organization_id: uuid.UUID, variant_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, uuid.UUID]:
@@ -215,6 +247,7 @@ __all__ = [
     "describe_variants",
     "size_label",
     "size_labels",
+    "sizes_by_spelling",
     "unknown_size_ids",
 ]
 

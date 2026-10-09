@@ -1,0 +1,80 @@
+# birka_json_perf2, after tests/integration/test_snapshot_parts.py and test_snapshot_import.py (131 passed) on it, 2026-10-09
+# run 1
+STATS ('inventory_snapshot_part', 207, None, datetime.datetime(2026, 10, 9, 9, 15, 16, 451044, tzinfo=datetime.timezone.utc))
+STATS ('inventory_snapshot_row', 3490, None, datetime.datetime(2026, 10, 9, 9, 15, 16, 459485, tzinfo=datetime.timezone.utc))
+STATS ('raw_input', 3493, None, datetime.datetime(2026, 10, 9, 9, 15, 16, 403601, tzinfo=datetime.timezone.utc))
+RAW_INPUT organizations, rows: (135, 5490)
+PLAN --- old (id AND organization_id)
+PLAN Nested Loop  (cost=0.43..24.86 rows=1 width=52) (actual time=0.312..1395.353 rows=5000 loops=1)
+PLAN   Buffers: shared hit=7080088
+PLAN   ->  Index Scan using uq_snapshot_row_line on inventory_snapshot_row  (cost=0.29..8.31 rows=1 width=52) (actual time=0.004..2.736 rows=5000 loops=1)
+PLAN         Index Cond: (inventory_snapshot_id = 'e8b8d1f8-7230-404a-926f-ffd9fce3466d'::uuid)
+PLAN         Filter: ((status = 'RESOLVED'::snapshot_row_status) AND (quantity_basis = 'STATED_BY_SIZE'::snapshot_quantity_basis))
+PLAN         Buffers: shared hit=10088
+PLAN   ->  Index Scan using pk_inventory_snapshot_part on inventory_snapshot_part  (cost=0.14..8.16 rows=1 width=16) (actual time=0.000..0.000 rows=1 loops=5000)
+PLAN         Index Cond: (id = inventory_snapshot_row.part_id)
+PLAN         Filter: (removed_at IS NULL)
+PLAN         Buffers: shared hit=10000
+PLAN   SubPlan 1
+PLAN     ->  Index Scan using ix_raw_input_org_hash on raw_input  (cost=0.28..8.30 rows=1 width=25) (actual time=0.140..0.278 rows=1 loops=5000)
+PLAN           Index Cond: (organization_id = '6a4c388e-0e50-409e-8384-b6fd236d7e85'::uuid)
+PLAN           Filter: (id = inventory_snapshot_row.raw_input_id)
+PLAN           Rows Removed by Filter: 4999
+PLAN           Buffers: shared hit=7060000
+PLAN Planning:
+PLAN   Buffers: shared hit=20
+PLAN Planning Time: 0.087 ms
+PLAN Execution Time: 1395.456 ms
+STMT old (id AND organization_id) run 1: 1.393 s, 5000 rows
+STMT old (id AND organization_id) run 2: 1.390 s, 5000 rows
+STMT old (id AND organization_id) run 3: 1.462 s, 5000 rows
+PLAN --- new (text_of)
+PLAN Nested Loop  (cost=0.43..24.86 rows=1 width=52) (actual time=0.012..6.612 rows=5000 loops=1)
+PLAN   Buffers: shared hit=34920
+PLAN   ->  Index Scan using uq_snapshot_row_line on inventory_snapshot_row  (cost=0.29..8.31 rows=1 width=52) (actual time=0.004..1.868 rows=5000 loops=1)
+PLAN         Index Cond: (inventory_snapshot_id = 'e8b8d1f8-7230-404a-926f-ffd9fce3466d'::uuid)
+PLAN         Filter: ((status = 'RESOLVED'::snapshot_row_status) AND (quantity_basis = 'STATED_BY_SIZE'::snapshot_quantity_basis))
+PLAN         Buffers: shared hit=9920
+PLAN   ->  Index Scan using pk_inventory_snapshot_part on inventory_snapshot_part  (cost=0.14..8.16 rows=1 width=16) (actual time=0.000..0.000 rows=1 loops=5000)
+PLAN         Index Cond: (id = inventory_snapshot_row.part_id)
+PLAN         Filter: (removed_at IS NULL)
+PLAN         Buffers: shared hit=10000
+PLAN   SubPlan 1
+PLAN     ->  Index Scan using pk_raw_input on raw_input  (cost=0.28..8.30 rows=1 width=25) (actual time=0.000..0.001 rows=1 loops=5000)
+PLAN           Index Cond: (id = inventory_snapshot_row.raw_input_id)
+PLAN           Filter: (NOT (organization_id IS DISTINCT FROM '6a4c388e-0e50-409e-8384-b6fd236d7e85'::uuid))
+PLAN           Buffers: shared hit=15000
+PLAN Planning:
+PLAN   Buffers: shared hit=10
+PLAN Planning Time: 0.126 ms
+PLAN Execution Time: 6.742 ms
+STMT new (text_of) run 1: 0.008 s, 5000 rows
+STMT new (text_of) run 2: 0.008 s, 5000 rows
+STMT new (text_of) run 3: 0.007 s, 5000 rows
+UNSAID run 1: 0.170 s (0 unsaid); statements: 0.070 s SELECT inventory_snapshot_row.inventory_snapshot_id, invento, 0.001 s SELECT anon_1.typed, size.id 
+UNSAID run 2: 0.125 s (0 unsaid); statements: 0.034 s SELECT inventory_snapshot_row.inventory_snapshot_id, invento, 0.001 s SELECT anon_1.typed, size.id 
+UNSAID run 3: 0.123 s (0 unsaid); statements: 0.034 s SELECT inventory_snapshot_row.inventory_snapshot_id, invento, 0.000 s SELECT anon_1.typed, size.id 
+TENANT other organization: 5000 rows, 0 with text
+1 passed in 9.70s
+# run 2 (right after run 1, the statistics as they were)
+STATS ('inventory_snapshot_part', 212, None, datetime.datetime(2026, 10, 9, 9, 15, 16, 451044, tzinfo=datetime.timezone.utc))
+STATS ('inventory_snapshot_row', 8490, None, datetime.datetime(2026, 10, 9, 9, 15, 16, 459485, tzinfo=datetime.timezone.utc))
+STATS ('raw_input', 8493, None, datetime.datetime(2026, 10, 9, 9, 15, 16, 403601, tzinfo=datetime.timezone.utc))
+RAW_INPUT organizations, rows: (136, 10490)
+PLAN   SubPlan 1
+PLAN     ->  Index Scan using ix_raw_input_org_hash on raw_input  (cost=0.29..8.30 rows=1 width=25) (actual time=0.144..0.288 rows=1 loops=5000)
+PLAN Execution Time: 1443.777 ms
+STMT old (id AND organization_id) run 1: 1.412 s, 5000 rows
+STMT old (id AND organization_id) run 2: 1.489 s, 5000 rows
+STMT old (id AND organization_id) run 3: 1.630 s, 5000 rows
+PLAN   SubPlan 1
+PLAN     ->  Index Scan using pk_raw_input on raw_input  (cost=0.29..8.30 rows=1 width=25) (actual time=0.000..0.000 rows=1 loops=5000)
+PLAN Execution Time: 5.110 ms
+STMT new (text_of) run 1: 0.091 s, 5000 rows
+STMT new (text_of) run 2: 0.008 s, 5000 rows
+STMT new (text_of) run 3: 0.008 s, 5000 rows
+UNSAID run 1: 0.107 s (0 unsaid); statements: 0.071 s SELECT inventory_snapshot_row.inventory_snapshot_id, invento, 0.001 s SELECT anon_1.typed, size.id 
+UNSAID run 2: 0.135 s (0 unsaid); statements: 0.077 s SELECT inventory_snapshot_row.inventory_snapshot_id, invento, 0.002 s SELECT anon_1.typed, size.id 
+UNSAID run 3: 0.173 s (0 unsaid); statements: 0.078 s SELECT inventory_snapshot_row.inventory_snapshot_id, invento, 0.001 s SELECT anon_1.typed, size.id 
+TENANT other organization: 5000 rows, 0 with text
+1 passed in 10.29s

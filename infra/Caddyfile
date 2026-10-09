@@ -24,10 +24,12 @@
 		# when none arrives, app/core/correlation.py).
 		request_header -X-Request-ID
 
-		# The largest body anything legitimate sends is an opening stock
-		# list: at most 1 000 lines and 100 000 characters (api/v1/snapshots.py),
-		# under 0.4 MB even at four bytes a character. A bigger body is
-		# refused here with 413, before the API holds it in memory.
+		# The largest body anything legitimate sends is one part of an
+		# opening stock list from a parser's file: at most 950 000 bytes as
+		# compact UTF-8 JSON (snapshots/stock_file.py), plus an envelope of
+		# about 2 500, under 0.96 MB (ADR-0014 §11). `1MB` is 1 000 000
+		# bytes, not 1 048 576. A bigger body is refused here with 413,
+		# before the API holds it in memory.
 		request_body {
 			max_size 1MB
 		}

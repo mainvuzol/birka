@@ -77,6 +77,29 @@ async function model(page: Page): Promise<string> {
   return name;
 }
 
+/**
+ * No list waits at this warehouse when a journey starts one there: the app
+ * offers no second list for a warehouse whose list waits (owner decision,
+ * 2026-10-08; ADR-0014 §7), and a journey run before may have left one.
+ */
+async function noListWaits(page: Page, location: string): Promise<void> {
+  const headers = { Authorization: `Bearer ${await token(page)}` };
+  const lists = await page.request.get(
+    `/api/v1/snapshots?store_id=${fixture.store_id}&location_id=${location}&status=IN_REVIEW&limit=100`,
+    { headers },
+  );
+  const { items } = (await lists.json()) as {
+    items: { snapshot_id: string }[];
+  };
+  for (const list of items) {
+    const rejected = await page.request.post(
+      `/api/v1/snapshots/${list.snapshot_id}/reject`,
+      { headers, data: { reason: "лишився від іншого прогону" } },
+    );
+    expect(rejected.ok()).toBe(true);
+  }
+}
+
 async function openings(page: Page): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
@@ -218,6 +241,7 @@ test("a split the list does not state asks who counted, and a warehouse with his
   page,
 }) => {
   const coat = await model(page);
+  await noListWaits(page, fixture.location_id);
   await openings(page);
   await typeList(page, fixture.location_id, "Зошит 2", [
     `${coat} сірий M/L 2 шт`,
@@ -283,6 +307,7 @@ test("a list typed is kept on the phone, and saved once when its answer is lost"
       await route.abort("failed");
     } else await route.continue();
   });
+  await noListWaits(page, fixture.location_id);
   await openings(page);
   const source = `Зошит ${word()}`;
   await typeList(page, fixture.location_id, source, [`${coat} сірий 1 шт`]);
@@ -325,6 +350,7 @@ test("approving is for whoever may approve, and the section for whoever handles 
       store.permissions = store.permissions.filter((p) => !drop.includes(p));
     await route.fulfill({ response, json: me });
   });
+  await noListWaits(page, fixture.location_id);
   await openings(page);
   await typeList(page, fixture.location_id, `Зошит ${word()}`, ["Куртка 1 шт"]);
   await page.getByRole("button", { name: "Зберегти список" }).click();
@@ -332,6 +358,15 @@ test("approving is for whoever may approve, and the section for whoever handles 
     page.getByRole("button", { name: "Розібрати рядок" }),
   ).toBeVisible();
   await expect(page.getByLabel("Затвердження списку")).toHaveCount(0);
+  // Whoever handles a list may still reject it (review, 2026-10-09).
+  await expect(
+    page
+      .getByLabel("Рішення щодо списку")
+      .getByRole("button", { name: "Відхилити список" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Затвердити список" }),
+  ).toHaveCount(0);
 
   drop = ["snapshot:approve", "snapshot:import"];
   await page.reload();
@@ -350,6 +385,7 @@ test("nothing is received into a warehouse while its list waits, and it is once 
   // The owner's answer of 2026-10-02: the lists are approved before new
   // deliveries, and the app keeps that order.
   const source = `Зошит ${word()}`;
+  await noListWaits(page, fixture.waiting_location_id);
   await openings(page);
   await typeList(page, fixture.waiting_location_id, source, ["Куртка 1 шт"]);
   await page.getByRole("button", { name: "Зберегти список" }).click();
