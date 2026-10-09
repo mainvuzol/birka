@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     db_statement_timeout_seconds: float = Field(default=30, ge=0)
     db_idle_in_transaction_timeout_seconds: float = Field(default=60, ge=0)
     db_pool_timeout_seconds: float = Field(default=10, gt=0)
+    # The password of `birka_app`, the role the API and backup-watch connect
+    # as (ADR-0016). Only `scripts.app_role` reads it, run as the owner to
+    # give that role its password and rights.
+    app_db_password: SecretStr = SecretStr("")
 
     # --- telegram ----------------------------------------------------------
     telegram_bot_token: SecretStr = SecretStr("")

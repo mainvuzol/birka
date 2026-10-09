@@ -94,8 +94,18 @@ async def database_state(session: AsyncSession) -> DatabaseState:
             revisions = await _database_revisions(session)
     except Exception as error:
         # Every failure is "does not answer". The kind only is logged: a
-        # connection error's text may name the server.
-        logger.warning("database.unreachable", error=type(error).__name__)
+        # connection error's text may name the server. It tells the app's
+        # role refused from a database that is down (ADR-0016): at sign-in,
+        # `InvalidPasswordError` (the role missing, as after a restore, or
+        # its password not the one in `.env`); afterwards PostgreSQL's own
+        # kind, beside SQLAlchemy's, `InsufficientPrivilegeError` (the role
+        # without its rights). `scripts.app_role` mends both.
+        cause = getattr(error, "orig", None)
+        logger.warning(
+            "database.unreachable",
+            error=type(error).__name__,
+            cause=type(cause.__cause__).__name__ if cause is not None and cause.__cause__ else None,
+        )
         return "unreachable"
     schema = code_schema()
     if schema.is_behind(revisions):
