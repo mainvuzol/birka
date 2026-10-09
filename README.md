@@ -677,10 +677,16 @@ Through the API:
      size whose count, also a number, reads as a larger size after it
      («42-44», «98-104»), whatever the catalogue holds, or a record whose
      count or whole is a size of the catalogue) needs
-     `split_read_as: "SIZE_WITH_COUNT"`, what the person chose; without it
-     the answer is refused (422, `SPLIT_MAY_BE_RANGE`), checked again at the
-     answer (owner decision, 2026-10-09). The line keeps it
-     (`split_read_as`), with the records it was said of
+     `split_read_as: "SIZE_WITH_COUNT"`, what the person chose, with
+     `split_read_records`, the records the person was asked about as
+     `shown_split[].written` writes them (by `shown_split[].size` when
+     `written` is null, a record the text no longer shows); without it, or
+     with a record that may be a range as the answer arrives left out of
+     them, the answer is refused (422, `SPLIT_MAY_BE_RANGE`, naming the
+     records, which the app then asks about), checked again
+     at the answer (owner decision, 2026-10-09; the records since the
+     review's third round, the same day). The line keeps it
+     (`split_read_as`), with exactly the records named
      (`split_read_records`), and the approval reads each again;
    - `LINE_IMPLIES_ONE` — a line with no number that could be a count, taken
      as one piece;

@@ -1642,17 +1642,19 @@ below).
      скільки рядків повторюється. Так?»
 3. Beside the 5 000 answers the owner kept, a list holds at most 5 000
    lines, as many as answers; a file at most 1 000 lines; a list at most
-   1 000 files, removed ones included. A line naming several sizes takes one
-   answer per size, so a list full of such lines can run out of answers
-   before its last line, and the shops' count counts each such size.
+   1 000 parts — files and lines typed by hand — removed ones included. A
+   line naming several sizes takes one answer per size, so a list full of
+   such lines can run out of answers before its last line, and the shops'
+   count counts each such size.
    - Питання: «Список бере до 5 000 рядків і 5 000 відповідей; рядок із
      кількома розмірами бере по відповіді на розмір, тож у підрахунку зошитів
      такий рядок рахується стільки разів, скільки в ньому розмірів. Файл — до
      1 000 рядків, у списку до 1 000 файлів. Так?»
-   - The question did not say that removed files count among the 1 000
-     files: that part **is put again, awaiting the owner** (R-e, below;
-     review, 2026-10-09). The like bound of lines, 10 000 with removed
-     files' lines, was not among the readings; it is R-b.
+   - The question did not say that the 1 000 counts parts — files and
+     lines typed by hand — removed ones included: that part **is put
+     again, awaiting the owner** (R-e, below; review, 2026-10-09; worded so
+     in its third round, the same day). The like bound of lines, 10 000
+     with removed files' lines, was not among the readings; it is R-b.
 4. A split is confirmed by a tap only when each of its sizes is already in
    the catalogue under that spelling; otherwise the size is created first, or
    the line is answered with a note.
@@ -1677,14 +1679,18 @@ below).
    sent: the line is answered with another basis and a note. The server
    refuses the tap without the choice «розмір 42 — 44 шт», checks it at the
    answer, and keeps that choice on the line and in its history, with the
-   records it was said of. A size created after the answer can make a
-   record a possible range, so the approval reads every such line again,
-   record by record, and is refused, naming the lines, until each record
-   that may be a range by then has the person's word: «Куртка 42-44 46-2»,
-   answered for «42-44», is asked again once a size «2» makes «46-2» a range
-   too. A record of a letter size, or of a number size with a count no
-   larger than it («46-2», «48-12»), is asked about only when the catalogue
-   makes it a range (known risks).
+   records it was said of. The answer names those records, the ones the
+   person was asked about; a size created while the person answers can
+   make another record a possible range, and the answer is then refused
+   and asked again, naming it, never kept for a record nobody was asked
+   about (review, third round, 2026-10-09). A size created after the
+   answer can make a record a possible range, so the approval reads every
+   such line again, record by record, and is refused, naming the lines,
+   until each record that may be a range by then has the person's word:
+   «Куртка 42-44 46-2», answered for «42-44», is asked again once a size
+   «2» makes «46-2» a range too. A record of a letter size, or of a number
+   size with a count no larger than it («46-2», «48-12»), is asked about
+   only when the catalogue makes it a range (known risks).
    - Питання: «Запис "42-44" застосунок може прийняти за "розмір 42 — 44
      шт", якщо так його прочитав парсер; людина бачить рядок і фото й
      натискає сама. Прийнятно?»
@@ -1756,12 +1762,13 @@ assumed.
     вказати, якщо ніхто не знає, які ціни в зошиті. Тоді ціни показуються
     без виду: «Ціна з зошита: 1200». Так?»
 - **R-e** (reading 3, its part the question left out). A list takes at most
-  1 000 files over its whole life, removed files included, as it takes at
-  most 10 000 lines (R-b). When that room is used up, the list takes no
-  more files: to add more, it is rejected and a new one started.
-  - Питання: «У список за весь час можна додати до 1 000 файлів, рахуючи й
-    прибрані. Якщо місце вичерпано, список відхиляють і починають новий.
-    Так?»
+  1 000 parts over its whole life — files and lines typed by hand, each
+  added part one — removed ones included, as it takes at most 10 000 lines
+  (R-b). When that room is used up, the list takes no more parts: to add
+  more, it is rejected and a new one started.
+  - Питання: «У список за весь час можна додати до 1 000 частин — файлів і
+    рядків, внесених вручну, — рахуючи й прибрані. Якщо місце вичерпано,
+    список відхиляють і починають новий. Так?»
 - **R-f.** A split the line shows is confirmed by a tap only when every
   other number in the line is accounted for. A number the file calls the
   price is taken as the price on the parser's word alone, wherever it

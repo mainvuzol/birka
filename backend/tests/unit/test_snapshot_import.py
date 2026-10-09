@@ -11,6 +11,8 @@ import uuid
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.dialects import postgresql
 
 from app.api.v1.snapshots import (
     AddPartRequest,
@@ -21,8 +23,14 @@ from app.api.v1.snapshots import (
 )
 from app.core.errors import ValidationFailedError
 from app.modules.catalog.parser import parse_catalog_line
+from app.modules.catalog.raw_lines import text_of
 from app.modules.snapshots import service
-from app.modules.snapshots.models import SnapshotQuantityBasis, SnapshotQuantityState
+from app.modules.snapshots.file_lines import SplitReading
+from app.modules.snapshots.models import (
+    InventorySnapshotRow,
+    SnapshotQuantityBasis,
+    SnapshotQuantityState,
+)
 from app.modules.snapshots.rules import lines_import_request
 from app.modules.snapshots.service import (
     MAX_PART_LINES,
@@ -295,6 +303,90 @@ def test_a_line_is_answered_with_allocations_or_a_skip_reason_never_both() -> No
             ResolutionRequest.model_validate(invalid)
 
 
+def test_what_a_person_said_of_a_split_names_the_records_it_was_said_of() -> None:
+    """Review, third round, 2026-10-09: `split_read_as` goes with the records
+    the editor asked about (`split_read_records`), each once, as the line
+    writes it, and only with an answer by size."""
+    allocation = {"product_variant_id": str(uuid.uuid4()), "size_unknown": True, "quantity": 2}
+    by_size = {"allocations": [allocation], "quantity_basis": "STATED_BY_SIZE"}
+    said = {"split_read_as": "SIZE_WITH_COUNT"}
+    ResolutionRequest.model_validate(by_size)
+    assert ResolutionRequest.model_validate(
+        {**by_size, **said, "split_read_records": ["42-44", "46-2"]}
+    ).split_read_records == ["42-44", "46-2"]
+    for invalid in (
+        # The word without the records it was said of, or records without it.
+        {**by_size, **said},
+        {**by_size, "split_read_records": ["42-44"]},
+        {**by_size, **said, "split_read_records": None},
+        {**by_size, **said, "split_read_records": []},
+        # Each record once, as a line can write it.
+        {**by_size, **said, "split_read_records": ["42-44", "42-44"]},
+        {**by_size, **said, "split_read_records": [""]},
+        {**by_size, **said, "split_read_records": ["4" * 501]},
+        {**by_size, **said, "split_read_records": [f"M-{n}" for n in range(11)]},
+        {**by_size, **said, "split_read_records": ["42-44\x00"]},
+        # Only with an answer by size.
+        {
+            "allocations": [allocation],
+            "quantity_basis": "OWNER_KNOWLEDGE",
+            "note": "так на фото",
+            **said,
+            "split_read_records": ["42-44"],
+        },
+        {"skip_reason": "заголовок", "split_read_records": ["42-44"]},
+    ):
+        with pytest.raises(ValidationError):
+            ResolutionRequest.model_validate(invalid)
+
+
+def shown_pair(size: str, count: int, written: str | None, may_be_range: bool) -> dict:
+    """A pair of a line's split as `_shown_splits` reads it now."""
+    return {
+        "size": size,
+        "count": count,
+        "size_id": uuid.uuid4(),
+        "written": written,
+        "may_be_range": may_be_range,
+    }
+
+
+def refused_records(split: list[dict], read_as: str | None, records: list[str] | None) -> dict:
+    reading = SplitReading(read_as) if read_as else None
+    with pytest.raises(ValidationFailedError) as refused:
+        service._stated_split(split, reading, records)
+    return refused.value.details
+
+
+def test_an_answer_by_size_covers_the_records_it_names_and_no_other() -> None:
+    """Review, third round, 2026-10-09: the person's word is checked at the
+    answer against the records it names. A record that may be a range as
+    the answer arrives and is not among them, made so by a size created
+    after the editor read the line, refuses it by name; a record that is
+    not the line's is refused too."""
+    asked = [shown_pair("42", 44, "42-44", True), shown_pair("46", 2, "46-2", False)]
+    since = [shown_pair("42", 44, "42-44", True), shown_pair("46", 2, "46-2", True)]
+
+    assert len(service._stated_split(asked, SplitReading.SIZE_WITH_COUNT, ["42-44"])) == 2
+    assert refused_records(asked, None, None) == {
+        "reason": "SPLIT_MAY_BE_RANGE",
+        "records": ["42-44"],
+    }
+    assert refused_records(since, "SIZE_WITH_COUNT", ["42-44"]) == {
+        "reason": "SPLIT_MAY_BE_RANGE",
+        "records": ["46-2"],
+    }
+    assert len(service._stated_split(since, SplitReading.SIZE_WITH_COUNT, ["46-2", "42-44"])) == 2
+    # A record named as the line does not write it is none of its records.
+    for unknown in (["42-44", "Парка"], ["42 – 44"], ["42"]):
+        assert refused_records(asked, "SIZE_WITH_COUNT", unknown) == {
+            "reason": "SPLIT_RECORD_UNKNOWN"
+        }, unknown
+    # A record the text no longer shows is named by its size.
+    unseen = [shown_pair("42", 44, None, True)]
+    assert len(service._stated_split(unseen, SplitReading.SIZE_WITH_COUNT, ["42"])) == 1
+
+
 # --- where the numbers came from (ADR-0005 §3) --------------------------------
 
 
@@ -486,3 +578,23 @@ def test_a_split_stated_by_size_says_why_it_is_refused() -> None:
     ):
         with pytest.raises(ValidationFailedError, match="names each of its sizes"):
             stated_by_size(answer, [(M, 1)])
+
+
+def test_a_line_s_text_is_read_by_its_key_with_its_organization_checked() -> None:
+    """Review, fourth round, 2026-10-09: `raw_lines.text_of` finds the line by
+    its primary key and checks its organization in a form no index serves
+    (`IS NOT DISTINCT FROM`), so no planner statistics lead to reading the
+    organization's lines by their index for each row. The check is there:
+    nothing else ties a row's line to its organization."""
+    organization_id = uuid.uuid4()
+    compiled = str(
+        select(
+            InventorySnapshotRow.line_no,
+            text_of(InventorySnapshotRow.raw_input_id, organization_id=organization_id),
+        ).compile(dialect=postgresql.dialect())
+    )
+    subquery = compiled[compiled.index("(SELECT") :]
+
+    assert "raw_input.id = inventory_snapshot_row.raw_input_id" in subquery
+    assert "raw_input.organization_id IS NOT DISTINCT FROM" in subquery
+    assert "raw_input.organization_id =" not in subquery

@@ -220,10 +220,33 @@ def test_a_split_the_text_shows_is_kept(
         # after it.
         ("Лоран бежевий S-1, M-2, L-1, 1850", (("S", 1), ("M", 2), ("L", 1)), {"price": "1850"}),
         ("Лоран M-3. 1850", (("M", 3),), {"price": "1850"}),
-        # The parser's preposition «с» is no size S; a digit of another
-        # script is a digit.
+        # The preposition «с» is no size S: lowercase, as the parser reads
+        # it, or a capital «С» that begins a phrase Birka's parse reads
+        # (review, fourth round, 2026-10-09); joined by a sign to its count,
+        # «С» is a size of the split. A digit of another script is a digit.
         ("Куртка с капюшоном M-3", (("M", 3),), {}),
+        ("Куртка с поясом M-3", (("M", 3),), {}),
+        ("Куртка С капюшоном M-3", (("M", 3),), {}),
+        ("Шуба С норкой M-3", (("M", 3),), {}),
+        ("Куртка С капюшоном С-3", (("С", 3),), {}),
+        ("Куртка с капюшоном с-3", (("с", 3),), {}),
+        # What this does not see: a lowercase «с» written for S reads as the
+        # preposition, as the parser reads it (ADR-0014 §5, known risks).
+        ("Лоран M-3 с", (("M", 3),), {}),
         ("Лоран M-３", (("M", 3),), {}),
+        # A Ukrainian word's apostrophe, between a Cyrillic letter and «я»,
+        # «ю», «є» or «ї», joins it: the «м» of «м'ята» is no size M.
+        ("Лоран м'ята M-3", (("M", 3),), {}),
+        ("Лоран м’ятний S-1 M-2", (("S", 1), ("M", 2)), {}),
+        ("Лоран мʼята M-3", (("M", 3),), {}),
+        ("Лоран м'ята м-3", (("м", 3),), {}),
+        # A comma with a space after it lists on, a bracket or a currency
+        # sign opens something else, and a no-break space about the sign is
+        # a space.
+        ("M-3, 5", (("M", 3),), {"price": "5"}),
+        ("Лоран M-3 (1850)", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3 ₴1850", (("M", 3),), {"price": "1850"}),
+        ("Лоран M\u00a0-\u00a03", (("M", 3),), {}),
         # The price is the parser's word: a number the file calls the price
         # is excused, whatever else it might be (ADR-0014 §5; a reading
         # awaiting the owner, R-f).
@@ -302,6 +325,45 @@ def test_a_split_shown_with_nothing_beside_it_but_a_price_a_count_or_a_length(
         ("Лоран M-3 + 2", (("M", 3),), {}),
         ("Лоран M-3 x 2", (("M", 3),), {}),
         ("Лоран M-3 * 2", (("M", 3),), {}),
+        # The sign in either case, any whitespace about it, and the
+        # multiplication signs ✕ ✖ ⨯ (review, third round, 2026-10-09):
+        # even with the number after it the file's price.
+        ("M-3X2", (("M", 3),), {"price": "2"}),
+        ("M-3 Х 2", (("M", 3),), {"price": "2"}),
+        ("M-3\u00a0x\u00a02", (("M", 3),), {"price": "2"}),
+        ("M-3✕2", (("M", 3),), {"price": "2"}),
+        ("M-3✖2", (("M", 3),), {"price": "2"}),
+        ("M-3 ⨯ 2", (("M", 3),), {"price": "2"}),
+        ("M-3\u2009+\u20092", (("M", 3),), {"price": "2"}),
+        ("M-3\u3000X\u20032", (("M", 3),), {"price": "2"}),
+        ("M-3\u202f,5", (("M", 3),), {"price": "5"}),
+        # What may follow a count is named, and nothing else before a
+        # numeral ends it (review, fourth round, 2026-10-09): a sign of
+        # another width or kind, a dash with no-break spaces about it, and a
+        # format character, which prints nothing, wherever it stands.
+        ("M-3＋2", (("M", 3),), {"price": "2"}),
+        ("M-3＊2", (("M", 3),), {"price": "2"}),
+        ("M-3／2", (("M", 3),), {"price": "2"}),
+        ("M-3ｘ2", (("M", 3),), {"price": "2"}),
+        ("M-3Ｘ2", (("M", 3),), {"price": "2"}),
+        ("M-3∗2", (("M", 3),), {"price": "2"}),
+        ("M-3•2", (("M", 3),), {"price": "2"}),
+        ("M-3÷2", (("M", 3),), {"price": "2"}),
+        ("M-3⁄2", (("M", 3),), {"price": "2"}),
+        ("M-3⨉2", (("M", 3),), {"price": "2"}),
+        ("M-3－2", (("M", 3),), {"price": "2"}),
+        ("M-3~2", (("M", 3),), {"price": "2"}),
+        ("M-3\u00a0–\u00a02", (("M", 3),), {"price": "2"}),
+        ("M-3\u3000-\u30002", (("M", 3),), {"price": "2"}),
+        ("M-3\u200bx2", (("M", 3),), {"price": "2"}),
+        ("M-3x\u200b2", (("M", 3),), {"price": "2"}),
+        ("M-3\ufeffx2", (("M", 3),), {"price": "2"}),
+        ("M-3\u00adx2", (("M", 3),), {"price": "2"}),
+        ("M-3\u200b5", (("M", 3),), {"price": "5"}),
+        ("M-3,\u200b5", (("M", 3),), {"price": "5"}),
+        ("M-3٫5", (("M", 3),), {"price": "5"}),
+        ("M-3，5", (("M", 3),), {"price": "5"}),
+        ("M-3．5", (("M", 3),), {"price": "5"}),
         # A numeral that is no digit (review, 2026-10-09): a fraction, a
         # superscript, a circled number, a Roman numeral sign.
         ("Лоран M-3½", (("M", 3),), {}),
@@ -327,6 +389,33 @@ def test_a_split_shown_with_nothing_beside_it_but_a_price_a_count_or_a_length(
         # Another size Birka reads in the text.
         ("Лоран S M-3", (("M", 3),), {}),
         ("Лоран M-3 L", (("M", 3),), {}),
+        # A capital «С» outside a phrase Birka's parse reads is S, whatever
+        # follows it (review, fourth round, 2026-10-09): nothing, a sign, a
+        # price, a count, a size, or a word; with S in the split, it is S
+        # written twice.
+        ("M-3 С", (("M", 3),), {}),
+        ("Лоран M-3 С.", (("M", 3),), {}),
+        ("Лоран С M-3 С", (("M", 3),), {}),
+        ("Лоран С M-3", (("M", 3),), {}),
+        ("С M-3", (("M", 3),), {}),
+        ("Лоран С, M-3", (("M", 3),), {}),
+        ("Лоран M-3 С 1850", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3, С 1850", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3 С 1850 грн", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3 С 3шт", (("M", 3),), {}),
+        ("Лоран M-3 С без кількості", (("M", 3),), {}),
+        ("Куртка С поясом M-3", (("M", 3),), {}),
+        ("Лоран S-1 M-2 С 1850", (("S", 1), ("M", 2)), {"price": "1850"}),
+        # An apostrophe joins no Latin size to a word: after a size, after a
+        # count, or between two sizes (review, fourth round, 2026-10-09).
+        ("Лоран M-3 L'", (("M", 3),), {}),
+        ("Лоран M-3'L", (("M", 3),), {}),
+        ("Лоран M-3’XL", (("M", 3),), {}),
+        ("Лоран M-3 L'S", (("M", 3),), {}),
+        ("Лоран M-3 XL’XXL", (("M", 3),), {}),
+        ("Лоран S-1 M-2 L'L", (("S", 1), ("M", 2)), {}),
+        ("Лоран S-1’M-2’L-4", (("S", 1), ("M", 2)), {}),
+        ("Лоран M-3 С'Л", (("M", 3),), {}),
         # Another letter size by its spelling, though the parser reads only
         # XS to XXL (review, 2026-10-09): written out, with a Cyrillic letter,
         # or counted.

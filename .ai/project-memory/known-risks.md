@@ -67,7 +67,7 @@ Found by the independent code reviews (2026-09-28). The fixes are in the report;
 - **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a part: a pasted text or a file) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
 - **No request-size limit or rate limit in front of the API.** Closed on 2026-10-03: Caddy refuses a body over 1 MB, and the API limits sign-ins per address ([before the public domain](#before-the-public-domain--2026-10-03)). Signed-in requests are still not limited per person.
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
-- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; on 2026-10-09, with every answer by size read again at the approval, at most 8.6 s, and the 2026-10-08 method up to 9.5 s the same hour on a busier laptop ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)); see [the JSON stock import](#the-json-stock-import--2026-10-08).
+- **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; on 2026-10-09, with every answer by size read again at the approval, at most 8.6 s, and the 2026-10-08 method up to 9.5 s the same hour on a busier laptop; measured again in the review's third round the same day, by size at most 8.48 s and the 2026-10-08 method up to 9.87 s, 0.13 s under the 10 s rule ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)); see [the JSON stock import](#the-json-stock-import--2026-10-08).
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
 - **Lines are stored verbatim, including bidirectional and zero-width characters.** Since 2026-10-08 «Початкові залишки» shows every line, and every string from a file, through a guard that marks them visibly (ADR-0014 §15). The catalogue screens still show raw text unguarded; they are left for a change of their own.
 - **The freeze and the ledger triggers guard rows, not `TRUNCATE`**, like `0002`'s append-only triggers. For the same reason, hard-deleting a user or an organization that a decided list names is refused. The app never hard-deletes either.
@@ -925,9 +925,13 @@ person; the same day the owner answered the design's questions.
   when its count, or the whole record, is one of the organization's sizes
   («M-3» with a size «3»). The tap is offered only once the person chooses
   «розмір 42 — 44 шт»; the server refuses the tap without that choice
-  (`SPLIT_MAY_BE_RANGE`), keeps it on the line and in the answer's history
-  with the records it was said of, and reads every such line again at the
-  approval, record by record: a size created after the answer that makes a
+  (`SPLIT_MAY_BE_RANGE`), and, since the review's third round, without
+  each record that may be a range as the answer arrives among the records
+  the answer names (the ones the editor asked about), so a size created
+  while the person answers is never credited to their word. It keeps the
+  choice on the line and in the answer's history with exactly the records
+  named, and reads every such line again at the approval, record by
+  record: a size created after the answer that makes a
   record the person's word did not cover a possible range stops the
   approval, naming the line, until it is answered again («Куртка 42-44
   46-2», answered for «42-44», once a size «2» exists).
@@ -936,14 +940,20 @@ person; the same day the owner answered the design's questions.
   unless the catalogue makes it a range, the person seeing the text and the
   photo's line.
 - **A split «shown» by more than the parser read** *(narrowed on
-  2026-10-09, review, in two rounds; not closed).* The check once took a
+  2026-10-09, review, in four rounds; not closed).* The check once took a
   split when each of the parser's sizes stood once with its count, whatever
   else the text held: «Лоран S-1 M-2 L-4» with only S and M read, «Лоран
   M-3+2», «Лоран S M-3», «S-1 M-2 L-1 разом 5» and «Лоран 46-2 48» were
   tapped on the parser's pairs. Now a count ends with its number, a sum or
-  a product with spaces about its sign included («M-3 + 2»); each size
-  stands in the text once, in any of its spellings («M-3 М» with a Cyrillic
-  М writes M twice); and the text holds no other size, whether the parser
+  a product with any whitespace about its sign included, the sign in
+  either case and ✕ ✖ ⨯ among them («M-3 + 2», «M-3X2», «M-3 Х 2» with
+  no-break spaces, «M-3✕2»; third round); since the fourth round what may
+  end a count is named, and any other sign before a numeral is no end, so
+  signs of another width or kind, a dash with no-break spaces about it, and
+  a character that prints nothing between them no longer hide a sum
+  («M-3＋2», «M-3∗2», «M-3 – 2», «M-3，5», «M-3x2» with a zero-width space;
+  «M-3 @1850» goes to a note too); each size stands in the text once, in
+  any of its spellings («M-3 М» with a Cyrillic М writes M twice); and the text holds no other size, whether the parser
   reads it or it is a letter size the parser does not know («Лоран S-1 M-2
   XXXL», «M-3 XXS», «M-3 ХL»), no other size with a count, and no number,
   of any script («½», «①»), Birka cannot account for (the file's price, a
@@ -958,11 +968,27 @@ person; the same day the owner answered the design's questions.
   - a size only the organization's catalogue knows, not a letter size
     («Лоран M-3 OS», «єдиний»), and a number written as a word («і ще два»)
     or in Latin letters («III»), are not seen beside a split;
+  - **a lowercase «с» is the parser's preposition,** wherever it stands.
+    So «Лоран M-3 с», where the «с» may be the size S with its count lost,
+    shows the split of M, as Birka's parser reads the line. A capital «С»
+    is read more strictly than the parser reads it (fourth round,
+    2026-10-09): it is the preposition only where it begins a phrase
+    Birka's parse reads («Куртка С капюшоном M-3» keeps its tap, as
+    «куртка с капюшоном M-3» does), and S anywhere else, so «Лоран С M-3»,
+    «Лоран M-3 С 1850», «Лоран M-3 С без кількості» and «Куртка С поясом
+    M-3» go to a note. In the third round a capital «С» with any word after
+    it was the preposition, as the parser reads it, and a «С» before a
+    price hid a size;
   - the conservative side: a price the file leaves out, or one the text
     writes with a gap («1 850»), and a word that spells a letter size («м»
     for metres, «л»), send a line that does show its split to a note. A
-    lowercase Cyrillic «с» is the parser's preposition, and is no size
-    there.
+    capital «С» outside a phrase Birka reads is S, so «Куртка С поясом M-3»
+    goes to a note; and a word joined by an apostrophe is one word only as
+    a Ukrainian word is, a Cyrillic letter before it and «я», «ю», «є» or
+    «ї» after it: «Лоран м'ята M-3» and «м’ятний» keep their tap, while
+    «M-3'L», «L'S» and «XL’XXL» each write a size and go to a note (fourth
+    round; the third round joined any two words at an apostrophe and hid
+    those sizes).
 - **The limit, and a warehouse larger than it.** A list takes at most 5 000
   answers and 5 000 lines, and a warehouse takes one list, once. The owner
   kept 5 000 on 2026-10-08: the shops first count their largest warehouse
@@ -977,11 +1003,17 @@ person; the same day the owner answered the design's questions.
   that ceiling.
 - **Measured on PostgreSQL 16 on the laptop, not on the server.** The
   approval took 7.6 s at 5 000 answers on the local 16.2 cluster, and up to
-  9.5 s on 2026-10-09 with the laptop busier (every answer by size: 8.6 s);
+  9.5 s on 2026-10-09 with the laptop busier (every answer by size: 8.6 s).
+  Measured again in the review's third round, after the re-check's text
+  read stopped depending on the planner's statistics, it took up to 9.87 s
+  by the 2026-10-08 method, 0.13 s under the 10 s rule, and 8.48 s by size
+  (the
+  [evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md));
   the server runs 17, on hardware not yet chosen (release checklist, row
   16). Both the timing and the ledger's ceiling may differ there, and the
   room under the 10 s rule is smaller than the first figure said. The client
-  waits 60 s for the approval, six times the slowest figure measured.
+  waits 60 s for the approval, six times the slowest figure measured
+  (9.87 s).
 - **The warehouse is held for the whole review,** even for days (owner,
   2026-10-08). The shared warehouse sells only on paper meanwhile, and those
   sales are typed after the approval. Nothing reminds anyone of a list left
@@ -1018,10 +1050,10 @@ person; the same day the owner answered the design's questions.
 - **Readings awaiting the owner** (business rules, R-a to R-f): reading 1
   put again as built; the 10 000 lines a list takes over its life, removed
   files' included; lines typed by hand removed as a file is; a file without
-  the kind of its prices; the 1 000 files a list takes over its life,
-  removed ones included; a number the file calls the price excused beside a
-  split on the parser's word. Each stands as built until the owner
-  answers.
+  the kind of its prices; the 1 000 parts — files and lines typed by hand —
+  a list takes over its life, removed ones included; a number the file
+  calls the price excused beside a split on the parser's word. Each stands
+  as built until the owner answers.
 - **The Telegram file picker is unproven on a phone.** iOS opens Files;
   Android depends on Telegram's WebView; a file received in a chat must
   first be saved to the phone. The drill on an Android and an iPhone is
@@ -1030,9 +1062,22 @@ person; the same day the owner answered the design's questions.
 - **The slow call is proven with a browser clock, not on a phone.**
   Creating a list from a file, adding a part (a file or typed lines) and
   approving wait 60 s, and their own timeout is not taken as the server
-  being down (ADR-0014 §16). Three E2E journeys hold the answer and move the
-  page's clock, one with the list made only after the phone stopped
-  waiting; a phone on a slow network has not been tried.
+  being down (ADR-0014 §16). Three E2E journeys hold the answer and move
+  the page's clock, one with the list made only after the phone stopped
+  waiting; a fourth loses the answers on their way back from the server
+  itself, a gateway's 504 among them; a phone on a slow network has not
+  been tried.
+- **A draft whose send was lost is settled by the server's word.** After
+  no answer, none in time or a gateway's 502, 503 or 504, «Новий список»
+  keeps the draft's command whatever is picked, and offers no new list. A
+  refusal as the same command sent before in another form settles it,
+  whatever became of the list that command made (waiting, rejected,
+  approved, or at another warehouse), and a list it made, opened from the
+  overview, ends the draft (fourth round, 2026-10-09). In the third round
+  only a waiting list found at the draft's warehouse settled it: a draft
+  whose list was rejected or approved offered no new list, even after a
+  reload. What is left: a draft is the phone's own, so another phone, or
+  this one after its storage is cleared, knows nothing of a lost send.
 - **A removed file's lines are kept as evidence,** with their text and
   parse, and count nowhere. A list holds at most 10 000 rows with them, about
   2–3 KB each, so backups grow with removed files too.

@@ -1,7 +1,13 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, SlowAnswer, api, errorText } from "@/shared/api";
+import {
+  ApiError,
+  SlowAnswer,
+  api,
+  errorText,
+  unreachable,
+} from "@/shared/api";
 import type { Location, Store } from "@/orders/types";
 import { CatalogPicker } from "@/inventory/CatalogPicker";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
@@ -197,6 +203,10 @@ export function Openings({
             <button
               className="quiet"
               onClick={() => {
+                // The list a draft's command made, its answer lost, found
+                // here: made, so nothing of the draft is sent again (review,
+                // fourth round, 2026-10-09).
+                forgetDraftOf(store, list);
                 setOpenId(list.snapshot_id);
               }}
             >
@@ -228,9 +238,14 @@ interface Draft {
    * content: picked again after a lost answer, it is the same command. */
   file_name: string | null;
   file_sha256: string | null;
-  /** The last send got no answer, or none in time: the server may have
-   * made the list, so the command stays the same whatever file is picked,
-   * and no second list is started at the warehouse (review, 2026-10-09). */
+  /** A send got no answer, none in time, or a gateway's own (502, 503,
+   * 504), and nothing since has settled it: the server may have made the
+   * list, or may still, so the command stays the same whatever file is
+   * picked, and no second list is started at the warehouse (review,
+   * 2026-10-09). A refusal of a later send's form does not settle it (third
+   * round, the same day); the command refused as sent before in another
+   * form does: the server holds it, so no send of it makes another list
+   * (fourth round). */
   unsettled: boolean;
 }
 
@@ -295,6 +310,11 @@ function saveDraft(
   } catch {
     /* Typing still works; only a reload loses it. */
   }
+}
+
+/** A draft whose command made this list is done: it is never sent again. */
+function forgetDraftOf(store: Store, list: StockList): void {
+  if (loadDraft(store).command_id === list.command_id) saveDraft(store, null);
 }
 
 /** The list's lines as the server keeps them: verbatim, minus blank ones. */
@@ -447,16 +467,21 @@ function NewList({
       saveDraft(store, null);
       done(list);
     } catch (error) {
-      // An answer settles the command; none, or none in time, does not.
-      // A slow one may have made the list, and a command refused as sent
-      // before in another form did: the warehouse is read again, and the
-      // list made is offered rather than a second one.
-      setDraft({ unsettled: !(error instanceof ApiError) });
-      if (
-        error instanceof SlowAnswer ||
-        (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
-      )
-        void waiting.refetch();
+      // No answer, none in time, or a gateway's own (502, 503, 504) leaves
+      // the command unsettled: the list may have been made, or may still
+      // be. A refusal of this request's form says nothing of a send before
+      // it and leaves the command as it was. The command refused as sent
+      // before in another form settles it: the server holds the command, so
+      // no send of it, however slow, makes another list, whether that list
+      // still waits, was decided, or is at another warehouse. The warehouse
+      // is read again before a new command can be sent (review, third and
+      // fourth rounds, 2026-10-09).
+      const conflict =
+        error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT";
+      const unanswered = !(error instanceof ApiError) || unreachable(error);
+      if (unanswered) setDraft({ unsettled: true });
+      if (conflict) setDraft({ unsettled: false });
+      if (error instanceof SlowAnswer || conflict) void waiting.refetch();
       const refused =
         error instanceof ApiError
           ? fileProblemTexts(error.validation, error.validationMore)
@@ -464,7 +489,7 @@ function NewList({
       setProblems(
         error instanceof SlowAnswer
           ? [errorText(error)]
-          : !(error instanceof ApiError)
+          : unanswered
             ? [
                 "Невідомо, чи збережено список. Натисніть ще раз — той самий список не збережеться двічі.",
               ]
@@ -1011,6 +1036,11 @@ function ListView({
                 cancel={() => {
                   setEditing(null);
                 }}
+                reread={() => {
+                  void cache.invalidateQueries({
+                    queryKey: ["stock-list-lines"],
+                  });
+                }}
               />
             ) : (
               <LineCard
@@ -1220,6 +1250,32 @@ function rangeAgainText(details: Record<string, unknown>): string {
     : `Рядки ${named} треба розібрати ще раз: запис у них тепер може бути діапазоном розмірів.`;
 }
 
+/**
+ * An answer by size refused: a record of the line may now be a range of
+ * sizes, a size having been created since the line was read
+ * (`SPLIT_MAY_BE_RANGE`, `records`; review, fourth round, 2026-10-09). The
+ * line is read again, and the record is asked about in the editor.
+ */
+function rangeNowText(details: Record<string, unknown>): string {
+  const records = Array.isArray(details.records)
+    ? details.records.filter((r): r is string => typeof r === "string")
+    : [];
+  const named = records.map((record) => `«${visible(record)}»`).join(", ");
+  return records.length === 0
+    ? "Запис у рядку тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз."
+    : records.length === 1
+      ? `Запис ${named} тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз.`
+      : `Записи ${named} тепер можуть означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що вони означають, і збережіть відповідь ще раз.`;
+}
+
+/**
+ * A record of a split as the server names it: as the line writes it
+ * («42-44»), or its size when the text no longer shows it.
+ */
+function recordKey(size: ShownSize): string {
+  return size.written ?? size.size;
+}
+
 /** A record of a split as the line writes it: «42-44». Guarded. */
 function recordText(size: ShownSize): string {
   return visible(size.written ?? `${size.size}-${String(size.count)}`);
@@ -1244,6 +1300,7 @@ function LineEditor({
   blocked,
   done,
   cancel,
+  reread,
 }: {
   line: ListLine;
   list: StockList;
@@ -1255,6 +1312,9 @@ function LineEditor({
   blocked: boolean;
   done: () => void;
   cancel: () => void;
+  /** Read the list's lines again, this one with them: the editor stays open
+   * and shows the line as the server reads it now. */
+  reread: () => void;
 }): JSX.Element {
   const stated =
     line.quantity_state === "KNOWN" && line.quantity_total !== null;
@@ -1289,9 +1349,18 @@ function LineEditor({
   const readSize =
     line.candidates.size?.length === 1 ? line.candidates.size[0] : undefined;
   const startSize = sizes.find((s) => s.code === readSize)?.size_id ?? "";
-  const [basis, setBasis] = useState<Basis | "SKIP" | "">(
+  const [chosen, setBasis] = useState<Basis | "SKIP" | "">(
     stated ? "STATED" : line.may_imply_one ? "LINE_IMPLIES_ONE" : "",
   );
+  // A choice the line no longer offers is no choice. The line is read again
+  // while the editor is open (the phone comes back to the app, the
+  // connection returns, an answer is refused): a record made a possible
+  // range since is asked about, and «Як у рядку» waits for its answer
+  // (review, fourth round, 2026-10-09).
+  const basis =
+    chosen === "" || chosen === "SKIP" || allowed.includes(chosen)
+      ? chosen
+      : "";
   const [parts, setParts] = useState<Part[]>([
     {
       variant: null,
@@ -1324,6 +1393,12 @@ function LineEditor({
   // As the line shows it: one model, each size with its own count.
   const bySize = basis === "STATED_BY_SIZE";
   const model = parts[0]?.variant ?? null;
+  // The records the person read as a size with its count, by name: what
+  // was answered here, never every record the line now flags (review,
+  // fourth round, 2026-10-09).
+  const readRecords = split.flatMap((size, index) =>
+    readings[index] === "SIZE_WITH_COUNT" ? [recordKey(size)] : [],
+  );
   const complete =
     basis === "SKIP"
       ? reason.trim() !== ""
@@ -1355,9 +1430,15 @@ function LineEditor({
               })),
               quantity_basis: basis,
               note: note.trim() || null,
-              // What the person said each record that may be a range means.
-              ...(ambiguous.length > 0
-                ? { split_read_as: "SIZE_WITH_COUNT" }
+              // What the person said each record that may be a range means,
+              // and of which records: those answered here, as the line
+              // writes them. A record made a range since is refused by name
+              // (review, third and fourth rounds, 2026-10-09).
+              ...(readRecords.length > 0
+                ? {
+                    split_read_as: "SIZE_WITH_COUNT",
+                    split_read_records: readRecords,
+                  }
                 : {}),
             }
           : {
@@ -1382,13 +1463,16 @@ function LineEditor({
     } catch (error) {
       const reason =
         error instanceof ApiError ? error.details.reason : undefined;
+      // A record made a possible range since the line was read: read it
+      // again, so the record named is asked about here.
+      if (reason === "SPLIT_MAY_BE_RANGE") reread();
       setProblem(
         !(error instanceof ApiError)
           ? "Немає відповіді сервера. Натисніть ще раз — повторна відповідь безпечна."
           : reason === "PART_REMOVED"
             ? "Файл цього рядка прибрали — відповідь не збережено."
             : reason === "SPLIT_MAY_BE_RANGE"
-              ? "Запис у рядку тепер може означати й діапазон розмірів. Скасуйте, відкрийте рядок знову й вкажіть, що він означає."
+              ? rangeNowText(error.details)
               : reason === "LIST_STORE_NOT_TRADING"
                 ? errorText(error)
                 : reason === "LIST_STORE_CANNOT_RECEIVE"
@@ -1427,7 +1511,7 @@ function LineEditor({
         const choose = (reading: SplitReading): void => {
           setReadings({ ...readings, [index]: reading });
           // Read as a range, the line is no longer answered as it shows.
-          if (reading === "RANGE" && basis === "STATED_BY_SIZE") setBasis("");
+          if (reading === "RANGE" && chosen === "STATED_BY_SIZE") setBasis("");
         };
         return (
           <fieldset key={name}>

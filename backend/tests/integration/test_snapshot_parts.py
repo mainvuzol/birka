@@ -46,7 +46,7 @@ from app.modules.catalog.evidence import (
     RawInputSource,
 )
 from app.modules.catalog.models import EntityStatus, ProductVariant
-from app.modules.catalog.raw_lines import record_lines
+from app.modules.catalog.raw_lines import record_lines, text_of
 from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementType, OpeningListHold, StockLot
 from app.modules.snapshots import service as snapshot_service
@@ -1745,6 +1745,7 @@ async def test_a_record_that_may_be_a_range_of_sizes_is_stated_by_size_only_when
             quantity_basis="OWNER_KNOWLEDGE",
             note="так на фото",
             split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44"],
         )
         unchanged = await view_of(client, snapshot_id)
         said = await resolve(
@@ -1754,6 +1755,7 @@ async def test_a_record_that_may_be_a_range_of_sizes_is_stated_by_size_only_when
             allocations=answer,
             quantity_basis="STATED_BY_SIZE",
             split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44"],
         )
 
     assert line["shown_split"] == [
@@ -1880,6 +1882,7 @@ async def test_an_answer_by_size_is_read_again_at_the_approval(world):
             allocations=by_size(w, ("M", 3)),
             quantity_basis="STATED_BY_SIZE",
             split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["M-3"],
         )
         approved = await approve(client, snapshot_id, said.json()["snapshot"]["review_revision"])
 
@@ -1903,6 +1906,49 @@ async def test_an_answer_by_size_is_read_again_at_the_approval(world):
     ]
 
 
+async def test_a_line_s_text_is_read_for_its_own_organization_only(world):
+    """Review, fourth round, 2026-10-09: the approval's re-check reads each
+    line's text in the statement that reads its rows (`raw_lines.text_of`),
+    by the line's primary key. Nothing ties a row's line to its
+    organization but this check: under another organization's id no text
+    is read, and a split whose text is not read is asked about again,
+    never approved on a tap."""
+    w = world
+    async with w.client() as client:
+        view = await created_from_file(client, w, ONE_SIZE)
+        tapped = await resolve(
+            client,
+            view["snapshot_id"],
+            1,
+            allocations=by_size(w, ("M", 3)),
+            quantity_basis="STATED_BY_SIZE",
+        )
+    assert tapped.status_code == 200, tapped.text
+    snapshot_id = uuid.UUID(view["snapshot_id"])
+    another = uuid.uuid4()
+
+    async def texts(organization_id: uuid.UUID) -> list[str | None]:
+        async with w.maker() as session:
+            return list(
+                await session.scalars(
+                    select(
+                        text_of(InventorySnapshotRow.raw_input_id, organization_id=organization_id)
+                    ).where(InventorySnapshotRow.inventory_snapshot_id == snapshot_id)
+                )
+            )
+
+    async def unsaid(organization_id: uuid.UUID) -> list[int]:
+        async with w.maker() as session:
+            return await snapshot_service._splits_unsaid(
+                session, organization_id=organization_id, snapshot_id=snapshot_id
+            )
+
+    assert await texts(w.org) == ["Лоран M-3"]
+    assert await texts(another) == [None]
+    assert await unsaid(w.org) == []
+    assert await unsaid(another) == [1]
+
+
 async def test_the_person_s_word_covers_the_records_it_was_said_of_and_no_other(world):
     """Review, 2026-10-09: the question is asked per record, so the answer
     keeps the records it was said of. «Куртка 42-44 46-2» answered for
@@ -1923,6 +1969,7 @@ async def test_the_person_s_word_covers_the_records_it_was_said_of_and_no_other(
             allocations=answer,
             quantity_basis="STATED_BY_SIZE",
             split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44"],
         )
         assert said.status_code == 200, said.text
         [first] = await rows_of(w, snapshot_id)
@@ -1947,6 +1994,7 @@ async def test_the_person_s_word_covers_the_records_it_was_said_of_and_no_other(
             allocations=answer,
             quantity_basis="STATED_BY_SIZE",
             split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44", "46-2"],
         )
         [second] = await rows_of(w, snapshot_id)
         approved = await approve(client, snapshot_id, again.json()["snapshot"]["review_revision"])
@@ -1978,6 +2026,128 @@ async def test_the_person_s_word_covers_the_records_it_was_said_of_and_no_other(
     ]
 
 
+async def test_a_size_created_while_the_editor_was_open_is_never_credited_to_the_person(world):
+    """Review, third round, 2026-10-09: the answer names the records the
+    editor asked about. The editor read «Парка 42-44 46-2» when only
+    «42-44» could be a range, and asked about it alone; a size «2» created
+    before the answer arrives makes «46-2» one too. Nobody was asked about
+    it, so the answer is refused naming it, and nothing is kept. Asked
+    again about both, the person's word is kept for both, and the approval
+    passes."""
+    w = world
+    file = stock_file(file_line("Парка 42-44 46-2", size_counts=counts(("42", 44), ("46", 2))))
+    async with w.client() as client:
+        parka, sizes = await numeric_model(client, w, "Парка", "42", "46")
+        view = await created_from_file(client, w, file)
+        snapshot_id = view["snapshot_id"]
+        [seen] = await lines_of(client, snapshot_id)
+        asked = [pair["written"] for pair in seen["shown_split"] if pair["may_be_range"]]
+        # Someone else, meanwhile, brings the size «2» into the catalogue.
+        await numeric_model(client, w, "Сукня дитяча", "2")
+        answer = [allocation(parka, sizes["42"], 44), allocation(parka, sizes["46"], 2)]
+        refused = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+            split_read_records=asked,
+        )
+        unchanged = await view_of(client, snapshot_id)
+        [kept] = await rows_of(w, snapshot_id)
+        [again] = await lines_of(client, snapshot_id)
+        # A record the line does not write so is not one of its records.
+        unknown = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44", "46 - 2"],
+        )
+        # Asked again, about both, in any order: the line's order is kept.
+        said = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["46-2", "42-44"],
+        )
+        [answered] = await rows_of(w, snapshot_id)
+        repeated = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=answer,
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44", "46-2"],
+        )
+        approved = await approve(client, snapshot_id, said.json()["snapshot"]["review_revision"])
+
+    assert asked == ["42-44"]
+    assert (refused.status_code, refused.json()["details"]) == (
+        422,
+        {"reason": "SPLIT_MAY_BE_RANGE", "records": ["46-2"]},
+    )
+    assert (unchanged["review_revision"], unchanged["summary"]["resolved"]) == (0, 0)
+    assert (kept.split_read_as, kept.split_read_records) == (None, None)
+    assert [(pair["written"], pair["may_be_range"]) for pair in again["shown_split"]] == [
+        ("42-44", True),
+        ("46-2", True),
+    ]
+    assert (unknown.status_code, unknown.json()["details"]) == (
+        422,
+        {"reason": "SPLIT_RECORD_UNKNOWN"},
+    )
+    assert said.status_code == 200, said.text
+    assert answered.split_read_records == ["42-44", "46-2"]
+    # The same records again, in the line's order, are the same answer.
+    assert repeated.status_code == 200, repeated.text
+    assert (
+        repeated.json()["snapshot"]["review_revision"] == said.json()["snapshot"]["review_revision"]
+    )
+    assert approved.status_code == 200, approved.text
+    assert await stock(w) == {(parka, sizes["42"]): 44, (parka, sizes["46"]): 2}
+    [entry] = await audit_of(w, "snapshot.line_resolved")
+    assert entry.after["split_read_records"] == ["42-44", "46-2"]
+    assert entry.after["split_may_be_range"] == ["42-44", "46-2"]
+
+
+async def test_the_person_s_word_is_kept_for_exactly_the_records_it_names(world):
+    """A record named that could be read only one way when the answer
+    arrived is kept with the others: the editor asked about it. A size «2»
+    created after the answer then stops nothing."""
+    w = world
+    file = stock_file(file_line("Парка 42-44 46-2", size_counts=counts(("42", 44), ("46", 2))))
+    async with w.client() as client:
+        parka, sizes = await numeric_model(client, w, "Парка", "42", "46")
+        view = await created_from_file(client, w, file)
+        snapshot_id = view["snapshot_id"]
+        said = await resolve(
+            client,
+            snapshot_id,
+            1,
+            allocations=[allocation(parka, sizes["42"], 44), allocation(parka, sizes["46"], 2)],
+            quantity_basis="STATED_BY_SIZE",
+            split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["42-44", "46-2"],
+        )
+        await numeric_model(client, w, "Сукня дитяча", "2")
+        approved = await approve(client, snapshot_id, said.json()["snapshot"]["review_revision"])
+
+    assert said.status_code == 200, said.text
+    [row] = await rows_of(w, snapshot_id)
+    assert row.split_read_records == ["42-44", "46-2"]
+    [entry] = await audit_of(w, "snapshot.line_resolved")
+    assert entry.after["split_may_be_range"] == ["42-44"]
+    assert approved.status_code == 200, approved.text
+
+
 async def test_what_a_person_said_of_a_split_goes_with_an_answer_by_size_only(world):
     """The database keeps `split_read_as` only beside `STATED_BY_SIZE`, and a
     removed file's line drops it with its answer."""
@@ -1993,6 +2163,7 @@ async def test_what_a_person_said_of_a_split_goes_with_an_answer_by_size_only(wo
             allocations=by_size(w, ("M", 3)),
             quantity_basis="STATED_BY_SIZE",
             split_read_as="SIZE_WITH_COUNT",
+            split_read_records=["M-3"],
         )
         assert said.status_code == 200, said.text
         assert (await remove(client, snapshot_id, part["part_id"])).status_code == 200

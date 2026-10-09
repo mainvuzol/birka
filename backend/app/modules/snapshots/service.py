@@ -1538,7 +1538,9 @@ def _record_key(pair: dict[str, Any]) -> str:
 
 
 def _stated_split(
-    split: Sequence[dict[str, Any]] | None, read_as: SplitReading | None
+    split: Sequence[dict[str, Any]] | None,
+    read_as: SplitReading | None,
+    records: Sequence[str] | None,
 ) -> list[tuple[uuid.UUID, int]] | None:
     """The split a line shows, as `STATED_BY_SIZE` may answer it: the
     catalogue's own size for each size as written, with its count.
@@ -1546,8 +1548,13 @@ def _stated_split(
     A size the catalogue lacks makes it unavailable: the person creates the
     size, or answers with a note (ADR-0014 §5). A record that may also be a
     range of sizes («42-44») needs the person to have said it is a size
-    with its count, `read_as` (owner, 2026-10-09); checked here, at the
-    answer, since a size created after the line was read can make it so.
+    with its count, `read_as`, of that very record, named in `records`
+    (owner, 2026-10-09). Checked here, at the answer, against the catalogue
+    as it is now: a size created after the editor read the line makes
+    another record a possible range, which the person was never asked
+    about, and the answer is refused naming it (review, third round,
+    2026-10-09). A record named that is not one of this line's split is
+    refused too.
     """
     if split is None:
         return None
@@ -1558,12 +1565,23 @@ def _stated_split(
                 "A size of this line is not in the catalogue", size=pair["size"]
             )
         shown.append((pair["size_id"], int(pair["count"])))
-    ranges = [_record_key(pair) for pair in split if pair["may_be_range"]]
-    if ranges and read_as is not SplitReading.SIZE_WITH_COUNT:
+    keys = [_record_key(pair) for pair in split]
+    named = set(records or ())
+    if not named <= set(keys):
+        raise ValidationFailedError(
+            "A record named is not one of this line's split", reason="SPLIT_RECORD_UNKNOWN"
+        )
+    said = named if read_as is SplitReading.SIZE_WITH_COUNT else set()
+    unsaid = [
+        key
+        for pair, key in zip(split, keys, strict=True)
+        if pair["may_be_range"] and key not in said
+    ]
+    if unsaid:
         raise ValidationFailedError(
             "A record of this line may also be a range of sizes; say what it means",
             reason="SPLIT_MAY_BE_RANGE",
-            records=ranges,
+            records=unsaid,
         )
     return shown
 
@@ -1596,6 +1614,7 @@ async def resolve_row(
     note: str | None = None,
     via_store_id: uuid.UUID | None = None,
     split_read_as: SplitReading | None = None,
+    split_read_records: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Say what one line means, replacing whatever was said before.
 
@@ -1607,11 +1626,14 @@ async def resolve_row(
 
     `split_read_as` is what the person said a record of the line's split
     means, when it may also be a range of sizes (`_stated_split`): it goes
-    only with `STATED_BY_SIZE`, and the line and the answer's audit entry
-    keep it, with the records it was said of (`split_read_records`: those
-    that may be a range as the person answers). The approval reads each
-    record again, since a size created after the answer can make another
-    record a possible range (`approve_snapshot`).
+    only with `STATED_BY_SIZE`, and with the records it was said of,
+    `split_read_records`, each as the line's split writes it: the records
+    the editor asked about. Every record that may be a range as the answer
+    arrives must be among them, or the answer is refused; the line and the
+    answer's audit entry keep exactly those named (review, third round,
+    2026-10-09). The approval reads each record again, since a size created
+    after the answer can make another record a possible range
+    (`approve_snapshot`).
     """
     observed = await _load(session, scope=scope, snapshot_id=snapshot_id)
     await _authorize(
@@ -1652,6 +1674,13 @@ async def resolve_row(
         raise ValidationFailedError("Give the line's allocations, or a reason to skip it")
     if split_read_as is not None and quantity_basis is not SnapshotQuantityBasis.STATED_BY_SIZE:
         raise ValidationFailedError("What a record of the split means goes only with its split")
+    if (split_read_as is None) != (split_read_records is None) or (
+        split_read_records is not None
+        and (not split_read_records or len(set(split_read_records)) != len(split_read_records))
+    ):
+        raise ValidationFailedError(
+            "What a record of the split means goes with the records it was said of, each once"
+        )
     read: dict[str, Any] = {}
     read_records: list[str] | None = None
     desired: list[tuple[uuid.UUID, uuid.UUID, int]]
@@ -1687,12 +1716,15 @@ async def resolve_row(
                     rows=[(row, evidence.raw_text if evidence else None)],
                 )
             ).get(row.id)
-            shown = _stated_split(split, split_read_as)
+            shown = _stated_split(split, split_read_as, split_read_records)
             if split_read_as is not None:
-                # What the person said the record means, beside the records
-                # that could be read otherwise when they said it: those, and
-                # only those, it was said of.
-                read_records = [_record_key(pair) for pair in split or () if pair["may_be_range"]]
+                # What the person said the records mean, kept with exactly
+                # the records it was said of, in the line's order, beside
+                # those that could be read otherwise as it arrived.
+                named = set(split_read_records or ())
+                read_records = [
+                    key for key in (_record_key(pair) for pair in split or ()) if key in named
+                ]
                 read = {
                     "split_read_as": split_read_as.value,
                     "split_may_be_range": [

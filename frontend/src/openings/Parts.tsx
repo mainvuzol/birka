@@ -65,14 +65,18 @@ function removal(
       };
 }
 
-/** A list with no room for a part, as the server counted it. */
+/**
+ * A list with no room for a part, as the server counted it. Its parts are
+ * its files and its lines typed by hand, removed ones too (review, fourth
+ * round, 2026-10-09).
+ */
 function listFull(details: Record<string, unknown>): string {
   const limit =
     typeof details.limit === "number"
       ? number(details.limit)
       : String(details.limit);
   return details.what === "parts"
-    ? `Список повний: не більше ${limit} файлів.`
+    ? `Список повний: не більше ${limit} частин — файлів і рядків, внесених вручну, — разом із прибраними.`
     : details.what === "rows"
       ? `Список повний: не більше ${limit} рядків разом із прибраними.`
       : `Список повний: не більше ${limit} рядків.`;

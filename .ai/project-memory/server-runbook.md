@@ -366,7 +366,8 @@ the owner kept the limit the same day):
   answers** of a model, a size and a count; a line naming several sizes
   takes one answer per size, so count each size of such a line;
 - each file, or each text typed in, at most 1 000 lines and 100 000
-  characters; at most 1 000 files.
+  characters; at most 1 000 parts — files and lines typed by hand —
+  removed ones included (reading R-e, awaiting the owner).
 
 The list shows how much of both is used.
 

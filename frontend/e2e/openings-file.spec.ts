@@ -141,6 +141,26 @@ async function numericModel(page: Page): Promise<string> {
   return name;
 }
 
+/**
+ * A size brought into the catalogue by a model in it, as anyone may while a
+ * list is answered: a number no other journey's line counts.
+ */
+async function sizeMade(page: Page, code: string): Promise<void> {
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: {
+      Authorization: `Bearer ${await token(page)}`,
+      "Idempotency-Key": randomUUID(),
+    },
+    data: {
+      store_id: fixture.store_id,
+      concept: `Мірка ${word()}`,
+      variant: { color: "сірий" },
+      sizes: [{ system: "NUMERIC_EU", code }],
+    },
+  });
+  expect(created.status()).toBe(201);
+}
+
 /** A list an earlier run left waiting here is rejected first. */
 async function noListWaits(page: Page, location: string): Promise<void> {
   const headers = { Authorization: `Bearer ${await token(page)}` };
@@ -921,6 +941,12 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   page,
 }) => {
   const parka = await numericModel(page);
+  const coat = await model(page);
+  // Counts no size of the catalogue is written as, until this journey
+  // makes one: four digits, no other journey's.
+  const [early, late] = [1000, 5000].map((from) =>
+    String(from + (randomBytes(2).readUInt16BE() % 4000)),
+  ) as [string, string];
   await noListWaits(page, fixture.file_range_location_id);
   const answers: Record<string, unknown>[] = [];
   page.on("request", (request) => {
@@ -947,6 +973,20 @@ test("a record that may be a size with its count or a range of sizes is asked ab
           photo_line: 2,
           model: parka,
           size_counts: [{ size: "42", count: 44 }],
+        },
+        {
+          text: `${coat} сірий M-${early}`,
+          photo: "R.jpg",
+          photo_line: 3,
+          model: coat,
+          size_counts: [{ size: "M", count: Number(early) }],
+        },
+        {
+          text: `${coat} сірий M-${late}`,
+          photo: "R.jpg",
+          photo_line: 4,
+          model: coat,
+          size_counts: [{ size: "M", count: Number(late) }],
         },
       ],
       { source: "Зошит діапазонів" },
@@ -993,6 +1033,9 @@ test("a record that may be a size with its count or a range of sizes is asked ab
     quantity_basis: "STATED_BY_SIZE",
     split_read_as: "SIZE_WITH_COUNT",
   });
+  // The person's word names the records it was said of: those asked about,
+  // as the line writes them (review, third round, 2026-10-09).
+  expect(answers[0]?.split_read_records).toEqual(["42-44"]);
 
   // Read as a range, as the text writes it: answered as any line, with a note.
   editor = await answer(page, 2);
@@ -1015,6 +1058,73 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   expect(answers).toHaveLength(2);
   expect(answers[1]).toMatchObject({ quantity_basis: "OWNER_KNOWLEDGE" });
   expect(answers[1]).not.toHaveProperty("split_read_as");
+  expect(answers[1]).not.toHaveProperty("split_read_records");
+
+  // A size created while the editor is open makes a record a possible range
+  // (review, fourth round, 2026-10-09). The line read again as the phone
+  // comes back to the app asks about it, «Як у рядку» waits for the answer,
+  // and only the record answered is named.
+  editor = await answer(page, 3);
+  const asShown = editor.getByLabel(`Як у рядку, по розмірах: M × ${early}`);
+  await expect(editor.getByRole("group", { name: /^Запис/ })).toHaveCount(0);
+  await asShown.check();
+  await pickModel(editor, coat);
+  const save = editor.getByRole("button", { name: "Зберегти відповідь" });
+  await expect(save).toBeEnabled();
+  await sizeMade(page, early);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  const madeRange = editor.getByRole("group", {
+    name: `Запис «M-${early}» — це:`,
+  });
+  await expect(madeRange).toBeVisible();
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await expect(save).toBeDisabled();
+  expect(answers).toHaveLength(2);
+  await madeRange.getByLabel(`Розмір M — ${early} шт`).check();
+  await expect(asShown).toBeChecked();
+  await save.click();
+  await expect(card(page, 3)).toContainText(
+    "Звідки кількість: Як у рядку, по розмірах",
+  );
+  expect(answers).toHaveLength(3);
+  expect(answers[2]).toMatchObject({
+    quantity_basis: "STATED_BY_SIZE",
+    split_read_as: "SIZE_WITH_COUNT",
+    split_read_records: [`M-${early}`],
+  });
+
+  // A size created after the editor read the line and before the answer
+  // arrives: the server refuses the answer naming the record, the line is
+  // read again, and the record is asked about here.
+  editor = await answer(page, 4);
+  await editor.getByLabel(`Як у рядку, по розмірах: M × ${late}`).check();
+  await pickModel(editor, coat);
+  await sizeMade(page, late);
+  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await expect(editor.getByRole("alert")).toHaveText(
+    `Запис «M-${late}» тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз.`,
+  );
+  const askedNow = editor.getByRole("group", {
+    name: `Запис «M-${late}» — це:`,
+  });
+  await expect(askedNow).toBeVisible();
+  await expect(
+    editor.getByRole("button", { name: "Зберегти відповідь" }),
+  ).toBeDisabled();
+  await askedNow.getByLabel(`Розмір M — ${late} шт`).check();
+  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await expect(card(page, 4)).toContainText(
+    "Звідки кількість: Як у рядку, по розмірах",
+  );
+  expect(answers).toHaveLength(5);
+  expect(answers[3]).not.toHaveProperty("split_read_records");
+  expect(answers[4]).toMatchObject({
+    quantity_basis: "STATED_BY_SIZE",
+    split_read_as: "SIZE_WITH_COUNT",
+    split_read_records: [`M-${late}`],
+  });
 
   // A size created since may make a record answered by size a range after
   // all: the approval names the lines to answer again (owner decision,
@@ -1682,6 +1792,34 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
     stockFile([{ text: `${coat} сірий L 1 шт`, photo: other, photo_line: 1 }]),
   );
   expect(await fitsWidth(page)).toBe(true);
+  // A list with no room for another part says what a part is: a file or
+  // lines typed by hand, removed ones counted (review, fourth round,
+  // 2026-10-09). The server's refusal, as it words it.
+  await page.route(
+    "**/api/v1/snapshots/*/parts?*",
+    async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "SNAPSHOT_CONFLICT",
+          message: "This stock list has no room for this part",
+          details: {
+            reason: "LIST_FULL",
+            what: "parts",
+            limit: 1000,
+            now: 1000,
+            adding: 1,
+          },
+        },
+      });
+    },
+    { times: 1 },
+  );
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding.getByRole("alert")).toHaveText(
+    "Список повний: не більше 1 000 частин — файлів і рядків, внесених вручну, — разом із прибраними.",
+  );
+  await page.unrouteAll({ behavior: "wait" });
   await adding.getByRole("button", { name: "Додати до списку" }).click();
   const two = page.getByRole("article", { name: "Файл 2" });
   await two.getByRole("button", { name: "Прибрати файл" }).click();
@@ -1867,6 +2005,17 @@ test("an answer too slow to wait for, its list made only after: no new list is o
   await page.route("**/api/v1/snapshots", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     sent.push(route.request().postDataJSON() as { command_id: string });
+    // The second send is refused for its form, as a server would refuse a
+    // body it cannot read: an answer about this request, not the first.
+    if (sent.length === 2)
+      return route.fulfill({
+        status: 422,
+        json: {
+          code: "VALIDATION_ERROR",
+          message: "Request failed validation",
+          details: { reason: "SOMETHING_ELSE" },
+        },
+      });
     if (sent.length > 1) return route.continue();
     await freed;
     await route.abort("failed").catch(() => undefined);
@@ -1902,6 +2051,28 @@ test("an answer too slow to wait for, its list made only after: no new list is o
       form.getByRole("button", { name: "Почати як новий список" }),
     ).toHaveCount(0);
 
+    // Sent again, the request is refused for its form: an answer about this
+    // send, which says nothing of the first. The send stays unsettled, and
+    // no new list is offered (review, third round, 2026-10-09).
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect.poll(() => sent.length).toBe(2);
+    await expect(form.getByRole("alert")).toHaveText(
+      "Перевірте дані та поточний статус замовлення.",
+    );
+    await expect(
+      form.getByRole("button", { name: "Зберегти список" }),
+    ).toBeEnabled();
+    await expect(
+      form.getByRole("button", { name: "Почати як новий список" }),
+    ).toHaveCount(0);
+    const kept = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `birka:stock-list-draft:${fixture.store_id}`,
+    );
+    expect(
+      (JSON.parse(kept ?? "{}") as { unsettled?: boolean }).unsettled,
+    ).toBe(true);
+
     // The server takes the same request in, late.
     const late = await page.request.post("/api/v1/snapshots", {
       data: sent[0],
@@ -1918,6 +2089,7 @@ test("an answer too slow to wait for, its list made only after: no new list is o
     expect(sent.map((body) => body.command_id)).toEqual([
       sent[0]?.command_id,
       sent[0]?.command_id,
+      sent[0]?.command_id,
     ]);
   } finally {
     free();
@@ -1930,4 +2102,128 @@ test("an answer too slow to wait for, its list made only after: no new list is o
       `birka:stock-list-draft:${fixture.store_id}`,
     ),
   ).toBeNull();
+});
+
+test("a send refused as the same command in another form settles the draft: whatever became of the list it made, a new list is offered, and a list a lost send made, opened from the overview, ends the draft", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  const location = fixture.file_later_location_id;
+  // The lists' names, this run's own: the overview shows every list.
+  const tag = word();
+  await noListWaits(page, location);
+  // The server takes each send in; while `lost` names how, its answer
+  // never reaches the phone: a gateway's own 504, or none at all.
+  const sent: { command_id: string }[] = [];
+  let lost: "gateway" | "nothing" | null = "gateway";
+  await page.route("**/api/v1/snapshots", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    sent.push(route.request().postDataJSON() as { command_id: string });
+    if (lost === null) return route.continue();
+    const made = await route.fetch();
+    expect(made.status()).toBe(201);
+    if (lost === "gateway")
+      return route.fulfill({ status: 504, body: "Gateway Timeout" });
+    return route.abort("failed");
+  });
+  const draft = async (): Promise<{
+    command_id?: string;
+    unsettled?: boolean;
+  } | null> =>
+    JSON.parse(
+      (await page.evaluate(
+        (key) => window.localStorage.getItem(key),
+        `birka:stock-list-draft:${fixture.store_id}`,
+      )) ?? "null",
+    ) as { command_id?: string; unsettled?: boolean } | null;
+  const unknown =
+    "Невідомо, чи збережено список. Натисніть ще раз — той самий список не збережеться двічі.";
+  const newList = (form: Locator): Locator =>
+    form.getByRole("button", { name: "Почати як новий список" });
+  try {
+    await openings(page);
+    let form = await newFromFile(page, location);
+    await choose(
+      form,
+      "загублений.json",
+      stockFile(
+        [{ text: `${coat} сірий M 1 шт`, photo: "V1.jpg", photo_line: 1 }],
+        { source: `Загублений зошит ${tag}` },
+      ),
+    );
+    // A gateway gave up while the server went on and made the list: the
+    // outcome is unknown, so no new list is offered (review, fourth round,
+    // 2026-10-09).
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect(form.getByRole("alert")).toHaveText(unknown);
+    await expect(newList(form)).toHaveCount(0);
+    expect((await draft())?.unsettled).toBe(true);
+
+    // Meanwhile someone rejects the list made: the file was wrong.
+    await noListWaits(page, location);
+    await form.getByRole("button", { name: "Закрити" }).click();
+
+    // Later, a corrected file: the same command, as the draft is
+    // unsettled, refused as sent before in another form. That settles it:
+    // the command made a list, so no send of it makes another, and a new
+    // list is offered, though no list of it waits at the warehouse.
+    lost = null;
+    form = await newFromFile(page, location);
+    await choose(
+      form,
+      "виправлений.json",
+      stockFile(
+        [{ text: `${coat} сірий L 2 шт`, photo: "V2.jpg", photo_line: 1 }],
+        { source: `Виправлений зошит ${tag}` },
+      ),
+    );
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect(form.getByRole("alert")).toHaveText(
+      "Цей список уже збережено, але в іншому вигляді. Знайдіть його в переліку, або почніть новий.",
+    );
+    expect(sent.map((body) => body.command_id)).toEqual([
+      sent[0]?.command_id,
+      sent[0]?.command_id,
+    ]);
+    expect((await draft())?.unsettled).toBe(false);
+    await newList(form).click();
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect(
+      page.getByRole("heading", { name: `Виправлений зошит ${tag}` }),
+    ).toBeVisible();
+    expect(sent).toHaveLength(3);
+    expect(sent[2]?.command_id).not.toBe(sent[0]?.command_id);
+    expect(await draft()).toBeNull();
+
+    // A send whose answer never came, its list then opened from the
+    // overview: the list is made, and the draft is done.
+    await noListWaits(page, location);
+    await page.getByRole("button", { name: "До списків" }).click();
+    lost = "nothing";
+    form = await newFromFile(page, location);
+    await choose(
+      form,
+      "без-відповіді.json",
+      stockFile(
+        [{ text: `${coat} сірий M 3 шт`, photo: "V3.jpg", photo_line: 1 }],
+        { source: `Зошит без відповіді ${tag}` },
+      ),
+    );
+    await form.getByRole("button", { name: "Зберегти список" }).click();
+    await expect(form.getByRole("alert")).toHaveText(unknown);
+    expect((await draft())?.command_id).toBe(sent[3]?.command_id);
+    await form.getByRole("button", { name: "Закрити" }).click();
+    lost = null;
+    await page.getByRole("button", { name: "Оновити" }).click();
+    await page
+      .getByRole("article", { name: `Список Зошит без відповіді ${tag}` })
+      .getByRole("button", { name: "Відкрити" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: `Зошит без відповіді ${tag}` }),
+    ).toBeVisible();
+    expect(await draft()).toBeNull();
+  } finally {
+    await page.unrouteAll({ behavior: "wait" });
+  }
 });

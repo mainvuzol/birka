@@ -179,19 +179,37 @@ sign**, the person confirms the split with one tap, «Як у рядку, по
   spelling of the same size: «Лоран M-3 M 2» and «Лоран M-3 (M)» write M
   twice, and so do «Лоран M-3 М» with a Cyrillic М and «XXL-1 2XL». That one
   place is followed by its sign and exactly its count: `462` is never «46,
-  2».
-- **The count ends with its number.** A count followed by `.` or `,` and a
-  digit right after it is a fraction; one followed by `+`, `/`, `×`, `*`,
-  `x`, `х`, `·` or `⋅` and a digit, with or without spaces about the sign,
-  is a sum or a product. Neither is a count: «M-3+2», «M-3 + 2», «M-3,5»,
-  «M-3.5», «M-3/2», «M-3х2» hold no count of M. A numeral of any script is a
+  2». A word is a run of letters and digits; an apostrophe (`'`, `’`,
+  `ʼ`) joins two only as in a Ukrainian word, a Cyrillic letter before it
+  and «я», «ю», «є» or «ї» after it. So the «м» of «м'ята» or «м’ятний» is
+  no size M, while «M-3'L», «L'S» or «XL’XXL» each write a size of their
+  own.
+- **The count ends with its number.** After the count may come only: the
+  end of `text`; after a space, another number, which must then be the
+  price (below); a letter, but `x` or `х` (in either case or width) before
+  a digit, which is a product; `,` `;` `.` or `)` with no digit right after
+  it, so a list goes on, while with one it is a fraction; `(` `[` `{` `«`
+  or a currency sign, which begin something else («M-3 (1850)», «M-3
+  ₴1850»); or any other sign with no digit after it. Any whitespace may
+  stand about a sign, a no-break space included, and a character that
+  prints nothing (a zero-width space, a soft hyphen) is passed over
+  wherever it stands. So «M-3+2», «M-3 + 2», «M-3,5», «M-3.5», «M-3/2»,
+  «M-3х2», «M-3X2», «M-3 Х 2», «M-3✕2», «M-3＋2», «M-3~2», «M-3 – 2»,
+  «M-3，5» and «M-3 @1850» hold no count of M. A numeral of any script is a
   digit here: «M-3½», «M-3²». «S-1, M-2» and «L-1, 1850» list on.
 - **The text shows the split and nothing beside it:**
   - no other size Birka reads in `text`: «Лоран S M-3» names S without a
     count; nor any other word that is a letter size as Birka spells sizes,
     though its parser reads only XS to XXL: «Лоран S-1 M-2 XXXL», «M-3
-    XXS», «M-3 4XL», «M-3 ХL» with a Cyrillic Х. A lowercase Cyrillic «с»
-    is a preposition, not S;
+    XXS», «M-3 4XL», «M-3 ХL» with a Cyrillic Х. The Cyrillic «с» is a
+    preposition, not S, when lowercase, as Birka's parser reads it
+    («куртка с поясом M-3»); a capital «С» is one only where it begins a
+    phrase Birka reads («Куртка С капюшоном M-3», «С лисой», «С
+    норкой»). Anywhere else a capital «С» is S: «M-3 С», «Лоран С M-3»,
+    «Лоран M-3 С 1850» and «Куртка С поясом M-3» show no split. One joined
+    to its count by a sign is a size with its count («С-3»). A lowercase
+    «с» written for S is not seen: «Лоран M-3 с» shows the split of M, so
+    write such a line without `size_counts` if the «с» there is a size;
   - no other size, or number, joined to digits by a sign: «Лоран S-1 M-2
     L-4» with `size_counts` for S and M only, «Лоран M-3 L-5» with M only,
     «Лоран M-3-2»;
@@ -223,8 +241,12 @@ sign**, the person confirms the split with one tap, «Як у рядку, по
   written, reads as a larger size after it («42-44», «42-58», «98-104»,
   whatever the catalogue holds), and when the count, or the whole record, is
   also a size in the shop's catalogue («M-3» with a size «3», a size
-  «42-44»). A size created after the answer brings the question back before
-  the approval, for every record the person's answer did not cover. A record you read as a range is not a size with its count:
+  «42-44»). The answer names the records the person was asked about: a
+  size created while they answer makes another record a possible range,
+  and that answer is refused and asked again. A size created after the
+  answer brings the question back before the approval, for every record
+  the person's answer did not cover. A record you read as a range is not a
+  size with its count:
   keep it in `text`, never in `size_counts`.
 - Otherwise the split is only a hint, and the person answers it with a note.
 

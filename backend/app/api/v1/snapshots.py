@@ -62,7 +62,7 @@ from app.modules.snapshots.service import (
     remove_part,
     resolve_row,
 )
-from app.modules.snapshots.stock_file import StockFileV1, has_control
+from app.modules.snapshots.stock_file import MAX_LIST_ITEMS, StockFileV1, has_control
 from app.modules.tenancy.models import StoreState
 
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
@@ -193,6 +193,15 @@ class ResolutionRequest(BaseModel):
     # sizes («42-44», `may_be_range`): only `SIZE_WITH_COUNT`, and only with
     # `STATED_BY_SIZE`, which such a line needs it for (owner, 2026-10-09).
     split_read_as: SplitReading | None = None
+    # The records it was said of: those the editor asked about, each as the
+    # line's `shown_split` writes it (`written`), or by its `size` when
+    # `written` is null, a record the text no longer shows (`_record_key`).
+    # Goes with `split_read_as` and only with it; every record that may be a
+    # range when the answer arrives must be among them (review, third round,
+    # 2026-10-09).
+    split_read_records: list[LineText] | None = Field(
+        default=None, min_length=1, max_length=MAX_LIST_ITEMS
+    )
 
     @model_validator(mode="after")
     def _one_answer(self) -> ResolutionRequest:
@@ -209,6 +218,14 @@ class ResolutionRequest(BaseModel):
             and self.quantity_basis is not SnapshotQuantityBasis.STATED_BY_SIZE
         ):
             raise ValueError("split_read_as goes only with STATED_BY_SIZE")
+        if (self.split_read_as is None) != (self.split_read_records is None):
+            raise ValueError(
+                "split_read_as goes with split_read_records, the records it was said of"
+            )
+        if self.split_read_records is not None and len(set(self.split_read_records)) != len(
+            self.split_read_records
+        ):
+            raise ValueError("Each record of split_read_records once")
         return self
 
 
@@ -575,6 +592,7 @@ async def resolve_line(
         note=payload.note,
         via_store_id=via,
         split_read_as=payload.split_read_as,
+        split_read_records=payload.split_read_records,
     )
     await session.commit()
     return result

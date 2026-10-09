@@ -200,10 +200,20 @@ def text_of(
     """The exact text of the line `raw_input_id` names, tenant-scoped,
     without its parse, as a column of the caller's own query: a check over
     every line of a long list reads each text beside its row, in the one
-    statement that reads the rows (review, 2026-10-09)."""
+    statement that reads the rows (review, 2026-10-09).
+
+    Found by its primary key alone. The tenant is checked in a form no index
+    serves (`IS NOT DISTINCT FROM`; the column is never null, so it is `=`),
+    so no statistics can lead the planner to read the organization's lines
+    by their index for each row instead: with the statistics a test suite
+    left, that took 1.4 s at 5 000 lines (review, third round, 2026-10-09).
+    A line of another organization reads as no text."""
     return (
         select(RawInput.raw_text)
-        .where(RawInput.id == raw_input_id, RawInput.organization_id == organization_id)
+        .where(
+            RawInput.id == raw_input_id,
+            RawInput.organization_id.is_not_distinct_from(organization_id),
+        )
         .scalar_subquery()
     )
 

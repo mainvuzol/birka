@@ -26,6 +26,7 @@ Pure: no database.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -51,22 +52,45 @@ FILE_NOTE = "FILE_NOTE"
 FILE_REASONS = (FILE_COUNT_HINT, FILE_COUNT_DIFFERS, FILE_SPLIT_NOT_IN_TEXT, FILE_NOTE)
 
 # The signs that join a size to its count: the hyphen, the dashes, the minus,
-# the colon and the equals sign. Spaces alone join nothing.
-SPLIT_SEPARATORS = "-\u2010\u2011\u2012\u2013\u2014\u2015\u2212:="
-_GAP = "[ \t]*[" + re.escape(SPLIT_SEPARATORS) + "][ \t]*"
-# The signs after a count that make it part of something else
-# (`_ends_cleanly`): a comma or a point before a numeral is a fraction, and
-# the others, spaced or not, a sum or a product.
-_FRACTION_SIGNS = ".,"
-_ARITHMETIC_SIGNS = "+/×*xх·⋅"
+# the colon and the equals sign, with any whitespace about them (`\s`: a
+# no-break space too). Spaces alone join nothing.
+SPLIT_SEPARATORS = "-‐‑‒–—―−:="
+_GAP = r"\s*[" + re.escape(SPLIT_SEPARATORS) + r"]\s*"
+# What may follow a count that ends with its number (`_ends_cleanly`): a list
+# goes on after these signs when no numeral stands right after them; these
+# open something else, a numeral after them or not; and a letter starts a
+# word, but for these two, «x» and «х» in either case or width, which before
+# a numeral make a product.
+_LIST_SIGNS = ",;.)"
+_OPENING_SIGNS = "([{«"
+_TIMES_LETTERS = "xх"
+# A word of the text: a run of letters and digits («Лоран», «XXXL», «3шт»),
+# joined by an apostrophe only as a Ukrainian word is, a Cyrillic letter
+# before it and «я», «ю», «є» or «ї» after it («м'ята», «м’ятний», «мʼята»).
+# So the «м» of «м'ята» is no size M, while «M-3'L», «L'S» and «XL’XXL» each
+# write a size of their own (review, fourth round, 2026-10-09). A word starts
+# where neither a letter or digit nor such an apostrophe stands before it,
+# and ends likewise.
+_APOSTROPHES = "'’ʼ"
+_CYRILLIC_LETTERS = "Ѐ-ҁҊ-ԯ"
+_IOTATED = "яюєїЯЮЄЇ"
+_JOIN = "(?<=[" + _CYRILLIC_LETTERS + "])[" + _APOSTROPHES + "](?=[" + _IOTATED + "])"
+_WORD = re.compile(r"[^\W_]+(?:" + _JOIN + r"[^\W_]+)*")
+_STARTS = r"(?<![^\W_])(?!(?<=[" + _CYRILLIC_LETTERS + "][" + _APOSTROPHES + "])[" + _IOTATED + "])"
+_ENDS = r"(?![^\W_])(?!" + _JOIN + ")"
 # Any word joined by one sign to a run of digits, wherever it starts, so
 # that records sharing a sign are each found: «M-3-2» holds «M-3» and «3-2».
-_RECORD = re.compile(r"(?=(?<![^\W_])([^\W_]+)" + _GAP + r"(\d+))")
-# A word of the text: a run of letters and digits («Лоран», «XXXL», «3шт»).
-_WORD = re.compile(r"[^\W_]+")
-# Birka's parser reads a lowercase Cyrillic «с» as the preposition, never as
-# the size S («куртка с капюшоном»; `parser._SIZES`).
+_RECORD = re.compile(r"(?=" + _STARTS + "(" + _WORD.pattern + ")" + _GAP + r"(\d+))")
+# Birka's parser reads the Cyrillic «с» as a preposition, never as the size
+# S, when it is lowercase, and when a capital «С» has any word after it
+# (`parser.parse_catalog_line`). A line is read more strictly (review, fourth
+# round, 2026-10-09): a capital «С» is the preposition only inside a phrase
+# Birka's parse reads («Куртка С капюшоном», «С лисой», «С норкой»), and the
+# size S anywhere else («Лоран С M-3», «M-3 С 1850», «Куртка С поясом M-3»).
+# Joined by a sign to a count, either is a record's size, as any word is
+# («С-3»).
 _PREPOSITION = "с"
+_COUNTED = re.compile(_GAP + r"\d")
 # The parser's own signal that a line names slash options: contextual
 # (constitution §21), so no split is shown beside one.
 _SLASH = "SLASH_OPTIONS_REQUIRE_REVIEW"
@@ -114,69 +138,152 @@ def _numerals(text: str) -> Iterator[tuple[int, int]]:
         yield start, len(text)
 
 
+def _invisible(character: str) -> bool:
+    """A format character, which prints nothing: a zero-width space, a soft
+    hyphen, a byte order mark, a joiner (`Cf`)."""
+    return unicodedata.category(character) == "Cf"
+
+
+def _skip(text: str, index: int, *, spaces: bool) -> int:
+    """The first place at or after `index` that holds no format character
+    (`_invisible`), nor, with `spaces`, any whitespace (`str.isspace`)."""
+    while index < len(text) and (_invisible(text[index]) or (spaces and text[index].isspace())):
+        index += 1
+    return index
+
+
+def _numeral_at(text: str, index: int) -> bool:
+    return index < len(text) and text[index].isnumeric()
+
+
 def _ends_cleanly(text: str, end: int) -> bool:
     """Whether a count that ends here ends with its number (review,
-    2026-10-09). A numeral of any script right after it continues it
-    («M-3½», «M-3²»); a comma or a point with a numeral right after it makes
-    a fraction («M-3,5», «M-3.5»); and `+ / × * x х · ⋅` with a numeral
-    after it, spaces about the sign or not, a sum or a product («M-3+2»,
-    «M-3 + 2», «M-3х2»). «S-1, M-2» and «L-1, 1850» list on."""
-    if text[end : end + 1].isnumeric():
+    2026-10-09; fourth round, the same day): what may follow it is named, and
+    anything else before a numeral makes it part of something more. Format
+    characters (`_invisible`) are passed over wherever they stand, and any
+    whitespace (`str.isspace`) about a sign. After the count:
+
+    - nothing, the text's end;
+    - after whitespace, a numeral: a number of its own, which every other
+      number of the line must answer for (`_numbers_explained`: «M-3 1850»);
+    - a letter: another word («M-3 L-1», «M-3 шт»), but «x» or «х», in
+      either case or width, before a numeral is a product («M-3x2»,
+      «M-3 Х 2», «M-3ｘ2»);
+    - «,» «;» «.» «)» with no numeral right after it: a list goes on
+      («S-1, M-2», «L-1, 1850», «M-3. 1850»), while «M-3,5» or «M-3.5» is
+      a fraction;
+    - «(» «[» «{» «« or a currency sign: something else begins («M-3
+      (1850)», «M-3 ₴1850»);
+    - any other sign with no numeral after it («M-3 (M)», «M-3!»): before
+      one, it is a sum, a product, a fraction or a range of some kind
+      («M-3+2», «M-3 – 2», «M-3＋2», «M-3∗2», «M-3~2», «M-3，5»).
+
+    A numeral right after it continues it, a format character between them
+    or not («M-3½», «M-3²»)."""
+    if _numeral_at(text, _skip(text, end, spaces=False)):
         return False
-    after = text[end:].lstrip(" \t")
-    sign, rest = after[:1], after[1:]
-    if sign == "":
+    at = _skip(text, end, spaces=True)
+    if at == len(text) or text[at].isnumeric():
         return True
-    if sign in _FRACTION_SIGNS:
-        return not rest[:1].isnumeric()
-    if sign in _ARITHMETIC_SIGNS:
-        return not rest.lstrip(" \t")[:1].isnumeric()
-    return True
+    sign = text[at]
+    if sign in _LIST_SIGNS:
+        return not _numeral_at(text, _skip(text, at + 1, spaces=False))
+    if sign in _OPENING_SIGNS or unicodedata.category(sign) == "Sc":
+        return True
+    if sign.isalpha() and unicodedata.normalize("NFKC", sign).casefold() not in _TIMES_LETTERS:
+        return True
+    return not _numeral_at(text, _skip(text, at + 1, spaces=True))
 
 
 def _places(text: str, size: str) -> list[re.Match[str]]:
     """Every place the text writes this size as a whole word, joined by one
     sign to a count, all its digits, that ends cleanly (`_ends_cleanly`):
     «M-3», «42 – 44». The digits are group 1."""
-    pattern = re.compile(r"(?<![^\W_])" + re.escape(size) + _GAP + r"(\d+)", re.IGNORECASE)
+    pattern = re.compile(_STARTS + re.escape(size) + _GAP + r"(\d+)", re.IGNORECASE)
     return [found for found in pattern.finditer(text) if _ends_cleanly(text, found.end())]
 
 
 @lru_cache(maxsize=4096)
-def _spelled(word: str) -> str | None:
+def _spelled(word: str) -> str:
     """A word of the text as the catalogue spells a size (`spell_size`,
-    ADR-0009): «ХL» with a Cyrillic Х is `XL`, «2xl» is `XXL`. None for the
-    parser's preposition «с». Kept: a list repeats its words."""
-    return None if word == _PREPOSITION else spell_size(word)
+    ADR-0009): «ХL» with a Cyrillic Х is `XL`, «2xl» is `XXL`. Kept: a list
+    repeats its words."""
+    return spell_size(word)
 
 
-def _words(text: str, size: str) -> int:
+def _phrases(parsed: dict[str, Any]) -> list[tuple[int, int]]:
+    """Where Birka's own parse read a descriptor in the text, a size aside:
+    «С капюшоном», «з лисицею», «чорна»."""
+    return [
+        (int(evidence["start"]), int(evidence["end"]))
+        for field, candidates in parsed.get("fields", {}).items()
+        if field != "size"
+        for candidate in candidates
+        for evidence in candidate.get("evidence", [])
+    ]
+
+
+def _preposition(text: str, word: re.Match[str], phrases: Sequence[tuple[int, int]]) -> bool:
+    """Whether this word of the text is the preposition «с», never the size
+    S: lowercase, as Birka's parser reads it («куртка с капюшоном»), or a
+    capital «С» that begins a phrase Birka's parse read («Куртка С
+    капюшоном», `_phrases`). A capital «С» anywhere else is S, though the
+    parser takes one with any word after it for the preposition: «Лоран С
+    M-3», «M-3 С 1850», «Куртка С поясом M-3» (review, fourth round,
+    2026-10-09). Never when a sign and a count follow it: «С-3» is a size
+    with its count, whoever wrote it."""
+    written = word.group()
+    if written.casefold() != _PREPOSITION or _COUNTED.match(text, word.end()):
+        return False
+    return written == _PREPOSITION or any(
+        start <= word.start() and word.end() < end for start, end in phrases
+    )
+
+
+def _size_words(
+    text: str, phrases: Sequence[tuple[int, int]]
+) -> Iterator[tuple[re.Match[str], str]]:
+    """Each word of the text (`_WORD`) with its spelling as a size, but the
+    preposition «с» (`_preposition`)."""
+    for word in _WORD.finditer(text):
+        if not _preposition(text, word, phrases):
+            yield word, _spelled(word.group())
+
+
+def _words(text: str, size: str, phrases: Sequence[tuple[int, int]]) -> int:
     """How many times the text writes this size as a whole word, with a count
     or without, in any of its spellings: «M-3 M 2» writes M twice, and so
-    does «M-3 М» with a Cyrillic М (ADR-0009: one size)."""
-    pattern = re.compile(r"(?<![^\W_])" + re.escape(size) + r"(?![^\W_])", re.IGNORECASE)
+    does «M-3 М» with a Cyrillic М (ADR-0009: one size). The preposition «с»
+    is no size (`_preposition`), and the letter before the apostrophe of a
+    Ukrainian word («м'ята») is none either (`_WORD`)."""
+    pattern = re.compile(_STARTS + re.escape(size) + _ENDS, re.IGNORECASE)
     spelling = spell_size(size).casefold()
+    prepositions = {
+        word.span() for word in _WORD.finditer(text) if _preposition(text, word, phrases)
+    }
     return len(
-        {found.span() for found in pattern.finditer(text)}
+        ({found.span() for found in pattern.finditer(text)} - prepositions)
         | {
             word.span()
-            for word in _WORD.finditer(text)
-            if (_spelled(word.group()) or "").casefold() == spelling
+            for word, spelled in _size_words(text, phrases)
+            if spelled.casefold() == spelling
         }
     )
 
 
-def _letter_size_beside(text: str, places: Sequence[tuple[int, int]]) -> bool:
+def _letter_size_beside(
+    text: str, places: Sequence[tuple[int, int]], phrases: Sequence[tuple[int, int]]
+) -> bool:
     """Whether a word outside the split's places is a letter size by Birka's
     own spelling (`letter_rank`), read by the parser or not: «XXXL», «XXS»,
-    «ХL» with a Cyrillic Х, «4XL», a Cyrillic «М» (review, 2026-10-09). The
-    parser reads only XS to XXL, so «Лоран S-1 M-2 XXXL» names a third size
-    it does not see."""
+    «ХL» with a Cyrillic Х, «4XL», a Cyrillic «М» (review, 2026-10-09), a
+    capital «С» outside a phrase, and «L» in «M-3'L» (fourth round, the same
+    day). The parser reads only XS to XXL, so «Лоран S-1 M-2 XXXL» names a
+    third size it does not see."""
     return any(
         letter_rank(spelled) is not None
-        for word in _WORD.finditer(text)
+        for word, spelled in _size_words(text, phrases)
         if not any(start <= word.start() and word.end() <= end for start, end in places)
-        and (spelled := _spelled(word.group())) is not None
     )
 
 
@@ -246,17 +353,22 @@ def shown_split(
 
     1. the file gives counts per size, for sizes distinct as spelled
        (`spell_size`, ADR-0009: `M` and `м` are one size);
-    2. each size stands in the text exactly once as a whole word, in any of
-       its spellings, followed by one sign and its count, which ends
-       cleanly: `462` is never «46, 2», `M 3` is never «M, 3», and «M-3+2»,
-       «M-3 + 2», «M-3,5», «M-3/2», «M-3х2» or «M-3½» never «M, 3»;
+    2. each size stands in the text exactly once as a whole word (`_WORD`:
+       the «м» of the Ukrainian «м'ята» is no M, while «M-3'L» writes an L),
+       in any of its spellings, followed by one sign and its count, which
+       ends cleanly (`_ends_cleanly`): `462` is never «46, 2», `M 3` is
+       never «M, 3», and «M-3+2», «M-3 + 2», «M-3,5», «M-3/2», «M-3х2»,
+       «M-3X2», «M-3✕2», «M-3 – 2», «M-3＋2» or «M-3½» never «M, 3»;
     3. no two of those places overlap;
     4. the totals agree: the file's `count`, if any, and Birka's own count
        with its unit, if any, which is then the only one and sure;
     5. one colour at most, in the file and in Birka's reading, and no slash;
     6. nothing beside it (review, 2026-10-09): Birka reads no other size in
        the text («Лоран S M-3»), nor is another word a letter size by its
-       spelling («Лоран S-1 M-2 XXXL», «Лоран M-3 М»; `_letter_size_beside`);
+       spelling («Лоран S-1 M-2 XXXL», «Лоран M-3 М», «Лоран С M-3»;
+       `_letter_size_beside`), the preposition «с» aside: lowercase, or a
+       capital «С» that begins a phrase Birka read («Куртка С капюшоном
+       M-3»; `_preposition`);
        the text holds no other size with a count («Лоран S-1 M-2 L-4», the
        file naming S and M); and every other number in it, of any script,
        is the file's price, a count with its unit or a length Birka read
@@ -285,13 +397,14 @@ def shown_split(
     ):
         return None
 
+    phrases = _phrases(parsed)
     places: list[tuple[int, int]] = []
     for pair in pairs:
         found = _places(line.text, pair.size)
         if (
             len(found) != 1
             or int(found[0].group(1)) != pair.count
-            or _words(line.text, pair.size) != 1
+            or _words(line.text, pair.size, phrases) != 1
         ):
             return None
         places.append(found[0].span())
@@ -304,7 +417,7 @@ def shown_split(
     }
     if read - spellings:
         return None
-    if _letter_size_beside(line.text, places):
+    if _letter_size_beside(line.text, places, phrases):
         return None
     if not _records(line.text) <= set(places):
         return None

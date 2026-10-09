@@ -214,8 +214,9 @@ statement over 5 s; adding a file at most 5 s; a page at most 0.5 s.
   self-join the planner sized wrongly. It is one scan now, flat at
   0.2–0.3 s.
 - **On PostgreSQL 16, not the server's 17.** The approval's reply is 1 108
-  bytes at every size; the client waits 60 s for it, eight times the
-  slowest measured.
+  bytes at every size; the client waits 60 s for it, six times the
+  slowest measured (9.87 s, in the review's third round; eight times when
+  this was first written).
 
 ## Verification
 
@@ -251,7 +252,7 @@ the shown split, a file line's count, `check_basis` and the format; 52
 caught, one equivalent (a count "continuing in digits", which the pattern's
 greedy digits already exclude).
 
-**E2E.** Ten journeys in `e2e/openings-file.spec.ts`:
+**E2E.** Twelve journeys in `e2e/openings-file.spec.ts`:
 1. a file fills a new list, its lines show their photo and reading, a split
    the line shows is confirmed by a tap, a second file joins, and the owner
    approves;
@@ -263,6 +264,10 @@ greedy digits already exclude).
    the server;
 4. a record that may be a size with its count or a range of sizes is asked
    about, and tapped only once read as a size with its count (reading 5);
+   since the fourth round, a size created while the editor is open makes a
+   record a possible range: read again as the phone comes back to the app,
+   the line asks about it and the tap waits for the answer, and an answer
+   the server refuses for it reads the line again and asks there;
 5. the shared warehouse's list is seen and filled from the other store, and
    no second list is offered for it;
 6. a shared list whose own store stopped trading is only rejected, from the
@@ -276,17 +281,31 @@ greedy digits already exclude).
    new;
 9. a narrow phone (review): at 375 px a 60-character file name breaks and
    never widens the page; an answer the list has no room for, and a list
-   whose store may no longer receive, say so (server answers faked in the
-   shapes the server gives);
+   whose store may no longer receive, say so, and since the fourth round a
+   list with no room for another part (server answers faked in the shapes
+   the server gives);
 10. an answer too slow to wait for (review): the list made meanwhile is
-    opened, never a second.
+    opened, never a second;
+11. an answer too slow to wait for, its list made only after (second
+    round): no new list is offered meanwhile, and saving again opens the
+    one list; since the third round, a send refused for its form between
+    leaves the draft unsettled;
+12. a send refused as the same command in another form settles the draft
+    (fourth round, against the server, its answers lost on their way back):
+    a gateway's 504 after the list is made leaves the draft unsettled; the
+    list rejected meanwhile, a corrected file is refused as the same
+    command, which settles the draft, and a new list is started; a list
+    whose answer never came, opened from the overview, ends its draft. It
+    replaces the third round's journey, whose server answers were faked and
+    which kept the draft unsettled until a waiting list was found.
 
 `e2e/openings.spec.ts` checks, since the review, that a manager without the
 right to approve still sees «Відхилити список».
 
 On a fresh seed: 249 before this change; 254 with journeys 1–3, 5 and 7;
 256 with 4 and 6 (2026-10-09); 259 after the review's fixes (2026-10-09,
-run locally). The final count, with the full run: TODO(final). Frontend
+run locally), 260 after its second round and 261 after its third. The
+final count, with the full run: TODO(final). Frontend
 typecheck, lint, build and Prettier passed after the fixes on 2026-10-09;
 with the final run: TODO(final).
 
@@ -499,6 +518,111 @@ figures under "Verification"):
   (`file_lines._ends_cleanly`) and the tests given a case each, and all
   three were caught.
 
+### The review's third round (2026-10-09)
+
+The second round's fixes were checked again the same day, with probes of
+their own, and six items were decided for one more round of fixes. Every
+one, and what was done:
+
+| Finding | What was done |
+|---|---|
+| **The person's word was credited to records nobody was asked about** (the re-check's probe P3). The answer kept as its records those that might be a range when it *arrived*: a size «2» created between the editor's look at «Парка 42-44 46-2», which asked about «42-44» only, and the answer credited «46-2» too, and the approval passed. | **Fixed.** The answer names the records the editor asked about, `split_read_records`, with `split_read_as`, each as `shown_split` writes it. A record that may be a range as the answer arrives and is not among them refuses the answer, 422 `SPLIT_MAY_BE_RANGE` naming it, and nothing is kept; a record not of the line's split is refused (`SPLIT_RECORD_UNKNOWN`); the line keeps exactly the records named, in the line's order; the approval reads them record by record as before. The editor sends them. Integration `test_a_size_created_while_the_editor_was_open_is_never_credited_to_the_person` and `test_the_person_s_word_is_kept_for_exactly_the_records_it_names`; unit tests of the request and of `_stated_split`; the range journey checks the body sent (ADR-0014 §5, §13). |
+| **The re-check's text read depended on the planner's statistics.** `text_of` correlated the raw input on its id and its organization; with the statistics a test suite leaves, the planner read the organization's index for each row: 1.36–1.39 s at 5 000 lines. | **Fixed.** The raw input is found by its primary key alone, and its organization checked with `IS NOT DISTINCT FROM`, which no index serves; a line of another organization still reads as no text. Measured with a test suite's statistics, in one session: the old form 1.39–1.63 s (EXPLAIN 1 395 ms), the new 0.007–0.008 s, the first read of the second run 0.091 s (6.7 ms). The approval by size at 5 000, three runs on a fresh database: 7.21, 8.48 and 7.59 s, the second reading 0.11–0.19 s; the 2026-10-08 method the same hour, 8.00, 9.87 and 7.30 s. All pass; 9.87 s is the closest to the 10 s rule yet, the laptop's spread ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md); ADR-0014 §10). |
+| **The count's end missed spellings of its sign.** «M-3X2», «M-3 Х 2», «M-3 x 2» with no-break spaces and «M-3✕2», each with a price "2", showed M:3. | **Fixed.** The sign is compared casefolded, any whitespace `str.isspace` names may stand about it, and `✕ ✖ ⨯` join `+ / × * x х · ⋅`. ADR-0014 §5 and the format's §7 say it as built. Unit cases, each with a price "2". |
+| **An apostrophe split a word, and a capital «С» lost the tap.** «Лоран м'ята M-3» and «Лоран м’ятний S-1 M-2» read an «м» as the size M; «Куртка С капюшоном M-3» read a size S. | **Fixed.** A word of the line is the catalogue's own (`catalog.sizes.WORD`, made public), an apostrophe inside it included; «с» and «С» follow the parser's rule: the preposition when lowercase or with another word after it, S when a capital with nothing after it («M-3 С»), and a size when joined to a count by a sign («С-3»). Every earlier negative still shows no split. What it leaves: «Лоран С M-3» shows the split of M, as the parser reads the line (ADR-0014 §5, risk register). |
+| **The phone settled an unsettled draft on any answer.** A later send refused for its form offered «Почати як новий список» again while the slow first send might still be taken. | **Fixed.** The draft stays unsettled until a list comes in answer, or a refusal as the same command sent before in another form whose re-read finds the list this command made. While it is unsettled, that refusal's text drops «або почніть новий». The "…made only after…" journey sends again between and is refused for its form; a new journey fakes the conflict before and after the list waits (ADR-0014 §16). |
+| **R-e's wording.** The 1 000 counts parts, typed lines included, not files only. | **Reworded** in reading 3 and R-e: «до 1 000 частин — файлів і рядків, внесених вручну, — рахуючи й прибрані»; the rest of the question unchanged. The runbook, the risk register and this report say parts too. |
+
+**Verified after the third round, on 2026-10-09** (the final run's
+figures stay under "Verification"):
+- backend: ruff, format (330 files), mypy (156 files), 31 import contracts
+  kept; the whole suite on a fresh database, 3 160 passed and 1 skipped
+  (`age`), the catalogue evaluation's integration file left out, as it
+  needs `birka_test`; no migration changed;
+- new tests: unit `test_file_lines.py` (21 cases: the count's end, the
+  apostrophe, «с» and «С»), `test_snapshot_import.py` (2); integration
+  `test_snapshot_parts.py` (2), and the six answers by size there now name
+  their records;
+- frontend: typecheck, lint, build and Prettier; E2E on a fresh seed, 261
+  passed, one journey new ("a send refused as the same command in another
+  form…") and two extended (the range journey checks the records sent; "…its
+  list made only after…" is refused for its form between). A first full run
+  lost its dev server to a crash of Node itself ("Lazy deopt after a fast
+  API call with return value is unsupported", in Vite's response writer)
+  after 207 journeys, and every journey after it timed out; run again on a
+  fresh seed, all passed;
+- 18 hand mutants, each applied alone, caught and reverted, the tree byte
+  for byte as before (`git diff --stat` and every changed file's sha256,
+  before and after): 13 on the server (the word credited to every record,
+  an unknown record taken, the records kept in the order sent, the request
+  without its records; the sign not casefolded, spaces only about it, no
+  ✕; words split at apostrophes, a capital «С» never a preposition, a
+  counted «С» a preposition, a word's end blind to apostrophes, a
+  preposition counted as the size written), 5 on the phone (no records
+  sent, records named by their size, any answer settling the draft, a
+  conflict settling whatever the re-read finds, a conflict never settling).
+
+### The review's fourth round (2026-10-09)
+
+The third round's fixes were checked again the same day, with probes of
+their own: four of its items were found done in part, and eleven findings
+were new. Every one, and what was done:
+
+| Finding | What was done |
+|---|---|
+| **A capital «С» before any later word, the price included, was read as the preposition** (major; the third round's apostrophe and «С» item, in part). «Лоран M-3 С 1850» with a price "1850", «Лоран M-3, С 1850», «Лоран M-3 С 3шт», «Лоран M-3 С без кількості», «Лоран С, M-3», «С M-3» and «Лоран С M-3» showed the split of M, and «Лоран S-1 M-2 С 1850» its split though it writes S twice. | **Fixed, more strictly than proposed.** A lowercase «с» stays the parser's preposition. A capital «С» is the preposition only where it begins a phrase Birka's own parse reads («Куртка С капюшоном», «С лисой», «С норкой»), and S anywhere else. The proposal, a word of letters after it that is no size and no «шт», would still show «Лоран M-3 С без кількості»; the phrase closes it, at the cost of a note for «Куртка С поясом M-3», as before the third round. Each line named is a pinned negative; «Куртка С капюшоном M-3» and «Шуба С норкой M-3» keep their tap. What it leaves: a lowercase «с» written for S («Лоран M-3 с», pinned as shown; ADR-0014 §5, the format's §7, the risk register). |
+| **The apostrophe join hid Latin sizes** (minor). «Лоран M-3'L», «Лоран M-3’XL», «Лоран M-3 L'S», «Лоран M-3 XL’XXL» and «Лоран S-1 M-2 L'L» showed their split. | **Fixed.** An apostrophe joins two words only as in a Ukrainian word: a Cyrillic letter before it and «я», «ю», «є» or «ї» after it (`file_lines._WORD`; `catalog.sizes` is back as it was). «м'ята», «м’ятний» and «мʼята» keep their tap; the five, «Лоран S-1’M-2’L-4» and «Лоран M-3 С'Л» are pinned negatives. |
+| **The count's end was a list of signs, and missed others** (minor). «M-3＋2», «M-3＊2», «M-3ｘ2», «M-3∗2», «M-3•2», «M-3÷2», «M-3⁄2», «M-3⨉2», «M-3－2», «M-3~2», a zero-width space or a soft hyphen about the «x», «M-3 – 2» with no-break spaces, «M-3٫5», «M-3，5» and «M-3．5» showed M:3 beside a price "2" or "5". | **Fixed: what may end a count is named** (`file_lines._ends_cleanly`). The text's end; after whitespace, a numeral of its own; a letter, but `x` or `х` in any case or width before a numeral; `,` `;` `.` `)` with no numeral right after; `(` `[` `{` `«` or a currency sign; or any other sign with no numeral after it. Format characters (`Cf`) are passed over wherever they stand, and the gap about a size's sign takes any whitespace. Every case named is pinned, and «M-3» and «5» with only a zero-width space between them too. Two forms change their outcome: «Лоран M-3 @1850» and «Лоран M-3 #1850» with that price now go to a note, while «Лоран M-3 (1850)» and «Лоран M-3 ₴1850» keep their tap (pinned). The published example's eleven lines read byte for byte as at the last commit. |
+| **The editor credited the person's word to a record nobody answered** (major; the records item, in part). Read again on the phone's return to the app, a line made ambiguous meanwhile asked about «M-3», but «Як у рядку» stayed chosen, «Зберегти відповідь» stayed enabled, and the answer named «M-3». | **Fixed.** The answer names the records the person read as «Розмір … шт» in this editor (by `written`, or `size` when it is null), not every record the line flags. A basis the line no longer offers is no choice: «Як у рядку» and «Зберегти відповідь» wait for the new record's answer, and come back with it. The range journey creates the size with the editor open, brings the phone back to the app, and checks the question, the disabled button and the records sent. |
+| **After a `SPLIT_MAY_BE_RANGE` refusal the editor never asked the new question** (two minors). Cancelling and opening the line again, as the alert said, reused the line as read before, and every resend was refused alike. | **Fixed.** The refusal reads the list's lines again with the editor open, which then asks about the records the server named, and the alert names them: «Запис «M-…» тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз.» The range journey answers by size while a size is created behind it: the real server refuses, the question appears, and the answer is kept. |
+| **An unsettled draft never settled once its list was decided** (major; the draft item, in part). A lost send's list, rejected or approved, or made at another warehouse: the corrected list was refused as the same command, the re-read of the warehouse's waiting lists found nothing, and «Почати як новий список» never came back, even after a reload. | **Fixed.** A refusal as the same command sent before in another form settles the draft, whatever became of that list: the server took the command under the import's lock, so no send of it makes another list. «Почати як новий список» still reads the warehouse before the new command can be sent, and a list that waits there is named instead. A list a draft's command made, opened from the overview, ends the draft, as «Відкрити список» does in the form. The journey whose server answers were faked is replaced by one against the server (ADR-0014 §16, risk register). |
+| **A first send answered 502 or 504 left the draft settled** (minor). | **Fixed.** A gateway's 502, 503 or 504 is no answer (`unreachable`), as for the server's reach: the draft is unsettled, and the form says «Невідомо, чи збережено список…». The new journey's first send is a 504 after the list is made. |
+| **«Список повний: не більше 1 000 файлів»** (minor). The limit counts parts, typed lines and removed ones included. | **Fixed:** «Список повний: не більше 1 000 частин — файлів і рядків, внесених вручну, — разом із прибраними.» The narrow-phone journey checks it. |
+| **No test pinned `text_of`'s tenant check or its form** (minor). Without the organization's check, or with `=` again, every test passed. | **Fixed.** Integration `test_a_line_s_text_is_read_for_its_own_organization_only`: under another organization's id no text is read, and the re-check then asks about the line, never passes it. Unit `test_a_line_s_text_is_read_by_its_key_with_its_organization_checked`: the compiled subquery holds `IS NOT DISTINCT FROM` and no `organization_id =`. |
+| **The text read's figures and the slowest approval** (minor; the measurement item, in part). | **Fixed.** ADR-0014 §10 and the third round's row: 0.007–0.008 s, the first read of the second run 0.091 s; the risk register gives 9.87 s (by size 8.48 s); the limits above say six times. |
+| **The key of a record the text no longer shows** (minor). | **Documented:** by its `size` when `written` is null, in ADR-0014 §5 and §13, the README and the request's comment. ADR-0014 §5's «What this does not see» names four, as the risk register does. |
+
+**Verified after the fourth round, on 2026-10-09** (the final run's
+figures stay under "Verification"):
+- backend: ruff, format (330 files), mypy (156 files), 31 import contracts
+  kept; the whole suite on a fresh database, 3 208 passed and 1 skipped
+  (`age`), the catalogue evaluation's integration file left out, as it
+  needs `birka_test`; no migration changed. A unit file this change does
+  not touch, `test_backup_limits.py`, is bound to time: two of its tests
+  failed in one run of the unit tests (a hung tool's pid file not yet
+  written at 0.5 s), and they passed in the whole run and in two of three
+  runs on their own;
+- new tests: unit `test_file_lines.py` (246 cases to 292: the count's end,
+  the capital «С», the apostrophe, a bracket or a currency sign before the
+  price), `test_snapshot_import.py` (1); integration
+  `test_snapshot_parts.py` (1); the published example's eleven lines read
+  as at the last commit;
+- frontend: typecheck, lint, build and Prettier; E2E on a fresh seed, 261
+  passed: the range journey and the narrow-phone journey extended, the
+  third round's faked journey replaced by one against the server;
+- the review's own browser probes, built on the changed screen: the editor
+  re-read on the phone's return asks about «M-3» and keeps «Зберегти
+  відповідь» disabled, sending nothing; a refused answer reads the line
+  again and names «46-2»; a 504 leaves the draft unsettled with no new
+  list offered; a list rejected meanwhile no longer blocks a new one; a
+  form's 422 still leaves the draft unsettled;
+- 22 hand mutants, each applied alone, the tree byte for byte as before
+  (`git diff --stat` and every changed file's sha256, before and after):
+  14 on the server, all caught (every capital «С» a preposition, a counted
+  «с» a preposition, an apostrophe joining before any letter or any two
+  words, a format character not passed over right after a count or
+  anywhere, any other sign ending a count, the product letters not by
+  width, no opening signs, a list sign before a spaced numeral read as a
+  fraction, the gap spaces and tabs only, a numeral after whitespace no
+  number of its own, `text_of` without its tenant, and with `=` again); 8
+  on the phone, 7 caught (a basis the line no longer offers kept, no
+  re-read after a refusal, the refusal naming no record, a conflict
+  settling nothing, a 504 taken for an answer, the overview keeping the
+  draft, the parts limit said in files). One survived, the records named
+  by the line's flags rather than by the answers: with every flagged
+  record answered before the tap is offered, the two lists are the same
+  whenever an answer can be sent, so it is kept for what it says.
+
 ## Where the build departs from the design
 
 - **`size_counts` takes one size** (1..10), not two or more: the owner
@@ -526,9 +650,12 @@ In the [risk register](known-risks.md#the-json-stock-import--2026-10-08):
 the evidence is a transcription; the parser's precision is unknown; tables
 of numbers mean notes; a size range can pass for a split, now asked about
 when its numbers or the catalogue make it a possible range, and again at
-the approval, record by record (2026-10-09); a split shown by more than the
-parser read, narrowed by the review in two rounds, a number the file calls
-the price still excused on the parser's word (R-f); a warehouse larger than
+the approval, record by record (2026-10-09), and at the answer for the
+records it names (third round); a split shown by more than the parser
+read, narrowed by the review in four rounds, a number the file calls the
+price still excused on the parser's word (R-f), and a lowercase «с» read as
+the parser's preposition; a draft whose send was lost, settled by the
+server's word (fourth round); a warehouse larger than
 the limit cannot be taken in; the measurement on PostgreSQL 16, with less
 room on a busy laptop; the warehouse held for days; two lists at once from
 two stores; a shared list whose own store stops trading, or may no longer
@@ -546,15 +673,17 @@ slow call proven with a browser clock only.
   page). Above 5 000, the limit is raised first, by a change to the ledger,
   before going live (owner, 2026-10-08; [backlog](backlog.md)). The count
   counts each size of a line that names several.
-- **The slow call on a real phone,** on a slow network. Three journeys prove
-  it with a browser clock.
+- **The slow call on a real phone,** on a slow network. Three journeys
+  prove it with a browser clock, and a fourth loses the server's answers
+  on their way back.
 - **The catalogue screens** still show raw text unguarded.
 - **Readings awaiting the owner:** six, R-a to R-f in the business rules:
   reading 1, put again as built (a paused warehouse's list only rejected
   from its own store); the 10 000 lines a list takes over its life, removed
   files' included; lines typed by hand removed as a file is; a file without
-  the kind of its prices; the 1 000 files a list takes over its life,
-  removed ones included (reading 3's part its question left out); and a
+  the kind of its prices; the 1 000 parts — files and lines typed by hand —
+  a list takes over its life, removed ones included (reading 3's part its
+  question left out); and a
   number the file calls the price, taken as the price on the parser's word
   beside a split. Not asked on 2026-10-09; each stands as built until the
   owner answers. Of the nine readings put on 2026-10-09, two changed and

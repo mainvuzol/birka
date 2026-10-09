@@ -243,18 +243,44 @@ these hold:
 2. **Each size appears with its count.** For each `(size, count)`, the text
    holds exactly one place where the size, written as in the file (ignoring
    case), stands as a whole word:
-   - not preceded by a letter or digit;
-   - followed by optional spaces or tabs;
+   - not preceded by a letter or digit, nor by a Ukrainian word's
+     apostrophe. A word is a run of letters and digits, joined by an
+     apostrophe `'` `’` `ʼ` only as a Ukrainian word is: a Cyrillic letter
+     before it and «я», «ю», «є» or «ї» after it. So the «м» of «м'ята» or
+     «м’ятний» is no word of its own, while «M-3'L», «L'S» and «XL’XXL»
+     each write a size of their own (review, fourth round, 2026-10-09; in
+     the third round an apostrophe joined any two words, which hid those
+     sizes);
+   - followed by optional whitespace;
    - then exactly one sign from `-‐‑‒–—―−:=`: spaces alone are not a sign;
-   - then optional spaces or tabs, and a run of digits, whose value is the
-     count, that **ends there** (review, 2026-10-09): not followed by a
-     digit; nor by optional spaces or tabs, `.` or `,` and a digit right
-     after it (a fraction); nor by one of `+ / × * x х · ⋅` (either case)
-     with optional spaces or tabs on either side and a digit (a sum or a
-     product). A numeral of any script counts as a digit there
-     (`str.isnumeric`: «½», «²», «①», «Ⅲ»). «M-3+2», «M-3 + 2», «M-3,5»,
-     «M-3.5», «M-3/2», «M-3х2», «M-3·2» and «M-3½» hold no count of M;
-     «S-1, M-2» and «L-1, 1850» list on.
+   - then optional whitespace, and a run of digits, whose value is the
+     count, that **ends there** (review, 2026-10-09; fourth round, the same
+     day). Whitespace is any character `str.isspace` names: a space, a
+     no-break space, a thin space. What may follow the count is named, and
+     anything else before a numeral makes it part of something more. A
+     format character, which prints nothing (`Cf`: a zero-width space, a
+     soft hyphen, a byte order mark), is passed over wherever it stands.
+     After the count may come:
+     - the text's end;
+     - after whitespace, another numeral: a number of its own, which 6
+       must account for («M-3 1850»);
+     - a letter: another word («M-3 L-1»), but `x` or `х`, in either case
+       or width, before a numeral is a product;
+     - `,` `;` `.` `)` with no numeral right after it: a list goes on
+       («S-1, M-2», «L-1, 1850»); with one, a fraction;
+     - `(` `[` `{` `«` or a currency sign: something else begins («M-3
+       (1850)», «M-3 ₴1850»);
+     - any other sign with no numeral after it.
+
+     A numeral of any script counts as a digit there (`str.isnumeric`:
+     «½», «²», «①», «Ⅲ»), and one right after the count continues it.
+     «M-3+2», «M-3 + 2», «M-3,5», «M-3.5», «M-3/2», «M-3х2», «M-3X2»,
+     «M-3 Х 2», «M-3✕2», «M-3·2» and «M-3½» hold no count of M; nor, since
+     the rule names what may end a count rather than what continues it,
+     do «M-3＋2», «M-3ｘ2», «M-3∗2», «M-3÷2», «M-3⁄2», «M-3~2», «M-3 – 2»
+     with no-break spaces, «M-3，5», «M-3٫5», or «M-3x2» with a zero-width
+     space in it (review, fourth round, 2026-10-09). «@» or «#» before the
+     price is such a sign too: «M-3 @1850» is answered with a note.
 
    And the size stands in the text as a whole word **exactly once**, with a
    count or without, in any of its spellings (ADR-0009): «M-3 M 2» and
@@ -275,8 +301,18 @@ these hold:
      spelling (`spell_size`, `letter_rank`), whether the parser reads it or
      not: the parser reads XS to XXL only, so «Лоран S-1 M-2 XXXL», «M-3
      XXS», «M-3 4XL» and «M-3 ХL» with a Cyrillic Х name a size it does not
-     see. A lowercase Cyrillic «с» is the parser's preposition, never S
-     («куртка с капюшоном M-3» shows its split);
+     see. The Cyrillic «с» is the preposition, never S, when lowercase, as
+     `parser.parse_catalog_line` reads it («куртка с капюшоном M-3»,
+     «куртка с поясом M-3» show their split); a capital «С» is it only
+     where it begins a phrase Birka's parse reads («Куртка С капюшоном
+     M-3», «С лисой», «С норкой» show theirs). Anywhere else a capital «С»
+     is S, though the parser takes one with any word after it for the
+     preposition: «M-3 С», «Лоран С M-3», «Лоран M-3 С 1850», «Лоран M-3 С
+     без кількості» and «Куртка С поясом M-3» show none, and «Лоран S-1
+     M-2 С 1850» writes S twice (review, fourth round, 2026-10-09; read as
+     the parser reads it in the third round, a «С» before a price had
+     hidden a size). A «с» or «С» joined to a count by a sign is a size
+     with its count («С-3»);
    - **no other record.** Every size with a count in the text is one of
      the pairs. A record is a word Birka's parser reads as a size on its
      own, or a run of digits, joined by one sign to a run of digits,
@@ -294,14 +330,16 @@ these hold:
 
    **What this does not see** (review, 2026-10-09). A size only the
    organization's catalogue knows, not a letter size («OS», «єдиний»); a
-   number written as a word («і ще два») or in Latin letters («III»); and
-   **a number the file calls the price**. The price is the parser's
-   reading, and the rule excuses one number on that word alone: «46-2 48»
-   with a `price` of `"48"`, or «S-1 M-2 L-1 разом 5» with `"5"`, shows its
-   split. Excusing the price only where the text marks it («грн», «₴»,
-   «ціна») would close it at the cost of taps on lines such as «Лоран S-1
-   M-2 L-1 1850»; that is the owner's to weigh, a reading awaiting the
-   owner (business rules, R-f). The risk register names all three.
+   number written as a word («і ще два») or in Latin letters («III»); a
+   lowercase «с» written for the size S, which the parser reads as the
+   preposition wherever it stands («Лоран M-3 с» shows the split of M);
+   and **a number the file calls the price**. The price is the
+   parser's reading, and the rule excuses one number on that word alone:
+   «46-2 48» with a `price` of `"48"`, or «S-1 M-2 L-1 разом 5» with `"5"`,
+   shows its split. Excusing the price only where the text marks it («грн»,
+   «₴», «ціна») would close it at the cost of taps on lines such as «Лоран
+   S-1 M-2 L-1 1850»; that is the owner's to weigh, a reading awaiting the
+   owner (business rules, R-f). The risk register names all four.
 
 When it holds, the row keeps `shown_split`. With two or more sizes it is
 `UNKNOWN_DISTRIBUTION` with the sum as its total; with one size it stays as
@@ -333,30 +371,50 @@ ambiguous from then on.
   Only once every such pair is read as a size with its count is
   `STATED_BY_SIZE` offered, never preselected. Read as a range, it is not
   offered: the person answers with another basis and a note, as for any
-  line.
+  line. The answer names the records the person answered so
+  (`split_read_records`), never one the line flags but nobody answered: a
+  line read again while the editor is open (the phone comes back to the
+  app, the connection returns) asks about a record made a possible range
+  meanwhile, and the tap waits for that answer (review, fourth round,
+  2026-10-09).
 - **The server checks again at the answer.** `STATED_BY_SIZE` on a line
-  with such a pair needs `split_read_as: "SIZE_WITH_COUNT"`; without it the
-  answer is refused (422 `VALIDATION_ERROR`, reason `SPLIT_MAY_BE_RANGE`,
-  naming the records), as every refusal of a basis is. `split_read_as` goes
-  with `STATED_BY_SIZE` only. The line keeps it (`split_read_as`, part of
-  the answer, not of the evidence), and so does the answer's audit entry,
-  with the records that could be read otherwise. A choice of a range is
-  never sent: the line is answered with another basis and a note.
+  with such a pair needs `split_read_as: "SIZE_WITH_COUNT"` with
+  `split_read_records`, the records the editor asked about, each as the
+  line's `shown_split` writes it (`written`), or by its `size` when
+  `written` is null, a record the text no longer shows (review, third
+  round, 2026-10-09). Every pair that may be a range **as the answer arrives**
+  must be among them; otherwise the answer is refused (422
+  `VALIDATION_ERROR`, reason `SPLIT_MAY_BE_RANGE`, naming the records that
+  are not), as every refusal of a basis is, and nothing is kept. The editor
+  then reads the line again and asks about the records named, so the person
+  answers them in place and sends again. So a size
+  created between the editor's look and the answer, which makes another
+  record a possible range, is never credited to a person who was not asked
+  about it: «Парка 42-44 46-2», asked about «42-44», is refused once a size
+  «2» makes «46-2» a range too, and kept when asked again about both. A
+  record named that is not one of the line's split is refused too (reason
+  `SPLIT_RECORD_UNKNOWN`). `split_read_as` and `split_read_records` go
+  together, each record once, with `STATED_BY_SIZE` only. The line keeps
+  them (part of the answer, not of the evidence): exactly the records
+  named, in the line's order, so the same answer sent again in another
+  order is the same answer. The answer's audit entry keeps them, with the
+  records that could be read otherwise as it arrived
+  (`split_may_be_range`). A choice of a range is never sent: the line is
+  answered with another basis and a note.
 - **And again at the approval, record by record** (review, 2026-10-09). A
   size created after the answer can make a record a possible range. The
   person's word covers the records it was said of: the line keeps them
-  beside `split_read_as` (`split_read_records`: the records, as the text
-  writes them, that may be a range when the person answers; NULL exactly
-  when `split_read_as` is). The approval reads every line answered
-  `STATED_BY_SIZE`, of parts not removed, against the catalogue as it is
-  then; a line with a pair that may be a range and is not among the
-  records its word was said of stops it: 409 `SNAPSHOT_CONFLICT`, reason
-  `SPLIT_MAY_BE_RANGE`, with `count` and the first 50 `line_nos`, as for a
-  line still open. «Куртка 42-44 46-2», answered for «42-44», is asked
-  again once a size «2» makes «46-2» a range too. The line is answered
-  again, with the choice or another basis, and the approval sent with the
-  new `review_revision`. The rows and their texts are read in one
-  statement.
+  beside `split_read_as` (`split_read_records`: the records the answer
+  named, as the text writes them; NULL exactly when `split_read_as` is). The
+  approval reads every line answered `STATED_BY_SIZE`, of parts not removed,
+  against the catalogue as it is then; a line with a pair that may be a
+  range and is not among the records its word was said of stops it: 409
+  `SNAPSHOT_CONFLICT`, reason `SPLIT_MAY_BE_RANGE`, with `count` and the
+  first 50 `line_nos`, as for a line still open. «Куртка 42-44 46-2»,
+  answered for «42-44», is asked again once a size «2» makes «46-2» a range
+  too. The line is answered again, with the choice or another basis, and the
+  approval sent with the new `review_revision`. The rows and their texts are
+  read in one statement.
 - **Not asked about:** a record of a letter size («M-3»), or of a number
   size whose count is written with fewer digits or is not larger («46-2»,
   «48-12»), while neither its count nor the record is a size of the
@@ -703,9 +761,21 @@ in process, each allocation its own stock key:
   the second reading itself 0.14–0.19 s. The method above, the same hour
   on a busier laptop, took 7.78, 6.94 and 9.50 s. Both pass, with less room
   than the first run showed.
+- **And again in the review's third round** (2026-10-09, same evidence).
+  The second reading's text read had depended on the planner's
+  statistics: with those a test suite leaves, it read the organization's
+  index for every row, 1.39–1.63 s at 5 000 lines. `text_of` now finds a
+  line by its primary key alone and checks the organization in a form no
+  index serves; with the same statistics, in the same session, the read
+  takes 0.007–0.008 s, the first read of the second run 0.091 s (EXPLAIN
+  6.7 ms against 1 395 ms). The approval by
+  size, three runs on a fresh database: 7.21, 8.48 and 7.59 s, 35 049
+  statements, the slowest 0.157 s, the second reading 0.11–0.19 s; the
+  method above, the same hour: 8.00, 9.87 and 7.30 s. Both pass; 9.87 s is
+  the closest to the 10 s rule yet, the laptop's spread.
 - **PostgreSQL 16 here, 17 on the server,** on hardware not yet chosen. The
   ceiling may sit elsewhere on 17, and the timings differ; the 60 s the
-  client waits (§16) is eight times the slowest approval measured.
+  client waits (§16) is six times the slowest approval measured.
 
 **The owner kept 5 000** (2026-10-08, after hearing the measurement). The
 limit stays at 5 000 answers per list in this change. The shops first count
@@ -831,10 +901,16 @@ out `REMOVED`, unless `part_id` names a removed part. Its offset and the
 - `same_photo_lines`.
 
 **`PUT /snapshots/{id}/lines/{line_no}`** gains `split_read_as`
-(`"SIZE_WITH_COUNT"`), with `STATED_BY_SIZE` only; a line with a pair that
-may be a range needs it (`SPLIT_MAY_BE_RANGE`, §5). An answer the list has
-no room for is a 422 with reason `LIST_FULL` (§10). A re-answer that
-differs only in `split_read_as` is a new answer: `review_revision` + 1.
+(`"SIZE_WITH_COUNT"`) and `split_read_records` (the records the editor
+asked about, as `shown_split` writes them, `written`, or by `size` when
+`written` is null: 1 to 10, each once, each 1 to 500 characters), together and with `STATED_BY_SIZE` only. A line with a
+pair that may be a range as the answer arrives needs them, that pair among
+the records (`SPLIT_MAY_BE_RANGE`, naming the pairs missing; a record that
+is not the line's, `SPLIT_RECORD_UNKNOWN`; §5; review, third round,
+2026-10-09). An answer the list has no room for is a 422 with reason
+`LIST_FULL` (§10). A re-answer that differs only in `split_read_as` or in
+the records it names is a new answer: `review_revision` + 1; the same
+records in another order are the same answer.
 
 **`POST /snapshots/{id}/approve`** is also refused, 409
 `SNAPSHOT_CONFLICT`, reason `SPLIT_MAY_BE_RANGE`, with `count` and the first
@@ -1069,29 +1145,53 @@ server down.
 
 **A slow answer starts no second list** (review, 2026-10-09). The server may
 have made the list while the phone stopped waiting. So after a slow answer,
-or none at all, «Новий список» marks its draft unsettled, and the draft
-keeps its `command_id` whatever file is then picked, until the server
-answers a send. «Почати як новий список» is not offered while the draft is
-unsettled, only after an answered refusal, and pressing it reads the
-warehouse again before «Зберегти список» can send the new command (review,
-2026-10-09): the list a slow send makes may land after the phone read the
-warehouse, and a new command then would start a second list beside it.
-The waiting lists of the warehouse are read again after a slow answer,
-after a resend refused as another request, when a file is picked while
-unsettled, and when a new list is started; «Зберегти список» waits while
-they are read. If a list made by this command waits there, the form says
-«Список «…» уже збережено, хоч відповідь сервера й не дійшла вчасно.
-Відкрийте його — інші файли чи рядки додайте вже до нього.», offers
-«Відкрити список», and hides «Зберегти список». If none waits yet, saving
-again sends the same command, which the server answers with the list once
-made. Before, another file picked after a slow answer took a new command,
-and could start a second list at the warehouse.
+none at all, or a gateway's own 502, 503 or 504, «Новий список» marks its
+draft unsettled, and the draft keeps its `command_id` whatever file is then
+picked. It stays unsettled until a send settles the command: one answered
+with the list, or refused as the same command sent before in another form
+(`IDEMPOTENCY_CONFLICT`). That refusal settles it whatever became of the
+list: the server holds the command, under the lock the import takes, so no
+send of it, however slow, makes another list, whether that list still
+waits, was rejected or approved, or is at another warehouse. Any other
+answer to a later send, a refusal of its form included, says nothing of the
+slow send before it, and leaves the draft unsettled (review, third round,
+2026-10-09; before it, any answer settled the draft). In the third round
+the conflict settled it only when the warehouse, read again, still held a
+waiting list of the command; a draft whose list was then rejected or
+approved, or was made at another warehouse, was left with no way to start
+a new list, even after a reload (fourth round, the same day). A list a
+draft's command made, opened from the overview, ends the draft, as
+«Відкрити список» does in the form: nothing of it is sent again. «Почати як новий список» is not offered while the draft is
+unsettled, only after an answered refusal of a settled one, and pressing it
+reads the warehouse again before «Зберегти список» can send the new command
+(review, 2026-10-09): the list a slow send makes may land after the phone
+read the warehouse, and a new command then would start a second list beside
+it; a list that waits there, this command's or another's, is named
+instead. The waiting lists of the warehouse are read again after a slow answer, after a
+resend refused as another request, when a file is picked while unsettled,
+and when a new list is started; «Зберегти список» waits while they are read.
+If a list made by this command waits there, the form says «Список «…» уже
+збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші
+файли чи рядки додайте вже до нього.», offers «Відкрити список», and hides
+«Зберегти список». If none waits yet, saving again sends the same command,
+which the server answers with the list once made. Before, another file
+picked after a slow answer took a new command, and could start a second list
+at the warehouse.
 
 **Proven with a browser clock.** Three journeys hold the server's answer
 and move the page's clock past 20 s and 60 s (`openings-file.spec.ts`: "a
 slow answer is no outage…", "an answer too slow to wait for, its list made
-meanwhile…" and "…its list made only after…"). None is a phone on a slow
-network.
+meanwhile…", and "…its list made only after…", which since the review's
+third round also sends again, is refused for its form, and still offers no
+new list). A fourth loses the server's answers on their way back, against
+the server itself ("a send refused as the same command in another form
+settles the draft: whatever became of the list it made…"; fourth round): a
+gateway's 504 after the list is made leaves the draft unsettled; the list
+is rejected meanwhile; a corrected file is refused as the same command,
+which settles the draft and offers a new list, started with a new command;
+and a list whose answer never came, opened from the overview, ends its
+draft. It replaces the third round's journey, whose server answers were
+faked. None is a phone on a slow network.
 
 **ADR-0013 §4.2 is amended:** a slow call's own timeout is not an outage.
 
