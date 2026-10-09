@@ -36,6 +36,14 @@ sudo timedatectl set-timezone Europe/Kyiv
 
 ## First install
 
+Rehearsed on a laptop, in Docker, on 2026-10-09, from step 3 to step 10
+([report](install-rehearsal-report.md)): the people, a store's name, the
+first night, an administrator and the trouble the watcher records, the
+shops' existing stock from a parser's file, and the check. Telegram itself
+was not reached: no message left the rehearsal's network. Restoring and
+updating were rehearsed the same day (backup runbook; [a new
+version](#a-new-version)).
+
 ### 1. The code
 
 ```sh
@@ -87,11 +95,16 @@ a person takes.
 
 ```sh
 docker compose up -d
-# Caddy answers 502 for the few seconds the API takes to start: retry.
+# Caddy answers 502 for the few seconds the API takes to start, and at the
+# first start refuses the connection until it has its certificate: retry.
 curl -fsS --retry 30 --retry-delay 2 --retry-all-errors https://<domain>/api/v1/health    # {"status":"ok","environment":"production"}
 curl -fsS https://<domain>/api/v1/ready     # {"status":"ready"}: the database answers and its schema is current
 docker compose ps                           # the api says (healthy) within a minute or two
 ```
+
+If the first `curl` still fails with an SSL error, Caddy has no certificate
+yet: `docker compose logs caddy` says why, usually the domain's `A` record
+or a closed port 80 or 443 ([what it needs](#what-it-needs)).
 
 `up -d` starts five things:
 - the database;
@@ -427,7 +440,9 @@ the delivery received first, or the till finds the shelf short.
 
 **Goods found later go in through «Приймання», with their size**: whoever
 enters them knows it (owner, 2026-10-02). The warehouse takes no second
-list.
+opening list: one can still be started, as a record, and it holds nothing
+back, but its approval is refused, the warehouse having history. Reject it
+(rehearsal, 2026-10-09).
 
 ### 10. Check it, with nothing invented
 
