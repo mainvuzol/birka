@@ -220,6 +220,10 @@ it again.
   there.
 - The terms are constants in `credit/erasure.py`. Changing one is a code
   change, and the owner's.
+- Going back by the code alone across `0038` is unsafe once a customer is
+  erased: the older code answers 500 for a debt with no name (update
+  rehearsal, 2026-10-09; server runbook, "going back"). `0038`'s downgrade
+  refuses then too.
 
 ## Rejected
 

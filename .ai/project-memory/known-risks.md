@@ -1171,3 +1171,10 @@ See the [report](customer-data-retention-report.md) and
   erases it an hour later. A watcher that is down erases nothing until it
   is back; its check-ins with the outside service stop then, and that
   service tells the owner (ADR-0011).
+- **Going back by the code alone across `0038` is not safe** once a customer
+  is erased, by the owner or by the hourly erasure: the old code answers 500
+  for «Борги» with everyone, the list of debts and an erased debt, and
+  copies a write-off's reason into the audit log again (update rehearsal,
+  2026-10-09). `0038`'s downgrade refuses then too. Fix forward, or go back
+  whole from the backup taken before the update
+  ([server runbook](server-runbook.md#going-back)).

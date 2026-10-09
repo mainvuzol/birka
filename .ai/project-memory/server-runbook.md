@@ -87,7 +87,8 @@ a person takes.
 
 ```sh
 docker compose up -d
-curl -fsS https://<domain>/api/v1/health    # {"status":"ok","environment":"production"}
+# Caddy answers 502 for the few seconds the API takes to start: retry.
+curl -fsS --retry 30 --retry-delay 2 --retry-all-errors https://<domain>/api/v1/health    # {"status":"ok","environment":"production"}
 curl -fsS https://<domain>/api/v1/ready     # {"status":"ready"}: the database answers and its schema is current
 docker compose ps                           # the api says (healthy) within a minute or two
 ```
@@ -537,7 +538,7 @@ export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)
 docker compose build && docker compose --profile ops build ops
 docker compose run --rm --no-deps api alembic upgrade head   # if this fails, stop here: see below
 docker compose up -d
-curl -fsS https://<domain>/api/v1/ready
+curl -fsS --retry 30 --retry-delay 2 --retry-all-errors https://<domain>/api/v1/ready   # 502 while the API starts
 docker image prune -f && docker builder prune -f --filter until=720h   # what the old images left
 ```
 
@@ -566,6 +567,11 @@ buttons: its sales, payments, returns and «Клієнт забрав» are refu
 Operations kept on a phone from before are resent: a recorded one replays,
 and one never recorded is refused and says to do it again.
 
+**Rehearsed on a laptop on 2026-10-09** ([report](update-rehearsal-report.md)):
+from #74 to #76, then back by each of the three ways below. It fixed the
+readiness check, which Caddy answers with 502 for the few seconds the API
+takes to start, and added what `0038` means for going back.
+
 **The update that brings `0036` (the mark «продано під час збою»)** needs
 nothing more. A page left open sends no mark and shows the old texts; its
 kept sale refused on resend now settles too. Reopen the app after it, as
@@ -575,6 +581,11 @@ The build installs exactly the library versions CI tested
 (`backend/requirements.lock`). The new app's page is never cached, and the
 previous version's files stay for 30 days after they are replaced, so a
 phone that opens the app during or after the update gets a working page.
+
+**The update that brings `0038` (customers' data)** needs nothing more.
+Within the hour, `backup-watch` erases the customers of debts closed long
+enough (owner, 2026-10-09). From then on, going back by the code alone is
+unsafe (below).
 
 ## Going back
 
@@ -605,6 +616,13 @@ phone that opens the app during or after the update gets a working page.
      marked sale recorded whose answer was lost, resent to the old server,
      is refused before its lookup and stays kept until the server is
      upgraded again.
+   - **Not across `0038` (customers' data) once a customer is erased:** by
+     the owner, or by the hourly erasure as soon as any debt is past its
+     term. The old code cannot read a debt with no name: «Борги» with
+     everyone, the list of debts and an erased debt answer 500 (rehearsal,
+     2026-10-09). Who owes, open debts and the till still work. The old
+     code also copies a write-off's reason into the audit log again. Fix
+     forward.
 2. **Code and schema: a migration's downgrade.**
    - Only where its report says the downgrade is lossless.
    - Several refuse while data they cannot keep exists, by design, rather
@@ -616,10 +634,45 @@ phone that opens the app during or after the update gets a working page.
      goes back.
    - `0036` refuses once any sale carries the mark «продано під час збою»:
      `0035` cannot hold it, and the mark is never changed.
+   - `0038` refuses once any customer is erased: `0037` cannot hold a debt
+     without one. Before that it is lossless (rehearsal, 2026-10-09).
+   - The downgrade is run by the new release's code, which knows it, and
+     only then the old code is checked out:
+     ```sh
+     docker compose --profile ops run --rm ops       # a backup first
+     docker compose run --rm --no-deps api alembic downgrade <the previous release's head revision>
+     git -C /srv/birka checkout <the previous release commit>
+     export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)
+     docker compose build && docker compose --profile ops build ops
+     docker compose up -d
+     ```
+     A downgrade that refuses changes nothing: the new code still runs.
 3. **Everything: the backup taken before the update.**
-   - Follow [restoring for real](backup-restore-runbook.md#restoring-for-real).
    - Whatever was recorded since that backup is lost: minutes, if it was
      taken as above.
+   - On a new server, follow [restoring for real](backup-restore-runbook.md#restoring-for-real).
+   - **On the same server** the database must be emptied first (rehearsed
+     on 2026-10-09). The night's archive is opened on the owner's computer
+     as restoring for real's steps 1–2 say, and `birka.dump` copied to
+     `backups/`. Then:
+     ```sh
+     cd /srv/birka/infra
+     docker compose --profile ops run --rm ops       # the state being left, kept too
+     git -C /srv/birka checkout <the previous release commit>   # the code the backup was taken with
+     export BIRKA_RELEASE=$(git -C /srv/birka rev-parse --short HEAD)
+     docker compose build && docker compose --profile ops build ops
+     docker compose stop api backup-watch            # nothing writes while the database goes back
+     docker compose rm -sf db && docker volume rm birka_db_data   # the database, and every row since the backup
+     docker compose up -d --wait db
+     docker compose exec -T db sh -c 'pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --exit-on-error --single-transaction --no-owner --no-privileges' < backups/birka.dump
+     docker compose up -d
+     curl -fsS --retry 30 --retry-delay 2 --retry-all-errors https://<domain>/api/v1/ready
+     ```
+     `birka_db_data` is the database's volume (`docker volume ls`). Then
+     restoring for real's step 7, the customers erased since that night
+     (on a release before `0038` there is no erasing: the owner erases them
+     after the next update); cron and the owner's computer go on as before.
+     Delete `birka.dump`.
 
 ## The hot path on this server (optional)
 
