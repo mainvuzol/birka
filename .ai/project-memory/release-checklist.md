@@ -20,7 +20,8 @@ block. The verdict stands. Re-assessed on 2026-10-09 for customers' data
 (`feat/customer-data-retention`): rows 3 (264 journeys), 15 and 19, the new row 27, the
 verdict's first sentences and the list of what does not block: the shops'
 largest warehouse comes to at most 5 000 (owner, 2026-10-09). The verdict
-stands.
+stands. Row 20 updated on 2026-10-09: the restore rehearsed on a laptop
+(`docs/restore-rehearsal`). The verdict stands.
 
 **Verdict: BLOCKED.** On 2026-10-08 the owner chose how the shops' existing
 stock goes in: photos → parser → JSON, in a format Birka defines, every line
@@ -81,7 +82,7 @@ accepted.
 | 17 | **The bot's menu button** opens `https://<domain>/`. | administrator | not started |
 | 18 | **The owner and the shop's places** (`seed_organization`), then the sellers (`scripts.people`). | administrator, on the owner's word | not started |
 | 19 | **Backups on the server:** the owner's key, the first night, cron and its log rotation, the owner's computer collecting copies with today's `infra/pull-backups.sh`, which deletes its nights older than 3 months (owner, 2026-10-09), and «Start» pressed in the bot. Then the trouble messages tried once, before the shops use the app (runbook, step 8a.3). | administrator, owner | not started |
-| 20 | **One full restore rehearsed on the server**, as the runbook's "restoring for real" describes. The nightly drill restores every night, but the manual sequence has never run. | administrator | not started |
+| 20 | **One full restore rehearsed on the server**, as the runbook's "restoring for real" describes. The nightly drill restores every night. **The full sequence was rehearsed on a laptop in Docker on 2026-10-09** ([report](restore-rehearsal-report.md)): it fixed the restore command, which could not run as written, and added setting backups up again on the new server. On the server it is still to run. | administrator | rehearsed on a laptop; not on the server |
 | 21 | **`time-to-sale` ≤ 15 s**, a person timing a real sale on a phone, in the shop. | owner or a seller | not measured |
 | 24 | **An outage drill on a real phone in Telegram** ([ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md)). With the API stopped: the paper text at sign-in. In airplane mode with the app open: the till says it, and a kept sale is checked by itself when the network is back. The app closed during the outage and opened after it: the kept sale checked on opening. The whole server stopped: what Telegram shows, recorded. What the WebView does offline is unmeasured until then (risk register). | owner or administrator | not started |
 | 25 | **The sellers' page, handed to the shops.** [When the server is down](paper-when-the-server-is-down.md) was confirmed by the owner on 2026-10-08: what the paper records and the page's rules (G14), and the paper switch always on (G20) (business rules, "how it is carried out"). Printed from the line under its note. | owner | confirmed; not handed out |

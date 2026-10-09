@@ -207,8 +207,14 @@ Run it daily, some hours after the server's night:
 
 ## Restoring for real
 
-Not yet rehearsed on a production server. The nightly drill uses the same
-`pg_restore` flags, so a copy whose drill passed restores with them.
+Rehearsed end to end on a laptop, in Docker, on 2026-10-09: an old server
+set up and backed up, destroyed, and a new one restored from the owner's
+copy with these commands as written
+([evidence](../../output/verification/2026-10-09-restore-rehearsal/rehearsal.md),
+[report](restore-rehearsal-report.md)). That rehearsal fixed step 4 and
+added step 8. Not yet on a production server (release checklist, row 20).
+The nightly drill uses the same `pg_restore` flags, so a copy whose drill
+passed restores with them.
 
 1. Pick the newest night whose `birka-<time>.drill.json` says `"ok": true`.
 2. On the owner's computer, open it with the key and check it is the archive
@@ -217,17 +223,23 @@ Not yet rehearsed on a production server. The nightly drill uses the same
    age --decrypt -i birka-backup-key.txt -o birka.dump birka-<time>.dump.age
    shasum -a 256 birka.dump        # equals "archive_sha256" in birka-<time>.json
    ```
-3. Copy `birka.dump` to the new server's `infra/backups/`, then bring up `db`
-   only:
+3. Copy `birka.dump` to the new server's `infra/backups/` (or the
+   `BIRKA_BACKUP_DIR` its `.env` names), with the new server's `.env` from
+   the password manager in `infra/`, then bring up `db` only:
    ```sh
    docker compose up -d --wait db
    ```
-4. Restore into the empty database:
+4. Restore into the empty database, from `infra/`, through the database's
+   own container:
    ```sh
-   docker compose --profile ops run --rm \
-     -e PGHOST=db -e PGUSER="$POSTGRES_USER" -e PGPASSWORD="$POSTGRES_PASSWORD" -e PGDATABASE="$POSTGRES_DB" \
-     ops sh -c '"$BIRKA_PG_BIN/pg_restore" --exit-on-error --single-transaction --no-owner --no-privileges --dbname="$PGDATABASE" /backups/birka.dump'
+   docker compose exec -T db sh -c 'pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --exit-on-error --single-transaction --no-owner --no-privileges' < backups/birka.dump
    ```
+   The container holds the user, the password and the database from `.env`,
+   and takes a local connection without a password; the single quotes keep
+   those names for its shell. The server's own shell has not read `.env`:
+   `$POSTGRES_PASSWORD` typed there is empty, and `pg_restore` would ask for
+   a password, or wait for ever unattended (rehearsal, 2026-10-09). No output
+   means it held.
 5. If the code is newer than the backup:
    ```sh
    docker compose run --rm --no-deps api alembic upgrade head
@@ -239,7 +251,8 @@ Not yet rehearsed on a production server. The nightly drill uses the same
    `backup-watch` service erases again, within the hour of starting, every
    customer whose term has run out. A customer erased on request after that
    night is back. If the old server's database can still be read, list
-   those erasures there before it goes:
+   those erasures there before it goes, in
+   `docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'`:
    ```sql
    SELECT entity_id AS credit_id, created_at FROM audit_log
    WHERE action = 'credit.customer_erased' AND after->>'by' = 'request'
@@ -247,12 +260,26 @@ Not yet rehearsed on a production server. The nightly drill uses the same
    ORDER BY created_at;
    ```
    On the restored server, where those names are back, read them for the
-   owner:
+   owner, in the same `psql`:
    ```sql
    SELECT id, customer_name FROM customer_credit WHERE id IN ('<credit_id>', …);
    ```
    The owner finds each in «Борги» by the name and presses «Стерти дані
    покупця» again. If the old database is gone, the owner repeats the ones
    they remember: from the newest night, at most a day of them.
+8. **Backups on the new server.** The restored database holds no night of
+   its own, so until one runs there the owner's section and the bot say the
+   backups are not set up, or overdue, and nothing is copied. As in
+   [setting it up](#setting-it-up), with the same key (`.env` already names
+   it):
+   ```sh
+   mkdir -p backups && sudo chown 10001 backups
+   docker compose --profile ops run --rm ops         # the new server's first night
+   docker compose run --rm backup-watch python -m scripts.backup_watch --status   # "OK", exit 0
+   ```
+   Then cron and its log rotation (step 2), the read-only user (step 3), and
+   the owner's computer pointed at the new server: its
+   `BIRKA_BACKUP_SOURCE` (step 4). The old server's nights stay on the
+   owner's computer beside the new ones, and go by date.
 
 Anything written after that night is lost: at most one day, by the policy.

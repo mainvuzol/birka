@@ -42,7 +42,7 @@ def serve(server: Path, *, sealed: bytes = b"age-encrypted bytes") -> None:
     (server / "notes.txt").write_text("server only")
 
 
-async def pull(server: Path, dest: Path, now: str = NOW) -> str:
+async def pull(server: Path, dest: Path, now: str = NOW, **env: str) -> str:
     return await run(
         Path("/bin/sh"),
         str(SCRIPT),
@@ -50,6 +50,7 @@ async def pull(server: Path, dest: Path, now: str = NOW) -> str:
             "BIRKA_BACKUP_SOURCE": f"{server}/",
             "BIRKA_BACKUP_DEST": str(dest),
             "BIRKA_BACKUP_NOW": now,
+            **env,
         },
     )
 
@@ -223,3 +224,16 @@ async def test_a_copy_that_arrived_damaged_is_named_and_fails_the_run(tmp_path):
 
     with pytest.raises(ToolError, match=f"DAMAGED OR MISSING: .*{STEM}.dump.age"):
         await pull(server, dest)
+
+
+async def test_a_scheduler_without_home_names_the_key(tmp_path):
+    """A NAS's task scheduler may run the collector without HOME (restore
+    rehearsal, 2026-10-09): it says what to set, or takes the key named."""
+    server, dest = tmp_path / "server", tmp_path / "owner"
+    serve(server)
+
+    with pytest.raises(ToolError, match="set HOME, or BIRKA_BACKUP_SSH_KEY"):
+        await pull(server, dest, HOME="")
+    said = await pull(server, dest, HOME="", BIRKA_BACKUP_SSH_KEY=str(tmp_path / "key"))
+
+    assert "1 encrypted backups here are whole; 0 damaged" in said
