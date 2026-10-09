@@ -1,0 +1,467 @@
+CI job `backend` — backend (lint, types, contracts, tests)
+Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
+
+commit:   98afbd8 (feat/container-limits) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2
+date:     2026-10-09 23:18:20 EEST → 23:33:00 (14m40s)
+machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.1 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
+tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v26.5.0, npm 11.17.0, /bin/bash 3.2.57(1)-release
+env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
+images:   postgres:17-alpine @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
+network:  from Docker's VM during the job (Docker Desktop's log): none
+result:   passed with declared gaps
+counts:   PG17 Tests: 3308 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1395 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age)
+
+DEVIATIONS from CI:
+  - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of ubuntu-latest (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
+  - Every job runs with TZ=UTC, LANG=C.UTF-8 and LC_ALL=C.UTF-8, as on the ubuntu runner (this Mac's own zone is Europe/Kyiv); every tool the job starts inherits them, Playwright's Chromium included.
+  - The working tree as it is, not a fresh checkout (the header says clean or dirty).
+  - CI=true; GITHUB_ENV and GITHUB_STEP_SUMMARY point into the runner's work directory; upload-artifact copies into the evidence directory. uv's and npm's caches are in the runner's work directory.
+  - Nothing is installed and no image is pulled; builds use only the local build cache. The network is used only where CI's own steps use it: `npm audit` and pip-audit's queries.
+  - Nothing is re-run: a failing step or test fails the job, as in CI.
+  - PostgreSQL 17: postgres:17-alpine (same env, initdb args and health check) in Docker Desktop's Linux VM, published on 127.0.0.1:55417 instead of localhost:5432; the database URLs say so.
+  - `PostgreSQL 17 client tools and age, for the backup tests` (apt in CI): NOT RUN, the declared gap (see GAPS).
+  - Tests and the assertion run CI's commands unchanged; the runner adds, in their environment only, PYTEST_ADDOPTS='--junitxml=<work>/… -o cache_dir=<work>/pytest-cache' to list each skip (from the junit file, not from -rs, so the text CI's assertion greps is CI's own) and to start from an empty pytest cache, as CI does (the repository's .pytest_cache is left alone).
+  - ruff and mypy start without a cache, as in CI (RUFF_CACHE_DIR/MYPY_CACHE_DIR in the work directory); `lint-imports` gets `--cache-dir <work>/import-linter-cache` so it too starts empty (the repository's backend/.import_linter_cache is left alone).
+  - /tmp paths moved to the runner's work directory; the catalogue evaluation report is in the evidence directory (CI uploads it as an artifact).
+  - `Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2.
+  - The 19 backup tests that skip on PostgreSQL 17 run again on the project's PostgreSQL 16 cluster pg-unit (127.0.0.1:55446, /Users/nikitahlushak/.cache/birka-runtime/pg-unit): PostgreSQL 16.2, timezone Europe/Kiev (CI's server: UTC), template1 locale libc collate C.UTF-8 ctype C.UTF-8 (CI: ICU uk-UA, --locale=C.UTF-8). The runner's scratch database birka_ci_local_backup16 (dropped after) and the databases the tests create inherit that timezone and locale. BIRKA_PG_BIN=/Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/pgserver/pginstall/bin (pg_dump 16.2).
+
+GAPS (declared; nothing else may be missing):
+  - DECLARED (owner decision 2026-10-08): no PostgreSQL 17 client tools and no age on this Mac. The 19 backup tests of test_backup_restore_drill.py skip on PostgreSQL 17, so CI's assertion fails, on its skip check alone (verified). On PostgreSQL 16.2 with its 16.2 client: 18 passed (test_a_backup_is_never_overwritten, test_a_backup_restores_and_proves_it_is_the_same_data, test_a_copy_missing_rows_fails_and_names_the_table, test_a_damaged_archive_is_refused_before_anything_is_created, test_a_dump_that_hangs_is_stopped_and_the_night_says_so, test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps, test_a_ledger_left_unprotected_fails_the_drill, test_a_ledger_that_does_not_reconcile_fails_the_drill, test_a_night_finding_the_last_one_still_running_starts_nothing, test_a_night_first_drops_what_a_stopped_drill_left, test_a_night_that_cannot_back_up_says_so, test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing, test_a_night_without_the_owners_key_fails_and_deletes_nothing, test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy, test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive, test_kept_copies_stay_for_inspection_and_are_never_the_source, test_stock_left_under_a_merged_model_fails_the_drill, test_the_counts_are_the_snapshot_the_archive_holds); 1 skipped there too, needing age (test_an_encrypted_night_can_only_be_read_with_the_owners_key). Covered by restore-drill: pg_dump/pg_restore 17 and age in the ops image, against PostgreSQL 17 with CI's locale: the night's backup (scripts.nightly_backup), its restore drill, encryption to the owner's key, the watcher reading the night as OK, and decryption back to exactly the drilled archive (sha256). Not run anywhere here on PostgreSQL 17 with pg_dump 17: the failure paths of those tests (damaged archive, missing rows, a ledger that does not reconcile, hangs, locks, leftovers).
+
+====================================================================================================
+===== [runner] job backend: backend (lint, types, contracts, tests)
+[runner] 5 step(s) the runner replaces or does not run match their sha256 in ci.yml
+[runner] service postgres: docker run -d --pull never --name birka-ci-local-pg --label com.birka.ci-local=1 -p 127.0.0.1:55417:5432 -e POSTGRES_USER=birka -e POSTGRES_PASSWORD=birka -e POSTGRES_DB=birka_test -e 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8' --health-cmd 'pg_isready -U birka -d birka_test' --health-interval 5s --health-timeout 5s --health-retries 20 postgres:17-alpine
+[runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55417->5432
+
+===== actions/checkout@v4
+[runner] the working tree at 98afbd8 (clean), not a fresh checkout
+===== replaced: ok: actions/checkout@v4 (0.0s)
+
+===== actions/setup-python@v5
+[runner] setup-python 3.12: the isolated venv /Users/nikitahlushak/.cache/birka-runtime/python/bin/python (Python 3.12.14)
+===== replaced: ok: actions/setup-python@v5 (0.0s)
+
+===== Install
+[runner] no pip install (no downloads): checking /Users/nikitahlushak/.cache/birka-runtime/python/bin/python against requirements-dev.lock
+[runner] 71 pins installed at their locked versions
+[runner] the venv also holds 3 package(s) requirements-dev.lock does not pin: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2
+$ uv pip check --python /Users/nikitahlushak/.cache/birka-runtime/python/bin/python
+Using Python 3.12.14 environment at: /Users/nikitahlushak/.cache/birka-runtime/python
+Checked 74 packages in 6ms
+All installed packages are compatible
+===== replaced: ok: Install (0.1s)
+
+===== Lint
+All checks passed!
+335 files already formatted
+===== ok: Lint (0.1s)
+
+===== Type check
+Success: no issues found in 158 source files
+===== ok: Type check (5.3s)
+
+===== Architecture contracts (ADR-0001)
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 142 files, 714 dependencies.
+-------------------------------------
+
+Layered architecture: api -> modules -> core KEPT
+core must not depend on any module KEPT
+tenancy is the base module and depends on no sibling KEPT
+module layering: identity -> authz -> tenancy KEPT
+catalog is a leaf: it may not import another business module KEPT
+authz must not depend on business modules KEPT
+refunds read history, not the catalog KEPT
+transfers move stock through inventory and read nothing else KEPT
+a sale neither refunds nor transfers KEPT
+credit keeps money owed and moves no stock KEPT
+inventory may read catalog but sales may not write stock directly KEPT
+only the inventory module may write stock (invariant I3) KEPT
+catalog parser cannot consult database or mutable catalog knowledge KEPT
+a legacy stock list opens a ledger and does nothing else KEPT
+nothing depends on the legacy list workflow KEPT
+backups reads no shop's business KEPT
+nothing depends on the backups section KEPT
+telegram only talks to Telegram KEPT
+damaged goods move only through the ledger's own commands KEPT
+only a return puts units in «Брак» KEPT
+a store's state changes nothing but the state KEPT
+nothing depends on the store-state command KEPT
+a return to a supplier moves goods through the ledger and reads nothing else KEPT
+what a store owes its suppliers moves no goods KEPT
+only «Брак» and the API use the supplier returns KEPT
+a report only reads KEPT
+nothing depends on the reports KEPT
+a merge moves stock only through the ledger's own door KEPT
+nothing depends on the catalogue corrections KEPT
+the drawer counts money and moves no goods KEPT
+only the API, the report and the watcher depend on the drawer KEPT
+
+Contracts: 31 kept, 0 broken.
+===== ok: Architecture contracts (ADR-0001) (0.1s)
+
+===== Apply migrations
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+===== ok: Apply migrations (1.1s)
+
+===== Migration drift check
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.schemas
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.tables
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.types
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.constraints
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.defaults
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments
+No new upgrade operations detected.
+===== ok: Migration drift check (0.5s)
+
+===== Migration downgrade is reversible
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 0038_customer_erasure -> 0037_stock_list_parts, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+INFO  [alembic.runtime.migration] Running downgrade 0037_stock_list_parts -> 0036_outage_mark, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running downgrade 0036_outage_mark -> 0035_cash_and_card, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running downgrade 0035_cash_and_card -> 0034_server_incidents, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running downgrade 0034_server_incidents -> 0033_session_epoch, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running downgrade 0033_session_epoch -> 0032_size_spelling, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running downgrade 0032_size_spelling -> 0031_catalog_correction, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running downgrade 0031_catalog_correction -> 0030_opening_list_hold, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running downgrade 0030_opening_list_hold -> 0029_borrowed_goods, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running downgrade 0029_borrowed_goods -> 0028_order_shipping, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0028_order_shipping -> 0027_supplier_invoices, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0027_supplier_invoices -> 0026_supplier_returns, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0026_supplier_returns -> 0025_store_states, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0025_store_states -> 0024_returns_elsewhere, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0024_returns_elsewhere -> 0023_customer_credit, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0023_customer_credit -> 0022_shelf_shortage, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0022_shelf_shortage -> 0021_suggested_price, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running downgrade 0021_suggested_price -> 0020_damaged_units, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running downgrade 0020_damaged_units -> 0019_till_returns, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running downgrade 0019_till_returns -> 0018_backup_alerts, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running downgrade 0018_backup_alerts -> 0017_stock_adjustment, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running downgrade 0017_stock_adjustment -> 0016_goods_receipt, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running downgrade 0016_goods_receipt -> 0015_snapshot_import, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running downgrade 0015_snapshot_import -> 0014_alias_feedback_identity, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running downgrade 0014_alias_feedback_identity -> 0013_catalog_knowledge, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running downgrade 0013_catalog_knowledge -> 0012_catalog_trigram, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running downgrade 0012_catalog_trigram -> 0011_customer_orders, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running downgrade 0011_customer_orders -> 0010_stock_reservations, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running downgrade 0010_stock_reservations -> 0009_private_locations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running downgrade 0009_private_locations -> 0008_transfer_replay, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running downgrade 0008_transfer_replay -> 0007_missing_at_sale, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running downgrade 0007_missing_at_sale -> 0006_stock_rekey, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running downgrade 0006_stock_rekey -> 0005_stock_locations, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running downgrade 0005_stock_locations -> 0004_refund_replay, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running downgrade 0004_refund_replay -> 0003_sale_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running downgrade 0003_sale_replay -> 0002_m1b, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running downgrade 0002_m1b -> 0001_m1a, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running downgrade 0001_m1a -> , M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+===== ok: Migration downgrade is reversible (1.9s)
+
+===== Catalog evaluation regression gate
+===== ok: Catalog evaluation regression gate (0.4s)
+
+===== Preserve catalog evaluation report
+[runner] artifact catalog-evaluation: /Users/nikitahlushak/birka/output/verification/2026-10-09-container-limits-ci-local/backend-catalog-evaluation.json (already in the evidence directory)
+===== replaced: ok: Preserve catalog evaluation report (0.0s)
+
+===== PostgreSQL 17 client tools and age, for the backup tests
+[runner] NOT RUN (declared gap): owner decision 2026-10-08: no PostgreSQL 17 client tools and no `age` on this Mac (CI installs them with apt). BIRKA_PG_BIN stays unset, so the backup tests skip on PostgreSQL 17 and CI's no-skip assertion fails on its skip check; the runner then runs exactly those tests on the project's PostgreSQL 16.2 cluster with its own 16.2 client. restore-drill runs pg_dump 17 and age (the ops image) against PostgreSQL 17.
+===== NOT RUN (declared gap): PostgreSQL 17 client tools and age, for the backup tests (0.0s)
+
+===== Tests
+....................................................ssssssssssssssssss.s [  2%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+...............                                                          [100%]
+=============================== warnings summary ===============================
+../../.cache/birka-runtime/python/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3308 passed, 19 skipped, 1 warning in 402.53s (0:06:42)
+===== ok: Tests (415.9s)
+
+===== Assert the database tests actually ran
+....................................................ssssssssssssssssss.s [  5%]
+........................................................................ [ 10%]
+........................................................................ [ 15%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 30%]
+........................................................................ [ 35%]
+........................................................................ [ 40%]
+........................................................................ [ 45%]
+........................................................................ [ 50%]
+........................................................................ [ 56%]
+........................................................................ [ 61%]
+........................................................................ [ 66%]
+........................................................................ [ 71%]
+........................................................................ [ 76%]
+........................................................................ [ 81%]
+........................................................................ [ 86%]
+........................................................................ [ 91%]
+........................................................................ [ 96%]
+..............................................                           [100%]
+=============================== warnings summary ===============================
+../../.cache/birka-runtime/python/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1395 passed, 19 skipped, 1913 deselected, 1 warning in 383.83s (0:06:23)
+::error::integration tests were skipped in CI (database unreachable?)
+===== FAILED (1): Assert the database tests actually ran (399.0s)
+
+===== [runner] what skipped on PostgreSQL 17, and why (from the junit files)
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_backup_restores_and_proves_it_is_the_same_data: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_copy_missing_rows_fails_and_names_the_table: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_damaged_archive_is_refused_before_anything_is_created: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_dump_that_hangs_is_stopped_and_the_night_says_so: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_ledger_left_unprotected_fails_the_drill: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_ledger_that_does_not_reconcile_fails_the_drill: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_finding_the_last_one_still_running_starts_nothing: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_first_drops_what_a_stopped_drill_left: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_that_cannot_back_up_says_so: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_without_the_owners_key_fails_and_deletes_nothing: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_an_encrypted_night_can_only_be_read_with_the_owners_key: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_kept_copies_stay_for_inspection_and_are_never_the_source: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_stock_left_under_a_merged_model_fails_the_drill: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_the_counts_are_the_snapshot_the_archive_holds: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+[runner] CI's assertion failed on its skip check alone: its pytest run passed (pipefail), `[0-9]+ passed` matched, no integration test failed, and `[0-9]+ skipped` matched
+
+===== [runner] the 19 skipped backup tests, on PostgreSQL 16.2 with its own client tools
+[runner] pg-unit (127.0.0.1:55446, /Users/nikitahlushak/.cache/birka-runtime/pg-unit): PostgreSQL 16.2, timezone Europe/Kiev (CI's server: UTC), template1 locale libc collate C.UTF-8 ctype C.UTF-8 (CI: ICU uk-UA, --locale=C.UTF-8)
+$ /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/pgserver/pginstall/bin/psql -h 127.0.0.1 -p 55446 -U birka_review -v ON_ERROR_STOP=1 -q -d postgres -c 'DROP DATABASE IF EXISTS "birka_ci_local_backup16" WITH (FORCE)' -c 'CREATE DATABASE "birka_ci_local_backup16"'
+NOTICE:  database "birka_ci_local_backup16" does not exist, skipping
+$ alembic upgrade head
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+$ /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/pgserver/pginstall/bin/pg_dump --version
+pg_dump (PostgreSQL) 16.2
+$ pytest -q --junitxml=/Users/nikitahlushak/.cache/birka-runtime/ci/work/backend/pg16.xml -o cache_dir=/Users/nikitahlushak/.cache/birka-runtime/ci/work/backend/pytest-cache tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten tests/integration/test_backup_restore_drill.py::test_a_backup_restores_and_proves_it_is_the_same_data tests/integration/test_backup_restore_drill.py::test_a_copy_missing_rows_fails_and_names_the_table tests/integration/test_backup_restore_drill.py::test_a_damaged_archive_is_refused_before_anything_is_created tests/integration/test_backup_restore_drill.py::test_a_dump_that_hangs_is_stopped_and_the_night_says_so tests/integration/test_backup_restore_drill.py::test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps tests/integration/test_backup_restore_drill.py::test_a_ledger_left_unprotected_fails_the_drill tests/integration/test_backup_restore_drill.py::test_a_ledger_that_does_not_reconcile_fails_the_drill tests/integration/test_backup_restore_drill.py::test_a_night_finding_the_last_one_still_running_starts_nothing tests/integration/test_backup_restore_drill.py::test_a_night_first_drops_what_a_stopped_drill_left tests/integration/test_backup_restore_drill.py::test_a_night_that_cannot_back_up_says_so tests/integration/test_backup_restore_drill.py::test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing tests/integration/test_backup_restore_drill.py::test_a_night_without_the_owners_key_fails_and_deletes_nothing tests/integration/test_backup_restore_drill.py::test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy tests/integration/test_backup_restore_drill.py::test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive tests/integration/test_backup_restore_drill.py::test_an_encrypted_night_can_only_be_read_with_the_owners_key tests/integration/test_backup_restore_drill.py::test_kept_copies_stay_for_inspection_and_are_never_the_source tests/integration/test_backup_restore_drill.py::test_stock_left_under_a_merged_model_fails_the_drill tests/integration/test_backup_restore_drill.py::test_the_counts_are_the_snapshot_the_archive_holds
+...............s...                                                      [100%]
+18 passed, 1 skipped in 46.56s
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_backup_restores_and_proves_it_is_the_same_data
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_copy_missing_rows_fails_and_names_the_table
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_damaged_archive_is_refused_before_anything_is_created
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_dump_that_hangs_is_stopped_and_the_night_says_so
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_ledger_left_unprotected_fails_the_drill
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_ledger_that_does_not_reconcile_fails_the_drill
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_night_finding_the_last_one_still_running_starts_nothing
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_night_first_drops_what_a_stopped_drill_left
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_night_that_cannot_back_up_says_so
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_night_without_the_owners_key_fails_and_deletes_nothing
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy
+  PASSED   tests/integration/test_backup_restore_drill.py::test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive
+  SKIPPED  tests/integration/test_backup_restore_drill.py::test_an_encrypted_night_can_only_be_read_with_the_owners_key: age unavailable: age not found; install it or set BIRKA_AGE
+  PASSED   tests/integration/test_backup_restore_drill.py::test_kept_copies_stay_for_inspection_and_are_never_the_source
+  PASSED   tests/integration/test_backup_restore_drill.py::test_stock_left_under_a_merged_model_fails_the_drill
+  PASSED   tests/integration/test_backup_restore_drill.py::test_the_counts_are_the_snapshot_the_archive_holds
+$ /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/pgserver/pginstall/bin/psql -h 127.0.0.1 -p 55446 -U birka_review -v ON_ERROR_STOP=1 -q -d postgres -c 'DROP DATABASE IF EXISTS "birka_ci_local_backup16" WITH (FORCE)'
+[runner] removed container birka-ci-local-pg and its anonymous volume
+
+===== [runner] steps
+  replaced: ok                       actions/checkout@v4  (0.0s)
+  replaced: ok                       actions/setup-python@v5  (0.0s)
+  replaced: ok                       Install  (0.1s)
+  ok                                 Lint  (0.1s)
+  ok                                 Type check  (5.3s)
+  ok                                 Architecture contracts (ADR-0001)  (0.1s)
+  ok                                 Apply migrations  (1.1s)
+  ok                                 Migration drift check  (0.5s)
+  ok                                 Migration downgrade is reversible  (1.9s)
+  ok                                 Catalog evaluation regression gate  (0.4s)
+  replaced: ok                       Preserve catalog evaluation report  (0.0s)
+  NOT RUN (declared gap)             PostgreSQL 17 client tools and age, for the backup tests  (0.0s)
+  ok                                 Tests  (415.9s)
+  FAILED (1)                         Assert the database tests actually ran  (399.0s)
+  ok                                 [runner] the skipped backup tests on PostgreSQL 16.2  (49.3s)
+===== [runner] backend: PASSED WITH DECLARED GAPS — PG17 Tests: 3308 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1395 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age)

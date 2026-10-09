@@ -1,7 +1,9 @@
 # What a container may do — 2026-10-09
 
 Baseline: `4954b3f` (the app's own database role, merged as PR #79).
-Status: built and measured; TODO(final).
+Status: built, measured, reviewed and rehearsed: the whole CI run locally
+passed, and a first install, an update from main, going back and a restore
+onto a new server held under the limits, on a laptop in Docker.
 Branch: `feat/container-limits`. Decision: [ADR-0017](../decisions/ADR-0017-what-a-container-may-do.md).
 
 ## Why this was next
@@ -102,7 +104,46 @@ backup or a restore, and these gaps, all closed:
 
 ## Evidence
 
-TODO(final)
+- **Tests:** `test_server_image.py` pins every service's settings:
+  - read-only, every privilege dropped, none gained;
+  - the privileges kept;
+  - none of the keys that give everything back;
+  - each service's mounts in memory;
+  - the measured limits, swap included;
+  - CI's settings for the backup and the watcher, equal to compose's.
+
+  Ten mutants of compose and CI, each caught.
+- **Measurement** ([evidence](../../output/verification/2026-10-09-container-limits/),
+  the driver and its compose files beside it): the two passes above.
+- **CI, run locally at `98afbd8`** ([summary](../../output/verification/2026-10-09-container-limits-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 308 on PostgreSQL 17;
+  - restore drill: 7/7, the night's backup, its drill and the watcher held
+    as compose holds them;
+  - e2e: 264 journeys;
+  - edge: 9/9, each container as Docker ran it: not privileged, read-only,
+    `[ALL]` dropped, only its own kept, its memory limit; the API's
+    `CapEff` 0;
+  - hot path: worst p95 66.9 ms and 71.2 ms.
+- **Rehearsals** ([evidence](../../output/verification/2026-10-09-container-limits-rehearsal/), drivers beside it):
+  - **A first install by the runbook, steps 3 to 10, under the limits.**
+    Every container was checked as Docker ran it, and a write into the
+    API's image was refused. The people, the night, the watcher's incident
+    (the API stopped 6 minutes, then started), the stock list and the check
+    all held.
+  - **An update from main** (`4954b3f`, no container held) to `98afbd8`.
+    The containers came back held, on the volumes the old ones left, and
+    the data stayed. A sale, a payment, an erasure, the people's and
+    stores' commands, the night's backup with its drill and the watcher all
+    worked under the limits.
+  - **Going back by the code alone** to main: the containers were not held
+    again, the data the same. Forward again: held.
+  - **A restore onto a new server**, every container held: the restore
+    through the read-only database container. Then the role's rights, and
+    the night's stock and sales back, with a new sale.
+
+Everything started was removed, and Docker stopped as it was found. The
+containers had no way out of their network.
 
 ## Not covered here
 

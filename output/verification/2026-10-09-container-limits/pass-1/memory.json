@@ -1,0 +1,52 @@
+{
+  "peaks": {
+    "birka-limits-try-caddy-1": 21.48,
+    "birka-limits-try-backup-watch-1": 191.0,
+    "birka-limits-try-api-1": 235.4,
+    "birka-limits-try-db-1": 255.7,
+    "birka-limits-perf-api": 234.2,
+    "birka-limits-try-measure-run-3373078a1b56": 69.87,
+    "birka-limits-try-measure-run-e2e78af1dd7c": 299.7,
+    "birka-limits-try-ops-run-73521dca2eee": 180.8
+  },
+  "limits": {
+    "birka-limits-try-caddy-1": 3072.0,
+    "birka-limits-try-backup-watch-1": 3072.0,
+    "birka-limits-try-api-1": 3072.0,
+    "birka-limits-try-db-1": 3072.0,
+    "birka-limits-perf-api": 3072.0,
+    "birka-limits-try-measure-run-3373078a1b56": 3072.0,
+    "birka-limits-try-measure-run-e2e78af1dd7c": 3072.0,
+    "birka-limits-try-ops-run-73521dca2eee": 3072.0
+  },
+  "by_phase": {
+    "1. the hot path, six sellers": {
+      "birka-limits-try-caddy-1": 19.11,
+      "birka-limits-try-backup-watch-1": 189.8,
+      "birka-limits-try-api-1": 221.1,
+      "birka-limits-try-db-1": 136.3,
+      "birka-limits-perf-api": 234.2,
+      "birka-limits-try-measure-run-3373078a1b56": 69.87
+    },
+    "2. an opening list's approval, 2 000 to 10 000 answers": {
+      "birka-limits-try-measure-run-e2e78af1dd7c": 299.7,
+      "birka-limits-try-caddy-1": 21.48,
+      "birka-limits-try-backup-watch-1": 191.0,
+      "birka-limits-try-api-1": 235.4,
+      "birka-limits-try-db-1": 255.7
+    },
+    "3. the night's backup and drill of the largest database": {
+      "birka-limits-try-caddy-1": 20.5,
+      "birka-limits-try-backup-watch-1": 189.0,
+      "birka-limits-try-api-1": 221.3,
+      "birka-limits-try-db-1": 181.7,
+      "birka-limits-try-ops-run-73521dca2eee": 180.8
+    },
+    "4. at rest": {
+      "birka-limits-try-caddy-1": 20.5,
+      "birka-limits-try-backup-watch-1": 190.3,
+      "birka-limits-try-api-1": 222.4,
+      "birka-limits-try-db-1": 197.1
+    }
+  }
+}

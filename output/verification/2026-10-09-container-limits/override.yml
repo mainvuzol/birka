@@ -1,0 +1,18 @@
+# The trial's own: images built here, nothing pulled or built, no way out
+# but Caddy's loopback ports.
+networks:
+  default:
+    internal: true
+  edge: {}
+services:
+  api: {image: birka-ci-local-api, build: !reset null, pull_policy: never}
+  backup-watch: {image: birka-ci-local-api, build: !reset null, pull_policy: never}
+  ops: {image: birka-ci-local-ops, build: !reset null, pull_policy: never}
+  web: {image: birka-edge-check-web, build: !reset null, pull_policy: never}
+  db: {pull_policy: never}
+  caddy:
+    pull_policy: never
+    networks: [default, edge]
+    ports: !override
+      - "127.0.0.1:58780:80"
+      - "127.0.0.1:59143:443"
