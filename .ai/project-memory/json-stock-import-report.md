@@ -81,7 +81,7 @@ server being down.
 Nine readings of "how it is carried out" were put to the owner; seven were
 confirmed as built, and two changed (business rules, readings 5 and 8).
 Both are built. The review found that reading 1's question did not say what
-is built; it is put again (R-a, below).
+is built; it was put again (R-a, below) and confirmed as built.
 
 **5. A record that may be a range of sizes is asked about** (ADR-0014 §5).
 - The server works out, at every read of a line, whether each pair of its
@@ -371,7 +371,7 @@ of a count. Every finding, and what was done:
 |---|---|
 | **The ledger's minor 1.** Through the other store, a list was approved, and its movements written in the name of its own store, after that store had lost `can_receive` at the warehouse. | **Fixed.** Every command but a rejection, through the other store, also needs the list's own store to hold `can_receive` there: 409 `LIST_STORE_CANNOT_RECEIVE`, said on the page in words. How it is carried out, on reading 8's ground; not put to the owner. |
 | **The ledger's minor 2.** The history of an answer did not name the store acted through. | **Fixed:** `via_store_id` on `snapshot.line_resolved`. |
-| **Fidelity major 2.** Reading 1 was confirmed on a question saying a paused warehouse's list may be changed from its own store; the build lets that store only reject it. | **Kept as built.** The reading is reworded to what is built, and put again (R-a, awaiting the owner). |
+| **Fidelity major 2.** Reading 1 was confirmed on a question saying a paused warehouse's list may be changed from its own store; the build lets that store only reject it. | **Kept as built.** The reading is reworded to what is built, and put again (R-a), confirmed as built on 2026-10-09. |
 | **Fidelity major 3.** A manager was told to reject a list whose last file is wrong, and shown no button to do it. | **Fixed.** The decision panel shows to whoever may approve or add files; «Затвердити список» only to whoever may approve, while the list's store trades. |
 | **The ledger's minor 4** (on main before this change). Creating a list parses its first part while holding the warehouse's lock, the order the ADR refuses for adding a part. | **Kept at first, as M1-023's order; fixed in the second round** (below). |
 
@@ -469,7 +469,7 @@ Every one, and what was done:
 |---|---|
 | **New major; the blocker, the ledger's major 1 and the plan's split rule, in part.** «Nothing beside it» asked only the parser, which reads XS to XXL: «Лоран S-1 M-2 XXXL» was tapped and approved end to end, and so were «M-3 XXS», «M-3 ХL» with a Cyrillic Х, and «M-3 М», M written twice. | **Fixed.** Any other word that is a letter size by Birka's own spelling (`spell_size`, `letter_rank`) stops the split, read by the parser or not; a size counts as written twice in any of its spellings («M-3 М», «XXL-1 2XL», «OS-3 ＯＳ»). The parser's preposition «с» stays no size, as the parser has it («куртка с капюшоном M-3» keeps its tap). |
 | **Numerals outside `\d`.** «M-3½», «M-3 ①», «M-3 ²», «M-3 Ⅲ» showed M:3. | **Fixed:** a numeral is any character `str.isnumeric` takes, both after a count and among the other numbers. A number written as a word («і ще два») or in Latin letters («III») stays a residual (risk register). |
-| **A number the file calls the price is excused.** «S-1 M-2 L-1 разом 5» with a price "5", «46-2 48» with "48", «M-3 3» with "3", «M-3 + 2» with "2" were tappable. | **Narrowed, and the rest put to the owner.** A count ends before a sum or a product with spaces about its sign too («M-3 + 2», «M-3 x 2», «M-3·2»), whatever the price. The price itself stays excused, as the plan decided; ADR-0014 §5 and the risk register now say it, the format's description tells the parser's author to write `price` only for a price, and the choice is reading R-f, awaiting the owner. |
+| **A number the file calls the price is excused.** «S-1 M-2 L-1 разом 5» with a price "5", «46-2 48» with "48", «M-3 3» with "3", «M-3 + 2» with "2" were tappable. | **Narrowed, and the rest put to the owner.** A count ends before a sum or a product with spaces about its sign too («M-3 + 2», «M-3 x 2», «M-3·2»), whatever the price. The price itself stays excused, as the plan decided; ADR-0014 §5 and the risk register now say it, the format's description tells the parser's author to write `price` only for a price, and the choice is reading R-f, confirmed as built on 2026-10-09. |
 | **The person's word is per record, the check per line** (two findings). «Куртка 42-44 46-2» answered for «42-44», then a size «2» created: approved, nobody asked of «46-2». | **Fixed.** The line keeps the records the word was said of, `split_read_records` (in `0037`: JSONB, NULL exactly when `split_read_as` is, a list, refused by the downgrade, cleared with a removed part); the approval refuses a record that may be a range and is not among them. A re-answer covering more records is a new answer. |
 | **One 3.4–3.6 s run of the re-check's text read** at 5 000 lines, not reproduced. | **Changed and measured.** The rows and their texts are one statement (`catalog.raw_lines.text_of`, a scalar subquery per row); `read_texts` and its `IN` are gone. 5 000 answers, all by size, three approvals: 8.55, 8.16 and 7.79 s, the re-check 0.14–0.19 s; the 2026-10-08 method, the same hour: 7.78, 6.94 and 9.50 s ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)). Within the rule, with less room than the first run showed (ADR-0014 §10, risk register). |
 | **FILE_SPLIT_NOT_IN_TEXT** told the reviewer a line does not show a split it plainly shows, now that a stray number refuses it too. | **Reworded:** «Парсер прочитав кількість по розмірах, але рядок показує її не так або не лише її — одним натиском її не підтвердити. Вкажіть, звідки відома кількість.» |
@@ -496,7 +496,7 @@ Every one, and what was done:
 
 | Finding | What was done |
 |---|---|
-| **Fidelity minor 1, in part.** Reading 3's question never said removed files count among the 1 000 files. | **Put again:** R-e, awaiting the owner. |
+| **Fidelity minor 1, in part.** Reading 3's question never said removed files count among the 1 000 files. | **Put again:** R-e, confirmed as built on 2026-10-09. |
 | **R-b's question in masculine forms** («прибрав — додав знову»). | **Reworded** to «прибрати — додати знову», nothing else changed. The lead's plan still quotes the old form. |
 | **The range rule described as two number sizes** (README, glossary, runbook, this report). | **Fixed:** the ADR's wording everywhere. |
 | **The status lines said every finding was fixed.** | **Fixed:** "fixed, or kept with the reason", in the README, the milestone and this report. |
@@ -674,7 +674,7 @@ the limit cannot be taken in; the measurement on PostgreSQL 16, with less
 room on a busy laptop; the warehouse held for days; two lists at once from
 two stores; a shared list whose own store stops trading, or may no longer
 receive there, now rejected through the other store (2026-10-09), still not
-approved; the readings awaiting the owner; the Telegram file picker; the
+approved; the Telegram file picker; the
 slow call proven with a browser clock only.
 
 ## What is not done
@@ -691,7 +691,8 @@ slow call proven with a browser clock only.
   prove it with a browser clock, and a fourth loses the server's answers
   on their way back.
 - **The catalogue screens** still show raw text unguarded.
-- **Readings awaiting the owner:** six, R-a to R-f in the business rules:
+- **Readings:** none awaits the owner. Six more, R-a to R-f in the business
+  rules, were confirmed as built on 2026-10-09, after the code was final:
   reading 1, put again as built (a paused warehouse's list only rejected
   from its own store); the 10 000 lines a list takes over its life, removed
   files' included; lines typed by hand removed as a file is; a file without
@@ -699,10 +700,10 @@ slow call proven with a browser clock only.
   a list takes over its life, removed ones included (reading 3's part its
   question left out); and a
   number the file calls the price, taken as the price on the parser's word
-  beside a split. Not asked on 2026-10-09; each stands as built until the
-  owner answers. Of the nine readings put on 2026-10-09, two changed and
-  were built (above); reading 1 is put again whole (R-a), and reading 3 for
-  its part about removed files (R-e); the other five stand confirmed.
+  beside a split. Of the nine readings put earlier the same day, two
+  changed and were built (above); reading 1 was put again whole (R-a), and
+  reading 3 for its part about removed files (R-e); the other five stood
+  confirmed.
 - **This change's final run:** the full backend suite, the E2E count,
   `alembic check` and the `0037` round trip, the frontend's gates, and the
   edge job: all passed on 2026-10-09, under "Verification".

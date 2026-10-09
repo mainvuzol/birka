@@ -18,8 +18,8 @@ correct.
   fill a warehouse's list in «Початкові залишки», every line reviewed by a
   person ([report](.ai/project-memory/json-stock-import-report.md)). It was
   reviewed adversarially on 2026-10-09; its findings fixed, or kept with the
-  reason (report, "Review of the built change"). Six readings of how it is
-  carried out await the owner.
+  reason (report, "Review of the built change"). The owner confirmed the
+  last six readings of how it is carried out as built on 2026-10-09.
 - **The catalogue's verified promotion (M1-021/022) is still partial.** It
   waits for human-confirmed data.
 - **The release is blocked** on steps only the owner, an administrator with

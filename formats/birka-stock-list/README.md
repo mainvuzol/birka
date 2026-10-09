@@ -62,7 +62,7 @@ One JSON object:
 | `version` | `1` | **yes** | always `1`; another version is refused by name |
 | `source` | string, 1..300 | no | which notebook, as people at the shop call it: `"Зошит 1, куртки"`. The app offers it as the list's name |
 | `counted_on` | string, 1..40 | no | when it was counted, free text: `"осінь 2025"` |
-| `price_kind` | `"sale"` or `"purchase"` | no | the kind of every price in the file. One notebook holds one kind of price (owner, 2026-10-08), so it is given once, for the whole file. Leave it out when nobody knows; the price is then shown without its kind (Birka's reading, awaiting the owner's confirmation) |
+| `price_kind` | `"sale"` or `"purchase"` | no | the kind of every price in the file. One notebook holds one kind of price (owner, 2026-10-08), so it is given once, for the whole file. Leave it out when nobody knows; the price is then shown without its kind (Birka's reading, confirmed by the owner on 2026-10-09) |
 | `parser` | string, 1..100 | no | which parser, and which version of it, wrote the file: `"photo-reader 0.3"` |
 | `lines` | array of 1..1 000 lines | **yes** | every written line, in reading order |
 

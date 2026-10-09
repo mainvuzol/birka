@@ -26,8 +26,9 @@ published for the parser's author (`formats/birka-stock-list/`). It now
 waits for the shops' count of their largest warehouse, which decides whether
 the list's limit of 5 000 answers is raised first (owner, 2026-10-08), for
 the parser's files and the shops (row 15), and for a file picked on a real
-phone in Telegram (row 26). Six readings of how it is carried out await
-the owner (business rules, R-a to R-f). Everything else the agent can build
+phone in Telegram (row 26). The six readings of how it is carried out the
+review raised were confirmed as built by the owner on 2026-10-09 (business
+rules, R-a to R-f). Everything else the agent can build
 and prove without a server or a person is done; this change passed the
 whole of CI run locally on 2026-10-09, the edge job's body check (row 11a)
 included. The

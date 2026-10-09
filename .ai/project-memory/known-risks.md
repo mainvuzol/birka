@@ -1064,15 +1064,15 @@ person; the same day the owner answered the design's questions.
 - **A paused warehouse's list is seen from its own store only.** `can_receive`
   through the other store needs the warehouse open, and there it can only be
   rejected until the warehouse reopens. The owner confirmed this reading on
-  a question that said the list could be changed there; it is put again as
-  built (business rules, R-a).
-- **Readings awaiting the owner** (business rules, R-a to R-f): reading 1
+  a question that said the list could be changed there; it was put again as
+  built and confirmed on 2026-10-09 (business rules, R-a).
+- **Readings confirmed as built on 2026-10-09** (business rules, R-a to
+  R-f), each a risk the owner accepted: reading 1
   put again as built; the 10 000 lines a list takes over its life, removed
   files' included; lines typed by hand removed as a file is; a file without
   the kind of its prices; the 1 000 parts — files and lines typed by hand —
   a list takes over its life, removed ones included; a number the file
-  calls the price excused beside a split on the parser's word. Each stands
-  as built until the owner answers.
+  calls the price excused beside a split on the parser's word.
 - **The Telegram file picker is unproven on a phone.** iOS opens Files;
   Android depends on Telegram's WebView; a file received in a chat must
   first be saved to the phone. The drill on an Android and an iPhone is

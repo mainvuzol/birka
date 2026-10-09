@@ -7,8 +7,8 @@ with what the build found (§1, §4, §5, §7, §10, §13). Amended on 2026-10-0
 - the owner's two changed readings (§5, §7, §12, §13, Consequences);
 - what the review of the built change found (§1, §2, §5–§8, §10–§17,
   Consequences; the report's "Review of the built change"), in two
-  rounds. Six readings of how it is carried out await the owner (business
-  rules, R-a to R-f).
+  rounds. Six readings of how it is carried out, R-a to R-f, were
+  confirmed as built by the owner on 2026-10-09 (business rules).
 Owner decisions: business-rules.md, "the shops' existing stock" (2026-10-08),
 with the answers to the design's questions the same day, and the readings of
 "how it is carried out" answered on 2026-10-09; "going live" (2026-10-01);
@@ -82,7 +82,7 @@ accepted.
 | `version` | `1` | required, written as an integer (`true` and `1.0` are refused); another version is refused by name |
 | `source` | string 1..300 | optional: which notebook, as people call it |
 | `counted_on` | string 1..40 | optional, free text, like a list's date today |
-| `price_kind` | `"sale"` or `"purchase"` | optional: the kind of every price in the file (owner: one notebook, one kind). Left out when nobody knows: the prices are then shown without a kind (reading R-d, awaiting the owner) |
+| `price_kind` | `"sale"` or `"purchase"` | optional: the kind of every price in the file (owner: one notebook, one kind). Left out when nobody knows: the prices are then shown without a kind (reading R-d, confirmed as built by the owner on 2026-10-09) |
 | `parser` | string 1..100 | optional: which parser and version wrote it |
 | `lines` | array of 1..1 000 lines | required, in reading order |
 
@@ -150,7 +150,7 @@ description says, and the validator in agreement with the server.
 **A part** is one file or one hand-typed text: the unit that is added,
 shown and removed. That a hand-typed part is removed as a file is, with the
 answers on its lines, is Birka's reading: the owner decided it for files
-(reading R-c, awaiting the owner). A part keeps:
+(reading R-c, confirmed as built by the owner on 2026-10-09). A part keeps:
 - its own `command_id` and request fingerprint;
 - for a file, a content fingerprint;
 - its kind (`FILE` or `PASTED`);
@@ -508,7 +508,7 @@ Each answer is the same `PUT` as today, with the same bases and the new one.
 - «Прочитано: Лоран · чорна · S, M, L»;
 - the parser's count as a hint;
 - «Ціна з зошита: 1200 (продажна | закупівельна)», or «Ціна з зошита:
-  1200» when the file gives no kind (reading R-d, awaiting the owner);
+  1200» when the file gives no kind (reading R-d, confirmed as built by the owner on 2026-10-09);
 - the file reasons in words, such as `FILE_COUNT_HINT`: «Парсер прочитав
   кількість, але в рядку вона не написана зі «шт» — це лише підказка.
   Вкажіть кількість і звідки вона відома.» (worded so since the review,
@@ -599,7 +599,8 @@ reads it and may reject it, under reach (ADR-0005 §9), and nothing else:
 adding, removing, answering and approving need `can_receive`, which needs
 the warehouse open. They pass again, from either store, once it reopens.
 The owner confirmed reading 1 on a question that said the list could be
-changed there; it is put again as built (reading R-a, awaiting the owner).
+changed there; it was put again as built, and confirmed (reading R-a,
+owner, 2026-10-09).
 
 **What does not change.**
 - The list's `acting_store_id` is still the store that created it. Lines
@@ -739,7 +740,7 @@ as a new part with new lines, answered anew (owner).
 | `MAX_PART_BYTES` | none | 950 000, a file part as compact UTF-8 JSON |
 | `MAX_LIST_ALLOCATIONS` | 5 000 | **5 000, measured**: the largest of 2 000, 5 000 and 10 000 that passes |
 | `MAX_LIST_LINES` | 1 000 | 5 000: `MAX_LIST_ALLOCATIONS`, lines not removed |
-| `MAX_LIST_ROWS` | none | 10 000: `2 × MAX_LIST_LINES`, removed lines included; bounds `line_no` (reading R-b, awaiting the owner) |
+| `MAX_LIST_ROWS` | none | 10 000: `2 × MAX_LIST_LINES`, removed lines included; bounds `line_no` (reading R-b, confirmed as built by the owner on 2026-10-09) |
 | `MAX_LIST_PARTS` | none | 1 000, removed parts included |
 | `MAX_ALLOCATIONS` (per line) | 50 | 50 |
 
@@ -1387,7 +1388,7 @@ every page.
   Birka cannot account for («разом 5», «½», a price the file leaves out) is
   answered with a note. More lines need a note than before. One thing is
   still taken on the parser's word: the number it calls the price (§5;
-  reading R-f, awaiting the owner).
+  reading R-f, confirmed as built by the owner on 2026-10-09).
 - **A line is about 2–3 KB of evidence.** A list at its 5 000 lines is
   about 10–15 MB, and up to about 30 MB with its 10 000 rows, removed files
   included.

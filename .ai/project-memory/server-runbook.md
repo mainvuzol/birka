@@ -367,7 +367,7 @@ the owner kept the limit the same day):
   takes one answer per size, so count each size of such a line;
 - each file, or each text typed in, at most 1 000 lines and 100 000
   characters; at most 1 000 parts — files and lines typed by hand —
-  removed ones included (reading R-e, awaiting the owner).
+  removed ones included (reading R-e, confirmed as built by the owner on 2026-10-09).
 
 The list shows how much of both is used.
 

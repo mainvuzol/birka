@@ -1588,9 +1588,9 @@ How it is carried out, not decided by the owner
   lines included, twice the 5 000 that count (reading R-b, awaiting the
   owner, below).
 - **Lines typed by hand are removed as a file is,** with the answers given
-  to them (reading R-c, awaiting the owner, below).
+  to them (reading R-c, confirmed as built by the owner on 2026-10-09, below).
 - **A file may leave the kind of its prices out;** the prices are then
-  shown without a kind (reading R-d, awaiting the owner, below).
+  shown without a kind (reading R-d, confirmed as built by the owner on 2026-10-09, below).
 - **A removed file's lines stay in the list as «Прибрано»,** with their
   text, and count nowhere. The answers given to them are deleted; each stays
   in the list's history.
@@ -1621,15 +1621,16 @@ How it is carried out, not decided by the owner
 without being asked, then each put to the owner with the question under it.
 Seven were confirmed as built; two changed (5 and 8), and both changes were
 built the same day. The review of the built change, the same day, found
-that reading 1's question did not say what is built: it is put again (R-a,
-below).
+that reading 1's question did not say what is built: it was put again
+(R-a, below), and confirmed as built.
 1. While a warehouse is paused, its list is seen only from the store that
    started it, and there it can only be rejected. Files are added, lines
    answered and the list approved again once the warehouse reopens, when the
-   other store sees it again too. **To be put again, awaiting the owner**
-   (review, 2026-10-09): the owner confirmed it on the question below, which
-   said the list could be changed there, while the build lets that store
-   only reject it. The question as built is R-a.
+   other store sees it again too. **Put again and confirmed as built**
+   (review, 2026-10-09): the owner had confirmed it on the question below,
+   which said the list could be changed there, while the build lets that
+   store only reject it; the question as built, R-a, was confirmed the same
+   day.
    - Питання (2026-10-09): «Поки склад призупинено, його список видно й
      можна змінювати лише з магазину, який цей список почав. Так?»
 2. The same file is refused a second time in one list, whatever its name,
@@ -1651,9 +1652,9 @@ below).
      такий рядок рахується стільки разів, скільки в ньому розмірів. Файл — до
      1 000 рядків, у списку до 1 000 файлів. Так?»
    - The question did not say that the 1 000 counts parts — files and
-     lines typed by hand — removed ones included: that part **is put
-     again, awaiting the owner** (R-e, below; review, 2026-10-09; worded so
-     in its third round, the same day). The like bound of lines, 10 000
+     lines typed by hand — removed ones included: that part was **put
+     again and confirmed as built** (R-e, below; review, 2026-10-09; worded
+     so in its third round, the same day). The like bound of lines, 10 000
      with removed files' lines, was not among the readings; it is R-b.
 4. A split is confirmed by a tap only when each of its sizes is already in
    the catalogue under that spelling; otherwise the size is created first, or
@@ -1727,11 +1728,10 @@ below).
    - Питання: «Ціни з зошитів, зокрема закупівельні, бачать усі, хто
      розбирає списки, — власник і менеджери. Так?»
 
-**Awaiting the owner** (the review of the built change, 2026-10-09; R-e
-and R-f from its second round, the same day). Built as Birka reads the
-rules; not asked on 2026-10-09, and to be asked with the question under
-each. Until the owner answers, each stands as built, and nothing more is
-assumed.
+**Confirmed as built by the owner on 2026-10-09** (the review of the built
+change, the same day; R-e and R-f from its second round). Built as Birka
+read the rules, then put to the owner with the question under each, after
+the code was final; every answer was the option as built.
 - **R-a** (reading 1, put again as built). While a warehouse is paused, its
   list is seen only from the store that started it, and there it can only
   be rejected; files are added, lines answered and the list approved again
