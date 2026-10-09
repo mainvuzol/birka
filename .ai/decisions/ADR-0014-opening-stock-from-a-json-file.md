@@ -250,7 +250,18 @@ these hold:
      «м’ятний» is no word of its own, while «M-3'L», «L'S» and «XL’XXL»
      each write a size of their own (review, fourth round, 2026-10-09; in
      the third round an apostrophe joined any two words, which hid those
-     sizes);
+     sizes). A letter there is a letter or a digit, but not a modifier
+     letter that writes a sign, though Unicode counts it a letter (`Lm`):
+     U+02B9 to U+02C1 (primes, apostrophes, half rings, glottal stops),
+     U+02C6 to U+02D1 (accents, lines, colons), U+02EC and U+02EE. Such a
+     sign joins nothing, as `'` joins nothing, so with the modifier letter
+     apostrophe `ʼ` (U+02BC) «Лоран M-3ʼL», «Лоран M-3 LʼS», «Лоран M-3
+     XLʼXXL», «Лоран S-1 M-2 LʼL» and «Лоран M-3 СʼЛ» each write a size
+     beside the split and go to a note, while «Лоран мʼята M-3» keeps its
+     tap, `ʼ` joining a Ukrainian word as `'` does (review, after the fourth
+     round, 2026-10-09; before it, those five showed their split). One
+     form gains its tap: a sign letter before the size, «Лоран ʼM-3», reads
+     as «Лоран 'M-3» always has;
    - followed by optional whitespace;
    - then exactly one sign from `-‐‑‒–—―−:=`: spaces alone are not a sign;
    - then optional whitespace, and a run of digits, whose value is the
@@ -259,18 +270,37 @@ these hold:
      no-break space, a thin space. What may follow the count is named, and
      anything else before a numeral makes it part of something more. A
      format character, which prints nothing (`Cf`: a zero-width space, a
-     soft hyphen, a byte order mark), is passed over wherever it stands.
-     After the count may come:
+     soft hyphen, a byte order mark), is passed over wherever it stands; a
+     combining mark or a variation selector (`Mn`, `Mc`, `Me`) wherever a
+     numeral is looked for. After the count may come:
      - the text's end;
      - after whitespace, another numeral: a number of its own, which 6
        must account for («M-3 1850»);
-     - a letter: another word («M-3 L-1»), but `x` or `х`, in either case
-       or width, before a numeral is a product;
+     - a letter, as a word's letter is (so no sign letter above):
+       another word («M-3 L-1»), but `x` or a letter that looks like it,
+       before a numeral, is a product: the Cyrillic `х`, the Greek `χ`
+       (U+03C7), the Cyrillic `ҳ` `ӽ` `ӿ` (U+04B3, U+04FD, U+04FF), in
+       either case, in any width or form (`ｘ`, `ˣ`), and with a mark on it
+       or not (`ẋ`, or `x` and a combining accent) (review, after the
+       fourth round, 2026-10-09: «M-3Χ2» with the Greek capital, «M-3ҳ2»,
+       and «M-3x2» with an accent on the `x`, each with a price "2", had
+       shown M:3);
      - `,` `;` `.` `)` with no numeral right after it: a list goes on
-       («S-1, M-2», «L-1, 1850»); with one, a fraction;
+       («S-1, M-2», «S-1; M-2», «46-2; 48-1», «L-1, 1850»). With one, the
+       count is part of something more, **read strictly**: «M-3,5» and
+       «M-3.5» are fractions, and «46-2;48-1», «M-3;2» and «M-3)2», which
+       may be a list written without a space, go to a note as well. The
+       conservative side, kept on purpose (review, after the fourth round,
+       2026-10-09): a parser that keeps the notebook's space after `;`
+       keeps the tap;
      - `(` `[` `{` `«` or a currency sign: something else begins («M-3
        (1850)», «M-3 ₴1850»);
      - any other sign with no numeral after it.
+
+     A mark where the count's end is read, on its last digit or after
+     whitespace, ends it with something unknown: «Лоран M-3» with a
+     combining accent on the 3 goes to a note, with nothing after it too
+     (after the fourth round).
 
      A numeral of any script counts as a digit there (`str.isnumeric`:
      «½», «²», «①», «Ⅲ»), and one right after the count continues it.
@@ -279,8 +309,39 @@ these hold:
      the rule names what may end a count rather than what continues it,
      do «M-3＋2», «M-3ｘ2», «M-3∗2», «M-3÷2», «M-3⁄2», «M-3~2», «M-3 – 2»
      with no-break spaces, «M-3，5», «M-3٫5», or «M-3x2» with a zero-width
-     space in it (review, fourth round, 2026-10-09). «@» or «#» before the
-     price is such a sign too: «M-3 @1850» is answered with a note.
+     space in it (review, fourth round, 2026-10-09).
+
+     **The forms that go to a note since the fourth round**, a tap before
+     it, each with the number after it as the price where it is one:
+     - `;` or `)` with a numeral right after it: «46-2;48-1», «M-3;2»,
+       «M-3)2»;
+     - any sign the rule does not name, then a numeral, spaced or not:
+       «Лоран M-3 @1850», «Лоран M-3 #1850», «Лоран M-3 №1850», and
+       likewise `%` `&` `!` `?` `'` `"` `_` `\` `^` `` ` `` `|` `<` `>`
+       `°` `§`, the closing brackets `]` `}`, every quote but `«` (`»`
+       `’` `”` `“` `„` and their kind), the dashes and tildes outside the
+       signs of a size, the arrows and every other symbol (a probe of
+       every sign, mark and format character up to U+2FFFF after the
+       count, the third round's rule against the fourth's: about 10 800
+       changed, none the other way);
+     - a format character or a combining mark between the count and a
+       numeral, or a superscript or subscript `x` (`ˣ`, `ₓ`) before one.
+
+     And **since the review after the fourth round** (2026-10-09), each
+     with a price "2" where a number follows:
+     - a sign letter (above) after the count, before a numeral («M-3ʼ2»
+       with U+02BC), or between two words, each then a size («Лоран
+       M-3ʼL», «Лоран M-3 LʼS», «Лоран M-3 XLʼXXL», «Лоран S-1 M-2 LʼL»,
+       «Лоран M-3 СʼЛ»);
+     - a look-alike of `x` before a numeral: «M-3Χ2», «M-3χ2», «M-3Ҳ2»,
+       «M-3ҳ2», «M-3Ӽ2», «M-3ӽ2», «M-3Ӿ2», «M-3ẋ2», «M-3x2» with a
+       combining accent or a variation selector on the `x`;
+     - a mark on the count's last digit, or between the count and what
+       follows it: «Лоран M-3» with a combining accent on the 3, the same
+       before «x2», and «M-3,5» with an accent after the comma.
+
+     «Лоран M-3 (1850)», «Лоран M-3 ₴1850», «S-1, M-2», «S-1; M-2»,
+     «46-2; 48-1» and «Лоран M-3. 1850» keep their tap (pinned).
 
    And the size stands in the text as a whole word **exactly once**, with a
    count or without, in any of its spellings (ADR-0009): «M-3 M 2» and

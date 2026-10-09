@@ -208,6 +208,8 @@ def test_a_split_the_text_shows_is_kept(
         ("M=1", (("M", 1),), {}),
         ("S-1,M-2", (("S", 1), ("M", 2)), {}),
         ("S-1, M-2", (("S", 1), ("M", 2)), {}),
+        ("S-1; M-2", (("S", 1), ("M", 2)), {}),
+        ("46-2; 48-1", (("46", 2), ("48", 1)), {}),
         ("Лоран M-3 шт", (("M", 3),), {}),
         # The file's price, as its digits are written; a count with «шт»
         # equal to the sum; a length Birka reads.
@@ -238,7 +240,13 @@ def test_a_split_the_text_shows_is_kept(
         # «ю», «є» or «ї», joins it: the «м» of «м'ята» is no size M.
         ("Лоран м'ята M-3", (("M", 3),), {}),
         ("Лоран м’ятний S-1 M-2", (("S", 1), ("M", 2)), {}),
-        ("Лоран мʼята M-3", (("M", 3),), {}),
+        ("Лоран м\u02bcята M-3", (("M", 3),), {}),
+        # A modifier letter that writes an apostrophe is a sign, as «'» is
+        # (review, after the fourth round, 2026-10-09): before a size or
+        # after a count it joins nothing to them.
+        ("Лоран 'M-3", (("M", 3),), {}),
+        ("Лоран \u02bcM-3", (("M", 3),), {}),
+        ("Лоран M-3\u02bc", (("M", 3),), {}),
         ("Лоран м'ята м-3", (("м", 3),), {}),
         # A comma with a space after it lists on, a bracket or a currency
         # sign opens something else, and a no-break space about the sign is
@@ -364,6 +372,35 @@ def test_a_split_shown_with_nothing_beside_it_but_a_price_a_count_or_a_length(
         ("M-3٫5", (("M", 3),), {"price": "5"}),
         ("M-3，5", (("M", 3),), {"price": "5"}),
         ("M-3．5", (("M", 3),), {"price": "5"}),
+        # A letter that looks like «x», in either case: the Greek «Χ», the
+        # Cyrillic «Ҳ», «Ӽ» and «Ӿ»; «x» with a mark or a variation selector
+        # on it, or written with one; and a mark between the count and what
+        # follows it, or on the count's last digit (review, after the fourth
+        # round, 2026-10-09).
+        ("M-3\u03a72", (("M", 3),), {"price": "2"}),
+        ("M-3\u03c72", (("M", 3),), {"price": "2"}),
+        ("M-3\u04b22", (("M", 3),), {"price": "2"}),
+        ("M-3\u04b32", (("M", 3),), {"price": "2"}),
+        ("M-3\u04fc2", (("M", 3),), {"price": "2"}),
+        ("M-3 \u04fd 2", (("M", 3),), {"price": "2"}),
+        ("M-3\u04fe2", (("M", 3),), {"price": "2"}),
+        ("M-3x\u03012", (("M", 3),), {"price": "2"}),
+        ("M-3 x\u0301 2", (("M", 3),), {"price": "2"}),
+        ("M-3x\ufe0f2", (("M", 3),), {"price": "2"}),
+        ("M-3\u1e8b2", (("M", 3),), {"price": "2"}),
+        ("M-3\u02e32", (("M", 3),), {"price": "2"}),
+        ("M-3\u0301x2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3\u0301", (("M", 3),), {}),
+        ("M-3,\u03015", (("M", 3),), {"price": "5"}),
+        # «;» or «)» with a numeral right after it, and any sign the rule
+        # does not name before a numeral, spaced or not: read strictly, the
+        # count is part of something more (ADR-0014 §5).
+        ("46-2;48-1", (("46", 2), ("48", 1)), {}),
+        ("Лоран M-3;2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3)2", (("M", 3),), {"price": "2"}),
+        ("Лоран M-3 @1850", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3 #1850", (("M", 3),), {"price": "1850"}),
+        ("Лоран M-3 №1850", (("M", 3),), {"price": "1850"}),
         # A numeral that is no digit (review, 2026-10-09): a fraction, a
         # superscript, a circled number, a Roman numeral sign.
         ("Лоран M-3½", (("M", 3),), {}),
@@ -416,6 +453,16 @@ def test_a_split_shown_with_nothing_beside_it_but_a_price_a_count_or_a_length(
         ("Лоран S-1 M-2 L'L", (("S", 1), ("M", 2)), {}),
         ("Лоран S-1’M-2’L-4", (("S", 1), ("M", 2)), {}),
         ("Лоран M-3 С'Л", (("M", 3),), {}),
+        # Nor does a modifier letter that writes an apostrophe, a prime or
+        # another sign, though Unicode counts it a letter: it joins no two
+        # words, and before a numeral it is a sign (review, after the
+        # fourth round, 2026-10-09).
+        ("Лоран M-3\u02bcL", (("M", 3),), {}),
+        ("Лоран M-3 L\u02bcS", (("M", 3),), {}),
+        ("Лоран M-3 XL\u02bcXXL", (("M", 3),), {}),
+        ("Лоран S-1 M-2 L\u02bcL", (("S", 1), ("M", 2)), {}),
+        ("Лоран M-3 \u0421\u02bc\u041b", (("M", 3),), {}),
+        ("M-3\u02bc2", (("M", 3),), {"price": "2"}),
         # Another letter size by its spelling, though the parser reads only
         # XS to XXL (review, 2026-10-09): written out, with a Cyrillic letter,
         # or counted.
@@ -472,6 +519,27 @@ def test_every_sign_joins_a_size_to_its_count_and_nothing_else_does() -> None:
         assert split(f"Лоран M{sign}1 L {sign} 2", size_counts=counts(("M", 1), ("L", 2))), sign
     for other in (" ", "  ", "_", ".", ",", "/", "+", "x", "×", "*", "~"):
         assert not split(f"Лоран M{other}1", size_counts=counts(("M", 1))), repr(other)
+
+
+# The modifier letters that write a sign (`file_lines._SIGN_LETTERS`): primes
+# and apostrophes, half rings, glottal stops, accents, lines and colons.
+SIGN_LETTERS = [
+    chr(code) for code in (*range(0x02B9, 0x02C2), *range(0x02C6, 0x02D2), 0x02EC, 0x02EE)
+]
+
+
+@pytest.mark.parametrize("sign", SIGN_LETTERS, ids=lambda sign: f"U+{ord(sign):04X}")
+def test_a_modifier_letter_that_writes_a_sign_is_no_letter(sign: str) -> None:
+    """Review, after the fourth round, 2026-10-09: Unicode counts these
+    modifier letters as letters (`Lm`), and a line reads them as the signs
+    they write. Such a sign joins no size to a word, as «'» joins none, and
+    before a numeral after a count it is a sign as any other."""
+    assert split(f"Лоран M-3{sign}L", size_counts=counts(("M", 3))) is None
+    assert split(f"Лоран M-3 L{sign}S", size_counts=counts(("M", 3))) is None
+    assert split(f"M-3{sign}2", size_counts=counts(("M", 3)), price="2") is None
+    assert split(f"46-2{sign}48-1", size_counts=counts(("46", 2), ("48", 1))) is None
+    # After the count, with nothing after it, it hides nothing.
+    assert split(f"Лоран M-3{sign}", size_counts=counts(("M", 3))) == (("M", 3),)
 
 
 def test_a_line_with_a_file_count_or_counts_per_size_is_never_one_piece() -> None:

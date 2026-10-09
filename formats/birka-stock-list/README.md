@@ -183,20 +183,43 @@ sign**, the person confirms the split with one tap, «Як у рядку, по
   `ʼ`) joins two only as in a Ukrainian word, a Cyrillic letter before it
   and «я», «ю», «є» or «ї» after it. So the «м» of «м'ята» or «м’ятний» is
   no size M, while «M-3'L», «L'S» or «XL’XXL» each write a size of their
-  own.
+  own. A modifier letter that writes an apostrophe, a prime, an accent, a
+  line or a colon (U+02B9 to U+02C1, U+02C6 to U+02D1, U+02EC, U+02EE;
+  `ʼ`, U+02BC, among them) is a sign there, not a letter, though Unicode
+  counts it one: «Лоран M-3ʼL», «Лоран M-3 LʼS», «Лоран M-3 XLʼXXL»,
+  «Лоран S-1 M-2 LʼL» and «Лоран M-3 СʼЛ» each write another size and show
+  no split, while «Лоран мʼята M-3» shows its own.
 - **The count ends with its number.** After the count may come only: the
   end of `text`; after a space, another number, which must then be the
-  price (below); a letter, but `x` or `х` (in either case or width) before
-  a digit, which is a product; `,` `;` `.` or `)` with no digit right after
-  it, so a list goes on, while with one it is a fraction; `(` `[` `{` `«`
-  or a currency sign, which begin something else («M-3 (1850)», «M-3
-  ₴1850»); or any other sign with no digit after it. Any whitespace may
-  stand about a sign, a no-break space included, and a character that
-  prints nothing (a zero-width space, a soft hyphen) is passed over
-  wherever it stands. So «M-3+2», «M-3 + 2», «M-3,5», «M-3.5», «M-3/2»,
-  «M-3х2», «M-3X2», «M-3 Х 2», «M-3✕2», «M-3＋2», «M-3~2», «M-3 – 2»,
-  «M-3，5» and «M-3 @1850» hold no count of M. A numeral of any script is a
-  digit here: «M-3½», «M-3²». «S-1, M-2» and «L-1, 1850» list on.
+  price (below); a letter, but `x` or a letter that looks like it before a
+  digit, which is a product: the Cyrillic `х`, the Greek `χ`, the Cyrillic
+  `ҳ` `ӽ` `ӿ`, in either case, in any width or form (`ｘ`, `ˣ`), with a
+  mark on it or not (`ẋ`); `,` `;` `.` or `)` with no digit right after
+  it, so a list goes on; `(` `[` `{` `«` or a currency sign, which begin
+  something else («M-3 (1850)», «M-3 ₴1850»); or any other sign with no
+  digit after it. Any whitespace may stand about a sign, a no-break space
+  included; a character that prints nothing (a zero-width space, a soft
+  hyphen) is passed over wherever it stands, and a combining mark or a
+  variation selector wherever a digit is looked for. A combining mark on
+  the count's last digit, or right after whitespace that follows it, is no
+  end: «Лоран M-3» with an accent on the 3 shows no split.
+- **With a digit right after `,` `;` `.` or `)`, the line goes to a note.**
+  «M-3,5» and «M-3.5» are fractions, and «46-2;48-1», «M-3;2» and «M-3)2»
+  are read just as strictly, though they may be a list: write the space
+  that follows `;` in the notebook («46-2; 48-1», «S-1; M-2» list on).
+- So none of these holds a count of M, each going to a note even with the
+  number after it as the `price`: «M-3+2», «M-3 + 2», «M-3,5», «M-3.5»,
+  «M-3/2», «M-3х2», «M-3X2», «M-3 Х 2», «M-3✕2», «M-3＋2», «M-3~2»,
+  «M-3 – 2»; «46-2;48-1», «M-3;2», «M-3)2»; any other sign before a number,
+  spaced or not: «Лоран M-3 @1850», «Лоран M-3 #1850», «Лоран M-3 №1850»,
+  `%` `&` `!` `?` `'` `"` `_` `°`, a closing bracket or a quote other than
+  `«`, a dash or a tilde that joins no size; «M-3ʼ2» with U+02BC; «M-3Χ2»
+  with the Greek capital chi, «M-3ҳ2», «M-3Ӽ2», «M-3ẋ2», and «M-3x2» with
+  an accent or a variation selector on the `x`; a zero-width space or a
+  combining mark between the count and a digit. A numeral of any script is
+  a digit here: «M-3½», «M-3²». «S-1, M-2», «L-1, 1850»,
+  «Лоран M-3. 1850», «Лоран M-3 (1850)» and «Лоран M-3 ₴1850» show their
+  split.
 - **The text shows the split and nothing beside it:**
   - no other size Birka reads in `text`: «Лоран S M-3» names S without a
     count; nor any other word that is a letter size as Birka spells sizes,

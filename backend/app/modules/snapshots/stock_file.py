@@ -433,7 +433,7 @@ def load_stock_file_text(text: str) -> StockFileV1:
     `Decimal`, which no integer field takes: `3.0` is not `3`. Every refusal
     is a `ValidationError`, as the model's own are.
     """
-    if text.startswith("﻿"):
+    if text.startswith("\ufeff"):
         text = text[1:]
     try:
         data = json.loads(

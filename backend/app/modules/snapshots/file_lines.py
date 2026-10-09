@@ -54,16 +54,30 @@ FILE_REASONS = (FILE_COUNT_HINT, FILE_COUNT_DIFFERS, FILE_SPLIT_NOT_IN_TEXT, FIL
 # The signs that join a size to its count: the hyphen, the dashes, the minus,
 # the colon and the equals sign, with any whitespace about them (`\s`: a
 # no-break space too). Spaces alone join nothing.
-SPLIT_SEPARATORS = "-‐‑‒–—―−:="
+SPLIT_SEPARATORS = "-\u2010\u2011\u2012\u2013\u2014\u2015\u2212:="
 _GAP = r"\s*[" + re.escape(SPLIT_SEPARATORS) + r"]\s*"
 # What may follow a count that ends with its number (`_ends_cleanly`): a list
 # goes on after these signs when no numeral stands right after them; these
 # open something else, a numeral after them or not; and a letter starts a
-# word, but for these two, «x» and «х» in either case or width, which before
-# a numeral make a product.
+# word, but for «x» and the letters that look like it, which before a
+# numeral make a product: the Cyrillic ha (U+0445), the Greek chi (U+03C7),
+# and the Cyrillic ha with a descender, a hook or a stroke (U+04B3, U+04FD,
+# U+04FF), in either case, in any width or form (fullwidth, superscript)
+# and with any mark on it (`_times_letter`; review, after the fourth round,
+# 2026-10-09).
 _LIST_SIGNS = ",;.)"
-_OPENING_SIGNS = "([{«"
-_TIMES_LETTERS = "xх"
+_OPENING_SIGNS = "([{\u00ab"
+_TIMES_LETTERS = frozenset("x\u0445\u03c7\u04b3\u04fd\u04ff")
+# A letter of a word (`_LETTER`): a letter or a digit, but not a modifier
+# letter that writes a sign, though Unicode counts it a letter (`Lm`):
+# U+02B9 to U+02C1, the primes, the apostrophes (U+02BC among them), the
+# half rings and the glottal stops; U+02C6 to U+02D1, the accents, the lines
+# and the colons; U+02EC and U+02EE. Such a sign is no letter, as «'» is
+# none: «M-3», U+02BC and «L» write an L, and «M-3», U+02BC and «2» hold no
+# count of M (review, after the fourth round, 2026-10-09).
+_SIGN_LETTERS = "\u02b9-\u02c1\u02c6-\u02d1\u02ec\u02ee"
+_LETTER = r"[^\W_" + _SIGN_LETTERS + "]"
+_A_LETTER = re.compile(_LETTER)
 # A word of the text: a run of letters and digits («Лоран», «XXXL», «3шт»),
 # joined by an apostrophe only as a Ukrainian word is, a Cyrillic letter
 # before it and «я», «ю», «є» or «ї» after it («м'ята», «м’ятний», «мʼята»).
@@ -71,13 +85,14 @@ _TIMES_LETTERS = "xх"
 # write a size of their own (review, fourth round, 2026-10-09). A word starts
 # where neither a letter or digit nor such an apostrophe stands before it,
 # and ends likewise.
-_APOSTROPHES = "'’ʼ"
-_CYRILLIC_LETTERS = "Ѐ-ҁҊ-ԯ"
-_IOTATED = "яюєїЯЮЄЇ"
+_APOSTROPHES = "'\u2019\u02bc"
+_CYRILLIC_LETTERS = "\u0400-\u0481\u048a-\u052f"
+_IOTATED = "\u044f\u044e\u0454\u0457\u042f\u042e\u0404\u0407"
 _JOIN = "(?<=[" + _CYRILLIC_LETTERS + "])[" + _APOSTROPHES + "](?=[" + _IOTATED + "])"
-_WORD = re.compile(r"[^\W_]+(?:" + _JOIN + r"[^\W_]+)*")
-_STARTS = r"(?<![^\W_])(?!(?<=[" + _CYRILLIC_LETTERS + "][" + _APOSTROPHES + "])[" + _IOTATED + "])"
-_ENDS = r"(?![^\W_])(?!" + _JOIN + ")"
+_JOINED = "(?<=[" + _CYRILLIC_LETTERS + "][" + _APOSTROPHES + "])[" + _IOTATED + "]"
+_WORD = re.compile(_LETTER + "+(?:" + _JOIN + _LETTER + "+)*")
+_STARTS = "(?<!" + _LETTER + ")(?!" + _JOINED + ")"
+_ENDS = "(?!" + _LETTER + ")(?!" + _JOIN + ")"
 # Any word joined by one sign to a run of digits, wherever it starts, so
 # that records sharing a sign are each found: «M-3-2» holds «M-3» and «3-2».
 _RECORD = re.compile(r"(?=" + _STARTS + "(" + _WORD.pattern + ")" + _GAP + r"(\d+))")
@@ -89,7 +104,7 @@ _RECORD = re.compile(r"(?=" + _STARTS + "(" + _WORD.pattern + ")" + _GAP + r"(\d
 # size S anywhere else («Лоран С M-3», «M-3 С 1850», «Куртка С поясом M-3»).
 # Joined by a sign to a count, either is a record's size, as any word is
 # («С-3»).
-_PREPOSITION = "с"
+_PREPOSITION = "\u0441"
 _COUNTED = re.compile(_GAP + r"\d")
 # The parser's own signal that a line names slash options: contextual
 # (constitution §21), so no split is shown beside one.
@@ -138,61 +153,90 @@ def _numerals(text: str) -> Iterator[tuple[int, int]]:
         yield start, len(text)
 
 
-def _invisible(character: str) -> bool:
-    """A format character, which prints nothing: a zero-width space, a soft
-    hyphen, a byte order mark, a joiner (`Cf`)."""
-    return unicodedata.category(character) == "Cf"
+def _mark(character: str) -> bool:
+    """A combining mark or a variation selector (`Mn`, `Mc`, `Me`), which
+    only changes the character before it: an acute accent, U+0301, or
+    a text style, U+FE0E, after an «x»."""
+    return unicodedata.category(character).startswith("M")
 
 
-def _skip(text: str, index: int, *, spaces: bool) -> int:
-    """The first place at or after `index` that holds no format character
-    (`_invisible`), nor, with `spaces`, any whitespace (`str.isspace`)."""
-    while index < len(text) and (_invisible(text[index]) or (spaces and text[index].isspace())):
+def _skip(text: str, index: int, *, spaces: bool, marks: bool = False) -> int:
+    """The first place at or after `index` that holds no format character,
+    which prints nothing (`Cf`: a zero-width space, a soft hyphen, a byte
+    order mark, a joiner), nor, with `marks`, a mark (`_mark`), nor, with
+    `spaces`, any whitespace (`str.isspace`)."""
+    while index < len(text) and (
+        unicodedata.category(text[index]) == "Cf"
+        or (marks and _mark(text[index]))
+        or (spaces and text[index].isspace())
+    ):
         index += 1
     return index
 
 
-def _numeral_at(text: str, index: int) -> bool:
-    return index < len(text) and text[index].isnumeric()
+def _numeral_after(text: str, index: int, *, spaces: bool) -> bool:
+    """Whether a numeral stands at `index`, any format characters and marks
+    before it passed over (`_skip`), and with `spaces` any whitespace."""
+    at = _skip(text, index, spaces=spaces, marks=True)
+    return at < len(text) and text[at].isnumeric()
+
+
+def _times_letter(letter: str) -> bool:
+    """Whether a letter is «x» or one that looks like it (`_TIMES_LETTERS`),
+    its width, its form, its marks and its case aside: a capital X, a
+    fullwidth or a superscript x, an x with a dot above, and the Cyrillic and
+    Greek look-alikes of either case (NFKD, marks dropped, casefolded;
+    review, after the fourth round, 2026-10-09)."""
+    base = "".join(part for part in unicodedata.normalize("NFKD", letter) if not _mark(part))
+    return base.casefold() in _TIMES_LETTERS
 
 
 def _ends_cleanly(text: str, end: int) -> bool:
     """Whether a count that ends here ends with its number (review,
     2026-10-09; fourth round, the same day): what may follow it is named, and
     anything else before a numeral makes it part of something more. Format
-    characters (`_invisible`) are passed over wherever they stand, and any
-    whitespace (`str.isspace`) about a sign. After the count:
+    characters (`Cf`) are passed over wherever they stand, any whitespace
+    (`str.isspace`) about a sign, and a mark (`_mark`) wherever a numeral is
+    looked for. After the count:
 
     - nothing, the text's end;
     - after whitespace, a numeral: a number of its own, which every other
       number of the line must answer for (`_numbers_explained`: «M-3 1850»);
-    - a letter: another word («M-3 L-1», «M-3 шт»), but «x» or «х», in
-      either case or width, before a numeral is a product («M-3x2»,
-      «M-3 Х 2», «M-3ｘ2»);
+    - a letter (`_LETTER`): another word («M-3 L-1», «M-3 шт»), but «x» or a
+      letter that looks like it (`_times_letter`) before a numeral is a
+      product («M-3x2», «M-3 Х 2», «M-3ｘ2», and «M-3x2» with the Greek chi
+      or a Cyrillic ha with a descender for the «x», or an accent on it);
     - «,» «;» «.» «)» with no numeral right after it: a list goes on
-      («S-1, M-2», «L-1, 1850», «M-3. 1850»), while «M-3,5» or «M-3.5» is
-      a fraction;
+      («S-1, M-2», «S-1; M-2», «L-1, 1850», «M-3. 1850»). With one, the
+      count is part of something more, read strictly: «M-3,5» or «M-3.5»
+      is a fraction, and «46-2;48-1» or «M-3)2» go to a note too;
     - «(» «[» «{» «« or a currency sign: something else begins («M-3
       (1850)», «M-3 ₴1850»);
-    - any other sign with no numeral after it («M-3 (M)», «M-3!»): before
-      one, it is a sum, a product, a fraction or a range of some kind
-      («M-3+2», «M-3 – 2», «M-3＋2», «M-3∗2», «M-3~2», «M-3，5»).
+    - any other sign with no numeral after it («M-3 (M)», «M-3!», or U+02BC
+      before «L»): before one, it is a sum, a product, a fraction or a range
+      of some kind («M-3+2», «M-3 – 2», «M-3＋2», «M-3∗2», «M-3~2»,
+      «M-3，5», «M-3 @1850», or U+02BC before «2»).
 
-    A numeral right after it continues it, a format character between them
-    or not («M-3½», «M-3²»)."""
-    if _numeral_at(text, _skip(text, end, spaces=False)):
+    A numeral right after it continues it, a format character or a mark
+    between them or not («M-3½», «M-3²»). A mark where the count's end is
+    read, on its last digit or after whitespace, ends it with something
+    unknown: «M-3» with an accent on the 3, or an accent between «3» and
+    «x2»."""
+    if _numeral_after(text, end, spaces=False):
         return False
     at = _skip(text, end, spaces=True)
     if at == len(text) or text[at].isnumeric():
         return True
     sign = text[at]
+    if _mark(sign):
+        return False
     if sign in _LIST_SIGNS:
-        return not _numeral_at(text, _skip(text, at + 1, spaces=False))
+        return not _numeral_after(text, at + 1, spaces=False)
     if sign in _OPENING_SIGNS or unicodedata.category(sign) == "Sc":
         return True
-    if sign.isalpha() and unicodedata.normalize("NFKC", sign).casefold() not in _TIMES_LETTERS:
+    if _A_LETTER.fullmatch(sign) and not _times_letter(sign):
         return True
-    return not _numeral_at(text, _skip(text, at + 1, spaces=True))
+    return not _numeral_after(text, at + 1, spaces=True)
 
 
 def _places(text: str, size: str) -> list[re.Match[str]]:
@@ -278,8 +322,9 @@ def _letter_size_beside(
     own spelling (`letter_rank`), read by the parser or not: «XXXL», «XXS»,
     «ХL» with a Cyrillic Х, «4XL», a Cyrillic «М» (review, 2026-10-09), a
     capital «С» outside a phrase, and «L» in «M-3'L» (fourth round, the same
-    day). The parser reads only XS to XXL, so «Лоран S-1 M-2 XXXL» names a
-    third size it does not see."""
+    day), or after U+02BC in its place (`_LETTER`; after the fourth round).
+    The parser reads only XS to XXL, so «Лоран S-1 M-2 XXXL» names a third
+    size it does not see."""
     return any(
         letter_rank(spelled) is not None
         for word, spelled in _size_words(text, phrases)
@@ -354,11 +399,13 @@ def shown_split(
     1. the file gives counts per size, for sizes distinct as spelled
        (`spell_size`, ADR-0009: `M` and `м` are one size);
     2. each size stands in the text exactly once as a whole word (`_WORD`:
-       the «м» of the Ukrainian «м'ята» is no M, while «M-3'L» writes an L),
-       in any of its spellings, followed by one sign and its count, which
-       ends cleanly (`_ends_cleanly`): `462` is never «46, 2», `M 3` is
-       never «M, 3», and «M-3+2», «M-3 + 2», «M-3,5», «M-3/2», «M-3х2»,
-       «M-3X2», «M-3✕2», «M-3 – 2», «M-3＋2» or «M-3½» never «M, 3»;
+       the «м» of the Ukrainian «м'ята» is no M, while «M-3'L» writes an L,
+       and so does U+02BC in place of the «'»), in any of its spellings,
+       followed by one sign and its count, which ends cleanly
+       (`_ends_cleanly`): `462` is never «46, 2», `M 3` is never «M, 3», and
+       «M-3+2», «M-3 + 2», «M-3,5», «M-3/2», «M-3х2», «M-3X2», «M-3✕2»,
+       «M-3 – 2», «M-3＋2», «M-3½», «46-2;48-1», or «M-3x2» with the Greek
+       chi for the «x», never «M, 3»;
     3. no two of those places overlap;
     4. the totals agree: the file's `count`, if any, and Birka's own count
        with its unit, if any, which is then the only one and sure;

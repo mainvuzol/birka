@@ -952,7 +952,13 @@ person; the same day the owner answered the design's questions.
   signs of another width or kind, a dash with no-break spaces about it, and
   a character that prints nothing between them no longer hide a sum
   («M-3＋2», «M-3∗2», «M-3 – 2», «M-3，5», «M-3x2» with a zero-width space;
-  «M-3 @1850» goes to a note too); each size stands in the text once, in
+  «M-3 @1850», «M-3 #1850», «M-3 №1850» and any other sign before a
+  numeral go to a note too, and so do «46-2;48-1», «M-3;2» and «M-3)2»,
+  read strictly on purpose though they may be a list: «46-2; 48-1» with
+  its space keeps the tap); after the fourth round, a letter that looks
+  like `x` (the Greek `χ`, the Cyrillic `ҳ` `ӽ` `ӿ`, either case, or `x`
+  with a mark) and a combining mark on the count or after it no longer
+  hide a product either («M-3Χ2», «M-3ҳ2»); each size stands in the text once, in
   any of its spellings («M-3 М» with a Cyrillic М writes M twice); and the text holds no other size, whether the parser
   reads it or it is a letter size the parser does not know («Лоран S-1 M-2
   XXXL», «M-3 XXS», «M-3 ХL»), no other size with a count, and no number,
@@ -988,7 +994,20 @@ person; the same day the owner answered the design's questions.
     «ї» after it: «Лоран м'ята M-3» and «м’ятний» keep their tap, while
     «M-3'L», «L'S» and «XL’XXL» each write a size and go to a note (fourth
     round; the third round joined any two words at an apostrophe and hid
-    those sizes).
+    those sizes). A modifier letter that writes an apostrophe or another
+    sign (U+02B9 to U+02C1, U+02C6 to U+02D1, U+02EC, U+02EE; `ʼ`, U+02BC,
+    among them) is a sign, not a letter, though Unicode counts it one, so
+    «M-3ʼL», «LʼS», «XLʼXXL», «LʼL» and «СʼЛ» write sizes and go to a note
+    too, while «Лоран мʼята M-3» keeps its tap (after the fourth round;
+    before it, those were one word each and hid the sizes).
+  - **Left as they are after the fourth round** (2026-10-09, the review
+    rounds stopped there): an apostrophe-like letter outside that range
+    (U+0374 among them, though it equals U+02B9) still joins a size to the
+    word before it; an «x» look-alike outside x, х, χ, ҳ, ӽ and ӿ before a
+    numeral still reads as a letter, so «M-3» beside the price may keep its
+    tap; and a spacing or enclosing mark (Mc, Me) right after a count is not
+    pinned by a test. A parser that writes what the notebook shows does not
+    produce these; the person still taps, seeing the line and its photo.
 - **The limit, and a warehouse larger than it.** A list takes at most 5 000
   answers and 5 000 lines, and a warehouse takes one list, once. The owner
   kept 5 000 on 2026-10-08: the shops first count their largest warehouse
