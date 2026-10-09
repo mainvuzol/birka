@@ -1,10 +1,10 @@
 # What to build next
 
 Work the owner asked for, or that waits on the owner, and is not built yet.
-None of it blocks the release ([release checklist](release-checklist.md)),
-unless the shops' count of their largest warehouse comes out above 5 000:
-then raising the opening list's limit (below) comes before going live
-(owner, 2026-10-08).
+None of it blocks the release ([release checklist](release-checklist.md)).
+The shops' largest warehouse comes to at most 5 000 (owner, 2026-10-09), so
+raising the opening list's limit (below) waits for a warehouse that turns
+out larger.
 Before anything here is built, the owner answers the open questions under it.
 Nothing is invented in the meantime.
 
@@ -23,7 +23,9 @@ on 2026-10-08, and a warehouse takes one list, once (ADR-0014 §10). The
 owner kept that limit the same day: the shops first count the notebooks of
 their largest warehouse roughly (pages × lines per page), and if it comes
 out above 5 000, the limit is raised by a separate change to the ledger
-before going live. **Waiting on the shops' count.** The change: the
+before going live. **The count came to at most 5 000** (owner, 2026-10-09),
+so this waits for a warehouse whose list turns out larger: the validator's
+exact lines, or a list refused as full (`LIST_FULL`). The change: the
 approval and its read of the reservations, which fails above about 6 500
 answers, batched in `inventory` under their own review, and the approval
 measured again. Nothing is built for it.

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
+import { NoCustomerData } from "@/shared/NoCustomerData";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
@@ -15,8 +16,14 @@ import {
 } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { submitCreditCommand, useCreditCommand } from "./commands";
-import { statusLabels } from "./types";
-import type { Credit, CreditEntry, CustomerPage, StoreDebts } from "./types";
+import { erasedCustomer, statusLabels } from "./types";
+import type {
+  Credit,
+  CreditEntry,
+  CustomerPage,
+  Erasure,
+  StoreDebts,
+} from "./types";
 
 const pageSize = 20;
 // As the server: another store's customers are found by two letters at least.
@@ -40,6 +47,12 @@ const minSearch = 2;
  * Each payment is paid one way, given by the button that takes it: the
  * till's «Готівка», «Картка» and «Переказ» (owner decision, 2026-10-04;
  * ADR-0012 §B12, G23).
+ *
+ * A closed debt's customer is erased a year after it was paid or returned,
+ * three after it was written off, or at once by the owner when the customer
+ * asks: the network's owner in every store, a store's owner in that store.
+ * The debt then reads «Покупця стерто», with every sum (owner decisions,
+ * 2026-10-09; ADR-0015).
  */
 export function Credits({
   store,
@@ -48,6 +61,7 @@ export function Credits({
   blocked,
   readOnly = false,
   networkOwner = false,
+  mayErase = false,
 }: {
   store: Store;
   token: string;
@@ -57,6 +71,11 @@ export function Credits({
   readOnly?: boolean;
   /** The owner of the network, who writes off a debt of a store that does not trade. */
   networkOwner?: boolean;
+  /**
+   * The network's owner, who erases a closed debt's customer who asks in
+   * every store; a store's owner does it in that store alone.
+   */
+  mayErase?: boolean;
 }): JSX.Element {
   const cache = useQueryClient();
   const [query, setQuery] = useState("");
@@ -106,6 +125,7 @@ export function Credits({
         blocked={blocked}
         readOnly={readOnly}
         networkOwner={networkOwner}
+        mayErase={mayErase}
         credit={selected}
         changed={(credit) => {
           setSelected(credit);
@@ -221,9 +241,14 @@ export function Credits({
       ) : (
         <>
           {customers.data.items.map((customer) => (
-            <article className="order-card" key={customer.phone_digits}>
-              <strong>{customer.customer_name}</strong>
-              <span>{customer.customer_phone}</span>
+            <article
+              className="order-card"
+              key={customer.phone_digits ?? customer.credits[0]?.id}
+            >
+              <strong>{customer.customer_name ?? erasedCustomer}</strong>
+              {customer.customer_phone && (
+                <span>{customer.customer_phone}</span>
+              )}
               <p>
                 {customer.open_debts > 0 ? (
                   <>
@@ -235,7 +260,9 @@ export function Credits({
                   <span className="badge">Нічого не винні</span>
                 )}
               </p>
-              <ul aria-label={`Борги: ${customer.customer_name}`}>
+              <ul
+                aria-label={`Борги: ${customer.customer_name ?? erasedCustomer}`}
+              >
                 {customer.credits.map((credit) => (
                   <li key={credit.id}>
                     <p>
@@ -260,8 +287,9 @@ export function Credits({
                         setSelected(credit);
                       }}
                     >
-                      Відкрити борг {customer.customer_name} від{" "}
-                      {when(credit.opened_at)}
+                      {customer.customer_name
+                        ? `Відкрити борг ${customer.customer_name} від ${when(credit.opened_at)}`
+                        : `Відкрити борг (покупця стерто) від ${when(credit.opened_at)}`}
                     </button>
                   </li>
                 ))}
@@ -283,6 +311,25 @@ export function Credits({
       )}
     </section>
   );
+}
+
+function day(iso: string): string {
+  return new Date(iso).toLocaleDateString("uk-UA");
+}
+
+/**
+ * What the owner's erasure did: how many closed debts lost the customer, and
+ * how many open ones keep them. Those are erased by their own term once
+ * closed, or by the owner again (owner decision, 2026-10-09; ADR-0015 §5).
+ */
+function erasedText(result: Erasure): string {
+  const open =
+    result.still_open > 0
+      ? ` Відкритих боргів цього покупця: ${String(result.still_open)}. З них дані не стирають; коли їх закриють, стерти можна так само.`
+      : "";
+  return result.erased > 0
+    ? `Дані покупця стерто із закритих боргів${result.network ? "" : " цього магазину"}: ${String(result.erased)}.${open}`
+    : `Дані покупця вже стерто.${open}`;
 }
 
 function when(iso: string): string {
@@ -328,6 +375,7 @@ function Debt({
   blocked,
   readOnly,
   networkOwner,
+  mayErase,
   credit,
   changed,
   back,
@@ -338,6 +386,7 @@ function Debt({
   blocked: boolean;
   readOnly: boolean;
   networkOwner: boolean;
+  mayErase: boolean;
   credit: Credit;
   changed: (credit: Credit) => void;
   back: () => void;
@@ -349,6 +398,9 @@ function Debt({
   const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [erasing, setErasing] = useState<"ask" | "sending" | null>(null);
+  const cache = useQueryClient();
+  const hint = useId();
   // Another store's debt, paid here because that one does not trade.
   const elsewhere = credit.store_id !== store.id;
   // The owner writes off; for a store that does not trade, the network's.
@@ -358,6 +410,12 @@ function Debt({
       : networkOwner;
   const owed = kopecks(credit.owed) ?? 0n;
   const working = busy || pending !== null;
+  // A store's owner erases in their store, while it trades (owner,
+  // 2026-10-09); the network's owner anywhere.
+  const erasesHere =
+    !readOnly &&
+    !elsewhere &&
+    store.permissions.includes("credit:erase_customer");
 
   async function send(
     body:
@@ -419,6 +477,34 @@ function Debt({
     }
   }
 
+  /**
+   * The owner erases this customer at their request: from every closed debt
+   * of the network under their phone. Not a money command, and the same
+   * whenever repeated, so it is sent directly rather than through the
+   * journal (owner decision, 2026-10-09; ADR-0015).
+   */
+  async function erase(): Promise<void> {
+    setProblem(null);
+    setDone(null);
+    setErasing("sending");
+    try {
+      // A body makes it a POST; the command takes nothing in it.
+      const result = await api<Erasure>(
+        `/credits/${credit.id}/erase-customer`,
+        token,
+        {},
+      );
+      setDone(erasedText(result));
+      changed(result.credit);
+      // The customer is erased in every store of the network.
+      void cache.invalidateQueries({ queryKey: ["credits"] });
+    } catch (error) {
+      setProblem(refusalText(error));
+    } finally {
+      setErasing(null);
+    }
+  }
+
   function pay(way: TillMethod): void {
     const cents = kopecks(amount);
     if (cents === null || cents <= 0n) {
@@ -443,16 +529,29 @@ function Debt({
     <section>
       <div className="toolbar">
         <h2>Борг</h2>
-        <button className="quiet" disabled={working} onClick={back}>
+        <button
+          className="quiet"
+          disabled={working || erasing === "sending"}
+          onClick={back}
+        >
           До списку боргів
         </button>
       </div>
-      <h3>{credit.customer_name}</h3>
-      <p>
-        <a href={`tel:${credit.customer_phone.replace(/[^\d+]/g, "")}`}>
-          {credit.customer_phone}
-        </a>
-      </p>
+      <h3>{credit.customer_name ?? erasedCustomer}</h3>
+      {credit.customer_phone ? (
+        <p>
+          <a href={`tel:${credit.customer_phone.replace(/[^\d+]/g, "")}`}>
+            {credit.customer_phone}
+          </a>
+        </p>
+      ) : (
+        credit.customer_erased_at && (
+          <p className="hint">
+            Ім’я й телефон стерто {day(credit.customer_erased_at)}. Суми
+            лишаються.
+          </p>
+        )
+      )}
       <p className="hint">
         {credit.goods.join(", ")} · продано {when(credit.opened_at)}
       </p>
@@ -546,10 +645,12 @@ function Debt({
                 <textarea
                   value={reason}
                   maxLength={1000}
+                  aria-describedby={hint}
                   onChange={(event) => {
                     setReason(event.target.value);
                   }}
                 />
+                <NoCustomerData id={hint} />
               </label>
               <div className="actions">
                 <button
@@ -587,6 +688,53 @@ function Debt({
           )}
         </fieldset>
       )}
+      {(mayErase || erasesHere) &&
+        credit.status !== "OPEN" &&
+        credit.customer_erased_at === null && (
+          <fieldset disabled={working || erasing === "sending"}>
+            <legend>Дані покупця</legend>
+            {erasing ? (
+              <div className="notice">
+                <p>
+                  Ім’я й телефон покупця зникнуть з усіх закритих боргів{" "}
+                  {mayErase ? "мережі" : "цього магазину"} з цим телефоном. Суми
+                  лишаються. Скасувати це не можна.
+                </p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void erase();
+                    }}
+                  >
+                    Так, стерти дані покупця
+                  </button>
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      setErasing(null);
+                    }}
+                  >
+                    Скасувати
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setDone(null);
+                  setProblem(null);
+                  setErasing("ask");
+                }}
+              >
+                Стерти дані покупця
+              </button>
+            )}
+          </fieldset>
+        )}
       <h3>Історія</h3>
       <ul aria-label="Історія боргу">
         {credit.entries.map((entry, index) => (
@@ -595,6 +743,9 @@ function Debt({
             {entryWay(entry)} · {entry.by}
             {entry.taken_at && ` · прийняв магазин «${entry.taken_at}»`}
             {entry.note && ` · ${entry.note}`}
+            {entry.kind === "WRITE_OFF" &&
+              entry.note === null &&
+              " · причину стерто разом з даними покупця"}
           </li>
         ))}
       </ul>
@@ -662,6 +813,8 @@ export function refusalText(error: unknown, way?: TillMethod | null): string {
         return "Магазин, де продали, знову працює — внесок приймає він. Передайте папір менеджеру.";
       case "SEARCH_REQUIRED":
         return "Знайдіть покупця за ім’ям або телефоном — щонайменше дві літери чи цифри.";
+      case "STILL_OWED":
+        return "Борг ще не закрито: дані покупця з нього не стирають. Коли його закриють, стерти можна так само.";
     }
   }
   return errorText(error);

@@ -315,6 +315,9 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   await unit.getByRole("button", { name: "Так, брак підтверджений" }).click();
   await unit.getByRole("button", { name: "Повернути постачальнику" }).click();
   await expect(
+    unit.getByLabel("Примітка для постачальника (необов’язково)"),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
+  await expect(
     unit.getByRole("button", { name: "Так, повернути постачальнику" }),
   ).toBeDisabled();
   await addSupplier(page, supplier);

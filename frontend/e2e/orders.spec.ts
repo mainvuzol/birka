@@ -173,6 +173,9 @@ test("return requires physical confirmation", async ({ page }) => {
     exact: true,
   });
   await expect(confirm).toBeDisabled();
+  await expect(
+    page.getByLabel("Причина повернення"),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
   await page
     .getByLabel("Причина повернення")
     .fill("Клієнт не забрав, товар повернувся");

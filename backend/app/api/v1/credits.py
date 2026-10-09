@@ -11,6 +11,12 @@ that trades finds its debts by a search (`elsewhere=true`) and takes their
 payments (`store_id`); the debt stays the selling store's, and the network's
 owner may still write it off (owner decisions, 2026-10-01).
 
+A closed debt's customer is erased a year after it was paid or returned,
+three after it was written off, or at once by the owner when the customer
+asks (`POST /credits/{id}/erase-customer`): the network's owner in the whole
+network, a store's owner in that store. The debt then reads with no name and
+no phone, and every sum stays (owner decisions, 2026-10-09; ADR-0015).
+
 Payments and write-offs are named by a client `command_id`, as a sale is:
 the same command is answered with what it did, however late it is retried.
 
@@ -37,7 +43,7 @@ from app.api.v1.sales import TillMethodValue, method_of
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
 from app.modules.cash.current import CurrentMethod, entry_methods, refund_methods
-from app.modules.credit import service
+from app.modules.credit import erasure, service
 from app.modules.credit.models import CreditStatus, EntryKind
 from app.modules.tenancy.models import StoreState
 
@@ -67,8 +73,10 @@ class CreditResponse(BaseModel):
     # The store that sold, and whether it trades.
     store_name: str
     store_state: StoreState
-    customer_name: str
-    customer_phone: str
+    # None once the customer is erased, from `customer_erased_at` on.
+    customer_name: str | None
+    customer_phone: str | None
+    customer_erased_at: datetime | None
     # What was agreed: the sale's total.
     amount: Decimal
     currency_code: str
@@ -92,12 +100,13 @@ class CreditPage(BaseModel):
 
 
 class CustomerResponse(BaseModel):
-    """One customer's debts in the store: one phone, one customer."""
+    """One customer's debts in the store: one phone, one customer. A debt
+    whose customer is erased stands alone, with no phone and no name."""
 
-    phone_digits: str
+    phone_digits: str | None
     # As the newest of these debts wrote them.
-    customer_name: str
-    customer_phone: str
+    customer_name: str | None
+    customer_phone: str | None
     owed: Decimal
     open_debts: int
     credits: list[CreditResponse]
@@ -106,6 +115,18 @@ class CustomerResponse(BaseModel):
 class CustomerPage(BaseModel):
     items: list[CustomerResponse]
     has_more: bool
+
+
+class ErasureResponse(BaseModel):
+    """What the owner's erasure did."""
+
+    # Closed debts whose customer was erased now.
+    erased: int
+    # The customer's open debts within the same reach, which keep them.
+    still_open: int
+    # The whole network (the network's owner), or the debt's store alone.
+    network: bool
+    credit: CreditResponse
 
 
 class StoreDebtsResponse(BaseModel):
@@ -172,6 +193,7 @@ def _response(view: service.CreditView, ways: dict[uuid.UUID, CurrentMethod]) ->
         store_state=view.store_state,
         customer_name=view.customer_name,
         customer_phone=view.customer_phone,
+        customer_erased_at=view.customer_erased_at,
         amount=view.amount,
         currency_code=view.currency_code,
         status=view.status,
@@ -328,6 +350,26 @@ async def write_off(
         correlation_id=get_correlation_id(),
     )
     body = (await _responses(session, [view]))[0]
+    await session.commit()
+    return body
+
+
+@router.post("/{credit_id}/erase-customer", response_model=ErasureResponse)
+async def erase_customer(
+    credit_id: uuid.UUID, scope: ScopeDep, session: SessionDep
+) -> ErasureResponse:
+    """The owner erases a closed debt's customer at their request, from every
+    closed debt under the same phone: the network's owner in the whole
+    network, a store's owner in the debt's store (owner decisions,
+    2026-10-09). An open debt is refused. Asked again, nothing more is
+    erased."""
+    done = await erasure.erase_customer(session, scope=scope, credit_id=credit_id)
+    body = ErasureResponse(
+        erased=done.erased,
+        still_open=done.still_open,
+        network=done.network,
+        credit=(await _responses(session, [done.credit]))[0],
+    )
     await session.commit()
     return body
 

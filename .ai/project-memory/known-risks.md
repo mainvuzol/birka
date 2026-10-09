@@ -335,7 +335,8 @@ See the [credit report](customer-credit-report.md).
   in the store sees them, as the owner chose, and so do the backups. They are
   kept out of the audit log, the logs and the receipt. Since 2026-10-03 that
   holds for a debt search's query string, a refused row's values and Sentry
-  too (`test_log_privacy.py`, `test_sentry_privacy.py`).
+  too (`test_log_privacy.py`, `test_sentry_privacy.py`). Since 2026-10-09
+  they are erased in time; see "Customers' data", below.
 
 ## Returns at another store — 2026-10-01
 
@@ -1012,7 +1013,9 @@ person; the same day the owner answered the design's questions.
   answers and 5 000 lines, and a warehouse takes one list, once. The owner
   kept 5 000 on 2026-10-08: the shops first count their largest warehouse
   roughly (pages × lines per page), and above 5 000 the limit is raised by
-  a separate change to the ledger before going live. The count is rough,
+  a separate change to the ledger before going live. The count came to
+  at most 5 000 (owner, 2026-10-09), so nothing is raised before going live.
+  The count is rough,
   and a notebook line may name several sizes, each its own answer, so a
   warehouse counted just under 5 000 may still not fit, unless the count
   counts each size of such a line. Raising the limit needs the ledger changed first:
@@ -1112,3 +1115,55 @@ person; the same day the owner answered the design's questions.
   a 502, which the phone would read as an outage. Until that job has run, in
   CI or on the local runner, the Caddyfile's limit against a real file part
   is not verified.
+
+## Customers' data — 2026-10-09
+
+See the [report](customer-data-retention-report.md) and
+[ADR-0015](../decisions/ADR-0015-customer-data-retention.md).
+
+- **An erased name lives on in older backups for up to 3 months,** on the
+  server and on the owner's computer, which now deletes its nights older
+  than that (`infra/pull-backups.sh`), keeping the newest night that can be
+  restored however old. A copy the owner moved elsewhere by hand is not
+  deleted. The collector deletes only when it runs: a machine that stopped
+  collecting keeps what it had. A copy damaged here fails every run until
+  its night's files are deleted by hand (backup runbook); old nights still
+  go meanwhile.
+- **A restore brings back the names erased after its night.** The term's
+  erasure runs again within the hour of the watcher starting. **An erasure
+  on request does not:** the owner repeats it (backup runbook, "restoring
+  for real"), from the old database's audit log while it can be read, from
+  memory otherwise. Nothing else records who asked.
+- **A command's fingerprint is a hash of the whole command, the customer's
+  name and phone among them**: `sale.command_fingerprint`, the first
+  payment's, and `order_command.fingerprint`; a write-off's fingerprint
+  hashes its reason the same way. It is kept so a late retry is answered
+  with what was done (ADR-0003), and cannot be read back into a name or a
+  reason. Someone holding the database who guesses the exact name, the
+  phone or the reason, and the rest of the command, could confirm the
+  guess. `idempotency_record` holds the same kind of hash for 7 days.
+- **Free text is not erased,** except a write-off's reason. A name typed in a
+  return's reason, a drawer's difference, a cash note or «Брак»'s notes
+  stays; the hint under each asks people not to. Supplier, invoice,
+  catalogue, store and stock notes have no hint. A drawer difference's
+  reason also reaches the owner's Telegram chat, beyond any erasure.
+- **The seller's phone keeps a command whose answer never came** — a credit
+  sale, an order collected in parts, a write-off — with its name, phone or
+  reason, until it is resent or resolved, as before.
+- **A failing erasure is logged and sent to Sentry** when it is on, as the
+  idempotency purge is; it does not reach the owner's trouble messages.
+- **Three years is the owner's estimate** of how long an unpaid debt can
+  still be claimed, to be checked with a lawyer by the owner.
+- **One phone is one customer in the owner's erasure too.** A couple sharing
+  a phone are erased together; a customer who changed number is erased only
+  under the number the debt was opened with, and the owner asks again with
+  the other.
+- **The terms run from the debt's closing,** in UTC, to the second; a debt
+  closed by a return made after it was paid off keeps its first closing.
+- **The terms are constants** (`credit/erasure.py`). Changing one is the
+  owner's decision and a code change; debts erased under a shorter term
+  cannot come back.
+- **The hourly erasure skips a debt that a return is being taken on,** and
+  erases it an hour later. A watcher that is down erases nothing until it
+  is back; its check-ins with the outside service stop then, and that
+  service tells the owner (ADR-0011).

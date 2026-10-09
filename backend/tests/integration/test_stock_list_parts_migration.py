@@ -3,7 +3,7 @@
 ADR-0014 §17. Every database here is created and dropped by the test;
 `BIRKA_TEST_DATABASE_URL` is only read for its connection details (see
 `test_stock_rekey_migration.py`, whose helpers this reuses). Lists are made
-through the API at the head revision and taken down to `0036`, where they
+through the API at `0037` and taken down to `0036`, where they
 are exactly what `0036` keeps: a list `0037` meets in a shop is one of those.
 A state no code could write is planted in SQL, with the triggers that would
 refuse it switched off for that one transaction.
@@ -55,7 +55,7 @@ async def scratch() -> AsyncIterator[str]:
 
 @asynccontextmanager
 async def world_in(database: str) -> AsyncIterator[World]:
-    """The world of `test_snapshot_import.py`, in this database, at head."""
+    """The world of `test_snapshot_import.py`, in this database, at `0037`."""
     engine: AsyncEngine = await _engine(database)
     maker = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -159,7 +159,7 @@ PARTS_BY_LIST = (
 
 async def test_the_migration_gives_every_list_its_first_part(scratch):
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", PARTS, database=scratch)
     async with world_in(scratch) as w:
         lists = await lists_in_every_state(w)
         async with w.client() as client:
@@ -177,7 +177,7 @@ async def test_the_migration_gives_every_list_its_first_part(scratch):
         before_lists = await rows_of(scratch, LISTS)
         before_rows = await rows_of(scratch, ROWS)
         before_allocations = await rows_of(scratch, ALLOCATIONS)
-        await _run(config, "upgrade", "head", database=scratch)
+        await _run(config, "upgrade", PARTS, database=scratch)
 
         assert await version(scratch) == PARTS
         # The schema changed under the world's pooled connections.
@@ -272,7 +272,7 @@ async def test_the_migration_gives_every_list_its_first_part(scratch):
 
 async def test_the_migration_refuses_a_list_it_cannot_make_one_part(scratch):
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", PARTS, database=scratch)
     async with world_in(scratch) as w:
         async with w.client() as client:
             waiting = (await imported(client, w))["snapshot_id"]
@@ -281,7 +281,7 @@ async def test_the_migration_refuses_a_list_it_cannot_make_one_part(scratch):
 
     async def refused(message: str, culprit: uuid.UUID) -> None:
         with pytest.raises(DBAPIError, match=message) as raised:
-            await _run(config, "upgrade", "head", database=scratch)
+            await _run(config, "upgrade", PARTS, database=scratch)
         assert str(culprit) in str(raised.value)
         assert await version(scratch) == BEFORE
         assert await rows_of(scratch, "SELECT to_regclass('inventory_snapshot_part')") == [(None,)]
@@ -339,7 +339,7 @@ async def test_the_migration_refuses_a_list_it_cannot_make_one_part(scratch):
         id=listed,
     )
 
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", PARTS, database=scratch)
     assert await version(scratch) == PARTS
 
 
@@ -451,7 +451,7 @@ PLANTED: list[tuple[str, str, list[str], list[str]]] = [
 
 async def test_the_downgrade_refuses_what_0036_cannot_hold(scratch):
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", PARTS, database=scratch)
     async with world_in(scratch) as w:
         async with w.client() as client:
             view = await imported(client, w)
@@ -513,7 +513,7 @@ async def test_the_downgrade_refuses_what_0036_cannot_hold(scratch):
 
 async def test_a_list_of_one_pasted_part_goes_down_and_comes_back_the_same(scratch):
     config = _alembic(scratch)
-    await _run(config, "upgrade", "head", database=scratch)
+    await _run(config, "upgrade", PARTS, database=scratch)
     async with world_in(scratch) as w:
         lists = await lists_in_every_state(w)
         before = {
@@ -524,7 +524,7 @@ async def test_a_list_of_one_pasted_part_goes_down_and_comes_back_the_same(scrat
 
         await _run(config, "downgrade", BEFORE, database=scratch)
         assert await version(scratch) == BEFORE
-        await _run(config, "upgrade", "head", database=scratch)
+        await _run(config, "upgrade", PARTS, database=scratch)
         # The schema changed under the world's pooled connections.
         await w.engine.dispose()
 

@@ -25,6 +25,7 @@ from scripts.backup_watch import (
     KEEP_UNSENT,
     REFUSED_FOR,
     Watcher,
+    erase_customers,
     every,
     measure_disks,
     ping,
@@ -680,3 +681,30 @@ async def test_expired_idempotency_records_are_purged_and_counted():
     assert deleted == 1234
     assert seen == [DAY]
     assert session.committed
+
+
+async def test_customers_past_their_term_are_erased_and_counted():
+    seen: list[datetime] = []
+
+    class Session:
+        async def __aenter__(self) -> Session:
+            return self
+
+        async def __aexit__(self, *exc: object) -> bool:
+            return False
+
+    session = Session()
+
+    async def erase(given: Any, *, now: datetime) -> int:
+        assert given is session
+        seen.append(now)
+        return 3
+
+    with capture_logs() as logs:
+        erased = await erase_customers(lambda: session, DAY, erase)  # type: ignore[arg-type]
+
+    assert erased == 3
+    assert seen == [DAY]
+    assert [
+        entry["erased"] for entry in logs if entry["event"] == "backup_watch.customers_erased"
+    ] == [3]

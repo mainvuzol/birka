@@ -683,10 +683,10 @@ slow call proven with a browser clock only.
   yet.
 - **A file picked on a real phone in Telegram,** on an Android and an
   iPhone: release checklist row 26.
-- **The shops' count of their largest warehouse** (pages × lines per
-  page). Above 5 000, the limit is raised first, by a change to the ledger,
-  before going live (owner, 2026-10-08; [backlog](backlog.md)). The count
-  counts each size of a line that names several.
+- ~~**The shops' count of their largest warehouse**~~ (pages × lines per
+  page): **at most 5 000** (owner, 2026-10-09), so the limit is not raised
+  before going live. A warehouse whose files still come out larger waits
+  for the ledger change ([backlog](backlog.md)).
 - **The slow call on a real phone,** on a slow network. Three journeys
   prove it with a browser clock, and a fourth loses the server's answers
   on their way back.

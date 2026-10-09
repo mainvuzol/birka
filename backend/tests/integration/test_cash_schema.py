@@ -79,6 +79,9 @@ pytestmark = [pytest.mark.integration, requires_database()]
 PRINT = "0" * 64
 FIRST_DAY = date(2026, 10, 1)
 CASH_PERMISSIONS = ("cash:close", "cash:expense", "cash:take_out", "cash:correct")
+# Granted by a revision after 0035 to whoever holds `user:manage`, so not held
+# before it either.
+LATER_PERMISSIONS = ("credit:erase_customer",)
 
 
 @pytest.fixture
@@ -292,7 +295,7 @@ async def forget_the_ways(engine: AsyncEngine) -> None:
         for table, guard in (
             ("sale", "sale_money_guard"),
             ("refund", "refund_money_guard"),
-            ("credit_entry", "credit_entry_append_only"),
+            ("credit_entry", "credit_entry_guard"),
         ):
             await connection.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER {guard}"))
             await connection.execute(text(f"UPDATE {table} SET payment_method = NULL"))  # noqa: S608
@@ -1076,7 +1079,7 @@ async def test_the_upgrade_gives_an_existing_organization_the_drawer_as_a_new_on
             role.value: {
                 permission.value
                 for permission in DEFAULT_ROLE_PERMISSIONS[role]
-                if permission.value not in CASH_PERMISSIONS
+                if permission.value not in CASH_PERMISSIONS + LATER_PERMISSIONS
             }
             for role in RoleCode
         } | {

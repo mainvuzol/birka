@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Select, and_, case, func, or_, select
+from sqlalchemy import Select, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
@@ -105,8 +105,10 @@ class CreditView:
     # 2026-10-01).
     store_name: str
     store_state: StoreState
-    customer_name: str
-    customer_phone: str
+    # None once the customer is erased (ADR-0015).
+    customer_name: str | None
+    customer_phone: str | None
+    customer_erased_at: datetime | None
     amount: Decimal
     currency_code: str
     status: CreditStatus
@@ -125,12 +127,13 @@ class CreditView:
 @dataclass(frozen=True, slots=True)
 class CustomerView:
     """One customer's debts in a store: one phone, one customer (owner
-    decision, 2026-10-01), whatever name each sale was written under."""
+    decision, 2026-10-01), whatever name each sale was written under. A debt
+    whose customer is erased is a customer of its own, with no phone."""
 
-    phone_digits: str
-    # As the newest of these debts wrote them.
-    customer_name: str
-    customer_phone: str
+    phone_digits: str | None
+    # As the newest of these debts wrote them; None once erased.
+    customer_name: str | None
+    customer_phone: str | None
     owed: Decimal
     open_debts: int
     credits: list[CreditView]
@@ -160,7 +163,8 @@ def customer_key(phone_digits: str) -> str:
 
 
 # The same, in SQL, over what is stored: the stored digits stay as written.
-_CUSTOMER = case(
+# NULL for a debt whose customer is erased.
+CUSTOMER = case(
     (
         and_(
             func.length(CustomerCredit.phone_digits) == 12,
@@ -170,6 +174,16 @@ _CUSTOMER = case(
     ),
     else_=CustomerCredit.phone_digits,
 )
+# How the debts are grouped into customers: an erased customer's debt stands
+# alone.
+_GROUP = func.coalesce(CUSTOMER, "erased:" + cast(CustomerCredit.id, String))
+
+
+def group_of(credit: CustomerCredit) -> str:
+    """`_GROUP`, of a debt read."""
+    if credit.phone_digits is None:
+        return f"erased:{credit.id}"
+    return customer_key(credit.phone_digits)
 
 
 def terms(*, customer_name: str, customer_phone: str, paid_now: Decimal) -> CreditTerms:
@@ -528,7 +542,9 @@ async def write_off(
             entity_id=credit.id,
             before={"owed": str(owed)},
             after={"owed": "0.00"},
-            reason=why,
+            # Never the reason: people write the customer's name in it, and
+            # it is erased with them from the debt's ledger, which keeps it
+            # (ADR-0015). The audit log is append-only.
         )
         logger.info("credit.written_off", credit_id=str(credit.id))
         return await view(session, credit)
@@ -698,6 +714,7 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
         store_state=state,
         customer_name=credit.customer_name,
         customer_phone=credit.customer_phone,
+        customer_erased_at=credit.customer_erased_at,
         amount=credit.amount,
         currency_code=credit.currency_code,
         status=CreditStatus(credit.status),
@@ -841,7 +858,7 @@ def _found_by(wanted: str) -> Any:
     ]
     if _PHONE_LIKE.fullmatch(wanted) and digits(wanted):
         conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))
-        conditions.append(_CUSTOMER.contains(customer_key(digits(wanted)), autoescape=True))
+        conditions.append(CUSTOMER.contains(customer_key(digits(wanted)), autoescape=True))
     return or_(*conditions)
 
 
@@ -873,23 +890,20 @@ async def list_customers(
         raise ValidationFailedError(
             "Search for the customer by name or phone", reason="SEARCH_REQUIRED"
         )
-    customer = _CUSTOMER.label("customer")
+    customer = _GROUP.label("customer")
     latest = func.max(CustomerCredit.created_at).label("latest")
     grouped = _in_store(select(customer, latest), scope, store_id, status, elsewhere)
     if wanted:
         grouped = grouped.where(
-            _CUSTOMER.in_(
-                _in_store(select(_CUSTOMER), scope, store_id, status, elsewhere).where(
+            CUSTOMER.in_(
+                _in_store(select(CUSTOMER), scope, store_id, status, elsewhere).where(
                     _found_by(wanted)
                 )
             )
         )
     rows = (
         await session.execute(
-            grouped.group_by(_CUSTOMER)
-            .order_by(latest.desc(), _CUSTOMER)
-            .limit(limit + 1)
-            .offset(offset)
+            grouped.group_by(_GROUP).order_by(latest.desc(), _GROUP).limit(limit + 1).offset(offset)
         )
     ).all()
     phones: list[str] = [row.customer for row in rows[:limit]]
@@ -897,14 +911,16 @@ async def list_customers(
     for credit in (
         await session.scalars(
             _in_store(select(CustomerCredit), scope, store_id, status, elsewhere)
-            .where(_CUSTOMER.in_(phones))
+            .where(_GROUP.in_(phones))
             .order_by(CustomerCredit.created_at.desc(), CustomerCredit.id)
         )
     ).all():
-        debts[customer_key(credit.phone_digits)].append(await view(session, credit))
+        debts[group_of(credit)].append(await view(session, credit))
+    # A customer whose every debt here was erased between the two reads has
+    # none left under their phone: they are left out of this page.
     customers = [
         CustomerView(
-            phone_digits=phone,
+            phone_digits=None if phone.startswith("erased:") else phone,
             customer_name=debts[phone][0].customer_name,
             customer_phone=debts[phone][0].customer_phone,
             owed=money(sum((debt.owed for debt in debts[phone]), ZERO)),
@@ -912,6 +928,7 @@ async def list_customers(
             credits=debts[phone],
         )
         for phone in phones
+        if debts[phone]
     ]
     return customers, len(rows) > limit
 
@@ -933,7 +950,7 @@ async def store_debts(
             _in_store(
                 select(
                     func.coalesce(func.sum(func.greatest(CustomerCredit.amount - lowered, 0)), 0),
-                    func.count(func.distinct(_CUSTOMER)),
+                    func.count(func.distinct(CUSTOMER)),
                     func.count(CustomerCredit.id),
                 ),
                 scope,
@@ -946,6 +963,7 @@ async def store_debts(
 
 
 __all__ = [
+    "CUSTOMER",
     "CreditTerms",
     "CreditView",
     "CustomerView",
@@ -956,6 +974,7 @@ __all__ = [
     "credited_sales",
     "customer_key",
     "fingerprint_of",
+    "group_of",
     "list_credits",
     "list_customers",
     "money_back",

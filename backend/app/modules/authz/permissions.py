@@ -70,6 +70,10 @@ class Permission(StrEnum):
     SALE_CREDIT = "sale:credit"
     # Writing off what a customer will not pay, with a reason. The owner's.
     CREDIT_WRITE_OFF = "credit:write_off"
+    # Erase a closed debt's customer at their request (owner decisions,
+    # 2026-10-09; ADR-0015): network-wide in the whole network, in one
+    # store in that store.
+    CREDIT_ERASE_CUSTOMER = "credit:erase_customer"
 
     # Returning goods to a supplier, cancelling such a return, and keeping
     # the network's list of suppliers (owner decision, 2026-10-01): whoever
@@ -180,6 +184,8 @@ _OWNER: frozenset[Permission] = _MANAGER | frozenset(
         Permission.BACKUP_VIEW,
         # Owner decision, 2026-10-01: the owner writes off a debt, with a reason.
         Permission.CREDIT_WRITE_OFF,
+        # Owner decision, 2026-10-09: the owner erases a customer who asks.
+        Permission.CREDIT_ERASE_CUSTOMER,
         # Owner decision, 2026-10-01: the owner blocks and archives a store.
         Permission.STORE_MANAGE,
         # Owner decision, 2026-10-01: the owner writes off what a supplier

@@ -265,13 +265,15 @@ there, line by line. Lines typed or pasted in the app remain, and may join
 the same list: a page the parser could not read is typed by hand (owner,
 2026-10-08). Nothing in a file becomes stock on its own word.
 
-**First, the largest warehouse is counted** (owner, 2026-10-08). Before
-anything is photographed for a list, the shops count the notebooks of their
-largest warehouse roughly: pages × lines per page. If it comes out above
-5 000, stop: the limit is raised first, by a separate change to the ledger
-(the approval and its reading of the reservations), before going live. A
-warehouse is not taken in parts across several lists: it takes one list,
-once. See "how large a list may be", below.
+**First, the largest warehouse is counted** (owner, 2026-10-08). The shops
+counted the notebooks of their largest warehouse roughly, pages × lines per
+page, and it comes to at most 5 000 (owner, 2026-10-09). If a warehouse's
+files still come out above 5 000 (the validator gives the exact lines
+before the first is uploaded), stop: the limit is raised first, by a
+separate change to the ledger (the approval and its reading of the
+reservations), before that warehouse goes live. A warehouse is not taken in
+parts across several lists: it takes one list, once. See "how large a list
+may be", below.
 
 For each warehouse, in this order:
 
@@ -373,10 +375,10 @@ The list shows how much of both is used.
 
 **A warehouse larger than that cannot be taken in one list yet,** and a
 warehouse takes only one: never in parts across lists. The shops' rough
-count comes first (above); the validator then gives each file's exact lines
-before the first is uploaded. Above 5 000, the limit is raised first, by a
-separate change to the ledger under its own review, measured again, before
-going live (owner, 2026-10-08). Above about 6 500 answers the ledger's own
+count came to at most 5 000 (above); the validator then gives each file's
+exact lines before the first is uploaded. Above 5 000, the limit is raised
+first, by a separate change to the ledger under its own review, measured
+again, before going live (owner, 2026-10-08). Above about 6 500 answers the ledger's own
 read of the reservations fails, whatever limit the code sets.
 
 **The shared warehouse's list belongs to both stores** (owner, 2026-10-08).

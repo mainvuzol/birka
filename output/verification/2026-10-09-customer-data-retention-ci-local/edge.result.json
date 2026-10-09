@@ -1,0 +1,94 @@
+{
+  "job": "edge",
+  "name": "edge (Caddy, the published bundle, headers and limits)",
+  "result": "passed",
+  "counts": "8/8 steps passed",
+  "reasons": [],
+  "commit": "51af2a9",
+  "tree": "clean",
+  "runner_sha256": "f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2",
+  "started": "2026-10-09T18:28:35+03:00",
+  "finished": "2026-10-09T18:29:01+03:00",
+  "duration": "0m25s",
+  "brief": "run_edge.py's way: project birka-edge-check, Caddy on :58080; images never pulled, builds from the local cache only (pinned bases, dead proxy); stack removed after",
+  "images": [
+    "postgres:17-alpine @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled",
+    "caddy:2-alpine @ sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028 (CADDY_VERSION=v2.11.6), local image store, never pulled",
+    "python:3.12.14-slim @ sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, build base pinned to the local build cache",
+    "node:24-alpine @ sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1, build base pinned to the local build cache",
+    "alpine:3.22 @ sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8, build base pinned to the local build cache",
+    "birka-edge-check-api @ sha256:af656d8414d78c1f4b3aa818ab84a889c2adbad7343714c025a334c59267244a, built here from the cache",
+    "birka-edge-check-web @ sha256:df2d17a4dcb49373a2fa2b62b33c1bff9357e244c568d0313ce3bc073703f1b7, built here from the cache"
+  ],
+  "deviations": [
+    "As edge/run_edge.py runs it: the isolated compose project birka-edge-check (CI: the file's own `birka`), Caddy published on 58080/58443 instead of 80/443 (edge/override.yml), every http://localhost in the steps becomes http://localhost:58080; BIRKA_DOMAIN stays http://localhost; BIRKA_BACKUP_DIR is edge/backups. The port check reads the config merged with the runner's two files, which touch only caddy's ports and the builds.",
+    "Images: a third compose file (work/edge/edge-offline.yml) sets `pull_policy: never` on every service with an image (postgres:17-alpine, caddy:2-alpine come from the local image store, never pulled; CI pulls them fresh), pins every build's base image to the digest in the local build cache and passes a dead HTTP(S) proxy as build args, so a step that would download fails; `docker run --pull never`.",
+    "BIRKA_RELEASE is the full HEAD commit, as github.sha is in CI.",
+    "Afterwards the stack is removed (`docker compose --profile ops down -v --remove-orphans`, project birka-edge-check only); its images are kept."
+  ],
+  "gaps": [],
+  "coverage": null,
+  "steps": [
+    {
+      "name": "actions/checkout@v4",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Caddy accepts the Caddyfile, as a server with a real domain reads it",
+      "status": "ok",
+      "seconds": 0.3,
+      "code": 0
+    },
+    {
+      "name": "Only Caddy publishes a port",
+      "status": "ok",
+      "seconds": 0.1,
+      "code": 0
+    },
+    {
+      "name": "Build the images and start the stack",
+      "status": "ok",
+      "seconds": 14.1,
+      "code": 0
+    },
+    {
+      "name": "The API is ready behind the edge, healthy to Docker, and keeps its internals in",
+      "status": "ok",
+      "seconds": 4.9,
+      "code": 0
+    },
+    {
+      "name": "What the edge sends",
+      "status": "ok",
+      "seconds": 0.2,
+      "code": 0
+    },
+    {
+      "name": "Sign-ins are counted per real address, whatever a client claims",
+      "status": "ok",
+      "seconds": 0.3,
+      "code": 0
+    },
+    {
+      "name": "The edge's own log keeps no query string",
+      "status": "ok",
+      "seconds": 3.4,
+      "code": 0
+    },
+    {
+      "name": "A new bundle keeps the previous one's files and drops month-old ones",
+      "status": "ok",
+      "seconds": 0.5,
+      "code": 0
+    },
+    {
+      "name": "The stack, when something failed",
+      "status": "skipped (if: failure())",
+      "seconds": 0.0,
+      "code": null
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-09-customer-data-retention-ci-local/edge.txt"
+}
