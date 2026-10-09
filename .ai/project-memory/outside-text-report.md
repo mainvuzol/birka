@@ -1,7 +1,8 @@
 # Text from outside, shown as it is — 2026-10-10
 
 Baseline: `3061c05` (every container held, merged as PR #80).
-Status: TODO(final).
+Status: built and proven: the whole CI run locally passed, and the guard
+taken off twelve places, one at a time, failed the new journey each time.
 Branch: `feat/catalog-text-guard`. Decision: [ADR-0018](../decisions/ADR-0018-outside-text-shown-as-it-is.md);
 owner: business-rules.md, "text from outside, shown as it is" (2026-10-10).
 
@@ -81,7 +82,21 @@ of it guarded. The owner chose on 2026-10-10:
 
 ## Evidence
 
-TODO(final)
+- **The journey** ran alone and in the whole suite: 265 journeys passed,
+  against the real API and PostgreSQL.
+- **Mutation, at `880e83a`** ([result](../../output/verification/2026-10-10-outside-text/mutants.txt),
+  its driver beside it): twelve of twelve caught. A hidden character quoted
+  from a failure is written there as `\uXXXX`, so the file shows it rather
+  than obeys it.
+- **CI, run locally at `880e83a`** ([summary](../../output/verification/2026-10-10-outside-text-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 308 on PostgreSQL 17;
+  - restore drill: 7/7;
+  - e2e: 265 journeys;
+  - frontend: lint, types, `npm audit` and the build clean;
+  - edge: 9/9;
+  - hot path: worst p95 71.4 ms (catalogue read) and 94.3 ms
+    (`POST /sales`), within 300 and 500.
 
 ## Not covered here
 
