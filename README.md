@@ -91,7 +91,8 @@ backend/.venv/Scripts/python.exe -m pip install --no-deps -e ".[dev]"
 The first installs the versions CI tests and the server runs
 (`backend/requirements.lock`), each file checked against its hash; the
 second, the backend itself and nothing else. Without the lock pip takes
-whatever is newest.
+whatever is newest. On Windows the lock leaves `uvloop` out and takes
+`colorama`, as its two marked lines say.
 
 Set the environment (copy `infra/.env.example`), then apply migrations and start the API:
 

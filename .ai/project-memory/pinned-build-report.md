@@ -76,14 +76,46 @@ GitHub moves `ubuntu-latest` to Ubuntu 26.04 from 2026-10-19
   backup image holds pg_dump 17.11, `age` 1.2.1 and Python 3.12.14. The web
   image built with its downloads blocked: every layer came from the cache
   through the digest-pinned bases.
-- **A wrong hash is refused:** in the API image, `aiofiles` installed from
-  its lock line; with one hash changed pip refused it (“THESE PACKAGES DO NOT
-  MATCH THE HASHES”), and a line without a hash was refused in
-  `--require-hashes` mode.
-- **Mutation:** nineteen ways of loosening a pin, one at a time, each caught.
+- **Only a file the lock names is installed:** in the API image, one lock
+  line, `aiofiles`, four ways. As locked, the wheel was installed. With the
+  wheel's hash changed, pip never took the wheel: it installed the other
+  file the line names, the source archive. With both hashes changed it
+  refused (“THESE PACKAGES DO NOT MATCH THE HASHES”), and a line without a
+  hash was refused in `--require-hashes` mode.
+- **Mutation:** twenty-five ways of loosening a pin, one at a time, each
+  caught: nineteen first, six more after the review (below).
 - **The local CI runner** learnt the pinned bases: a Dockerfile's digest
   must be in the build cache, and `docker image inspect` is given the full
   `docker.io/library/…` name, the only form of `name:tag@digest` it accepts.
+
+## Review of the built change
+
+An independent review (2026-10-10) found nothing that breaks CI on
+`ubuntu-24.04`, the server's build, an update or going back. It checked the
+action commits against their releases, Python 3.12.14 and Node 24.21.0 on
+the runner, the five digests, hash mode with `--no-deps -e` and `pip check`,
+pip-audit on the hashed lock, and the runbooks for any image by tag. It
+found three things, fixed:
+- **The README's install broke on Windows.** The locks are Linux's, so
+  `uvloop`, which has no Windows build, came without a marker, and
+  `colorama` was missing. Keeping the old `-c` form was no way out: a lock
+  with hashes, given as constraints, turns hash mode on, and pip then
+  refuses the unhashed `-e .` (tried in the API image, offline). Now the
+  dev lock marks `uvloop` `sys_platform != "win32"` and holds `colorama`
+  for Windows, as uv's Windows resolution has it; a dry run for Windows
+  takes `colorama` and leaves `uvloop`, Linux and macOS the reverse, 71
+  packages each, hashes required. The runtime lock is unchanged.
+- **The test could pass with a pin loose:** a new service by tag, an image
+  by Docker Hub's full name, a job's container, a `.yaml` workflow, a
+  Docker action, or a Node release moved with its digest but not in CI.
+  It now reads compose's and CI's images whatever they are, every
+  Dockerfile base, every workflow file, and CI's Node against the release
+  the web image's Dockerfile names; six mutants for these, each caught.
+- **What CI still takes fresh was understated;** the list is now whole.
+
+And two small ones: the runbook resolved an action by its moving major tag
+(now by the exact release), and `.ai/project.md` named an install without
+the lock.
 
 ## Evidence
 
@@ -98,9 +130,11 @@ TODO(final)
   server through a change, not by itself.
 - **Going back** to an older commit needs Docker Hub to still serve its
   digests: it does for official images, without a promise.
-- **CI still takes two tools fresh:** `pip-audit` for its job, and the
-  `setuptools` that builds the backend's own package for `pip install -e`.
-  The server's image installs neither.
+- **CI still takes some things fresh,** none of which the server's image
+  holds: `pip-audit` and its dependencies, the `setuptools` that builds the
+  backend's own package for `pip install -e`, the backend job's PostgreSQL
+  17 client and `age` from apt, Playwright's Chromium and its system
+  packages, and the runner image's own Docker, Compose and Buildx.
 - **GitHub has not run this,** blocked by the billing hold: the pinned
   actions, `ubuntu-24.04` and the exact Python and Node are proven by the
   test and by GitHub's own lists, not by a run there.

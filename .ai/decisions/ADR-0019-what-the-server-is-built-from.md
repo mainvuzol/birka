@@ -50,13 +50,19 @@ always what CI ran:
    install, so it may not share the locked one's command.
 3. **CI is named too:** every action by a commit, its release in a comment
    beside it; every job on `ubuntu-24.04`; Python `3.12.14`, the image's,
-   and Node `24.21.0`, the one in the pinned `node:24-alpine`.
+   and Node `24.21.0`, the one in the pinned `node:24-alpine`, which the web
+   image's Dockerfile names beside its digest.
 4. **A pin moves only on purpose**, on a branch, with the whole CI run: the
    server runbook's "a pinned version, changed on purpose" says how and when.
 5. **A test holds all of it** (`tests/unit/test_pinned_inputs.py`, with
-   `test_dependency_lock.py`): no image by tag alone, one digest per tag, no
-   action by tag, a named Ubuntu, the images' Python and Node in CI, and a
-   hash for every pin, installed by hash.
+   `test_dependency_lock.py`): no image that compose or CI starts, and no
+   Dockerfile base, by tag alone; one digest per tag; no action by tag; a
+   named Ubuntu; the image's Python in CI, and the Node release the web
+   image's Dockerfile names; a hash for every pin, installed by hash.
+6. **The dev lock installs on a developer's Windows too:** its `uvloop`
+   line is marked `sys_platform != "win32"` (there is no Windows build) and
+   it holds `colorama` for Windows, with their hashes, as pyproject's own
+   markers say. Linux and macOS install the same set as the server's lock.
 
 ## Consequences
 
@@ -71,9 +77,12 @@ always what CI ran:
   build, the newest within PostgreSQL 17 and Debian 13: the PostgreSQL
   project's repository keeps only its newest release, so pinning it would
   stop the build at the next one.
-- CI still takes `pip-audit`, and the `setuptools` that builds the backend's
-  own package for `pip install -e`, fresh. The server's image installs
-  neither.
+- CI still takes some things fresh, none of which the server's image holds:
+  `pip-audit` and its dependencies, the `setuptools` that builds the
+  backend's own package for `pip install -e`, the backend job's PostgreSQL
+  17 client and `age` from apt, Playwright's Chromium and the system
+  packages it asks for, and the runner image's own Docker, Compose and
+  Buildx.
 - The npm packages were already pinned: `npm ci` installs
   `package-lock.json`'s versions, each checked against its `integrity` hash.
 

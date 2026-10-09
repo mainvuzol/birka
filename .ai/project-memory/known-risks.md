@@ -672,9 +672,12 @@ See the [report](public-hardening-report.md) and
     build than the pinned one;
   - going back to an older commit needs Docker Hub to still serve its
     digests, which it does for official images but does not promise;
-  - CI alone still takes two things fresh: `pip-audit` for its job, and
-    the `setuptools` that builds the backend's own package for `pip install
-    -e` (the server's image does not build it).
+  - CI alone still takes some things fresh, none of which the server's
+    image holds: `pip-audit` and its dependencies; the `setuptools` that
+    builds the backend's own package for `pip install -e`; the backend
+    job's PostgreSQL 17 client and `age` from apt; Playwright's Chromium and
+    the system packages it asks for; and the runner image's own Docker,
+    Compose and Buildx, which GitHub updates weekly.
 - **The certificate warning is stored as a backup alert** (kind `FAILED`,
   key `certificate:<date>`), so «Резервні копії» may show it as the last
   message sent. The bot says nothing when the certificate is renewed, and an

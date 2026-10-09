@@ -745,9 +745,10 @@ server:
   the table names, and let the whole CI run.
   `tests/unit/test_pinned_inputs.py` fails while two places differ;
 - a library: the header of `backend/requirements.lock`;
-- an action: `gh api repos/actions/checkout/git/ref/tags/v4` names its
-  commit (an annotated tag takes one more `gh api …/git/tags/<sha>`); keep
-  the release in the comment beside it;
+- an action: by its exact release, `gh api
+  repos/actions/checkout/git/ref/tags/v4.4.0` names the commit (an
+  annotated tag takes one more `gh api …/git/tags/<sha>`); the release goes
+  in the comment beside it. The moving `v4` names no release;
 - Ubuntu, Python or Node in CI: together with the images they stand for.
 
 **When:** after a security release of PostgreSQL, Caddy, Python, Node or
