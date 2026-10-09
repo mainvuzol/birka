@@ -1,9 +1,9 @@
 CI job `backend` — backend (lint, types, contracts, tests)
 Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
 
-commit:   880e83a (feat/catalog-text-guard) — clean
-runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2
-date:     2026-10-10 00:26:56 EEST → 00:41:44 (14m47s)
+commit:   98b6c6e (feat/catalog-text-guard) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 e9e486313ff047ab8868f3195ab4a7a97b8e2c7eb19b1f58ca420842bce370ea
+date:     2026-10-10 01:13:44 EEST → 01:28:30 (14m46s)
 machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.1 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v26.5.0, npm 11.17.0, /bin/bash 3.2.57(1)-release
 env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
@@ -39,7 +39,7 @@ GAPS (declared; nothing else may be missing):
 [runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55417->5432
 
 ===== actions/checkout@v4
-[runner] the working tree at 880e83a (clean), not a fresh checkout
+[runner] the working tree at 98b6c6e (clean), not a fresh checkout
 ===== replaced: ok: actions/checkout@v4 (0.0s)
 
 ===== actions/setup-python@v5
@@ -54,16 +54,16 @@ $ uv pip check --python /Users/nikitahlushak/.cache/birka-runtime/python/bin/pyt
 Using Python 3.12.14 environment at: /Users/nikitahlushak/.cache/birka-runtime/python
 Checked 74 packages in 6ms
 All installed packages are compatible
-===== replaced: ok: Install (0.4s)
+===== replaced: ok: Install (0.2s)
 
 ===== Lint
 All checks passed!
 335 files already formatted
-===== ok: Lint (0.1s)
+===== ok: Lint (0.2s)
 
 ===== Type check
 Success: no issues found in 158 source files
-===== ok: Type check (7.6s)
+===== ok: Type check (6.9s)
 
 ===== Architecture contracts (ADR-0001)
 
@@ -117,7 +117,7 @@ the drawer counts money and moves no goods KEPT
 only the API, the report and the watcher depend on the drawer KEPT
 
 Contracts: 31 kept, 0 broken.
-===== ok: Architecture contracts (ADR-0001) (0.3s)
+===== ok: Architecture contracts (ADR-0001) (0.2s)
 
 ===== Apply migrations
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
@@ -160,7 +160,7 @@ INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_
 INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
 INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
 INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
-===== ok: Apply migrations (1.4s)
+===== ok: Apply migrations (1.2s)
 
 ===== Migration drift check
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
@@ -255,10 +255,10 @@ INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_
 INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
 INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
 INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
-===== ok: Migration downgrade is reversible (2.1s)
+===== ok: Migration downgrade is reversible (2.2s)
 
 ===== Catalog evaluation regression gate
-===== ok: Catalog evaluation regression gate (0.4s)
+===== ok: Catalog evaluation regression gate (0.5s)
 
 ===== Preserve catalog evaluation report
 [runner] artifact catalog-evaluation: /Users/nikitahlushak/birka/output/verification/2026-10-10-outside-text-ci-local/backend-catalog-evaluation.json (already in the evidence directory)
@@ -322,8 +322,8 @@ INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_
     from starlette.testclient import TestClient as TestClient  # noqa
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-3308 passed, 19 skipped, 1 warning in 402.99s (0:06:42)
-===== ok: Tests (416.6s)
+3308 passed, 19 skipped, 1 warning in 404.80s (0:06:44)
+===== ok: Tests (418.5s)
 
 ===== Assert the database tests actually ran
 ....................................................ssssssssssssssssss.s [  5%]
@@ -352,9 +352,9 @@ INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_
     from starlette.testclient import TestClient as TestClient  # noqa
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-1395 passed, 19 skipped, 1913 deselected, 1 warning in 385.23s (0:06:25)
+1395 passed, 19 skipped, 1913 deselected, 1 warning in 384.60s (0:06:24)
 ::error::integration tests were skipped in CI (database unreachable?)
-===== FAILED (1): Assert the database tests actually ran (398.6s)
+===== FAILED (1): Assert the database tests actually ran (398.3s)
 
 ===== [runner] what skipped on PostgreSQL 17, and why (from the junit files)
   SKIPPED tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
@@ -427,7 +427,7 @@ $ /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/
 pg_dump (PostgreSQL) 16.2
 $ pytest -q --junitxml=/Users/nikitahlushak/.cache/birka-runtime/ci/work/backend/pg16.xml -o cache_dir=/Users/nikitahlushak/.cache/birka-runtime/ci/work/backend/pytest-cache tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten tests/integration/test_backup_restore_drill.py::test_a_backup_restores_and_proves_it_is_the_same_data tests/integration/test_backup_restore_drill.py::test_a_copy_missing_rows_fails_and_names_the_table tests/integration/test_backup_restore_drill.py::test_a_damaged_archive_is_refused_before_anything_is_created tests/integration/test_backup_restore_drill.py::test_a_dump_that_hangs_is_stopped_and_the_night_says_so tests/integration/test_backup_restore_drill.py::test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps tests/integration/test_backup_restore_drill.py::test_a_ledger_left_unprotected_fails_the_drill tests/integration/test_backup_restore_drill.py::test_a_ledger_that_does_not_reconcile_fails_the_drill tests/integration/test_backup_restore_drill.py::test_a_night_finding_the_last_one_still_running_starts_nothing tests/integration/test_backup_restore_drill.py::test_a_night_first_drops_what_a_stopped_drill_left tests/integration/test_backup_restore_drill.py::test_a_night_that_cannot_back_up_says_so tests/integration/test_backup_restore_drill.py::test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing tests/integration/test_backup_restore_drill.py::test_a_night_without_the_owners_key_fails_and_deletes_nothing tests/integration/test_backup_restore_drill.py::test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy tests/integration/test_backup_restore_drill.py::test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive tests/integration/test_backup_restore_drill.py::test_an_encrypted_night_can_only_be_read_with_the_owners_key tests/integration/test_backup_restore_drill.py::test_kept_copies_stay_for_inspection_and_are_never_the_source tests/integration/test_backup_restore_drill.py::test_stock_left_under_a_merged_model_fails_the_drill tests/integration/test_backup_restore_drill.py::test_the_counts_are_the_snapshot_the_archive_holds
 ...............s...                                                      [100%]
-18 passed, 1 skipped in 46.47s
+18 passed, 1 skipped in 44.95s
   PASSED   tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten
   PASSED   tests/integration/test_backup_restore_drill.py::test_a_backup_restores_and_proves_it_is_the_same_data
   PASSED   tests/integration/test_backup_restore_drill.py::test_a_copy_missing_rows_fails_and_names_the_table
@@ -453,17 +453,17 @@ $ /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/
 ===== [runner] steps
   replaced: ok                       actions/checkout@v4  (0.0s)
   replaced: ok                       actions/setup-python@v5  (0.0s)
-  replaced: ok                       Install  (0.4s)
-  ok                                 Lint  (0.1s)
-  ok                                 Type check  (7.6s)
-  ok                                 Architecture contracts (ADR-0001)  (0.3s)
-  ok                                 Apply migrations  (1.4s)
+  replaced: ok                       Install  (0.2s)
+  ok                                 Lint  (0.2s)
+  ok                                 Type check  (6.9s)
+  ok                                 Architecture contracts (ADR-0001)  (0.2s)
+  ok                                 Apply migrations  (1.2s)
   ok                                 Migration drift check  (0.5s)
-  ok                                 Migration downgrade is reversible  (2.1s)
-  ok                                 Catalog evaluation regression gate  (0.4s)
+  ok                                 Migration downgrade is reversible  (2.2s)
+  ok                                 Catalog evaluation regression gate  (0.5s)
   replaced: ok                       Preserve catalog evaluation report  (0.0s)
   NOT RUN (declared gap)             PostgreSQL 17 client tools and age, for the backup tests  (0.0s)
-  ok                                 Tests  (416.6s)
-  FAILED (1)                         Assert the database tests actually ran  (398.6s)
-  ok                                 [runner] the skipped backup tests on PostgreSQL 16.2  (48.9s)
+  ok                                 Tests  (418.5s)
+  FAILED (1)                         Assert the database tests actually ran  (398.3s)
+  ok                                 [runner] the skipped backup tests on PostgreSQL 16.2  (47.6s)
 ===== [runner] backend: PASSED WITH DECLARED GAPS — PG17 Tests: 3308 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1395 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age)

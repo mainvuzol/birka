@@ -73,7 +73,8 @@ of it guarded. The owner chose on 2026-10-10:
   and a debt), «Звіт», «Повернення», «Каса» (the sales to correct; a cash
   day runs from 06:00, so it reads the day that holds the sale),
   «Накладні» and «Постачальникам». Each must hold the marks and none of the
-  characters.
+  characters. The journey writes them as `\u` escapes, so its own source
+  shows them rather than obeys them.
 - **Mutation**: the guard taken off one place at a time, on each of those
   screens: twelve places, each failing the journey. Two of them showed the
   journey's own faults first: a check that found the seller's name in the
@@ -84,18 +85,18 @@ of it guarded. The owner chose on 2026-10-10:
 
 - **The journey** ran alone and in the whole suite: 265 journeys passed,
   against the real API and PostgreSQL.
-- **Mutation, at `880e83a`** ([result](../../output/verification/2026-10-10-outside-text/mutants.txt),
+- **Mutation, at `98b6c6e`** ([result](../../output/verification/2026-10-10-outside-text/mutants.txt),
   its driver beside it): twelve of twelve caught. A hidden character quoted
   from a failure is written there as `\uXXXX`, so the file shows it rather
   than obeys it.
-- **CI, run locally at `880e83a`** ([summary](../../output/verification/2026-10-10-outside-text-ci-local/summary.md)):
+- **CI, run locally at `98b6c6e`** ([summary](../../output/verification/2026-10-10-outside-text-ci-local/summary.md)):
   every job passed, the backend with its declared gap.
   - backend: 3 308 on PostgreSQL 17;
   - restore drill: 7/7;
   - e2e: 265 journeys;
   - frontend: lint, types, `npm audit` and the build clean;
   - edge: 9/9;
-  - hot path: worst p95 71.4 ms (catalogue read) and 94.3 ms
+  - hot path: worst p95 68.4 ms (catalogue read) and 69.7 ms
     (`POST /sales`), within 300 and 500.
 
 ## Not covered here

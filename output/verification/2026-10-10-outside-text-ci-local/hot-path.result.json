@@ -2,14 +2,14 @@
   "job": "hot-path",
   "name": "hot path budgets (PostgreSQL 17)",
   "result": "passed",
-  "counts": "8 cases, 3 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 71.4 ms of 300 (GET /catalog/stock-options (6 sellers)), POST /sales 94.3 ms of 500 (POST /sales · paid in parts (6 sellers))",
+  "counts": "8 cases, 3 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 68.4 ms of 300 (GET /catalog/stock-options (6 sellers)), POST /sales 69.7 ms of 500 (POST /sales · same coat, 6 sellers)",
   "reasons": [],
-  "commit": "880e83a",
+  "commit": "98b6c6e",
   "tree": "clean",
-  "runner_sha256": "f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2",
-  "started": "2026-10-10T00:46:13+03:00",
-  "finished": "2026-10-10T00:46:50+03:00",
-  "duration": "0m37s",
+  "runner_sha256": "e9e486313ff047ab8868f3195ab4a7a97b8e2c7eb19b1f58ca420842bce370ea",
+  "started": "2026-10-10T01:32:51+03:00",
+  "finished": "2026-10-10T01:33:30+03:00",
+  "duration": "0m38s",
   "brief": "PG17 in Docker on 127.0.0.1:55417, reached through Docker Desktop's port forwarding; a 10-core Mac, not a 2-vCPU runner; gate one-seller as CI; run last, alone",
   "images": [
     "postgres:17-alpine @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
@@ -19,7 +19,7 @@
     "BIRKA_PERF_GATE=one-seller, as CI sets it (the release reading is BIRKA_PERF_GATE=all).",
     "/tmp paths moved: the figures are in the evidence directory (hot-path-figures.txt), the API log is copied there (CI uploads both as an artifact). The step summary CI writes is printed in this log.",
     "Run last, after every other job, with nothing else of the runner running.",
-    "Load average at the start: { 5.31 4.34 3.91 }.",
+    "Load average at the start: { 5.57 3.85 3.57 }.",
     "`Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2."
   ],
   "gaps": [],
@@ -46,13 +46,13 @@
     {
       "name": "Migrate, and start the API as the server runs it",
       "status": "ok",
-      "seconds": 3.3,
+      "seconds": 4.4,
       "code": 0
     },
     {
       "name": "Measure, and fail on a budget breached",
       "status": "ok",
-      "seconds": 28.1,
+      "seconds": 27.5,
       "code": 0
     },
     {

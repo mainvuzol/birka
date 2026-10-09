@@ -4,12 +4,12 @@
   "result": "passed",
   "counts": "pip-audit audited 43 packages: 0 known vulnerabilities (\"No known vulnerabilities found\")",
   "reasons": [],
-  "commit": "880e83a",
+  "commit": "98b6c6e",
   "tree": "clean",
-  "runner_sha256": "f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2",
-  "started": "2026-10-10T00:45:44+03:00",
-  "finished": "2026-10-10T00:45:49+03:00",
-  "duration": "0m04s",
+  "runner_sha256": "e9e486313ff047ab8868f3195ab4a7a97b8e2c7eb19b1f58ca420842bce370ea",
+  "started": "2026-10-10T01:32:27+03:00",
+  "finished": "2026-10-10T01:32:31+03:00",
+  "duration": "0m03s",
   "brief": "pip-audit 2.9.0 from its own venv (Python 3.12.14); its report as JSON, counted from pip-audit's own output",
   "images": [
     "none (this job starts no container)"
@@ -36,7 +36,7 @@
     {
       "name": "Audit requirements.lock",
       "status": "ok",
-      "seconds": 4.0,
+      "seconds": 2.8,
       "code": 0
     }
   ],

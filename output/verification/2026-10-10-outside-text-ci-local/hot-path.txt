@@ -1,16 +1,16 @@
 CI job `hot-path` — hot path budgets (PostgreSQL 17)
 Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
 
-commit:   880e83a (feat/catalog-text-guard) — clean
-runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2
-date:     2026-10-10 00:46:13 EEST → 00:46:50 (0m37s)
+commit:   98b6c6e (feat/catalog-text-guard) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 e9e486313ff047ab8868f3195ab4a7a97b8e2c7eb19b1f58ca420842bce370ea
+date:     2026-10-10 01:32:51 EEST → 01:33:30 (0m38s)
 machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.1 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v26.5.0, npm 11.17.0, /bin/bash 3.2.57(1)-release
 env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
 images:   postgres:17-alpine @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
 network:  from Docker's VM during the job (Docker Desktop's log): none
 result:   passed
-counts:   8 cases, 3 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 71.4 ms of 300 (GET /catalog/stock-options (6 sellers)), POST /sales 94.3 ms of 500 (POST /sales · paid in parts (6 sellers))
+counts:   8 cases, 3 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 68.4 ms of 300 (GET /catalog/stock-options (6 sellers)), POST /sales 69.7 ms of 500 (POST /sales · same coat, 6 sellers)
 
 DEVIATIONS from CI:
   - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of ubuntu-latest (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
@@ -23,7 +23,7 @@ DEVIATIONS from CI:
   - BIRKA_PERF_GATE=one-seller, as CI sets it (the release reading is BIRKA_PERF_GATE=all).
   - /tmp paths moved: the figures are in the evidence directory (hot-path-figures.txt), the API log is copied there (CI uploads both as an artifact). The step summary CI writes is printed in this log.
   - Run last, after every other job, with nothing else of the runner running.
-  - Load average at the start: { 5.31 4.34 3.91 }.
+  - Load average at the start: { 5.57 3.85 3.57 }.
   - `Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2.
 
 GAPS (declared; nothing else may be missing):
@@ -32,12 +32,12 @@ GAPS (declared; nothing else may be missing):
 ====================================================================================================
 ===== [runner] job hot-path: hot path budgets (PostgreSQL 17)
 [runner] 4 step(s) the runner replaces or does not run match their sha256 in ci.yml
-[runner] alone: no other job's process or container; load average { 5.31 4.34 3.91 }
+[runner] alone: no other job's process or container; load average { 5.57 3.85 3.57 }
 [runner] service postgres: docker run -d --pull never --name birka-ci-local-pg --label com.birka.ci-local=1 -p 127.0.0.1:55417:5432 -e POSTGRES_USER=birka -e POSTGRES_PASSWORD=birka -e POSTGRES_DB=birka_perf -e 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8' --health-cmd 'pg_isready -U birka -d birka_perf' --health-interval 5s --health-timeout 5s --health-retries 20 postgres:17-alpine
 [runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55417->5432
 
 ===== actions/checkout@v4
-[runner] the working tree at 880e83a (clean), not a fresh checkout
+[runner] the working tree at 98b6c6e (clean), not a fresh checkout
 ===== replaced: ok: actions/checkout@v4 (0.0s)
 
 ===== actions/setup-python@v5
@@ -50,7 +50,7 @@ GAPS (declared; nothing else may be missing):
 [runner] the venv also holds 3 package(s) requirements-dev.lock does not pin: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2
 $ uv pip check --python /Users/nikitahlushak/.cache/birka-runtime/python/bin/python
 Using Python 3.12.14 environment at: /Users/nikitahlushak/.cache/birka-runtime/python
-Checked 74 packages in 5ms
+Checked 74 packages in 6ms
 All installed packages are compatible
 ===== replaced: ok: Install (0.1s)
 
@@ -97,8 +97,9 @@ INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock
 INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
 curl: (7) Failed to connect to 127.0.0.1 port 58043 after 0 ms: Couldn't connect to server
 curl: (7) Failed to connect to 127.0.0.1 port 58043 after 0 ms: Couldn't connect to server
+curl: (7) Failed to connect to 127.0.0.1 port 58043 after 0 ms: Couldn't connect to server
 {"status":"ok","environment":"ci"}
-===== ok: Migrate, and start the API as the server runs it (3.3s)
+===== ok: Migrate, and start the API as the server runs it (4.4s)
 
 ===== Measure, and fail on a budget breached
 gate: one-seller; 10 CPUs; harness, API and database on one machine
@@ -106,30 +107,30 @@ python: 3.12.14 (CPython)
 postgresql: PostgreSQL 17.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync on, synchronous_commit on
 api: http://127.0.0.1:58043, environment ci
 seeding 400 variants × 6 sizes …
-2026-10-09 21:46:24 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=ea8364e2-693f-4da5-bb50-48f49cc7187c types=['DELIVERY']
-2026-10-09 21:46:25 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=ea8364e2-693f-4da5-bb50-48f49cc7187c types=['DELIVERY']
-2026-10-09 21:46:26 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=ea8364e2-693f-4da5-bb50-48f49cc7187c types=['DELIVERY']
-2026-10-09 21:46:27 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=ea8364e2-693f-4da5-bb50-48f49cc7187c types=['DELIVERY']
-2026-10-09 21:46:28 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=400 organization_id=ea8364e2-693f-4da5-bb50-48f49cc7187c types=['DELIVERY']
+2026-10-09 22:33:03 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=a389a99f-39db-4008-b45b-d52e0478f1ec types=['DELIVERY']
+2026-10-09 22:33:05 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=a389a99f-39db-4008-b45b-d52e0478f1ec types=['DELIVERY']
+2026-10-09 22:33:06 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=a389a99f-39db-4008-b45b-d52e0478f1ec types=['DELIVERY']
+2026-10-09 22:33:06 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=a389a99f-39db-4008-b45b-d52e0478f1ec types=['DELIVERY']
+2026-10-09 22:33:07 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=400 organization_id=a389a99f-39db-4008-b45b-d52e0478f1ec types=['DELIVERY']
 seeded 2400 stock keys
-GET /catalog/stock-options               n=200  p50=    9.4  p95=   13.2  p99=   74.1  max=   79.1  pass
-GET /catalog/stock-options (6 sellers)   n=300  p50=   23.4  p95=   71.4  p99=   83.5  max=  111.7  pass  (not gated)
-POST /sales · 1 line                     n=200  p50=   18.4  p95=   24.3  p99=   33.6  max=   34.4  pass
-POST /sales · 1 line (6 sellers)         n=300  p50=   40.1  p95=   47.7  p99=  102.2  max=  169.9  pass  (not gated)
-POST /sales · 4 lines (6 sellers)        n=200  p50=   59.1  p95=   69.5  p99=  108.7  max=  118.8  pass  (not gated)
-POST /sales · same coat, 6 sellers       n=120  p50=   57.7  p95=   66.2  p99=   76.9  max=   99.9  pass  (not gated)
-POST /sales · paid in parts              n=200  p50=   22.1  p95=   27.6  p99=   31.9  max=   32.1  pass
-POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99=  121.1  max=  230.3  pass  (not gated)
+GET /catalog/stock-options               n=200  p50=    8.9  p95=    9.6  p99=   11.1  max=   59.9  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   22.4  p95=   68.4  p99=   78.1  max=  119.0  pass  (not gated)
+POST /sales · 1 line                     n=200  p50=   18.5  p95=   22.6  p99=   24.6  max=   24.8  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   39.2  p95=   45.3  p99=   89.1  max=  153.7  pass  (not gated)
+POST /sales · 4 lines (6 sellers)        n=200  p50=   57.9  p95=   65.5  p99=   73.1  max=  115.4  pass  (not gated)
+POST /sales · same coat, 6 sellers       n=120  p50=   57.3  p95=   69.7  p99=   84.9  max=   94.7  pass  (not gated)
+POST /sales · paid in parts              n=200  p50=   21.7  p95=   26.6  p99=   30.5  max=   32.4  pass
+POST /sales · paid in parts (6 sellers)  n=300  p50=   46.3  p95=   52.2  p99=   99.8  max=  121.3  pass  (not gated)
 
 [
   {
     "case": "GET /catalog/stock-options",
     "concurrency": 1,
     "n": 200,
-    "p50": 9.431875019799918,
-    "p95": 13.19354202132672,
-    "p99": 74.05991601990536,
-    "max": 79.0907500195317,
+    "p50": 8.864686999004334,
+    "p95": 9.616957977414131,
+    "p99": 11.095124995335937,
+    "max": 59.87783399177715,
     "budget": 300.0,
     "verdict": "pass",
     "gated": true
@@ -138,10 +139,10 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "GET /catalog/stock-options (6 sellers)",
     "concurrency": 6,
     "n": 300,
-    "p50": 23.43604149064049,
-    "p95": 71.38395798392594,
-    "p99": 83.54675001464784,
-    "max": 111.71166598796844,
+    "p50": 22.351416992023587,
+    "p95": 68.36487504187971,
+    "p99": 78.0872919713147,
+    "max": 119.01058297371492,
     "budget": 300.0,
     "verdict": "pass",
     "gated": false
@@ -150,10 +151,10 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "POST /sales \u00b7 1 line",
     "concurrency": 1,
     "n": 200,
-    "p50": 18.423041474306956,
-    "p95": 24.318166950251907,
-    "p99": 33.59608299797401,
-    "max": 34.44175003096461,
+    "p50": 18.516479001846164,
+    "p95": 22.624791017733514,
+    "p99": 24.5936670107767,
+    "max": 24.81833304045722,
     "budget": 500.0,
     "verdict": "pass",
     "gated": true
@@ -162,10 +163,10 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "POST /sales \u00b7 1 line (6 sellers)",
     "concurrency": 6,
     "n": 300,
-    "p50": 40.08572900784202,
-    "p95": 47.656166017986834,
-    "p99": 102.1501250215806,
-    "max": 169.8683330323547,
+    "p50": 39.197124482598156,
+    "p95": 45.32187501899898,
+    "p99": 89.14749999530613,
+    "max": 153.68008305085823,
     "budget": 500.0,
     "verdict": "pass",
     "gated": false
@@ -174,10 +175,10 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "POST /sales \u00b7 4 lines (6 sellers)",
     "concurrency": 6,
     "n": 200,
-    "p50": 59.093833493534476,
-    "p95": 69.4627920165658,
-    "p99": 108.69312501745299,
-    "max": 118.83554101223126,
+    "p50": 57.91014598798938,
+    "p95": 65.5034999945201,
+    "p99": 73.06983298622072,
+    "max": 115.40849995799363,
     "budget": 500.0,
     "verdict": "pass",
     "gated": false
@@ -186,10 +187,10 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "POST /sales \u00b7 same coat, 6 sellers",
     "concurrency": 6,
     "n": 120,
-    "p50": 57.724916987353936,
-    "p95": 66.18795800022781,
-    "p99": 76.8614590051584,
-    "max": 99.85687502194196,
+    "p50": 57.26054203114472,
+    "p95": 69.74395900033414,
+    "p99": 84.93008301593363,
+    "max": 94.69925001030788,
     "budget": 500.0,
     "verdict": "pass",
     "gated": false
@@ -198,10 +199,10 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "POST /sales \u00b7 paid in parts",
     "concurrency": 1,
     "n": 200,
-    "p50": 22.070416511269286,
-    "p95": 27.60420902632177,
-    "p99": 31.89933398971334,
-    "max": 32.112374959979206,
+    "p50": 21.692979469662532,
+    "p95": 26.56862500589341,
+    "p99": 30.477249994874,
+    "max": 32.39229100290686,
     "budget": 500.0,
     "verdict": "pass",
     "gated": true
@@ -210,16 +211,16 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
     "case": "POST /sales \u00b7 paid in parts (6 sellers)",
     "concurrency": 6,
     "n": 300,
-    "p50": 54.16939553106204,
-    "p95": 94.30008404888213,
-    "p99": 121.07345799449831,
-    "max": 230.31499999342486,
+    "p50": 46.28856250201352,
+    "p95": 52.2072910098359,
+    "p99": 99.83199997805059,
+    "max": 121.33862497285008,
     "budget": 500.0,
     "verdict": "pass",
     "gated": false
   }
 ]
-===== ok: Measure, and fail on a budget breached (28.1s)
+===== ok: Measure, and fail on a budget breached (27.5s)
 
 ===== Breaches that do not fail the run, where they are seen
 0 case(s) over budget and not gated
@@ -229,15 +230,15 @@ POST /sales · paid in parts (6 sellers)  n=300  p50=   54.2  p95=   94.3  p99= 
 [runner] artifact hot-path: /Users/nikitahlushak/birka/output/verification/2026-10-10-outside-text-ci-local/hot-path-figures.txt (already in the evidence directory)
 [runner] artifact hot-path: /Users/nikitahlushak/.cache/birka-runtime/ci/work/hot-path/birka-perf-api.log -> /Users/nikitahlushak/birka/output/verification/2026-10-10-outside-text-ci-local/artifacts/hot-path/hot-path/birka-perf-api.log
 ===== replaced: ok: Preserve the figures (0.0s)
-[runner] stopping pid 975 on port 58043: python -m uvicorn app.main:app --host 127.0.0.1 --port 58043 --no-access-log
+[runner] stopping pid 16772 on port 58043: python -m uvicorn app.main:app --host 127.0.0.1 --port 58043 --no-access-log
 [runner] removed container birka-ci-local-pg and its anonymous volume
 
 ===== [runner] steps
   replaced: ok                       actions/checkout@v4  (0.0s)
   replaced: ok                       actions/setup-python@v5  (0.0s)
   replaced: ok                       Install  (0.1s)
-  ok                                 Migrate, and start the API as the server runs it  (3.3s)
-  ok                                 Measure, and fail on a budget breached  (28.1s)
+  ok                                 Migrate, and start the API as the server runs it  (4.4s)
+  ok                                 Measure, and fail on a budget breached  (27.5s)
   ok                                 Breaches that do not fail the run, where they are seen  (0.0s)
   replaced: ok                       Preserve the figures  (0.0s)
-===== [runner] hot-path: PASSED — 8 cases, 3 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 71.4 ms of 300 (GET /catalog/stock-options (6 sellers)), POST /sales 94.3 ms of 500 (POST /sales · paid in parts (6 sellers))
+===== [runner] hot-path: PASSED — 8 cases, 3 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 68.4 ms of 300 (GET /catalog/stock-options (6 sellers)), POST /sales 69.7 ms of 500 (POST /sales · same coat, 6 sellers)

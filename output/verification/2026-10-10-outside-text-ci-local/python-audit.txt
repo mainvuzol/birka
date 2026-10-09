@@ -1,9 +1,9 @@
 CI job `python-audit` — backend (known vulnerabilities in the locked packages)
 Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
 
-commit:   880e83a (feat/catalog-text-guard) — clean
-runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2
-date:     2026-10-10 00:45:44 EEST → 00:45:49 (0m04s)
+commit:   98b6c6e (feat/catalog-text-guard) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 e9e486313ff047ab8868f3195ab4a7a97b8e2c7eb19b1f58ca420842bce370ea
+date:     2026-10-10 01:32:27 EEST → 01:32:31 (0m03s)
 machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.1 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v26.5.0, npm 11.17.0, /bin/bash 3.2.57(1)-release
 env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
@@ -31,7 +31,7 @@ GAPS (declared; nothing else may be missing):
 [runner] pip-audit 2.9.0 in /Users/nikitahlushak/.cache/birka-runtime/ci/pip-audit-venv
 
 ===== actions/checkout@v4
-[runner] the working tree at 880e83a (clean), not a fresh checkout
+[runner] the working tree at 98b6c6e (clean), not a fresh checkout
 ===== replaced: ok: actions/checkout@v4 (0.0s)
 
 ===== actions/setup-python@v5
@@ -43,10 +43,10 @@ pip-audit 2.9.0
 WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies
 WARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes
 No known vulnerabilities found
-===== ok: Audit requirements.lock (4.0s)
+===== ok: Audit requirements.lock (2.8s)
 
 ===== [runner] steps
   replaced: ok                       actions/checkout@v4  (0.0s)
   replaced: ok                       actions/setup-python@v5  (0.0s)
-  ok                                 Audit requirements.lock  (4.0s)
+  ok                                 Audit requirements.lock  (2.8s)
 ===== [runner] python-audit: PASSED — pip-audit audited 43 packages: 0 known vulnerabilities ("No known vulnerabilities found")

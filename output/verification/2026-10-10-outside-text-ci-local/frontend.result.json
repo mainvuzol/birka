@@ -2,14 +2,14 @@
   "job": "frontend",
   "name": "frontend (lint, types, build)",
   "result": "passed",
-  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 129 modules, built in 70ms",
+  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 129 modules, built in 67ms",
   "reasons": [],
-  "commit": "880e83a",
+  "commit": "98b6c6e",
   "tree": "clean",
-  "runner_sha256": "f1191cb7985460a46b701bf193d9ef36f189c05be97bd985a9988e886cdf15a2",
-  "started": "2026-10-10T00:45:31+03:00",
-  "finished": "2026-10-10T00:45:44+03:00",
-  "duration": "0m12s",
+  "runner_sha256": "e9e486313ff047ab8868f3195ab4a7a97b8e2c7eb19b1f58ca420842bce370ea",
+  "started": "2026-10-10T01:32:16+03:00",
+  "finished": "2026-10-10T01:32:26+03:00",
+  "duration": "0m10s",
   "brief": "node v26.5.0 for 24; npm ci replaced by a check that node_modules is exactly the lock",
   "images": [
     "none (this job starts no container)"
@@ -44,25 +44,25 @@
     {
       "name": "npm audit --audit-level=high",
       "status": "ok",
-      "seconds": 1.0,
+      "seconds": 0.6,
       "code": 0
     },
     {
       "name": "npm run lint",
       "status": "ok",
-      "seconds": 7.1,
+      "seconds": 6.2,
       "code": 0
     },
     {
       "name": "npm run typecheck",
       "status": "ok",
-      "seconds": 1.8,
+      "seconds": 1.7,
       "code": 0
     },
     {
       "name": "npm run build",
       "status": "ok",
-      "seconds": 1.9,
+      "seconds": 2.0,
       "code": 0
     }
   ],
