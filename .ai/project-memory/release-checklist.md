@@ -21,7 +21,9 @@ block. The verdict stands. Re-assessed on 2026-10-09 for customers' data
 verdict's first sentences and the list of what does not block: the shops'
 largest warehouse comes to at most 5 000 (owner, 2026-10-09). The verdict
 stands. Row 20 updated on 2026-10-09: the restore rehearsed on a laptop
-(`docs/restore-rehearsal`). The verdict stands.
+(`docs/restore-rehearsal`). The verdict stands. Row 14 updated on
+2026-10-09: an update and going back rehearsed on a laptop
+(`docs/update-rehearsal`). The verdict stands.
 
 **Verdict: BLOCKED.** On 2026-10-08 the owner chose how the shops' existing
 stock goes in: photos → parser → JSON, in a format Birka defines, every line
@@ -69,7 +71,7 @@ accepted.
 | 11b | **Failures are visible.** The bot tells the owner and the administrators when the app, its database or its disk fails, or nobody can sign in, with a sound in the shops' hours. An outside check-in notices a server that dies whole. `/api/v1/ready` and compose's healthcheck show the API's state. A broken screen shows «Щось пішло не так» and «Перезапустити» and notes the server's log; a server error shows its number. The nightly backup cannot hang or overlap. | [report](failures-visible-report.md), [ADR-0011](../decisions/ADR-0011-failures-are-visible.md) |
 | 12 | **Store and organization boundaries hold** on every command. | invariants I12/I13; the reviews in each report |
 | 13 | **Docker logs are bounded.** 5 × 10 MB per service, so the disk cannot fill with them. | `infra/docker-compose.yml`, PR #50; CI validates the file |
-| 14 | **A runbook for the server.** Install, the shops' existing stock, update, go back, and the security that applies. | [server runbook](server-runbook.md), PR #50; step 9 rewritten on 2026-10-02 |
+| 14 | **A runbook for the server.** Install, the shops' existing stock, update, go back, and the security that applies. Restoring a backup (2026-10-09) and an update with each way of going back (2026-10-09) rehearsed end to end on a laptop, in Docker; both fixed what failed as written. | [server runbook](server-runbook.md), PR #50; step 9 rewritten on 2026-10-02 · [restore rehearsal](restore-rehearsal-report.md) · [update rehearsal](update-rehearsal-report.md) |
 | 22 | **The hot path's release reading, every case gated** (`BIRKA_PERF_GATE=all`), after the last change to `POST /sales`. Taken again on 2026-10-08 on the laptop, after the outage work's optional mark (ADR-0013 §11: one field read as nothing; its INSERT writes NULL for the mark's two details and the database defaults `during_outage`; no new plpgsql trigger runs, and the new foreign key adds one internal check per insert, a no-op for NULL; no extra statement, 37 per sale before and after): three times on fresh databases migrated to `0036`, and all 8 cases pass every run. Worst p95 93.9 ms against 500 (run 3, paid in parts with six sellers; runs 1 and 2 at most 79.1 ms), one seller about 11 ms. Before: 167.6 ms on 2026-10-04, 192 ms on 2026-10-03. A reading on the server is optional. | [hot path report](hot-path-budget-report.md#update--2026-10-08-the-mark-of-a-sale-typed-from-paper) · [2026-10-04](hot-path-budget-report.md#update--2026-10-04-the-way-button-and-the-drawers-stamp) |
 | 27 | **A customer's name and phone are erased in time** (owner, 2026-10-09): a year after a debt was paid or returned, three after a write-off, or at once by the owner when the customer asks (the network's in every store, a store's in that store); every sum stays, and the database keeps an erased customer erased. The owner's own copies of the backups keep 3 months. | [report](customer-data-retention-report.md) · [ADR-0015](../decisions/ADR-0015-customer-data-retention.md) · `test_customer_erasure.py` · `test_pull_backups.py` · `e2e/credits.spec.ts` |
 
