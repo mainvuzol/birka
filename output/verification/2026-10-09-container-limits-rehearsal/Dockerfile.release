@@ -1,0 +1,13 @@
+# One release's image, made from an image already built here (no network):
+# the built image's code replaced by the release's, whole.
+ARG BASE
+FROM ${BASE}
+USER root
+RUN rm -rf /app/app /app/migrations /app/scripts /app/alembic.ini
+COPY --chown=birka:birka app ./app
+COPY --chown=birka:birka migrations ./migrations
+COPY --chown=birka:birka scripts ./scripts
+COPY --chown=birka:birka alembic.ini ./
+USER birka
+ARG BIRKA_RELEASE=dev
+ENV BIRKA_RELEASE=$BIRKA_RELEASE

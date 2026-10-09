@@ -1,0 +1,25 @@
+# Pass 1 only: limits far above what is expected, so every peak is the work's
+# own; and the measuring scripts' container, the API's image with an HTTP
+# client added (measure-image/), hardened like the API.
+services:
+  db: {mem_limit: 3g}
+  api: {mem_limit: 3g}
+  backup-watch: {mem_limit: 3g}
+  ops: {mem_limit: 3g}
+  caddy: {mem_limit: 3g}
+  web: {mem_limit: 3g}
+  measure:
+    profiles: ["measure"]
+    image: birka-limits-measure
+    pull_policy: never
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=64m"]
+    mem_limit: 3g
+    depends_on: [db]
+    environment:
+      BIRKA_APP_ENV: ci
+      BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN}
+      BIRKA_SESSION_SECRET: ${BIRKA_SESSION_SECRET}
+      BIRKA_LOG_LEVEL: WARNING

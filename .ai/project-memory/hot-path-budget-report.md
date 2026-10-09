@@ -293,8 +293,10 @@ The API ran as CI runs it: one process, no access log, `WARNING`. Evidence:
   runs gave 47 and 45 ms for the same case.
 - **A sale paid in parts costs about what a sale paid in full does.**
 
-This closes row 22 for the laptop. A reading on the real server is an
-optional step in the [server runbook](server-runbook.md#the-hot-path-on-this-server-optional).
+This closes row 22 for the laptop. A reading on the real server was an
+optional step in the [server runbook](server-runbook.md#the-hot-path-on-this-server-optional);
+tried in Docker on 2026-10-09, it cannot run with the server's images, which
+do not hold the harness's HTTP client.
 
 ## Update — 2026-10-04: the way button, and the drawer's stamp
 

@@ -631,8 +631,21 @@ See the [report](public-hardening-report.md) and
   - the trigger functions name their tables without a schema: safe while
     the role may create nothing in the app's database, which the command
     checks each time it runs.
-- **Containers run with Docker's defaults:** a writable root filesystem, the
-  default capabilities, no memory limits.
+- **Containers ran with Docker's defaults:** a writable root filesystem, the
+  default capabilities, no memory limits. **Closed on 2026-10-09**
+  ([ADR-0017](../decisions/ADR-0017-what-a-container-may-do.md)): every
+  image is read-only, every kernel privilege is dropped but PostgreSQL's
+  five for its entrypoint and Caddy's one for ports below 1024, none is
+  gained by running a program, and each container has a memory limit 2.5 to
+  4 times the most it reached under the heaviest work measured. What stays:
+  - the volumes stay writable, as they must: the database's data, Caddy's
+    certificates, the backups for `ops`;
+  - Caddy and `web` run as root, without privileges; the database's
+    entrypoint starts as root;
+  - no process-count limit;
+  - a release that needs more memory than its limit is killed at it and
+    restarted: CI's `edge` job runs the stack with the limits, but not the
+    heaviest work, which was measured once (the report has how).
 - **The content security policy names only `frame-ancestors`.** A strict one
   needs the app opened in each Telegram client first (row 21's real device).
 - **The seller's address is in the API's log now**, since the sign-in limit

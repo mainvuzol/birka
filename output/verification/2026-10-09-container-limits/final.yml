@@ -1,0 +1,18 @@
+# Pass 2: compose's own limits; the measuring scripts' container held to the
+# API's, 768m, so an approval of 10 000 answers shows whether the API fits.
+services:
+  measure:
+    profiles: ["measure"]
+    image: birka-limits-measure
+    pull_policy: never
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=16m"]
+    mem_limit: 768m
+    depends_on: [db]
+    environment:
+      BIRKA_APP_ENV: ci
+      BIRKA_TELEGRAM_BOT_TOKEN: ${BIRKA_TELEGRAM_BOT_TOKEN}
+      BIRKA_SESSION_SECRET: ${BIRKA_SESSION_SECRET}
+      BIRKA_LOG_LEVEL: WARNING

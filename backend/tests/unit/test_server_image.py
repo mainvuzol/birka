@@ -281,6 +281,96 @@ def test_what_faces_the_shops_connects_as_birka_app_and_only_ops_as_the_owner() 
     assert "app_db_password" in Settings.model_fields
 
 
+# --- what each container may do (ADR-0017) ------------------------------------
+
+# The one privilege each keeps, and why: PostgreSQL's entrypoint starts as
+# root, reads its data directory, gives it and its socket's directory to its
+# user and becomes that user; Caddy binds ports below 1024.
+KEPT_PRIVILEGES = {
+    "db": ["CHOWN", "DAC_READ_SEARCH", "FOWNER", "SETGID", "SETUID"],
+    "caddy": ["NET_BIND_SERVICE"],
+}
+
+
+# Each of these would give a container back what the others take away:
+# every privilege, the host's processes or network, its devices, root.
+NEVER = ("privileged", "pid", "ipc", "network_mode", "userns_mode", "devices", "user", "cgroup")
+
+
+def test_no_container_may_change_its_image_or_gain_a_privilege() -> None:
+    """Every service, the one-off `ops` and `web` too: a read-only image,
+    no kernel privilege but the one it uses, and none gained by running a
+    program that asks for more, or by being made privileged."""
+    for name, service in _services().items():
+        assert service["read_only"] is True, name
+        assert service["cap_drop"] == ["ALL"], name
+        assert service["security_opt"] == ["no-new-privileges:true"], name
+        assert service.get("cap_add", []) == KEPT_PRIVILEGES.get(name, []), name
+        assert not set(NEVER) & set(service), name
+
+
+# Mounts in memory, the only places outside its volumes a container writes.
+TMPFS = {
+    "db": ["/var/run/postgresql:size=1m", "/tmp:size=64m"],
+    "api": ["/tmp:size=16m"],
+    "backup-watch": ["/tmp:size=16m"],
+    "ops": ["/tmp:size=64m"],
+    "caddy": ["/tmp:size=16m"],
+    "web": [],
+}
+
+
+def test_what_a_container_writes_goes_to_a_volume_or_a_small_tmp_in_memory() -> None:
+    services = _services()
+    assert {name: service.get("tmpfs", []) for name, service in services.items()} == TMPFS
+    assert services["web"]["volumes"] == ["web_dist:/output"]
+
+
+# About 2.5 to 4 times the most each reached under the heaviest work
+# measured on 2026-10-09, in MiB: the database 256, the app approving 10 000
+# answers 300, six sellers at once 234, the watcher 191, a night's backup and
+# drill 181, Caddy 21 (container-limits-report.md). A new figure means
+# measuring again.
+MEMORY_LIMITS = {
+    "db": "1g",
+    "api": "768m",
+    "backup-watch": "512m",
+    "ops": "512m",
+    "caddy": "256m",
+    "web": "128m",
+}
+
+
+def test_every_container_has_its_measured_memory_limit_and_no_swap_beyond_it() -> None:
+    services = _services()
+    assert {name: service["mem_limit"] for name, service in services.items()} == MEMORY_LIMITS
+    assert {name: service["memswap_limit"] for name, service in services.items()} == MEMORY_LIMITS
+
+
+def _held(name: str) -> str:
+    """What `docker run` needs to hold a container as compose holds it."""
+    service = _services()[name]
+    [tmp] = [mount for mount in service["tmpfs"] if mount.startswith("/tmp:")]
+    return (
+        "--read-only --cap-drop ALL --security-opt no-new-privileges:true"
+        f" --tmpfs {tmp} --memory {service['mem_limit']} --memory-swap {service['memswap_limit']}"
+    )
+
+
+def test_ci_runs_the_backup_and_the_watcher_held_as_compose_holds_them() -> None:
+    """The night's backup, its drill and the watcher run in CI by `docker
+    run`, not compose: with the same settings, or a change that writes
+    somewhere new in them passes CI and fails at night on the server."""
+    steps = {
+        step.get("name"): step.get("run", "")
+        for step in _workflow()["jobs"]["restore-drill"]["steps"]
+    }
+    assert _held("ops") in steps["Migrate, seed, and run the nightly backup as the schedule would"]
+    watcher = steps["The owner's section sees the night, and the watcher starts and stops cleanly"]
+    assert f'held="{_held("backup-watch")}"' in watcher
+    assert watcher.count("$held") == 2
+
+
 # --- the watcher --------------------------------------------------------------
 
 

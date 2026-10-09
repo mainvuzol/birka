@@ -75,6 +75,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106"]          # hard-coded test secrets are intentional
+"tests/unit/test_server_image.py" = ["S108"]   # /tmp mounts in compose, not temp files
 "migrations/versions/*" = ["E501"]
 
 [tool.ruff.lint.isort]
