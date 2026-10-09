@@ -143,8 +143,8 @@ The live E2E log holds no query string at all.
   - the API as the database's owner (closed on 2026-10-09: ADR-0016);
   - container defaults (closed on 2026-10-09: ADR-0017);
   - a strict content security policy;
-  - floating images;
-  - lock hashes.
+  - floating images (closed on 2026-10-10: ADR-0019);
+  - lock hashes (closed on 2026-10-10: ADR-0019).
 - **Nothing has run in production.**
 
 ## Changed files

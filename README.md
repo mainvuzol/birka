@@ -81,11 +81,17 @@ py -3.12 -m venv .venv
 ```
 
 ```bash
-backend/.venv/Scripts/python.exe -m pip install -c requirements-dev.lock -e ".[dev]"
+backend/.venv/Scripts/python.exe -m pip install --no-deps --require-hashes -r requirements-dev.lock
 ```
 
-`-c requirements-dev.lock` installs the versions CI tests and the server runs
-(`backend/requirements.lock`); without it pip takes whatever is newest.
+```bash
+backend/.venv/Scripts/python.exe -m pip install --no-deps -e ".[dev]"
+```
+
+The first installs the versions CI tests and the server runs
+(`backend/requirements.lock`), each file checked against its hash; the
+second, the backend itself and nothing else. Without the lock pip takes
+whatever is newest.
 
 Set the environment (copy `infra/.env.example`), then apply migrations and start the API:
 

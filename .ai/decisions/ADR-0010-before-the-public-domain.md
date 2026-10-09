@@ -117,7 +117,9 @@ The owner decided:
 - **`pip-audit`** runs in CI on the runtime lock, as `npm audit` does for the
   app.
 - **Rejected for now:** hashes (generating them needs the network), and
-  Dependabot pull requests (no one is named to act on them yet).
+  Dependabot pull requests (no one is named to act on them yet). Hashes,
+  and every image by its digest, came on 2026-10-10
+  ([ADR-0019](ADR-0019-what-the-server-is-built-from.md)).
 
 ### 6. The certificate
 

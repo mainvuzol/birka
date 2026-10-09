@@ -1,5 +1,9 @@
 # Builds the Mini App bundle and copies it into a volume that Caddy serves.
-FROM node:24-alpine AS build
+# Each base by its digest, the multi-arch index CI built from (Node 24.21.0
+# here, the one CI's frontend jobs set up): a tag is rebuilt in place now and
+# then. To move one, see the server runbook, "a pinned version, changed on
+# purpose".
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS build
 WORKDIR /app
 # Copy the lockfile too: npm ci requires it and installs exactly that tree.
 COPY package.json package-lock.json ./
@@ -15,7 +19,7 @@ ARG BIRKA_RELEASE=dev
 RUN npm run build
 
 # Alpine 3.20's support ended in spring 2026; 3.22 is supported until 2027.
-FROM alpine:3.22
+FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
 COPY --from=build /app/dist /dist
 # Source maps would hand anyone the app's source with its comments; nothing
 # reads them (vite.config.ts no longer writes them; this is the backstop).

@@ -1932,3 +1932,23 @@ name on some 60 places and other text from outside on some 90 more.
 
 Built on 2026-10-10; see the [report](outside-text-report.md) and
 [ADR-0018](../decisions/ADR-0018-outside-text-shown-as-it-is.md).
+
+## Owner decision — 2026-10-10 (what the server is built from)
+
+Chosen on 2026-10-10, after the three risks of 2026-10-09 were closed, from
+what was left that needs neither a server nor a person; first of two, before
+a request limit per person.
+
+- **Everything the server is built from is pinned to what CI ran:** the
+  images (PostgreSQL, Caddy, Node, Alpine, Python) by their digest, the
+  Python libraries by their files' hashes, CI's GitHub Actions by commit, and
+  CI itself on a named Ubuntu, `ubuntu-24.04`, rather than `ubuntu-latest`,
+  which GitHub moves to 26.04 from 2026-10-19.
+- **The network only to read** digests and hashes (Docker Hub, PyPI, the
+  GitHub API); nothing is installed on the developer's Mac. Asked once the
+  images had to be rebuilt to prove it, the owner also allowed downloading
+  inside Docker only: the locked libraries, checked by their hashes, and the
+  backup image's PostgreSQL client and `age` again.
+
+Built on 2026-10-10; see the [report](pinned-build-report.md) and
+[ADR-0019](../decisions/ADR-0019-what-the-server-is-built-from.md).

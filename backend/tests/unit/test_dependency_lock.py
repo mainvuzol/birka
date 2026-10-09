@@ -9,7 +9,10 @@ its next build, with nothing to run against it. So:
 - requirements.lock pins every package the runtime needs on Linux, and
   backend/Dockerfile installs it and nothing else (`--no-deps`);
 - requirements-dev.lock is that set plus the test and lint tools, and CI
-  installs with it as constraints.
+  installs it the same way, then the backend alone;
+- both hold the sha256 of each file PyPI has for a version, and are
+  installed with --require-hashes, so a file replaced under the same version
+  is refused (owner, 2026-10-10; ADR-0019).
 
 These tests keep the two files honest without a network: each pin satisfies
 pyproject.toml, the files agree with each other, they hold the whole
@@ -82,6 +85,18 @@ def read_lock(path: Path) -> dict[str, Requirement]:
 
 def pinned(requirement: Requirement) -> str:
     return next(iter(requirement.specifier)).version
+
+
+def read_hashes(path: Path) -> dict[str, set[str]]:
+    """Each pin's `--hash=sha256:` values, by normalized name."""
+    text = path.read_text(encoding="utf-8").replace("\\\n", " ")
+    hashes: dict[str, set[str]] = {}
+    for line in text.splitlines():
+        match = re.match(r"([A-Za-z0-9][A-Za-z0-9._-]*)==\S+(.*)", _COMMENT.sub("", line))
+        if match:
+            found = re.findall(r"--hash=sha256:([0-9a-f]{64})\b", match.group(2))
+            hashes[canonicalize_name(match.group(1))] = set(found)
+    return hashes
 
 
 def pyproject_requirements(group: str) -> list[Requirement]:
@@ -263,17 +278,35 @@ def test_the_image_installs_the_lock_and_only_the_lock() -> None:
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
     assert re.search(r"^COPY requirements\.lock ", dockerfile, re.MULTILINE)
     installs = [found.strip() for found in re.findall(r"pip install[^\n&;]*", dockerfile)]
-    assert installs == ["pip install --no-deps -r requirements.lock"], installs
+    assert installs == ["pip install --no-deps --require-hashes -r requirements.lock"], installs
 
 
 def test_ci_installs_the_backend_with_a_lock() -> None:
-    """Every CI job that installs the backend constrains it with a lock, so
-    what CI tests is what the image installs."""
-    lines = [
-        line.strip()
-        for line in CI_WORKFLOW.read_text(encoding="utf-8").splitlines()
-        if "pip install" in line and " -e " in line
-    ]
-    assert lines, "CI no longer installs the backend with pip"
-    unconstrained = [line for line in lines if not re.search(r"-c requirements(-dev)?\.lock", line)]
-    assert not unconstrained, f"installed without a lock: {unconstrained}"
+    """Every CI job that installs the backend installs a lock first, by hash,
+    and then the backend alone, so what CI tests is what the image installs."""
+    lines = [line.strip() for line in CI_WORKFLOW.read_text(encoding="utf-8").splitlines()]
+    backends = [n for n, line in enumerate(lines) if "pip install" in line and " -e " in line]
+    assert backends, "CI no longer installs the backend with pip"
+    for n in backends:
+        assert lines[n].startswith("pip install --no-deps -e "), (
+            f"the backend brings its own dependencies: {lines[n]}"
+        )
+        lock = r"pip install --no-deps --require-hashes -r requirements(-dev)?\.lock"
+        assert re.fullmatch(lock, lines[n - 1]), f"no lock installed before it: {lines[n - 1]}"
+
+
+@pytest.mark.parametrize("lock_name", LOCKS)
+def test_every_pin_carries_its_hashes(lock_name: str) -> None:
+    """--require-hashes refuses a pin without one, so a lost hash fails the
+    install; this says which, before a build gets there."""
+    hashes = read_hashes(BACKEND_ROOT / lock_name)
+    assert hashes.keys() == read_lock(BACKEND_ROOT / lock_name).keys()
+    bare = sorted(name for name, found in hashes.items() if not found)
+    assert not bare, f"{lock_name}: pins without a hash: {bare}"
+
+
+def test_both_locks_hold_the_same_hashes_for_a_runtime_pin() -> None:
+    """The server's files are the ones CI's tests ran on."""
+    runtime, dev = read_hashes(RUNTIME_LOCK), read_hashes(DEV_LOCK)
+    differ = sorted(name for name in runtime if runtime[name] != dev.get(name))
+    assert not differ, f"hashes differ between the two locks: {differ}"
