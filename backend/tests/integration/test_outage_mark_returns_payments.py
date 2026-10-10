@@ -287,7 +287,9 @@ async def test_a_return_typed_from_paper_is_stored_with_its_mark_and_shown_in_th
 async def test_a_payment_typed_from_paper_is_stored_and_shown_in_the_debt_s_history(maker):
     net = await network(maker)
     credit_id = await on_credit(maker, net)
-    written = paper(0, "10:05")
+    # Yesterday's: a morning hour of today has not come yet when the suite
+    # runs after midnight (local CI, 2026-10-11).
+    written = paper(1, "10:05")
     typed = await pay(
         maker, net, net.manager, credit_id, a_payment(mark=outage(net.seller, written))
     )
@@ -305,7 +307,7 @@ async def test_a_payment_typed_from_paper_is_stored_and_shown_in_the_debt_s_hist
         "seller",
     )
     assert datetime.fromisoformat(marked["outage"]["at"]) == datetime.combine(
-        kyiv_day(0), time(10, 5), KYIV
+        kyiv_day(1), time(10, 5), KYIV
     )
     assert ordinary["outage"] is None
     assert read["owed"] == "500.00"
@@ -345,7 +347,8 @@ async def test_the_mark_is_part_of_the_command(maker):
     """The same command resent with the same mark is the same; with another
     mark, or none, it is refused, as a sale's is."""
     net = await network(maker)
-    written = paper(0, "09:00")
+    # Yesterday's, so the hour has always come (local CI, 2026-10-11).
+    written = paper(1, "09:00")
     sale = await sold(maker, net)
     command = str(uuid.uuid4())
     body = a_return(sale, mark=outage(net.seller, written), command=command)
@@ -353,7 +356,7 @@ async def test_the_mark_is_part_of_the_command(maker):
     again = await take_back(maker, net, net.seller, sale, body)
     assert first.status_code == 201, first.text
     assert again.json() == first.json()
-    for other in (outage(net.manager, written), outage(net.seller, paper(0, "09:01")), None):
+    for other in (outage(net.manager, written), outage(net.seller, paper(1, "09:01")), None):
         conflict = await take_back(
             maker, net, net.seller, sale, a_return(sale, mark=other, command=command)
         )
