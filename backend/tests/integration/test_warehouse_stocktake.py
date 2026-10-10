@@ -304,7 +304,8 @@ async def test_positions_nobody_counted_stay_as_they_are_and_are_told(maker):
     assert {p["product_variant_id"] for p in left} == {coat[0], jacket[0], vest[0]}
     assert all(p["count"] is None for p in left)
 
-    await counted(maker, net, stocktake, *coat, 0, 3)
+    # Counted, and still on record: it is no longer offered as not counted.
+    await counted(maker, net, stocktake, *coat, 1, 3)
     left = await positions(maker, net, stocktake, "uncounted")
     assert {p["product_variant_id"] for p in left} == {jacket[0], vest[0]}
     # Paged as «Залишки» is.
@@ -316,15 +317,14 @@ async def test_positions_nobody_counted_stay_as_they_are_and_are_told(maker):
     assert done.json()["sums"] == {
         "counted_positions": 1,
         "unchecked_positions": 2,
-        "shortage_units": 3,
+        "shortage_units": 2,
         "shortage_positions": 1,
         "surplus_units": 0,
         "surplus_positions": 0,
     }
     assert done.json()["finished_by"] == "manager"
     assert (await balance(maker, net, *jacket), await balance(maker, net, *vest)) == (2, 1)
-    # A balance counted down to nothing is still a position counted.
-    assert await balance(maker, net, *coat) == 0
+    assert await balance(maker, net, *coat) == 1
 
 
 async def test_goods_found_that_the_list_does_not_show_are_a_surplus(maker):
