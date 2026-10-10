@@ -1338,3 +1338,19 @@ See the [report](warehouse-stocktake-report.md) and
 - **The list is in the order «Залишки» shows,** by model, not by name or
   shelf. A coat in hand is found with «Знайшли товар, якого немає в
   списку», which counts against the balance the server then names.
+
+## Instructions in Ukrainian — 2026-10-11
+
+See the [report](launch-guide-uk-report.md).
+
+- **Two copies of the install steps.** [server-setup-uk.md](server-setup-uk.md)
+  translates the English runbook's install, backups' setting up and
+  day-to-day running. A change made in one and not the other leaves an
+  administrator following a step that no longer holds. Each page says the
+  English is the source and a change is made in both; nothing checks it.
+- **Not rehearsed in Ukrainian.** The commands are the runbook's, as
+  rehearsed in English on 2026-10-09; nobody has yet installed a server
+  from the Ukrainian page.
+- **The managers' guide names the screens' words as they are on
+  2026-10-11.** A screen reworded later leaves the guide behind until it
+  is updated.

@@ -9,6 +9,9 @@ retention, off-server copies and alerting the same day (business-rules.md,
 server.
 The server itself is set up by the [server runbook](server-runbook.md), which
 sends you here at its step 8.
+Its "setting it up" is in Ukrainian too, in
+[server-setup-uk.md](server-setup-uk.md), step 8: a change to it is made in
+both.
 
 The owner hears of every failed or missing night in the app and in Telegram
 since the same day; see [how the owner hears of it](#how-the-owner-hears-of-it)

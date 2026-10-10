@@ -2065,7 +2065,7 @@ How it is carried out, not decided by the owner:
 - **Not marked:** the first payment of a sale paid in parts (the sale's
   own mark covers it), a write-off, an order collected (typed as a sale).
 - **The sellers' page** says to tick the switch for a payment and a return
-  too, always; that wording waits for the owner's confirmation.
+  too, always; the owner confirmed that wording on 2026-10-11.
 
 Built on 2026-10-10; see the [report](outage-mark-returns-payments-report.md)
 and [ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md).
@@ -2111,3 +2111,38 @@ How it is carried out, not decided by the owner:
 
 Built on 2026-10-10; see the [report](warehouse-stocktake-report.md) and
 [ADR-0022](../decisions/ADR-0022-warehouse-stocktake.md).
+
+## Owner decision — 2026-10-11 (instructions in Ukrainian for the launch)
+
+Chosen on 2026-10-11 after the stocktake of a whole warehouse: the release
+waits on steps a person takes on a server, and the server's instructions
+were in English. Each answer the recommended one.
+
+- **Who reads the server's instructions:** a technical person, an
+  administrator who works with a server and its command line: exact
+  commands, and what each prints when it held.
+- **What they cover:** the first install, the bot, the people, the shops'
+  existing stock, backups, being told of trouble, the day-to-day running
+  and what to do when the server does not answer. A new version, going
+  back, a full restore and security stay in the English runbook, for the
+  developer.
+- **A guide for managers:** stock on the warehouse — receiving, the selling
+  price, correcting a balance, a stocktake of a whole warehouse, and «Брак».
+- **Where:** pages in the project, as the sellers' page is, to print or
+  send. The app does not change.
+
+The owner confirmed the same day the sellers' page's steps 2, 6 and 7 of
+2026-10-10 (returns and payments typed from paper).
+
+How it is carried out, not decided by the owner:
+- **The English runbook stays the source.** Where the two differ, the
+  English is right, and a change to an install step is made in both; each
+  says so.
+- **Step 9, the shops' existing stock,** is summed up in Ukrainian; its
+  full detail stays in the English runbook.
+- **The managers' guide names the screens' own words** and states only
+  rules already decided, each where the owner decided it.
+
+Written on 2026-10-11; see the [report](launch-guide-uk-report.md), the
+[server's instructions](server-setup-uk.md) and the
+[managers' guide](managers-stock-uk.md).

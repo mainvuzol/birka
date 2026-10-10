@@ -14,6 +14,11 @@ isolated Docker verification of 2026-09-16
 Backups have their own [runbook](backup-restore-runbook.md). This one links
 to it at the step where it belongs.
 
+**In Ukrainian:** [server-setup-uk.md](server-setup-uk.md) carries the first
+install, backups' setting up and the day-to-day running for the
+administrator (owner decision, 2026-10-11). This runbook is the source: a
+change to those steps is made in both.
+
 ## What it needs
 
 | | |
