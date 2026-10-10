@@ -78,7 +78,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def _domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
         # Domain failures are expected outcomes, not incidents: logged at
         # warning, never with a stack trace, and never echoing the request body.
-        logger.warning("domain_error", code=exc.code, status=exc.http_status)
+        # A quiet one logs itself (a person's limit: their refusals counted in
+        # a line a minute rather than a line each).
+        if not exc.quiet:
+            logger.warning("domain_error", code=exc.code, status=exc.http_status)
         return JSONResponse(
             status_code=exc.http_status, content=exc.to_payload(), headers=exc.headers
         )

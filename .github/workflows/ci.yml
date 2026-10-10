@@ -308,6 +308,11 @@ jobs:
       BIRKA_SESSION_SECRET: ci-session-secret-that-is-long-enough-32
       BIRKA_LOG_LEVEL: WARNING
       BIRKA_PERF_GATE: one-seller
+      # Each seller here asks hundreds of times in seconds; a server keeps 300
+      # a minute per person (rate_limit.py). The limit is still taken on
+      # every request, so its cost is in the figures.
+      BIRKA_REQUESTS_PER_MINUTE_PER_PERSON: "100000"
+      BIRKA_REQUEST_BURST_PER_PERSON: "100000"
 
     defaults:
       run:
@@ -449,6 +454,12 @@ jobs:
       # people do; a server keeps the limit of 30 a minute (rate_limit.py).
       BIRKA_SIGN_INS_PER_MINUTE: "100000"
       BIRKA_SIGN_IN_BURST: "100000"
+      # And as one person, journey after journey, far faster than anyone
+      # works; a server keeps 300 a minute and 20 heavy ones (rate_limit.py).
+      BIRKA_REQUESTS_PER_MINUTE_PER_PERSON: "100000"
+      BIRKA_REQUEST_BURST_PER_PERSON: "100000"
+      BIRKA_HEAVY_REQUESTS_PER_MINUTE_PER_PERSON: "100000"
+      BIRKA_HEAVY_REQUEST_BURST_PER_PERSON: "100000"
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

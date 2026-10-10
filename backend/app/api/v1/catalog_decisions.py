@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import DBAPIError
 
-from app.api.deps import ScopeDep, SessionDep
+from app.api.deps import HeavyScopeDep, ScopeDep, SessionDep
 from app.api.v1.catalog import ProductRequest, ProductResponse
 from app.core.errors import CatalogAmbiguousError
 from app.core.text import CleanText
@@ -72,7 +72,9 @@ class DecisionResponse(BaseModel):
 
 
 @router.post("", response_model=DecisionResponse)
-async def create(payload: DecisionRequest, scope: ScopeDep, session: SessionDep) -> dict[str, Any]:
+async def create(
+    payload: DecisionRequest, scope: HeavyScopeDep, session: SessionDep
+) -> dict[str, Any]:
     result = await create_decision(session, scope=scope, **payload.model_dump())
     await session.commit()
     return result

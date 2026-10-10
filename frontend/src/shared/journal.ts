@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
-import { api, ApiError, recordedNothing } from "@/shared/api";
+import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
 
 /**
@@ -184,9 +184,8 @@ export function journal<
     } catch (error) {
       const definite =
         (!previouslyAmbiguous || recordedNothing(error)) &&
-        error instanceof ApiError &&
-        error.code !== "IDEMPOTENCY_IN_PROGRESS" &&
-        [400, 403, 404, 409, 422].includes(error.status);
+        refusedOutright(error) &&
+        error.code !== "IDEMPOTENCY_IN_PROGRESS";
       if (definite) {
         localStorage.removeItem(storageKey);
         use.setState({ pending: null, error: null });

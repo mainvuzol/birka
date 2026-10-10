@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.deps import ScopeDep, SessionDep
+from app.api.deps import HeavyScopeDep, ScopeDep, SessionDep
 from app.core.text import CleanText
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.matching import duplicate_family_signatures, preview_match
@@ -55,7 +55,7 @@ class MatchPreviewResponse(BaseModel):
 
 @router.post("/match-preview", response_model=MatchPreviewResponse)
 async def match_preview(
-    payload: MatchPreviewRequest, scope: ScopeDep, session: SessionDep
+    payload: MatchPreviewRequest, scope: HeavyScopeDep, session: SessionDep
 ) -> dict[str, Any]:
     scope.require(Permission.CATALOG_CONFIRM, payload.store_id)
     result = await preview_match(

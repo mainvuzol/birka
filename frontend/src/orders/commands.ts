@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError, recordedNothing } from "@/shared/api";
+import { api, recordedNothing, refusedOutright } from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
 import type { Order } from "./types";
 export interface Pending {
@@ -130,8 +130,7 @@ export async function submitPending(
     if (
       (!previouslyAmbiguous || recordedNothing(error)) &&
       !current.acknowledged &&
-      error instanceof ApiError &&
-      [400, 403, 404, 409, 422].includes(error.status)
+      refusedOutright(error)
     ) {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);

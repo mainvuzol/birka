@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError, recordedNothing } from "@/shared/api";
+import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
 import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { isSince, sinceOf } from "@/shared/reach";
@@ -311,9 +311,8 @@ export async function submitSale(
     const definite =
       (!previouslyAmbiguous || recordedNothing(error)) &&
       !current.acknowledged &&
-      error instanceof ApiError &&
-      error.code !== "IDEMPOTENCY_IN_PROGRESS" &&
-      [400, 403, 404, 409, 422].includes(error.status);
+      refusedOutright(error) &&
+      error.code !== "IDEMPOTENCY_IN_PROGRESS";
     if (definite) {
       localStorage.removeItem(storageKey);
       // Handed back to the caller rather than raised globally: the till has a

@@ -65,7 +65,7 @@ See the [report](m1-023-snapshot-import-report.md) and [ADR-0005](../decisions/A
 Found by the independent code reviews (2026-09-28). The fixes are in the report; these remain.
 
 - **The catalog parser is superlinear.** Two things scale badly with a line's length: size tokens are rescanned per token, and the slash pattern backtracks. A 2 000-character hostile line costs about 70 ms. The stock-list import is bounded (500 characters a line, 100 000 a part: a pasted text or a file) and parses off the event loop. A linear parser needs a parser version and the evaluation gate. The catalog preview and decisions take one line of up to 2 000 characters per request, bounds that predate this.
-- **No request-size limit or rate limit in front of the API.** Closed on 2026-10-03: Caddy refuses a body over 1 MB, and the API limits sign-ins per address ([before the public domain](#before-the-public-domain--2026-10-03)). Signed-in requests are still not limited per person.
+- **No request-size limit or rate limit in front of the API.** Closed on 2026-10-03: Caddy refuses a body over 1 MB, and the API limits sign-ins per address ([before the public domain](#before-the-public-domain--2026-10-03)). Since 2026-10-10 signed-in requests are limited per person too ([ADR-0020](../decisions/ADR-0020-requests-per-person.md)).
 - **A parse is stored twice.** `ParseResult` keeps `unclassified` beside the full `parsed` document. This is bounded by the import limits, and changing it is a parser-storage change.
 - **An approval holds its warehouse exclusively while it writes.** That is up to 5 000 lots and movements, with no `lock_timeout`. By definition nothing else has written to that warehouse yet. **Measured on 2026-10-08** (ADR-0014 §10, [evidence](../../output/verification/2026-10-08-json-import-approval/README.md)): 7.6 s at 5 000 answers on the local PostgreSQL 16; on 2026-10-09, with every answer by size read again at the approval, at most 8.6 s, and the 2026-10-08 method up to 9.5 s the same hour on a busier laptop; measured again in the review's third round the same day, by size at most 8.48 s and the 2026-10-08 method up to 9.87 s, 0.13 s under the 10 s rule ([evidence](../../output/verification/2026-10-09-json-import-approval-by-size/README.md)); see [the JSON stock import](#the-json-stock-import--2026-10-08).
 - **The catalog check at approval is unlocked.** `require_active_variants` reads variant status without a lock. No command retires or merges a variant today; one that does must serialize with approval. **Closed by ADR-0008 (2026-10-03):** resolving a line and approving a list hold their models `FOR KEY SHARE`, which a merge and a retirement wait for; the refusal names the lines.
@@ -610,10 +610,26 @@ See the [report](public-hardening-report.md) and
   holds the phone opens the app again through the person's Telegram until
   that session is ended (Telegram → Settings → Devices); the runbook and the
   command's own output say so.
-- **Signed-in requests are not limited per person.** One seller's token can
-  still keep the API busy: the catalogue parser runs on the only event loop.
+- **Signed-in requests were not limited per person.** One seller's token
+  could keep the API busy: the catalogue parser runs on the only event loop.
   Since 2026-10-03 a statement is cancelled after 30 seconds, so the
-  database is not held for long.
+  database is not held for long. **Closed on 2026-10-10**
+  ([ADR-0020](../decisions/ADR-0020-requests-per-person.md)): every
+  signed-in request counts against its person, on all their phones together,
+  300 at once and 300 a minute, and the five requests that parse a file or a
+  catalogue line, or approve a list, 20 at once and 20 a minute besides.
+  The numbers were measured as far above anyone's work. What stays:
+  - a stolen token spends its person's budget, and the person is refused
+    with it until it refills; `scripts.people sign-out` ends the token, and
+    the person's next sign-in counts in a new bucket;
+  - uvicorn writes an access line for every request, refused or not, so a
+    flood of requests, signed in or not, still turns over Docker's 50 MB of
+    the API's log;
+  - the buckets live in the API's memory, and a restart forgets them;
+  - the heavy requests are a list in the code: a new one is added there on
+    purpose (`tests/unit/test_person_limit.py` names them);
+  - a kept operation refused when checked stays kept, and the till blocked,
+    until it is checked again.
 - **The API connected to PostgreSQL as the owner of every table**, in fact
   as a superuser, the official image's `POSTGRES_USER`. **Closed on
   2026-10-09** ([ADR-0016](../decisions/ADR-0016-the-apps-database-role.md)):

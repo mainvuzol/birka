@@ -212,6 +212,23 @@ export function recordedNothing(error: unknown): boolean {
   return error instanceof ApiError && error.details.recorded === false;
 }
 
+/**
+ * A refusal of this very request, looked at and turned down: a first attempt
+ * refused so was never recorded. A resend of an attempt whose outcome was
+ * unknown proves nothing about the first sending by it, unless the server
+ * says so (`recordedNothing`); each journal checks that itself.
+ *
+ * A person past their requests (429 `TOO_MANY_REQUESTS`; owner decision,
+ * 2026-10-10, ADR-0020) is one: refused before anything was read.
+ */
+export function refusedOutright(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    ([400, 403, 404, 409, 422].includes(error.status) ||
+      (error.status === 429 && error.code === "TOO_MANY_REQUESTS"))
+  );
+}
+
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;
@@ -254,6 +271,17 @@ export function errorText(error: unknown): string {
       : "Магазин заблоковано власником: операції в ньому зупинено.";
   if (error.status === 401)
     return "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.";
+  // One person past their requests, on all their phones together (owner
+  // decision, 2026-10-10; ADR-0020): nothing was done, so wait and repeat.
+  // Never «не записано»: a kept operation's banner says to type it from
+  // paper only on those words, and a resend refused here says nothing about
+  // the first sending.
+  if (error.code === "TOO_MANY_REQUESTS") {
+    const seconds = Number(error.details.retry_after);
+    return Number.isInteger(seconds) && seconds > 0
+      ? `Забагато дій за короткий час. Зачекайте ${String(seconds)} с і повторіть.`
+      : "Забагато дій за короткий час. Зачекайте хвилину й повторіть.";
+  }
   // Too many sign-ins from one address are refused for a while, so that the
   // public address cannot be flooded with them.
   if (error.code === "RATE_LIMITED")
