@@ -18,20 +18,45 @@ import { create } from "zustand";
  *
  * Since 2026-10-10 the same switch types returns and debt payments from
  * paper (owner decision; ADR-0021): one series per store, whichever screen
- * it is ticked on, and the person named carries across them.
+ * it is ticked on. Who is named is each screen's own — who sold, who took a
+ * return, who took a payment — so a name chosen for one is never sent,
+ * unseen, for another: a wrong mark is permanent.
  */
 interface Paper {
   /** The store whose till is in paper mode; null when none is. */
   storeId: string | null;
   /** «Хто продав»: one of that store's sellers, or null for «Не вказано». */
   soldBy: string | null;
+  /** «Хто прийняв» a return, and a debt payment: each screen's own. */
+  takenBy: { refund: string | null; credit: string | null };
 }
 
-export const usePaper = create<Paper>(() => ({ storeId: null, soldBy: null }));
+const nobody = { refund: null, credit: null };
+
+export const usePaper = create<Paper>(() => ({
+  storeId: null,
+  soldBy: null,
+  takenBy: nobody,
+}));
 
 /** The switch, ticked or unticked: either way nobody is named yet. */
 export function setPaper(storeId: string, on: boolean): void {
-  usePaper.setState({ storeId: on ? storeId : null, soldBy: null });
+  usePaper.setState({
+    storeId: on ? storeId : null,
+    soldBy: null,
+    takenBy: nobody,
+  });
+}
+
+/** «Хто прийняв» on «Повернення» or in «Борги», for the store in paper mode. */
+export function setTakenBy(
+  storeId: string,
+  kind: "refund" | "credit",
+  takenBy: string | null,
+): void {
+  const state = usePaper.getState();
+  if (state.storeId === storeId)
+    usePaper.setState({ takenBy: { ...state.takenBy, [kind]: takenBy } });
 }
 
 /** «Хто продав», for the store whose till is in paper mode. */
@@ -41,7 +66,7 @@ export function setSoldBy(storeId: string, soldBy: string | null): void {
 
 /** Another store chosen, or the app left: no series carries over. */
 export function clearPaper(): void {
-  usePaper.setState({ storeId: null, soldBy: null });
+  usePaper.setState({ storeId: null, soldBy: null, takenBy: nobody });
 }
 
 /** The phone's own date, today or yesterday: the paper's day (G1). */

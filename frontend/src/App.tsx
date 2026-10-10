@@ -1319,11 +1319,11 @@ function Workspace({
               : ""}
             . {visible(creditSettled.credit.customer_name ?? erasedCustomer)}:
             залишок боргу {money(creditSettled.credit.owed)}.
-            {creditSettled.amount !== null &&
-              creditSettled.way === "CARD" &&
-              (creditSettled.fromPaper
-                ? " Оплату провели під час збою — на терміналі не проводьте ще раз."
-                : ` ${chargeOnce(creditSettled.amount)}`)}
+            {creditSettled.fromPaper
+              ? paidOnPaper(creditSettled.way)
+              : creditSettled.amount !== null &&
+                creditSettled.way === "CARD" &&
+                ` ${chargeOnce(creditSettled.amount)}`}
           </p>
           <button
             onClick={() => {
@@ -1827,6 +1827,17 @@ function Workspace({
  * seller may have charged the terminal meanwhile, so it says to charge it
  * only if nobody did (owner decision, 2026-10-07; ADR-0013 §5.6, G19).
  */
+/**
+ * A kept payment typed from paper, confirmed: what the till says of money
+ * taken during the outage, by its way (ADR-0021) — never to charge again.
+ */
+function paidOnPaper(way: PaymentMethod | null): string {
+  const paid = way === null ? null : paidDuringOutage(way);
+  return paid === null
+    ? ""
+    : ` ${paid.charAt(0).toUpperCase()}${paid.slice(1)}.`;
+}
+
 function chargeOnce(amount: string): string {
   return `Якщо картку ще не провели — проведіть на терміналі ${money(amount)}. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.`;
 }

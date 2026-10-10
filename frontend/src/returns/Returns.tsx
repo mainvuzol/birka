@@ -380,7 +380,11 @@ export function Done({
         <p className="badge">{paperText("return", refund.outage)}</p>
       )}
       {elsewhere && (
-        <p>Товар куплено в іншому магазині мережі — гроші віддаєте ви.</p>
+        <p>
+          {refund.outage
+            ? "Товар куплено в іншому магазині мережі — гроші віддавав ваш магазин."
+            : "Товар куплено в іншому магазині мережі — гроші віддаєте ви."}
+        </p>
       )}
       {credit ? (
         <>
@@ -665,7 +669,9 @@ function ReturnForm({
         <fieldset>
           <legend>
             {mark.paper
-              ? "Як повернули гроші під час збою"
+              ? sale.paid_in_parts
+                ? "Як повертали гроші під час збою (якщо повертали)"
+                : "Як повернули гроші під час збою"
               : sale.paid_in_parts
                 ? "Як повертаємо гроші (якщо буде що повертати)"
                 : "Як повертаємо гроші"}
@@ -709,14 +715,17 @@ function ReturnForm({
         </button>
         {mark.paper && (
           <p className="hint">
-            Гроші повернули під час збою: оберіть, як повертали, і натисніть.
-            Покупцю вдруге нічого не віддавайте.
+            Гроші, які віддали під час збою, вдруге не віддавайте: оберіть, як
+            їх віддавали, і натисніть.
             {` Хто прийняв: ${mark.named ? visible(mark.named.display_name) : "не вказано"}.`}
           </p>
         )}
       </fieldset>
       {refusal !== null && (
-        <p role="alert">{refusalText(refusal)} Нічого не повернено.</p>
+        <p role="alert">
+          {refusalText(refusal)}{" "}
+          {mark.paper ? "Нічого не записано." : "Нічого не повернено."}
+        </p>
       )}
     </section>
   );

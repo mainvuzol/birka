@@ -1280,7 +1280,11 @@ See the [report](outage-mark-returns-payments-report.md) and
   tick it always.
 - **One switch for the till, «Повернення» and «Борги».** Ticked on one
   screen, it is on on the others for the same store until unticked or the
-  store is left. Every button says «З паперу · …» while it is on.
+  store is left. Left on after a series, a live debt payment typed next
+  becomes one «з паперу»: its screen says not to charge the card, and the
+  card may go uncharged. Every button says «З паперу · …» while it is on,
+  and each screen shows the band «Режим: з паперу». Who is named is each
+  screen's own, never carried from one to another.
 - **The mark is the typist's word,** as a sale's: nothing checks who took
   the money or when. A wrong mark is permanent; the database refuses any
   change of it.

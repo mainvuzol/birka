@@ -13,6 +13,8 @@ one day to a year (`PERIOD`).
 - `GET /reports/sales/entries` — every sale and return, the newest first. A
   sale typed from paper carries its mark «продано під час збою» (`outage`):
   who sold and the paper's time; `by` is whoever typed it (ADR-0013 §5.6).
+  A return typed from paper carries it too, `sold_by` then naming who took
+  it back (ADR-0021).
 
 The last two read one store (`store_id`), or every store the report shows.
 """

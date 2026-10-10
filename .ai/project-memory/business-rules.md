@@ -2054,9 +2054,10 @@ payment said nothing about the terminal.
 
 How it is carried out, not decided by the owner:
 - **One switch for the store,** on the till, «Повернення» and «Борги»
-  together: ticked on one, it is on on the others, and the person named
-  carries across; the hour is each operation's own. Leaving the store
-  clears it, as at the till.
+  together: ticked on one, it is on on the others; leaving the store
+  clears it, as at the till. Who is named is each screen's own, so a name
+  chosen for a sale is never sent for a return; the hour is each
+  operation's own.
 - **Who may be named:** someone who may take returns there
   (`sale:refund`), or payments (`sale:credit`), now, in the store taking
   it: for a return at another store, or a closed store's debt paid at one

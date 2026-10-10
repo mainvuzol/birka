@@ -47,7 +47,9 @@ in «Каса» (ADR-0012, G24).
 A sale typed from paper (owner decisions, 2026-10-04 and 2026-10-07;
 ADR-0013 §5.6) counts on the day it was typed, like any sale: its entry says
 «продано під час збою», who sold and the paper's time, as the paper says, and
-`by` stays whoever typed it. The mark changes no figure.
+`by` stays whoever typed it. The mark changes no figure. A return typed from
+paper carries it too (owner decision, 2026-10-10; ADR-0021): who took it
+back and the paper's time.
 
 Nothing here is stored, so it never disagrees with what it sums.
 """

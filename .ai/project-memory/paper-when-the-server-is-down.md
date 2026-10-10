@@ -8,7 +8,7 @@
 > by the phone, and the app that does not open at all (2026-10-08). See
 > business-rules.md, "the server is unreachable" and "how it is carried
 > out", and [ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md).
-> Steps 6 and 7 updated on 2026-10-10 for the owner's decision that
+> Steps 2, 6 and 7 updated on 2026-10-10 for the owner's decision that
 > returns and debt payments typed from paper carry the mark too
 > ([ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md));
 > the new wording waits for the owner's confirmation.
@@ -30,8 +30,10 @@
    (готівка, картка, переказ), час і хто продав. У магазині з двома
    складами — ще з якого складу віддали (свій чи спільний).
    - Оплата частинами: ще ім’я й телефон покупця і скільки сплатив зараз.
-   - Внесок за борг: ім’я й телефон покупця, суму, як оплатив.
-   - Повернення: що повернули, коли це купили, як віддали гроші.
+   - Внесок за борг: ім’я й телефон покупця, суму, як оплатив, час і хто
+     прийняв.
+   - Повернення: що повернули, коли це купили, як віддали гроші, час і хто
+     прийняв.
    - Забране замовлення: яке замовлення і як оплачено.
 3. **Картку проводьте на терміналі одразу, як завжди.** Коли потім вносите
    з паперу, на терміналі нічого не проводьте вдруге, і гроші за повернення

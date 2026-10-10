@@ -1912,7 +1912,7 @@ test.describe("9. what to do with money after the outage", () => {
       has: page.getByRole("heading", { name: "Внесок підтверджено" }),
     });
     await expect(confirmed).toContainText(
-      "Оплату провели під час збою — на терміналі не проводьте ще раз.",
+      "Оплату провели під час збою, на терміналі не проводьте ще раз.",
     );
     await expect(confirmed).not.toContainText("Якщо картку ще не провели");
     expect(payments).toEqual([

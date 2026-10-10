@@ -138,8 +138,9 @@ async def list_sellers(
     own check accepts (`sales.outage.nameable_sellers`).
 
     `for=refund` and `for=credit` ask the same of a return or a debt payment
-    typed from paper here: whoever may take one (`sale:refund`,
-    `sale:credit`; owner decision, 2026-10-10, ADR-0021).
+    typed from paper here (owner decision, 2026-10-10: the mark as a sale's):
+    whoever may take one, `sale:refund` or `sale:credit`, a reading of how
+    it is carried out (ADR-0021).
 
     Whoever may do it here reads it, asked as the command is: a store that
     does not trade gives nobody anything, not even to a role that reads the

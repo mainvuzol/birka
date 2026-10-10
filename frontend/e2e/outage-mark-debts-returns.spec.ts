@@ -172,7 +172,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   await page.getByLabel("Вношу повернення з паперу").check();
   await expect(
     page.getByRole("region", { name: "Режим: з паперу" }),
-  ).toContainText("Гроші вже віддали — вдруге не віддавайте.");
+  ).toContainText("Гроші, які віддали під час збою, вдруге не віддавайте.");
   await page
     .getByRole("combobox", { name: "Хто прийняв" })
     .selectOption({ label: "Ганна" });
@@ -244,7 +244,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
     ),
   ).toBeVisible();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
-    "Внесок під час збою · хто прийняв: Ганна",
+    "Внесок під час збою · хто прийняв: Ганна · внесено: Ліда",
   );
   expect(sent).toHaveLength(1);
   expect(sent[0]?.payment_method).toBe("CARD");
@@ -254,12 +254,24 @@ test("a card payment typed from paper never says to charge the card, and the deb
   });
 });
 
-test("the switch is one for the store: ticked on «Повернення», the till is in paper mode too, and unticked at the till it is off on «Повернення»", async ({
+test("the switch is one for the store: ticked on «Повернення», the till and «Борги» are in paper mode too, a name chosen at the till is not taken for a return, and unticked at the till it is off everywhere", async ({
   page,
 }) => {
-  await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  const name = `Перемикач ${randomUUID().slice(0, 6)}`;
+  const phone = `067${String(randomBytes(4).readUInt32BE() % 10_000_000).padStart(7, "0")}`;
+  await soldAtCentre(page, { customer_name: name, customer_phone: phone });
   const { model } = await soldAtCentre(page);
+  await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
+
+  // At the till: paper mode, «Ганна» named as having sold.
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  await page.getByLabel("Вношу продаж з паперу").check();
+  await page
+    .getByRole("combobox", { name: "Хто продав" })
+    .selectOption({ label: "Ганна" });
+
+  // «Повернення»: in paper mode too, and nobody named for the return.
+  await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Пошук за назвою товару").fill(model);
   await page.getByRole("button", { name: "Знайти" }).click();
   await page
@@ -267,12 +279,26 @@ test("the switch is one for the store: ticked on «Повернення», the t
     .filter({ hasText: model })
     .getByRole("button", { name: "Оформити повернення" })
     .click();
-  await page.getByLabel("Вношу повернення з паперу").check();
+  await expect(page.getByLabel("Вношу повернення з паперу")).toBeChecked();
+  await expect(page.getByRole("combobox", { name: "Хто прийняв" })).toHaveValue(
+    "",
+  );
 
+  // «Борги»: the same.
+  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByRole("button", { name: `Відкрити борг ${name}` }).click();
+  await expect(page.getByLabel("Вношу внесок з паперу")).toBeChecked();
+  await expect(
+    page
+      .getByRole("group", { name: "Внесок", exact: true })
+      .getByRole("button", { name: "З паперу · Готівка" }),
+  ).toBeVisible();
+
+  // Unticked at the till: off on «Повернення».
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await expect(page.getByLabel("Вношу продаж з паперу")).toBeChecked();
   await page.getByLabel("Вношу продаж з паперу").uncheck();
-
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Пошук за назвою товару").fill(model);
   await page.getByRole("button", { name: "Знайти" }).click();

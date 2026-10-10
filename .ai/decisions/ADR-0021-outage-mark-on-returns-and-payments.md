@@ -29,11 +29,16 @@ for them might be added later (backlog). Without it:
    «Звіт»'s day and the drawer are those of the moment it is typed. A wrong
    mark is permanent.
 2. **The till's switch** (owner): on «Повернення» and on a debt's «Внесок»,
-   «Вношу повернення з паперу» and «Вношу внесок з паперу». It is the
-   till's own switch: one series per store on the phone, whichever screen
-   it is ticked on, cleared when the store is left; the person named
-   carries across; the hour is each operation's. In paper mode the buttons
-   say «З паперу · …», and under them who took it.
+   «Вношу повернення з паперу» and «Вношу внесок з паперу», kept for a
+   series; in paper mode the buttons say «З паперу · …», and under them who
+   took it. How it is carried out, not decided by the owner:
+   - it is the till's own state: one series per store on the phone,
+     whichever screen it is ticked on, cleared when the store is left;
+   - who is named is each screen's own (who sold, who took a return, who
+     took a payment), kept for that screen's series, so a name chosen on
+     one is never sent, unseen, for another (found by the review: a wrong
+     mark is permanent);
+   - the hour is each operation's.
 3. **The screens say the money was already handed over** (owner):
    - a return: «… повернули під час збою — вдруге не повертайте.», with
      the mark, on «Повернення оформлено», and the same when the phone
@@ -51,7 +56,9 @@ for them might be added later (backlog). Without it:
    with nothing named; answered as `outage: {by_user_id, by, at}` on the
    refund and on the debt's entry. Named so, not as a sale's `sold_by`:
    nobody sold here. Only the shape is checked before the replay lookup.
-6. **Checked after the lookup, by the store taking it** (as ADR-0013 §5.3):
+6. **Checked after the lookup, by the store taking it** (as ADR-0013 §5.3;
+   how it is carried out, as a sale's "one of the store's people" reads for
+   a return and a payment):
    - whoever is named may take one there now: `sale:refund` for a return,
      `sale:credit` for a payment, by a grant for that store or for the
      whole network, active, of this network; else `OUTAGE_SELLER_UNKNOWN`;
@@ -84,8 +91,10 @@ for them might be added later (backlog). Without it:
   without it is an ordinary one, and its screen says to hand the money over,
   as before. The sellers' page says to tick it always.
 - **One switch for three screens** means a series ticked on «Повернення»
-  is on at the till too. The buttons say «З паперу» before every press, as
-  they do at the till.
+  is on at the till and in «Борги» too, and one left on at the till turns a
+  live payment into one «з паперу»: its screen then says not to charge the
+  card. The buttons say «З паперу» before every press, as they do at the
+  till, and the screen's band «Режим: з паперу» shows it.
 - **The mark is the typist's word,** as a sale's is (ADR-0013 §5): nothing
   checks who took the money or when.
 

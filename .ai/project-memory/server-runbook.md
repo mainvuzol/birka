@@ -623,6 +623,10 @@ Within the hour, `backup-watch` erases the customers of debts closed long
 enough (owner, 2026-10-09). From then on, going back by the code alone is
 unsafe (below).
 
+**The update that brings `0039` (the mark on returns and payments)** needs
+nothing more. A page left open sends no mark on a return or a payment and
+shows the old texts. Reopen the app after it, as always.
+
 ## Going back
 
 1. **The code alone.**
@@ -652,6 +656,13 @@ unsafe (below).
      marked sale recorded whose answer was lost, resent to the old server,
      is refused before its lookup and stays kept until the server is
      upgraded again.
+   - **Across `0039` (the mark on returns and payments) it is safe,** in
+     the same way: the old code leaves the new columns to their defaults,
+     and refuses a marked return or payment from a page of the new version,
+     so nothing is recorded. The same narrow case holds a phone: a marked
+     return or payment recorded whose answer was lost, resent to the old
+     server, is refused before its lookup and stays kept until the server
+     is upgraded again.
    - **Not across `0038` (customers' data) once a customer is erased:** by
      the owner, or by the hourly erasure as soon as any debt is past its
      term. The old code cannot read a debt with no name: «Борги» with
@@ -672,6 +683,8 @@ unsafe (below).
      `0035` cannot hold it, and the mark is never changed.
    - `0038` refuses once any customer is erased: `0037` cannot hold a debt
      without one. Before that it is lossless (rehearsal, 2026-10-09).
+   - `0039` refuses once any return or debt payment carries the mark «під
+     час збою»: `0038` cannot hold it, and the mark is never changed.
    - The downgrade is run by the new release's code, which knows it, and
      only then the old code is checked out:
      ```sh

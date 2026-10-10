@@ -56,18 +56,22 @@ On 2026-10-10, each answer the recommended one:
 - **«Борги»:** «Вношу внесок з паперу» with the same fields, buttons «З
   паперу · Готівка/Картка/Переказ», and «Внесок … з паперу записано:
   карткою — оплату провели під час збою, на терміналі не проводьте ще
-  раз.»; a kept one confirmed later never says to charge the card. The
-  history: «Внесок під час збою · хто прийняв: …».
+  раз.»; a kept one confirmed later says the same by its way, never to
+  charge the card. The history: «Внесок під час збою · хто прийняв: … ·
+  внесено: …».
 - **«Звіт»:** a marked return reads «Повернено під час збою · хто прийняв:
   … · за папером … · внесено: …».
-- **One switch** for the till, «Повернення» and «Борги» of a store; the
-  person named carries across, the hour is each operation's.
-- **The sellers' page,** steps 6 and 7: tick the switch for a payment and a
-  return too. The new wording waits for the owner's confirmation.
+- **One switch** for the till, «Повернення» and «Борги» of a store; who is
+  named is each screen's own, the hour each operation's.
+- **The sellers' page,** steps 2, 6 and 7: write down who took a payment or
+  a return and when, and tick the switch for them too. The new wording
+  waits for the owner's confirmation.
+- **The server runbook:** the update that brings `0039`, and going back
+  across it.
 
 ## How it was built and proven
 
-- **Server tests** (`test_outage_mark_returns_payments.py`, 11):
+- **Server tests** (`test_outage_mark_returns_payments.py`, 13):
   - a return typed by the manager naming the seller: stored, answered,
     today's, in the same drawer as a live one, and in «Звіт» with who took
     it and who typed it;
@@ -78,33 +82,68 @@ On 2026-10-10, each answer the recommended one:
     another time or none conflicts, for both;
   - who may be named: a cashier who only sells, someone who left, another
     store's seller and a stranger refused; the seller, manager and owner
-    accepted;
+    accepted; someone who takes returns and no payments named on a return,
+    refused on a payment, and listed so;
   - the lists for `refund` and `credit` are exactly whom the checks accept,
     the till's still includes the cashier, and only whoever may take one
     reads its list;
   - the paper's time: two days old and tomorrow refused, with `details.at`;
     seconds or a space refused by shape before the lookup;
-  - a marked return and payment replay after their person left and their
-    day passed;
+  - a marked return and payment typed while the clock read two days ago
+    replay now, when a new one with that time is refused; and replay after
+    their person left, when a new one naming them is refused;
   - another store's: the taking store's people only;
   - the mark never changed, nor a live return marked afterwards;
   - `0039` goes down and up, and refuses once a payment is marked.
 - **Pinned prints:** a marked return's two and a marked payment's one,
-  beside the earlier ones, all unchanged.
+  naming someone and naming nobody (`{}`), beside the earlier ones, all
+  unchanged.
 - **Journeys:**
   - against the real server (`outage-mark-debts-returns.spec.ts`): a return
     typed by «Ліда» naming «Ганна» says the money went back, sends the
     mark, and shows in «Звіт» with who typed it; a card payment says not to
-    charge, sends the mark, and shows in the history; the switch ticked on
-    «Повернення» is on at the till, and unticked there is off;
+    charge, sends the mark, and shows in the history with who typed it;
+    the switch ticked at the till is on on «Повернення» and in «Борги»,
+    the name chosen at the till is not taken for a return, and unticked at
+    the till it is off;
   - stubbed (`outage.spec.ts`): a kept return and a kept card payment typed
     from paper, confirmed by the phone, say the money was handed over and
     are resent with their mark.
-- **Mutation:** TODO(final).
+- **Mutation:** twenty-seven ways of breaking it, one at a time, each
+  caught: seventeen on the server, ten on the screens, four of them added
+  after the review (a mark checked before either lookup, the payments'
+  list the returns', the till's name taken for a return)
+  ([list](../../output/verification/2026-10-10-outage-mark-returns-payments/mutants.txt)).
 
 ## Review of the built change
 
-TODO(final)
+An independent review read the first commit (`8102e7f`). It found no
+defect in the commands, the schema or the prints: the old prints keep their
+values, the checks sit after the lookup in both commands, the ledger's
+guard does freeze the new columns, and a name is sent only when listed. It
+found, all addressed:
+- **"Replays after its day passed" was claimed, not tested:** the test
+  never moved the clock. It does now, as the sale's does, for both.
+- **The name chosen at the till was pre-selected for a return,** where a
+  wrong mark is permanent; and the ADR credited the owner with the shared
+  switch and the carried name, which the business rules list as readings.
+  Who is named is now each screen's own, and the ADR says what is a
+  reading. The switch left on after a series, turning a live payment into
+  one «з паперу», is in the risk register.
+- **No runbook entry for `0039`:** added, for the update and for going
+  back.
+- **Texts untrue in two cases:** a return of a sale paid in parts that only
+  lowers the debt, and one taken at another store. Reworded: «Гроші, які
+  віддали під час збою, вдруге не віддавайте», «Як повертали гроші під час
+  збою (якщо повертали)», «гроші віддавав ваш магазин».
+- **A kept transfer payment typed from paper said nothing:** it says what
+  the till says of a transfer now.
+- **Test gaps:** the two permissions could be swapped unnoticed (now a role
+  with only `sale:refund`), and the mark naming nobody had no pinned print
+  (now pinned).
+- **Nits:** the checklist's journey count, the sellers' page's step 2, the
+  report docstrings, «внесено:» in the debt's history, and «Нічого не
+  записано.» after a mark's refusal in paper mode.
 
 ## Evidence
 
@@ -117,3 +156,7 @@ TODO(final)
 - **The mark is the typist's word,** and permanent.
 - **Debt payments stay one sum in «Звіт»**; their marks are in «Борги».
 - **The sellers' page's new steps** are not yet confirmed by the owner.
+- **The store's zone:** both stores of the tests are in Kyiv, so the taking
+  store's zone and the selling store's are never told apart.
+- **Journeys not walked:** a card or transfer return from paper, a return
+  of a sale paid in parts from paper, a corrupt kept mark on reload.

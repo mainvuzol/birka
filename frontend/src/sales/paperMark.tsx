@@ -4,15 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
-import { paperDay, setPaper, setSoldBy, usePaper } from "./paper";
+import { paperDay, setPaper, setTakenBy, usePaper } from "./paper";
 
 /**
  * A return or a debt payment typed from paper (owner decision, 2026-10-10;
  * ADR-0021): the mark «під час збою», as a sale's. It may name who took it
  * and at what hour, as the paper says; both optional. The switch is the
  * till's (`./paper`): one series per store, whichever screen it is ticked
- * on, and the person named carries across; the paper's time is each
- * operation's own.
+ * on; who is named is this screen's own, kept for its series; the paper's
+ * time is each operation's own.
  */
 
 /** The mark as a return's or a payment's request carries it. */
@@ -88,7 +88,7 @@ export function usePaperMark(
 ) {
   const paper = usePaper((state) => state.storeId === store.id);
   const takenBy = usePaper((state) =>
-    state.storeId === store.id ? state.soldBy : null,
+    state.storeId === store.id ? state.takenBy[namedFor] : null,
   );
   const [time, setTime] = useState("");
   const [yesterday, setYesterday] = useState(false);
@@ -120,7 +120,7 @@ export function usePaperMark(
       setYesterday(false);
     },
     name(userId: string | null): void {
-      setSoldBy(store.id, userId);
+      setTakenBy(store.id, namedFor, userId);
     },
     setTime(value: string): void {
       setTime(value);
@@ -173,7 +173,7 @@ export function PaperFields({
           <h3>Режим: з паперу</h3>
           <p>
             {what === "return"
-              ? "Повернення позначать «під час збою». Воно увійде в сьогоднішній «Звіт» і в касу до наступного закриття. Гроші вже віддали — вдруге не віддавайте."
+              ? "Повернення позначать «під час збою». Воно увійде в сьогоднішній «Звіт» і в касу до наступного закриття. Гроші, які віддали під час збою, вдруге не віддавайте."
               : "Внесок позначать «під час збою». Він увійде в касу до наступного закриття. Гроші вже взяли — на терміналі нічого не проводьте."}
           </p>
           <label>

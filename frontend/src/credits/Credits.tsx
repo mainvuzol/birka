@@ -786,10 +786,12 @@ function Debt({
         {credit.entries.map((entry, index) => (
           <li key={`${entry.at}:${String(index)}`}>
             {when(entry.at)} · {entryLabels[entry.kind]} {money(entry.amount)}
-            {entryWay(entry)} · {visible(entry.by)}
+            {entryWay(entry)} ·{" "}
+            {entry.outage
+              ? `${paperText("payment", entry.outage)} · внесено: ${visible(entry.by)}`
+              : visible(entry.by)}
             {entry.taken_at &&
               ` · прийняв магазин «${visible(entry.taken_at)}»`}
-            {entry.outage && ` · ${paperText("payment", entry.outage)}`}
             {entry.note && ` · ${visible(entry.note)}`}
             {entry.kind === "WRITE_OFF" &&
               entry.note === null &&

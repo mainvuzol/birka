@@ -24,7 +24,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime, time
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 import httpx
@@ -40,6 +40,7 @@ from app.modules.authz.permissions import Permission
 from app.modules.credit.models import CreditEntry
 from app.modules.identity.models import AppUser
 from app.modules.refunds.models import Refund
+from app.modules.sales import outage as outage_module
 from tests.conftest import requires_database
 from tests.integration.test_outage_mark import KYIV, kyiv_day, paper, person
 from tests.integration.test_shared_warehouse import (
@@ -189,20 +190,23 @@ async def payments_of(maker, credit_id: str) -> list[CreditEntry]:
         )
 
 
-async def a_cashier(maker, net: Network) -> uuid.UUID:
-    """Someone of the primary store whose role sells and takes nothing back,
-    nor any debt payment: a role an owner composed."""
+async def a_cashier(
+    maker, net: Network, may: Permission = Permission.SALE_CREATE, name: str = "Каса"
+) -> uuid.UUID:
+    """Someone of the primary store whose role does one thing only: by
+    default sells, and takes nothing back, nor any debt payment. A role an
+    owner composed."""
     async with maker() as session:
         role = Role(
             organization_id=net.shops.organization_id,
             code=f"CASHIER-{uuid.uuid4().hex[:6]}",
-            name="Лише продаж",
+            name="Лише одне",
             is_system=False,
         )
         session.add(role)
         await session.flush()
-        session.add(RolePermission(role_id=role.id, permission_code=Permission.SALE_CREATE.value))
-        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name="Каса")
+        session.add(RolePermission(role_id=role.id, permission_code=may.value))
+        user = AppUser(telegram_user_id=uuid.uuid4().int % 2**62, display_name=name)
         session.add(user)
         await session.flush()
         session.add(
@@ -400,6 +404,34 @@ async def test_only_someone_who_may_take_it_there_now_is_named(maker):
         assert paid.status_code == 201, paid.text
 
 
+async def test_returns_and_payments_each_name_their_own_people(maker):
+    """Someone who may take returns and no payments is named on a return,
+    never on a payment, and listed so."""
+    net = await network(maker)
+    returns_only = await a_cashier(maker, net, Permission.SALE_REFUND, "Повернення")
+    sale = await sold(maker, net)
+    taken = await take_back(maker, net, net.seller, sale, a_return(sale, mark=outage(returns_only)))
+    assert taken.status_code == 201, taken.text
+    credit_id = await on_credit(maker, net)
+    refused(
+        await pay(maker, net, net.seller, credit_id, a_payment(mark=outage(returns_only))),
+        "OUTAGE_SELLER_UNKNOWN",
+    )
+    primary = net.shops.primary_store
+    async with as_(maker, net, net.seller) as client:
+        lists = {
+            named_for: [
+                seller["display_name"]
+                for seller in (
+                    await client.get(f"/api/v1/stores/{primary}/sellers", params={"for": named_for})
+                ).json()["sellers"]
+            ]
+            for named_for in ("sale", "refund", "credit")
+        }
+    assert "Повернення" in lists["refund"]
+    assert "Повернення" not in lists["credit"] and "Повернення" not in lists["sale"]
+
+
 async def test_the_screens_list_exactly_whom_the_check_accepts(maker):
     net = await network(maker)
     await a_cashier(maker, net)
@@ -484,27 +516,64 @@ async def test_the_paper_time_is_today_or_yesterday_and_never_ahead(maker):
 # --- after the lookup ---------------------------------------------------------------
 
 
-async def test_a_marked_return_and_payment_replay_after_their_person_left_and_day_passed(maker):
+async def test_a_marked_return_and_payment_replay_after_their_day_aged_out(maker, monkeypatch):
+    """Typed while the server's clock read two days ago, «вчора 18:00» then;
+    resent now, their answers lost: the day has aged out since, and the same
+    return and payment are answered all the same. A new one with that time
+    is refused now, so the clock did move."""
+    net = await network(maker)
+    written = paper(3, "18:00")
+    sale = await sold(maker, net)
+    credit_id = await on_credit(maker, net)
+    return_body = a_return(sale, mark=outage(net.seller, written))
+    payment_body = a_payment(mark=outage(net.seller, written))
+    real = datetime.now(UTC)
+    monkeypatch.setattr(outage_module, "_now", lambda: real - timedelta(days=2))
+    taken = await take_back(maker, net, net.seller, sale, return_body)
+    paid = await pay(maker, net, net.seller, credit_id, payment_body)
+    monkeypatch.undo()
+    assert taken.status_code == 201, taken.text
+    assert paid.status_code == 201, paid.text
+
+    again = await take_back(maker, net, net.seller, sale, return_body)
+    assert again.status_code == 201, again.text
+    assert again.json()["id"] == taken.json()["id"]
+    assert (await pay(maker, net, net.seller, credit_id, payment_body)).json() == paid.json()
+    other = await sold(maker, net)
+    refused(
+        await take_back(maker, net, net.seller, other, a_return(other, mark=outage(None, written))),
+        "OUTAGE_TIME_TOO_OLD",
+    )
+    refused(
+        await pay(maker, net, net.seller, credit_id, a_payment(mark=outage(None, written))),
+        "OUTAGE_TIME_TOO_OLD",
+    )
+
+
+async def test_a_marked_return_and_payment_replay_after_their_person_left(maker):
     net = await network(maker)
     taker = await person(maker, net, "Оксана", store=net.shops.primary_store)
-    written = paper(1, "18:00")
     sale = await sold(maker, net)
-    return_body = a_return(sale, mark=outage(taker, written))
+    return_body = a_return(sale, mark=outage(taker))
     taken = await take_back(maker, net, net.seller, sale, return_body)
     credit_id = await on_credit(maker, net)
-    payment_body = a_payment(mark=outage(taker, written))
+    payment_body = a_payment(mark=outage(taker))
     paid = await pay(maker, net, net.seller, credit_id, payment_body)
     assert taken.status_code == 201 and paid.status_code == 201
 
     async with maker() as session:
         await session.execute(update(AppUser).where(AppUser.id == taker).values(is_active=False))
         await session.commit()
-    # Resent days later: the paper's day is long gone too. A fresh transport
-    # key, as the phone's own check sends.
     again = await take_back(maker, net, net.seller, sale, return_body)
     assert again.status_code == 201, again.text
     assert again.json()["id"] == taken.json()["id"]
     assert (await pay(maker, net, net.seller, credit_id, payment_body)).json() == paid.json()
+    # A new one naming them is refused now, so they did leave.
+    other = await sold(maker, net)
+    refused(
+        await take_back(maker, net, net.seller, other, a_return(other, mark=outage(taker))),
+        "OUTAGE_SELLER_UNKNOWN",
+    )
 
 
 # --- the store taking it ------------------------------------------------------------

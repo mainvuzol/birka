@@ -145,6 +145,12 @@ PAPER_MARK = {"by_user_id": str(NAMED_SELLER), "at": "2026-10-06T19:40"}
 PAYMENT_MARKED_PERMANENT = "a242067070025761fb234cd461cf158714ac301b852fc4bc76ef5b2a9b5ce383"
 REFUND_MARKED_7_DAY = "46eb3948a619bcd3ca7452fb3c2c526d7ee2354a73914503b961bab183a94e7a"
 REFUND_MARKED_PERMANENT = "9bc8488d4d5561a59e3f7a833efd7f397028fbf906869356efbdc1e28418d5ac"
+# And marked with nothing named, `outage: {}`.
+PAYMENT_MARKED_UNNAMED_PERMANENT = (
+    "c5fb47bad0a908c641885cbf1f10e7a7e686a9cd9825a0a44916f95528a42dea"
+)
+REFUND_MARKED_UNNAMED_7_DAY = "b3bee519cf3ed285cba1c199de663d7ea4690b98c14876f1bbc8f95f59f480bd"
+REFUND_MARKED_UNNAMED_PERMANENT = "fd85aff438cf9910e7c53013cde50c93391aa31d1c0a89625728c6f387ac9d63"
 
 
 class _StoppedError(Exception):
@@ -360,8 +366,16 @@ async def test_a_later_payment_keeps_its_print(
     assert taken == {"permanent": expected}
 
 
+@pytest.mark.parametrize(
+    ("mark", "expected"),
+    [(PAPER_MARK, "PAYMENT_MARKED_PERMANENT"), ({}, "PAYMENT_MARKED_UNNAMED_PERMANENT")],
+    ids=["who-and-when", "nothing-named"],
+)
 async def test_a_payment_typed_from_paper_keeps_its_print(
-    taken: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    taken: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    mark: dict[str, str],
+    expected: str,
 ) -> None:
     async def locked(session: Any, *, organization_id: uuid.UUID, credit_id: uuid.UUID) -> Any:
         return SimpleNamespace(id=CREDIT, store_id=STORE)
@@ -371,7 +385,7 @@ async def test_a_payment_typed_from_paper_keeps_its_print(
         "command_id": str(COMMAND),
         "amount": "500.00",
         "payment_method": "CARD",
-        "outage": PAPER_MARK,
+        "outage": mark,
     }
     with pytest.raises(_StoppedError):
         await credits_api.pay(
@@ -381,8 +395,8 @@ async def test_a_payment_typed_from_paper_keeps_its_print(
             session=None,
         )
 
-    assert taken == {"permanent": PAYMENT_MARKED_PERMANENT}
-    assert PAYMENT_MARKED_PERMANENT not in (PAYMENT_PERMANENT, PAYMENT_TRANSFER_PERMANENT)
+    assert taken == {"permanent": globals()[expected]}
+    assert globals()[expected] not in (PAYMENT_PERMANENT, PAYMENT_TRANSFER_PERMANENT)
 
 
 class _SaleLines:
@@ -502,8 +516,32 @@ class _SaleLines:
             },
             {"7-day": REFUND_MARKED_7_DAY, "permanent": REFUND_MARKED_PERMANENT},
         ),
+        (
+            {
+                "command_id": str(COMMAND),
+                "lines": [
+                    {
+                        "sale_item_id": str(SALE_ITEM),
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    },
+                ],
+                "reason": "Не підійшов розмір",
+                "payment_method": "CASH",
+                "outage": {},
+            },
+            {"7-day": REFUND_MARKED_UNNAMED_7_DAY, "permanent": REFUND_MARKED_UNNAMED_PERMANENT},
+        ),
     ],
-    ids=["where-sold", "elsewhere", "where-sold-with-a-way", "elsewhere-with-a-way", "from-paper"],
+    ids=[
+        "where-sold",
+        "elsewhere",
+        "where-sold-with-a-way",
+        "elsewhere-with-a-way",
+        "from-paper",
+        "from-paper-nothing-named",
+    ],
 )
 async def test_a_refund_keeps_both_prints(
     taken: dict[str, str],
