@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     # from one address far more often than people do.
     sign_ins_per_minute: int = Field(default=30, gt=0)
     sign_in_burst: int = Field(default=30, gt=0)
+    # Signed-in requests one person may make, on all their phones together
+    # (`app.core.rate_limit`; owner decision, 2026-10-10): a burst, then so
+    # many a minute. Measured: the busiest journey makes 51 requests, and an
+    # opened app about 30 at once. The heavy ones, which parse a file or a
+    # catalogue line, have a bucket of their own: the busiest journey makes 7.
+    # Raised only for the end-to-end journeys and the hot path, which each
+    # act as one person far faster than anyone can.
+    requests_per_minute_per_person: int = Field(default=300, gt=0)
+    request_burst_per_person: int = Field(default=300, gt=0)
+    heavy_requests_per_minute_per_person: int = Field(default=20, gt=0)
+    heavy_request_burst_per_person: int = Field(default=20, gt=0)
 
     # --- the site's certificate ---------------------------------------------
     # The domain the Mini App is served on, as Caddy serves it (BIRKA_DOMAIN

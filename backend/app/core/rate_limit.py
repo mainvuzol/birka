@@ -1,4 +1,5 @@
-"""How often one address may sign in, or report a broken screen.
+"""How often one address may sign in, or report a broken screen, and how
+often one signed-in person may ask anything.
 
 `POST /auth/telegram` is the one request anyone on the internet can make
 without a session. A payload that fails its signature costs only an HMAC, but
@@ -21,6 +22,18 @@ its own bucket per address (**10 at once, refilled at 10 a minute**, also a
 technical default) keeps one phone stuck in a crash loop, or anyone else,
 from filling the server's log.
 
+Every signed-in request counts against its person, on all their phones
+together (owner decision, 2026-10-10; ADR-0020): **300 at once, refilled at
+300 a minute**, and for the few that parse a file or a catalogue line on the
+API's one event loop, **20 at once, refilled at 20 a minute**. Measured on the
+end-to-end journeys (2026-10-10): the busiest makes 51 requests and 7 heavy
+ones, and an opened app about 30 at once, so nobody working meets either; one
+person's token, or one stolen, can no longer keep the API busy for everyone
+else. The person is the session token's own `sub`, read before any database
+query, and the refusal says nothing was done. A refused person is logged once
+a minute, with how many were refused, not once a refusal; the owner is not
+told (owner decision, 2026-10-10).
+
 The buckets live in this process's memory. One uvicorn process serves the API
 (`backend/Dockerfile`), so every request sees the same buckets and nothing
 else is needed; a restart forgets them, which only ever lets someone in.
@@ -38,6 +51,7 @@ from __future__ import annotations
 import ipaddress
 import math
 import time
+import uuid
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,7 +59,10 @@ from dataclasses import dataclass
 from fastapi import Request
 
 from app.core.config import Settings, get_settings
-from app.core.errors import RateLimitedError
+from app.core.errors import RateLimitedError, TooManyRequestsError
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # A server's numbers: the settings' defaults.
 SIGN_INS_PER_MINUTE: int = Settings.model_fields["sign_ins_per_minute"].default
@@ -182,6 +199,82 @@ def _refuse_past(bucket: TokenBucket, request: Request, message: str | None = No
         raise RateLimitedError(retry_after=max(1, math.ceil(wait)), message=message)
 
 
+def _person_bucket(request: Request) -> TokenBucket:
+    # Settings raise these only for the end-to-end journeys and the hot path,
+    # each one person asking far faster than anyone can. A server keeps the
+    # defaults.
+    return _app_bucket(
+        request,
+        "person_bucket",
+        lambda settings: TokenBucket(
+            per_minute=settings.requests_per_minute_per_person,
+            burst=settings.request_burst_per_person,
+        ),
+    )
+
+
+def _heavy_bucket(request: Request) -> TokenBucket:
+    return _app_bucket(
+        request,
+        "heavy_bucket",
+        lambda settings: TokenBucket(
+            per_minute=settings.heavy_requests_per_minute_per_person,
+            burst=settings.heavy_request_burst_per_person,
+        ),
+    )
+
+
+# How often a person still being refused is written to the log again.
+REFUSALS_LOGGED_EVERY_SECONDS = 60.0
+
+
+def _refuse_person(request: Request, bucket: TokenBucket, work: str, person: uuid.UUID) -> None:
+    """Take one of the person's tokens, or refuse, logging the refusals of a
+    person once a minute with their count."""
+    wait = bucket.take(str(person))
+    if wait is None:
+        return
+    retry_after = max(1, math.ceil(wait))
+    state = request.app.state
+    notes: OrderedDict[tuple[str, uuid.UUID], tuple[int, float]] | None = getattr(
+        state, "person_refusals", None
+    )
+    if notes is None:
+        notes = OrderedDict()
+        state.person_refusals = notes
+    now = time.monotonic()
+    count, logged_at = notes.pop((work, person), (0, -REFUSALS_LOGGED_EVERY_SECONDS))
+    count += 1
+    if now - logged_at >= REFUSALS_LOGGED_EVERY_SECONDS:
+        logger.warning(
+            "person.rate_limited",
+            user_id=str(person),
+            work=work,
+            refused=count,
+            retry_after=retry_after,
+        )
+        count, logged_at = 0, now
+    notes[(work, person)] = (count, logged_at)
+    while len(notes) > 10_000:
+        notes.popitem(last=False)
+    raise TooManyRequestsError(retry_after=retry_after)
+
+
+def limit_person(request: Request, person: uuid.UUID) -> None:
+    """Refuse a signed-in request past its person's bucket.
+
+    Called from `get_current_scope`, a coroutine, right after the session
+    token is read and before any database query: never from a worker thread.
+    """
+    _refuse_person(request, _person_bucket(request), "requests", person)
+
+
+def limit_heavy_work(request: Request, person: uuid.UUID) -> None:
+    """Refuse a request that parses a file or a catalogue line past its
+    person's own bucket for those (`HeavyScopeDep`)."""
+    _refuse_person(request, _heavy_bucket(request), "heavy", person)
+
+
 async def limit_sign_ins(request: Request) -> None:
     """Refuse a sign-in past the address's bucket, before anything is checked.
 
@@ -207,5 +300,7 @@ __all__ = [
     "TokenBucket",
     "client_address",
     "limit_client_errors",
+    "limit_heavy_work",
+    "limit_person",
     "limit_sign_ins",
 ]

@@ -798,8 +798,15 @@ that is wanted, it is the laptop's and CI's.
   API is reachable by anyone on the domain; what keeps it to the shop's
   people is Telegram's signed sign-in data and their roles.
 - **What anyone may send:** a request body of at most 1 MB (Caddy), and 30
-  sign-ins a minute from one address (the API). Neither is near what a shop
-  sends.
+  sign-ins a minute from one address (the API). Once signed in, 300 requests
+  a minute per person on all their phones together, and 20 of the few that
+  parse a file or a catalogue line, or approve a list
+  ([ADR-0020](../decisions/ADR-0020-requests-per-person.md)). None is near
+  what a shop sends. A person refused is written to the API's log once a
+  minute, with how many were refused (`docker compose logs api | grep
+  person.rate_limited`, which names the person's id); the owner is not told.
+  The numbers are the code's own: raising them is a change, not a setting
+  on the server.
 - **A secret leaked:**
   - the session secret: put a new `BIRKA_SESSION_SECRET` in `.env` and
     `docker compose up -d api`. Everyone is signed out and opens the app

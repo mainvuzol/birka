@@ -31,7 +31,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.api.deps import ScopeDep, SessionDep
+from app.api.deps import HeavyScopeDep, ScopeDep, SessionDep
 from app.core.text import CleanText, reject_unstorable
 from app.modules.identity.service import display_names
 from app.modules.snapshots.file_lines import SplitReading
@@ -485,7 +485,7 @@ async def _named(session: SessionDep, parts: list[dict[str, Any]]) -> list[dict[
 
 @router.post("", response_model=SnapshotResponse, status_code=status.HTTP_201_CREATED)
 async def import_list(
-    payload: ImportRequest, scope: ScopeDep, session: SessionDep, response: Response
+    payload: ImportRequest, scope: HeavyScopeDep, session: SessionDep, response: Response
 ) -> dict[str, Any]:
     """Keep a legacy stock list as evidence: typed lines or a parser's file.
     Nothing becomes stock yet."""
@@ -615,7 +615,7 @@ async def read_parts(
 async def add_list_part(
     snapshot_id: uuid.UUID,
     payload: AddPartRequest,
-    scope: ScopeDep,
+    scope: HeavyScopeDep,
     session: SessionDep,
     response: Response,
     via: ActingThrough = None,
@@ -660,7 +660,7 @@ async def remove_list_part(
 async def approve_list(
     snapshot_id: uuid.UUID,
     payload: ApprovalRequest,
-    scope: ScopeDep,
+    scope: HeavyScopeDep,
     session: SessionDep,
     via: ActingThrough = None,
 ) -> dict[str, Any]:

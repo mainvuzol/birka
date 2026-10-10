@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError, recordedNothing } from "@/shared/api";
+import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
 import type { Decision } from "./types";
 export interface Command {
@@ -300,8 +300,7 @@ export async function submitCatalogCommand(
       // whose outcome was unknown (ADR-0008 §9).
       (!ambiguous || recordedNothing(error)) &&
       !acknowledged &&
-      error instanceof ApiError &&
-      [400, 403, 404, 409, 422].includes(error.status)
+      refusedOutright(error)
     ) {
       localStorage.removeItem(key);
       useCatalogCommand.setState({ pending: null });

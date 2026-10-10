@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
 from app.core.errors import AuthenticationFailedError, SessionExpiredError
+from app.core.rate_limit import limit_heavy_work, limit_person
 from app.modules.authz.scope import RequestScope
 from app.modules.authz.service import resolve_scope
 from app.modules.identity.service import assert_user_is_active
@@ -64,6 +65,9 @@ async def get_current_scope(
     claims = decode_session_token(
         _bearer_token(authorization), secret=settings.session_secret.get_secret_value()
     )
+    # Every signed-in request counts against its person, before the database
+    # is asked anything (owner decision, 2026-10-10; ADR-0020).
+    limit_person(request, claims.user_id)
     # Deactivating an account must take effect on the next request, not when
     # the token expires. Composed here rather than inside resolve_scope so the
     # authz module does not have to depend on identity.
@@ -83,4 +87,15 @@ async def get_current_scope(
 
 ScopeDep = Annotated[RequestScope, Depends(get_current_scope)]
 
-__all__ = ["ScopeDep", "SessionDep", "SettingsDep", "get_current_scope"]
+
+async def get_heavy_scope(request: Request, scope: ScopeDep) -> RequestScope:
+    """`get_current_scope`, for a request that parses a file or a catalogue
+    line on the event loop: it also counts against the person's bucket for
+    those (ADR-0020). A coroutine, so the bucket is only touched on the loop."""
+    limit_heavy_work(request, scope.user_id)
+    return scope
+
+
+HeavyScopeDep = Annotated[RequestScope, Depends(get_heavy_scope)]
+
+__all__ = ["HeavyScopeDep", "ScopeDep", "SessionDep", "SettingsDep", "get_current_scope"]

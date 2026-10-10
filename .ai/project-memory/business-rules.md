@@ -1952,3 +1952,28 @@ a request limit per person.
 
 Built on 2026-10-10; see the [report](pinned-build-report.md) and
 [ADR-0019](../decisions/ADR-0019-what-the-server-is-built-from.md).
+
+## Owner decision — 2026-10-10 (requests per person)
+
+Chosen on 2026-10-10 as the second of two, after what the server is built
+from: one person's token could ask the API without end.
+
+- **What the person sees when refused:** a text with how long to wait. The
+  action is not done and is simply repeated after the pause; operations kept
+  on the phone stay kept and are sent later.
+- **Everyone the same:** one limit per person, on all their phones together,
+  the owner's included.
+- **The server's log only:** who was refused and how many times; the bot
+  says nothing.
+
+The limit's numbers are a measurement, not a rule: far above what anyone
+does in the shop (ADR-0020). Built on 2026-10-10; see the
+[report](per-person-limit-report.md) and
+[ADR-0020](../decisions/ADR-0020-requests-per-person.md).
+
+**For the owner to confirm (a reading of how it is built):** the example
+text the owner was shown ended «— нічого не записано». It is left out: the
+banner of an operation kept on a phone tells the seller to type it from
+paper only when the app says «не записано», and a refused re-check of a
+kept operation proves nothing about its first sending. The app says «Забагато
+дій за короткий час. Зачекайте N с і повторіть.».

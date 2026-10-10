@@ -29,6 +29,8 @@ class DomainError(Exception):
     message: str = "Unexpected error"
     # Headers the response carries, e.g. `Retry-After`. Most errors carry none.
     headers: dict[str, str] | None = None
+    # True for a failure that logs itself, more sparingly than one line each.
+    quiet: bool = False
 
     def __init__(self, message: str | None = None, **details: Any) -> None:
         self.message = message or self.message
@@ -101,6 +103,27 @@ class NoAccessError(AuthenticationFailedError):
 
     code = "NO_ACCESS"
     message = "This Telegram account has no access to any store"
+
+
+class TooManyRequestsError(DomainError):
+    """Too many requests from one signed-in person (`app/core/rate_limit.py`;
+    owner decision, 2026-10-10).
+
+    Refused before the request is read any further, so nothing was done.
+    `details.retry_after` and `Retry-After` say in how many seconds the next
+    one is taken. Its own code, not `RATE_LIMITED`: the app says that one is
+    about signing in. Logged by the limit itself, once a minute per person,
+    not once per refusal, so a flood cannot fill the server's log.
+    """
+
+    code = "TOO_MANY_REQUESTS"
+    http_status = 429
+    message = "Too many requests from this person; wait and try again"
+    quiet = True
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(None, retry_after=retry_after)
+        self.headers = {"Retry-After": str(retry_after)}
 
 
 class RateLimitedError(DomainError):
