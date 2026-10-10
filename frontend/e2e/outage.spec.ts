@@ -1873,6 +1873,58 @@ test.describe("9. what to do with money after the outage", () => {
     expect(payments).toHaveLength(1);
   });
 
+  test("«Борги»: a kept card payment typed from paper the phone confirms never says to charge the card, and is resent with its mark", async ({
+    page,
+  }) => {
+    const outage = { by_user_id: null, at: null };
+    await seed(page, {
+      [creditKey]: JSON.stringify({
+        key: randomUUID(),
+        ambiguous: true,
+        body: {
+          kind: "payment",
+          store_id: ids.store,
+          credit_id: ids.credit,
+          command_id: randomUUID(),
+          amount: "500.00",
+          payment_method: "CARD",
+          outage,
+        },
+      }),
+    });
+    await serve(page);
+    await debts(page);
+    const payments: unknown[] = [];
+    await on(
+      page,
+      `/credits/${ids.credit}/payments`,
+      async (route, request) => {
+        payments.push(request.postDataJSON());
+        await route.fulfill({
+          status: 201,
+          json: { ...credit, paid: "1500.00", owed: "1500.00" },
+        });
+      },
+    );
+    await page.goto(launch());
+    await page.getByRole("button", { name: /Подільський/ }).click();
+    const confirmed = page.locator("section.notice", {
+      has: page.getByRole("heading", { name: "Внесок підтверджено" }),
+    });
+    await expect(confirmed).toContainText(
+      "Оплату провели під час збою — на терміналі не проводьте ще раз.",
+    );
+    await expect(confirmed).not.toContainText("Якщо картку ще не провели");
+    expect(payments).toEqual([
+      {
+        command_id: expect.any(String) as string,
+        amount: "500.00",
+        payment_method: "CARD",
+        outage,
+      },
+    ]);
+  });
+
   test("«Борги»: a payment refused because the store that sold trades again says to pass the paper to a manager", async ({
     page,
   }) => {
@@ -2364,6 +2416,60 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         await page.evaluate((key) => localStorage.getItem(key), returnKey),
       ).toBeNull();
     });
+
+  test("a kept return typed from paper the phone confirms says the money went back during the outage, and is resent with its mark", async ({
+    page,
+  }) => {
+    const stored = JSON.parse(keptReturn("CASH")) as {
+      body: Record<string, unknown>;
+    };
+    const outage = { by_user_id: null, at: null };
+    stored.body.outage = outage;
+    await seed(page, { [returnKey]: JSON.stringify(stored) });
+    await serve(page);
+    const sent = await returns(page, async (route, way) => {
+      await route.fulfill({
+        status: 201,
+        json: {
+          id: randomUUID(),
+          sale_id: ids.sale,
+          store_id: ids.store,
+          taken_at_store_id: null,
+          total_amount: "3000.00",
+          items: [
+            {
+              sale_item_id: item,
+              quantity: 1,
+              amount: "3000.00",
+              condition: "INTACT",
+              destination_location_id: ids.shared,
+              display_name: `${coat} · M`,
+            },
+          ],
+          credit: null,
+          payment_method: way,
+          outage: { by_user_id: null, by: null, at: null },
+        },
+      });
+    });
+    await page.goto(launch());
+    await page.getByRole("button", { name: /Подільський/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Повернення оформлено" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "3000,00 грн готівкою повернули під час збою — вдруге не повертайте.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Повернено під час збою")).toBeVisible();
+    await expect(page.getByText(/Якщо гроші ще не повернули/)).toHaveCount(0);
+    expect(sent).toHaveLength(1);
+    expect(
+      (JSON.parse(sent[0] ?? "{}") as { outage?: unknown }).outage,
+    ).toEqual(outage);
+  });
 
   test("a kept return confirmed by its button says the same", async ({
     page,

@@ -139,6 +139,13 @@ SALE_MARKED_PERMANENT = "1a58f9df682736443f113bdbe070600ebcef525980445b0785d6f4d
 SALE_MARKED_UNNAMED_7_DAY = "1e78afc25f6aa9832cf5262ac1c11a6c61297dcdf92df08081ebe04ca29ba92c"
 SALE_MARKED_UNNAMED_PERMANENT = "06984ca6f8f15fb5e44612a7cee84a23c638b756ab9c4dc5d5ad40896292e50d"
 
+# The golden prints of a return and a debt payment typed from paper
+# (ADR-0021), computed when the mark was added to them.
+PAPER_MARK = {"by_user_id": str(NAMED_SELLER), "at": "2026-10-06T19:40"}
+PAYMENT_MARKED_PERMANENT = "a242067070025761fb234cd461cf158714ac301b852fc4bc76ef5b2a9b5ce383"
+REFUND_MARKED_7_DAY = "46eb3948a619bcd3ca7452fb3c2c526d7ee2354a73914503b961bab183a94e7a"
+REFUND_MARKED_PERMANENT = "9bc8488d4d5561a59e3f7a833efd7f397028fbf906869356efbdc1e28418d5ac"
+
 
 class _StoppedError(Exception):
     """Raised where the stored print would be compared: the command goes no
@@ -353,6 +360,31 @@ async def test_a_later_payment_keeps_its_print(
     assert taken == {"permanent": expected}
 
 
+async def test_a_payment_typed_from_paper_keeps_its_print(
+    taken: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def locked(session: Any, *, organization_id: uuid.UUID, credit_id: uuid.UUID) -> Any:
+        return SimpleNamespace(id=CREDIT, store_id=STORE)
+
+    monkeypatch.setattr(credit_service, "_locked", locked)
+    body = {
+        "command_id": str(COMMAND),
+        "amount": "500.00",
+        "payment_method": "CARD",
+        "outage": PAPER_MARK,
+    }
+    with pytest.raises(_StoppedError):
+        await credits_api.pay(
+            credit_id=CREDIT,
+            payload=credits_api.PaymentRequest.model_validate(body),
+            scope=_scope(),
+            session=None,
+        )
+
+    assert taken == {"permanent": PAYMENT_MARKED_PERMANENT}
+    assert PAYMENT_MARKED_PERMANENT not in (PAYMENT_PERMANENT, PAYMENT_TRANSFER_PERMANENT)
+
+
 class _SaleLines:
     """The one query `create_refund` sends itself: the sale's lines."""
 
@@ -452,8 +484,26 @@ class _SaleLines:
             },
             {"7-day": REFUND_ELSEWHERE_CARD_7_DAY, "permanent": REFUND_ELSEWHERE_CARD_PERMANENT},
         ),
+        # Typed from paper (ADR-0021), as the phone sends it in paper mode.
+        (
+            {
+                "command_id": str(COMMAND),
+                "lines": [
+                    {
+                        "sale_item_id": str(SALE_ITEM),
+                        "quantity": 1,
+                        "restock": True,
+                        "condition": "INTACT",
+                    },
+                ],
+                "reason": "Не підійшов розмір",
+                "payment_method": "CASH",
+                "outage": PAPER_MARK,
+            },
+            {"7-day": REFUND_MARKED_7_DAY, "permanent": REFUND_MARKED_PERMANENT},
+        ),
     ],
-    ids=["where-sold", "elsewhere", "where-sold-with-a-way", "elsewhere-with-a-way"],
+    ids=["where-sold", "elsewhere", "where-sold-with-a-way", "elsewhere-with-a-way", "from-paper"],
 )
 async def test_a_refund_keeps_both_prints(
     taken: dict[str, str],

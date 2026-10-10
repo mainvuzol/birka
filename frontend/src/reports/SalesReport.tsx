@@ -1,3 +1,4 @@
+import { paperText } from "@/sales/paperMark";
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -484,7 +485,14 @@ function OutageLine({ entry }: { entry: Entry }): JSX.Element | null {
     <>
       <br />
       <small>
-        {markText(outage)} · внесено: {visible(entry.by)}
+        {entry.kind === "RETURN"
+          ? paperText("return", {
+              by_user_id: null,
+              by: outage.sold_by,
+              at: outage.sold_at,
+            })
+          : markText(outage)}{" "}
+        · внесено: {visible(entry.by)}
       </small>
     </>
   );

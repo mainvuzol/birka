@@ -1272,6 +1272,8 @@ findings). Each answer is the recommended one.
 - **The mark is on sales only.** Debt payments and returns typed from paper
   are ordinary ones; «Звіт» names who typed a return, «Борги» who took a
   payment (corrected 2026-10-08). A mark for them may be added later.
+  *Superseded on 2026-10-10: they carry the mark too (owner, "returns and
+  payments typed from paper").*
 - **A kept sale recorded once the server answers carries no mark.** It is
   an ordinary sale, dated when it was recorded, sold by the phone's owner.
 - **«Клієнт забрав» refused because the order was cancelled or came back
@@ -2026,3 +2028,43 @@ How it is carried out, not decided by the owner:
   Another country's number is found as it was written.
 
 Built on 2026-10-10; see the [report](closed-store-debt-search-report.md).
+
+## Owner decision — 2026-10-10 (returns and payments typed from paper)
+
+Chosen on 2026-10-10 after a closed store's debts, from the backlog: the
+mark «продано під час збою» was on sales only (2026-10-07), so a return
+typed from paper told the seller to hand the money back again, and a card
+payment said nothing about the terminal.
+
+- **The mark holds what a sale's does.** Who took the return or the
+  payment and at what hour (today or «вчора»), as the paper says; both
+  optional. Who typed it is recorded too. It is dated the day it is typed,
+  as a sale is. A wrong mark cannot be changed afterwards.
+- **The till's switch «З паперу».** The same switch on the return screen
+  and on a debt's payment: once on, it stays for the whole series, and the
+  buttons say «З паперу · Готівка», so a forgotten switch is seen before
+  the press.
+- **The screen says the money was already handed over.** A return: «…
+  грн готівкою повернули під час збою — вдруге не повертайте.» A card
+  payment: «оплату провели під час збою, на терміналі не проводьте ще
+  раз». As for a sale typed from paper at the till.
+- **Where it shows.** A return in «Звіт», with the mark, who took it and
+  who typed it, as a sale. A payment in the debt's history in «Борги», the
+  same. In «Звіт» debt payments stay one sum.
+
+How it is carried out, not decided by the owner:
+- **One switch for the store,** on the till, «Повернення» and «Борги»
+  together: ticked on one, it is on on the others, and the person named
+  carries across; the hour is each operation's own. Leaving the store
+  clears it, as at the till.
+- **Who may be named:** someone who may take returns there
+  (`sale:refund`), or payments (`sale:credit`), now, in the store taking
+  it: for a return at another store, or a closed store's debt paid at one
+  that trades, that store's people and its day.
+- **Not marked:** the first payment of a sale paid in parts (the sale's
+  own mark covers it), a write-off, an order collected (typed as a sale).
+- **The sellers' page** says to tick the switch for a payment and a return
+  too, always; that wording waits for the owner's confirmation.
+
+Built on 2026-10-10; see the [report](outage-mark-returns-payments-report.md)
+and [ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md).

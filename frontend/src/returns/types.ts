@@ -1,3 +1,4 @@
+import type { PaperBody, PaperView } from "@/sales/paperMark";
 import type { OutageMark } from "@/sales/types";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
@@ -86,6 +87,12 @@ export interface ReturnBody {
    * it only when money goes back (G35).
    */
   payment_method?: TillMethod;
+  /**
+   * Typed from paper after the server did not answer (owner decision,
+   * 2026-10-10; ADR-0021): who took it and the paper's time. Absent from a
+   * return typed live.
+   */
+  outage?: PaperBody;
 }
 
 export interface Refund {
@@ -111,6 +118,8 @@ export interface Refund {
    * the way was asked, and on a return that only lowered a debt (G35).
    */
   payment_method?: TillMethod | null;
+  /** Typed from paper: who took it and when (ADR-0021). */
+  outage?: PaperView | null;
 }
 
 /**

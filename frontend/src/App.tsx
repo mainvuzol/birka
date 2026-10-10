@@ -493,6 +493,8 @@ function Workspace({
     credit: Credit;
     amount: string | null;
     way: PaymentMethod | null;
+    // Typed from paper: the card was charged during the outage (ADR-0021).
+    fromPaper?: boolean;
   } | null>(null);
   // Which command a resent attempt refused as recording nothing was, and
   // how a payment was pressed: what to give back says it (ADR-0013 §8).
@@ -724,6 +726,7 @@ function Workspace({
             ? {
                 amount: attempt.body.amount,
                 way: attempt.body.payment_method ?? null,
+                fromPaper: !!attempt.body.outage,
               }
             : { amount: null, way: null }),
         });
@@ -1318,7 +1321,9 @@ function Workspace({
             залишок боргу {money(creditSettled.credit.owed)}.
             {creditSettled.amount !== null &&
               creditSettled.way === "CARD" &&
-              ` ${chargeOnce(creditSettled.amount)}`}
+              (creditSettled.fromPaper
+                ? " Оплату провели під час збою — на терміналі не проводьте ще раз."
+                : ` ${chargeOnce(creditSettled.amount)}`)}
           </p>
           <button
             onClick={() => {

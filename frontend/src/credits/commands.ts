@@ -1,5 +1,6 @@
 import { isId, journal } from "@/shared/journal";
 import { isTillMethod } from "@/shared/payment";
+import { isPaperBody } from "@/sales/paperMark";
 import type { Credit, CreditBody } from "./types";
 
 /**
@@ -29,6 +30,8 @@ const credits = journal<CreditBody, Credit>({
           // Only for another store's debt: a payment where it was sold is
           // sent exactly as before.
           ...(body.elsewhere ? { store_id: body.store_id } : {}),
+          // Typed from paper (ADR-0021): only then.
+          ...(body.outage ? { outage: body.outage } : {}),
         }
       : { command_id: body.command_id, reason: body.reason },
   scope: "credit-pending",
@@ -39,7 +42,8 @@ const credits = journal<CreditBody, Credit>({
       money.test(body.amount) &&
       (body.elsewhere === undefined || typeof body.elsewhere === "boolean") &&
       (body.payment_method === undefined ||
-        isTillMethod(body.payment_method))) ||
+        isTillMethod(body.payment_method)) &&
+      (body.outage === undefined || isPaperBody(body.outage))) ||
       (body.kind === "write-off" &&
         typeof body.reason === "string" &&
         body.reason.trim() !== "")),

@@ -14,7 +14,9 @@ shop ([report](borrowed-goods-report.md)) and the sales report the owner
 chose next ([report](sales-report-report.md)). Settling money between the
 network's stores left it too: the owner decided on 2026-10-01 that stores of
 one network do not settle with each other. The JSON stock import, which
-blocked the release, is built ([report](json-stock-import-report.md)).
+blocked the release, is built ([report](json-stock-import-report.md)), and
+so is the mark on debt payments and returns typed from paper, chosen on
+2026-10-10 ([report](outage-mark-returns-payments-report.md)).
 
 ## Raising the opening list's limit above 5 000 answers
 
@@ -39,11 +41,3 @@ outages (owner, the same day). Nothing is built for it. It would reopen the
 page that is never cached (ADR-0010 §4) and the drawer's commit order
 (ADR-0012 §3), with stock of unknown age and screens for conflicts; see
 [ADR-0013](../decisions/ADR-0013-the-server-is-unreachable.md), "Rejected".
-
-## A mark on debt payments and returns typed from paper
-
-The mark «продано під час збою» is on sales only. Debt payments and returns
-typed from paper are ordinary ones: «Звіт» names who typed a return, and
-«Борги» who took a payment (owner, 2026-10-07, corrected 2026-10-08). A mark
-for them may be added later (owner, 2026-10-07); it would add the same
-columns to their records, additively.

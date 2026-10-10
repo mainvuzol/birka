@@ -1,5 +1,6 @@
 import type { StoreState } from "@/orders/types";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
+import type { PaperBody, PaperView } from "@/sales/paperMark";
 
 /** `GET /credits`: a store's debts — sales paid in parts (owner decisions, 2026-10-01). */
 export type CreditStatus = "OPEN" | "SETTLED" | "WRITTEN_OFF";
@@ -25,6 +26,11 @@ export interface CreditEntry {
   payment_method: PaymentMethod | null;
   /** The way was corrected after it was recorded. */
   corrected: boolean;
+  /**
+   * A payment typed from paper (owner decision, 2026-10-10; ADR-0021): who
+   * took it and when, as the paper says; `by` is who typed it.
+   */
+  outage?: PaperView | null;
 }
 
 export interface Credit {
@@ -129,6 +135,8 @@ export type CreditBody =
        * resent as stored.
        */
       payment_method?: TillMethod;
+      /** Typed from paper (ADR-0021). Absent from a payment typed live. */
+      outage?: PaperBody;
     }
   | {
       kind: "write-off";

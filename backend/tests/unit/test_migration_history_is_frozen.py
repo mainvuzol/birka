@@ -66,6 +66,9 @@ FROZEN: dict[str, str] = {
     "0037_stock_list_parts.py": (
         "fcafd9f61a23868ba73708e25fed79deb7a222728e035c5756824d0562a3b250"
     ),
+    "0038_customer_erasure.py": (
+        "110d4fd1af7727d3cd54df80a92ee3256b2e8749948468240f9a0e8c94e7b502"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),

@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from alembic.script import ScriptDirectory
 from scripts.backup_watch import watch
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -703,7 +704,9 @@ async def test_0038_goes_down_only_while_no_customer_is_erased():
 
             async with scratch.connect() as connection:
                 version = await connection.scalar(text("SELECT version_num FROM alembic_version"))
-            assert version == "0038_customer_erasure"
+            # Refused in the one transaction the whole downgrade runs in:
+            # still at the head, whatever revision that is now.
+            assert version == ScriptDirectory.from_config(config).get_current_head()
             assert (await row(maker, kept)).customer_erased_at is not None
         finally:
             await scratch.dispose()

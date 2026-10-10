@@ -249,7 +249,9 @@ class Kind(StrEnum):
 @dataclass(frozen=True, slots=True)
 class OutageView:
     """«Продано під час збою»: a sale typed from paper (ADR-0013 §5.6). Who
-    sold and when, as the paper says; each None when the paper named none."""
+    sold and when, as the paper says; each None when the paper named none.
+    A return typed from paper carries it too (owner decision, 2026-10-10;
+    ADR-0021): `sold_by` is then who took it back, as `by` is who typed it."""
 
     sold_by: str | None
     sold_at: datetime | None
@@ -821,11 +823,13 @@ async def _return_entries(
 ) -> dict[uuid.UUID, EntryView]:
     if not refund_ids:
         return {}
+    named = aliased(AppUser)
     refunds = (
         await session.execute(
-            select(Refund, AppUser.display_name, CreditEntry.cash_back)
+            select(Refund, AppUser.display_name, CreditEntry.cash_back, named.display_name)
             .join(AppUser, AppUser.id == Refund.actor_user_id)
             .outerjoin(CreditEntry, CreditEntry.refund_id == Refund.id)
+            .outerjoin(named, named.id == Refund.outage_taken_by)
             .where(Refund.id.in_(refund_ids))
         )
     ).all()
@@ -865,8 +869,13 @@ async def _return_entries(
                 )
                 for refund_item, sale_item in lines.get(refund.id, [])
             ],
+            outage=(
+                OutageView(sold_by=taken_by, sold_at=refund.outage_taken_at)
+                if refund.during_outage
+                else None
+            ),
         )
-        for refund, actor, cash_back in refunds
+        for refund, actor, cash_back, taken_by in refunds
     }
 
 

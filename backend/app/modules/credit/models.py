@@ -42,6 +42,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -211,6 +212,20 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
     # stamped by the database at insert (ADR-0012, B3). Never written by the
     # application.
     drawer_period: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A payment typed from paper after the server did not answer (owner
+    # decision, 2026-10-10; ADR-0021): the mark «під час збою», as a sale's.
+    # It may name who took the payment, as the paper says (one who may take
+    # payments in the store that took it), and the paper's time, composed in
+    # that store's zone. Who typed it is `actor_user_id`; the day and the
+    # drawer are those of the moment it was typed. Never changed: the ledger's
+    # guard freezes every column of an entry (revision 0038).
+    during_outage: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    outage_taken_by: Mapped[uuid.UUID | None] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    outage_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint("kind IN ('PAYMENT', 'RETURN', 'WRITE_OFF')", name="kind_known"),
@@ -242,6 +257,11 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
         ),
         CheckConstraint(
             "drawer_period IS NULL OR drawer_period > 0", name="drawer_period_positive"
+        ),
+        CheckConstraint("NOT during_outage OR kind = 'PAYMENT'", name="only_a_payment_is_marked"),
+        CheckConstraint(
+            "during_outage OR (outage_taken_by IS NULL AND outage_taken_at IS NULL)",
+            name="outage_details_need_the_mark",
         ),
         ForeignKeyConstraint(
             ["organization_id", "taken_at_store_id"],

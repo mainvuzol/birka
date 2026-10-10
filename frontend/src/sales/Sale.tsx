@@ -14,7 +14,7 @@ import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
 import { submitSale, useSaleCommand } from "./commands";
-import { setPaper, setSoldBy, usePaper } from "./paper";
+import { paperDay, setPaper, setSoldBy, usePaper } from "./paper";
 import type {
   EmptyShelf,
   OutageBody,
@@ -36,13 +36,6 @@ const paperGone =
   "Цього товару вже немає в обліку — продаж з паперу не записано. Попросіть менеджера спершу виправити залишок, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
 const paperReserved =
   "Частина цих одиниць у резерві замовлення — продаж з паперу не записано. Менеджер має вирішити із замовленням, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
-
-/** The phone's own date, today or yesterday: the paper's day (G1). */
-function paperDay(yesterday: boolean): string {
-  const at = new Date();
-  if (yesterday) at.setDate(at.getDate() - 1);
-  return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
-}
 
 interface Draft {
   line: SaleLine;

@@ -15,6 +15,10 @@ import { create } from "zustand";
  *
  * The paper's time is not here: it is the till's own, cleared after each
  * sale, since a wrong time is permanent too.
+ *
+ * Since 2026-10-10 the same switch types returns and debt payments from
+ * paper (owner decision; ADR-0021): one series per store, whichever screen
+ * it is ticked on, and the person named carries across them.
  */
 interface Paper {
   /** The store whose till is in paper mode; null when none is. */
@@ -38,4 +42,11 @@ export function setSoldBy(storeId: string, soldBy: string | null): void {
 /** Another store chosen, or the app left: no series carries over. */
 export function clearPaper(): void {
   usePaper.setState({ storeId: null, soldBy: null });
+}
+
+/** The phone's own date, today or yesterday: the paper's day (G1). */
+export function paperDay(yesterday: boolean): string {
+  const at = new Date();
+  if (yesterday) at.setDate(at.getDate() - 1);
+  return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
 }
