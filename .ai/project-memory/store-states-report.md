@@ -53,6 +53,8 @@ The owner answered on 2026-10-01 (business-rules.md, "store states").
 - **Its debts are paid at any store that trades.**
   - In «Борги», «Де брали в борг: У магазині, що заблокований чи закритий»
     finds the customer by a search of two letters or more, never a list.
+    *Since 2026-10-10 only by the customer's whole phone, and only what is
+    still owed ([report](closed-store-debt-search-report.md)).*
   - The debt says which store sold it, and that this store takes the payment
     while the debt stays the other's.
   - Each payment taken that way names the store that took it, in the history.

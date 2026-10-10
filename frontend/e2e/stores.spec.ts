@@ -299,7 +299,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   ).toHaveCount(0);
 });
 
-test("a debt of a blocked store is found by a search and paid at a store that trades", async ({
+test("a debt of a blocked store is found by the whole phone and paid at a store that trades", async ({
   page,
 }) => {
   await settle(page, fixture.network_market_store_id, "ACTIVE");
@@ -343,16 +343,31 @@ test("a debt of a blocked store is found by a search and paid at a store that tr
     await page
       .getByLabel("Де брали в борг")
       .selectOption({ label: "У магазині, що заблокований чи закритий" });
-    await expect(
-      page.getByText(/Знайдіть покупця за ім’ям або телефоном/),
-    ).toBeVisible();
-    // Another store's customers are never browsed.
+    const askForPhone = page.getByText(
+      /Введіть повний номер телефону покупця, наприклад 067 123 45 67/,
+    );
+    await expect(askForPhone).toBeVisible();
+    // Only what is still owed, so nothing to choose (owner, 2026-10-10).
+    await expect(page.getByLabel("Показати")).toHaveCount(0);
+    // Neither a name nor a part of the number finds another store's
+    // customers: the phone does not even ask (owner decision, 2026-10-10).
+    const search = page.getByLabel("Повний номер телефону покупця");
+    for (const partial of [name, phone.slice(0, 6)]) {
+      await search.fill(partial);
+      await page.getByRole("button", { name: "Знайти" }).click();
+      await expect(askForPhone).toBeVisible();
+    }
     expect(searches.filter((url) => url.includes("elsewhere=true"))).toEqual(
       [],
     );
-    await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
+    // The whole number, written as the customer says it.
+    await search.fill(`+38 ${phone.slice(0, 3)} ${phone.slice(3)}`);
     await page.getByRole("button", { name: "Знайти" }).click();
     await expect(page.getByText("Продано в магазині «Ринок»")).toBeVisible();
+    const asked = searches.filter((url) => url.includes("elsewhere=true"));
+    expect(asked.length).toBeGreaterThan(0);
+    for (const url of asked)
+      expect(new URL(url).searchParams.get("status")).toBe("OPEN");
     await page
       .getByRole("button", { name: new RegExp(`Відкрити борг ${name}`) })
       .click();

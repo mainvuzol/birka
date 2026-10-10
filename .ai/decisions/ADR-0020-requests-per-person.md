@@ -64,8 +64,8 @@ bucket was refused at 120 a minute, nor its heavy requests at 10.
    those words. A resend refused here proves nothing about the first
    sending, so the text does not say them. The owner chose a text with the
    wait time; the words «нічого не записано» in the example they were shown
-   are left out for this reason, and put to the owner as a reading. A screen
-   that knows its command was new may still say it, truly: a stock
+   are left out for this reason, which the owner confirmed on 2026-10-10.
+   A screen that knows its command was new may still say it, truly: a stock
    correction adds «Нічого не записано.» to every refusal of a new one, and
    keeps the count to send again. Adding a file keeps its command too.
 5. **The server's log only** (owner, 2026-10-10): `person.rate_limited`,

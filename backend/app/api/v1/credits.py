@@ -9,7 +9,9 @@ is one customer, and the store sees what it is owed in all. Returns lower it thr
 While the store that sold is blocked or archived, any store of the network
 that trades finds its debts by a search (`elsewhere=true`) and takes their
 payments (`store_id`); the debt stays the selling store's, and the network's
-owner may still write it off (owner decisions, 2026-10-01).
+owner may still write it off (owner decisions, 2026-10-01). It is found by
+the customer's whole phone, and only while it is owed (owner decisions,
+2026-10-10).
 
 A closed debt's customer is erased a year after it was paid or returned,
 three after it was written off, or at once by the owner when the customer
@@ -266,7 +268,8 @@ async def list_customers(
     decision, 2026-10-01). `status=OPEN` for those still owing.
 
     `elsewhere=true` searches the debts of the stores that do not trade, whose
-    payments this store takes; a `query` of two letters at least is needed."""
+    payments this store takes: `query` is the customer's whole phone, and only
+    debts still owed are answered (owner decisions, 2026-10-10)."""
     customers, has_more = await service.list_customers(
         session,
         scope=scope,

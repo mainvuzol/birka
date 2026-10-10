@@ -27,8 +27,15 @@ import type {
 } from "./types";
 
 const pageSize = 20;
-// As the server: another store's customers are found by two letters at least.
-const minSearch = 2;
+
+/** As the server: another store's customer is found by their whole phone,
+ * however it is written (owner decision, 2026-10-10). */
+function wholePhone(text: string): boolean {
+  const digits = text.replace(/\D/g, "").length;
+  return /^[\d\s()+-]+$/.test(text) && digits >= 10 && digits <= 15;
+}
+const askForPhone =
+  "Введіть повний номер телефону покупця, наприклад 067 123 45 67. За іменем чи частиною номера борги інших магазинів не шукають.";
 
 /**
  * A store's debts: sales paid in parts (owner decisions, 2026-10-01).
@@ -41,9 +48,10 @@ const minSearch = 2;
  * debt from «Повернення». The store sees what it is owed in all.
  *
  * While the store that sold is blocked or archived, any store that trades
- * finds its debts by a search and takes the payments; the debt stays that
- * store's, and the owner of the network may still write it off (owner
- * decisions, 2026-10-01, "store states").
+ * finds its debts by the customer's whole phone, only those still owed, and
+ * takes the payments; the debt stays that store's, and the owner of the
+ * network may still write it off (owner decisions, 2026-10-01, "store
+ * states", and 2026-10-10).
  *
  * Each payment is paid one way, given by the button that takes it: the
  * till's «Готівка», «Картка» and «Переказ» (owner decision, 2026-10-04;
@@ -86,8 +94,10 @@ export function Credits({
   const [selected, setSelected] = useState<Credit | null>(null);
   // Whose debts: this store's, or those of the stores that do not trade.
   const [elsewhere, setElsewhere] = useState(false);
-  // Other stores' customers are found, never browsed.
-  const searched = !elsewhere || search.length >= minSearch;
+  // Other stores' customers are found by their whole phone, never browsed;
+  // only what they still owe (owner decisions, 2026-10-10).
+  const searched = !elsewhere || wholePhone(search);
+  const openOnly = owedOnly || elsewhere;
   const customers = useQuery({
     queryKey: [
       "credits",
@@ -95,13 +105,13 @@ export function Credits({
       "customers",
       elsewhere,
       search,
-      owedOnly,
+      openOnly,
       shown,
     ],
     queryFn: () =>
       api<CustomerPage>(
         `/credits/customers?store_id=${store.id}&limit=${String(shown)}${
-          owedOnly ? "&status=OPEN" : ""
+          openOnly ? "&status=OPEN" : ""
         }${search ? `&query=${encodeURIComponent(search)}` : ""}${
           elsewhere ? "&elsewhere=true" : ""
         }`,
@@ -195,9 +205,12 @@ export function Credits({
         }}
       >
         <label>
-          Пошук за ім’ям або телефоном
+          {elsewhere
+            ? "Повний номер телефону покупця"
+            : "Пошук за ім’ям або телефоном"}
           <input
             type="search"
+            inputMode={elsewhere ? "tel" : undefined}
             value={query}
             maxLength={200}
             onChange={(event) => {
@@ -207,32 +220,31 @@ export function Credits({
         </label>
         <button type="submit">Знайти</button>
       </form>
-      <label>
-        Показати
-        <select
-          value={owedOnly ? "OPEN" : "ALL"}
-          onChange={(event) => {
-            setOwedOnly(event.target.value === "OPEN");
-            setShown(pageSize);
-          }}
-        >
-          <option value="OPEN">Ті, хто ще винен</option>
-          <option value="ALL">Усі, разом зі сплаченими й списаними</option>
-        </select>
-      </label>
+      {!elsewhere && (
+        <label>
+          Показати
+          <select
+            value={owedOnly ? "OPEN" : "ALL"}
+            onChange={(event) => {
+              setOwedOnly(event.target.value === "OPEN");
+              setShown(pageSize);
+            }}
+          >
+            <option value="OPEN">Ті, хто ще винен</option>
+            <option value="ALL">Усі, разом зі сплаченими й списаними</option>
+          </select>
+        </label>
+      )}
       {!searched ? (
-        <p>
-          Знайдіть покупця за ім’ям або телефоном — щонайменше дві літери чи
-          цифри.
-        </p>
+        <p>{askForPhone}</p>
       ) : customers.isPending ? (
         <p role="status">Завантажуємо борги…</p>
       ) : customers.error ? (
-        <p role="alert">{errorText(customers.error)}</p>
+        <p role="alert">{refusalText(customers.error)}</p>
       ) : customers.data.items.length === 0 ? (
         <p>
           {elsewhere
-            ? "Боргів магазинів, що не працюють, за таким ім’ям чи телефоном не знайдено."
+            ? "За цим номером ніхто не винен магазинам, що не працюють."
             : search
               ? "Боргів за таким ім’ям чи телефоном не знайдено."
               : owedOnly
@@ -817,8 +829,8 @@ export function refusalText(error: unknown, way?: TillMethod | null): string {
       // 2026-10-07; G25).
       case "PAID_WHERE_SOLD":
         return "Магазин, де продали, знову працює — внесок приймає він. Передайте папір менеджеру.";
-      case "SEARCH_REQUIRED":
-        return "Знайдіть покупця за ім’ям або телефоном — щонайменше дві літери чи цифри.";
+      case "PHONE_REQUIRED":
+        return askForPhone;
       case "STILL_OWED":
         return "Борг ще не закрито: дані покупця з нього не стирають. Коли його закриють, стерти можна так само.";
     }

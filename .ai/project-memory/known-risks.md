@@ -699,9 +699,15 @@ See the [report](public-hardening-report.md) and
   message sent. The bot says nothing when the certificate is renewed, and an
   edge it cannot reach at all is only logged; both are questions for the
   owner if they come up.
-- **A debt search of two characters, paged,** can list another store's
-  debtors one page at a time; the owner's "never listed whole" holds only
-  per page.
+- **A debt search of two characters, paged,** could list a closed store's
+  debtors one page at a time; "never listed whole" held only per page.
+  **Closed on 2026-10-10** ([report](closed-store-debt-search-report.md)):
+  another store's debts are found only by the customer's whole phone, and
+  only while owed (owner). What stays: whoever knows a customer's number
+  learns that they owe a closed store, how much and for what, as a seller
+  of the store that sold them knows; and the store's own list, for its own
+  people and the network's owner and managers, is searched by name as
+  before.
 - **A customer's name and phone are kept on one line**: a line break or a
   run of spaces in them becomes one space.
 

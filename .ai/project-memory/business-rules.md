@@ -430,7 +430,9 @@ How it is carried out, not decided by the owner:
 - **An archived store is opened, never blocked.** Archived → blocked is
   refused.
 - **Other stores' debts are found by a search of two letters or more,** as
-  other stores' sales are. They are never listed whole.
+  other stores' sales are. They are never listed whole. *Superseded on
+  2026-10-10 by the owner's "a closed store's debts": only by the
+  customer's whole phone, and only what is still owed.*
 - **People are still let go from a blocked store** by `scripts.people`, on
   the network owner's word. Nobody new is added to it.
 - **A store an operator had set inactive before this** becomes blocked: the
@@ -1971,9 +1973,37 @@ does in the shop (ADR-0020). Built on 2026-10-10; see the
 [report](per-person-limit-report.md) and
 [ADR-0020](../decisions/ADR-0020-requests-per-person.md).
 
-**For the owner to confirm (a reading of how it is built):** the example
-text the owner was shown ended «— нічого не записано». It is left out: the
-banner of an operation kept on a phone tells the seller to type it from
-paper only when the app says «не записано», and a refused re-check of a
-kept operation proves nothing about its first sending. The app says «Забагато
-дій за короткий час. Зачекайте N с і повторіть.».
+**Confirmed by the owner on 2026-10-10 (a reading of how it is built):**
+the example text the owner was shown ended «— нічого не записано». It is
+left out: the banner of an operation kept on a phone tells the seller to
+type it from paper only when the app says «не записано», and a refused
+re-check of a kept operation proves nothing about its first sending. The app
+says «Забагато дій за короткий час. Зачекайте N с і повторіть.».
+
+## Owner decision — 2026-10-10 (a closed store's debts)
+
+Chosen on 2026-10-10, after requests per person. While a store is blocked
+or archived, any store of the network that trades takes its debts' payments
+(owner, 2026-10-01). A seller found them by a search of two letters or more,
+with «Показати ще»: a rule of how it was built, not the owner's. «06» finds
+nearly every phone, so a seller could page through the closed store's
+customers, names and phones.
+
+- **Only by the customer's whole phone.** The seller types the customer's
+  whole number, written any way («067…», «+38…»), and finds that customer
+  alone. A name or a part of a number finds nobody.
+- **Only what is still owed.** A payment is taken only on an open debt. What
+  was paid or written off in a closed store is read by the owner and the
+  network's managers, in that store itself.
+
+How it is carried out, not decided by the owner:
+- **A customer who does not remember their number** is found by the owner or
+  a manager of the network in the closed store itself, as before.
+- **The number is the customer's**, as one phone is one customer
+  (2026-10-01): «+38 067…» and «067…» are one number. A number written
+  otherwise when the debt was opened, «8 067…», is found as it was written.
+- **A debt opened from the search stays readable by its id** in the store
+  that took the payment, so the seller who took the last one sees it paid.
+  That is not a search: the id comes from the search or the payment.
+
+Built on 2026-10-10; see the [report](closed-store-debt-search-report.md).

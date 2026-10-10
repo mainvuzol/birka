@@ -55,9 +55,6 @@ MAX_PHONE = 40
 MAX_REASON = 1000
 # Room for a country code; fewer than ten digits is not a phone anyone calls.
 PHONE_DIGITS = range(10, 16)
-# A search among the debts of stores that do not trade: never a browse of
-# other stores' customers, as a return at another store is never one either.
-MIN_SEARCH = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -847,6 +844,15 @@ def _in_store(
 _PHONE_LIKE = re.compile(r"[\d\s()+\-]+")
 
 
+def whole_phone(wanted: str) -> str | None:
+    """The customer a whole phone number names, however it is written
+    («+38 (067) 123-45-67», «0671234567»); None for a name or a part of a
+    number."""
+    if not _PHONE_LIKE.fullmatch(wanted) or len(digits(wanted)) not in PHONE_DIGITS:
+        return None
+    return customer_key(digits(wanted))
+
+
 def _found_by(wanted: str) -> Any:
     """The customer's name, or any spelling of their phone.
 
@@ -881,19 +887,29 @@ async def list_customers(
     seller chooses (owner decision, 2026-10-01).
 
     `elsewhere` looks among the debts of the stores that do not trade, whose
-    payments any trading store takes (owner decision, 2026-10-01). Only by a
-    search: other stores' customers are found, never browsed.
+    payments any trading store takes (owner decision, 2026-10-01): only by
+    the customer's whole phone, however it is written, and only the debts
+    still owed (owner decisions, 2026-10-10). Whoever pays brings their
+    phone; other stores' customers are never browsed, by name or by a part
+    of a number, and what was paid or written off there stays with the
+    network's owner and managers, who read the store itself.
     """
     scope.require(Permission.SALE_CREDIT, store_id)
     wanted = query.strip()
-    if elsewhere and len(wanted) < MIN_SEARCH:
-        raise ValidationFailedError(
-            "Search for the customer by name or phone", reason="SEARCH_REQUIRED"
-        )
+    phone: str | None = None
+    if elsewhere:
+        phone = whole_phone(wanted)
+        if phone is None:
+            raise ValidationFailedError(
+                "Search for the customer by their whole phone number", reason="PHONE_REQUIRED"
+            )
+        status = CreditStatus.OPEN
     customer = _GROUP.label("customer")
     latest = func.max(CustomerCredit.created_at).label("latest")
     grouped = _in_store(select(customer, latest), scope, store_id, status, elsewhere)
-    if wanted:
+    if elsewhere:
+        grouped = grouped.where(CUSTOMER == phone)
+    elif wanted:
         grouped = grouped.where(
             CUSTOMER.in_(
                 _in_store(select(CUSTOMER), scope, store_id, status, elsewhere).where(

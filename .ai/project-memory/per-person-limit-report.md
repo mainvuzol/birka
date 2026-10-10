@@ -2,8 +2,8 @@
 
 Baseline: `519b264` (what the server is built from, merged as PR #82).
 Status: built, reviewed and proven: the whole CI run locally passed, and
-twenty ways of breaking it each caught. The text without «нічого не
-записано» waits for the owner's confirmation.
+twenty ways of breaking it each caught. Merged as PR #83. The owner
+confirmed the text without «нічого не записано» on 2026-10-10.
 Branch: `feat/per-person-limit`. Decision: [ADR-0020](../decisions/ADR-0020-requests-per-person.md);
 owner: business-rules.md, "requests per person" (2026-10-10).
 
@@ -93,8 +93,8 @@ limits are 300 and 20.
   seventeen first, three more after the review (below).
 - **The text:** the example the owner was shown ended «— нічого не
   записано». That is left out, because a kept operation's banner reserves
-  those words for typing it from paper. It is put to the owner as a reading
-  (business rules).
+  those words for typing it from paper. The owner confirmed it on
+  2026-10-10 (business rules).
 
 ## Review of the built change
 
@@ -154,5 +154,3 @@ All under [`output/verification/2026-10-10-per-person-limit/`](../../output/veri
 - **A refused query** (a list, a report) shows the same text where the
   screen shows its error; the journey walks the sale's two cases and a
   correction, the other commands share the helper.
-- **The owner's confirmation of the text** without «нічого не записано» is
-  pending.
