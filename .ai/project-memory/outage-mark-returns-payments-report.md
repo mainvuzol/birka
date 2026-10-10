@@ -1,7 +1,9 @@
 # Returns and payments typed from paper — 2026-10-10
 
 Baseline: `50dbac4` (a closed store's debts, merged as PR #84).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty-seven ways of breaking it each caught. The sellers' page's steps 2,
+6 and 7 wait for the owner's confirmation.
 Branch: `feat/outage-mark-debts-returns`. Decision:
 [ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md);
 owner: business-rules.md, "returns and payments typed from paper"
@@ -147,7 +149,24 @@ found, all addressed:
 
 ## Evidence
 
-TODO(final)
+- [`output/verification/2026-10-10-outage-mark-returns-payments/`](../../output/verification/2026-10-10-outage-mark-returns-payments/):
+  `mutants.py` and `mutants.txt`, twenty-seven ways of breaking it, each
+  caught.
+- **CI, run locally at `c7dad9a`** ([summary](../../output/verification/2026-10-10-outage-mark-returns-payments-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 378 on PostgreSQL 17;
+  - e2e: 273 journeys;
+  - hot path: worst p95 68.4 ms (catalogue read) and 70.8 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- A first run at `ade4e8d` failed on two tests and the runner, not the
+  change: the new journeys ran the browser in CI's UTC, so the paper's
+  19:40 in Kyiv read 16:40 (they use Kyiv's clock now, as `outage.spec.ts`
+  does); a server test fixed the order of names, which PostgreSQL 17's
+  uk-UA collation sorts otherwise (sets now); and the runner's edge job
+  migrated with an `ops` image an earlier run had kept, built before
+  `0039` (it now removes that one image first, as a fresh runner has
+  none; the server runbook builds `ops` on every update).
 
 ## Not covered here
 
