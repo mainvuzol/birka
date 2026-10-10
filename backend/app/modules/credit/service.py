@@ -15,6 +15,7 @@ way was asked still replays (ADR-0012, B2, B13).
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -55,9 +56,6 @@ MAX_PHONE = 40
 MAX_REASON = 1000
 # Room for a country code; fewer than ten digits is not a phone anyone calls.
 PHONE_DIGITS = range(10, 16)
-# A search among the debts of stores that do not trade: never a browse of
-# other stores' customers, as a return at another store is never one either.
-MIN_SEARCH = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,25 +150,36 @@ def digits(phone: str) -> str:
     return re.sub(r"\D", "", phone)
 
 
+# A Ukrainian number written with what dials it from elsewhere: «+38» or
+# «38», the old long-distance «8», «0038» from abroad. Each, with how many
+# digits it then has; the number itself is the last ten, from its «0».
+_UKRAINIAN = (("380", 12), ("80", 11), ("00380", 14))
+
+
 def customer_key(phone_digits: str) -> str:
     """Who a phone belongs to: one phone is one customer (owner decision,
-    2026-10-01), however it was written. «+38 (067) 123-45-67» and
-    «0671234567» are one number, so a Ukrainian number is kept in its own
+    2026-10-01), however it was written. «+38 (067) 123-45-67»,
+    «0671234567», «8 067 123 45 67» and «0038 067 123 45 67» are one number
+    (owner decision, 2026-10-10), so a Ukrainian number is kept in its own
     ten digits."""
-    if len(phone_digits) == 12 and phone_digits.startswith("380"):
-        return phone_digits[2:]
+    for prefix, length in _UKRAINIAN:
+        if len(phone_digits) == length and phone_digits.startswith(prefix):
+            return phone_digits[length - 10 :]
     return phone_digits
 
 
 # The same, in SQL, over what is stored: the stored digits stay as written.
 # NULL for a debt whose customer is erased.
 CUSTOMER = case(
-    (
-        and_(
-            func.length(CustomerCredit.phone_digits) == 12,
-            CustomerCredit.phone_digits.startswith("380"),
-        ),
-        func.substr(CustomerCredit.phone_digits, 3),
+    *(
+        (
+            and_(
+                func.length(CustomerCredit.phone_digits) == length,
+                CustomerCredit.phone_digits.startswith(prefix),
+            ),
+            func.substr(CustomerCredit.phone_digits, length - 9),
+        )
+        for prefix, length in _UKRAINIAN
     ),
     else_=CustomerCredit.phone_digits,
 )
@@ -773,6 +782,12 @@ async def read_credit(
         ):
             # Another store's debt is no business of this one while it trades.
             raise ForbiddenStoreError(store_id=str(credit.store_id))
+        if credit.status != CreditStatus.OPEN.value:
+            # Only what is still owed is another store's business (owner
+            # decision, 2026-10-10). What was paid or written off is read in
+            # the store itself, by the network's owner and managers; the
+            # payment that closed it answered so when it was taken.
+            raise ForbiddenStoreError(store_id=str(credit.store_id))
     return await view(session, credit)
 
 
@@ -847,6 +862,26 @@ def _in_store(
 _PHONE_LIKE = re.compile(r"[\d\s()+\-]+")
 
 
+# Besides its digits, what a whole phone may be written or pasted with:
+# spaces, «+», brackets, «-», «.», «/», and the invisible marks a phone's
+# contacts add to a number copied from them (Unicode's format characters).
+_PHONE_MARKS = frozenset("+()-./")
+
+
+def _whole_phone(wanted: str) -> str | None:
+    """The customer a whole phone number names, however it is written
+    («+38 (067) 123-45-67», «0671234567»); None for a name or a part of a
+    number. The digits' count and the equality make it exact."""
+    if any(
+        not (char.isspace() or char in _PHONE_MARKS or unicodedata.category(char) == "Cf")
+        for char in re.sub(r"\d", "", wanted)
+    ):
+        return None
+    if len(digits(wanted)) not in PHONE_DIGITS:
+        return None
+    return customer_key(digits(wanted))
+
+
 def _found_by(wanted: str) -> Any:
     """The customer's name, or any spelling of their phone.
 
@@ -881,19 +916,29 @@ async def list_customers(
     seller chooses (owner decision, 2026-10-01).
 
     `elsewhere` looks among the debts of the stores that do not trade, whose
-    payments any trading store takes (owner decision, 2026-10-01). Only by a
-    search: other stores' customers are found, never browsed.
+    payments any trading store takes (owner decision, 2026-10-01): only by
+    the customer's whole phone, however it is written, and only the debts
+    still owed (owner decisions, 2026-10-10). Whoever pays brings their
+    phone; other stores' customers are never browsed, by name or by a part
+    of a number, and what was paid or written off there stays with the
+    network's owner and managers, who read the store itself.
     """
     scope.require(Permission.SALE_CREDIT, store_id)
     wanted = query.strip()
-    if elsewhere and len(wanted) < MIN_SEARCH:
-        raise ValidationFailedError(
-            "Search for the customer by name or phone", reason="SEARCH_REQUIRED"
-        )
+    phone: str | None = None
+    if elsewhere:
+        phone = _whole_phone(wanted)
+        if phone is None:
+            raise ValidationFailedError(
+                "Search for the customer by their whole phone number", reason="PHONE_REQUIRED"
+            )
+        status = CreditStatus.OPEN
     customer = _GROUP.label("customer")
     latest = func.max(CustomerCredit.created_at).label("latest")
     grouped = _in_store(select(customer, latest), scope, store_id, status, elsewhere)
-    if wanted:
+    if elsewhere:
+        grouped = grouped.where(CUSTOMER == phone)
+    elif wanted:
         grouped = grouped.where(
             CUSTOMER.in_(
                 _in_store(select(CUSTOMER), scope, store_id, status, elsewhere).where(

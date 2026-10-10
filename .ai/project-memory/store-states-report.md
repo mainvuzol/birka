@@ -41,7 +41,10 @@ The owner answered on 2026-10-01 (business-rules.md, "store states").
   - They still sign in: a seller whose only store is blocked is not "without
     access".
   - Once it is unblocked, they work as before.
-- **The owner and the network's managers** open it read-only:
+- **The owner and the network's managers** open it read-only. *As built,
+  any role held in every store did; since 2026-10-10 only one holding the
+  financial report for the whole network, so a seller added to every store
+  sees only the state ([report](closed-store-debt-search-report.md)).*
   - a banner says «Лише перегляд»;
   - only the screens that read stay: orders, stock, debts, «Брак», with no
     button that changes anything;
@@ -53,6 +56,8 @@ The owner answered on 2026-10-01 (business-rules.md, "store states").
 - **Its debts are paid at any store that trades.**
   - In «Борги», «Де брали в борг: У магазині, що заблокований чи закритий»
     finds the customer by a search of two letters or more, never a list.
+    *Since 2026-10-10 only by the customer's whole phone, and only what is
+    still owed ([report](closed-store-debt-search-report.md)).*
   - The debt says which store sold it, and that this store takes the payment
     while the debt stays the other's.
   - Each payment taken that way names the store that took it, in the history.
@@ -84,8 +89,10 @@ The owner answered on 2026-10-01 (business-rules.md, "store states").
     money, only while the store that sold does not trade. Otherwise it is
     refused with `PAID_WHERE_SOLD`.
   - `GET /credits/customers?elsewhere=true&query=…` searches the debts of
-    the stores that do not trade.
+    the stores that do not trade. *Since 2026-10-10 only by the customer's
+    whole phone, and only what is still owed.*
   - `GET /credits/{id}?store_id=…` reads one from the store taking it.
+    *Since 2026-10-10 only while it is owed.*
   - A debt answers `store_name` and `store_state`; a payment entry answers
     `taken_at`.
 - **Writing off** a debt of a store that does not trade needs
