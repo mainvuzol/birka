@@ -149,7 +149,9 @@ export function Correction({
       const actual = outcome.error.details.actual;
       if (outcome.error.code === "STOCK_CHANGED" && typeof actual === "number")
         setSystem(actual);
-      setCount("");
+      // A person past their requests (ADR-0020) counted right: the same count
+      // is sent again after the wait. Any other refusal asks for a recount.
+      if (outcome.error.code !== "TOO_MANY_REQUESTS") setCount("");
       setTried(false);
       onRefused();
     }

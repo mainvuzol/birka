@@ -67,7 +67,7 @@ async def get_current_scope(
     )
     # Every signed-in request counts against its person, before the database
     # is asked anything (owner decision, 2026-10-10; ADR-0020).
-    limit_person(request, claims.user_id)
+    limit_person(request, claims.user_id, claims.session_epoch)
     # Deactivating an account must take effect on the next request, not when
     # the token expires. Composed here rather than inside resolve_scope so the
     # authz module does not have to depend on identity.

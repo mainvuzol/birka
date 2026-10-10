@@ -23,6 +23,7 @@ from structlog.testing import capture_logs
 
 from app.api import deps
 from app.api.deps import HeavyScopeDep, ScopeDep, session_dependency
+from app.core import rate_limit
 from app.core.config import Settings
 from app.core.rate_limit import TokenBucket
 from app.main import create_app
@@ -43,14 +44,15 @@ class Clock:
 
 
 class Database:
-    """The person's two lookups, counted."""
+    """The person's two lookups, counted; `epoch` is their session epoch."""
 
     def __init__(self) -> None:
         self.asked = 0
+        self.epoch = 0
 
     async def user(self, _session: Any, user_id: uuid.UUID) -> SimpleNamespace:
         self.asked += 1
-        return SimpleNamespace(id=user_id, session_epoch=0)
+        return SimpleNamespace(id=user_id, session_epoch=self.epoch)
 
     async def scope(self, _session: Any, user_id: uuid.UUID, *, reading: bool) -> RequestScope:
         return RequestScope(user_id=user_id, organization_id=ORGANIZATION, reading=reading)
@@ -90,9 +92,13 @@ def _app(**limits: int) -> Any:
     return app
 
 
-def _token(person: uuid.UUID) -> str:
+def _token(person: uuid.UUID, epoch: int = 0) -> str:
     token, _ = issue_session_token(
-        user_id=person, organization_id=ORGANIZATION, secret=SECRET, ttl_seconds=3600
+        user_id=person,
+        organization_id=ORGANIZATION,
+        secret=SECRET,
+        ttl_seconds=3600,
+        session_epoch=epoch,
     )
     return token
 
@@ -141,6 +147,23 @@ async def test_a_person_counts_once_on_all_their_phones_and_nobody_else_waits(
     # Another person, even in the same shop behind the same address, is not
     # held up.
     assert (await _ask(app, _token(uuid.uuid4()))).status_code == 200
+
+
+async def test_a_sign_out_starts_the_person_a_new_bucket(database: Database) -> None:
+    """A stolen token keeping the person's bucket empty does not keep them out
+    once their sign-ins are ended: their new one counts afresh, and the old
+    one is still refused before the database."""
+    app = _app()
+    app.state.person_bucket = TokenBucket(per_minute=60, burst=2, clock=Clock())
+    person = uuid.uuid4()
+    stolen = _token(person, epoch=0)
+    assert [(await _ask(app, stolen)).status_code for _ in range(3)] == [200, 200, 429]
+
+    database.epoch = 1  # scripts.people sign-out
+    asked = database.asked
+    assert (await _ask(app, _token(person, epoch=1))).status_code == 200
+    assert (await _ask(app, stolen)).status_code == 429
+    assert database.asked == asked + 1
 
 
 async def test_the_bucket_refills_and_a_new_app_starts_full(database: Database) -> None:
@@ -196,12 +219,13 @@ async def test_a_request_without_a_valid_session_takes_nothing(database: Databas
         assert (await client.get("/api/v1/health")).status_code == 200
 
 
-async def test_refusals_are_logged_once_a_minute_with_how_many(
+async def test_refusals_are_logged_at_once_then_counted_once_a_minute(
     database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    app = _app(requests_per_minute_per_person=60, request_burst_per_person=1)
+    app = _app()
     clock = Clock()
-    monkeypatch.setattr("app.core.rate_limit.time.monotonic", clock)
+    monkeypatch.setattr(rate_limit, "_clock", clock)
+    app.state.person_bucket = TokenBucket(per_minute=60, burst=1, clock=clock)
     person = uuid.uuid4()
     token = _token(person)
 
@@ -210,14 +234,17 @@ async def test_refusals_are_logged_once_a_minute_with_how_many(
         for _ in range(4):
             await _ask(app, token)
         clock.now += 61
-        app.state.person_bucket = TokenBucket(per_minute=60, burst=1, clock=lambda: 0.0)
-        await _ask(app, token)
-        await _ask(app, token)
+        # The next request anyone makes writes out the three not yet counted,
+        # and is served: the bucket has refilled.
+        assert (await _ask(app, _token(uuid.uuid4()))).status_code == 200
+        assert (await _ask(app, token)).status_code == 200
+        assert (await _ask(app, token)).status_code == 429
 
     limited = [line for line in lines if line["event"] == "person.rate_limited"]
     assert [(line["user_id"], line["work"], line["refused"]) for line in limited] == [
         (str(person), "requests", 1),
-        (str(person), "requests", 4),
+        (str(person), "requests", 3),
+        (str(person), "requests", 1),
     ]
     # Not one line per refusal: the general `domain_error` line stays out.
     assert not [line for line in lines if line.get("code") == "TOO_MANY_REQUESTS"]

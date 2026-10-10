@@ -112,8 +112,9 @@ class TooManyRequestsError(DomainError):
     Refused before the request is read any further, so nothing was done.
     `details.retry_after` and `Retry-After` say in how many seconds the next
     one is taken. Its own code, not `RATE_LIMITED`: the app says that one is
-    about signing in. Logged by the limit itself, once a minute per person,
-    not once per refusal, so a flood cannot fill the server's log.
+    about signing in. Logged by the limit itself, a person's refusals counted
+    in a line a minute, so it adds no `domain_error` line for each (uvicorn's
+    access line for each request stays, as for every request).
     """
 
     code = "TOO_MANY_REQUESTS"

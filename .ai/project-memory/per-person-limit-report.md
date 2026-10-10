@@ -38,7 +38,9 @@ limits are 300 and 20.
 
 - **Every signed-in request counts against its person,** on all their
   phones together: 300 at once, refilled at 300 a minute. It is taken right
-  after the session token is read, before any database query.
+  after the session token is read, before any database query. The bucket is
+  the person's at their session epoch: `scripts.people sign-out` gives them
+  a new one, so a stolen token emptying the old one does not keep them out.
 - **The heavy requests count in a bucket of their own too,** 20 at once and
   20 a minute: a catalogue decision or preview, and an opening list made
   from a file, a file added, a list approved.
@@ -49,9 +51,13 @@ limits are 300 and 20.
   - A command kept on the phone stays kept and is checked again later.
   - This holds for the sale, the order and catalogue commands, and every
     journal (receipts, returns, corrections and the rest), through one
-    helper, `refusedOutright`.
-- **The log:** `person.rate_limited`, once a minute per person, with how
-  many were refused; not the general `domain_error` line for each.
+    helper, `refusedOutright`. A file being added keeps its command too.
+  - A stock correction, which knows its command was new, adds «Нічого не
+    записано.», true of it, and keeps the count to send again.
+- **The log:** `person.rate_limited`: a person's first refusal at once,
+  the rest of its minute as one line with their count once the minute is
+  over; not the general `domain_error` line for each. uvicorn's access line
+  for every request stays.
 - **CI** raises the numbers for the journeys and the hot path, each one
   person at a machine's speed; the hot path still takes the limit on every
   request.
@@ -64,10 +70,13 @@ limits are 300 and 20.
   - refused past the burst, before the database is asked;
   - one person on two phones shares one bucket, another person waits for
     nothing;
+  - a sign-out gives the person a new bucket, while the old token is still
+    refused before the database;
   - the refill, and each app counting on its own;
   - heavy requests in their own bucket and the general one;
   - a forged token takes nothing;
-  - the log once a minute with the count;
+  - the first refusal logged at once, the rest counted once the minute is
+    over, on a clock of the test's own;
   - the measured numbers;
   - every path the API has asked twice: exactly the five heavy ones refuse
     the second.
@@ -75,12 +84,39 @@ limits are 300 and 20.
   - a new sale refused shows the wait, blocks nothing, never says «не
     записано», and is sold again as a new sale;
   - a sale kept after a lost answer, refused when checked, stays kept and
-    the till blocked, and the next check settles it with the same key.
-- **Mutation:** seventeen ways of breaking it, one at a time, each caught.
+    the till blocked, and the next check settles it with the same key;
+  - a stock correction refused keeps its count, says «Нічого не записано.»
+    with the wait, and is written when sent again.
+- **Mutation:** TODO(final).
 - **The text:** the example the owner was shown ended «— нічого не
   записано». That is left out, because a kept operation's banner reserves
   those words for typing it from paper. It is put to the owner as a reading
   (business rules).
+
+## Review of the built change
+
+An independent review (2026-10-10) found nothing wrong in the buckets' use
+on the event loop, in which requests are limited (health, readiness, the
+outage probe, signing in and the watcher's status are not; every signed-in
+route is), in the five heavy routes (exactly those that parse), or in the
+journals. It found, all fixed:
+- **A sign-out did not help:** the bucket was the person's alone, so a
+  stolen token, refused only after its bucket was taken, kept the person's
+  new sign-in out for up to the token's 12 hours. The bucket is now the
+  person's at their session epoch; a test signs out and asks again.
+- **A flood that stopped hid its size:** only the first refusal of a
+  minute was written, and the rest waited for the person's next refusal,
+  which might never come. They are now written out once the minute is over.
+- **"A flood cannot fill the log" was not true:** uvicorn's access line is
+  written for every request. Said so instead.
+- **Two screens:** adding a file forgot its command on this refusal (made
+  harmless by the server's refusal of the same file twice), and a stock
+  correction cleared the count it could send again. Both keep them now; a
+  journey walks the correction.
+- **The hot path's own run** would stop at the 300th request on a laptop:
+  its instructions now raise the limit, as CI does.
+- **A test froze the process's own clock** to time the log lines, and one
+  relied on the real clock; both now use a clock of their own.
 
 ## Evidence
 
@@ -89,12 +125,14 @@ TODO(final)
 ## Not covered here
 
 - **A stolen token spends its person's budget,** and the person is refused
-  with it; `scripts.people sign-out` ends both.
+  with it, until `scripts.people sign-out` ends the token and gives the
+  person a new bucket.
+- **uvicorn's access line** is written for every request, refused or not.
 - **The buckets are in the API's memory;** a restart forgets them.
 - **The heavy requests are a list in the code;** a new one is added on
   purpose, as the test says.
 - **A refused query** (a list, a report) shows the same text where the
-  screen shows its error; only the sale's two cases are walked by the
-  journey, the other commands share the helper.
+  screen shows its error; the journey walks the sale's two cases and a
+  correction, the other commands share the helper.
 - **The owner's confirmation of the text** without «нічого не записано» is
   pending.

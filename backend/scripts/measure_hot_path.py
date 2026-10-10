@@ -28,6 +28,12 @@ PostgreSQL server and the API's environment. The evidence file then says what
 made it.
 
 Run it against a disposable database only; it writes thousands of sales.
+The API it measures is started with the per-person limit raised,
+`BIRKA_REQUESTS_PER_MINUTE_PER_PERSON=100000` and
+`BIRKA_REQUEST_BURST_PER_PERSON=100000`, as CI's hot-path job does: each
+seller here asks hundreds of times in seconds, and a server keeps 300 a
+minute (ADR-0020), so the run would stop at a 429 `TOO_MANY_REQUESTS`. The
+limit is still taken on every request, so its cost is in the figures.
 
     BIRKA_PERF_DATABASE_URL=postgresql+asyncpg://…/birka_perf \
     BIRKA_PERF_API_URL=http://127.0.0.1:58043 \

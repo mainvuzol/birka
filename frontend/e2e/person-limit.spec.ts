@@ -13,6 +13,10 @@ import { readFileSync } from "node:fs";
  * «не записано», the words a kept operation's banner reserves for typing it
  * from paper.
  *
+ * A screen that knows the command was new says so: a stock correction adds
+ * «Нічого не записано.», which is true of it, and keeps the count to send
+ * again.
+ *
  * The real server does not refuse anyone in these journeys (the run raises
  * the limits, as one person journeying far faster than anyone works), so the
  * refusal is the server's answer as `test_person_limit.py` proves it, given
@@ -23,6 +27,8 @@ interface Fixture {
   telegram_user_id: string;
   store_id: string;
   till_location_id: string;
+  /** The stocktake warehouse: only the correction journeys count in it. */
+  count_location_id: string;
   variant_id: string;
   size_id: string;
 }
@@ -191,4 +197,46 @@ test("a sale kept on the phone, refused for too many requests when checked, stay
   // Every check resent the very attempt it kept.
   expect(new Set(keys).size).toBe(1);
   expect(keys).toHaveLength(3);
+});
+
+test("a correction refused for too many requests keeps its count, and is written when sent again", async ({
+  page,
+}) => {
+  const commands: string[] = [];
+  await page.route("**/api/v1/inventory/adjustments", async (route) => {
+    commands.push(
+      (route.request().postDataJSON() as { command_id: string }).command_id,
+    );
+    await (commands.length === 1 ? tooMany(route) : route.continue());
+  });
+  await page.goto(launch());
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await page.getByRole("button", { name: "Залишки", exact: true }).click();
+  await page
+    .getByLabel("Склад для перегляду")
+    .selectOption(fixture.count_location_id);
+  const row = page
+    .getByRole("article")
+    .filter({ hasText: "Розмір: M" })
+    .first();
+  const before = Number(
+    /\d+/.exec((await row.getByText(/^На складі:/).textContent()) ?? "")?.[0],
+  );
+  await row.getByRole("button", { name: "Виправити залишок" }).click();
+  await page.getByRole("radio", { name: "Втрачено" }).click();
+  await page.getByLabel("Скільки списати, од.").fill("1");
+  await page.getByRole("button", { name: "Записати коригування" }).click();
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText(WAIT);
+  await expect(alert).toContainText("Нічого не записано.");
+  // The count still stands; nothing is kept as unknown.
+  await expect(page.getByLabel("Скільки списати, од.")).toHaveValue("1");
+  await expect(page.getByText("Незавершене коригування")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `Втрачено, облік ${String(before)} → ${String(before - 1)}.`,
+  );
+  expect(commands).toHaveLength(2);
 });

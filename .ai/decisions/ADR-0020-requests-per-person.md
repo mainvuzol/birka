@@ -31,8 +31,12 @@ bucket was refused at 120 a minute, nor its heavy requests at 10.
 1. **Every signed-in request counts against its person** (owner,
    2026-10-10): one bucket per person, on all their phones together, the
    owner's included.
-   - The person is the session token's `sub`, read before the database is
-     asked anything, so a refusal costs an HMAC and no query.
+   - The person is the session token's `sub`, with its session epoch, read
+     before the database is asked anything, so a refusal costs an HMAC and
+     no query. Every phone of a person shares the epoch; ending their
+     sign-ins (`scripts.people sign-out`) raises it, and their next sign-in
+     starts a new bucket, so a stolen token that keeps the old one empty
+     does not keep them out.
    - **300 at once, refilled at 300 a minute.** That is six times the
      busiest journey's whole count, and 5 a second for as long as it lasts.
 2. **The heavy requests count twice:** in that bucket and in one of their
@@ -55,17 +59,23 @@ bucket was refused at 120 a minute, nor its heavy requests at 10.
    - A command already kept on the phone, whose first sending may have been
      recorded, stays kept, and is checked again later, as after an outage
      (owner, 2026-10-10).
-4. **Never «не записано».** A kept operation's banner tells the seller to
-   type it from paper only when the app says those words. A resend refused
-   here proves nothing about the first sending, so the text does not say
-   them. The owner chose a text with the wait time; the words «нічого не
-   записано» in the example they were shown are left out for this reason,
-   and put to the owner as a reading.
+4. **The refusal's text never says «не записано».** A kept operation's
+   banner tells the seller to type it from paper only when the app says
+   those words. A resend refused here proves nothing about the first
+   sending, so the text does not say them. The owner chose a text with the
+   wait time; the words «нічого не записано» in the example they were shown
+   are left out for this reason, and put to the owner as a reading. A screen
+   that knows its command was new may still say it, truly: a stock
+   correction adds «Нічого не записано.» to every refusal of a new one, and
+   keeps the count to send again. Adding a file keeps its command too.
 5. **The server's log only** (owner, 2026-10-10): `person.rate_limited`,
    with the person's id, `requests` or `heavy`, how many were refused and
-   the wait. Written once a minute per person, not once a refusal. The
-   general `domain_error` line is not written for this refusal, so a flood
-   cannot fill the log. The bot says nothing.
+   the wait. A person's first refusal is written at once; the ones after it
+   in its minute, as one line with their count, once that minute is over
+   (by the next request anyone makes). The general `domain_error` line is
+   not written for this refusal. uvicorn's access line is, for every
+   request, as before: a flood of any request, signed in or not, still
+   turns over Docker's 50 MB of the API's log. The bot says nothing.
 6. **Raised only for the journeys and the hot path,** each of which acts as
    one person far faster than anyone works. The hot path still takes the
    limit on every request, so its cost is in the figures. A server keeps the
@@ -76,7 +86,7 @@ bucket was refused at 120 a minute, nor its heavy requests at 10.
 - **A stolen token can spend its person's budget,** and the person is
   refused with it until the bucket refills. The owner chose one limit per
   person; ending the person's sign-ins (`scripts.people sign-out`) ends
-  the stolen one too.
+  the stolen token, and the person's next sign-in counts in a new bucket.
 - **The buckets live in the API's memory.** A restart forgets them, which
   only lets people in.
 - **A kept operation refused when checked** keeps the till blocked until it

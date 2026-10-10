@@ -620,7 +620,11 @@ See the [report](public-hardening-report.md) and
   catalogue line, or approve a list, 20 at once and 20 a minute besides.
   The numbers were measured as far above anyone's work. What stays:
   - a stolen token spends its person's budget, and the person is refused
-    with it until it refills; `scripts.people sign-out` ends both;
+    with it until it refills; `scripts.people sign-out` ends the token, and
+    the person's next sign-in counts in a new bucket;
+  - uvicorn writes an access line for every request, refused or not, so a
+    flood of requests, signed in or not, still turns over Docker's 50 MB of
+    the API's log;
   - the buckets live in the API's memory, and a restart forgets them;
   - the heavy requests are a list in the code: a new one is added there on
     purpose (`tests/unit/test_person_limit.py` names them);

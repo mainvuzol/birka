@@ -802,9 +802,11 @@ that is wanted, it is the laptop's and CI's.
   a minute per person on all their phones together, and 20 of the few that
   parse a file or a catalogue line, or approve a list
   ([ADR-0020](../decisions/ADR-0020-requests-per-person.md)). None is near
-  what a shop sends. A person refused is written to the API's log once a
-  minute, with how many were refused (`docker compose logs api | grep
-  person.rate_limited`, which names the person's id); the owner is not told.
+  what a shop sends. A person refused is written to the API's log
+  (`docker compose logs api | grep person.rate_limited`, which names the
+  person's id): the first refusal at once, the rest of that minute as one
+  line with their count; the owner is not told. `scripts.people sign-out`
+  also gives the person a fresh limit, if a stolen token is using theirs.
   The numbers are the code's own: raising them is a change, not a setting
   on the server.
 - **A secret leaked:**

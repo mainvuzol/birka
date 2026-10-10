@@ -389,8 +389,11 @@ export function AddFile({
       removed = added.part.removed_at !== null && !again;
       if (!removed) await done();
     } catch (error) {
-      // Answered: a second press is a new command. Not answered: the same.
-      if (error instanceof ApiError) forget(key);
+      // Answered: a second press is a new command. Not answered, or refused
+      // for the person's requests before anything was read (ADR-0020): the
+      // same.
+      if (error instanceof ApiError && error.code !== "TOO_MANY_REQUESTS")
+        forget(key);
       setProblems(
         refusal(
           error,
