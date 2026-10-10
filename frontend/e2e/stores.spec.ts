@@ -340,6 +340,10 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await openAs(page, hanna);
     await page.getByRole("button", { name: "Центр CENTRE" }).click();
     await page.getByRole("button", { name: "Борги", exact: true }).click();
+    // Everyone on the store's own list, paid too; not on another's.
+    await page
+      .getByLabel("Показати")
+      .selectOption({ label: "Усі, разом зі сплаченими й списаними" });
     await page
       .getByLabel("Де брали в борг")
       .selectOption({ label: "У магазині, що заблокований чи закритий" });
@@ -357,11 +361,15 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
       await page.getByRole("button", { name: "Знайти" }).click();
       await expect(askForPhone).toBeVisible();
     }
+    // Nor does «Оновити» ask for them.
+    await page.getByRole("button", { name: "Оновити" }).click();
+    await expect(askForPhone).toBeVisible();
     expect(searches.filter((url) => url.includes("elsewhere=true"))).toEqual(
       [],
     );
-    // The whole number, written as the customer says it.
-    await search.fill(`+38 ${phone.slice(0, 3)} ${phone.slice(3)}`);
+    // The whole number, pasted from the phone's contacts between the two
+    // invisible direction marks they add.
+    await search.fill(`\u202a+38 ${phone.slice(0, 3)} ${phone.slice(3)}\u202c`);
     await page.getByRole("button", { name: "Знайти" }).click();
     await expect(page.getByText("Продано в магазині «Ринок»")).toBeVisible();
     const asked = searches.filter((url) => url.includes("elsewhere=true"));

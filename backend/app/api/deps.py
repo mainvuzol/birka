@@ -42,9 +42,10 @@ def _bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-# Requests that only read. A store that does not trade is read by a role that
-# covers the whole network, and nothing else is done in it (owner decisions,
-# 2026-10-01); every command here is a POST, PUT, PATCH or DELETE.
+# Requests that only read. A store that does not trade is read by the
+# network's owner and managers, and nothing else is done in it (owner
+# decisions, 2026-10-01 and 2026-10-10); every command here is a POST, PUT,
+# PATCH or DELETE.
 _READS = frozenset({"GET", "HEAD"})
 
 

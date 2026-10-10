@@ -1,0 +1,22 @@
+- server: a part of the number still matches: caught FAILED tests/integration/test_store_states.py::test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed
+- server: two digits are a number: caught FAILED tests/unit/test_customer_phone.py::test_a_name_or_a_part_of_a_number_is_not[06]
+- server: a name with a number is a number: caught FAILED tests/unit/test_customer_phone.py::test_a_name_or_a_part_of_a_number_is_not[\u0406\u0440\u0438\u043d\u0430 0671234567]
+- server: a number pasted from contacts refused: caught FAILED tests/unit/test_customer_phone.py::test_a_whole_number_is_a_search[\u202a+38 067 123 45 67\u202c]
+- server: paid debts answered too: caught FAILED tests/integration/test_store_states.py::test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed
+- server: a name searched as before: caught FAILED tests/integration/test_store_states.py::test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed
+- server: «+38» not one number with «0»: caught FAILED tests/unit/test_customer_phone.py::test_a_whole_number_is_a_search[+38 (067) 123-45-67]
+- server: the old partial search kept for elsewhere: caught FAILED tests/integration/test_store_states.py::test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed
+- server: «8 067» another customer: caught FAILED tests/unit/test_customer_phone.py::test_a_ukrainian_number_is_one_customer_however_written[8 067 123 45 67]
+- server: «0038 067» another customer: caught FAILED tests/unit/test_customer_phone.py::test_a_ukrainian_number_is_one_customer_however_written[0038 067 123 45 67]
+- server: the database's key not the code's: caught FAILED tests/integration/test_store_states.py::test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed
+- server: a paid debt read by its id elsewhere: caught FAILED tests/integration/test_store_states.py::test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed
+- server: a seller in every store reads a closed one: caught FAILED tests/integration/test_store_states.py::test_a_seller_in_every_store_sees_a_closed_one_only_as_its_state
+- server: nobody reads a closed store: caught FAILED tests/integration/test_store_states.py::test_debts_of_a_store_that_does_not_trade_are_paid_at_one_that_does
+- phone: six digits asked of the server: caught Error: expect(received).toEqual(expected) // deep equality
+- phone: a number pasted from contacts refused: caught Error: expect(locator).toBeVisible() failed
+- phone: paid debts asked for elsewhere: caught Error: expect(received).toBe(expected) // Object.is equality
+- phone: «Показати» offered elsewhere: caught Error: expect(locator).toHaveCount(expected) failed
+- phone: the field still says a name: caught Error: apiRequestContext.post: Test timeout of 30000ms exceeded.
+- phone: no request ever sent elsewhere: caught Error: expect(locator).toBeVisible() failed
+- phone: «Оновити» asks without a number: caught Error: expect(received).toEqual(expected) // deep equality
+21 of 21 caught

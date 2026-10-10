@@ -29,10 +29,11 @@ import type {
 const pageSize = 20;
 
 /** As the server: another store's customer is found by their whole phone,
- * however it is written (owner decision, 2026-10-10). */
+ * however it is written or pasted, with the invisible marks a phone's
+ * contacts add (owner decision, 2026-10-10). */
 function wholePhone(text: string): boolean {
   const digits = text.replace(/\D/g, "").length;
-  return /^[\d\s()+-]+$/.test(text) && digits >= 10 && digits <= 15;
+  return /^[\d\s()+./\p{Cf}-]+$/u.test(text) && digits >= 10 && digits <= 15;
 }
 const askForPhone =
   "Введіть повний номер телефону покупця, наприклад 067 123 45 67. За іменем чи частиною номера борги інших магазинів не шукають.";
@@ -156,7 +157,8 @@ export function Credits({
           className="quiet"
           disabled={customers.isFetching}
           onClick={() => {
-            void customers.refetch();
+            // Another store's customers only once a whole number is typed.
+            if (searched) void customers.refetch();
             void summary.refetch();
           }}
         >
@@ -244,7 +246,7 @@ export function Credits({
       ) : customers.data.items.length === 0 ? (
         <p>
           {elsewhere
-            ? "За цим номером ніхто не винен магазинам, що не працюють."
+            ? "За цим номером боргів магазинів, що не працюють, не знайдено. Перевірте номер або зверніться до менеджера."
             : search
               ? "Боргів за таким ім’ям чи телефоном не знайдено."
               : owedOnly

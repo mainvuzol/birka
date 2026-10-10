@@ -35,7 +35,8 @@ class RequestScope:
     # ("BLOCKED" or "ARCHIVED"): through a membership of its own, or through
     # a role that covers the whole network.
     closed_stores: Mapping[uuid.UUID, str] = field(default_factory=dict)
-    # Those of them this person may read: the ones a network-wide role covers.
+    # Those of them this person may read: every one, for the network's owner
+    # and managers (`resolve_scope`); none for anyone else.
     readable_closed_stores: frozenset[uuid.UUID] = field(default_factory=frozenset)
     # Whether this request only reads. Nothing else is done in a store that
     # does not trade.
@@ -66,7 +67,7 @@ class RequestScope:
 
     def require_store(self, store_id: uuid.UUID) -> None:
         """Reject a store the user has no membership for, or one that does
-        not trade, unless this only reads it and a network-wide role covers it.
+        not trade, unless this only reads it and it is readable to this person.
 
         Organization-wide membership grants store access implicitly, but only
         to stores that were loaded into this scope.

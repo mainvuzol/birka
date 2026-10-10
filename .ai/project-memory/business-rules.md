@@ -330,7 +330,9 @@ Asked when the debts by customer, the store's total and orders paid in parts
 were taken up with the screens.
 
 - **One phone is one customer**, whatever name each sale was written under.
-  «+38 (067) 123-45-67» and «0671234567» are one number.
+  «+38 (067) 123-45-67» and «0671234567» are one number. *Since 2026-10-10
+  «8 067 123 45 67» and «0038 067 123 45 67» are the same number too
+  (owner, "a closed store's debts").*
 - **A customer with several debts pays on the debt the seller chooses.**
   The customer's card shows every debt and what they owe in all; nothing is
   spread across debts by itself.
@@ -418,7 +420,9 @@ How it is carried out, not decided by the owner:
 - **"Nothing is done in it"** is enforced in one place: the person's scope.
   - A blocked or archived store answers any change with `STORE_NOT_TRADING`.
   - Only a request that reads (`GET`) is let through, and only for a
-    network-wide role.
+    network-wide role. *Since 2026-10-10 only for the network's owner and
+    managers, not a seller added to every store (owner, "a closed store's
+    debts").*
   - Its own people's grants count for nothing while it does not trade.
 - **A command that moves stock holds its store until it commits.** A change
   of state waits for it, and a command that comes after sees the new state.
@@ -1996,14 +2000,29 @@ customers, names and phones.
   was paid or written off in a closed store is read by the owner and the
   network's managers, in that store itself.
 
+Asked the same day, after an independent review of the built change:
+- **A seller added to every store sees a closed store only as its state**
+  («Магазин заблоковано» and since when), as its own sellers do. They find
+  its debts from a store that trades, by the whole phone, like any seller.
+  The whole closed store is read by the network's owner and managers only,
+  as written on 2026-10-01.
+- **«8 067 123 45 67» and «0038 067 123 45 67» are the same number** as
+  «067 123 45 67» and «+38 067…»: one customer everywhere, in this search,
+  in a customer's debts together and in erasing them on request. No record
+  changes, only how numbers are compared.
+
 How it is carried out, not decided by the owner:
 - **A customer who does not remember their number** is found by the owner or
   a manager of the network in the closed store itself, as before.
-- **The number is the customer's**, as one phone is one customer
-  (2026-10-01): «+38 067…» and «067…» are one number. A number written
-  otherwise when the debt was opened, «8 067…», is found as it was written.
-- **A debt opened from the search stays readable by its id** in the store
-  that took the payment, so the seller who took the last one sees it paid.
-  That is not a search: the id comes from the search or the payment.
+- **"The network's owner and managers"** are those who hold the financial
+  report (`report:view_financial`) for the whole network: by default the
+  owner's and the manager's roles, not the seller's. Roles are rows the
+  owner may compose, so the permission says it, not a role's name.
+- **A debt is read by its id from another store only while it is owed.**
+  The payment that closes it answers with it, paid; after that it is read in
+  the closed store by the owner and managers.
+- **A whole phone** is 10 to 15 digits, with spaces, «+», brackets, «-», «.»,
+  «/» and the invisible marks a phone's contacts add to a copied number.
+  Another country's number is found as it was written.
 
 Built on 2026-10-10; see the [report](closed-store-debt-search-report.md).

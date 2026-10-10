@@ -37,10 +37,11 @@ from app.api.deps import session_dependency
 from app.core.errors import ValidationFailedError
 from app.main import create_app
 from app.modules.audit.models import AuditLog
-from app.modules.authz.models import Membership
+from app.modules.authz.models import Membership, Role
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, RoleCode
 from app.modules.authz.service import resolve_scope, seed_default_roles
-from app.modules.credit.models import CreditEntry
+from app.modules.credit.models import CreditEntry, CustomerCredit
+from app.modules.credit.service import CUSTOMER, customer_key
 from app.modules.identity.models import AppUser
 from app.modules.identity.session import issue_session_token
 from app.modules.inventory.service import find_divergences, lock_stock
@@ -703,7 +704,7 @@ async def test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed(
     sees only what is still owed. A name or a part of a number finds nobody,
     so another store's customers cannot be gone through."""
     net = await network(maker)
-    variant, size = await stocked(maker, net, net.shops.shared_warehouse)
+    variant, size = await stocked(maker, net, net.shops.shared_warehouse, qty=6)
     tag = uuid.uuid4().hex[:6]
 
     async def sold_on_credit(name: str, phone: str) -> str:
@@ -723,11 +724,31 @@ async def test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed(
         assert sale.status_code == 201, sale.text
         return sale.json()["credit"]["credit_id"]
 
-    # One customer, with the phone written two ways; another, a digit away.
+    # One customer, the number written four ways (owner decisions,
+    # 2026-10-01 and 2026-10-10); another, a digit away; and a number from
+    # abroad whose digits hold the first's whole.
     first = await sold_on_credit(f"Ірина-{tag}", "+38 (067) 123-45-67")
     second = await sold_on_credit(f"Ірина Коваль-{tag}", "0671234567")
+    eight = await sold_on_credit(f"Ірина-{tag}-вісім", "8 (067) 123-45-67")
+    zeros = await sold_on_credit(f"Ірина-{tag}-нулі", "0038 067 123 45 67")
+    hers = {first, second, eight, zeros}
     other = await sold_on_credit(f"Ірина-{tag}-інша", "0671234568")
+    abroad = await sold_on_credit(f"Ірина-{tag}-закордон", "+48 067 123 45 67")
     assert (await set_state(maker, net, "BLOCKED")).status_code == 200
+
+    # The database reads each stored number as the same customer the code
+    # does.
+    async with maker() as session:
+        keys = (
+            await session.execute(
+                select(CustomerCredit.phone_digits, CUSTOMER).where(
+                    CustomerCredit.organization_id == net.shops.organization_id
+                )
+            )
+        ).all()
+    assert len(keys) == 6
+    assert all(stored == customer_key(written) for written, stored in keys)
+    assert {stored for _, stored in keys} == {"0671234567", "0671234568", "480671234567"}
 
     params = {"store_id": str(net.shops.primary_store), "elsewhere": "true"}
 
@@ -735,6 +756,14 @@ async def test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed(
         return await client.get(
             "/api/v1/credits/customers", params=params | {"query": query} | more
         )
+
+    async def found(client: httpx.AsyncClient, query: str, **more: str) -> set[str]:
+        response = await search(client, query, **more)
+        assert response.status_code == 200, (query, response.text)
+        assert response.json()["has_more"] is False
+        customers = response.json()["items"]
+        assert len(customers) <= 1, query
+        return {debt["id"] for customer in customers for debt in customer["credits"]}
 
     async with as_(maker, net, net.seller) as client:
         # Neither a name nor a part of a number is a search here.
@@ -751,15 +780,21 @@ async def test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed(
             refused = await search(client, query)
             assert refused.status_code == 422, (query, refused.text)
             assert refused.json()["details"]["reason"] == "PHONE_REQUIRED", query
-        # The whole number, however it is written, finds that customer alone.
-        for query in ("0671234567", "+380671234567", "38 (067) 123-45-67", "067-123-45-67"):
-            found = await search(client, query)
-            assert found.status_code == 200, (query, found.text)
-            [customer] = found.json()["items"]
-            assert found.json()["has_more"] is False
-            assert {debt["id"] for debt in customer["credits"]} == {first, second}, query
-        [neighbour] = (await search(client, "0671234568")).json()["items"]
-        assert [debt["id"] for debt in neighbour["credits"]] == [other]
+        # The whole number, however it is written or pasted, finds that
+        # customer alone, under each of the ways it was written.
+        for query in (
+            "0671234567",
+            "+380671234567",
+            "38 (067) 123-45-67",
+            "067.123.45.67",
+            "8 067 123 45 67",
+            "0038 067 123 45 67",
+            # Copied from a phone's contacts, between two direction marks.
+            "\u202a+38 067 123 45 67\u202c",
+        ):
+            assert await found(client, query) == hers, query
+        assert await found(client, "0671234568") == {other}
+        assert await found(client, "+48 067 123 45 67") == {abroad}
 
         # Paid in full here, the debt leaves the search; whatever is asked
         # for, only what is still owed is answered.
@@ -775,15 +810,26 @@ async def test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed(
         assert paid.status_code == 201, paid.text
         assert paid.json()["status"] == "SETTLED"
         for status in ({}, {"status": "OPEN"}, {"status": "SETTLED"}):
-            [customer] = (await search(client, "0671234567", **status)).json()["items"]
-            assert [debt["id"] for debt in customer["credits"]] == [second], status
-            assert customer["open_debts"] == 1
-        # The seller who took the last payment still reads that debt by its
-        # id, as their screen does after it.
-        read = await client.get(
-            f"/api/v1/credits/{first}", params={"store_id": str(net.shops.primary_store)}
+            assert await found(client, "0671234567", **status) == hers - {first}, status
+        # Nor is it read by its id here any more: the payment's answer said
+        # it was paid. One still owed is.
+        at_primary = {"store_id": str(net.shops.primary_store)}
+        closed = await client.get(f"/api/v1/credits/{first}", params=at_primary)
+        assert closed.status_code == 403, closed.text
+        assert closed.json()["code"] == "FORBIDDEN_STORE"
+        assert (await client.get(f"/api/v1/credits/{second}", params=at_primary)).status_code == 200
+
+    # Written off by the network's owner, a debt leaves the search too.
+    async with as_(maker, net, net.owner) as client:
+        written_off = await client.post(
+            f"/api/v1/credits/{other}/write-off",
+            json={"command_id": str(uuid.uuid4()), "reason": "перевірка"},
         )
-        assert read.status_code == 200 and read.json()["status"] == "SETTLED"
+        assert written_off.status_code == 200, written_off.text
+    async with as_(maker, net, net.seller) as client:
+        assert await found(client, "0671234568") == set()
+        refused = await client.get(f"/api/v1/credits/{other}", params=at_primary)
+        assert refused.status_code == 403, refused.text
 
     # The network reads the blocked store itself: every debt, by name too.
     async with as_(maker, net, net.manager) as client:
@@ -792,11 +838,91 @@ async def test_a_debt_elsewhere_is_found_by_the_whole_phone_and_only_while_owed(
             params={"store_id": str(net.shops.child_store), "query": f"Ірина-{tag}"},
         )
         assert listed.status_code == 200, listed.text
-        assert {d["id"] for c in listed.json()["items"] for d in c["credits"]} == {
-            first,
-            second,
+        assert {d["id"] for c in listed.json()["items"] for d in c["credits"]} == hers | {
             other,
+            abroad,
         }
+
+
+async def test_a_seller_in_every_store_sees_a_closed_one_only_as_its_state(maker):
+    """Owner decision, 2026-10-10: a store that does not trade is read by the
+    network's owner and managers (2026-10-01). A seller added to every store
+    sees only its state, as its own sellers do, and finds its debts from a
+    store that trades by the customer's whole phone."""
+    net = await network(maker)
+    variant, size = await stocked(maker, net, net.shops.shared_warehouse)
+    async with as_(maker, net, net.child_seller) as client:
+        sale = await client.post(
+            "/api/v1/sales",
+            json=sale_body(net.shops.child_store, net.shops.shared_warehouse, variant, size)
+            | {
+                "credit": {
+                    "customer_name": "Ірина",
+                    "customer_phone": "0671234567",
+                    "paid_now": "500.00",
+                }
+            },
+            headers=key(),
+        )
+    assert sale.status_code == 201, sale.text
+    credit_id = sale.json()["credit"]["credit_id"]
+    # A seller added to every store of the network at once.
+    async with maker() as session:
+        role = await session.scalar(
+            select(Role).where(
+                Role.organization_id == net.shops.organization_id,
+                Role.code == RoleCode.SELLER.value,
+            )
+        )
+        assert role is not None
+        everywhere = AppUser(
+            telegram_user_id=uuid.uuid4().int % 2**62, display_name="network_seller"
+        )
+        session.add(everywhere)
+        await session.flush()
+        session.add(
+            Membership(
+                user_id=everywhere.id,
+                organization_id=net.shops.organization_id,
+                store_id=None,
+                role_id=role.id,
+            )
+        )
+        await session.commit()
+    assert (await set_state(maker, net, "BLOCKED")).status_code == 200
+    child = {"store_id": str(net.shops.child_store)}
+
+    async with as_(maker, net, everywhere.id) as client:
+        for path, params in (
+            ("/api/v1/credits/customers", child | {"query": "06"}),
+            ("/api/v1/credits", child),
+            ("/api/v1/credits/summary", child),
+            (f"/api/v1/credits/{credit_id}", {}),
+        ):
+            not_trading(await client.get(path, params=params), "BLOCKED")
+        me = (await client.get("/api/v1/me")).json()
+        [blocked] = [store for store in me["stores"] if store["id"] == str(net.shops.child_store)]
+        assert (blocked["state"], blocked["permissions"]) == ("BLOCKED", [])
+        elsewhere = await client.get(
+            "/api/v1/credits/customers",
+            params={
+                "store_id": str(net.shops.primary_store),
+                "elsewhere": "true",
+                "query": "067 123 45 67",
+            },
+        )
+        assert elsewhere.status_code == 200, elsewhere.text
+        assert [c["credits"][0]["id"] for c in elsewhere.json()["items"]] == [credit_id]
+
+    # The network's manager reads the store itself, as before.
+    async with as_(maker, net, net.manager) as client:
+        assert (await client.get("/api/v1/credits", params=child)).status_code == 200
+    async with maker() as session:
+        manager = await resolve_scope(session, net.manager, reading=True)
+        seller = await resolve_scope(session, everywhere.id, reading=True)
+    assert net.shops.child_store in manager.readable_closed_stores
+    assert seller.readable_closed_stores == frozenset()
+    assert dict(seller.closed_stores) == {net.shops.child_store: "BLOCKED"}
 
 
 async def test_the_network_owner_writes_off_a_debt_of_a_store_that_does_not_trade(maker):

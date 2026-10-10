@@ -41,9 +41,10 @@ async def resolve_scope(
     authenticated Telegram account with no membership is not a user of this
     system.
 
-    `reading` says the request only reads: then, and only then, a role that
-    covers the whole network also reads a store that does not trade (owner
-    decisions, 2026-10-01).
+    `reading` says the request only reads: then, and only then, the owner or
+    a manager of the whole network also reads a store that does not trade
+    (owner decisions, 2026-10-01). A seller added to every store sees only
+    its state, as its own sellers do (owner decision, 2026-10-10).
     """
     stmt = (
         select(
@@ -103,7 +104,13 @@ async def resolve_scope(
 
     # An organization-wide membership grants access to every store of that
     # organization, so those stores must appear in the scope for
-    # `require_store` to accept them. One that does not trade is read only.
+    # `require_store` to accept them. One that does not trade is read only,
+    # and only by the network's owner and managers (owner decisions,
+    # 2026-10-01 and 2026-10-10): those who see the whole network's money,
+    # which a seller does not, even one added to every store. Roles are rows
+    # the owner may compose, so it is the permission that says so, not the
+    # role's name.
+    reads_closed = Permission.REPORT_VIEW_FINANCIAL in _coerce(org_codes)
     readable: set[uuid.UUID] = set()
     if org_codes:
         stores = await session.execute(
@@ -114,7 +121,8 @@ async def resolve_scope(
                 store_permissions.setdefault(store_id, frozenset())
             else:
                 closed[store_id] = state
-                readable.add(store_id)
+                if reads_closed:
+                    readable.add(store_id)
 
     return RequestScope(
         user_id=user_id,
