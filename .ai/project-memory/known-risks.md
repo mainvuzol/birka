@@ -286,8 +286,10 @@ See the [release checklist](release-checklist.md) and the
   shows only under concurrency is printed as `(not gated)`, not failed:
   read the artifact when touching locks or the hot path, and take the
   release reading with `BIRKA_PERF_GATE=all`.
-- **A rebuild picks up new minor versions** of `postgres:17-alpine` and
-  `caddy:2-alpine`, untested.
+- **A rebuild picked up new minor versions** of `postgres:17-alpine` and
+  `caddy:2-alpine`, untested. **Closed on 2026-10-10**
+  ([ADR-0019](../decisions/ADR-0019-what-the-server-is-built-from.md)):
+  every image is pinned by its digest.
 - **The server's size is an estimate**, and public HTTPS issuance has never
   run.
 - **Docker logs were unbounded** until this gate; they are now 5 × 10 MB per
@@ -653,8 +655,29 @@ See the [report](public-hardening-report.md) and
 - **IPv6:** the domain must have no `AAAA` record, or every IPv6 client
   shares one sign-in limit (compose gives its network no IPv6).
 - **The images `node:24-alpine`, `caddy:2-alpine` and `postgres:17-alpine`
-  float**, and GitHub Actions are pinned by tag. The Python lock has no
-  hashes yet.
+  floated**, GitHub Actions were pinned by tag, and the Python lock had no
+  hashes. **Closed on 2026-10-10**
+  ([ADR-0019](../decisions/ADR-0019-what-the-server-is-built-from.md)):
+  every image by its digest, the multi-arch index CI ran; every action by
+  commit; CI on `ubuntu-24.04` with the images' Python and Node; each
+  library by the hashes of its files, installed with `--require-hashes`.
+  What stays:
+  - the backup image's PostgreSQL client and `age` come from apt at each
+    build, the newest of PostgreSQL 17 and of Debian: the PostgreSQL
+    project's repository keeps only its newest release, so a pinned one
+    would stop building;
+  - a pin moves only when someone moves it: a security release of an image
+    reaches the server only through a change, as the runbook says ("a
+    pinned version, changed on purpose"); Caddy's tag already names a newer
+    build than the pinned one;
+  - going back to an older commit needs Docker Hub to still serve its
+    digests, which it does for official images but does not promise;
+  - CI alone still takes some things fresh, none of which the server's
+    image holds: `pip-audit` and its dependencies; the `setuptools` that
+    builds the backend's own package for `pip install -e`; the backend
+    job's PostgreSQL 17 client and `age` from apt; Playwright's Chromium and
+    the system packages it asks for; and the runner image's own Docker,
+    Compose and Buildx, which GitHub updates weekly.
 - **The certificate warning is stored as a backup alert** (kind `FAILED`,
   key `certificate:<date>`), so «Резервні копії» may show it as the last
   message sent. The bot says nothing when the certificate is renewed, and an

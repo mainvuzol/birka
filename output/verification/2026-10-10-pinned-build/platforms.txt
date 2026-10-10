@@ -1,0 +1,10 @@
+# At c9f0425, 2026-10-10 02:26 EEST, uv 0.12.19
+== windows
+Would install 71 packages
+ + colorama==0.4.6
+== linux
+Would install 71 packages
+ + uvloop==0.23.0
+== macos
+Would install 71 packages
+ + uvloop==0.23.0

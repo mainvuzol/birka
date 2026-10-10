@@ -1,0 +1,6 @@
+# Docker Hub, read only, at c9f0425, 2026-10-10 02:26 EEST
+alpine:3.22: multi-arch index; linux/amd64 yes, linux/arm64 yes; 8 platforms; tag still points here
+caddy:2-alpine: multi-arch index; linux/amd64 yes, linux/arm64 yes; 7 platforms; tag moved to sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+node:24-alpine: multi-arch index; linux/amd64 yes, linux/arm64 yes; 3 platforms; tag still points here
+postgres:17-alpine: multi-arch index; linux/amd64 yes, linux/arm64 yes; 8 platforms; tag still points here
+python:3.12.14-slim: multi-arch index; linux/amd64 yes, linux/arm64 yes; 8 platforms; tag still points here

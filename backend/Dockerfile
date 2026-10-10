@@ -1,6 +1,11 @@
 # The Python CI and the local checks run on, to the patch release: a floating
 # `3.12-slim` would change it under the server at its next build, untested.
-FROM python:3.12.14-slim AS base
+# And to the image itself, by its digest: the tag is rebuilt in place now and
+# then (a Debian fix underneath), and the digest names the one CI built from.
+# It is the multi-arch index, so it serves an amd64 server and an arm64 one
+# alike. To move it, see the server runbook, "a pinned version, changed on
+# purpose".
+FROM python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -12,10 +17,12 @@ WORKDIR /app
 # Dependencies first so a code change does not reinstall the world. Exactly
 # the versions CI tested (requirements.lock), and nothing they did not ask
 # for: --no-deps, so a package missing from the lock fails `pip check` here
-# rather than arriving at whatever version PyPI has that day. The project
-# itself is not installed: the code is copied below and imported from /app.
+# rather than arriving at whatever version PyPI has that day. Each file must
+# match a hash the lock holds (--require-hashes), so a file replaced on PyPI,
+# or on the way, under the same version is refused. The project itself is not
+# installed: the code is copied below and imported from /app.
 COPY requirements.lock ./
-RUN pip install --no-deps -r requirements.lock && pip check
+RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
 
 EXPOSE 8000
 

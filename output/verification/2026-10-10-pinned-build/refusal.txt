@@ -1,0 +1,29 @@
+# At c9f0425, 2026-10-10 02:26 EEST, in birka-ci-local-api built from 5d11009 (its Dockerfile, lock and code unchanged since)
+== right.lock
+aiofiles==25.1.0 \
+    --hash=sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2 \
+    --hash=sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
+  Downloading aiofiles-25.1.0-py3-none-any.whl (14 kB)
+Successfully installed aiofiles-25.1.0
+exit: 0
+== one-off.lock
+aiofiles==25.1.0 \
+    --hash=sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2 \
+    --hash=sha256:0000000027c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
+  Downloading aiofiles-25.1.0.tar.gz (46 kB)
+Successfully installed aiofiles-25.1.0
+exit: 0
+== wrong.lock
+aiofiles==25.1.0 \
+    --hash=sha256:00000000a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2 \
+    --hash=sha256:0000000027c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
+  Downloading aiofiles-25.1.0-py3-none-any.whl (14 kB)
+ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE. If you have updated the package versions, please update the hashes. Otherwise, examine
+        Expected sha256 0000000027c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
+             Got        abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
+exit: 1
+== bare.lock
+aiofiles==25.1.0
+  Downloading aiofiles-25.1.0-py3-none-any.whl (14 kB)
+ERROR: Hashes are required in --require-hashes mode, but they are missing from some requirements. Here is a list of those requirements along with the hashes the
+exit: 1

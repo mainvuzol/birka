@@ -613,7 +613,8 @@ kept sale refused on resend now settles too. Reopen the app after it, as
 always.
 
 The build installs exactly the library versions CI tested
-(`backend/requirements.lock`). The new app's page is never cached, and the
+(`backend/requirements.lock`), each file checked against its hash, on the
+base images CI built from, named by digest. The new app's page is never cached, and the
 previous version's files stay for 30 days after they are replaced, so a
 phone that opens the app during or after the update gets a working page.
 
@@ -712,6 +713,48 @@ unsafe (below).
      after the next update); cron and the owner's computer go on as before.
      Delete `birka.dump`.
 
+## A pinned version, changed on purpose
+
+Everything the server is built from is named exactly, as CI ran it (owner,
+2026-10-10, [ADR-0019](../decisions/ADR-0019-what-the-server-is-built-from.md)):
+
+| What | Where | Pinned as |
+|---|---|---|
+| PostgreSQL 17.11, Caddy 2.11.6 | `infra/docker-compose.yml`; also the dev compose, CI's services and the edge job's Caddyfile check | `name:tag@sha256:…`, the multi-arch index (amd64 and arm64) |
+| Python 3.12.14, Node 24.21.0, Alpine 3.22 | `backend/Dockerfile`, `frontend/Dockerfile` | the same |
+| the API's libraries | `backend/requirements.lock` (and `-dev` for CI) | a version, and the hash of each of its files |
+| the bundle's packages | `frontend/package-lock.json` | a version and its `integrity` hash, as before |
+| CI's actions, Ubuntu, Python and Node | `.github/workflows/ci.yml` | a commit, its release beside it; `ubuntu-24.04`; `3.12.14`; `24.21.0` |
+
+The server needs nothing new for this. `docker compose up -d` pulls a
+missing image by its digest, and `docker compose build` builds from the
+pinned bases, installing each library only if its file matches a hash the
+lock holds. Going back to an earlier commit brings its pins back, and its
+images with them, as long as Docker Hub still serves those digests: it keeps
+official images' old digests, but promises nothing.
+
+**Not pinned:** the backup image's PostgreSQL client and `age` come from apt
+when it is built. The PostgreSQL project's repository keeps only its newest
+release, so a pinned one would stop building at the next. Refresh them as
+"A new version" says.
+
+**Moving a pin** is a change like any other, on a branch, never on the
+server:
+- an image: read the tag's digest now (`docker buildx imagetools inspect
+  caddy:2-alpine`, its first `Digest:` is the index), put it in every place
+  the table names, and let the whole CI run.
+  `tests/unit/test_pinned_inputs.py` fails while two places differ;
+- a library: the header of `backend/requirements.lock`;
+- an action: by its exact release, `gh api
+  repos/actions/checkout/git/ref/tags/v4.4.0` names the commit (an
+  annotated tag takes one more `gh api …/git/tags/<sha>`); the release goes
+  in the comment beside it. The moving `v4` names no release;
+- Ubuntu, Python or Node in CI: together with the images they stand for.
+
+**When:** after a security release of PostgreSQL, Caddy, Python, Node or
+Alpine, and otherwise every month or so, with the backup tools' refresh.
+Caddy's tag already named a newer build than the one pinned on 2026-10-10.
+
 ## The hot path on this server (optional)
 
 The release reading (checklist row 22) is taken on a laptop and in CI, and
@@ -774,10 +817,10 @@ that is wanted, it is the laptop's and CI's.
 - **Nothing here has run on a production server.** Public HTTPS issuance
   has never been tried. The 2026-09-16 run used Caddy's own local
   certificate.
-- **The images `postgres:17-alpine`, `caddy:2-alpine` and `node:24-alpine`
-  float.** A build picks up their newest minor versions. The API's Python
-  is pinned (`python:3.12.14-slim`) and its libraries are locked, without
-  hashes yet.
+- **The backup image's PostgreSQL client and `age` float** within
+  PostgreSQL 17 and Debian: apt gives the newest at each build of `ops`.
+  Every other image and library is pinned
+  ([above](#a-pinned-version-changed-on-purpose)).
 - **The server size is an estimate.** The hot-path budgets are measured on
   a laptop and on a two-CPU CI runner, not on the server or on a phone in a
   shop.

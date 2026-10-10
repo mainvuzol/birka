@@ -39,7 +39,12 @@ x-hardened: &hardened
 services:
   db:
     <<: *hardened
-    image: postgres:17-alpine
+    # Every image by its digest, the multi-arch index CI ran (PostgreSQL
+    # 17.11 here, Caddy 2.11.6 below): a tag is rebuilt in place now and
+    # then, and `docker compose pull` would take whatever it names that day.
+    # To move one, see the server runbook, "a pinned version, changed on
+    # purpose".
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: unless-stopped
     logging: *logging
     # The image's entrypoint starts as root, reads the data directory, makes
@@ -238,7 +243,7 @@ services:
 
   caddy:
     <<: *hardened
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028
     restart: unless-stopped
     logging: *logging
     # Ports 80 and 443 are below 1024: binding them is the one privilege.
