@@ -131,6 +131,21 @@ async def main() -> None:
         shared_opening = StockLocation(
             organization_id=org.id, name="Спільний новий склад", code="E2E-SHARED-OPENING"
         )
+        # Four for a stocktake of a whole warehouse (owner decisions,
+        # 2026-10-10), one per journey: a stocktake stays open until it is
+        # finished, and one is open per warehouse.
+        stocktaken = StockLocation(
+            organization_id=org.id, name="Склад інвентаризації", code="E2E-STOCKTAKE"
+        )
+        recounted = StockLocation(
+            organization_id=org.id, name="Склад, де рахують знову", code="E2E-STOCKTAKE-AGAIN"
+        )
+        refreshed = StockLocation(
+            organization_id=org.id, name="Склад, де облік оновлюється", code="E2E-STOCKTAKE-FRESH"
+        )
+        kept_count = StockLocation(
+            organization_id=org.id, name="Склад, де підрахунок губиться", code="E2E-STOCKTAKE-KEPT"
+        )
         # A second store of the network, with its own warehouse, that also
         # sells from the returns warehouse: where goods come from that are
         # taken back at the first (owner decisions, 2026-10-01).
@@ -170,6 +185,10 @@ async def main() -> None:
                 file_late,
                 file_later,
                 shared_opening,
+                stocktaken,
+                recounted,
+                refreshed,
+                kept_count,
                 second,
                 second_own,
                 concept,
@@ -207,6 +226,10 @@ async def main() -> None:
             file_late,
             file_later,
             shared_opening,
+            stocktaken,
+            recounted,
+            refreshed,
+            kept_count,
         ):
             session.add(
                 StoreLocationAccess(
@@ -248,10 +271,20 @@ async def main() -> None:
                     acting_store_id=store.id,
                     product_variant_id=variant.id,
                     size_id=size.id,
-                    quantity_delta=30 if stocked is not counted else 10,
+                    quantity_delta={counted.id: 10, stocktaken.id: 6, recounted.id: 4}.get(
+                        stocked.id, 30
+                    ),
                     movement_type=MovementType.DELIVERY,
                 )
-                for stocked in (location, till, counted)
+                for stocked in (
+                    location,
+                    till,
+                    counted,
+                    stocktaken,
+                    recounted,
+                    refreshed,
+                    kept_count,
+                )
             ],
         )
         role = Role(organization_id=org.id, code="E2E", name="Тестовий продавець")
@@ -298,6 +331,10 @@ async def main() -> None:
             "file_late_location_id": str(file_late.id),
             "file_later_location_id": str(file_later.id),
             "shared_opening_location_id": str(shared_opening.id),
+            "stocktake_location_id": str(stocktaken.id),
+            "recount_location_id": str(recounted.id),
+            "refresh_location_id": str(refreshed.id),
+            "kept_count_location_id": str(kept_count.id),
             "second_store_id": str(second.id),
             "second_location_id": str(second_own.id),
             "variant_id": str(variant.id),

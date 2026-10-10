@@ -627,6 +627,11 @@ unsafe (below).
 nothing more. A page left open sends no mark on a return or a payment and
 shows the old texts. Reopen the app after it, as always.
 
+**The update that brings `0040` (a stocktake of a whole warehouse)** needs
+nothing more: it adds three tables. `backup-watch` sends the owner a
+finished stocktake's sum, so it is rebuilt and restarted with the rest, as
+always. A page left open shows no stocktake until it is reopened.
+
 ## Going back
 
 1. **The code alone.**
@@ -663,6 +668,13 @@ shows the old texts. Reopen the app after it, as always.
      return or payment recorded whose answer was lost, resent to the old
      server, is refused before its lookup and stays kept until the server
      is upgraded again.
+   - **Across `0040` (a stocktake) it is safe.** The old code knows nothing
+     of the three tables and leaves them: a stocktake's counts are stock
+     adjustments it reads as ever. A stocktake from a page of the new
+     version is refused by it. A finished stocktake's message not yet sent
+     waits until the server is upgraded again. One narrow case holds a
+     phone: a count recorded whose answer was lost, resent to the old
+     server, is refused and stays kept until the server is upgraded again.
    - **Not across `0038` (customers' data) once a customer is erased:** by
      the owner, or by the hourly erasure as soon as any debt is past its
      term. The old code cannot read a debt with no name: «Борги» with
@@ -685,6 +697,8 @@ shows the old texts. Reopen the app after it, as always.
      without one. Before that it is lossless (rehearsal, 2026-10-09).
    - `0039` refuses once any return or debt payment carries the mark «під
      час збою»: `0038` cannot hold it, and the mark is never changed.
+   - `0040` refuses once any stocktake exists: `0039` cannot say which
+     corrections were one stocktake. The corrections themselves stay.
    - The downgrade is run by the new release's code, which knows it, and
      only then the old code is checked out:
      ```sh

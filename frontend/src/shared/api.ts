@@ -307,6 +307,9 @@ export function errorText(error: unknown): string {
     return "Моделі ще не можна об’єднати: спершу завершіть те, що показано.";
   if (error.code === "INSUFFICIENT_STOCK")
     return "Доступного товару вже недостатньо. Оновіть залишки та перевірте кількість.";
+  // A stocktake someone finished meanwhile (ADR-0022).
+  if (error.code === "STOCKTAKE_FINISHED")
+    return "Цю інвентаризацію вже завершили. Щоб рахувати далі, почніть нову.";
   if (error.code === "IDEMPOTENCY_IN_PROGRESS")
     return "Попередня спроба ще виконується. Зачекайте кілька секунд і перевірте результат.";
   if (error.status === 409)

@@ -1,0 +1,33 @@
+baseline journeys: pass
+- server: a moved balance not refused: caught FAILED tests/integration/test_warehouse_stocktake.py::test_the_warehouse_keeps_selling_and_a_moved_position_is_counted_again
+- server: the difference taken the wrong way round: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_count_that_matches_changes_nothing_and_one_that_differs_applies_at_once
+- server: a finished stocktake still counted: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_finished_stocktake_takes_no_count_and_answers_as_it_was
+- server: a count resent after the finish refused before its lookup: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_finished_stocktake_takes_no_count_and_answers_as_it_was
+- server: refusals after the lookup without recorded:false: caught FAILED tests/integration/test_warehouse_stocktake.py::test_the_warehouse_keeps_selling_and_a_moved_position_is_counted_again
+- server: a size not known counted upwards: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_size_not_known_is_only_counted_down_and_a_waiting_warehouse_not_at_all
+- server: the count left out of its fingerprint: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_count_is_recorded_once_however_late_it_is_resent
+- server: a position counted twice summed by its last count: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_position_counted_again_counts_once_in_the_sums
+- server: what was counted told as not checked: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_count_that_matches_changes_nothing_and_one_that_differs_applies_at_once
+- server: counted positions still listed as not counted: caught FAILED tests/integration/test_warehouse_stocktake.py::test_positions_nobody_counted_stay_as_they_are_and_are_told
+- server: whoever finished hears it too: caught FAILED tests/integration/test_warehouse_stocktake.py::test_the_owner_hears_the_sum_silently_and_nobody_else
+- server: nobody hears it: caught FAILED tests/integration/test_warehouse_stocktake.py::test_the_owner_hears_the_sum_silently_and_nobody_else
+- server: finishing again sums it again: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_finished_stocktake_takes_no_count_and_answers_as_it_was
+- server: a count does not hold the stocktake while it lands: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_count_under_way_lands_before_the_finish_and_none_after
+- server: «Брак» counted: caught FAILED tests/integration/test_warehouse_stocktake.py::test_brak_is_never_counted_and_a_reserved_balance_is_only_checked
+- server: a warehouse waiting for its list counted: caught FAILED tests/integration/test_warehouse_stocktake.py::test_a_size_not_known_is_only_counted_down_and_a_waiting_warehouse_not_at_all
+- server: whoever sees stock counts: caught FAILED tests/integration/test_warehouse_stocktake.py::test_only_whoever_may_correct_stock_counts_and_whoever_sees_it_reads
+- server: another network's stocktake found by its id (equivalent): SURVIVED 
+- server: joining the open one answered as started: caught FAILED tests/integration/test_warehouse_stocktake.py::test_one_stocktake_is_open_per_warehouse_and_whoever_starts_another_joins_it
+- server: the watcher never tells stocktakes: caught FAILED tests/integration/test_warehouse_stocktake.py::test_the_watcher_tells_stocktakes_every_minute_with_the_silent_sender
+- server: the shared outbox keeps a refused chat waiting: caught FAILED tests/integration/test_cash_watch.py::test_a_chat_that_refuses_for_good_is_not_tried_again
+- phone: a count sent against nothing: caught Error: expect(locator).toContainText(expected) failed
+- phone: the server's balance not taken after a refusal: caught Error: expect(locator).toBeVisible() failed
+- phone: the count's stocktake sent in its body: caught Error: expect(locator).toContainText(expected) failed
+- phone: a kept count holds no other screen: caught Error: expect(locator).toBeDisabled() failed
+- phone: found goods counted against what the list showed: caught Error: expect(locator).toContainText(expected) failed
+- phone: the surplus left out of the sums: caught Error: expect(locator).toContainText(expected) failed
+- phone: a stocktake offered without inventory:adjust: caught Error: expect(locator).toHaveCount(expected) failed
+- phone: a line's balance read once, never again: caught Error: expect(locator).toBeVisible() failed
+- phone: a count still on the phone does not hold the finish: caught Error: expect(locator).toBeDisabled() failed
+- phone: the counted list shows no count: caught Error: expect(locator).toContainText(expected) failed
+30 of 31 caught

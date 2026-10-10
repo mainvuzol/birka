@@ -2069,3 +2069,45 @@ How it is carried out, not decided by the owner:
 
 Built on 2026-10-10; see the [report](outage-mark-returns-payments-report.md)
 and [ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md).
+
+## Owner decision — 2026-10-10 (a stocktake of a whole warehouse)
+
+Chosen on 2026-10-10 after a closed store's debts, second after the mark on
+returns and payments: a stocktake changed one balance at a time, and
+nothing said what a count of the whole warehouse found or what nobody
+counted. Each answer the recommended one.
+
+- **The warehouse keeps selling while it is counted.** Each position is
+  checked against its balance when it is saved. If it was sold or received
+  meanwhile, that position alone is counted again.
+- **Positions nobody counted stay as they are.** The end says how many were
+  not checked.
+- **A manager or the owner counts, and each count applies at once:**
+  whoever may correct stock today.
+- **One record, and the bot tells the owner.** Who, when, how many
+  positions, the shortage and the surplus in units; the bot sends the sum
+  to the owner silently, as a drawer's difference.
+
+Not chosen: the warehouse stopped until the count is finished; what nobody
+counted set to zero, or every position required; sellers counting and a
+manager approving; only ordinary corrections with the reason «Перерахунок»,
+or a record without the bot.
+
+How it is carried out, not decided by the owner:
+- **One open per warehouse.** Whoever starts one while it is open joins it,
+  from any store that may correct that warehouse's stock.
+- **A position counted again** keeps its last count; what the stocktake
+  changed there is the sum of its counts, so a mistyped count counted again
+  cancels out.
+- **What a correction refuses, a count refuses:** «Брак», a warehouse
+  waiting for its opening list, a difference on a balance an order holds,
+  and a size not known counted upwards. A count equal to the balance is
+  always recorded as checked.
+- **The counter sees the balance,** as on the correction screen.
+- **Goods the list does not show** are found in the catalogue and counted
+  against zero.
+- **The owner who receives the message** is whoever holds `store:manage`
+  across the network, never whoever finished it, as for the drawer.
+
+Built on 2026-10-10; see the [report](warehouse-stocktake-report.md) and
+[ADR-0022](../decisions/ADR-0022-warehouse-stocktake.md).

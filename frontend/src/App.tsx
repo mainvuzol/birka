@@ -56,6 +56,13 @@ import {
   useAdjustmentCommand,
 } from "@/inventory/adjustmentCommands";
 import type { Adjustment } from "@/inventory/adjustmentTypes";
+import {
+  loadCount,
+  resolveCount,
+  useCountCommand,
+} from "@/inventory/stocktakeCommands";
+import type { CountResult } from "@/inventory/stocktakeTypes";
+import { countErrorText } from "@/inventory/Stocktake";
 import { Backups, useBackups } from "@/backups/Backups";
 import { Done as ReturnDone, Returns } from "@/returns/Returns";
 import type { Refund, ReturnPart } from "@/returns/types";
@@ -450,6 +457,23 @@ function Workspace({
       setAdjustmentStorageError(true);
     }
   }, [adjustmentKey, loadedFromDisk]);
+  // A stocktake's count (ADR-0022): the stock screen's own, as a correction.
+  const countKey = `birka:stocktake-count-pending:${me.organization_id}:${me.user_id}:${store.id}`;
+  const [countStorageError, setCountStorageError] = useState(false);
+  const [countSettled, setCountSettled] = useState<CountResult | null>(null);
+  const countCommand = useCountCommand();
+  useEffect(() => {
+    try {
+      const saved = loadCount(countKey);
+      useCountCommand.setState({ pending: saved, error: null });
+      if (saved) {
+        setTab("stock");
+        loadedFromDisk("count");
+      }
+    } catch {
+      setCountStorageError(true);
+    }
+  }, [countKey, loadedFromDisk]);
   const returnKey = `birka:return-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [returnStorageError, setReturnStorageError] = useState(false);
   const returnCommand = useReturnCommand();
@@ -768,6 +792,26 @@ function Workspace({
       }
     });
   }
+  function checkCount(): void {
+    const attempt = countCommand.pending;
+    if (!attempt) return;
+    void resolveCount(countKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "done") {
+        setCountSettled(outcome.result);
+      } else if (outcome.kind === "refused") {
+        // Proven to have recorded nothing — the balance moved since the
+        // count, or the stocktake was finished: settled, and it says so,
+        // with the positions read again (ADR-0013 §1).
+        useCountCommand.setState({ error: outcome.error });
+      }
+      if (outcome.kind !== "unknown") {
+        void cache.invalidateQueries({ queryKey: ["stocktake"] });
+        void cache.invalidateQueries({ queryKey: ["stocktake-positions"] });
+        void cache.invalidateQueries({ queryKey: ["stocktakes"] });
+        void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
+      }
+    });
+  }
   function checkOrder(): void {
     if (pending) void run(pending, true);
   }
@@ -818,10 +862,15 @@ function Workspace({
   const othersUnsettled = othersExceptCorrections || correctionUnsettled;
   const otherThanAdjustment =
     othersUnsettled || storesUnsettled || supplierUnsettled || invoiceUnsettled;
+  // A correction and a stocktake's count are both the stock screen's: either
+  // unsettled holds every other screen, and that screen holds the other.
   const adjustmentUnsettled =
     adjustmentStorageError ||
     adjustmentCommand.busy ||
-    adjustmentCommand.pending !== null;
+    adjustmentCommand.pending !== null ||
+    countStorageError ||
+    countCommand.busy ||
+    countCommand.pending !== null;
   const otherThanStores =
     othersUnsettled ||
     adjustmentUnsettled ||
@@ -883,6 +932,12 @@ function Workspace({
       busy: adjustmentCommand.busy,
       loaded: fromDisk.has("adjustment"),
       run: checkAdjustment,
+    },
+    {
+      pending: countCommand.pending !== null,
+      busy: countCommand.busy,
+      loaded: fromDisk.has("count"),
+      run: checkCount,
     },
     {
       pending: pending !== null,
@@ -1387,6 +1442,51 @@ function Workspace({
       {adjustmentCommand.error !== null && (
         <p role="alert">{adjustmentErrorText(adjustmentCommand.error)}</p>
       )}
+      {countStorageError && (
+        <p role="alert">
+          Не вдалося прочитати збережений підрахунок інвентаризації. Не очищайте
+          дані застосунку; зверніться до менеджера.
+        </p>
+      )}
+      {countCommand.pending && (
+        <section className="notice">
+          <h3>
+            {countCommand.busy
+              ? "Перевіряємо підрахунок…"
+              : "Незавершений підрахунок"}
+          </h3>
+          <p>
+            Невідомо, чи записано попередній підрахунок інвентаризації.
+            Перевірте результат — той самий підрахунок не застосується двічі.
+            Нові операції заблоковано.
+          </p>
+          <p>{keptText(countCommand.pending.since, me.display_name)}</p>
+          <button disabled={countCommand.busy} onClick={checkCount}>
+            Перевірити результат підрахунку
+          </button>
+        </section>
+      )}
+      {countSettled && (
+        <section className="notice" role="status">
+          <h3>Підрахунок підтверджено</h3>
+          <p>
+            Його було записано один раз:{" "}
+            {countSettled.quantity_delta === 0
+              ? `збігається з обліком (${String(countSettled.counted_quantity)}).`
+              : `облік ${String(countSettled.quantity_before)} → ${String(countSettled.counted_quantity)}.`}
+          </p>
+          <button
+            onClick={() => {
+              setCountSettled(null);
+            }}
+          >
+            Зрозуміло
+          </button>
+        </section>
+      )}
+      {countCommand.error !== null && (
+        <p role="alert">{countErrorText(countCommand.error)}</p>
+      )}
       {pending && (
         <section className="notice">
           <h3>{busy ? "Перевіряємо результат…" : "Незавершена операція"}</h3>
@@ -1466,7 +1566,10 @@ function Workspace({
             token={token}
             scopeKey={key}
             journalKey={adjustmentKey}
-            blocked={otherThanAdjustment || adjustmentStorageError}
+            countKey={countKey}
+            blocked={
+              otherThanAdjustment || adjustmentStorageError || countStorageError
+            }
           />
         ) : (
           <p role="alert">Немає доступу до залишків.</p>

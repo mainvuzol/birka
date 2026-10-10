@@ -160,7 +160,8 @@ See the [report](stock-correction-ui-report.md).
   the catalogue search. The default manager holds it; an owner who
   recomposes a role without it loses that half of the screen, not the
   correction of listed balances.
-- **One balance at a time.** There is no bulk stocktake of a whole warehouse.
+- **One balance at a time** was the only way until 2026-10-10. A whole
+  warehouse is now counted as one stocktake (below).
 
 ## A size read at the till — 2026-09-30
 
@@ -850,7 +851,8 @@ See the [report](cash-and-card-report.md) and
 - **The carrier's cash on delivery is not checked** against what the carrier
   paid out.
 - **The outbox's sending algorithm is copied** from `backups` into
-  `cash.messages`. A fix to one must be made in both.
+  `telegram.outbox`, which the drawer's and a stocktake's messages share
+  (since 2026-10-10). A fix to one must be made in both.
 - **«Звіт» sums more groups live,** by way and with the fixes, unmeasured and
   without an index of its own.
 - **A seller whose only grant is the store's own** gets a plain 403 in a
@@ -1293,3 +1295,46 @@ See the [report](outage-mark-returns-payments-report.md) and
   before.
 - **The first payment of a sale paid in parts** carries the sale's mark,
   not one of its own.
+
+## A stocktake of a whole warehouse — 2026-10-10
+
+See the [report](warehouse-stocktake-report.md) and
+[ADR-0022](../decisions/ADR-0022-warehouse-stocktake.md).
+
+- **The counter sees the balance.** Nothing makes them count rather than
+  type what the screen shows, as on the correction screen.
+- **A coat that left the shelf before its sale was recorded** is counted
+  missing, and the sale then takes it from the balance again: a shortage of
+  one that is not one. A position sold while it is counted is refused and
+  counted again only when the sale is recorded before the count is saved.
+  Count a position while no sale of it is under way.
+- **A stocktake left open is never summed or told.** Its counts have
+  applied; the warehouse shows it as open until someone finishes it, and
+  nothing reminds anyone.
+- **"Not checked" is read at the finish:** positions with stock on record
+  then that nobody counted. One sold to nothing meanwhile is in neither
+  figure.
+- **A reserved position that differs is not changed.** It is refused until
+  its order is dispatched or cancelled, and stays a difference nobody
+  recorded; it needs a correction then.
+- **«Брак» is not counted here.** It changes only through returns and its
+  own section.
+- **The sums are in units, not money,** as the owner chose.
+- **Only the network's owner hears of it,** not a store's own owner, as for
+  the drawer; the finished record is in the app for everyone who sees the
+  warehouse's stock.
+- **A stocktake continued later keeps the counts made before.** Those
+  positions count as checked and are not offered among «Ще не пораховані»;
+  one that changed since is counted again from «Пораховані». How it is
+  carried out (one open per warehouse, which others join), not the owner's
+  rule. The only way to start afresh is to finish it, which tells the
+  owner.
+- **Two people counting from one page** may skip a position: the list of
+  those not counted is paged, and a page moves as the other counts. The
+  finish's «не перевірено» and the list read afresh show what is left.
+- **The finish tells nobody when the owner finishes it,** or when the only
+  holder of `store:manage` across the network has no chat with the bot. The
+  confirmation says the bot writes when someone else finishes.
+- **The list is in the order «Залишки» shows,** by model, not by name or
+  shelf. A coat in hand is found with «Знайшли товар, якого немає в
+  списку», which counts against the balance the server then names.

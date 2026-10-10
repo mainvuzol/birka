@@ -9,8 +9,12 @@ import { PriceEditor } from "@/prices/SuggestedPrice";
 import { CatalogPicker } from "./CatalogPicker";
 import { Correction } from "./Correction";
 import type { Corrected } from "./Correction";
+import { Stocktake, Stocktakes } from "./Stocktake";
+import { useAdjustmentCommand } from "./adjustmentCommands";
 import { reasonLabels } from "./adjustmentTypes";
 import type { ReceivableVariant, SizeOption } from "./receiptTypes";
+import { useCountCommand } from "./stocktakeCommands";
+import type { StocktakeRecord } from "./stocktakeTypes";
 
 const pageSize = 50;
 
@@ -24,18 +28,25 @@ const pageSize = 50;
  *
  * Each model shows the price this store's till suggests, and whoever holds
  * `catalog:set_price` changes it from here (owner decision, 2026-10-01).
+ *
+ * A stocktake of the whole warehouse starts here too, and counting replaces
+ * the list until the person leaves it (owner decisions, 2026-10-10;
+ * ADR-0022).
  */
 export function Stock({
   store,
   token,
   scopeKey,
   journalKey,
+  countKey,
   blocked,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   journalKey: string;
+  /** Where a stocktake's count is kept until it is settled. */
+  countKey: string;
   blocked: boolean;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
@@ -47,6 +58,20 @@ export function Stock({
   const [corrected, setCorrected] = useState<Corrected | null>(null);
   const [pricing, setPricing] = useState<string | null>(null);
   const [priced, setPriced] = useState<string | null>(null);
+  const [counting, setCounting] = useState<StocktakeRecord | null>(null);
+  // A correction and a count each wait for the other to settle.
+  const adjustment = useAdjustmentCommand();
+  const countCommand = useCountCommand();
+  const correcting =
+    blocked || countCommand.busy || countCommand.pending !== null;
+  // A count not yet settled holds the finish, a new start and a return to
+  // counting too: the sums would be frozen without it (review, 2026-10-10).
+  const countingBlocked =
+    blocked ||
+    adjustment.busy ||
+    adjustment.pending !== null ||
+    countCommand.busy ||
+    countCommand.pending !== null;
   const allowed = store.permissions.includes("inventory:view");
   const canAdjust = store.permissions.includes("inventory:adjust");
   const canPrice = store.permissions.includes("catalog:set_price");
@@ -90,6 +115,7 @@ export function Stock({
       setSelectionLost(true);
       setEditing(null);
       setFinding(false);
+      setCounting(null);
     }
   }, [locationId, locations.isSuccess, selected]);
 
@@ -165,6 +191,7 @@ export function Stock({
                 setCorrected(null);
                 setPricing(null);
                 setPriced(null);
+                setCounting(null);
               }}
             >
               <option value="">Оберіть склад</option>
@@ -199,7 +226,38 @@ export function Stock({
                   Цей магазин не може виправляти залишки на цьому складі.
                 </p>
               )}
-              {corrected && (
+              {counting && (
+                <Stocktake
+                  store={store}
+                  token={token}
+                  scopeKey={scopeKey}
+                  journalKey={countKey}
+                  blocked={countingBlocked}
+                  location={selected}
+                  record={counting}
+                  onLeave={() => {
+                    setCounting(null);
+                    void stock.refetch();
+                  }}
+                />
+              )}
+              {!counting && !selected.damaged_returns && (
+                <Stocktakes
+                  store={store}
+                  token={token}
+                  scopeKey={scopeKey}
+                  blocked={countingBlocked}
+                  location={selected}
+                  canCount={adjustable}
+                  onCount={(record) => {
+                    setCounting(record);
+                    setEditing(null);
+                    setFinding(false);
+                    setCorrected(null);
+                  }}
+                />
+              )}
+              {!counting && corrected && (
                 <p role="status">
                   Коригування записано: {visible(corrected.target.name)} ·{" "}
                   {visible(corrected.target.size)} —{" "}
@@ -208,10 +266,10 @@ export function Stock({
                   {corrected.adjustment.quantity_after}.
                 </p>
               )}
-              {priced && (
+              {!counting && priced && (
                 <p role="status">Ціну продажу збережено: {visible(priced)}.</p>
               )}
-              {refreshing || stock.isPending ? (
+              {counting ? null : refreshing || stock.isPending ? (
                 <p role="status">Завантажуємо залишки…</p>
               ) : stock.error ? (
                 <Failure
@@ -307,7 +365,7 @@ export function Stock({
                             store={store}
                             token={token}
                             journalKey={journalKey}
-                            blocked={blocked}
+                            blocked={correcting}
                             locationId={selected.id}
                             target={{
                               product_variant_id: item.product_variant_id,
@@ -373,7 +431,7 @@ export function Stock({
                         token={token}
                         scopeKey={scopeKey}
                         journalKey={journalKey}
-                        blocked={blocked}
+                        blocked={correcting}
                         locationId={selected.id}
                         onDone={done}
                         onCancel={() => {

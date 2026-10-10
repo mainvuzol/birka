@@ -781,3 +781,61 @@ source_modules = [
     "app.modules.transfers",
 ]
 forbidden_modules = ["app.modules.cash"]
+
+# 2026-10-10 (ADR-0001 amendment, ADR-0022): module `stocktake` counts a whole
+# warehouse. `stocktake → inventory, catalog (read), identity, authz, tenancy,
+# telegram, core` (+ audit through inventory): a count that differs is a stock
+# adjustment through `inventory.record_adjustment`, and the owners' message
+# goes through `telegram.outbox`. It sells, returns, moves and takes in
+# nothing, and reads no money.
+[[tool.importlinter.contracts]]
+name = "a stocktake corrects stock only through the ledger's own door"
+type = "forbidden"
+source_modules = ["app.modules.stocktake"]
+forbidden_modules = [
+    "app.modules.sales",
+    "app.modules.refunds",
+    "app.modules.transfers",
+    "app.modules.orders",
+    "app.modules.snapshots",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.cash",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.backups",
+    "app.modules.reports",
+    "app.modules.catalog_correction",
+    "app.modules.inventory.repository",
+]
+# Only DIRECT imports: the inventory service it corrects through sits on the
+# rest underneath.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "only the API and the watcher depend on the stocktake"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.modules.audit",
+    "app.modules.authz",
+    "app.modules.backups",
+    "app.modules.cash",
+    "app.modules.catalog",
+    "app.modules.catalog_correction",
+    "app.modules.credit",
+    "app.modules.damaged",
+    "app.modules.identity",
+    "app.modules.inventory",
+    "app.modules.orders",
+    "app.modules.refunds",
+    "app.modules.reports",
+    "app.modules.sales",
+    "app.modules.snapshots",
+    "app.modules.stores",
+    "app.modules.suppliers",
+    "app.modules.telegram",
+    "app.modules.tenancy",
+    "app.modules.transfers",
+]
+forbidden_modules = ["app.modules.stocktake"]
