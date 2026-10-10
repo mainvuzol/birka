@@ -3,7 +3,7 @@
 Baseline: `50dbac4` (a closed store's debts, merged as PR #84).
 Status: built, reviewed and proven: the whole CI run locally passed, and
 twenty-seven ways of breaking it each caught. The sellers' page's steps 2,
-6 and 7 wait for the owner's confirmation.
+6 and 7 were confirmed by the owner on 2026-10-11.
 Branch: `feat/outage-mark-debts-returns`. Decision:
 [ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md);
 owner: business-rules.md, "returns and payments typed from paper"
@@ -67,7 +67,7 @@ On 2026-10-10, each answer the recommended one:
   named is each screen's own, the hour each operation's.
 - **The sellers' page,** steps 2, 6 and 7: write down who took a payment or
   a return and when, and tick the switch for them too. The new wording
-  waits for the owner's confirmation.
+  was confirmed by the owner on 2026-10-11.
 - **The server runbook:** the update that brings `0039`, and going back
   across it.
 
@@ -174,7 +174,8 @@ found, all addressed:
   says to hand the money over.
 - **The mark is the typist's word,** and permanent.
 - **Debt payments stay one sum in «Звіт»**; their marks are in «Борги».
-- **The sellers' page's new steps** are not yet confirmed by the owner.
+- **The sellers' page's new steps** were confirmed by the owner on
+  2026-10-11, after the merge.
 - **The store's zone:** both stores of the tests are in Kyiv, so the taking
   store's zone and the selling store's are never told apart.
 - **Journeys not walked:** a card or transfer return from paper, a return

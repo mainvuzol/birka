@@ -1,0 +1,9 @@
+- a migration command drifts: caught MISS command not in the English runbooks: docker compose --profile ops run --rm --no-deps ops alembic upgrade heads
+- the crontab line's hour drifts: caught MISS command not in the English runbooks: 15 4 * * * cd /srv/birka/infra && docker compose --profile ops run --rm ops >> /var/log/birka-backup.log 2>&
+- the backup directory's owner drifts: caught MISS command not in the English runbooks: mkdir -p backups && sudo chown 1000 backups       # користувач образу
+- the app role's command loses --no-deps: caught MISS command not in the English runbooks: docker compose --profile ops run --rm ops python -m scripts.app_role   # "birka_app: created", "… tables: re
+- a link points nowhere: caught MISS server-setup-uk.md: link to a missing file: people.md
+- the managers' guide names a button no screen has: caught MISS managers' guide quotes a word no screen uses: «Записати виправлення»
+- the managers' guide names a stocktake button wrongly: caught MISS managers' guide quotes a word no screen uses: «Зберегти кількість»
+- the managers' guide links nowhere: caught MISS managers-stock-uk.md: link to a missing file: paper.md
+8 of 8 caught

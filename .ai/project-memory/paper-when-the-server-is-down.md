@@ -11,7 +11,7 @@
 > Steps 2, 6 and 7 updated on 2026-10-10 for the owner's decision that
 > returns and debt payments typed from paper carry the mark too
 > ([ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md));
-> the new wording waits for the owner's confirmation.
+> the owner confirmed the new wording on 2026-10-11.
 > Print from the line below.
 
 ---
