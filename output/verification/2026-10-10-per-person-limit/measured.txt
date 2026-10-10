@@ -1,0 +1,13 @@
+3862 requests by the app, 2344 signed in, by 11 people
+the busiest person in 1 s: 35
+the busiest person in 10 s: 231
+the busiest person in 60 s: 817
+the busiest journey: 51 requests (outside-text.spec.ts › text from outside is shown with its hidden characters marked, on every screen it reaches)
+heavy requests: 75, by path {'/api/v1/catalog/match-decisions': 27, '/api/v1/snapshots': 25, '/api/v1/snapshots/{id}/parts': 16, '/api/v1/snapshots/{id}/approve': 7}
+the busiest journey's heavy requests: 7
+general 120/min, burst 120: refused, the whole run as one person 1295; each journey from a full bucket 0
+general 300/min, burst 300: refused, the whole run as one person 625; each journey from a full bucket 0
+general 600/min, burst 600: refused, the whole run as one person 0; each journey from a full bucket 0
+heavy 10/min, burst 10: refused, the whole run 47; each journey from a full bucket 0
+heavy 20/min, burst 20: refused, the whole run 24; each journey from a full bucket 0
+heavy 30/min, burst 30: refused, the whole run 6; each journey from a full bucket 0

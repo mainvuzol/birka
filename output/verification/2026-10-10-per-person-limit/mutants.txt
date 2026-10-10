@@ -1,0 +1,22 @@
+# The limit broken one way at a time, at c516393, 2026-10-10 11:42 EEST
+- server: no limit on signed-in requests: caught FAILED tests/unit/test_person_limit.py::test_a_person_past_their_burst_is_refused_before_the_database
+- server: the limit after the database is asked: caught FAILED tests/unit/test_person_limit.py::test_a_person_past_their_burst_is_refused_before_the_database
+- server: counted per sign-in, not per person: caught FAILED tests/unit/test_person_limit.py::test_a_person_counts_once_on_all_their_phones_and_nobody_else_waits
+- server: one bucket whatever the sign-outs: caught FAILED tests/unit/test_person_limit.py::test_a_sign_out_starts_the_person_a_new_bucket
+- server: the rest of a minute's refusals never written out: caught FAILED tests/unit/test_person_limit.py::test_refusals_are_logged_at_once_then_counted_once_a_minute
+- server: approving a list not counted as heavy: caught FAILED tests/unit/test_person_limit.py::test_exactly_the_heavy_routes_count_as_heavy
+- server: rejecting a list counted as heavy: caught FAILED tests/unit/test_person_limit.py::test_exactly_the_heavy_routes_count_as_heavy
+- server: heavy work in the general bucket: caught FAILED tests/unit/test_person_limit.py::test_heavy_work_has_its_own_bucket_and_counts_in_the_other_too
+- server: refused as a sign-in: caught FAILED tests/unit/test_person_limit.py::test_a_person_past_their_burst_is_refused_before_the_database
+- server: the wait rounded down: caught FAILED tests/unit/test_person_limit.py::test_a_person_past_their_burst_is_refused_before_the_database
+- server: no Retry-After header: caught FAILED tests/unit/test_person_limit.py::test_a_person_past_their_burst_is_refused_before_the_database
+- server: every refusal also logged as a domain error: caught FAILED tests/unit/test_person_limit.py::test_refusals_are_logged_at_once_then_counted_once_a_minute
+- server: every refusal logged: caught FAILED tests/unit/test_person_limit.py::test_refusals_are_logged_at_once_then_counted_once_a_minute
+- server: other numbers than measured: caught FAILED tests/unit/test_person_limit.py::test_the_server_keeps_the_measured_numbers
+- phone: a refused new sale kept as unknown: caught «a new sale refused for too many requests is not done, says h…»; «a correction refused for too many requests keeps its count, …»
+- phone: a kept sale cleared by the refusal: caught «a sale kept on the phone, refused for too many requests when…»
+- phone: the text says «нічого не записано»: caught «a new sale refused for too many requests is not done, says h…»; «a sale kept on the phone, refused for too many requests when…»; «a correction refused for too many requests keeps its count, …»
+- phone: the wait not said: caught «a new sale refused for too many requests is not done, says h…»; «a sale kept on the phone, refused for too many requests when…»; «a correction refused for too many requests keeps its count, …»
+- phone: a refused correction's count cleared: caught «a correction refused for too many requests keeps its count, …»
+- phone: the general refusal text: caught «a new sale refused for too many requests is not done, says h…»; «a sale kept on the phone, refused for too many requests when…»; «a correction refused for too many requests keeps its count, …»
+20 of 20 caught

@@ -1,7 +1,9 @@
 # Requests per person — 2026-10-10
 
 Baseline: `519b264` (what the server is built from, merged as PR #82).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty ways of breaking it each caught. The text without «нічого не
+записано» waits for the owner's confirmation.
 Branch: `feat/per-person-limit`. Decision: [ADR-0020](../decisions/ADR-0020-requests-per-person.md);
 owner: business-rules.md, "requests per person" (2026-10-10).
 
@@ -87,7 +89,8 @@ limits are 300 and 20.
     the till blocked, and the next check settles it with the same key;
   - a stock correction refused keeps its count, says «Нічого не записано.»
     with the wait, and is written when sent again.
-- **Mutation:** TODO(final).
+- **Mutation:** twenty ways of breaking it, one at a time, each caught:
+  seventeen first, three more after the review (below).
 - **The text:** the example the owner was shown ended «— нічого не
   записано». That is left out, because a kept operation's banner reserves
   those words for typing it from paper. It is put to the owner as a reading
@@ -120,7 +123,24 @@ journals. It found, all fixed:
 
 ## Evidence
 
-TODO(final)
+All under [`output/verification/2026-10-10-per-person-limit/`](../../output/verification/2026-10-10-per-person-limit/):
+- `requests.jsonl`, `count-requests.md`: every request the app made in the
+  265 journeys at `519b264`, by person, and how they were counted;
+- `analyse.py`, `measured.txt`: the peaks and the replay through the app's
+  own `TokenBucket`;
+- `mutants.py`, `mutants.txt`: twenty ways of breaking it, each caught.
+- **CI, run locally at `c516393`** ([summary](../../output/verification/2026-10-10-per-person-limit-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 329 on PostgreSQL 17;
+  - e2e: 268 journeys, the limits raised as for one person at a
+    machine's speed;
+  - hot path: worst p95 73.5 ms (catalogue read) and 112.8 ms
+    (`POST /sales`), within 300 and 500, the limit taken on every request;
+  - restore drill, frontend, python-audit and edge passed.
+- A first run at `6010035` lost the network for its two audits and one
+  outage journey, which reads Chromium's own online state; the journey
+  passed three times alone once the network was back, and the run above is
+  whole.
 
 ## Not covered here
 
