@@ -3,7 +3,7 @@
 Baseline: `50dbac4` (a closed store's debts, merged as PR #84).
 Status: built, reviewed and proven: the whole CI run locally passed, and
 twenty-seven ways of breaking it each caught. The sellers' page's steps 2,
-6 and 7 wait for the owner's confirmation.
+6 and 7 were confirmed by the owner on 2026-10-11.
 Branch: `feat/outage-mark-debts-returns`. Decision:
 [ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md);
 owner: business-rules.md, "returns and payments typed from paper"

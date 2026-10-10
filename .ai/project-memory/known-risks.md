@@ -1344,10 +1344,13 @@ See the [report](warehouse-stocktake-report.md) and
 See the [report](launch-guide-uk-report.md).
 
 - **Two copies of the install steps.** [server-setup-uk.md](server-setup-uk.md)
-  translates the English runbook's install, backups' setting up and
-  day-to-day running. A change made in one and not the other leaves an
-  administrator following a step that no longer holds. Each page says the
-  English is the source and a change is made in both; nothing checks it.
+  translates the English runbook's install, backups' setting up,
+  day-to-day running and what to do when the server does not answer. A
+  change made in one and not the other leaves an administrator following a
+  step that no longer holds. Each page says the English is the source and a
+  change is made in both. `check_guides.py` checks that every command on
+  the Ukrainian page is the English one, only when someone runs it, and
+  only that way round: a command added to the English is not missed.
 - **Not rehearsed in Ukrainian.** The commands are the runbook's, as
   rehearsed in English on 2026-10-09; nobody has yet installed a server
   from the Ukrainian page.

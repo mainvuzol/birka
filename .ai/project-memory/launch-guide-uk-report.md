@@ -1,7 +1,9 @@
 # Instructions in Ukrainian for the launch — 2026-10-11
 
 Baseline: `ca108c5` (a stocktake of a whole warehouse, merged as PR #86).
-Status: TODO(final).
+Status: written, reviewed and checked: every command matches the English
+runbooks, every link resolves, every quoted word is the app's, and the
+whole CI run locally passed.
 Branch: `docs/launch-guide-uk`. Owner: business-rules.md, "instructions in
 Ukrainian for the launch" (2026-10-11).
 
@@ -56,9 +58,10 @@ left open.
 
 ## How it was built and proven
 
-- **Translated from the runbooks, not rewritten:** every command is the
-  English runbook's, character for character, with its comment in
-  Ukrainian; every rule is one the owner decided, with its date.
+- **Translated from the runbooks, not rewritten:** every command line is
+  the English runbook's, as written there, apart from its placeholders and
+  its comment, which are in Ukrainian; every rule is one the owner decided,
+  with its date.
 - **The managers' guide names the screens' words,** read from the
   components (`Receive.tsx`, `SuggestedPrice.tsx`, `Correction.tsx`,
   `Stock.tsx`, `Stocktake.tsx`, `Damaged.tsx`).
@@ -66,10 +69,13 @@ left open.
   - each of the Ukrainian page's 57 command lines is in the English server
     or backup runbook, as written there;
   - each relative link on both pages points at a file that exists;
-  - each of the managers' guide's 84 «…» is a word the app's source holds.
+  - each of the managers' guide's 83 «…» is a word the app's source holds.
   It found five on its first run: three quotes broken across a line (the
   check now joins them), an inflected «Браком», and «В обліку: N» for
-  «В обліку: …».
+  «В обліку: …». It checks one way only: a command on the Ukrainian page
+  must be in the English runbooks, not every English command on the page
+  (the review read that way round by hand); a quoted word passes if any
+  source file holds it, a comment or a test included.
 - **The check's mutants:** eight ways of breaking the pages, one at a time,
   each caught: a migration command, the crontab's hour, the backup
   directory's owner, `--no-deps` dropped, a link to nowhere on each page,
@@ -78,11 +84,59 @@ left open.
 
 ## Review
 
-TODO(final).
+An independent review read the first commit (`624af2e`) against the English
+runbooks, the screens' code and the business rules. Every command of the
+covered English sections is on the Ukrainian page, in its step, and every
+date and attribution holds. It found, all addressed:
+- **The managers' guide told a manager to approve or reject a waiting
+  opening list.** Only the owner approves one, and rejecting it throws its
+  whole review away; the owner's rule is to receive the delivery after the
+  approval. It now says so, and not to reject a list to receive goods.
+- **A stocktake on a warehouse that still has no history** closes it to its
+  opening list, as any count that differs does: the guide now says nothing
+  is counted there either.
+- **The order of a late delivery and its paper sales was dropped,** on both
+  pages: the delivery is received first, or the till finds the shelf short.
+- **Two ways to enter goods found on a shelf, with no rule.** Asked of the
+  owner, who decided the same day: known where from, «Приймання»; not
+  known, a surplus of a count (business rules, 2026-10-11).
+- **Dropped from the translation:** the validator needs its requirements;
+  a copy moved by hand is the owner's to delete; an archive found damaged
+  is not collected again on its own; who the drawer's and the stocktake's
+  messages are never sent to; sizes created before answering by size; a
+  line with several sizes takes an answer per each; the photos keep the
+  parser's names; the API's log shows the seller's address; the
+  administrator not named yet; a pointer to the English "Security" for the
+  firewall and SSH keys.
+- **Misleading:** a reserved balance is corrected by hand after the order,
+  not by itself; a phone held in a blocked store now reads as the English
+  says, with what happens after; «власник бази» is the PostgreSQL role;
+  only «Змінити ціну продажу» shows in «Залишки»; «Брак» is listed but
+  disabled at receiving; a return to a supplier needs one chosen; a unit
+  sold from another store's own warehouse goes back to one of this store's.
+- **Ukrainian:** screen names after a preposition («у «Звіт»») now say
+  «у розділі «Звіт»»; «той, хто…» and «кожен, хто…» are plural; «Швидкі
+  команди», a dangling participle, the ports' TCP and UDP, and smaller
+  wording.
+- **Docs:** the #85 report's status still said the sellers' page waited;
+  the English 8a now names the stocktake's message, which the Ukrainian
+  page already did; the English runbook and the risk register name every
+  section translated; the checklist's links moved after the line they
+  belong to; the check's one-way reach and what it accepts are stated.
 
 ## Evidence
 
-TODO(final).
+- [`output/verification/2026-10-11-launch-guide-uk/`](../../output/verification/2026-10-11-launch-guide-uk/):
+  `check_guides.py` and `check.txt` (57 command lines, 83 quoted words,
+  OK), `mutants.py` and `mutants.txt` (8 of 8 caught).
+- **CI, run locally at `624af2e`** ([summary](../../output/verification/2026-10-11-launch-guide-uk-ci-local/summary.md)):
+  every job passed, the backend with its declared gap; the commits after it
+  change only these pages and the evidence.
+  - backend: 3 400 on PostgreSQL 17;
+  - e2e: 278 journeys;
+  - hot path: worst p95 65.9 ms (catalogue read) and 123.4 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 

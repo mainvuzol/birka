@@ -14,10 +14,13 @@ isolated Docker verification of 2026-09-16
 Backups have their own [runbook](backup-restore-runbook.md). This one links
 to it at the step where it belongs.
 
-**In Ukrainian:** [server-setup-uk.md](server-setup-uk.md) carries the first
-install, backups' setting up and the day-to-day running for the
-administrator (owner decision, 2026-10-11). This runbook is the source: a
-change to those steps is made in both.
+**In Ukrainian:** [server-setup-uk.md](server-setup-uk.md) carries what it
+needs, the first install, backups' setting up, the day-to-day running and
+what to do when the server does not answer, for the administrator (owner
+decision, 2026-10-11). This runbook is the source: a change to those steps
+is made in both, and `check_guides.py`
+(`output/verification/2026-10-11-launch-guide-uk/`) checks that the
+Ukrainian page's commands are this runbook's.
 
 ## What it needs
 
@@ -240,6 +243,11 @@ That message is about the shop, not the server:
 - it is sent once the reason is written, or 15 minutes after the close, and
   retried for a day;
 - it needs nothing set up beyond the owner's «Start» in the bot (step 8).
+
+Since 2026-10-10 it also tells **a finished stocktake of a whole
+warehouse** ([ADR-0022](../decisions/ADR-0022-warehouse-stocktake.md)): to
+the network's owner only, never whoever finished it, always silent, written
+when it is finished and retried for a day, with nothing more to set up.
 
 1. **The administrator** opens the shop's bot and presses «Start», then
    opens the app from it: «Доступу ще немає» shows their Telegram number. Put

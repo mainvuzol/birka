@@ -2134,6 +2134,14 @@ were in English. Each answer the recommended one.
 The owner confirmed the same day the sellers' page's steps 2, 6 and 7 of
 2026-10-10 (returns and payments typed from paper).
 
+**Goods found on a shelf that the books do not hold** (asked the same day,
+after the review found the guide offered two ways with no rule):
+- **known where from** — a delivery not entered, or goods the opening list
+  missed — they go in through «Приймання», with the supplier and price if
+  known, as decided on 2026-10-02;
+- **not known** — a surplus of a count: «Знайшли товар, якого немає в
+  списку» in a stock correction or a stocktake.
+
 How it is carried out, not decided by the owner:
 - **The English runbook stays the source.** Where the two differ, the
   English is right, and a change to an install step is made in both; each
