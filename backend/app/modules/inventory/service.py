@@ -951,6 +951,7 @@ __all__ = [
     "apply_catalog_merge",
     "apply_movements",
     "apply_opening_balance",
+    "awaiting_opening_list",
     "current_quantity",
     "current_variants",
     "find_divergences",
@@ -1537,6 +1538,19 @@ async def stock_under_merged_models(
         )
         for location_id, size_id, quantity, reserved_quantity in rows.all()
     ]
+
+
+async def awaiting_opening_list(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_id: uuid.UUID
+) -> bool:
+    """Whether this warehouse waits for its opening list (owner decision,
+    2026-10-02): nothing moves there until the list is approved or rejected,
+    so a stocktake of it is not started either (ADR-0022)."""
+    return bool(
+        await repository.locations_awaiting_opening_list(
+            session, organization_id=organization_id, location_ids={location_id}
+        )
+    )
 
 
 async def hold_for_opening_list(

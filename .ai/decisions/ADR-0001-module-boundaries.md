@@ -237,3 +237,25 @@ tenancy (models, hold_stores), audit, telegram, core`.
   unit test now imports every module the contracts name
   (`test_import_contracts_name_real_modules.py`).
 - Contracts are in `backend/pyproject.toml` (31 in all).
+
+2026-10-10 amendment (a stocktake of a whole warehouse,
+[ADR-0022](ADR-0022-warehouse-stocktake.md)): module `stocktake` counts one
+warehouse, position by position, and keeps the record and the bot's message
+of it (`stocktake`, `stocktake_count`, `stocktake_message`). Permitted edges:
+`stocktake → inventory (service, models read), catalog (read), identity
+(display_names, telegram_chats), authz, tenancy, telegram (outbox), core`.
+- A count that differs is a stock adjustment through
+  `inventory.record_adjustment`, under `inventory.lock_stock`; it never
+  writes the ledger or `inventory.repository` itself. It reads balances
+  (`inventory.models.Inventory`) for the positions and the sums.
+- It sells, returns, moves between warehouses and takes in nothing, and
+  reads no money.
+- Only the API and the watcher depend on it: the watcher script sends
+  `stocktake.messages`.
+- The drawer's sending algorithm moved to `telegram.outbox`, which both
+  `cash.messages` and `stocktake.messages` call with their own table and
+  `identity.telegram_chats`: `telegram` still reaches nobody's data. The
+  backups keep their copy.
+- Contracts "a stocktake corrects stock only through the ledger's own door"
+  and "only the API and the watcher depend on the stocktake" are new.
+- Contracts are in `backend/pyproject.toml` (33 in all).

@@ -42,6 +42,7 @@ from app.api.v1.refunds import router as refunds_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.snapshots import router as snapshots_router
+from app.api.v1.stocktakes import router as stocktakes_router
 from app.api.v1.stores import router as stores_router
 from app.api.v1.supplier_invoices import router as supplier_invoices_router
 from app.api.v1.suppliers import router as suppliers_router
@@ -56,6 +57,7 @@ router.include_router(catalog_corrections_router)
 router.include_router(catalog_matching_router)
 router.include_router(catalog_decisions_router)
 router.include_router(inventory_router)
+router.include_router(stocktakes_router)
 router.include_router(locations_router)
 router.include_router(orders_router)
 router.include_router(sales_router)

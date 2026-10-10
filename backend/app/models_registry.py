@@ -62,6 +62,7 @@ from app.modules.snapshots.models import (
     InventorySnapshotPart,
     InventorySnapshotRow,
 )
+from app.modules.stocktake.models import Stocktake, StocktakeCount, StocktakeMessage
 from app.modules.suppliers.models import (
     Supplier,
     SupplierInvoice,
@@ -136,6 +137,9 @@ __all__ = [
     "StockLot",
     "StockMovement",
     "StockReservation",
+    "Stocktake",
+    "StocktakeCount",
+    "StocktakeMessage",
     "Store",
     "StoreLocationAccess",
     "StoreStateChange",

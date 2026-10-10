@@ -15,17 +15,18 @@ at any hour, as with backups; and the same day, when the design asked:
 
 `queue_due` writes one `PENDING` message per owner with a chat before
 anything is sent, so looking twice queues nothing twice; `deliver` sends
-them. It is `backups.service.deliver`'s algorithm, copied rather than
-shared: a shop's module may not import the backups section, nor may
-`telegram` reach the people (ADR-0012, B8; a known duplication). Both run in
-the watcher (`scripts.backup_watch`), never in the API: a message sent after
-a commit would be lost with Telegram or the process, and never retried.
+them, by `telegram.outbox`, which a stocktake's messages share (ADR-0022).
+It is `backups.service.deliver`'s algorithm, copied rather than shared: a
+shop's module may not import the backups section (ADR-0012, B8; a known
+duplication). Both run in the watcher (`scripts.backup_watch`), never in the
+API: a message sent after a commit would be lost with Telegram or the
+process, and never retried.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -36,12 +37,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.authz.permissions import Permission
 from app.modules.authz.service import organization_wide_holders_in
-from app.modules.cash.models import CashClose, CashCloseReason, CashMessage, MessageStatus
+from app.modules.cash.models import CashClose, CashCloseReason, CashMessage
 from app.modules.cash.read import unclosed_days
 from app.modules.cash.service import SMALL_DIFFERENCE, money
 from app.modules.identity.models import AppUser
 from app.modules.identity.service import telegram_chats
-from app.modules.telegram.messages import BotTokenRefusedError, UndeliverableError
+from app.modules.telegram import outbox
+from app.modules.telegram.outbox import GIVE_UP_AFTER, Send
 from app.modules.tenancy.models import Store
 
 # How long the bot waits for the reason before it writes without it (G11).
@@ -49,11 +51,6 @@ WAIT_FOR_REASON = timedelta(minutes=15)
 # A close older than this is not told any more: the watcher was down for a
 # day, and the close is in the app.
 TOLD_WITHIN = timedelta(hours=24)
-# A message Telegram cannot be reached for is tried at every look until a
-# day after it was queued, then given up, as a backup's is.
-GIVE_UP_AFTER = timedelta(hours=24)
-
-Send = Callable[[int, str], Awaitable[None]]
 
 
 def grn(value: Decimal) -> str:
@@ -165,70 +162,11 @@ async def queue_due(session: AsyncSession, *, now: datetime) -> int:
 
 
 async def deliver(session: AsyncSession, *, send: Send, now: datetime) -> int:
-    """Send every `PENDING` message; returns how many were sent.
-
-    `backups.service.deliver`, for the drawer: each message is locked, sent
-    and committed on its own, so two watchers never send one at once and no
-    transaction stays open across more than one call to Telegram. A chat
-    Telegram refuses for good is `REFUSED`; any other failure is tried at
-    every look for a day, then `FAILED`. A bot token Telegram refuses is
-    nobody's chat and no attempt: every message stays `PENDING` and goes out
-    once the token is fixed."""
-    waiting = list(
-        (
-            await session.scalars(
-                select(CashMessage.id)
-                .where(CashMessage.status == MessageStatus.PENDING.value)
-                .order_by(CashMessage.created_at, CashMessage.id)
-            )
-        ).all()
+    """Send every `PENDING` message; returns how many were sent, by the
+    algorithm a stocktake's messages share (`telegram.outbox`)."""
+    return await outbox.deliver(
+        session, model=CashMessage, chats=telegram_chats, send=send, now=now
     )
-    await session.commit()
-    sent = 0
-    token_refused: BotTokenRefusedError | None = None
-    for message_id in waiting:
-        message = await session.scalar(
-            select(CashMessage)
-            .where(
-                CashMessage.id == message_id,
-                CashMessage.status == MessageStatus.PENDING.value,
-            )
-            .with_for_update(skip_locked=True)
-        )
-        if message is None:
-            # Sent meanwhile, or another watcher holds it now.
-            await session.commit()
-            continue
-        chat = (await telegram_chats(session, {message.user_id})).get(message.user_id)
-        if chat is None:
-            message.attempts += 1
-            message.status = MessageStatus.FAILED.value
-            message.last_error = "the account is disabled"
-        elif token_refused is not None:
-            message.last_error = str(token_refused)
-        else:
-            try:
-                await send(chat, message.text)
-            except BotTokenRefusedError as refusal:
-                token_refused = refusal
-                message.last_error = str(refusal)
-            except UndeliverableError as refusal:
-                message.attempts += 1
-                message.status = MessageStatus.REFUSED.value
-                message.last_error = str(refusal)[:300]
-            except Exception as error:
-                message.attempts += 1
-                message.last_error = f"{type(error).__name__}: {error}"[:300]
-                if now - message.created_at >= GIVE_UP_AFTER:
-                    message.status = MessageStatus.FAILED.value
-            else:
-                message.attempts += 1
-                message.status = MessageStatus.SENT.value
-                message.sent_at = now
-                message.last_error = None
-                sent += 1
-        await session.commit()
-    return sent
 
 
 async def messages_of(session: AsyncSession, close_id: uuid.UUID) -> list[CashMessage]:

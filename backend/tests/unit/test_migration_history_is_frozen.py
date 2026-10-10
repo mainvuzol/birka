@@ -69,6 +69,9 @@ FROZEN: dict[str, str] = {
     "0038_customer_erasure.py": (
         "110d4fd1af7727d3cd54df80a92ee3256b2e8749948468240f9a0e8c94e7b502"
     ),
+    "0039_outage_mark_debts_returns.py": (
+        "4d144fe4e62700b7ca5898eae732a8dbc7586e278dd5a35c004ed5f1b1b3f981"
+    ),
     "0024_returns_elsewhere.py": (
         "618c349021af46076a8f04fa20b7488c5b3457923d6eb895906d9d8b9657c622"
     ),

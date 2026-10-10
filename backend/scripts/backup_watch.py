@@ -70,7 +70,9 @@ the bot to the network's owner, silently at any hour, as with backups: once
 its reason is written, or 15 minutes after the close without it; never to
 whoever closed, and never for a difference under 1 грн. So every minute this
 queues what is due (`app.modules.cash.messages.queue_due`) and sends it with
-the same silent sender, retried for a day like a backup's message.
+the same silent sender, retried for a day like a backup's message. A
+stocktake of a whole warehouse, once finished, is told the same way
+(owner decision, 2026-10-10; `app.modules.stocktake.messages`).
 
 It also deletes expired idempotency records once an hour
 (`app.core.idempotency.purge_expired`), and once an hour erases the customers
@@ -133,6 +135,7 @@ from app.modules.backups.status import State
 from app.modules.cash.messages import deliver as deliver_cash
 from app.modules.cash.messages import queue_due
 from app.modules.credit.erasure import erase_expired
+from app.modules.stocktake.messages import deliver as deliver_stocktakes
 from app.modules.telegram.messages import (
     BotTokenRefusedError,
     UndeliverableError,
@@ -267,6 +270,18 @@ async def tell_cash(maker: async_sessionmaker[AsyncSession], send: Send, now: da
         sent = await deliver_cash(session, send=send, now=now)
     if queued or sent:
         logger.info("backup_watch.cash_told", queued=queued, sent=sent)
+
+
+async def tell_stocktakes(
+    maker: async_sessionmaker[AsyncSession], send: Send, now: datetime
+) -> None:
+    """Send what the network's owners must hear of a finished stocktake,
+    written when it was finished — silently, by the same `send` (owner
+    decision, 2026-10-10; ADR-0022)."""
+    async with maker() as session:
+        sent = await deliver_stocktakes(session, send=send, now=now)
+    if sent:
+        logger.info("backup_watch.stocktakes_told", sent=sent)
 
 
 async def purge_idempotency(
@@ -651,6 +666,13 @@ async def watch(
             CASH_EVERY,
             CASH_TIMEOUT,
             lambda now: tell_cash(maker, send, now),
+            stop,
+        ),
+        every(
+            "stocktakes",
+            CASH_EVERY,
+            CASH_TIMEOUT,
+            lambda now: tell_stocktakes(maker, send, now),
             stop,
         ),
         every(

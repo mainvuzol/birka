@@ -434,6 +434,20 @@ class OpeningBalanceConflictError(DomainError):
     message = "This warehouse already has stock history; an opening balance cannot be added to it"
 
 
+class StocktakeFinishedError(DomainError):
+    """A count sent to a stocktake someone has finished (ADR-0022).
+
+    Its sums are frozen once it is finished, so a count arriving after them
+    is refused and nothing is written; `details.stocktake_id` names it. A
+    count that was recorded before the finish is answered from its record,
+    however late it is resent.
+    """
+
+    code = "STOCKTAKE_FINISHED"
+    http_status = 409
+    message = "This stocktake is finished; start a new one to count again"
+
+
 class OpeningListPendingError(DomainError):
     """A warehouse waits for its opening list (owner decision, 2026-10-02).
 
@@ -541,6 +555,7 @@ __all__ = [
     "SameAsError",
     "SessionExpiredError",
     "SnapshotConflictError",
+    "StocktakeFinishedError",
     "StoreNotTradingError",
     "UnknownSizeStockError",
     "ValidationFailedError",
