@@ -59,7 +59,14 @@ from app.modules.cash.current import sale_methods
 from app.modules.credit import service as credit_service
 from app.modules.refunds.service import refunded_quantities
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
-from app.modules.sales.outage import MarkView, OutageMark, marks_of, paper_time
+from app.modules.sales.outage import (
+    MarkView,
+    OutageMark,
+    PaperMark,
+    PaperView,
+    marks_of,
+    paper_time,
+)
 from app.modules.sales.payment import PaymentMethod
 from app.modules.sales.read import MAX_QUERY, list_sales, way_shown_to
 from app.modules.sales.service import (
@@ -174,6 +181,40 @@ class OutageMarkPayload(BaseModel):
     # The paper's time, the store's own wall clock with no offset; the phone
     # fills in the day, today or yesterday.
     sold_at: PaperTime | None = None
+
+
+class PaperMarkPayload(BaseModel):
+    """«Під час збою» on a return or a debt payment typed from paper (owner
+    decision, 2026-10-10; ADR-0021): who took it and the paper's time, as a
+    sale's mark says who sold. `{}` marks it with nobody and no time named.
+    Only the shape here; the rest is decided after the replay lookup."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Who took it, as the paper says: one who may take it in the store
+    # taking it.
+    by_user_id: uuid.UUID | None = None
+    # The paper's time, that store's wall clock with no offset.
+    at: PaperTime | None = None
+
+    def mark(self) -> PaperMark:
+        return PaperMark(by_user_id=self.by_user_id, at=self.at)
+
+
+class PaperMarkResponse(BaseModel):
+    """A return's or a payment's mark (ADR-0021): who took it as the paper
+    says, by name too, and the paper's time; each None when the paper named
+    none. Who typed it is the entry's own `by`."""
+
+    by_user_id: uuid.UUID | None
+    by: str | None
+    at: datetime | None
+
+
+def paper_response(view: PaperView | None) -> PaperMarkResponse | None:
+    if view is None:
+        return None
+    return PaperMarkResponse(by_user_id=view.by_user_id, by=view.by, at=view.at)
 
 
 class SaleRequest(BaseModel):
@@ -739,4 +780,12 @@ async def read_sale(sale_id: uuid.UUID, scope: ScopeDep, session: SessionDep) ->
     return body.model_copy(update={"payment_method": method.value if method else None})
 
 
-__all__ = ["MethodValue", "TillMethodValue", "method_of", "router"]
+__all__ = [
+    "MethodValue",
+    "PaperMarkPayload",
+    "PaperMarkResponse",
+    "TillMethodValue",
+    "method_of",
+    "paper_response",
+    "router",
+]

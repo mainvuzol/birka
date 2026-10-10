@@ -493,6 +493,8 @@ function Workspace({
     credit: Credit;
     amount: string | null;
     way: PaymentMethod | null;
+    // Typed from paper: the card was charged during the outage (ADR-0021).
+    fromPaper?: boolean;
   } | null>(null);
   // Which command a resent attempt refused as recording nothing was, and
   // how a payment was pressed: what to give back says it (ADR-0013 §8).
@@ -724,6 +726,7 @@ function Workspace({
             ? {
                 amount: attempt.body.amount,
                 way: attempt.body.payment_method ?? null,
+                fromPaper: !!attempt.body.outage,
               }
             : { amount: null, way: null }),
         });
@@ -1316,9 +1319,11 @@ function Workspace({
               : ""}
             . {visible(creditSettled.credit.customer_name ?? erasedCustomer)}:
             залишок боргу {money(creditSettled.credit.owed)}.
-            {creditSettled.amount !== null &&
-              creditSettled.way === "CARD" &&
-              ` ${chargeOnce(creditSettled.amount)}`}
+            {creditSettled.fromPaper
+              ? paidOnPaper(creditSettled.way)
+              : creditSettled.amount !== null &&
+                creditSettled.way === "CARD" &&
+                ` ${chargeOnce(creditSettled.amount)}`}
           </p>
           <button
             onClick={() => {
@@ -1822,6 +1827,17 @@ function Workspace({
  * seller may have charged the terminal meanwhile, so it says to charge it
  * only if nobody did (owner decision, 2026-10-07; ADR-0013 §5.6, G19).
  */
+/**
+ * A kept payment typed from paper, confirmed: what the till says of money
+ * taken during the outage, by its way (ADR-0021) — never to charge again.
+ */
+function paidOnPaper(way: PaymentMethod | null): string {
+  const paid = way === null ? null : paidDuringOutage(way);
+  return paid === null
+    ? ""
+    : ` ${paid.charAt(0).toUpperCase()}${paid.slice(1)}.`;
+}
+
 function chargeOnce(amount: string): string {
   return `Якщо картку ще не провели — проведіть на терміналі ${money(amount)}. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.`;
 }

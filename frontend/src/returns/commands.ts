@@ -1,5 +1,6 @@
 import { isId, isRecord, journal } from "@/shared/journal";
 import { isTillMethod } from "@/shared/payment";
+import { isPaperBody } from "@/sales/paperMark";
 import type { Refund, ReturnBody } from "./types";
 
 /**
@@ -34,6 +35,8 @@ const returns = journal<ReturnBody, Refund>({
     ...(body.payment_method ? { payment_method: body.payment_method } : {}),
     // Taken back here, sold at another store of the network.
     ...(body.elsewhere ? { store_id: body.store_id } : {}),
+    // Typed from paper (ADR-0021): only then, so every other is as before.
+    ...(body.outage ? { outage: body.outage } : {}),
   }),
   scope: "return-pending",
   isBody: (body) =>
@@ -41,6 +44,7 @@ const returns = journal<ReturnBody, Refund>({
     (body.reason === null || typeof body.reason === "string") &&
     (body.elsewhere === undefined || typeof body.elsewhere === "boolean") &&
     (body.payment_method === undefined || isTillMethod(body.payment_method)) &&
+    (body.outage === undefined || isPaperBody(body.outage)) &&
     Array.isArray(body.lines) &&
     body.lines.length > 0 &&
     body.lines.every(isPart),

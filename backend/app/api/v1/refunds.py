@@ -38,7 +38,13 @@ from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.deps import ScopeDep, SessionDep
-from app.api.v1.sales import TillMethodValue, method_of
+from app.api.v1.sales import (
+    PaperMarkPayload,
+    PaperMarkResponse,
+    TillMethodValue,
+    method_of,
+    paper_response,
+)
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
@@ -107,6 +113,9 @@ class RefundRequest(BaseModel):
     # return a phone kept from before it was asked, and allowed absent for a
     # sale paid in parts whose return only lowers the debt.
     payment_method: TillMethodValue | None = None
+    # «Під час збою»: typed from paper after the server did not answer
+    # (owner decision, 2026-10-10; ADR-0021).
+    outage: PaperMarkPayload | None = None
 
     def fingerprinted(self) -> dict[str, object]:
         """The body as its idempotency fingerprint reads it: what a request
@@ -117,6 +126,8 @@ class RefundRequest(BaseModel):
             del body["store_id"]
         if body["payment_method"] is None:
             del body["payment_method"]
+        if body["outage"] is None:
+            del body["outage"]
         for line in body["lines"]:
             if line["location_id"] is None:
                 del line["location_id"]
@@ -172,10 +183,14 @@ class RefundResponse(BaseModel):
     # whose return only lowered the debt), and on answers given before the
     # way was asked.
     payment_method: str | None = None
+    # Typed from paper (ADR-0021): who took it and when, as the paper says.
+    # None for a return typed live, and on answers given before the mark.
+    outage: PaperMarkResponse | None = None
 
 
 def _to_response(result: RefundResult) -> RefundResponse:
     return RefundResponse(
+        outage=paper_response(result.outage),
         payment_method=result.refund.payment_method,
         id=result.refund.id,
         sale_id=result.refund.sale_id,
@@ -299,6 +314,7 @@ async def create(
         correlation_id=get_correlation_id(),
         at_store_id=store_id,
         payment_method=method_of(payload.payment_method),
+        outage=payload.outage.mark() if payload.outage is not None else None,
     )
 
     body = (

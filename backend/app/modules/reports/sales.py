@@ -47,7 +47,9 @@ in «Каса» (ADR-0012, G24).
 A sale typed from paper (owner decisions, 2026-10-04 and 2026-10-07;
 ADR-0013 §5.6) counts on the day it was typed, like any sale: its entry says
 «продано під час збою», who sold and the paper's time, as the paper says, and
-`by` stays whoever typed it. The mark changes no figure.
+`by` stays whoever typed it. The mark changes no figure. A return typed from
+paper carries it too (owner decision, 2026-10-10; ADR-0021): who took it
+back and the paper's time.
 
 Nothing here is stored, so it never disagrees with what it sums.
 """
@@ -249,7 +251,9 @@ class Kind(StrEnum):
 @dataclass(frozen=True, slots=True)
 class OutageView:
     """«Продано під час збою»: a sale typed from paper (ADR-0013 §5.6). Who
-    sold and when, as the paper says; each None when the paper named none."""
+    sold and when, as the paper says; each None when the paper named none.
+    A return typed from paper carries it too (owner decision, 2026-10-10;
+    ADR-0021): `sold_by` is then who took it back, as `by` is who typed it."""
 
     sold_by: str | None
     sold_at: datetime | None
@@ -821,11 +825,13 @@ async def _return_entries(
 ) -> dict[uuid.UUID, EntryView]:
     if not refund_ids:
         return {}
+    named = aliased(AppUser)
     refunds = (
         await session.execute(
-            select(Refund, AppUser.display_name, CreditEntry.cash_back)
+            select(Refund, AppUser.display_name, CreditEntry.cash_back, named.display_name)
             .join(AppUser, AppUser.id == Refund.actor_user_id)
             .outerjoin(CreditEntry, CreditEntry.refund_id == Refund.id)
+            .outerjoin(named, named.id == Refund.outage_taken_by)
             .where(Refund.id.in_(refund_ids))
         )
     ).all()
@@ -865,8 +871,13 @@ async def _return_entries(
                 )
                 for refund_item, sale_item in lines.get(refund.id, [])
             ],
+            outage=(
+                OutageView(sold_by=taken_by, sold_at=refund.outage_taken_at)
+                if refund.during_outage
+                else None
+            ),
         )
-        for refund, actor, cash_back in refunds
+        for refund, actor, cash_back, taken_by in refunds
     }
 
 

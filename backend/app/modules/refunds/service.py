@@ -100,6 +100,14 @@ from app.modules.inventory.service import (
 )
 from app.modules.refunds.models import Refund, RefundItem, ReturnCondition
 from app.modules.sales.models import Sale, SaleItem, SaleStatus
+from app.modules.sales.outage import (
+    PaperMark,
+    PaperView,
+    checked_paper,
+    names_of,
+    paper_view,
+    print_of_paper,
+)
 from app.modules.sales.payment import TILL_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.sales.service import MAX_MONEY, money
 from app.modules.tenancy.service import (
@@ -158,6 +166,10 @@ class RefundResult:
     # and cash back (owner decision, 2026-10-01). None for one paid in full,
     # whose `total_amount` is the cash back.
     credit: ReturnSettlement | None = None
+    # Typed from paper after the server did not answer: who took it and when,
+    # as the paper says (owner decision, 2026-10-10; ADR-0021). None for a
+    # return typed live.
+    outage: PaperView | None = None
 
 
 async def _load_sale(
@@ -362,6 +374,7 @@ def _fingerprint(
     taking: uuid.UUID,
     elsewhere: set[uuid.UUID] | None,
     payment_method: PaymentMethod | None,
+    outage: PaperMark | None = None,
 ) -> str:
     """Everything that makes this refund *this* refund.
 
@@ -405,6 +418,8 @@ def _fingerprint(
             # The same for how the money goes back: none on a return kept from
             # before it was asked (ADR-0012, B13).
             **print_of(payment_method),
+            # And its mark, only when typed from paper (ADR-0021).
+            **print_of_paper(outage),
         },
         actor_user_id=scope.user_id,
         store_id=sale.store_id,
@@ -417,6 +432,7 @@ def _result(
     sale_items: dict[uuid.UUID, SaleItem],
     movements: list[uuid.UUID],
     credit: ReturnSettlement | None = None,
+    outage: PaperView | None = None,
 ) -> RefundResult:
     """Assemble a result in the one canonical order.
 
@@ -436,6 +452,18 @@ def _result(
         ],
         movements=movements,
         credit=credit,
+        outage=outage,
+    )
+
+
+async def _mark_of(session: AsyncSession, refund: Refund) -> PaperView | None:
+    """The return's mark, with the name of whoever it names, as they are
+    named now; nothing is asked of the database for one typed live."""
+    if not refund.during_outage:
+        return None
+    named = {refund.outage_taken_by} if refund.outage_taken_by is not None else set()
+    return paper_view(
+        True, refund.outage_taken_by, refund.outage_taken_at, await names_of(session, named)
     )
 
 
@@ -466,6 +494,7 @@ async def _read_refund(session: AsyncSession, refund: Refund) -> RefundResult:
             session, organization_id=refund.organization_id, refund_id=refund.id
         ),
         await return_settlement(session, refund_id=refund.id),
+        await _mark_of(session, refund),
     )
 
 
@@ -533,11 +562,17 @@ async def create_refund(
     at_store_id: uuid.UUID | None = None,
     payment_method: PaymentMethod | None = None,
     method_required: bool = True,
+    outage: PaperMark | None = None,
 ) -> RefundResult:
     """Take goods back against an existing sale, or raise and roll back.
 
     `at_store_id` is the store taking them back, when it is not the one that
     sold (owner decisions, 2026-10-01).
+
+    `outage` marks a return typed from paper (owner decision, 2026-10-10;
+    ADR-0021): checked after the replay lookup, by the rules of the store
+    taking it back, so a marked return recorded and resent after its day or
+    its person is gone is answered as recorded.
 
     `payment_method` is how the money goes back, one of the till's three
     ways. A new refund without it is refused right after the replay lookup,
@@ -616,6 +651,7 @@ async def create_refund(
         taking=taking,
         elsewhere=elsewhere,
         payment_method=payment_method,
+        outage=outage,
     )
     existing = await _existing_command(
         session, scope=scope, command_id=command_id, request_fingerprint=request_fingerprint
@@ -638,6 +674,19 @@ async def create_refund(
         # settled when it was sold.
         if method is None and sale.id not in await credited_sales(session, sale_ids=[sale.id]):
             stated_way(method, takes=TILL_METHODS, required=method_required)
+        # Typed from paper: whoever it names may take returns where it is
+        # taken back, and the paper's time is that store's today or yesterday.
+        mark = (
+            await checked_paper(
+                session,
+                organization_id=scope.organization_id,
+                store_id=taking,
+                mark=outage,
+                may=Permission.SALE_REFUND,
+            )
+            if outage is not None
+            else None
+        )
 
         # Lock the whole sale's lines, in id order, before reading how much of it
         # has already been refunded. Every refund of this sale takes the same rows
@@ -737,6 +786,9 @@ async def create_refund(
             # Only when money goes back: a return that only lowered a debt moved
             # none, whatever the screen had preselected (ADR-0012, G35).
             payment_method=method.value if method is not None and moves_money else None,
+            during_outage=mark is not None,
+            outage_taken_by=mark.by_user_id if mark is not None else None,
+            outage_taken_at=mark.at if mark is not None else None,
         )
         session.add(refund)
         await session.flush()
@@ -894,7 +946,9 @@ async def create_refund(
             payment_method=refund.payment_method,
         )
 
-        return _result(refund, refund_items, sale_items, movements, credit)
+        return _result(
+            refund, refund_items, sale_items, movements, credit, await _mark_of(session, refund)
+        )
 
 
 async def refunded_quantities(

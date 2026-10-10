@@ -59,7 +59,8 @@ the recommended one**:
 - **G26:** the server back before 6:00: type the paper, then close;
   otherwise close the next evening;
 - **G1:** the paper time is an hour, with «вчора»: today or yesterday only;
-- **G2:** the mark is on sales only;
+- **G2:** the mark is on sales only; *superseded on 2026-10-10: returns and
+  debt payments carry it too ([ADR-0021](ADR-0021-outage-mark-on-returns-and-payments.md))*;
 - **G22:** a kept sale recorded later carries no mark;
 - **G24:** a refused late «Клієнт забрав» is typed as a paper sale at the
   order's prices, with the mark;
@@ -540,6 +541,10 @@ No tap is added to a normal sale.
 
 ### 8. Debts, returns and orders typed later
 
+- *Since 2026-10-10 a return and a debt payment typed from paper carry the
+  mark, and their screens say the money was already handed over
+  ([ADR-0021](ADR-0021-outage-mark-on-returns-and-payments.md)); what
+  follows was written before.*
 - **Typed as ordinary operations,** dated when typed, in the drawer period
   open then, **with no mark** (G2, owner 2026-10-07). Their screens cannot
   tell a paper operation from a live one, so a return «На картку» still says

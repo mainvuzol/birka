@@ -1,0 +1,28 @@
+- server: a return's print without its mark: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_the_mark_is_part_of_the_command
+- server: a payment's print without its mark: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_the_mark_is_part_of_the_command
+- server: whoever sells named on a return: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_only_someone_who_may_take_it_there_now_is_named
+- server: whoever sells named on a payment: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_only_someone_who_may_take_it_there_now_is_named
+- server: a return's people those of the store that sold: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_another_store_names_its_own_people_and_its_own_day
+- server: a payment's people those of the store that sold: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_another_store_names_its_own_people_and_its_own_day
+- server: a return's mark not stored: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_a_return_typed_from_paper_is_stored_with_its_mark_and_shown_in_the_report
+- server: a payment's mark not stored: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_a_payment_typed_from_paper_is_stored_and_shown_in_the_debt_s_history
+- server: a return's mark not answered: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_a_return_typed_from_paper_is_stored_with_its_mark_and_shown_in_the_report
+- server: a payment's mark not in the history: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_a_payment_typed_from_paper_is_stored_and_shown_in_the_debt_s_history
+- server: the returns list is the till's: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_returns_and_payments_each_name_their_own_people
+- server: an unmarked return printed with the mark's absence: caught FAILED tests/unit/test_old_prints_are_pinned.py::test_a_refund_keeps_both_prints[where-sold]
+- server: «Звіт» shows no return's mark: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_a_return_typed_from_paper_is_stored_with_its_mark_and_shown_in_the_report
+- server: the paper's time named as a sale's: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_the_paper_time_is_today_or_yesterday_and_never_ahead
+- server: a return's mark checked before its lookup: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_only_someone_who_may_take_it_there_now_is_named
+- server: a payment's mark checked before its lookup: caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_only_someone_who_may_take_it_there_now_is_named
+- server: the payments list is the returns': caught FAILED tests/integration/test_outage_mark_returns_payments.py::test_returns_and_payments_each_name_their_own_people
+- phone: the till's name taken for a return: caught Error: expect(locator).toBeVisible() failed
+- phone: a return from paper says to hand the money back: caught Error: expect(locator).toContainText(expected) failed
+- phone: a return's mark not sent: caught Error: expect(locator).toContainText(expected) failed
+- phone: a kept return resent without its mark: caught Error: expect(locator).toContainText(expected) failed
+- phone: a kept payment resent without its mark: caught Error: expect(locator).toContainText(expected) failed
+- phone: a payment from paper says nothing of the terminal: caught Error: expect(locator).toBeVisible() failed
+- phone: a kept card payment from paper says to charge it: caught Error: expect(locator).toContainText(expected) failed
+- phone: «Звіт» words a return as a sale: caught Error: expect(locator).toContainText(expected) failed
+- phone: the history shows no mark: caught Error: expect(locator).toContainText(expected) failed
+- phone: the button does not say «З паперу»: caught Error: locator.click: Test timeout of 30000ms exceeded.
+27 of 27 caught

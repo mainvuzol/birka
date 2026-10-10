@@ -104,7 +104,9 @@ export interface Entry {
   goods: string[];
   // A sale typed from paper, «продано під час збою» (ADR-0013 §5.6): who sold
   // and the paper's time, each null when the paper named none; `by` above is
-  // still whoever typed it. Null on every other entry.
+  // still whoever typed it. A return typed from paper carries it too (owner
+  // decision, 2026-10-10; ADR-0021): `sold_by` is then who took it back.
+  // Null on every other entry.
   outage?: { sold_by: string | null; sold_at: string | null } | null;
 }
 

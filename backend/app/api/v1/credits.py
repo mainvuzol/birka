@@ -41,7 +41,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep
-from app.api.v1.sales import TillMethodValue, method_of
+from app.api.v1.sales import (
+    PaperMarkPayload,
+    PaperMarkResponse,
+    TillMethodValue,
+    method_of,
+    paper_response,
+)
 from app.core.correlation import get_correlation_id
 from app.core.text import CleanText
 from app.modules.cash.current import CurrentMethod, entry_methods, refund_methods
@@ -66,6 +72,9 @@ class EntryResponse(BaseModel):
     # None too for one recorded before the way was asked («не вказано»).
     payment_method: str | None = None
     corrected: bool = False
+    # A payment typed from paper (ADR-0021): who took it and when, as the
+    # paper says; `by` is who typed it. None for every other entry.
+    outage: PaperMarkResponse | None = None
 
 
 class CreditResponse(BaseModel):
@@ -150,6 +159,9 @@ class PaymentRequest(BaseModel):
     # One of the till's three ways. Absent only from a payment a phone kept
     # from before it was asked.
     payment_method: TillMethodValue | None = None
+    # «Під час збою»: typed from paper after the server did not answer
+    # (owner decision, 2026-10-10; ADR-0021).
+    outage: PaperMarkPayload | None = None
 
 
 class WriteOffRequest(BaseModel):
@@ -223,6 +235,7 @@ def _response(view: service.CreditView, ways: dict[uuid.UUID, CurrentMethod]) ->
                     else None
                 ),
                 corrected=entry.id in ways and ways[entry.id].corrected,
+                outage=paper_response(entry.outage),
             )
             for entry in view.entries
         ],
@@ -334,6 +347,7 @@ async def pay(
         at_store_id=payload.store_id,
         correlation_id=get_correlation_id(),
         payment_method=method_of(payload.payment_method),
+        outage=payload.outage.mark() if payload.outage is not None else None,
     )
     body = (await _responses(session, [view]))[0]
     await session.commit()

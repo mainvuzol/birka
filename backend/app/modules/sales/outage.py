@@ -6,7 +6,10 @@ the sales are typed in as ordinary sales: dated the day they are typed, with
 the mark «продано під час збою». The mark may name who sold and at what hour,
 as the paper says; both are optional. On 2026-10-07: the hour is today's, or
 yesterday's with «вчора», and an older sale is typed with no time; the mark
-is on sales only; a wrong mark cannot be changed afterwards.
+is on sales only; a wrong mark cannot be changed afterwards. On 2026-10-10
+the owner put the same mark on returns and debt payments typed from paper:
+who took one and at what hour, as the paper says, both optional
+(`PaperMark`, ADR-0021).
 
 A sale's request may carry the mark (`OutageMark`), and everything here is
 checked **after** the sale's replay lookup found nothing (`checked_mark`,
@@ -134,18 +137,23 @@ def print_of_mark(mark: OutageMark | None) -> dict[str, object]:
 
 
 async def nameable_sellers(
-    session: AsyncSession, organization_id: uuid.UUID, store_id: uuid.UUID
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    may: Permission = Permission.SALE_CREATE,
 ) -> dict[uuid.UUID, str]:
     """Who may be named as having sold in this store, with their names, in
     the order of their names: an active person whose active membership of
     this organization, for this store or for the whole network, holds
-    `sale:create` (ADR-0013 §5.3, G4).
+    `sale:create` (ADR-0013 §5.3, G4). For a return or a debt payment typed
+    from paper, who may take one here: `sale:refund` or `sale:credit`
+    (ADR-0021).
 
-    The check of a marked sale and the till's list (`GET
+    The check of a marked command and the screens' list (`GET
     /stores/{id}/sellers`) both ask here. Someone who has left cannot be
     named: the paper's line is typed with «не вказано».
     """
-    holders = await holders_in_store(session, organization_id, store_id, Permission.SALE_CREATE)
+    holders = await holders_in_store(session, organization_id, store_id, may)
     if not holders:
         return {}
     rows = await session.execute(
@@ -192,11 +200,93 @@ async def checked_mark(
             store_id=store_id,
             written=mark.sold_at,
             now=now or _now(),
+            detail="sold_at",
         )
         if mark.sold_at is not None
         else None
     )
     return CheckedMark(sold_by_user_id=mark.sold_by_user_id, sold_at=sold_at)
+
+
+@dataclass(frozen=True, slots=True)
+class PaperMark:
+    """The mark as a return's or a debt payment's request states it
+    (ADR-0021): who took it, and the paper's time exactly as the body
+    carried it, each None when the paper names none."""
+
+    by_user_id: uuid.UUID | None = None
+    at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CheckedPaper:
+    """A return's or a payment's mark as it is stored: who took it, and the
+    paper's time as a moment."""
+
+    by_user_id: uuid.UUID | None
+    at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class PaperView:
+    """A return's or a payment's mark as its screens show it: who took it,
+    by name as well, and the paper's time."""
+
+    by_user_id: uuid.UUID | None
+    by: str | None
+    at: datetime | None
+
+
+def print_of_paper(mark: PaperMark | None) -> dict[str, object]:
+    """What a return's or a payment's prints carry of its mark: nothing when
+    there is none, so every one recorded before the mark existed keeps its
+    print and still replays; otherwise who and the literal time, as a
+    sale's do (ADR-0021)."""
+    if mark is None:
+        return {}
+    return {
+        "outage": {
+            "by_user_id": str(mark.by_user_id) if mark.by_user_id is not None else None,
+            "at": mark.at,
+        }
+    }
+
+
+async def checked_paper(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    mark: PaperMark,
+    may: Permission,
+    now: datetime | None = None,
+) -> CheckedPaper:
+    """The mark of a new return or debt payment as it is stored, or a
+    refusal, by the sale's rules (ADR-0021): whoever is named may take one in
+    `store_id`, the store taking it (`may`), and the paper's time is that
+    store's today or yesterday. Called only after the replay lookup found
+    nothing, so a refusal proves nothing was recorded."""
+    if mark.by_user_id is not None and mark.by_user_id not in (
+        await nameable_sellers(session, organization_id, store_id, may)
+    ):
+        raise ValidationFailedError(
+            "Whoever is named as having taken it may not take it in this store",
+            reason="OUTAGE_SELLER_UNKNOWN",
+            by_user_id=str(mark.by_user_id),
+        )
+    at = (
+        await _moment(
+            session,
+            organization_id=organization_id,
+            store_id=store_id,
+            written=mark.at,
+            now=now or _now(),
+            detail="at",
+        )
+        if mark.at is not None
+        else None
+    )
+    return CheckedPaper(by_user_id=mark.by_user_id, at=at)
 
 
 async def _moment(
@@ -206,10 +296,12 @@ async def _moment(
     store_id: uuid.UUID,
     written: str,
     now: datetime,
+    detail: str,
 ) -> datetime:
     """The paper's time as a moment, in the store's zone: today's or
     yesterday's there, and not after the server's now by more than clocks
-    differ (owner decision, 2026-10-07; G1)."""
+    differ (owner decision, 2026-10-07; G1). A refusal names the time under
+    `detail`, the request's own name for it."""
     timezone = await session.scalar(
         select(Store.timezone).where(Store.id == store_id, Store.organization_id == organization_id)
     )
@@ -221,9 +313,9 @@ async def _moment(
     # refusals never meet, and a moment is composed only from a recent date.
     if wall_clock.date() < now.astimezone(zone).date() - timedelta(days=1):
         raise ValidationFailedError(
-            "A time from paper is today's or yesterday's; type an older sale without one",
+            "A time from paper is today's or yesterday's; type an older one without it",
             reason="OUTAGE_TIME_TOO_OLD",
-            sold_at=written,
+            **{detail: written},
         )
     # fold=0: an hour the clocks repeat in autumn reads as its first pass.
     moment = wall_clock.replace(tzinfo=zone)
@@ -231,9 +323,34 @@ async def _moment(
         raise ValidationFailedError(
             "This time from paper has not come yet",
             reason="OUTAGE_TIME_FUTURE",
-            sold_at=written,
+            **{detail: written},
         )
     return moment.astimezone(UTC)
+
+
+async def names_of(session: AsyncSession, named: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """The names of the people a mark names, as they are named now: one
+    query, and none when nobody is named."""
+    if not named:
+        return {}
+    rows = await session.execute(
+        select(AppUser.id, AppUser.display_name).where(AppUser.id.in_(named))
+    )
+    return dict(rows.tuples().all())
+
+
+def paper_view(
+    marked: bool, by_user_id: uuid.UUID | None, at: datetime | None, names: dict[uuid.UUID, str]
+) -> PaperView | None:
+    """A return's or a payment's mark from its stored columns, or None for
+    one typed live."""
+    if not marked:
+        return None
+    return PaperView(
+        by_user_id=by_user_id,
+        by=names.get(by_user_id) if by_user_id is not None else None,
+        at=at,
+    )
 
 
 async def marks_of(session: AsyncSession, sales: Sequence[Sale]) -> dict[uuid.UUID, MarkView]:
@@ -269,11 +386,18 @@ __all__ = [
     "CLOCKS_DIFFER_BY",
     "PAPER_TIME",
     "CheckedMark",
+    "CheckedPaper",
     "MarkView",
     "OutageMark",
+    "PaperMark",
+    "PaperView",
     "checked_mark",
+    "checked_paper",
     "marks_of",
     "nameable_sellers",
+    "names_of",
     "paper_time",
+    "paper_view",
     "print_of_mark",
+    "print_of_paper",
 ]

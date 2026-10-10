@@ -169,6 +169,7 @@ def test_a_refund_request_with_a_way_prints_it(way: str) -> None:
     # Otherwise the body as before: the newer fields left out when unused.
     printed = request.model_dump(mode="json")
     del printed["store_id"]
+    del printed["outage"]
     for line in printed["lines"]:
         del line["location_id"]
     assert request.fingerprinted() == printed

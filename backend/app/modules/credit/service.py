@@ -43,6 +43,14 @@ from app.modules.authz.scope import RequestScope
 from app.modules.credit.models import CreditEntry, CreditStatus, CustomerCredit, EntryKind
 from app.modules.identity.models import AppUser
 from app.modules.sales.models import Sale, SaleItem
+from app.modules.sales.outage import (
+    PaperMark,
+    PaperView,
+    checked_paper,
+    names_of,
+    paper_view,
+    print_of_paper,
+)
 from app.modules.sales.payment import TILL_METHODS, PaymentMethod, print_of, stated_way
 from app.modules.sales.service import money
 from app.modules.tenancy.models import Store, StoreState
@@ -91,6 +99,9 @@ class Entry:
     note: str | None
     # A payment another store took, because the one that sold did not trade.
     taken_at: str | None
+    # A payment typed from paper: who took it and when, as the paper says
+    # (owner decision, 2026-10-10; ADR-0021). None for every other entry.
+    outage: PaperView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,11 +387,16 @@ async def pay(
     correlation_id: str | None = None,
     payment_method: PaymentMethod | None = None,
     method_required: bool = True,
+    outage: PaperMark | None = None,
 ) -> CreditView:
     """A later payment, taken in the store that sold while it trades, and in
     any store of the network that trades while it does not (owner decisions,
     2026-10-01). `at_store_id` is that other store; the debt stays the selling
     store's either way.
+
+    `outage` marks a payment typed from paper (owner decision, 2026-10-10;
+    ADR-0021): checked after the replay lookup, by the rules of the store
+    taking it.
 
     `payment_method` is one of the till's three ways, required of a new
     payment after the replay lookup (`payment.stated_way`).
@@ -403,6 +419,8 @@ async def pay(
             # The same for the way: none on a payment kept from before it was
             # asked (ADR-0012, B13).
             **print_of(payment_method),
+            # And its mark, only when typed from paper (ADR-0021).
+            **print_of_paper(outage),
         },
         actor_user_id=scope.user_id,
         store_id=credit.store_id,
@@ -426,6 +444,19 @@ async def pay(
     # `recorded`: the phone keeps the attempt (owner, 2026-10-08).
     with nothing_recorded():
         method = stated_way(payment_method, takes=TILL_METHODS, required=method_required)
+        # Typed from paper: whoever it names may take payments in the store
+        # taking it, and the paper's time is that store's today or yesterday.
+        mark = (
+            await checked_paper(
+                session,
+                organization_id=scope.organization_id,
+                store_id=taking,
+                mark=outage,
+                may=Permission.SALE_CREDIT,
+            )
+            if outage is not None
+            else None
+        )
         states = await hold_stores(
             session, organization_id=scope.organization_id, store_ids={taking, credit.store_id}
         )
@@ -458,6 +489,9 @@ async def pay(
                 correlation_id=correlation_id,
                 taken_at_store_id=taking if taking != credit.store_id else None,
                 payment_method=method.value if method is not None else None,
+                during_outage=mark is not None,
+                outage_taken_by=mark.by_user_id if mark is not None else None,
+                outage_taken_at=mark.at if mark is not None else None,
             )
         )
         await session.flush()
@@ -696,6 +730,16 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
         session, organization_id=credit.organization_id, store_id=credit.store_id
     )
     assert state is not None
+    # Who a payment typed from paper names, by name: one query, and none when
+    # no payment names anyone.
+    people = await names_of(
+        session,
+        {
+            entry.outage_taken_by
+            for entry, _ in entries
+            if entry.during_outage and entry.outage_taken_by is not None
+        },
+    )
     total = dict.fromkeys(EntryKind, ZERO)
     cash_back = ZERO
     last_payment: datetime | None = None
@@ -747,6 +791,9 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
                 by=name,
                 note=entry.note,
                 taken_at=names[entry.taken_at_store_id] if entry.taken_at_store_id else None,
+                outage=paper_view(
+                    entry.during_outage, entry.outage_taken_by, entry.outage_taken_at, people
+                ),
             )
             for entry, name in entries
         ],

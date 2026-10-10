@@ -8,6 +8,12 @@ import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { isTillMethod, refundHow, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import {
+  PaperFields,
+  paperRefusal,
+  paperText,
+  usePaperMark,
+} from "@/sales/paperMark";
 import { submitReturn, useReturnCommand } from "./commands";
 import { useBackOnSale } from "./places";
 import { refundLabels, sizeLabel } from "./types";
@@ -301,6 +307,18 @@ function handBackOnce(
   return `Якщо гроші ще не повернули — ${step.charAt(0).toLowerCase()}${step.slice(1)}. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.`;
 }
 
+/**
+ * A return typed from paper: the money went back while the server did not
+ * answer, the way the seller pressed (ADR-0021).
+ */
+function handedBack(
+  amount: string,
+  way: TillMethod | null | undefined,
+): string {
+  const how = way ? ` ${refundHow[way]}` : "";
+  return `${money(amount)}${how} повернули під час збою — вдруге не повертайте.`;
+}
+
 export function Done({
   store,
   token,
@@ -320,7 +338,9 @@ export function Done({
   /** A kept attempt confirmed, never a return answered at once. */
   kept?: boolean;
 }): JSX.Element {
-  const back = kept ? handBackOnce : handBack;
+  // Typed from paper: the money went back during the outage (owner
+  // decision, 2026-10-10; ADR-0021), so it is never said to hand it back.
+  const back = refund.outage ? handedBack : kept ? handBackOnce : handBack;
   const damaged = refund.items.some((item) => item.condition === "DAMAGED");
   const intact = refund.items.some((item) => item.condition === "INTACT");
   // Intact goods the seller sent to a warehouse of this store (owner
@@ -356,8 +376,15 @@ export function Done({
   return (
     <div className="section-block" role="status">
       <h3>Повернення оформлено</h3>
+      {refund.outage && (
+        <p className="badge">{paperText("return", refund.outage)}</p>
+      )}
       {elsewhere && (
-        <p>Товар куплено в іншому магазині мережі — гроші віддаєте ви.</p>
+        <p>
+          {refund.outage
+            ? "Товар куплено в іншому магазині мережі — гроші віддавав ваш магазин."
+            : "Товар куплено в іншому магазині мережі — гроші віддаєте ви."}
+        </p>
       )}
       {credit ? (
         <>
@@ -422,6 +449,9 @@ function ReturnForm({
 }): JSX.Element {
   const hint = useId();
   const { busy, pending } = useReturnCommand();
+  // Paper mode: the till's switch (`@/sales/paper`); the paper's time is
+  // this return's own.
+  const mark = usePaperMark(store, token, journalKey, "refund");
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [counts, setCounts] = useState<Counts>({});
   // Per sale line: the warehouse of this store intact goods go to, when the
@@ -504,6 +534,7 @@ function ReturnForm({
   async function send(): Promise<void> {
     setRefusal(null);
     const trimmed = reason.trim();
+    const outage = mark.body();
     const outcome = await submitReturn(journalKey, token, {
       // A new transport key per attempt; the return's identity is
       // `command_id`, which is what makes a late retry safe.
@@ -518,10 +549,12 @@ function ReturnForm({
         // A sale in parts may go without: the server asks for the way only
         // when money goes back (ADR-0012 G35).
         ...(way ? { payment_method: way } : {}),
+        ...(outage ? { outage } : {}),
       },
     });
     if (outcome.kind === "done") {
       setCommandId(crypto.randomUUID());
+      mark.forgetTime();
       settled(outcome.result, parts);
     } else if (outcome.kind === "refused") {
       setRefusal(outcome.error);
@@ -556,6 +589,7 @@ function ReturnForm({
       )}
       <fieldset disabled={blocked || working}>
         <legend>Що повертають</legend>
+        <PaperFields mark={mark} what="return" />
         {lines.map((item) => {
           const left = item.quantity - item.refunded;
           const entered = counts[item.id] ?? { intact: "", damaged: "" };
@@ -634,9 +668,13 @@ function ReturnForm({
         </label>
         <fieldset>
           <legend>
-            {sale.paid_in_parts
-              ? "Як повертаємо гроші (якщо буде що повертати)"
-              : "Як повертаємо гроші"}
+            {mark.paper
+              ? sale.paid_in_parts
+                ? "Як повертали гроші під час збою (якщо повертали)"
+                : "Як повернули гроші під час збою"
+              : sale.paid_in_parts
+                ? "Як повертаємо гроші (якщо буде що повертати)"
+                : "Як повертаємо гроші"}
           </legend>
           {tillMethods.map((option) => (
             <label className="check" key={option}>
@@ -667,15 +705,27 @@ function ReturnForm({
         >
           {!ready
             ? "Вкажіть, що повертають"
-            : sale.paid_in_parts
-              ? `Оформити повернення на ${money(decimal(total))}`
-              : way === null
-                ? "Оберіть, як повертаєте гроші"
-                : `Повернути покупцю ${money(decimal(total))} ${refundHow[way]}`}
+            : `${mark.paper ? "З паперу · " : ""}${
+                sale.paid_in_parts
+                  ? `Оформити повернення на ${money(decimal(total))}`
+                  : way === null
+                    ? "Оберіть, як повертаєте гроші"
+                    : `Повернути покупцю ${money(decimal(total))} ${refundHow[way]}`
+              }`}
         </button>
+        {mark.paper && (
+          <p className="hint">
+            Гроші, які віддали під час збою, вдруге не віддавайте: оберіть, як
+            їх віддавали, і натисніть.
+            {` Хто прийняв: ${mark.named ? visible(mark.named.display_name) : "не вказано"}.`}
+          </p>
+        )}
       </fieldset>
       {refusal !== null && (
-        <p role="alert">{refusalText(refusal)} Нічого не повернено.</p>
+        <p role="alert">
+          {refusalText(refusal)}{" "}
+          {mark.paper ? "Нічого не записано." : "Нічого не повернено."}
+        </p>
       )}
     </section>
   );
@@ -687,6 +737,9 @@ function ReturnForm({
  */
 export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
+    // Typed from paper, refused for its mark (ADR-0021).
+    const paper = paperRefusal(error.details.reason);
+    if (paper !== null) return paper;
     if (error.code === "DAMAGED_RETURNS_UNAVAILABLE")
       return error.details.reason === "SOLD_FROM"
         ? "Склад «Брак» цього магазину налаштований як склад для продажу, тож пошкоджений товар туди не приймається. Зверніться до власника."

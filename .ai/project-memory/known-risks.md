@@ -910,8 +910,11 @@ the review of the built change raised.
   follows a terminal prompt. Cards are taken during an outage (owner,
   2026-10-07): a marked receipt, and a kept card operation confirmed later,
   say not to charge twice, but nothing can check it. A return typed from
-  paper «На картку» still says to pay back through the terminal, since
-  returns carry no mark (G2).
+  paper «На картку» still said to pay back through the terminal, since
+  returns carried no mark (G2). *Since 2026-10-10 a return and a debt
+  payment typed with «з паперу» carry the mark and say the money was
+  already handed over ([ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md));
+  one typed without the switch still says to hand it over.*
 - **The money for a kept return may be given back twice.** The seller gives
   it back during the outage, as the sellers' page says, and the phone
   confirms the return by itself later, perhaps hours later and on another
@@ -1265,3 +1268,28 @@ See the [report](customer-data-retention-report.md) and
   2026-10-09). `0038`'s downgrade refuses then too. Fix forward, or go back
   whole from the backup taken before the update
   ([server runbook](server-runbook.md#going-back)).
+
+## Returns and payments typed from paper — 2026-10-10
+
+See the [report](outage-mark-returns-payments-report.md) and
+[ADR-0021](../decisions/ADR-0021-outage-mark-on-returns-and-payments.md).
+
+- **The switch must be ticked.** A return or a payment typed from paper
+  without «з паперу» is an ordinary one: no mark, and its screen says to
+  hand the money over, or to charge the card. The sellers' page says to
+  tick it always.
+- **One switch for the till, «Повернення» and «Борги».** Ticked on one
+  screen, it is on on the others for the same store until unticked or the
+  store is left. Left on after a series, a live debt payment typed next
+  becomes one «з паперу»: its screen says not to charge the card, and the
+  card may go uncharged. Every button says «З паперу · …» while it is on,
+  and each screen shows the band «Режим: з паперу». Who is named is each
+  screen's own, never carried from one to another.
+- **The mark is the typist's word,** as a sale's: nothing checks who took
+  the money or when. A wrong mark is permanent; the database refuses any
+  change of it.
+- **Debt payments stay one sum in «Звіт».** A payment's mark is read in the
+  debt's history in «Борги»; a lost phone's payments are checked there, as
+  before.
+- **The first payment of a sale paid in parts** carries the sale's mark,
+  not one of its own.
