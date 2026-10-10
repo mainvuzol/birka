@@ -450,9 +450,12 @@ async def test_the_screens_list_exactly_whom_the_check_accepts(maker):
         named_for: [seller["display_name"] for seller in response.json()["sellers"]]
         for named_for, response in lists.items()
     }
-    # Whoever sells; the cashier among them, who takes nothing back.
-    assert names[None] == names["sale"] == ["manager", "owner", "seller", "Каса"]
-    assert names["refund"] == names["credit"] == ["manager", "owner", "seller"]
+    # Whoever sells; the cashier among them, who takes nothing back. In the
+    # order of their names, which is the database's collation's: compared
+    # as sets here.
+    assert names[None] == names["sale"]
+    assert set(names["sale"]) == {"manager", "owner", "seller", "Каса"}
+    assert set(names["refund"]) == set(names["credit"]) == {"manager", "owner", "seller"}
     # And whoever is listed is accepted.
     for listed in lists["refund"].json()["sellers"]:
         sale = await sold(maker, net)

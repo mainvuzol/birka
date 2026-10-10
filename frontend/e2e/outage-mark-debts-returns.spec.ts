@@ -10,6 +10,10 @@ import { readFileSync } from "node:fs";
  * hour, the money never handed over or charged a second time, and the mark
  * in «Звіт» and in the debt's history.
  */
+// A phone in a shop in Kyiv: the paper's hour reads as the store's clock,
+// as in `outage.spec.ts`, whatever zone the machine running the journeys is in.
+test.use({ timezoneId: "Europe/Kyiv" });
+
 interface Fixture {
   network_owner_telegram_user_id: string;
   network_centre_seller_telegram_user_id: string;
