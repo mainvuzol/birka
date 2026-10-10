@@ -2,7 +2,8 @@
 
 Baseline: `a886c69` (returns and payments typed from paper, merged as PR
 #85).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+thirty of thirty-one ways of breaking it caught (the other an equivalent).
 Branch: `feat/warehouse-stocktake`. Decision:
 [ADR-0022](../decisions/ADR-0022-warehouse-stocktake.md); owner:
 business-rules.md, "a stocktake of a whole warehouse" (2026-10-10).
@@ -167,7 +168,21 @@ drawer's did. It found, all addressed in `d0914d6`:
 
 ## Evidence
 
-TODO(final).
+- [`output/verification/2026-10-10-warehouse-stocktake/`](../../output/verification/2026-10-10-warehouse-stocktake/):
+  `mutants.py` and `mutants.txt`, thirty-one ways of breaking it, thirty
+  caught.
+- **CI, run locally at `be82608`** ([summary](../../output/verification/2026-10-10-warehouse-stocktake-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 400 on PostgreSQL 17;
+  - e2e: 278 journeys;
+  - hot path: worst p95 54.1 ms (catalogue read) and 67.3 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- A first run at `a13ad3b` failed two server tests of PR #85, not this
+  change: they typed «10:05» and «09:00» of today from paper, and the run
+  reached them after midnight in Kyiv, when those hours had not come; the
+  server rightly refused them. They type yesterday's hours now
+  (`be82608`).
 
 ## Not covered here
 
