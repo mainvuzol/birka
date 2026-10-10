@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { JSX } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { Location, Store } from "@/orders/types";
@@ -300,10 +300,20 @@ function Differences({
             : ""}
         </li>
       ))}
-      {page.data.has_more && (
+      {(offset > 0 || page.data.has_more) && (
         <li>
           <button
             className="quiet"
+            disabled={offset === 0}
+            onClick={() => {
+              setOffset(Math.max(0, offset - pageSize));
+            }}
+          >
+            Попередні
+          </button>
+          <button
+            className="quiet"
+            disabled={!page.data.has_more}
             onClick={() => {
               setOffset(offset + pageSize);
             }}
@@ -366,6 +376,7 @@ export function Stocktake({
     retry: false,
   });
   const shown = done ?? current.data ?? record;
+  const cache = useQueryClient();
 
   function reread(): void {
     void current.refetch();
@@ -376,11 +387,23 @@ export function Stocktake({
     setFinishing(true);
     setFailure(null);
     try {
-      setDone(
-        await api<StocktakeRecord>(`/stocktakes/${record.id}/finish`, token, {
-          store_id: store.id,
-        }),
+      const finished = await api<StocktakeRecord>(
+        `/stocktakes/${record.id}/finish`,
+        token,
+        { store_id: store.id },
       );
+      // The warehouse's list shows it finished at once, never «Продовжити».
+      cache.setQueryData<{ items: StocktakeRecord[] }>(
+        ["stocktakes", scopeKey, store.id, location.id],
+        (old) =>
+          old && {
+            items: old.items.map((item) =>
+              item.id === finished.id ? finished : item,
+            ),
+          },
+      );
+      void cache.invalidateQueries({ queryKey: ["stocktakes"] });
+      setDone(finished);
       setConfirming(false);
     } catch (error) {
       setFailure(error);
@@ -538,8 +561,8 @@ export function Stocktake({
             {shown.sums.unchecked_positions > 0
               ? `Не перевірено позицій: ${String(shown.sums.unchecked_positions)} — їхні залишки не зміняться. `
               : ""}
-            Після завершення рахувати в цій інвентаризації вже не можна.
-            Власнику надійде підсумок.
+            Після завершення рахувати в цій інвентаризації вже не можна. Бот
+            надішле підсумок власнику мережі, якщо завершує не власник.
           </p>
           <div className="actions">
             <button
@@ -702,9 +725,17 @@ function CountForm({
   onCounted: (result: CountResult) => void;
   onRefused: () => void;
 }): JSX.Element {
-  // Where the count is judged from: what the list showed, replaced by what
-  // the server saw under its lock when the two disagree.
-  const [system, setSystem] = useState(target.quantity);
+  // Where the count is judged from: what the line shows, or what the server
+  // saw under its lock when it refused a count made against that — but only
+  // while the line still shows the balance it replaced. Read again, the line
+  // is the newer (review, 2026-10-10).
+  const [moved, setMoved] = useState<{ shown: number; actual: number } | null>(
+    null,
+  );
+  const system =
+    moved !== null && moved.shown === target.quantity
+      ? moved.actual
+      : target.quantity;
   const [count, setCount] = useState("");
   const [tried, setTried] = useState(false);
   const [refusal, setRefusal] = useState("");
@@ -746,7 +777,7 @@ function CountForm({
       setRefusal(countRefusalText(outcome.error));
       const actual = outcome.error.details.actual;
       if (outcome.error.code === "STOCK_CHANGED" && typeof actual === "number")
-        setSystem(actual);
+        setMoved({ shown: target.quantity, actual });
       // A person past their requests (ADR-0020) counted right: the same
       // count is sent again after the wait. Any other refusal asks for a
       // recount.

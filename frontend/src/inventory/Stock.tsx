@@ -64,8 +64,14 @@ export function Stock({
   const countCommand = useCountCommand();
   const correcting =
     blocked || countCommand.busy || countCommand.pending !== null;
+  // A count not yet settled holds the finish, a new start and a return to
+  // counting too: the sums would be frozen without it (review, 2026-10-10).
   const countingBlocked =
-    blocked || adjustment.busy || adjustment.pending !== null;
+    blocked ||
+    adjustment.busy ||
+    adjustment.pending !== null ||
+    countCommand.busy ||
+    countCommand.pending !== null;
   const allowed = store.permissions.includes("inventory:view");
   const canAdjust = store.permissions.includes("inventory:adjust");
   const canPrice = store.permissions.includes("catalog:set_price");

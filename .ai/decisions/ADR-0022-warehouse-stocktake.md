@@ -36,22 +36,24 @@ rules.
    permanent row, its ledger movement, its audit entry); one that matches
    changes nothing and is recorded as checked.
 4. **One record, and the owner hears of it** (owner): who started it and
-   when, who finished it and when, the positions counted, those not
-   checked, the shortage and the surplus in units and in positions. On the
-   finish the bot tells the network's owners, silently, as a drawer's
-   difference: whoever holds `store:manage` across the network, never
-   whoever finished it.
+   when, who finished it and when, how many positions were counted and how
+   many not checked, the shortage and the surplus in units; the bot tells
+   the owner its sum, silently, as a drawer's difference.
 
 How it is carried out, not decided by the owner:
 
-5. **One open per warehouse.** `POST /stocktakes` starts one, or answers
+5. **What the record and the message carry beyond that:** the shortage
+   and the surplus in positions too, beside the units. The
+   "owner" told is whoever holds `store:manage` across the network, never
+   whoever finished it, as for a drawer's difference (ADR-0012, G10).
+6. **One open per warehouse.** `POST /stocktakes` starts one, or answers
    the one open there (200), which whoever starts it then joins, from any
    store that may correct that warehouse. Two starting at once get one.
-6. **A position counted twice has two counts.** What it was counted at is
+7. **A position counted twice has two counts.** What it was counted at is
    its last; what the stocktake changed there is the sum of its counts'
    deltas. A mistyped count counted again cancels out, and a sale between
    two counts is no shortage.
-7. **The count is a command with a permanent identity,** as an adjustment's
+8. **The count is a command with a permanent identity,** as an adjustment's
    (ADR-0007): `POST /stocktakes/{id}/counts` with `command_id`,
    `product_variant_id`, `size_id`, `counted_quantity` (0–10 000) and
    `expected_quantity`, and an `Idempotency-Key`. The fingerprint leaves the
@@ -60,33 +62,33 @@ How it is carried out, not decided by the owner:
    after the lookup carry `recorded: false` (ADR-0013 §1): `STOCK_CHANGED`,
    `STOCKTAKE_FINISHED`, the reservation's (`reason: RESERVED`) and a size
    not known counted upwards.
-8. **What is refused as a correction is refused here:** «Брак» (it changes
+9. **What is refused as a correction is refused here:** «Брак» (it changes
    only through returns and its own section), a warehouse waiting for its
    opening list, a balance an order holds when the count differs (a
    matching one is checked), and a size not known counted upwards
    (ADR-0005 §3).
-9. **Finishing freezes the sums** under an exclusive lock on the stocktake,
+10. **Finishing freezes the sums** under an exclusive lock on the stocktake,
    which every count holds shared: counts under way land first, none after.
    Finishing again answers it as it was. The message is written in the same
    transaction and sent by the watcher.
-10. **Who counted** is on each count, and the store they acted for: another
+11. **Who counted** is on each count, and the store they acted for: another
     store sharing the warehouse counts for itself.
-11. **Reading** (`GET /stocktakes`, `/stocktakes/{id}`, `/{id}/positions`)
+12. **Reading** (`GET /stocktakes`, `/stocktakes/{id}`, `/{id}/positions`)
     asks what reading the warehouse's stock asks (`inventory:view`). The
     positions are a page: those with stock not counted yet, in the order
     «Залишки» lists them; those counted, last first; or only the
     differences.
-12. **The schema** (`0040_warehouse_stocktake`): `stocktake` (a guard lets it
+13. **The schema** (`0040_warehouse_stocktake`): `stocktake` (a guard lets it
     change once, from open to finished, and never deletes it; one open per
     warehouse by a partial unique index), `stocktake_count` (append-only),
     `stocktake_message` (an outbox). The downgrade refuses once any
     stocktake exists.
-13. **One sending algorithm for the shop's messages.** The drawer's
+14. **One sending algorithm for the shop's messages.** The drawer's
     `deliver` moved to `telegram.outbox`, parameterised by the message
     table and by who a chat belongs to, and the stocktake's messages use it
     too; the backups keep their own copy (a shop module may not import that
     section).
-14. **The screen:** «Інвентаризація складу» on «Залишки» for one warehouse:
+15. **The screen:** «Інвентаризація складу» on «Залишки» for one warehouse:
     start (with what it means), continue, the finished ones with their
     differences. Counting replaces the list: the positions not counted, the
     ones counted, goods found that the list does not show (counted against

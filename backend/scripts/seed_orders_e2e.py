@@ -131,7 +131,7 @@ async def main() -> None:
         shared_opening = StockLocation(
             organization_id=org.id, name="Спільний новий склад", code="E2E-SHARED-OPENING"
         )
-        # Three for a stocktake of a whole warehouse (owner decisions,
+        # Four for a stocktake of a whole warehouse (owner decisions,
         # 2026-10-10), one per journey: a stocktake stays open until it is
         # finished, and one is open per warehouse.
         stocktaken = StockLocation(
@@ -139,6 +139,9 @@ async def main() -> None:
         )
         recounted = StockLocation(
             organization_id=org.id, name="Склад, де рахують знову", code="E2E-STOCKTAKE-AGAIN"
+        )
+        refreshed = StockLocation(
+            organization_id=org.id, name="Склад, де облік оновлюється", code="E2E-STOCKTAKE-FRESH"
         )
         kept_count = StockLocation(
             organization_id=org.id, name="Склад, де підрахунок губиться", code="E2E-STOCKTAKE-KEPT"
@@ -184,6 +187,7 @@ async def main() -> None:
                 shared_opening,
                 stocktaken,
                 recounted,
+                refreshed,
                 kept_count,
                 second,
                 second_own,
@@ -224,6 +228,7 @@ async def main() -> None:
             shared_opening,
             stocktaken,
             recounted,
+            refreshed,
             kept_count,
         ):
             session.add(
@@ -271,7 +276,15 @@ async def main() -> None:
                     ),
                     movement_type=MovementType.DELIVERY,
                 )
-                for stocked in (location, till, counted, stocktaken, recounted, kept_count)
+                for stocked in (
+                    location,
+                    till,
+                    counted,
+                    stocktaken,
+                    recounted,
+                    refreshed,
+                    kept_count,
+                )
             ],
         )
         role = Role(organization_id=org.id, code="E2E", name="Тестовий продавець")
@@ -320,6 +333,7 @@ async def main() -> None:
             "shared_opening_location_id": str(shared_opening.id),
             "stocktake_location_id": str(stocktaken.id),
             "recount_location_id": str(recounted.id),
+            "refresh_location_id": str(refreshed.id),
             "kept_count_location_id": str(kept_count.id),
             "second_store_id": str(second.id),
             "second_location_id": str(second_own.id),

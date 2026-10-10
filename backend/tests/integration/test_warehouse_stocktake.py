@@ -708,3 +708,87 @@ async def test_the_watcher_tells_stocktakes_every_minute_with_the_silent_sender(
     assert started["stocktakes"][0] == backup_watch.CASH_EVERY == 60.0
     await started["stocktakes"][1](datetime.now(UTC))
     assert told == ["silent"]
+
+
+async def test_a_count_under_way_lands_before_the_finish_and_none_after(maker, monkeypatch):
+    """The finish waits for a count that has passed its check (ADR-0022 §10):
+    its sums include it, and nothing is counted into frozen sums."""
+    net = await network(maker)
+    coat = await stocked(maker, net, net.shops.shared_warehouse, qty=3)
+    stocktake = await started(maker, net)
+    reached, release = asyncio.Event(), asyncio.Event()
+    real = stocktake_service.lock_stock
+
+    async def paused(*args, **kwargs):  # type: ignore[no-untyped-def]
+        reached.set()
+        await release.wait()
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(stocktake_service, "lock_stock", paused)
+    counting = asyncio.create_task(count(maker, net, stocktake, a_count(*coat, 2, 3, net=net)))
+    await asyncio.wait_for(reached.wait(), timeout=10)
+    finishing = asyncio.create_task(finish(maker, net, stocktake, by=net.owner))
+    await asyncio.sleep(0.5)
+    assert not finishing.done()
+    release.set()
+    counted_response, finished = await asyncio.gather(counting, finishing)
+    assert counted_response.status_code == 201, counted_response.text
+    assert finished.status_code == 200, finished.text
+    assert finished.json()["sums"]["counted_positions"] == 1
+    assert finished.json()["sums"]["shortage_units"] == 1
+
+
+async def test_another_networks_stocktake_models_and_private_warehouses_are_not_counted(maker):
+    net = await network(maker)
+    coat = await stocked(maker, net, net.shops.shared_warehouse, qty=3)
+    stocktake = await started(maker, net)
+
+    stranger = await network(maker)
+    theirs = await stocked(maker, stranger, stranger.shops.shared_warehouse, qty=2)
+    # Their manager, at our stocktake: it does not exist for them.
+    refused(
+        await count(
+            maker,
+            stranger,
+            stocktake,
+            a_count(*coat, 2, 3, net=stranger),
+            by=stranger.manager,
+        ),
+        404,
+        "NOT_FOUND",
+    )
+    # Our manager, counting their model here: unknown, and nothing recorded.
+    body = refused(
+        await count(maker, net, stocktake, a_count(*theirs, 1, 0, net=net)), 404, "NOT_FOUND"
+    )
+    assert body["details"]["recorded"] is False
+    assert await count_rows(maker, stocktake) == 0
+    assert await balance(maker, stranger, *theirs) == 2
+
+    # The other store's own warehouse is its own: the network's manager
+    # neither starts, counts nor reads a stocktake there.
+    refused(
+        await begin(maker, net, net.manager, store=net.shops.child_store, warehouse=net.own),
+        403,
+        "PERMISSION_DENIED",
+    )
+    own = await begin(maker, net, net.child_owner, store=net.shops.child_store, warehouse=net.own)
+    assert own.status_code == 201, own.text
+    vest = await stocked(maker, net, net.own, qty=1)
+    refused(
+        await count(
+            maker,
+            net,
+            own.json()["id"],
+            a_count(*vest, 0, 1, store=net.shops.child_store),
+            by=net.manager,
+        ),
+        403,
+        "PERMISSION_DENIED",
+    )
+    async with as_(maker, net, net.manager) as client:
+        response = await client.get(
+            f"/api/v1/stocktakes/{own.json()['id']}",
+            params={"store_id": str(net.shops.child_store)},
+        )
+    assert response.status_code == 403, response.text

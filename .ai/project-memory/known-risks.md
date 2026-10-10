@@ -1323,6 +1323,18 @@ See the [report](warehouse-stocktake-report.md) and
 - **Only the network's owner hears of it,** not a store's own owner, as for
   the drawer; the finished record is in the app for everyone who sees the
   warehouse's stock.
+- **A stocktake continued later keeps the counts made before.** Those
+  positions count as checked and are not offered among «Ще не пораховані»;
+  one that changed since is counted again from «Пораховані». How it is
+  carried out (one open per warehouse, which others join), not the owner's
+  rule. The only way to start afresh is to finish it, which tells the
+  owner.
+- **Two people counting from one page** may skip a position: the list of
+  those not counted is paged, and a page moves as the other counts. The
+  finish's «не перевірено» and the list read afresh show what is left.
+- **The finish tells nobody when the owner finishes it,** or when the only
+  holder of `store:manage` across the network has no chat with the bot. The
+  confirmation says the bot writes when someone else finishes.
 - **The list is in the order «Залишки» shows,** by model, not by name or
   shelf. A coat in hand is found with «Знайшли товар, якого немає в
   списку», which counts against the balance the server then names.

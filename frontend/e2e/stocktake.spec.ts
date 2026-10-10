@@ -13,6 +13,7 @@ interface Fixture {
   telegram_user_id: string;
   stocktake_location_id: string;
   recount_location_id: string;
+  refresh_location_id: string;
   kept_count_location_id: string;
   variant_id: string;
   size_id: string;
@@ -56,21 +57,12 @@ async function enter(page: Page, location: string): Promise<void> {
   await page.getByLabel("Склад для перегляду").selectOption(location);
 }
 
-/** Start one, or carry on with the one a retry left open. */
+/** Start the warehouse's stocktake, saying first what it means. */
 async function begin(page: Page): Promise<void> {
   const section = page.getByRole("region", { name: "Інвентаризація складу" });
-  const carry = section.getByRole("button", {
-    name: "Продовжити інвентаризацію",
-  });
-  const start = section.getByRole("button", {
-    name: "Почати інвентаризацію складу",
-  });
-  await expect(carry.or(start)).toBeVisible();
-  if (await carry.isVisible()) {
-    await carry.click();
-    return;
-  }
-  await start.click();
+  await section
+    .getByRole("button", { name: "Почати інвентаризацію складу" })
+    .click();
   await expect(section.getByText("Склад продає далі.")).toBeVisible();
   await section.getByRole("button", { name: "Почати інвентаризацію" }).click();
 }
@@ -193,7 +185,7 @@ test("a warehouse is counted position by position, each difference applied at on
     .click();
   await expect(
     counting.getByText(
-      "Після завершення рахувати в цій інвентаризації вже не можна. Власнику надійде підсумок.",
+      "Після завершення рахувати в цій інвентаризації вже не можна. Бот надішле підсумок власнику мережі, якщо завершує не власник.",
     ),
   ).toBeVisible();
   await counting.getByRole("button", { name: "Так, завершити" }).click();
@@ -290,10 +282,13 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
     .fill(String(system - 1));
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
   await expect(page.getByText("Незавершений підрахунок")).toBeVisible();
-  // The till waits too, and so does a correction: nothing else happens
-  // until this is settled.
+  // The till waits too, and so does the finish: nothing else happens until
+  // this is settled, and no sums are frozen without it.
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Завершити інвентаризацію" }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Перевірити результат підрахунку" })
@@ -311,7 +306,7 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   ).toBeEnabled();
 });
 
-test("a stocktake is started only by whoever may correct stock; a seller sees it", async ({
+test("a stocktake is offered only to whoever may correct stock", async ({
   page,
 }) => {
   await page.route("**/api/v1/me", async (route) => {
@@ -337,4 +332,49 @@ test("a stocktake is started only by whoever may correct stock; a seller sees it
   await expect(
     page.getByRole("button", { name: "Продовжити інвентаризацію" }),
   ).toHaveCount(0);
+});
+
+test("a balance read again is the one a count is made against", async ({
+  page,
+}) => {
+  // The list first shows one more than the warehouse holds, as when a sale
+  // took a coat after it was read; read again, it shows what is held.
+  let stale = true;
+  await page.route("**/api/v1/stocktakes/*/positions?**", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      items: { size_label: string; quantity: number }[];
+    };
+    if (stale)
+      for (const item of body.items)
+        if (item.size_label === "M") item.quantity += 1;
+    await route.fulfill({ response, json: body });
+  });
+  const sent = counts(page);
+  await enter(page, fixture.refresh_location_id);
+  await begin(page);
+  const shown = await onRecord(page);
+  stale = false;
+  const reread = page.waitForResponse((r) => r.url().includes("/positions?"));
+  // The phone comes back to the app: its lists are read again.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await reread;
+  await expect(
+    line(page).getByText(`В обліку: ${String(shown - 1)}`),
+  ).toBeVisible();
+  await line(page)
+    .getByLabel("Фактично на складі, од.")
+    .fill(String(shown - 1));
+  await expect(line(page).getByText("Збігається з обліком.")).toBeVisible();
+  await line(page).getByRole("button", { name: "Записати кількість" }).click();
+  await expect(
+    page.getByText(`збігається з обліком (${String(shown - 1)})`),
+  ).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({
+    counted_quantity: shown - 1,
+    expected_quantity: shown - 1,
+  });
 });

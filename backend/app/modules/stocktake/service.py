@@ -268,27 +268,32 @@ async def start(
         session, organization_id=scope.organization_id, location_id=location_id
     ):
         raise OpeningListPendingError(location_ids=[str(location_id)])
-    started = (
-        await session.execute(
-            pg_insert(Stocktake)
-            .values(
-                id=uuid.uuid4(),
-                organization_id=scope.organization_id,
-                location_id=location_id,
-                store_id=store_id,
-                started_by_user_id=scope.user_id,
+    # Insert, or find the one open. A finish that lands between the two
+    # leaves none open, and the next turn starts one (review, 2026-10-10).
+    for _ in range(3):
+        started = (
+            await session.execute(
+                pg_insert(Stocktake)
+                .values(
+                    id=uuid.uuid4(),
+                    organization_id=scope.organization_id,
+                    location_id=location_id,
+                    store_id=store_id,
+                    started_by_user_id=scope.user_id,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["location_id"], index_where=text("finished_at IS NULL")
+                )
+                .returning(Stocktake.id)
             )
-            .on_conflict_do_nothing(
-                index_elements=["location_id"], index_where=text("finished_at IS NULL")
-            )
-            .returning(Stocktake.id)
+        ).scalar_one_or_none()
+        stocktake = await session.scalar(
+            select(Stocktake)
+            .where(Stocktake.location_id == location_id, Stocktake.finished_at.is_(None))
+            .execution_options(populate_existing=True)
         )
-    ).scalar_one_or_none()
-    stocktake = await session.scalar(
-        select(Stocktake)
-        .where(Stocktake.location_id == location_id, Stocktake.finished_at.is_(None))
-        .execution_options(populate_existing=True)
-    )
+        if stocktake is not None:
+            break
     assert stocktake is not None
     await session.commit()
     return (await _views(session, [stocktake]))[0], started is not None
