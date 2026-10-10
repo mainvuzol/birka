@@ -1,7 +1,9 @@
 # A closed store's debts — 2026-10-10
 
 Baseline: `f807c34` (requests per person, merged as PR #83).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty-one ways of breaking it each caught. The owner answered every
+question it raised.
 Branch: `feat/closed-store-debt-search`. Owner: business-rules.md, "a
 closed store's debts" (2026-10-10).
 
@@ -147,7 +149,20 @@ guessed within the per-person limit, and the server takes digits other than
 
 ## Evidence
 
-TODO(final)
+- [`output/verification/2026-10-10-closed-store-debt-search/`](../../output/verification/2026-10-10-closed-store-debt-search/):
+  `mutants.py` and `mutants.txt`, twenty-one ways of breaking it, each
+  caught.
+- **CI, run locally at `b594c5f`** ([summary](../../output/verification/2026-10-10-closed-store-debt-search-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 360 on PostgreSQL 17;
+  - e2e: 268 journeys;
+  - hot path: worst p95 77.9 ms (catalogue read) and 70.5 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- A first run at the same commit was given its evidence folder as a
+  relative path, which the steps run from `backend/` could not write into:
+  the backend, pip-audit and the hot path failed on that alone, the hot
+  path's figures all within budget. The run above was given it whole.
 
 ## Not covered here
 
