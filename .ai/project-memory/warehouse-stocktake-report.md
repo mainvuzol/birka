@@ -89,7 +89,7 @@ On 2026-10-10, each answer the recommended one:
 
 ## How it was built and proven
 
-- **Server tests** (`test_warehouse_stocktake.py`, 14; `test_stocktake_message.py`, 3):
+- **Server tests** (`test_warehouse_stocktake.py`, 17; `test_stocktake_message.py`, 3):
   - a matching count changes nothing and writes no movement; a differing
     one applies at once as an adjustment with the reason `STOCKTAKE`;
   - a position sold while it was counted is refused, nothing written, and
@@ -114,17 +114,56 @@ On 2026-10-10, each answer the recommended one:
     finishes hears nothing;
   - the database refuses any change of a finished stocktake or a count,
     and any deletion;
-  - `0040` goes down and up, and refuses once a stocktake exists.
-- **Journeys** (`stocktake.spec.ts`, 4, against the real server): a
-  warehouse counted, a found coat added, finished and read back with its
-  differences; a position sold while counted refused and counted again; a
-  count whose answer was lost holds the app and is resent unchanged; a
+  - `0040` goes down and up, and refuses once a stocktake exists;
+  - a count that has passed its check while the finish arrives lands
+    first, and the finish's sums include it;
+  - a count into another network's stocktake, of another network's model,
+    or into another store's own warehouse is refused, nothing recorded;
+  - the watcher tells stocktakes every minute, by the silent sender.
+- **Journeys** (`stocktake.spec.ts`, 5, against the real server): a
+  warehouse counted, a found coat added, a coat found in hand that turns
+  out to be held counted against what the server names, finished and read
+  back with its differences; a position sold while counted refused and counted again; a
+  balance read again is the one a count is made against; a count whose
+  answer was lost holds the app and the finish, and is resent unchanged; a
   person without `inventory:adjust` is offered no stocktake.
-- **Mutation:** TODO(final).
+- **Mutation:** thirty-one ways of breaking it, one at a time; thirty
+  caught, twenty on the server and ten on the screens
+  ([list](../../output/verification/2026-10-10-warehouse-stocktake/mutants.txt)).
+  The one that survives is an equivalent: without the organization's
+  filter on a stocktake's id, the warehouse's own access check refuses
+  another network the same way, with 404. Two survived a first run and were
+  closed by a test each: positions counted and still on record, and goods
+  found in hand that turn out to be held.
 
 ## Review of the built change
 
-TODO(final).
+An independent review read the first commit (`468f329`). It found no
+defect in the schema, the command's order (access, the key, the permanent
+lookup, then every refusal with `recorded: false`), the stock writes, the
+sums, the owners' message or the outbox's move, which behaves as the
+drawer's did. It found, all addressed in `d0914d6`:
+- **A count still on the phone did not hold «Завершити».** The banner said
+  new operations were held, and a finish could freeze the sums without it.
+  The finish, a new start and «Продовжити» now wait for it, and the journey
+  checks the finish is held.
+- **A line's form kept the balance it was first read at,** after the list
+  was read again (another count, the phone coming back to the app): the
+  preview showed a false difference and the count was sent against an old
+  balance, refused. A balance the server names after a refusal now holds
+  only while the line still shows the one it replaced; a journey proves a
+  re-read balance is the one counted against.
+- **"Counts under way land first" was not tested,** nor a count into
+  another network's stocktake, of another network's model, or into a
+  private warehouse. Each is now.
+- **The warehouse's list showed a finished stocktake as open** until it was
+  read again, offering «Продовжити». It is updated at the finish.
+- **A start could answer 500** if the open one was finished between its
+  insert and its read: it tries again.
+- **Nits:** what the owner did not decide is labelled so in ADR-0022;
+  «Власнику надійде підсумок» was untrue when the owner finishes; the
+  differences page both ways; the risks of a stocktake continued later and
+  of paging while two count are recorded.
 
 ## Evidence
 
@@ -139,5 +178,8 @@ TODO(final).
 - **A reserved position that differs** stays unchanged until its order is
   dispatched or cancelled.
 - **The list is in «Залишки»'s order,** by model, not by name or shelf.
+- **A stocktake continued later** keeps the counts made before.
+- **Two people counting from one page** may skip a position; the finish
+  says what is left.
 - **Not walked in a browser:** a reserved position, «Брак», another store
   counting the same warehouse, and a seller reading a finished record.

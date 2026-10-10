@@ -62,6 +62,9 @@ M = [
      "        await _queue_message(session, stocktake, now=now)\n", ""),
     ("server: finishing again sums it again", BACKEND, SERVICE,
      "    if stocktake.finished_at is None:\n        sums = await _sums(", "    if True:\n        sums = await _sums("),
+    ("server: a count does not hold the stocktake while it lands", BACKEND, SERVICE,
+     "            .where(Stocktake.id == stocktake_id)\n            .with_for_update(read=True)\n",
+     "            .where(Stocktake.id == stocktake_id)\n"),
     ("server: «Брак» counted", BACKEND, SERVICE,
      "        raise DamagedStockClosedError(location_ids=[str(location_id)])\n", "        pass\n"),
     ("server: a warehouse waiting for its list counted", BACKEND, SERVICE,
@@ -69,7 +72,10 @@ M = [
     ("server: whoever sees stock counts", BACKEND, SERVICE,
      "        capability=LocationCapability.RECEIVE,\n        permission=Permission.INVENTORY_ADJUST,",
      "        capability=LocationCapability.RECEIVE,\n        permission=Permission.INVENTORY_VIEW,"),
-    ("server: another network's stocktake found by its id", BACKEND, SERVICE,
+    # Expected to survive, as an equivalent: without the organization's filter
+    # the warehouse's own access check refuses another network the same way
+    # (404, not disclosing it), for reading, counting and finishing alike.
+    ("server: another network's stocktake found by its id (equivalent)", BACKEND, SERVICE,
      "            Stocktake.id == stocktake_id, Stocktake.organization_id == scope.organization_id\n",
      "            Stocktake.id == stocktake_id\n"),
     ("server: joining the open one answered as started", BACKEND, "backend/app/api/v1/stocktakes.py",
@@ -81,7 +87,7 @@ M = [
     ("phone: a count sent against nothing", FRONTEND, SCREEN,
      "        expected_quantity: system,\n", "        expected_quantity: 0,\n"),
     ("phone: the server's balance not taken after a refusal", FRONTEND, SCREEN,
-     "        setSystem(actual);\n", ""),
+     "        setMoved({ shown: target.quantity, actual });\n", ""),
     ("phone: the count's stocktake sent in its body", FRONTEND, "frontend/src/inventory/stocktakeCommands.ts",
      "  payload: (body) => ({\n    store_id: body.store_id,", "  payload: (body) => ({\n    stocktake_id: body.stocktake_id,\n    store_id: body.store_id,"),
     ("phone: a kept count holds no other screen", FRONTEND, "frontend/src/App.tsx",
@@ -92,6 +98,12 @@ M = [
      "  if (sums.surplus_units)\n", "  if (false)\n"),
     ("phone: a stocktake offered without inventory:adjust", FRONTEND, "frontend/src/inventory/Stock.tsx",
      "                  canCount={adjustable}\n", "                  canCount={true}\n"),
+    ("phone: a line's balance read once, never again", FRONTEND, SCREEN,
+     "  const system =\n    moved !== null && moved.shown === target.quantity\n      ? moved.actual\n      : target.quantity;\n",
+     "  const [initial] = useState(target.quantity);\n  const system = moved !== null ? moved.actual : initial;\n"),
+    ("phone: a count still on the phone does not hold the finish", FRONTEND, "frontend/src/inventory/Stock.tsx",
+     "    adjustment.pending !== null ||\n    countCommand.busy ||\n    countCommand.pending !== null;\n",
+     "    adjustment.pending !== null;\n"),
     ("phone: the counted list shows no count", FRONTEND, SCREEN,
      "      {counted && (\n        <span>", "      {false && (\n        <span>"),
 ]
