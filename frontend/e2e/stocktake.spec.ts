@@ -180,6 +180,33 @@ test("a warehouse is counted position by position, each difference applied at on
     "store_id",
   ]);
 
+  // A coat in hand that turns out to be held: the server names how many,
+  // and the count is made against that.
+  await counting
+    .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
+    .click();
+  await page.getByLabel("Пошук у каталозі").fill("лоран");
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
+  await page
+    .getByRole("combobox", { name: "Розмір" })
+    .selectOption({ label: "M" });
+  const found = page.getByRole("group", { name: /^Підрахунок:/ }).last();
+  await found.getByLabel("Фактично на складі, од.").fill("1");
+  await found.getByRole("button", { name: "Записати кількість" }).click();
+  await expect(found.getByRole("alert")).toContainText(
+    `Цей товар уже є в обліку цього складу: ${String(system - 2)} од.`,
+  );
+  await expect(
+    found.getByText(`В обліку тепер: ${String(system - 2)}`),
+  ).toBeVisible();
+  await found.getByLabel("Фактично на складі, од.").fill(String(system - 2));
+  await expect(found.getByText("Збігається з обліком.")).toBeVisible();
+  await found.getByRole("button", { name: "Записати кількість" }).click();
+  await expect(
+    counting.getByText(`збігається з обліком (${String(system - 2)})`),
+  ).toBeVisible();
+
   await counting
     .getByRole("button", { name: "Завершити інвентаризацію" })
     .click();
