@@ -64,6 +64,7 @@ Keep production DB writes, secret changes and destructive actions behind approva
 
 ### Product & Domain
 - product-strategist
+- adoption-brand-strategist
 - requirements-engineer
 - retail-domain-expert
 - financial-integrity
