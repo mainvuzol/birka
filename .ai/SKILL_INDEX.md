@@ -1,6 +1,6 @@
 # Skill Index v3
 
-Total skills: **96**
+Total skills: **97**
 
 ## Adaptive catalog additions
 - adaptive-catalog-architect
@@ -19,6 +19,7 @@ Total skills: **96**
 ## Complete alphabetical index
 
 - `adaptive-catalog-architect` — `skills/adaptive-catalog-architect.md`
+- `adoption-brand-strategist` — `skills/adoption-brand-strategist.md`
 - `adversarial-reviewer` — `skills/adversarial-reviewer.md`
 - `agent-handoff` — `skills/agent-handoff.md`
 - `ai-team-golden-evals` — `skills/ai-team-golden-evals.md`
