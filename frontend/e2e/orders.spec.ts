@@ -170,6 +170,57 @@ test("lost committed response survives reopening and reuses the same command", a
     .click();
   await expect(reopened.getByText("Скасовано", { exact: true })).toBeVisible();
 });
+test("a kept order its check cannot settle opens on «Замовлення», not on the till", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  await draft(page);
+  let answered = false;
+  let lost = 0;
+  const commands: string[] = [];
+  await context.route("**/api/v1/orders", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    const body = route.request().postDataJSON() as { command_id: string };
+    commands.push(body.command_id);
+    if (answered) await route.continue();
+    else {
+      await route.fetch();
+      await route.abort("failed");
+      lost += 1;
+    }
+  });
+  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await expect(
+    page.getByRole("button", { name: "Повторити ту саму команду" }),
+  ).toBeEnabled();
+  await page.close();
+  // Reopened, the phone's own check loses its answer too: the kept order
+  // still holds the app, and its own tab shows, not the till (redesign P0-1).
+  const reopened = await context.newPage();
+  await reopen(reopened);
+  const retry = reopened.getByRole("button", {
+    name: "Повторити ту саму команду",
+  });
+  await expect.poll(() => lost).toBe(2);
+  await expect(retry).toBeEnabled();
+  await expect(reopened.getByRole("heading", { name: "Продаж" })).toHaveCount(
+    0,
+  );
+  answered = true;
+  await retry.click();
+  await expect(
+    reopened.getByRole("heading", { name: /Замовлення №/ }),
+  ).toBeVisible();
+  expect(new Set(commands).size).toBe(1);
+  await reopened
+    .getByRole("button", { name: "Скасувати та звільнити резерв" })
+    .click();
+  await expect(reopened.getByText("Скасовано", { exact: true })).toBeVisible();
+});
 test("return requires physical confirmation", async ({ page }) => {
   await enter(page);
   await draft(page);

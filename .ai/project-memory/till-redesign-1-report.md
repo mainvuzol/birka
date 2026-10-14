@@ -66,7 +66,7 @@ change.
 
 ## How it was built and proven
 
-- **Journeys** (`till-redesign.spec.ts`, 11; `credits.spec.ts`, 4 new):
+- **Journeys** (`till-redesign.spec.ts`, 11; `credits.spec.ts`, 4 new; `orders.spec.ts`, 1 new):
   - one store opens on the till, with nothing to change to; two are chosen,
     and chosen again when the app is opened again; whoever does not sell
     opens on the orders; a single store that does not trade shows its
@@ -80,6 +80,9 @@ change.
     told what to do;
   - an invoice operation kept on the phone that cannot be read holds the
     till, which now opens first, as it holds every other tab;
+  - an order kept on the phone whose own check on reopening loses its
+    answer again opens on «Замовлення», not on the till, and is settled by
+    the same command;
   - in Telegram's dark theme and in a light one, the paper band, the hint,
     the kept sale's banner and an alert read at 4.5:1 or more; in the dark
     one the shortage answer and a paper sale's mark too;
