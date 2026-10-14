@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -103,7 +103,7 @@ test("the owner changes a store's state over an hour after opening the app, and 
   await settle(page, market, "ACTIVE");
   try {
     await openAs(page, owner);
-    await page.getByRole("button", { name: "Центр CENTRE" }).click();
+    await openStore(page, "Центр CENTRE");
     const signIns = await launchDataExpired(page);
     await page.getByRole("button", { name: "Магазини", exact: true }).click();
     const card = page.getByRole("article", { name: "Магазин Ринок" });
@@ -122,7 +122,7 @@ test("the owner changes a store's state over an hour after opening the app, and 
     await expect(
       page.getByRole("heading", { name: "Вхід через Telegram" }),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: "Центр CENTRE" }).click();
+    await openStore(page, "Центр CENTRE");
     await expect(
       page.getByRole("button", { name: "Продаж", exact: true }),
     ).toBeVisible();
@@ -138,7 +138,7 @@ test("a seller at a blocked store reads it again with the token, however the rea
   await settle(page, market, "BLOCKED");
   try {
     await openAs(page, petro);
-    await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+    await openStore(page, /^Ринок MARKET/);
     await expect(
       page.getByText(/Роботу в цьому магазині зупинено/),
     ).toBeVisible();
@@ -186,7 +186,7 @@ test("a session past its 12 hours asks for the app to be opened again, and never
   await settle(page, market, "BLOCKED");
   try {
     await openAs(page, petro);
-    await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+    await openStore(page, /^Ринок MARKET/);
     const signIns = await launchDataExpired(page);
     let reads = 0;
     await page.route("**/api/v1/me", async (route) => {
@@ -239,7 +239,6 @@ test("a sign-in refused for too many attempts says to wait, and the next one sig
   // No token yet: trying again signs in with the launch data.
   refused = false;
   await page.getByRole("button", { name: "Спробувати ще раз" }).click();
-  await expect(
-    page.getByRole("button", { name: "Центр CENTRE" }),
-  ).toBeVisible();
+  // One store: the app opens on it (redesign P0-1).
+  await expect(page.getByRole("navigation", { name: "Розділи" })).toBeVisible();
 });

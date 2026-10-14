@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -50,7 +50,7 @@ async function openAs(page: Page, telegramUserId: string): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId) }).toString()}`,
   );
-  await page.getByRole("button", { name: "Центр CENTRE" }).click();
+  await openStore(page, "Центр CENTRE");
 }
 
 async function headers(page: Page): Promise<Record<string, string>> {
@@ -365,7 +365,7 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
   ).toBeDisabled();
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();
-  await page.getByRole("button", { name: "Центр CENTRE" }).click();
+  await openStore(page, "Центр CENTRE");
   await page
     .getByRole("button", { name: "Перевірити результат операції" })
     .click();

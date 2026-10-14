@@ -1357,3 +1357,24 @@ See the [report](launch-guide-uk-report.md).
 - **The managers' guide names the screens' words as they are on
   2026-10-11.** A screen reworded later leaves the guide behind until it
   is updated.
+
+## The till in the new design, first part — 2026-10-15
+
+See the [report](till-redesign-1-report.md).
+
+- **Light or dark is read from Telegram's background colour,** not from a
+  scheme Telegram names: a background in between (brightness near 128)
+  could pick the other theme. Outside Telegram the device's setting
+  decides.
+- **The app paints its own palette.** It no longer matches Telegram's own
+  background exactly, by design; Telegram's header above it keeps
+  Telegram's colour.
+- **The dark backgrounds of the warning, debt, delivery and «Брак» colours
+  are this change's own,** not the direction's; the owner has not seen
+  them. Every warning on the till reads at 4.5:1 in a journey.
+- **The panel under the thumb is held while the till is in view.** On a
+  real iPhone, the keyboard over a price field and the safe area at the
+  bottom are not checked on a device yet (the task list asks for a
+  screenshot from one).
+- **В1 and В3 are decided, not built:** a coat the books hold none of is
+  not yet found at the till, and a 0 грн line has no warning yet.

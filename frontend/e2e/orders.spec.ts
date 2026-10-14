@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -44,7 +44,15 @@ function collects(page: Page): unknown[] {
 }
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
+  // The till opens first for whoever sells (redesign P0-1).
+  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+}
+
+/** The app opened again: a kept order turns to «Замовлення» by itself. */
+async function reopen(page: Page): Promise<void> {
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
 }
 async function draft(page: Page): Promise<void> {
   await page.getByRole("button", { name: "+ Нове замовлення" }).click();
@@ -150,8 +158,8 @@ test("lost committed response survives reopening and reuses the same command", a
   await page.close();
   const reopened = await context.newPage();
   // Read from the phone's storage, it is checked at once, with no tap
-  // (ADR-0013 §4.3).
-  await enter(reopened);
+  // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
+  await reopen(reopened);
   await expect(
     reopened.getByRole("heading", { name: /Замовлення №/ }),
   ).toBeVisible();
@@ -268,7 +276,7 @@ test("first definitive rejection leaves draft editable", async ({
   ).toHaveCount(0);
 });
 
-test("Telegram bridge signals readiness and applies launch theme without storing credentials", async ({
+test("Telegram bridge signals readiness and takes light or dark from the launch theme without storing credentials", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -293,13 +301,13 @@ test("Telegram bridge signals readiness and applies launch theme without storing
     ready: (window as unknown as { hostEvents: string[] }).hostEvents.includes(
       "web_app_ready",
     ),
-    background: document.documentElement.style.getPropertyValue(
-      "--tg-theme-bg-color",
-    ),
+    // The app paints its own palette and takes only light or dark from
+    // Telegram (redesign P0-5).
+    theme: document.documentElement.dataset.theme,
     storage: [...Object.keys(localStorage), ...Object.keys(sessionStorage)],
   }));
   expect(state.ready).toBe(true);
-  expect(state.background).toBe("#eeeeee");
+  expect(state.theme).toBe("light");
   expect(state.storage).toEqual([]);
 });
 

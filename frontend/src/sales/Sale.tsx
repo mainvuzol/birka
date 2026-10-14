@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
@@ -505,6 +505,21 @@ export function Sale({
             item.available_quantity > 0,
         )));
   const working = busy || pending !== null;
+  // The server's answer to a shortage opens above the panel, in view and
+  // focused, so it is never past the edge of the screen (redesign P0-4).
+  const shortRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!shortfall) return;
+    shortRef.current?.scrollIntoView({ block: "nearest" });
+    shortRef.current?.focus({ preventScroll: true });
+  }, [shortfall]);
+  // Paid in parts: what is paid now and what is left, as typed so far. The
+  // receipt's figures are the server's.
+  const paidNow = mayCredit && credit.inParts ? kopecks(credit.paid) : null;
+  const owing =
+    paidNow !== null && paidNow > 0n && paidNow < total
+      ? { now: paidNow, left: total - paidNow }
+      : null;
   // Named on every answer that sells: «… · Картка».
   const how = method ? ` · ${methodLabels[method]}` : "";
 
@@ -817,7 +832,10 @@ export function Sale({
         </button>
         {validation && <p role="alert">{validation}</p>}
         {draft.map((d, index) => (
-          <div className="line" key={stockKey(d.line)}>
+          <div
+            className={index === shortIndex ? "line short" : "line"}
+            key={stockKey(d.line)}
+          >
             <strong>
               {visible(d.name)} · {visible(d.size)}
             </strong>
@@ -853,9 +871,6 @@ export function Sale({
             </button>
           </div>
         ))}
-        <p className="total">
-          Разом <strong>{money(decimal(total))}</strong>
-        </p>
         {mayCredit && (
           <TermsFields
             value={credit}
@@ -864,38 +879,11 @@ export function Sale({
             hint="Покупець забирає товар зараз, решту доплачує, коли зможе. Внески приймає лише цей магазин, у розділі «Борги»."
           />
         )}
-        <div
-          className="actions"
-          role="group"
-          aria-label="Продати — як платить покупець"
-        >
-          {tillMethods.map((way) => (
-            <button
-              key={way}
-              type="button"
-              disabled={draft.length === 0}
-              onClick={() => {
-                void send(way, found, missing, clarified);
-              }}
-            >
-              {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
-            </button>
-          ))}
-        </div>
-        {paper && (
-          // Seen before the press: a forgotten switch marks a live sale for
-          // good, with a colleague's name (G6).
-          <p>
-            Продавець: {named ? visible(named.display_name) : "не вказано"}
-            {from.length > 0 &&
-              ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
-          </p>
-        )}
         <p className="hint">
           {paper
             ? // The card was charged during the outage (G19).
               "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
-            : "Спершу натисніть тут, потім проведіть на терміналі суму, яку покаже чек нижче: вона може змінитися, якщо товару не виявиться на полиці."}
+            : "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці."}
         </p>
       </fieldset>
       {refusal !== null && (
@@ -904,7 +892,13 @@ export function Sale({
         </p>
       )}
       {shortfall && (
-        <section className="notice" role="alert">
+        <section
+          className="notice"
+          role="alert"
+          ref={shortRef}
+          tabIndex={-1}
+          aria-label="Залишку не вистачає"
+        >
           <h3>Залишку не вистачає</h3>
           {shortDraft === undefined || shortIndex < 0 ? (
             <p>
@@ -1034,6 +1028,12 @@ export function Sale({
                       менеджера або зменшіть кількість.
                     </p>
                   )}
+                  {mayCorrect && !mayReportMissing && (
+                    <p>
+                      Немає на полиці? Приберіть рядок і скажіть менеджеру —
+                      залишок виправить він.
+                    </p>
+                  )}
                 </>
               )}
               <button
@@ -1043,12 +1043,55 @@ export function Sale({
                   replaceDraft(draft.filter((_, i) => i !== shortIndex));
                 }}
               >
-                Прибрати цей рядок із кошика
+                Прибрати з кошика
               </button>
             </>
           )}
         </section>
       )}
+      {/* Under the thumb (redesign P0-4): what is being paid, and the three
+          ways, which sell when pressed (owner decision, 2026-10-04). */}
+      <div
+        className="pay-panel"
+        role="group"
+        aria-label="Продати — як платить покупець"
+      >
+        <p className="pay-total">
+          {owing ? (
+            <>
+              Зараз <strong>{money(decimal(owing.now))}</strong> · винен{" "}
+              <strong>{money(decimal(owing.left))}</strong>
+            </>
+          ) : (
+            <>
+              Разом <strong>{money(decimal(total))}</strong>
+            </>
+          )}
+        </p>
+        <div className="pay-ways">
+          {tillMethods.map((way) => (
+            <button
+              key={way}
+              type="button"
+              disabled={blocked || working || draft.length === 0}
+              onClick={() => {
+                void send(way, found, missing, clarified);
+              }}
+            >
+              {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
+            </button>
+          ))}
+        </div>
+        {paper && (
+          // Seen before the press: a forgotten switch marks a live sale for
+          // good, with a colleague's name (G6).
+          <p className="pay-seller">
+            Продавець: {named ? visible(named.display_name) : "не вказано"}
+            {from.length > 0 &&
+              ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -1074,7 +1117,23 @@ function Receipt({
     <section>
       <h2>Продаж записано</h2>
       {mark && <p className="badge">{markText(mark)}</p>}
-      {way === null || receipt.credit ? (
+      {receipt.credit ? (
+        // Paid in parts, the terminal takes only what is paid now: the sum
+        // first, and how (redesign P0-6). From the answer, never worked out.
+        <p className="total">
+          <span>
+            {way !== null && `${methodLabels[way]} · `}
+            {way === "CARD" && paid === null
+              ? "Проведіть на терміналі"
+              : "Зараз"}{" "}
+            <strong>{money(receipt.credit.paid_now)}</strong>
+            {paid !== null
+              ? ` — ${paid}`
+              : way === "TRANSFER" &&
+                " — перевірте, що переказ надійшов, перш ніж віддати товар"}
+          </span>
+        </p>
+      ) : way === null ? (
         <p className="total">
           Разом <strong>{money(receipt.total)}</strong>
         </p>
@@ -1106,6 +1165,9 @@ function Receipt({
       {receipt.credit && (
         <div className="section-block">
           <h3>Оплата частинами</h3>
+          <p>
+            Разом за товар <strong>{money(receipt.total)}</strong>
+          </p>
           <p>
             Сплачено зараз <strong>{money(receipt.credit.paid_now)}</strong>
             {way !== null && ` ${methodHow[way]}`}

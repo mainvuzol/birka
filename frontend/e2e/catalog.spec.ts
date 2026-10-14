@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -31,7 +31,7 @@ function launch(): string {
 }
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Каталог", exact: true }).click();
 }
 async function draft(page: Page, raw: string): Promise<void> {
@@ -103,7 +103,7 @@ test("reject proposal and retrieve its preserved reason from history", async ({
     page.getByText("Причина відхилення: Це інша модель", { exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Каталог", exact: true }).click();
   await page.getByLabel("Стан пропозицій").selectOption({ label: "Відхилені" });
   await page.getByRole("button", { name: new RegExp(raw) }).click();
@@ -139,7 +139,7 @@ test("lost proposal response survives reopening with the same UUID", async ({
   await page.close();
   const reopened = await context.newPage();
   await reopened.goto(launch());
-  await reopened.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(reopened, "Основний MAIN");
   await expect(
     reopened.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
@@ -197,7 +197,7 @@ test("catalog navigation requires catalog permission", async ({ page }) => {
     await route.fulfill({ response, json: body });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await expect(
     page.getByRole("button", { name: "Каталог", exact: true }),
   ).toHaveCount(0);
@@ -237,7 +237,7 @@ test("lost alias-feedback response reuses the same evidence UUID after reopening
     (r) => r.url().endsWith("/alias-feedback") && r.status() === 200,
   );
   await reopened.goto(launch());
-  await reopened.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(reopened, "Основний MAIN");
   await expect(
     reopened.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
@@ -357,7 +357,7 @@ test("create a reviewed product and recover a lost response without duplication"
   await reopened.goto(launch());
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3).
-  await reopened.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(reopened, "Основний MAIN");
   await expect(
     reopened.getByText(`Збережений товар: ${name} синій. Розміри: L (ALPHA)`, {
       exact: true,

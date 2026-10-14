@@ -1,10 +1,90 @@
+/* The design's tokens (redesign direction §4, approved 2026-10-11): one
+   palette, light and dark, the theme taken from Telegram's own (its
+   background's brightness, `src/shared/telegram.ts`), or from the device
+   outside Telegram. Telegram's colours themselves are no longer painted:
+   its dark theme made light text on the light notices unreadable (P0-5).
+   The dark backgrounds of the meaning colours are not in the direction;
+   they are chosen here to keep 4.5:1 (a departure from the direction). */
+:root {
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --field: #eeeeea;
+  --text: #121715;
+  --text-2: #5e6662;
+  --line: #e7e7e2;
+  --line-strong: #cfd3cc;
+  --accent: #0f6e58;
+  --on-accent: #ffffff;
+  --accent-text: #0f6e58;
+  --accent-soft: #e2f0eb;
+  --debt: #a33a0b;
+  --debt-bg: #fbebe3;
+  --warn: #7a4e0b;
+  --warn-bg: #fbf1de;
+  --warn-line: #e8cf9c;
+  --transit: #1e4e79;
+  --transit-bg: #e3eef8;
+  --damaged: #5b2e7a;
+  --damaged-bg: #f1e9f6;
+  --focus: #c77b1e;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0e1513;
+  --surface: #18211e;
+  --field: #222c29;
+  --text: #f1f4f2;
+  --text-2: #9aa5a0;
+  --line: #26312d;
+  --line-strong: #3a4642;
+  --accent: #38b28f;
+  --on-accent: #0b1210;
+  --accent-text: #6fd3b4;
+  --accent-soft: #173a31;
+  --debt: #f08a5d;
+  --debt-bg: #2e1d15;
+  --warn: #e2b34a;
+  --warn-bg: #2a2414;
+  --warn-line: #5a4a22;
+  --transit: #9cc3ea;
+  --transit-bg: #17263a;
+  --damaged: #c9a6e3;
+  --damaged-bg: #261c30;
+  --focus: #e2b34a;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1513;
+    --surface: #18211e;
+    --field: #222c29;
+    --text: #f1f4f2;
+    --text-2: #9aa5a0;
+    --line: #26312d;
+    --line-strong: #3a4642;
+    --accent: #38b28f;
+    --on-accent: #0b1210;
+    --accent-text: #6fd3b4;
+    --accent-soft: #173a31;
+    --debt: #f08a5d;
+    --debt-bg: #2e1d15;
+    --warn: #e2b34a;
+    --warn-bg: #2a2414;
+    --warn-line: #5a4a22;
+    --transit: #9cc3ea;
+    --transit-bg: #17263a;
+    --damaged: #c9a6e3;
+    --damaged-bg: #261c30;
+    --focus: #e2b34a;
+    color-scheme: dark;
+  }
+}
 :root {
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  color: var(--tg-theme-text-color, #233a37);
-  background: var(--tg-theme-bg-color, #f4f5f0);
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   font-size: 16px;
-  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -24,7 +104,7 @@ header {
   align-items: center;
   gap: 16px;
   padding-bottom: 26px;
-  border-bottom: 1px solid #d7ddd6;
+  border-bottom: 1px solid var(--line);
 }
 h1 {
   font-size: 32px;
@@ -49,8 +129,8 @@ h3 {
   font-weight: 700;
 }
 section {
-  background: var(--tg-theme-secondary-bg-color, #fff);
-  border: 1px solid #dce1da;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 18px;
   padding: 22px;
   margin: 18px 0;
@@ -69,8 +149,8 @@ button {
   border-radius: 11px;
   padding: 13px 17px;
   min-height: 48px;
-  background: var(--tg-theme-button-color, #245d4e);
-  color: var(--tg-theme-button-text-color, #fff);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 650;
   cursor: pointer;
 }
@@ -82,13 +162,13 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #d89137;
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 .quiet {
   background: transparent;
-  color: var(--tg-theme-text-color, #245d4e);
-  border-color: #d0dad2;
+  color: var(--text);
+  border-color: var(--line-strong);
 }
 .store,
 .order-card {
@@ -100,23 +180,23 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 .store {
-  background: #e8f0e7;
-  color: #234638;
+  background: var(--accent-soft);
+  color: var(--text);
   align-items: flex-start;
 }
 .order-card {
   background: transparent;
   color: inherit;
-  border-color: #dce1da;
+  border-color: var(--line);
   padding: 18px;
 }
 .order-card:hover {
-  border-color: #245d4e;
+  border-color: var(--accent);
 }
 .badge {
   font-size: 12px;
-  background: #edf0d9;
-  color: #435238;
+  background: var(--accent-soft);
+  color: var(--accent-text);
   border-radius: 20px;
   padding: 6px 11px;
   align-self: flex-start;
@@ -126,7 +206,7 @@ textarea:focus-visible {
 small,
 .hint {
   font-size: 13px;
-  color: var(--tg-theme-hint-color, #60716a);
+  color: var(--text-2);
 }
 label .hint {
   font-weight: 400;
@@ -178,9 +258,9 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid #b9c8bf;
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
-  background: var(--tg-theme-bg-color, #fff);
+  background: var(--field);
   color: inherit;
   padding: 13px;
   min-height: 48px;
@@ -195,7 +275,7 @@ textarea {
   flex: 0.5;
 }
 .line {
-  border-bottom: 1px solid #e0e5df;
+  border-bottom: 1px solid var(--line);
   padding: 18px 0;
   display: flex;
   flex-direction: column;
@@ -223,8 +303,9 @@ textarea {
   text-align: right;
 }
 .notice {
-  background: #fff3d6;
-  border-color: #e5c36b;
+  background: var(--warn-bg);
+  color: var(--text);
+  border-color: var(--warn-line);
 }
 .check {
   flex-direction: row;
@@ -236,13 +317,13 @@ textarea {
   flex-shrink: 0;
 }
 [role="alert"] {
-  background: #fff0ec;
-  color: #943b27;
+  background: var(--debt-bg);
+  color: var(--debt);
   padding: 15px;
   border-radius: 10px;
 }
 button.active {
-  box-shadow: 0 2px 4px #245d4e18;
+  box-shadow: 0 2px 4px rgb(15 110 88 / 10%);
 }
 @media (max-width: 480px) {
   main {
@@ -312,7 +393,7 @@ nav {
   overflow-wrap: anywhere;
 }
 .catalog-candidate {
-  border: 1px solid #dce1da;
+  border: 1px solid var(--line);
   padding: 14px;
   border-radius: 10px;
   overflow-wrap: anywhere;
@@ -351,7 +432,7 @@ nav {
    trouble, one for Telegram, one for the recent nights. A block that needs
    the owner is the notice colour. */
 .section-block {
-  border: 1px solid #dce1da;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 14px 16px;
   margin: 14px 0;
@@ -360,8 +441,8 @@ nav {
   margin-top: 0;
 }
 .badge.failed {
-  background: #fff0ec;
-  color: #943b27;
+  background: var(--debt-bg);
+  color: var(--debt);
 }
 .nights,
 .troubles {
@@ -372,7 +453,7 @@ nav {
 .nights > li,
 .troubles > li {
   padding: 8px 0;
-  border-top: 1px solid #edf0ea;
+  border-top: 1px solid var(--line);
 }
 .nights > li:first-child,
 .troubles > li:first-child {
@@ -381,7 +462,7 @@ nav {
 
 /* A return: one block per sale line, the two counts side by side. */
 .line-return {
-  border-top: 1px solid #edf0ea;
+  border-top: 1px solid var(--line);
   padding-top: 12px;
   margin-bottom: 12px;
 }
@@ -410,7 +491,7 @@ nav {
   flex-direction: column;
   gap: 4px;
   padding: 12px 0;
-  border-top: 1px solid #edf0ea;
+  border-top: 1px solid var(--line);
 }
 .damaged-unit:first-of-type {
   border-top: 0;
@@ -423,4 +504,48 @@ nav {
 /* The sales report's two days, side by side and as wide as each other. */
 .fields.period label:first-child {
   flex: 1;
+}
+
+/* The till's panel under the thumb (redesign P0-4): what is being paid, and
+   the three ways in one row, held at the bottom of the screen while the
+   till is in view, above the iPhone's home indicator. */
+.pay-panel {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 18px -6px 0;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 -6px 18px rgb(0 0 0 / 8%);
+}
+.pay-total {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.pay-total strong {
+  font-size: 26px;
+  font-weight: 800;
+}
+.pay-ways {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.pay-ways button {
+  min-height: 54px;
+  padding: 10px 6px;
+  border-radius: 15px;
+}
+.pay-seller {
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+/* The basket's line the server's shortage is about. */
+.line.short {
+  background: var(--warn-bg);
+  border-left: 4px solid var(--warn);
+  padding-left: 12px;
 }

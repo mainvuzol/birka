@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -56,7 +56,7 @@ async function openAs(
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId, name) }).toString()}`,
   );
-  await page.getByRole("button", { name: "Центр CENTRE" }).click();
+  await openStore(page, "Центр CENTRE");
 }
 
 async function headersOf(page: Page): Promise<Record<string, string>> {

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -193,7 +193,7 @@ function card(page: Page, name: string) {
 
 async function storesSection(page: Page): Promise<void> {
   await openAs(page, owner);
-  await page.getByRole("button", { name: "Центр CENTRE" }).click();
+  await openStore(page, "Центр CENTRE");
   await page.getByRole("button", { name: "Магазини", exact: true }).click();
 }
 
@@ -226,9 +226,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
 
   // Петро sees that it is blocked, and since when — never why.
   await openAs(page, petro);
-  const his = page.getByRole("button", { name: /^Ринок MARKET/ });
-  await expect(his).toContainText("Заблоковано власником з");
-  await his.click();
+  // His one store opens straight on its state (redesign P0-1).
   await expect(
     page.getByRole("heading", { name: /^Заблоковано власником з/ }),
   ).toBeVisible();
@@ -242,7 +240,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
 
   // The owner reads it, and nothing else.
   await openAs(page, owner);
-  await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+  await openStore(page, /^Ринок MARKET/);
   await expect(page.getByText(/Лише перегляд/)).toBeVisible();
   for (const name of [
     "Продаж",
@@ -289,7 +287,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   ).toBeVisible();
   await expect(page.getByText(/Лише перегляд/)).toHaveCount(0);
   await openAs(page, petro);
-  await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+  await openStore(page, /^Ринок MARKET/);
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeVisible();
@@ -338,7 +336,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     });
     const payments = posts(page, "/payments");
     await openAs(page, hanna);
-    await page.getByRole("button", { name: "Центр CENTRE" }).click();
+    await openStore(page, "Центр CENTRE");
     await page.getByRole("button", { name: "Борги", exact: true }).click();
     // Everyone on the store's own list, paid too; not on another's.
     await page
@@ -411,7 +409,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     // In the blocked store itself the owner reads the debt: no payment is
     // taken there, and the network's owner may still write it off.
     await openAs(page, owner);
-    await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+    await openStore(page, /^Ринок MARKET/);
     await page.getByRole("button", { name: "Борги", exact: true }).click();
     await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
     await page.getByRole("button", { name: "Знайти" }).click();
@@ -516,7 +514,7 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     ).toBeDisabled();
     // Written down before it was sent: a reload still knows what to ask about.
     await page.reload();
-    await page.getByRole("button", { name: "Центр CENTRE" }).click();
+    await openStore(page, "Центр CENTRE");
     await expect(page.getByText("Незавершена зміна стану")).toBeVisible();
     await page.getByRole("button", { name: "Перевірити результат" }).click();
     await expect(page.getByText("«Ринок»: заблоковано.")).toBeVisible();

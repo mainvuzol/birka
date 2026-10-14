@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -210,7 +210,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     test.setTimeout(90_000);
     const coat = await coats(page);
     await openAs(page, olya, "Оля");
-    await page.getByRole("button", { name: /^Каса CASH/ }).click();
+    await openStore(page, /^Каса CASH/);
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
     cashSale = await sell(page, coat, "500", "Готівка");
     expect(cashSale.payment_method).toBe("CASH");
@@ -383,13 +383,14 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByRole("button", { name: "Каса", exact: true }),
     ).toBeEnabled();
+    // Оля has one store: there is nothing to change to (redesign P0-1).
     await expect(
       page.getByRole("button", { name: "Змінити магазин" }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
 
     // Read from the server: reopening the app does not lose it.
     await openAs(page, olya, "Оля");
-    await page.getByRole("button", { name: /^Каса CASH/ }).click();
+    await openStore(page, /^Каса CASH/);
     await expect(reason).toBeVisible();
     await expect(page.getByText(/Нестача 50,00 грн\./)).toBeVisible();
     await expect(
@@ -464,7 +465,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // (ADR-0013 §4.3).
     const resent = page.waitForResponse(isClose);
     await openAs(page, olya, "Оля");
-    await page.getByRole("button", { name: /^Каса CASH/ }).click();
+    await openStore(page, /^Каса CASH/);
     const answer = await resent;
     expect(answer.status()).toBe(422);
     expect(
@@ -506,7 +507,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     ).toMatchObject({ reason: "DAY_CLOSED", recorded: false });
     // Their list holds the open period only, and nothing was sold since.
     await openAs(page, olya, "Оля");
-    await page.getByRole("button", { name: /^Каса CASH/ }).click();
+    await openStore(page, /^Каса CASH/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
     await expect(
@@ -518,7 +519,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     page,
   }) => {
     await openAs(page, owner);
-    await page.getByRole("button", { name: /^Каса CASH/ }).click();
+    await openStore(page, /^Каса CASH/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Внести в касу" }),
@@ -600,7 +601,7 @@ test("a take-out kept on the phone settles on the refusal of a close in between,
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3).
   await openAs(page, olya, "Оля");
-  await page.getByRole("button", { name: /^Каса CASH/ }).click();
+  await openStore(page, /^Каса CASH/);
   await expect(page.getByRole("alert")).toHaveText(
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\. Якщо гроші взяли чи внесли вже після закриття — запишіть ще раз\. Якщо до нього — це запише менеджер до того закриття\.$/,
   );
@@ -647,7 +648,7 @@ test("a kept fix of a way refused on its resend still says what was not recorded
     }),
   );
   await openAs(page, olya, "Оля");
-  await page.getByRole("button", { name: /^Каса CASH/ }).click();
+  await openStore(page, /^Каса CASH/);
   const said =
     "Зміну способу оплати не записано. Касу вже закрито: змінити спосіб оплати тепер може лише менеджер або власник.";
   await expect(page.getByRole("alert")).toHaveText(said);
@@ -699,12 +700,12 @@ test("a refusal read in one store's «Каса» does not follow into another st
     }),
   );
   await openAs(page, owner);
-  await page.getByRole("button", { name: /^Каса CASH/ }).click();
+  await openStore(page, /^Каса CASH/);
   const said =
     "Зміну способу оплати не записано. Цю операцію записано до того, як застосунок почав рахувати касу: її спосіб оплати не змінюють.";
   await expect(page.getByRole("alert")).toHaveText(said);
   await page.getByRole("button", { name: "Змінити магазин" }).click();
-  await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+  await openStore(page, /^Ринок MARKET/);
   await expect(
     page.getByText(/^Не вдалося прочитати збережену операцію каси/),
   ).toBeVisible();
@@ -717,7 +718,7 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
   page,
 }) => {
   await openAs(page, owner);
-  await page.getByRole("button", { name: /^Зупинений PAUSED/ }).click();
+  await openStore(page, /^Зупинений PAUSED/);
   await expect(page.getByText(/Лише перегляд/)).toBeVisible();
   await page.getByRole("button", { name: "Каса", exact: true }).click();
   await expect(
@@ -745,7 +746,7 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
 
   // «Марко» manages it: a manager's rights give nothing while it is blocked.
   await openAs(page, marko);
-  await page.getByRole("button", { name: /^Зупинений PAUSED/ }).click();
+  await openStore(page, /^Зупинений PAUSED/);
   await expect(
     page.getByText(/Роботу в цьому магазині зупинено/),
   ).toBeVisible();

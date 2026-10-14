@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
@@ -80,7 +80,7 @@ async function open(
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId, firstName) }).toString()}`,
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: tab, exact: true }).click();
 }
 

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -56,7 +56,7 @@ async function enter(
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData(who.id, who.name) }).toString()}`,
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: tab, exact: true }).click();
 }
 

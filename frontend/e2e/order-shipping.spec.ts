@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -46,7 +46,18 @@ async function enter(page: Page): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
+  // The till opens first for whoever sells (redesign P0-1).
+  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+}
+
+/** The app opened again: a kept order turns to «Замовлення» by itself. */
+async function reopen(page: Page): Promise<void> {
+  await page.goto("about:blank");
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
 }
 
 /** A new order of one coat, its goods picked, nothing said yet of where it goes. */
@@ -308,8 +319,8 @@ test("a correction whose answer is lost is resent unchanged", async ({
   await page.close();
   const reopened = await context.newPage();
   // Read from the phone's storage, it is checked at once, with no tap
-  // (ADR-0013 §4.3).
-  await enter(reopened);
+  // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
+  await reopen(reopened);
   await expect(
     reopened.getByText("Доставка: Нова пошта · ТТН 20451111"),
   ).toBeVisible();

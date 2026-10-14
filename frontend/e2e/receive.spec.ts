@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -40,7 +40,7 @@ function launch(): string {
 
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Приймання", exact: true }).click();
 }
 
@@ -298,7 +298,7 @@ test("receiving needs its own permission", async ({ page }) => {
     await route.fulfill({ response, json: body });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await expect(
     page.getByRole("button", { name: "Приймання", exact: true }),
   ).toHaveCount(0);

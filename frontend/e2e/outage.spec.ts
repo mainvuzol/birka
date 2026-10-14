@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -325,7 +325,7 @@ async function serve(
 /** The app, its store, and the till. */
 async function openTill(page: Page): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: /Подільський/ }).click();
+  await openStore(page, /Подільський/);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
 }
 
@@ -486,7 +486,7 @@ test.describe("1. the seller is told to sell on paper", () => {
     const server = await serve(page);
     server.drawer = "lost";
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     const failed = page.getByRole("alert");
     await expect(failed).toContainText(UNREACHABLE);
@@ -504,7 +504,7 @@ test.describe("1. the seller is told to sell on paper", () => {
     const server = await serve(page);
     server.drawer = "error";
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     const failed = page.getByRole("alert");
     await expect(failed).toContainText(
@@ -720,7 +720,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
       await route.abort("connectionreset");
     };
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByRole("combobox", { name: "Товар і розмір", exact: true }),
     ).toBeVisible();
@@ -754,7 +754,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await seed(page, { [saleKey]: keptSale("CASH") });
     const server = await serve(page);
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByRole("heading", { name: "Продаж підтверджено" }),
     ).toBeVisible();
@@ -771,7 +771,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await seed(page, { [saleKey]: keptSale("CARD") });
     const server = await serve(page);
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Продаж підтверджено" }),
     });
@@ -811,7 +811,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
       });
     };
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Продаж підтверджено" }),
     });
@@ -909,8 +909,10 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
       expect(
         await page.evaluate((key) => localStorage.getItem(key), saleKey),
       ).toBeNull();
+      // Settled: nothing holds the phone. Its person has one store, so its
+      // sections say so (redesign P0-1).
       await expect(
-        page.getByRole("button", { name: "Змінити магазин" }),
+        page.getByRole("button", { name: "Продаж", exact: true }),
       ).toBeEnabled();
 
       // The goods come in later, and the server comes back: the refused sale
@@ -1071,6 +1073,26 @@ test("6b. the series ends when the switch is unticked, and when the store is lef
   page,
 }) => {
   await serve(page);
+  // A second store to leave for: one store has nothing to change to
+  // (redesign P0-1).
+  await page.route("**/api/v1/me", async (route) => {
+    await route.fulfill({
+      json: {
+        ...me,
+        stores: [
+          ...me.stores,
+          {
+            id: "6a3c1f0e-0000-4000-8000-0000000000c3",
+            name: "Ринок",
+            code: "RIN",
+            state: "ACTIVE",
+            state_since: null,
+            permissions: [],
+          },
+        ],
+      },
+    });
+  });
   await openTill(page);
   const paper = page.getByLabel("Вношу продаж з паперу");
   const who = page.getByRole("combobox", { name: "Хто продав" });
@@ -1084,7 +1106,7 @@ test("6b. the series ends when the switch is unticked, and when the store is lef
   // Leaving the store ends the series: back at its till, the switch is off.
   await who.selectOption({ label: colleague });
   await page.getByRole("button", { name: "Змінити магазин" }).click();
-  await page.getByRole("button", { name: /Подільський/ }).click();
+  await openStore(page, /Подільський/);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(
     page.getByRole("combobox", { name: "Товар і розмір", exact: true }),
@@ -1362,7 +1384,7 @@ test.describe("8. the real server keeps the mark", () => {
     await page.goto(
       `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId, name) }).toString()}`,
     );
-    await page.getByRole("button", { name: "Центр CENTRE" }).click();
+    await openStore(page, "Центр CENTRE");
   }
 
   async function headersOf(
@@ -1610,7 +1632,7 @@ test.describe("9. what to do with money after the outage", () => {
       await route.fulfill({ status: 201, json: close });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     await expect(
       page.getByText(
@@ -1641,7 +1663,7 @@ test.describe("9. what to do with money after the outage", () => {
       await route.abort("connectionreset");
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     await page.getByLabel("Скільки готівки в касі зараз, грн").fill("850");
     await page.getByRole("button", { name: "Закрити касу" }).click();
@@ -1750,7 +1772,7 @@ test.describe("9. what to do with money after the outage", () => {
       await serve(page);
       await debts(page);
       await page.goto(launch());
-      await page.getByRole("button", { name: /Подільський/ }).click();
+      await openStore(page, /Подільський/);
       await page.getByRole("button", { name: "Борги", exact: true }).click();
       await page
         .getByRole("button", { name: /^Відкрити борг Оксана Петренко/ })
@@ -1769,7 +1791,7 @@ test.describe("9. what to do with money after the outage", () => {
       await serve(page);
       const payments = await debts(page);
       await page.goto(launch());
-      await page.getByRole("button", { name: /Подільський/ }).click();
+      await openStore(page, /Подільський/);
       await page.getByRole("button", { name: "Борги", exact: true }).click();
       await page
         .getByRole("button", { name: /^Відкрити борг Оксана Петренко/ })
@@ -1815,7 +1837,7 @@ test.describe("9. what to do with money after the outage", () => {
         });
       });
       await page.goto(launch());
-      await page.getByRole("button", { name: /Подільський/ }).click();
+      await openStore(page, /Подільський/);
       await expect(
         page.getByText(
           "Замовлення вже скасовано або повернено — «Клієнт забрав» не записано. Якщо товар віддали — внесіть його як продаж з паперу, за цінами замовлення.",
@@ -1862,7 +1884,7 @@ test.describe("9. what to do with money after the outage", () => {
       },
     );
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Внесок підтверджено" }),
     });
@@ -1907,7 +1929,7 @@ test.describe("9. what to do with money after the outage", () => {
       },
     );
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Внесок підтверджено" }),
     });
@@ -1946,7 +1968,7 @@ test.describe("9. what to do with money after the outage", () => {
       });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Борги", exact: true }).click();
     await page
       .getByRole("button", { name: /^Відкрити борг Оксана Петренко/ })
@@ -1989,7 +2011,7 @@ test.describe("9. what to do with money after the outage", () => {
       },
     );
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByText(
         "Списання не записано. За цим продажем уже нічого не винні.",
@@ -2042,7 +2064,7 @@ test.describe("9. what to do with money after the outage", () => {
       },
     );
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByText(
         "Внесок не записано. Це більше, ніж винні: залишок боргу 300,00 грн. Прийміть 300,00 грн, а решту поверніть покупцю переказом.",
@@ -2075,7 +2097,7 @@ test.describe("9. what to do with money after the outage", () => {
     await serve(page);
     const payments = await debts(page);
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     // Checked by itself on opening, and refused: settled.
     await expect(
       page.getByText(
@@ -2192,7 +2214,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         });
       });
       await page.goto(launch());
-      await page.getByRole("button", { name: /Подільський/ }).click();
+      await openStore(page, /Подільський/);
       // Checked by itself on opening, with no tap.
       await expect(
         page.getByRole("heading", { name: "Перевіряємо коригування…" }),
@@ -2247,7 +2269,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByText(
         "Операцію «Відправлено» не записано. Перевірте дані та поточний статус замовлення.",
@@ -2288,7 +2310,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByText(
         "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 5a6b7c8d.",
@@ -2399,7 +2421,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       await serve(page);
       const sent = await returns(page, recorded);
       await page.goto(launch());
-      await page.getByRole("button", { name: /Подільський/ }).click();
+      await openStore(page, /Подільський/);
       // Checked by itself on opening, with no tap, and recorded.
       await expect(
         page.getByRole("heading", { name: "Повернення оформлено" }),
@@ -2453,7 +2475,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByRole("heading", { name: "Повернення оформлено" }),
     ).toBeVisible();
@@ -2493,7 +2515,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       } else await recorded(route, way);
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByText(
         "Попередня спроба ще виконується. Зачекайте кілька секунд і перевірте результат.",
@@ -2547,7 +2569,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByRole("heading", { name: "Повернення оформлено" }),
     ).toBeVisible();
@@ -2578,7 +2600,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await serve(page);
     const sent = await returns(page, recorded);
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     const confirmed = confirmedReturn(page);
     await expect(confirmed).toBeVisible();
     await expect(
@@ -2678,7 +2700,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
           reads += 1;
       });
       await page.goto(launch());
-      await page.getByRole("button", { name: /Подільський/ }).click();
+      await openStore(page, /Подільський/);
       const confirmed = confirmedReturn(page);
       await expect(confirmed).toBeVisible();
       await expect(
@@ -2722,7 +2744,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
     });
     await page.goto(launch());
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect(
       page.getByText(
         "Повернення не записано. Частину цього товару вже повернули. Поверніться до списку й оновіть продаж.",

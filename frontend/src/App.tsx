@@ -209,7 +209,18 @@ export function App(): JSX.Element {
         <p role="status">Входимо в магазин…</p>
       </main>
     );
-  const store = me.data.stores.find((s) => s.id === storeId);
+  // One store needs no choice: the app opens on it (redesign, P0-1). With
+  // two or more, the person chooses each time, nothing chosen beforehand: a
+  // sale is written to the store chosen (owner decision, 2026-10-14).
+  const chosen = me.data.stores.find((s) => s.id === storeId);
+  const only = me.data.stores.length === 1 ? me.data.stores[0] : undefined;
+  const store = chosen ?? only;
+  const changeStore =
+    only === undefined
+      ? () => {
+          setStoreId("");
+        }
+      : undefined;
   return (
     <main>
       <header>
@@ -224,7 +235,7 @@ export function App(): JSX.Element {
       {!store ? (
         <section>
           <h2>Оберіть магазин</h2>
-          <p>Продаж буде записано на обраний магазин. Склад оберете окремо.</p>
+          <p>Оберіть магазин, у якому ви зараз: продажі запишуться на нього.</p>
           {me.data.stores.length === 0 ? (
             <p>Доступних магазинів немає. Зверніться до адміністратора.</p>
           ) : (
@@ -249,14 +260,11 @@ export function App(): JSX.Element {
         <section>
           <div className="toolbar">
             <h2>{visible(store.name)}</h2>
-            <button
-              className="quiet"
-              onClick={() => {
-                setStoreId("");
-              }}
-            >
-              Змінити магазин
-            </button>
+            {changeStore && (
+              <button className="quiet" onClick={changeStore}>
+                Змінити магазин
+              </button>
+            )}
           </div>
           <h3>{stateText(store)}</h3>
           <p role="alert">
@@ -271,9 +279,7 @@ export function App(): JSX.Element {
           store={asShown(store)}
           token={token}
           me={me.data}
-          changeStore={() => {
-            setStoreId("");
-          }}
+          changeStore={changeStore}
           storesChanged={readAgain}
         />
       )}
@@ -290,7 +296,8 @@ function Workspace({
   store: Store;
   token: string;
   me: Me;
-  changeStore: () => void;
+  /** Absent when the person has one store: there is nothing to change to. */
+  changeStore: (() => void) | undefined;
   /** The owner changed a store's state: what the app knows is read again. */
   storesChanged: () => void;
 }): JSX.Element {
@@ -326,7 +333,14 @@ function Workspace({
     | "report"
     | "models"
     | "cash"
-  >("list");
+  >(
+    // The till first, for whoever sells there (redesign, P0-1): the book is
+    // opened at the page of the day's work. Kept operations still turn to
+    // their own tab, below.
+    store.state === "ACTIVE" && store.permissions.includes("sale:create")
+      ? "sale"
+      : "list",
+  );
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
   const trading = store.state === "ACTIVE";
@@ -629,7 +643,11 @@ function Workspace({
     try {
       const saved = loadPending(key);
       useCommand.getState().set(saved);
-      if (saved) loadedFromDisk("orders");
+      if (saved) {
+        // Its own tab, as every kept operation: the till opens first now.
+        setTab("list");
+        loadedFromDisk("orders");
+      }
     } catch {
       setStorageError(true);
     }
@@ -957,9 +975,11 @@ function Workspace({
     <>
       <div className="toolbar">
         <h2>{visible(store.name)}</h2>
-        <button className="quiet" disabled={blocked} onClick={changeStore}>
-          Змінити магазин
-        </button>
+        {changeStore && (
+          <button className="quiet" disabled={blocked} onClick={changeStore}>
+            Змінити магазин
+          </button>
+        )}
       </div>
       {!trading && (
         <p className="notice" role="status">

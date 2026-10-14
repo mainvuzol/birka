@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -104,7 +104,7 @@ async function openings(page: Page): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Початкові залишки" }).click();
 }
 
@@ -314,7 +314,7 @@ test("a list typed is kept on the phone, and saved once when its answer is lost"
 
   // A reload loses nothing typed.
   await page.reload();
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Початкові залишки" }).click();
   await page.getByRole("button", { name: "Новий список" }).click();
   await expect(
@@ -370,7 +370,7 @@ test("approving is for whoever may approve, and the section for whoever handles 
 
   drop = ["snapshot:approve", "snapshot:import"];
   await page.reload();
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();

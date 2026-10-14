@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -63,7 +63,7 @@ function launch(): string {
 /** Open the till at «Старі залишки» and return the balances it listed. */
 async function enter(page: Page): Promise<Option[]> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   const listed = page.waitForResponse(
     (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
@@ -298,7 +298,7 @@ test("a line sold as size not known is never offered «товар на місц�
     page.getByRole("button", { name: /Це товар без розміру/ }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Прибрати цей рядок із кошика" }),
+    page.getByRole("button", { name: "Прибрати з кошика" }),
   ).toBeVisible();
 });
 
@@ -449,7 +449,7 @@ test("a sale written down before clarifications existed is resent exactly as sto
     });
   });
   await page.reload();
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3).
   await expect(page.getByText("Продаж підтверджено")).toBeVisible();

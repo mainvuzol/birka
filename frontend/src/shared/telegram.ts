@@ -24,19 +24,27 @@ export function telegramUserId(): number | null {
   }
 }
 
+/**
+ * Light or dark, as Telegram is (redesign P0-5): the app paints its own
+ * palette (`styles.css`), and takes from Telegram only which of the two. The
+ * brightness of Telegram's background decides it, as Telegram's own
+ * `colorScheme` is derived; outside Telegram the device's setting does.
+ */
+export function schemeOf(
+  theme: Record<string, unknown>,
+): "light" | "dark" | null {
+  const bg = theme.bg_color;
+  if (typeof bg !== "string" || !/^#[0-9a-f]{6}$/i.test(bg)) return null;
+  const channel = (at: number): number => parseInt(bg.slice(at, at + 2), 16);
+  // Perceived brightness (ITU-R BT.601), 0–255.
+  const brightness =
+    0.299 * channel(1) + 0.587 * channel(3) + 0.114 * channel(5);
+  return brightness < 128 ? "dark" : "light";
+}
+
 function applyTheme(theme: Record<string, unknown>): void {
-  for (const [key, value] of Object.entries(theme)) {
-    if (
-      /^[a-z_]+$/.test(key) &&
-      typeof value === "string" &&
-      /^#[0-9a-f]{6}$/i.test(value)
-    ) {
-      document.documentElement.style.setProperty(
-        `--tg-theme-${key.replaceAll("_", "-")}`,
-        value,
-      );
-    }
-  }
+  const scheme = schemeOf(theme);
+  if (scheme) document.documentElement.dataset.theme = scheme;
 }
 
 /** Notify the host after rendering; keep bridge calls out of business UI. */

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import { execFileSync } from "node:child_process";
 import { createHmac, randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -77,9 +77,8 @@ test("someone the shop has not added sees their number, and is let in once added
     ),
   ).toBe(`granted: ${String(stranger)} is E2E in MAIN\n`);
   await page.getByRole("button", { name: "Спробувати ще раз" }).click();
-  await expect(
-    page.getByRole("button", { name: "Основний MAIN" }),
-  ).toBeVisible();
+  // One store: the app opens on it, at the till (redesign P0-1).
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 
   // Turned off, they are told so on their next request, and not let back in.
   people(
@@ -89,7 +88,7 @@ test("someone the shop has not added sees their number, and is let in once added
     "--telegram-user-id",
     String(stranger),
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Залишки", exact: true }).click();
   await expect(
     page.getByText("Доступ до магазину закрито. Зверніться до власника."),
