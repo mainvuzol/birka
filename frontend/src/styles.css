@@ -3,8 +3,11 @@
    background's brightness, `src/shared/telegram.ts`), or from the device
    outside Telegram. Telegram's colours themselves are no longer painted:
    its dark theme made light text on the light notices unreadable (P0-5).
-   The dark backgrounds of the meaning colours are not in the direction;
-   they are chosen here to keep 4.5:1 (a departure from the direction). */
+   Departures from the direction, chosen here: the dark backgrounds of the
+   meaning colours, and the dark foregrounds of «в пути» and «брак», to keep
+   4.5:1; and tokens the direction does not name — `--line-strong` (a field's
+   and a quiet button's edge), `--warn-line`, `--focus`, `--accent-text` in
+   light (the accent itself), and the two shadows. */
 :root {
   --bg: #f4f4f1;
   --surface: #ffffff;
@@ -26,7 +29,9 @@
   --transit-bg: #e3eef8;
   --damaged: #5b2e7a;
   --damaged-bg: #f1e9f6;
-  --focus: #c77b1e;
+  --focus: #9a5a10;
+  --panel-shadow: rgb(0 0 0 / 8%);
+  --active-shadow: rgb(15 110 88 / 10%);
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -51,6 +56,8 @@
   --damaged: #c9a6e3;
   --damaged-bg: #261c30;
   --focus: #e2b34a;
+  --panel-shadow: rgb(0 0 0 / 45%);
+  --active-shadow: rgb(0 0 0 / 30%);
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -76,6 +83,8 @@
     --damaged: #c9a6e3;
     --damaged-bg: #261c30;
     --focus: #e2b34a;
+    --panel-shadow: rgb(0 0 0 / 45%);
+    --active-shadow: rgb(0 0 0 / 30%);
     color-scheme: dark;
   }
 }
@@ -323,7 +332,7 @@ textarea {
   border-radius: 10px;
 }
 button.active {
-  box-shadow: 0 2px 4px rgb(15 110 88 / 10%);
+  box-shadow: 0 2px 4px var(--active-shadow);
 }
 @media (max-width: 480px) {
   main {
@@ -516,18 +525,33 @@ nav {
   margin: 18px -6px 0;
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 16px;
-  box-shadow: 0 -6px 18px rgb(0 0 0 / 8%);
+  box-shadow: 0 -6px 18px var(--panel-shadow);
+}
+/* The panel's height, kept clear wherever the page scrolls to (Sale.tsx). */
+html {
+  scroll-padding-bottom: calc(var(--pay-panel-h, 0px) + 12px);
+}
+.pay-what {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
 }
 .pay-total {
   margin: 0 0 10px;
   font-size: 18px;
   font-variant-numeric: tabular-nums;
 }
-.pay-total strong {
+.pay-total .sum {
   font-size: 26px;
   font-weight: 800;
+}
+.sum-rest {
+  font-size: 0.62em;
+  font-weight: 700;
+  color: var(--text-2);
 }
 .pay-ways {
   display: grid;

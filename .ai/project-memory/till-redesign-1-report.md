@@ -25,27 +25,35 @@ with its server change) and one tap of a size into the basket (P0-3).
 
 - **P0-1, the app opens on the till.** One store opens without the choice,
   and without «Змінити магазин»; with two or more the person chooses each
-  time, nothing chosen beforehand (owner, В6), and the choice says «Оберіть
-  магазин, у якому ви зараз: продажі запишуться на нього.» The first tab is
+  time, nothing chosen beforehand and nothing remembered (owner, В6), and the
+  choice says «Продажі запишуться на той магазин, у якому ви зараз.» The
+  first tab is
   «Продаж» for whoever may sell in a store that trades, else «Замовлення».
   A kept operation still opens its own tab; a kept order now opens
   «Замовлення» itself, which the default no longer did.
 - **P0-5, the direction's palette, light and dark.** Every colour of the
   stylesheet is a token (`--bg`, `--surface`, `--text`, `--accent`,
   `--warn`, `--debt`…), with the direction's values; the theme is taken
-  from the brightness of Telegram's background (`data-theme`), or from the
-  device outside Telegram. Telegram's own colours are no longer painted:
-  its dark theme drew light text on the light notices. The dark backgrounds
-  of the meaning colours are chosen here (a departure from the direction).
-- **P0-4, under the thumb.** «Разом» and «Готівка / Картка / Переказ» are
-  a panel held at the bottom of the screen with the safe area, the three in
-  one row; with «Оплата частинами» it reads «Зараз … · винен …», from what
-  was typed. In paper mode the buttons say «З паперу · …» and the seller
-  line stays on the panel. The server's shortage answer opens above it,
-  scrolled into view and focused, and its basket line is marked. A seller
-  who may correct a shortage but not write a shelf off is told «Немає на
-  полиці? Приберіть рядок і скажіть менеджеру — залишок виправить він.»;
-  «Прибрати з кошика» replaces «Прибрати цей рядок із кошика».
+  from Telegram's background by Telegram's own rule (`isColorDark`), set
+  before the first paint (`data-theme`), or from the device outside
+  Telegram. Telegram's own colours are no longer painted: its dark theme
+  drew light text on the light notices. Departures, chosen here: the dark
+  backgrounds of the meaning colours, tokens the direction does not name
+  (edges, focus, shadows), and a light theme that changes visibly.
+- **P0-4, under the thumb.** Once the basket holds something (direction
+  §5), a panel held at the bottom of the screen with the safe area says
+  what is sold («Лоран шоколад · M», or «У кошику: 3 од.»), «Разом» with
+  «,00 грн» smaller and quieter, and «Готівка / Картка / Переказ» in one
+  row, 54 px; with «Оплата частинами» it reads «Зараз … · винен …», from
+  what was typed. In paper mode the buttons say «З паперу · …» and the
+  seller line stays on the panel. The panel's height is kept clear wherever
+  the page scrolls (`scroll-padding-bottom`). The server's shortage answer
+  opens above it, scrolled into view and focused, and its basket line is
+  marked. A seller who may correct a shortage but not write a shelf off is
+  told «Немає на полиці? Приберіть рядок і попросіть менеджера виправити
+  залишок.»; «Прибрати з кошика» replaces «Прибрати цей рядок із кошика».
+  Whatever holds the other tabs holds the till too, now that it opens
+  first.
 - **P0-6, a sale paid in parts.** Its receipt leads with what is paid now
   and how — «Картка · Проведіть на терміналі 1000,00 грн», «Готівка · Зараз
   …», «Переказ · Зараз … — перевірте, що переказ надійшов…», and from paper
@@ -58,23 +66,30 @@ change.
 
 ## How it was built and proven
 
-- **Journeys** (`till-redesign.spec.ts`, 9; `credits.spec.ts`, 4 new):
-  - one store opens on the till, with nothing to change to; two are chosen
-    each time; whoever does not sell opens on the orders; a single store
-    that does not trade shows its state;
-  - on a 360 × 640 phone the total and the three ways are in view, below
-    the basket's last line, with no sideways scroll; paid in parts the
-    panel says what is paid now and left;
-  - the shortage answer is in view and focused, its line marked, and a
-    seller without the right to write a shelf off is told what to do;
+- **Journeys** (`till-redesign.spec.ts`, 11; `credits.spec.ts`, 4 new):
+  - one store opens on the till, with nothing to change to; two are chosen,
+    and chosen again when the app is opened again; whoever does not sell
+    opens on the orders; a single store that does not trade shows its
+    state;
+  - no panel on an empty basket; on a 360 × 640 phone what is sold, the
+    total and the three ways are in view, below the basket's last line,
+    with no sideways scroll; paid in parts the panel says what is paid now
+    and left;
+  - the shortage answer is in view and focused, wholly above the panel,
+    its line marked, and a seller without the right to write a shelf off is
+    told what to do;
+  - an invoice operation kept on the phone that cannot be read holds the
+    till, which now opens first, as it holds every other tab;
   - in Telegram's dark theme and in a light one, the paper band, the hint,
-    the kept sale's banner and an alert read at 4.5:1 or more;
+    the kept sale's banner and an alert read at 4.5:1 or more; in the dark
+    one the shortage answer and a paper sale's mark too;
   - a part payment by card, cash and transfer leads with the 1000 paid
     now, never «Проведіть на терміналі 3000»; from paper, never to charge
     the card again.
 - **Every other journey** was brought to the new opening: people with one
   store open straight, so `openStore()` (`e2e/fixtures.ts`) presses a
-  store's button only where the choice shows (120 places); journeys about
+  store's button only where the choice shows, and then checks that store
+  opened (120 places); journeys about
   the choice itself, or about leaving a store, give their person a second
   store; orders journeys open «Замовлення».
 - **Mutation:** TODO(final).

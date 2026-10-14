@@ -2163,8 +2163,8 @@ for the till was written (`redesign/2026-10-11-redesign-tz-sale.md`): the
 till first, in the new design. Not chosen now: the bottom menu of five
 tabs, the task lists for the other sections, and the older items.
 
-The owner answered three of the task list's ten questions, each the
-recommended one:
+The owner answered three of the task list's ten questions, each with option
+(а), the one recommended when they were asked:
 - **В1. A coat in hand that the books hold none of** is found in the
   catalogue at the till and sold through «Товар на місці», as a shortage
   is today (F30): the customer does not wait. Built with the till's search
@@ -2172,22 +2172,26 @@ recommended one:
 - **В3. A sale at 0 грн** (a gift) is allowed, with a warning on its line.
   Built with task P1-8, not yet.
 - **В6. The store is chosen every time** by whoever has two or more; none
-  is remembered. One store needs no choice.
+  is remembered.
 
 Built in the first part (tasks P0-1, P0-4, P0-5, P0-6); how it is carried
 out, not decided by the owner:
-- **One store opens straight**, and the till is the first tab for whoever
+- **One store opens straight**, with nothing to choose (the task list's
+  P0-1), and the till is the first tab for whoever
   sells there; whoever does not sell opens on «Замовлення», as before. A
   kept operation still opens its own tab, a kept order «Замовлення» too.
 - **The direction's palette, light and dark,** with the theme taken from
-  Telegram's background. The dark backgrounds of the warning, debt,
-  delivery and «Брак» colours are not in the direction: they are chosen to
-  read at 4.5:1 (a departure from the direction).
-- **The total and the three ways under the thumb,** held at the bottom of
-  the screen; with «Оплата частинами» it reads «Зараз … · винен …». The
+  Telegram's background by Telegram's own rule. Departures from the
+  direction, chosen here: the dark backgrounds of the meaning colours, a
+  few tokens it does not name (edges, focus, shadows), and the light theme
+  changing visibly, as the palette replaces Telegram's colours.
+- **What is sold, the total and the three ways under the thumb,** held at
+  the bottom of the screen once the basket holds something; with «Оплата
+  частинами» it reads «Зараз … · винен …». The
   server's shortage answer opens above it, in view and focused, its line
-  marked; a seller who may not write a shelf off is told to remove the
-  line and tell a manager.
+  marked, and kept clear of the panel; a seller who may not write a shelf
+  off is told to remove the line and ask a manager to correct the
+  balance.
 - **A sale paid in parts** leads its receipt with what is paid now and
   how: «Картка · Проведіть на терміналі 1000,00 грн», never the whole.
 

@@ -866,9 +866,7 @@ test("paying in parts needs its own permission", async ({ page }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await expect(
-    page.getByRole("group", { name: "Продати — як платить покупець" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Борги", exact: true }),

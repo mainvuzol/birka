@@ -1289,7 +1289,8 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     await expect(
       page.getByRole("button", { name: `Прибрати ${coat}` }),
     ).toHaveCount(0);
-    await expect(pay(page, "Готівка")).toBeDisabled();
+    // An empty basket shows no ways at all (redesign direction §5).
+    await expect(pay(page, "Готівка")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Товар на місці/ }),
     ).toHaveCount(0);

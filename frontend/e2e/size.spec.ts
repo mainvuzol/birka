@@ -111,7 +111,8 @@ test("a coat held with its size not known is sold with the size on its label", a
     .getByRole("combobox", { name: "Розмір з етикетки" })
     .selectOption({ label: "L" });
   await addToBasket(page, 1);
-  await expect(page.getByText(/· L$/)).toBeVisible();
+  // The basket's line; the panel says it too.
+  await expect(page.locator(".line").getByText(/· L$/)).toBeVisible();
   await expect(
     page.getByText("Розмір з етикетки товару без розміру"),
   ).toBeVisible();

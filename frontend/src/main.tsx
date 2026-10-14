@@ -36,8 +36,10 @@ const queryClient = new QueryClient({
 import { App } from "@/App";
 import { CrashBoundary } from "@/shared/CrashScreen";
 import { noteUnhandledErrors } from "@/shared/report";
+import { applyLaunchTheme } from "@/shared/telegram";
 
 noteUnhandledErrors();
+applyLaunchTheme();
 
 const container = document.getElementById("root");
 if (!container) {

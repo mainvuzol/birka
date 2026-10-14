@@ -910,13 +910,15 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
       ),
     ).toBeVisible();
     expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
-    // The till is the seller's again, with the three ways.
+    // The till is the seller's again; its three ways come with a basket
+    // (redesign direction §5).
     await expect(
       page.getByRole("button", { name: "Змінити магазин" }),
     ).toBeEnabled();
+    await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
     await expect(
-      page.getByRole("group", { name: "Продати — як платить покупець" }),
-    ).toBeVisible();
+      page.getByRole("combobox", { name: "Склад", exact: true }),
+    ).toBeEnabled();
   });
 
   test("a payment is refused and settles, and says it was not taken", async ({

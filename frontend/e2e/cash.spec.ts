@@ -209,6 +209,21 @@ test.describe("«Оля»'s day at «Каса»", () => {
   }) => {
     test.setTimeout(90_000);
     const coat = await coats(page);
+    // A second store, so leaving the store is offered, and held while a
+    // reason is owed (G12): one store has nothing to change to (P0-1).
+    await page.route("**/api/v1/me", async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as { stores: object[] };
+      body.stores.push({
+        id: "6a3c1f0e-0000-4000-8000-0000000000d4",
+        name: "Ринок",
+        code: "RIN",
+        state: "ACTIVE",
+        state_since: null,
+        permissions: [],
+      });
+      await route.fulfill({ response, json: body });
+    });
     await openAs(page, olya, "Оля");
     await openStore(page, /^Каса CASH/);
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
@@ -383,10 +398,9 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByRole("button", { name: "Каса", exact: true }),
     ).toBeEnabled();
-    // Оля has one store: there is nothing to change to (redesign P0-1).
     await expect(
       page.getByRole("button", { name: "Змінити магазин" }),
-    ).toHaveCount(0);
+    ).toBeDisabled();
 
     // Read from the server: reopening the app does not lose it.
     await openAs(page, olya, "Оля");

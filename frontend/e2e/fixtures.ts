@@ -57,5 +57,11 @@ export async function openStore(
       .or(page.getByRole("button", { name: "Оновити", exact: true }))
       .first(),
   ).toBeVisible();
-  if (await choice.isVisible()) await choice.click();
+  if (!(await choice.isVisible())) return;
+  // The store chosen is the store opened: its name heads the workspace.
+  const label = (await choice.innerText()).split("\n")[0]?.trim() ?? "";
+  await choice.click();
+  await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(
+    label,
+  );
 }

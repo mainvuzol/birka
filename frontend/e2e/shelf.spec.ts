@@ -209,14 +209,11 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   expect(recorded).toHaveLength(1);
   expect(await held(page, empty)).toBe(0);
   await page.getByRole("button", { name: "Новий продаж" }).click();
-  // An empty basket offers none of the three ways to sell.
-  const ways = page.getByRole("group", {
-    name: "Продати — як платить покупець",
-  });
-  for (const way of ["Готівка", "Картка", "Переказ"])
-    await expect(
-      ways.getByRole("button", { name: way, exact: true }),
-    ).toBeDisabled();
+  // An empty basket offers none of the three ways to sell, nor their panel
+  // (redesign direction §5).
+  await expect(
+    page.getByRole("group", { name: "Продати — як платить покупець" }),
+  ).toHaveCount(0);
 });
 
 test("an empty shelf whose answer was lost is checked, and not recorded twice", async ({

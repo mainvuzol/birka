@@ -168,16 +168,21 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
     page.getByRole("heading", { name: "Оберіть магазин" }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      "Оберіть магазин, у якому ви зараз: продажі запишуться на нього.",
-    ),
+    page.getByText("Продажі запишуться на той магазин, у якому ви зараз."),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
-  await openStore(page, "Основний MAIN");
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toBeVisible();
+  // Opened again, nothing is remembered: the choice again (owner, В6).
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await expect(
+    page.getByRole("heading", { name: "Оберіть магазин" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
 });
 
 test("whoever does not sell opens on the orders, as before", async ({
@@ -219,10 +224,15 @@ test("the total and the three ways are in view on a small phone, below the baske
   await page.setViewportSize({ width: 360, height: 640 });
   await stubStock(page, 3);
   await onTheTill(page);
+  // An empty basket shows no panel (direction §5).
+  await expect(
+    page.getByRole("group", { name: "Продати — як платить покупець" }),
+  ).toHaveCount(0);
   await oneLine(page);
   const panel = page.getByRole("group", {
     name: "Продати — як платить покупець",
   });
+  await expect(panel.getByText("Лоран шоколад · M")).toBeInViewport();
   await expect(panel.getByText("Разом 1850,00 грн")).toBeInViewport();
   for (const way of ["Готівка", "Картка", "Переказ"])
     await expect(
@@ -298,13 +308,63 @@ test("the server's shortage opens above the panel, in view and focused; a seller
   await expect(answer).toBeFocused();
   await expect(
     answer.getByText(
-      "Немає на полиці? Приберіть рядок і скажіть менеджеру — залишок виправить він.",
+      "Немає на полиці? Приберіть рядок і попросіть менеджера виправити залишок.",
     ),
   ).toBeVisible();
-  await expect(
-    answer.getByRole("button", { name: "Прибрати з кошика" }),
-  ).toBeVisible();
+  // All of it above the panel, never under it (review, 2026-10-15).
+  const remove = answer.getByRole("button", { name: "Прибрати з кошика" });
+  await expect(remove).toBeVisible();
+  const removeBox = await remove.boundingBox();
+  const panelTop = (
+    await page
+      .getByRole("group", { name: "Продати — як платить покупець" })
+      .boundingBox()
+  )?.y;
+  expect(
+    removeBox !== null &&
+      panelTop !== undefined &&
+      removeBox.y + removeBox.height <= panelTop + 1,
+  ).toBe(true);
   await expect(page.locator(".line.short")).toHaveCount(1);
+});
+
+test("an unreadable kept invoice holds the till, as it holds the other tabs", async ({
+  page,
+}) => {
+  let invoiceKey = "";
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      organization_id: string;
+      user_id: string;
+      stores: MeStore[];
+    };
+    body.stores = body.stores.map((s) => ({
+      ...s,
+      permissions: [...new Set([...s.permissions, "supplier:debt"])],
+    }));
+    invoiceKey = `birka:supplier-invoice-pending:${body.organization_id}:${body.user_id}:${fixture.store_id}`;
+    await route.fulfill({ response, json: body });
+  });
+  await stubStock(page, 3);
+  await onTheTill(page);
+  // The phone keeps an invoice operation it cannot read; the app is opened
+  // again and still opens on the till.
+  await page.evaluate((key) => {
+    localStorage.setItem(key, "{not an invoice");
+  }, invoiceKey);
+  await page.goto("about:blank");
+  await onTheTill(page);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережену операцію з накладною" }),
+  ).toBeVisible();
+  // Nothing can be put in the basket, so nothing can be sold.
+  await expect(
+    page.getByRole("combobox", { name: "Склад", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByLabel("Вношу продаж з паперу")).toBeDisabled();
 });
 
 // --- P0-5: Telegram's dark theme -------------------------------------------------
@@ -372,3 +432,84 @@ for (const [name, theme, scheme] of [
     expect(await contrast(alert)).toBeGreaterThanOrEqual(4.5);
   });
 }
+
+test("in Telegram's dark theme the shortage answer and a paper sale's mark read at 4.5:1", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await stubStock(page, 2);
+  let answer: "short" | "sold" = "short";
+  await page.route("**/api/v1/sales", async (route) => {
+    const body = route.request().postDataJSON() as { payment_method: string };
+    if (answer === "short") {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "INSUFFICIENT_STOCK",
+          message: "Not enough stock for this operation",
+          details: {
+            location_id: fixture.till_location_id,
+            product_variant_id: fixture.variant_id,
+            size_id: fixture.size_id,
+            requested: 3,
+            available: 2,
+            correctable: true,
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: "11111111-1111-4111-8111-111111111111",
+        store_id: fixture.store_id,
+        currency_code: "UAH",
+        subtotal: "1850.00",
+        discount_total: "0.00",
+        total: "1850.00",
+        items: [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            product_variant_id: fixture.variant_id,
+            size_id: fixture.size_id,
+            source_location_id: fixture.till_location_id,
+            quantity: 1,
+            unit_price: "1850.00",
+            discount_amount: "0.00",
+            final_unit_price: "1850.00",
+            line_total: "1850.00",
+            display_name: "Лоран шоколад",
+          },
+        ],
+        corrections: [],
+        shortages: [],
+        size_reclassifications: [],
+        payment_method: body.payment_method,
+        outage: { sold_by_user_id: null, sold_by: null, sold_at: null },
+      },
+    });
+  });
+  await onTheTill(page, DARK);
+  await oneLine(page, 3);
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  const short = page.getByRole("alert", { name: "Залишку не вистачає" });
+  await expect(short).toBeVisible();
+  expect(await contrast(short.locator("p").first())).toBeGreaterThanOrEqual(
+    4.5,
+  );
+  expect(
+    await contrast(short.getByRole("button", { name: "Прибрати з кошика" })),
+  ).toBeGreaterThanOrEqual(4.5);
+
+  await short.getByRole("button", { name: "Прибрати з кошика" }).click();
+  answer = "sold";
+  await page.getByLabel("Вношу продаж з паперу").check();
+  await oneLine(page);
+  await page
+    .getByRole("button", { name: "З паперу · Готівка", exact: true })
+    .click();
+  const mark = page.locator(".badge", { hasText: "Продано під час збою" });
+  await expect(mark).toBeVisible();
+  expect(await contrast(mark)).toBeGreaterThanOrEqual(4.5);
+});

@@ -508,6 +508,32 @@ export function Sale({
   // The server's answer to a shortage opens above the panel, in view and
   // focused, so it is never past the edge of the screen (redesign P0-4).
   const shortRef = useRef<HTMLElement>(null);
+  // The panel's height is kept clear wherever the page scrolls to — the
+  // shortage answer, a field in focus — so nothing ends under it (review,
+  // 2026-10-15).
+  const panelRef = useRef<HTMLDivElement>(null);
+  const hasGoods = draft.length > 0;
+  useEffect(() => {
+    const root = document.documentElement;
+    const panel = panelRef.current;
+    if (!hasGoods || !panel) {
+      root.style.removeProperty("--pay-panel-h");
+      return;
+    }
+    const keep = (): void => {
+      root.style.setProperty(
+        "--pay-panel-h",
+        `${String(panel.offsetHeight)}px`,
+      );
+    };
+    keep();
+    const watch = new ResizeObserver(keep);
+    watch.observe(panel);
+    return () => {
+      watch.disconnect();
+      root.style.removeProperty("--pay-panel-h");
+    };
+  }, [hasGoods]);
   useEffect(() => {
     if (!shortfall) return;
     shortRef.current?.scrollIntoView({ block: "nearest" });
@@ -1030,8 +1056,8 @@ export function Sale({
                   )}
                   {mayCorrect && !mayReportMissing && (
                     <p>
-                      Немає на полиці? Приберіть рядок і скажіть менеджеру —
-                      залишок виправить він.
+                      Немає на полиці? Приберіть рядок і попросіть менеджера
+                      виправити залишок.
                     </p>
                   )}
                 </>
@@ -1049,50 +1075,73 @@ export function Sale({
           )}
         </section>
       )}
-      {/* Under the thumb (redesign P0-4): what is being paid, and the three
-          ways, which sell when pressed (owner decision, 2026-10-04). */}
-      <div
-        className="pay-panel"
-        role="group"
-        aria-label="Продати — як платить покупець"
-      >
-        <p className="pay-total">
-          {owing ? (
-            <>
-              Зараз <strong>{money(decimal(owing.now))}</strong> · винен{" "}
-              <strong>{money(decimal(owing.left))}</strong>
-            </>
-          ) : (
-            <>
-              Разом <strong>{money(decimal(total))}</strong>
-            </>
-          )}
-        </p>
-        <div className="pay-ways">
-          {tillMethods.map((way) => (
-            <button
-              key={way}
-              type="button"
-              disabled={blocked || working || draft.length === 0}
-              onClick={() => {
-                void send(way, found, missing, clarified);
-              }}
-            >
-              {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
-            </button>
-          ))}
-        </div>
-        {paper && (
-          // Seen before the press: a forgotten switch marks a live sale for
-          // good, with a colleague's name (G6).
-          <p className="pay-seller">
-            Продавець: {named ? visible(named.display_name) : "не вказано"}
-            {from.length > 0 &&
-              ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+      {/* Under the thumb (redesign P0-4): what is sold and what is paid,
+          and the three ways, which sell when pressed (owner decision,
+          2026-10-04). It shows once the basket holds something (direction
+          §5). */}
+      {draft.length > 0 && (
+        <div
+          className="pay-panel"
+          role="group"
+          aria-label="Продати — як платить покупець"
+          ref={panelRef}
+        >
+          <p className="pay-what">
+            {draft.length === 1 && draft[0]
+              ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
+              : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} од.`}
           </p>
-        )}
-      </div>
+          <p className="pay-total">
+            {owing ? (
+              <>
+                Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
+                <Sum value={money(decimal(owing.left))} />
+              </>
+            ) : (
+              <>
+                Разом <Sum value={money(decimal(total))} />
+              </>
+            )}
+          </p>
+          <div className="pay-ways">
+            {tillMethods.map((way) => (
+              <button
+                key={way}
+                type="button"
+                disabled={blocked || working}
+                onClick={() => {
+                  void send(way, found, missing, clarified);
+                }}
+              >
+                {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
+              </button>
+            ))}
+          </div>
+          {paper && (
+            // Seen before the press: a forgotten switch marks a live sale for
+            // good, with a colleague's name (G6).
+            <p className="pay-seller">
+              Продавець: {named ? visible(named.display_name) : "не вказано"}
+              {from.length > 0 &&
+                ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+            </p>
+          )}
+        </div>
+      )}
     </section>
+  );
+}
+
+/** «1850» large, «,00 грн» smaller and quieter (direction §4, money). */
+function Sum({ value }: { value: string }): JSX.Element {
+  const at = value.indexOf(",");
+  return at < 0 ? (
+    <strong className="sum">{value}</strong>
+  ) : (
+    <strong className="sum">
+      {value.slice(0, at)}
+      <span className="sum-rest">{value.slice(at)}</span>
+    </strong>
   );
 }
 

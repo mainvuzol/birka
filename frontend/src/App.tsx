@@ -235,7 +235,7 @@ export function App(): JSX.Element {
       {!store ? (
         <section>
           <h2>Оберіть магазин</h2>
-          <p>Оберіть магазин, у якому ви зараз: продажі запишуться на нього.</p>
+          <p>Продажі запишуться на той магазин, у якому ви зараз.</p>
           {me.data.stores.length === 0 ? (
             <p>Доступних магазинів немає. Зверніться до адміністратора.</p>
           ) : (
@@ -1546,7 +1546,13 @@ function Workspace({
               adjustmentUnsettled ||
               returnUnsettled ||
               creditUnsettled ||
-              cashUnsettled
+              cashUnsettled ||
+              // The till is the first tab now (redesign P0-1): whatever holds
+              // every other tab holds it too, not only the tab's button.
+              storesUnsettled ||
+              supplierUnsettled ||
+              invoiceUnsettled ||
+              correctionUnsettled
             }
             {...fixFromReceipt}
           />

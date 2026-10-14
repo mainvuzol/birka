@@ -371,11 +371,9 @@ test("the three ways wait for a basket, and an answer recorded without a way nam
   const ways = page.getByRole("group", {
     name: "Продати — як платить покупець",
   });
-  // Nothing to sell yet: none of the three.
-  for (const way of ["Готівка", "Картка", "Переказ"])
-    await expect(
-      ways.getByRole("button", { name: way, exact: true }),
-    ).toBeDisabled();
+  // Nothing to sell yet: none of the three, nor the panel that holds them
+  // (redesign direction §5).
+  await expect(ways).toHaveCount(0);
   await pickFirstProduct(page);
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Картка", exact: true }).click();
