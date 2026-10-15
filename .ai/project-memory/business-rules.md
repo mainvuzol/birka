@@ -2154,3 +2154,46 @@ How it is carried out, not decided by the owner:
 Written on 2026-10-11; see the [report](launch-guide-uk-report.md), the
 [server's instructions](server-setup-uk.md) and the
 [managers' guide](managers-stock-uk.md).
+
+## Owner decision — 2026-10-14 (the till in the new design, first part)
+
+Chosen on 2026-10-14, after the redesign direction was approved
+(2026-10-11, `redesign/design-direction.md`) and the strategist's task list
+for the till was written (`redesign/2026-10-11-redesign-tz-sale.md`): the
+till first, in the new design. Not chosen now: the bottom menu of five
+tabs, the task lists for the other sections, and the older items.
+
+The owner answered three of the task list's ten questions, each with option
+(а), the one recommended when they were asked:
+- **В1. A coat in hand that the books hold none of** is found in the
+  catalogue at the till and sold through «Товар на місці», as a shortage
+  is today (F30): the customer does not wait. Built with the till's search
+  (task P1-5), not yet.
+- **В3. A sale at 0 грн** (a gift) is allowed, with a warning on its line.
+  Built with task P1-8, not yet.
+- **В6. The store is chosen every time** by whoever has two or more; none
+  is remembered.
+
+Built in the first part (tasks P0-1, P0-4, P0-5, P0-6); how it is carried
+out, not decided by the owner:
+- **One store opens straight**, with nothing to choose (the task list's
+  P0-1), and the till is the first tab for whoever
+  sells there; whoever does not sell opens on «Замовлення», as before. A
+  kept operation still opens its own tab, a kept order «Замовлення» too.
+- **The direction's palette, light and dark,** with the theme taken from
+  Telegram's background by Telegram's own rule. Departures from the
+  direction, chosen here: the dark backgrounds of the meaning colours, a
+  few tokens it does not name (edges, focus, shadows), and the light theme
+  changing visibly, as the palette replaces Telegram's colours.
+- **What is sold, the total and the three ways under the thumb,** held at
+  the bottom of the screen once the basket holds something; with «Оплата
+  частинами» it reads «Зараз … · винен …». The
+  server's shortage answer opens above it, in view and focused, its line
+  marked, and kept clear of the panel; a seller who may not write a shelf
+  off is told to remove the line and ask a manager to correct the
+  balance.
+- **A sale paid in parts** leads its receipt with what is paid now and
+  how: «Картка · Проведіть на терміналі 1000,00 грн», never the whole.
+
+Nothing about money, stock or who may do what changes. Built on
+2026-10-15; see the [report](till-redesign-1-report.md).

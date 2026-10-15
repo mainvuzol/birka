@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -79,7 +79,7 @@ async function basket(page: Page): Promise<void> {
     });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
@@ -210,7 +210,7 @@ test("a correction refused for too many requests keeps its count, and is written
     await (commands.length === 1 ? tooMany(route) : route.continue());
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Залишки", exact: true }).click();
   await page
     .getByLabel("Склад для перегляду")

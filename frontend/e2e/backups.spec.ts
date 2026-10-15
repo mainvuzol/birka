@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -32,7 +32,7 @@ function launch(telegramUserId: string): string {
 
 async function enter(page: Page, telegramUserId: string): Promise<void> {
   await page.goto(launch(telegramUserId));
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
 }
 
 function tab(page: Page) {

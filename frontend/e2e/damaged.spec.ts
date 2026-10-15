@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -167,7 +167,7 @@ async function damaged(
 
 async function open(page: Page): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Брак", exact: true }).click();
 }
 
@@ -278,7 +278,7 @@ test("the «Брак» section needs its own permission", async ({ page }) => {
     await route.fulfill({ response, json: body });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
@@ -292,7 +292,7 @@ test("the stock screen shows «Брак» and offers no correction or price ther
 }) => {
   await damaged(page, 1);
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Залишки", exact: true }).click();
   await page
     .getByLabel("Склад для перегляду")

@@ -1,0 +1,25 @@
+- unchanged tree: passed 32 passed (18.7s) 
+- one store asks to be chosen: caught by a single store that does not trade shows its state, with nothing to change to; one store opens straight on the till, with nothing to change to
+- one store offers «Змінити магазин»: caught by a single store that does not trade shows its state, with nothing to change to; one store opens straight on the till, with nothing to change to
+- the till is not the first tab: caught by an unreadable kept invoice holds the till, as it holds the other tabs; in Telegram's dark theme every warning on the till reads at 4.5:1; in Telegram's dark theme the shortage answer and a paper sale's mark read at 4.5:1; in Telegram's light theme every warning on the till reads at 4.5:1; one store opens straight on the till, with nothing to change to; paid in parts, the panel says what is paid now and what is left; the server's shortage opens above the panel, in view and focused; a seller who may not wri; the total and the three ways are in view on a small phone, below the basket; two stores are chosen each time, nothing chosen beforehand, and the till comes first
+- the till comes first without the right to sell: caught by whoever does not sell opens on the orders, as before
+- a kept order does not open «Замовлення»: caught by a kept order its check cannot settle opens on «Замовлення», not on the till
+- Telegram's dark theme is taken as light: caught by in Telegram's dark theme every warning on the till reads at 4.5:1
+- the dark warning background is light: caught by in Telegram's dark theme every warning on the till reads at 4.5:1
+- the dark alert text is the light one: caught by in Telegram's dark theme every warning on the till reads at 4.5:1; in Telegram's dark theme the shortage answer and a paper sale's mark read at 4.5:1
+- the panel is not held at the bottom: caught by the total and the three ways are in view on a small phone, below the basket
+- the shortage answer is not focused: caught by the server's shortage opens above the panel, in view and focused; a seller who may not wri
+- the shortage answer is not scrolled into view: caught by the server's shortage opens above the panel, in view and focused; a seller who may not wri
+- a seller who may not write a shelf off is not told: caught by the server's shortage opens above the panel, in view and focused; a seller who may not wri
+- the short line is not marked: caught by the server's shortage opens above the panel, in view and focused; a seller who may not wri
+- the panel ignores a part payment: caught by paid in parts, the panel says what is paid now and what is left
+- the panel shows on an empty basket: caught by the total and the three ways are in view on a small phone, below the basket
+- the panel does not say what is sold: caught by the total and the three ways are in view on a small phone, below the basket
+- the panel's height is not kept clear: caught by the server's shortage opens above the panel, in view and focused; a seller who may not wri
+- an unreadable kept invoice does not hold the till: caught by an unreadable kept invoice holds the till, as it holds the other tabs
+- a part payment's receipt leads with the whole: caught by paid in parts by card typed from paper, the receipt says the card was charged and never to; paid in parts by «Готівка», the receipt leads with the 1000 paid now, not the 3000; paid in parts by «Картка», the receipt leads with the 1000 paid now, not the 3000; paid in parts by «Переказ», the receipt leads with the 1000 paid now, not the 3000
+- a card part payment does not say to charge the terminal: caught by paid in parts by «Картка», the receipt leads with the 1000 paid now, not the 3000
+- a card part payment from paper says to charge the terminal: caught by paid in parts by card typed from paper, the receipt says the card was charged and never to
+- a transfer part payment says nothing of checking it: caught by paid in parts by «Переказ», the receipt leads with the 1000 paid now, not the 3000
+- the receipt does not say the whole price: caught by paid in parts by «Готівка», the receipt leads with the 1000 paid now, not the 3000; paid in parts by «Картка», the receipt leads with the 1000 paid now, not the 3000; paid in parts by «Переказ», the receipt leads with the 1000 paid now, not the 3000
+23 of 23 caught

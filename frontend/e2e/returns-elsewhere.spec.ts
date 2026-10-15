@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -145,7 +145,7 @@ async function held(
 /** «Повернення» at «Основний», looking among the other stores' sales. */
 async function findElsewhere(page: Page, model: string): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Де купили").selectOption("ELSEWHERE");
   await page.getByLabel("Пошук за назвою товару").fill(model);
@@ -180,7 +180,7 @@ test("goods bought at another store come back here, and this store hands the mon
   });
 
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Де купили").selectOption("ELSEWHERE");
   // The other stores' sales are found, never browsed.
@@ -321,7 +321,7 @@ test("a unit from the other store's own warehouse goes back on sale here, where 
   const before = await held(page, fixture.returns_location_id, variant);
 
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Брак", exact: true }).click();
   const unit = page.getByRole("article").filter({ hasText: model });
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
@@ -413,7 +413,7 @@ test("a kept return of goods from the other store's own warehouse, checked by th
   await page.goto("about:blank");
   answered = true;
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   const confirmed = page.locator("section.notice", {
     has: page.getByRole("heading", { name: "Повернення оформлено" }),
   });
@@ -508,7 +508,7 @@ test("a sale of this store is returned as before, with no store named", async ({
   expect(sale.status()).toBe(201);
 
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Пошук за назвою товару").fill(model);
   await page.getByRole("button", { name: "Знайти" }).click();

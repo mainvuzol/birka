@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -37,7 +37,7 @@ function launch(): string {
 
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
 }
 
@@ -120,7 +120,7 @@ test("a seller sells stock the ledger agrees with, and the sale is recorded once
   ]);
   await expect(
     page.getByText(
-      "Спершу натисніть тут, потім проведіть на терміналі суму, яку покаже чек нижче: вона може змінитися, якщо товару не виявиться на полиці.",
+      "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці.",
     ),
   ).toBeVisible();
   const posted = page.waitForResponse(
@@ -371,11 +371,9 @@ test("the three ways wait for a basket, and an answer recorded without a way nam
   const ways = page.getByRole("group", {
     name: "Продати — як платить покупець",
   });
-  // Nothing to sell yet: none of the three.
-  for (const way of ["Готівка", "Картка", "Переказ"])
-    await expect(
-      ways.getByRole("button", { name: way, exact: true }),
-    ).toBeDisabled();
+  // Nothing to sell yet: none of the three, nor the panel that holds them
+  // (redesign direction §5).
+  await expect(ways).toHaveCount(0);
   await pickFirstProduct(page);
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Картка", exact: true }).click();

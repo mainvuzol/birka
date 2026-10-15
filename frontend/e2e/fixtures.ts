@@ -1,4 +1,4 @@
-import { test as base } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 /**
@@ -39,3 +39,29 @@ export const test = base.extend<{ pageErrorsExpected: boolean }>({
 });
 
 export { expect } from "@playwright/test";
+
+/**
+ * Into a store's workspace. A person with one store is taken into it as the
+ * app opens (redesign P0-1); with two or more, the store is chosen, and this
+ * presses its button. It waits for whichever comes: the choice, the
+ * workspace's sections, or a store's state that offers only «Оновити».
+ */
+export async function openStore(
+  page: Page,
+  name: string | RegExp,
+): Promise<void> {
+  const choice = page.getByRole("button", { name });
+  await expect(
+    choice
+      .or(page.getByRole("navigation", { name: "Розділи" }))
+      .or(page.getByRole("button", { name: "Оновити", exact: true }))
+      .first(),
+  ).toBeVisible();
+  if (!(await choice.isVisible())) return;
+  // The store chosen is the store opened: its name heads the workspace.
+  const label = (await choice.innerText()).split("\n")[0]?.trim() ?? "";
+  await choice.click();
+  await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(
+    label,
+  );
+}

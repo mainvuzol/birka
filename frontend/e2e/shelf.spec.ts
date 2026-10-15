@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -105,7 +105,7 @@ async function till(page: Page): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
@@ -209,14 +209,11 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   expect(recorded).toHaveLength(1);
   expect(await held(page, empty)).toBe(0);
   await page.getByRole("button", { name: "Новий продаж" }).click();
-  // An empty basket offers none of the three ways to sell.
-  const ways = page.getByRole("group", {
-    name: "Продати — як платить покупець",
-  });
-  for (const way of ["Готівка", "Картка", "Переказ"])
-    await expect(
-      ways.getByRole("button", { name: way, exact: true }),
-    ).toBeDisabled();
+  // An empty basket offers none of the three ways to sell, nor their panel
+  // (redesign direction §5).
+  await expect(
+    page.getByRole("group", { name: "Продати — як платить покупець" }),
+  ).toHaveCount(0);
 });
 
 test("an empty shelf whose answer was lost is checked, and not recorded twice", async ({

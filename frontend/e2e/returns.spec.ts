@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -144,7 +144,7 @@ async function held(
 /** The returns tab, searched down to one model's sales. */
 async function find(page: Page, model: string): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Пошук за назвою товару").fill(model);
   await page.getByRole("button", { name: "Знайти" }).click();
@@ -396,7 +396,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
 
 test("the search says when no sale has such goods", async ({ page }) => {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Пошук за назвою товару").fill(`немає ${randomUUID()}`);
   await page.getByRole("button", { name: "Знайти" }).click();
@@ -416,7 +416,7 @@ test("taking returns needs its own permission", async ({ page }) => {
     await route.fulfill({ response, json: body });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
@@ -429,7 +429,7 @@ test("the «Брак» takes no deliveries, and is named in the stock", async ({
   page,
 }) => {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Приймання", exact: true }).click();
   const offered = page.locator(`option[value="${fixture.bin_location_id}"]`);
   await expect(offered).toHaveAttribute("disabled", "");

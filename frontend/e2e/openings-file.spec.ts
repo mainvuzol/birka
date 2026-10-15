@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -184,7 +184,7 @@ async function openings(page: Page): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Початкові залишки" }).click();
 }
 
@@ -1182,7 +1182,7 @@ test("the shared warehouse's list is seen and filled from the other store, and n
       asked.push(request.url());
   });
   await page.getByRole("button", { name: "Змінити магазин" }).click();
-  await page.getByRole("button", { name: "Другий SECOND" }).click();
+  await openStore(page, "Другий SECOND");
   await page.getByRole("button", { name: "Початкові залишки" }).click();
   const listed = page.getByRole("article", { name: `Список ${name}` });
   await expect(listed).toContainText("Веде магазин «Основний»");
@@ -1303,7 +1303,7 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await page.goto(
       `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_south_manager_telegram_user_id) }).toString()}`,
     );
-    await page.getByRole("button", { name: "Південний SOUTH" }).click();
+    await openStore(page, "Південний SOUTH");
     await page.getByRole("button", { name: "Початкові залишки" }).click();
     await page.getByRole("button", { name: "Новий список" }).click();
     const form = page.getByRole("form", { name: "Новий список" });

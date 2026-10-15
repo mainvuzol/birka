@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -169,11 +169,13 @@ function newPhone(): string {
   return `067${String(randomBytes(4).readUInt32BE() % 10_000_000).padStart(7, "0")}`;
 }
 
-/** Two coats in the till's basket, at 1500 each. */
-async function basket(page: Page, coat: Coat): Promise<void> {
+/** Two coats in the till's basket, at 1500 each; typed from paper if said. */
+async function basket(page: Page, coat: Coat, paper = false): Promise<void> {
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  // Ticked first: ticking it empties a basket (G20).
+  if (paper) await page.getByLabel("Вношу продаж з паперу").check();
   const loaded = () =>
     page.waitForResponse(
       (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
@@ -215,7 +217,7 @@ async function debt(page: Page, name: string): Promise<void> {
   // A launch link that differs only in its hash would not reload the app.
   await page.goto("about:blank");
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Борги", exact: true }).click();
   await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
   await page.getByRole("button", { name: "Знайти" }).click();
@@ -456,7 +458,7 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   // Written down before it was sent: a reload still knows what to ask
   // about, and asks at once, with no tap (ADR-0013 §4.3).
   await page.reload();
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await expect(page.getByText("Внесок підтверджено")).toBeVisible();
   await expect(
     page.getByText(`${name}: залишок боргу 1300,00 грн.`),
@@ -572,7 +574,7 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   const name = customer();
   const { model, sale, token } = await onCredit(page, name);
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Пошук за назвою товару").fill(model);
   await page.getByRole("button", { name: "Знайти" }).click();
@@ -664,7 +666,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   expect(await storeOwed(page, first.token)).toBe(before + 200000n);
 
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Борги", exact: true }).click();
   const total = page.getByLabel("Скільки винні магазину");
   await expect(total).toContainText(
@@ -755,7 +757,9 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   const tel = newPhone();
   const collected = posts(page, "/collect");
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
+  // The till opens first (redesign P0-1); the order is in «Замовлення».
+  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(model) }).click();
   await expect(
     page.getByText("Прибув на пошту", { exact: true }),
@@ -817,7 +821,9 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   const { model } = await arrived(page);
   const collected = posts(page, "/collect");
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
+  // The till opens first (redesign P0-1); the order is in «Замовлення».
+  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(model) }).click();
   const collect = page.getByRole("button", {
     name: "Клієнт забрав",
@@ -858,11 +864,9 @@ test("paying in parts needs its own permission", async ({ page }) => {
     await route.fulfill({ response, json: body });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await expect(
-    page.getByRole("group", { name: "Продати — як платить покупець" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Борги", exact: true }),
@@ -883,7 +887,9 @@ test("collecting an order in parts needs the same permission", async ({
     await route.fulfill({ response, json: body });
   });
   await page.goto(launch());
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
+  // The till opens first (redesign P0-1); the order is in «Замовлення».
+  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(model) }).click();
   await expect(
     page.getByRole("button", { name: "Клієнт забрав", exact: true }),
@@ -912,7 +918,7 @@ async function everyDebtOf(
 ): Promise<void> {
   await page.goto("about:blank");
   await page.goto(launch(telegramUserId));
-  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Борги", exact: true }).click();
   await page.getByRole("combobox", { name: "Показати" }).selectOption("ALL");
   await page.getByLabel("Пошук за ім’ям або телефоном").fill(query);
@@ -1083,4 +1089,62 @@ test("a written-off debt's reason is erased with its customer", async ({
   await expect(history).toContainText(
     "Списано 2000,00 грн · Оля · причину стерто разом з даними покупця",
   );
+});
+
+// The receipt of a sale paid in parts leads with what the customer pays now,
+// and how (redesign P0-6): the terminal is charged that, never the whole.
+for (const [way, top, wrong] of [
+  [
+    "Картка",
+    "Картка · Проведіть на терміналі 1000,00 грн",
+    "Проведіть на терміналі 3000,00 грн",
+  ],
+  ["Готівка", "Готівка · Зараз 1000,00 грн", "Проведіть на терміналі"],
+  [
+    "Переказ",
+    "Переказ · Зараз 1000,00 грн — перевірте, що переказ надійшов, перш ніж віддати товар",
+    "Проведіть на терміналі",
+  ],
+] as const) {
+  test(`paid in parts by «${way}», the receipt leads with the 1000 paid now, not the 3000`, async ({
+    page,
+  }) => {
+    const coat = await stocked(page);
+    await basket(page, coat);
+    await page.getByLabel("Оплата частинами").check();
+    await page.getByLabel("Ім’я покупця").fill(customer());
+    await page.getByLabel("Телефон покупця").fill(newPhone());
+    await page.getByLabel("Сплачує зараз, грн").fill("1000");
+    await page.getByRole("button", { name: way, exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано" }),
+    ).toBeVisible();
+    await expect(page.getByText(top)).toBeVisible();
+    await expect(page.getByText(wrong)).toHaveCount(0);
+    await expect(page.getByText("Разом за товар 3000,00 грн")).toBeVisible();
+    await expect(page.getByText("Покупець винен 2000,00 грн")).toBeVisible();
+  });
+}
+
+test("paid in parts by card typed from paper, the receipt says the card was charged and never to charge it again", async ({
+  page,
+}) => {
+  const coat = await stocked(page);
+  await basket(page, coat, true);
+  await page.getByLabel("Оплата частинами").check();
+  await page.getByLabel("Ім’я покупця").fill(customer());
+  await page.getByLabel("Телефон покупця").fill(newPhone());
+  await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await page
+    .getByRole("button", { name: "З паперу · Картка", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Картка · Зараз 1000,00 грн — оплату провели під час збою, на терміналі не проводьте ще раз",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Проведіть на терміналі")).toHaveCount(0);
 });

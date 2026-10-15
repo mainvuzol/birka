@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -141,7 +141,7 @@ function posts(page: Page, ending: string): { bodies: unknown[] } {
 /** The new return's form, at «Центр», on the shared warehouse. */
 async function newReturn(page: Page): Promise<void> {
   await openAs(page, hanna);
-  await page.getByRole("button", { name: "Центр CENTRE" }).click();
+  await openStore(page, "Центр CENTRE");
   await page
     .getByRole("button", { name: "Постачальникам", exact: true })
     .click();
@@ -307,7 +307,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
 
   const supplier = `Брак-постачальник ${randomUUID().slice(0, 6)}`;
   await openAs(page, petro);
-  await page.getByRole("button", { name: /^Ринок MARKET/ }).click();
+  await openStore(page, /^Ринок MARKET/);
   await page.getByRole("button", { name: "Брак", exact: true }).click();
   const unit = page.getByRole("article", { name: coat.model });
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
@@ -373,7 +373,7 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   ).toBeDisabled();
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();
-  await page.getByRole("button", { name: "Центр CENTRE" }).click();
+  await openStore(page, "Центр CENTRE");
   await page
     .getByRole("button", { name: "Перевірити результат повернення" })
     .click();

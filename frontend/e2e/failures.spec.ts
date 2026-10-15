@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page, Request, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -58,6 +58,16 @@ const me = {
       id: ids.store,
       name: "Подільський",
       code: "POD",
+      state: "ACTIVE",
+      state_since: null,
+      permissions: [],
+    },
+    // A second store, so the app stops at the choice: one store opens
+    // straight (redesign P0-1), and these journeys are about that screen.
+    {
+      id: "6a3c1f0e-0000-4000-8000-0000000000b2",
+      name: "Ринок",
+      code: "RIN",
       state: "ACTIVE",
       state_since: null,
       permissions: [],
@@ -258,7 +268,7 @@ test.describe("a screen that breaks", () => {
       page.getByRole("button", { name: "Перезапустити" }).click(),
     ]);
     expect(page.url()).toContain("#tgWebAppData=");
-    await page.getByRole("button", { name: /Подільський/ }).click();
+    await openStore(page, /Подільський/);
     await expect.poll(() => resent.length).toBe(1);
     await expect(
       page.getByRole("heading", { name: "Незавершений продаж" }),
@@ -602,7 +612,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
 
   async function open(page: Page): Promise<void> {
     await page.goto(signedLaunch(fixture.owner_telegram_user_id));
-    await page.getByRole("button", { name: "Основний MAIN" }).click();
+    await openStore(page, "Основний MAIN");
     await tab(page).click();
   }
 
@@ -835,7 +845,7 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     const key = `birka:${scope}:${who.organization}:${who.user}:${fixture.store_id}`;
     await seed(page, { [key]: JSON.stringify(attempt) });
     await page.goto(signedLaunch(fixture.telegram_user_id, "Оля"));
-    await page.getByRole("button", { name: "Основний MAIN" }).click();
+    await openStore(page, "Основний MAIN");
     return key;
   }
 
@@ -900,13 +910,15 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
       ),
     ).toBeVisible();
     expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
-    // The till is the seller's again, with the three ways.
+    // The till is the seller's again; its three ways come with a basket
+    // (redesign direction §5).
     await expect(
       page.getByRole("button", { name: "Змінити магазин" }),
     ).toBeEnabled();
+    await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
     await expect(
-      page.getByRole("group", { name: "Продати — як платить покупець" }),
-    ).toBeVisible();
+      page.getByRole("combobox", { name: "Склад", exact: true }),
+    ).toBeEnabled();
   });
 
   test("a payment is refused and settles, and says it was not taken", async ({

@@ -1,0 +1,70 @@
+{
+  "job": "frontend",
+  "name": "frontend (lint, types, build)",
+  "result": "passed",
+  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 132 modules, built in 73ms",
+  "reasons": [],
+  "commit": "4594f2e",
+  "tree": "clean",
+  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
+  "started": "2026-10-15T10:30:25+03:00",
+  "finished": "2026-10-15T10:30:39+03:00",
+  "duration": "0m13s",
+  "brief": "node v26.5.0 for 24; npm ci replaced by a check that node_modules is exactly the lock",
+  "images": [
+    "none (this job starts no container)"
+  ],
+  "deviations": [
+    "Node v26.5.0 (npm 11.17.0), the host's, instead of node 24.",
+    "`npm ci` replaced by a check that the installed node_modules is exactly package-lock.json, and that package.json agrees with the lock as npm ci checks it; the step fails otherwise (nothing installed, no downloads).",
+    "`npm audit --audit-level=high` runs as in CI: it sends package-lock.json's names and versions to registry.npmjs.org (owner decision 2026-10-08); npm's cache and logs go to the runner's work directory (npm_config_cache), its update check is off.",
+    "`tsc -b` inside `npm run build` reuses the git-ignored frontend/tsconfig.tsbuildinfo where CI starts without one; the separate `npm run typecheck` (tsc --noEmit) still checks every file."
+  ],
+  "gaps": [],
+  "coverage": null,
+  "steps": [
+    {
+      "name": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "npm ci",
+      "status": "replaced: ok",
+      "seconds": 0.1,
+      "code": 0
+    },
+    {
+      "name": "npm audit --audit-level=high",
+      "status": "ok",
+      "seconds": 0.7,
+      "code": 0
+    },
+    {
+      "name": "npm run lint",
+      "status": "ok",
+      "seconds": 8.8,
+      "code": 0
+    },
+    {
+      "name": "npm run typecheck",
+      "status": "ok",
+      "seconds": 1.9,
+      "code": 0
+    },
+    {
+      "name": "npm run build",
+      "status": "ok",
+      "seconds": 1.9,
+      "code": 0
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-15-till-redesign-1-ci-local/frontend.txt"
+}
