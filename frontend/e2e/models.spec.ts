@@ -5,6 +5,7 @@ import {
   more,
   openStore,
   section,
+  sections,
   tapSize,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
@@ -285,6 +286,14 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+  // Its own section stays open under «Ще», every other is held (P1-6).
+  await more(page);
+  await expect(
+    sections(page).getByRole("button", { name: "Моделі", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    sections(page).getByRole("button", { name: "Залишки", exact: true }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Перевірити результат зміни" })

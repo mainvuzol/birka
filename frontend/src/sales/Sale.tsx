@@ -180,7 +180,8 @@ export function Sale({
   const [yesterday, setYesterday] = useState(false);
   // This phone saw the server come back (redesign P1-7): the paper written
   // meanwhile is typed before the drawer closes, or it reads as a surplus and
-  // a shortage. Said once, until answered or the next time it comes back.
+  // a shortage. Said once, until answered or the next time it comes back;
+  // never with the paper mode on, which answers it (`./paper`).
   const back = useReach((state) => state.back);
   const { busy, pending } = useSaleCommand();
   const cache = useQueryClient();
@@ -708,7 +709,7 @@ export function Sale({
   return (
     <section>
       <h2>Продаж</h2>
-      {back && !paper && (
+      {back && (
         <section className="notice" aria-label="Сервер знову відповідає">
           <p>
             Сервер знову відповідає: продажі з паперу можна вносити. Внесіть їх

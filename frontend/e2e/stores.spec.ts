@@ -1,4 +1,4 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import { test, expect, more, openStore, section, sections } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -513,6 +513,14 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     await expect(page.getByText("Незавершена зміна стану")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Борги", exact: true }),
+    ).toBeDisabled();
+    // Its own section stays open under «Ще», every other is held (P1-6).
+    await more(page);
+    await expect(
+      sections(page).getByRole("button", { name: "Магазини", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      sections(page).getByRole("button", { name: "Залишки", exact: true }),
     ).toBeDisabled();
     // Written down before it was sent: a reload still knows what to ask about.
     await page.reload();

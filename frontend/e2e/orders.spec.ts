@@ -131,6 +131,14 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     path: "test-results/order-collected-mobile.png",
     fullPage: true,
   });
+  // «Замовлення» pressed again leaves the order for the store's list.
+  await section(page, "Замовлення");
+  await expect(
+    page.getByRole("heading", { name: "Замовлення магазину" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Замовлення №/ })).toHaveCount(
+    0,
+  );
 });
 test("lost committed response survives reopening and reuses the same command", async ({
   page,

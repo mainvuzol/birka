@@ -293,16 +293,19 @@ function till(page: Page): Locator {
 }
 
 /**
- * The server answers again: the warehouses read once more, and the goods
- * with them.
+ * The server answers again: whatever the till could not read is read once
+ * more — the warehouses, the goods with them, and the sellers in paper mode.
  */
 async function answered(page: Page, server: { down: boolean }): Promise<void> {
   server.down = false;
-  await failed(page)
-    .first()
-    .getByRole("button", { name: "Повторити завантаження" })
-    .click();
-  await expect(failed(page)).toHaveCount(0);
+  await expect(async () => {
+    if ((await failed(page).count()) > 0)
+      await failed(page)
+        .first()
+        .getByRole("button", { name: "Повторити завантаження" })
+        .click({ timeout: 1000 });
+    await expect(failed(page)).toHaveCount(0, { timeout: 1000 });
+  }).toPass();
 }
 
 /** Another section, and the till again: it reads its warehouses anew. */
@@ -421,6 +424,21 @@ test("the reminder's button waits while a sale is being sent, as the tick does",
   release();
   // No answer: the sale is kept, and the server lost again.
   await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(reminder(page)).toHaveCount(0);
+});
+
+test("a server back while the paper is being typed is the reminder answered, and the switch unticked says nothing", async ({
+  page,
+}) => {
+  const server = await tillAfterOutage(page);
+  const paper = page.getByLabel("Вношу продаж з паперу");
+  await paper.check();
+  await expect(page.getByText("Режим: продаж з паперу")).toBeVisible();
+  await answered(page, server);
+  await expect(till(page)).toBeVisible();
+  await expect(reminder(page)).toHaveCount(0);
+  await paper.uncheck();
+  await expect(page.getByText("Режим: продаж з паперу")).toHaveCount(0);
   await expect(reminder(page)).toHaveCount(0);
 });
 

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { backNoted } from "@/shared/reach";
+import { backNoted, useReach } from "@/shared/reach";
 
 /**
  * The till's paper mode, «Вношу продаж з паперу» (ADR-0013 §7; owner
@@ -53,6 +53,14 @@ export function setPaper(storeId: string, on: boolean): void {
     takenBy: nobody,
   });
 }
+
+// The server back while the paper mode is on: the paper is being typed, so
+// the till's reminder is answered already, and is not said once the switch
+// is unticked (redesign P1-7).
+useReach.subscribe((state, previous) => {
+  if (state.back && !previous.back && usePaper.getState().storeId !== null)
+    backNoted();
+});
 
 /** «Хто прийняв» on «Повернення» or in «Борги», for the store in paper mode. */
 export function setTakenBy(
