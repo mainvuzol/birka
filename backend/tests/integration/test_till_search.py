@@ -306,8 +306,10 @@ async def test_ukrainian_letters_read_in_the_alphabet_s_order(maker):
     database's collation, ICU `uk-UA` in production, CI and Compose."""
     engine = create_async_engine(os.environ["BIRKA_TEST_DATABASE_URL"])
     async with engine.connect() as connection:
+        # `datlocprovider` is a one-byte "char", which the driver does not
+        # read as a string: cast, or an ICU database looks like none.
         provider = await connection.scalar(
-            text("SELECT datlocprovider FROM pg_database WHERE datname = current_database()")
+            text("SELECT datlocprovider::text FROM pg_database WHERE datname = current_database()")
         )
     await engine.dispose()
     if provider != "i":
