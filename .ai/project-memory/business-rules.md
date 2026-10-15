@@ -2197,3 +2197,57 @@ out, not decided by the owner:
 
 Nothing about money, stock or who may do what changes. Built on
 2026-10-15; see the [report](till-redesign-1-report.md).
+
+## Owner decision — 2026-10-15 (the till's search, one tap of a size, the app's name)
+
+Asked after the till's first part merged (PR #90): what next, and two of the
+task list's open questions. Each answer was the option recommended when
+asked.
+- **Next: the till's search and one tap of a size** (the task list's P0-2,
+  P0-3): a model is found by a few letters, and a tap on its size puts it in
+  the basket, its quantity and price in the line.
+- **В5. Two approved texts change,** as a seller cannot read them right:
+  «Він увійде в сьогоднішній «Звіт» і в касу…» becomes «Він увійде в
+  сьогоднішні продажі й у касу до наступного закриття.» (a seller does not
+  see «Звіт»), and «Товар без розміру вносьте як «розмір невідомий».»
+  becomes «Товар з невідомим розміром вносьте як «розмір невідомий».»
+  («без розміру» reads as a coat that has no size). Nothing else about
+  paper mode changes.
+- **В4. The app is called «Бірка»**: in its header, on the sign-in and
+  crash screens, and in the browser's tab, where it said «birka».
+
+How it is carried out, not decided by the owner:
+- **The search matches as receiving's does:** every word of what is typed
+  must be in the model's name, its source or its colour, literally; a
+  merged model's old name finds the model that stays (2026-10-03). It
+  starts at two letters, after a pause of a third of a second.
+- **The list reads by the model's name,** then its source and colour, each
+  model's sizes together in receiving's order, a size not known last. A
+  hundred rows a page; «Ще товари» adds the next under them. The order is
+  the database's collation, `uk-UA` in production.
+- **Each model is a tag:** its name, its price for this store, and a chip
+  per size held, «M · 2»; a chip whose every coat an order holds offers
+  nothing to sell, but from paper, where the server's refusal says to let
+  a manager decide about the order first, as before (ADR-0013 §6). Only
+  what the warehouse holds is listed, as before.
+- **A tap on a chip puts one coat in the basket,** a second tap one more.
+  The line has «−» and «+» (1 to 1000) and its own price field, filled
+  with the model's price and changed freely; a model with none leaves it
+  empty, with the cursor in it, and the three ways and «Разом» wait for a
+  price in every line. Any change to the basket is a new sale, as before: the
+  server's earlier answers about the shelf no longer apply.
+- **«Розмір з етикетки» moves into the line** of a coat held with its size
+  not known; its texts are unchanged, «без розміру» included, until the
+  till's words are settled together (task P2-2). A line so read before
+  «Вношу продаж з паперу» is ticked holds the ways until it is taken out:
+  from paper no size is read off a label (G3).
+- **One warehouse to sell from is named, not asked** («Склад: …»); with
+  two, «З якого складу віддаєте?». A warehouse paused or no longer sold
+  from stops being the till's.
+- **«Новий продаж» puts the cursor in the search.**
+- **Not changed here:** the return's own paper text says the same of
+  «Звіт» («Воно увійде в сьогоднішній «Звіт» і в касу…»); В5 named the
+  sale's, so it waits for the owner. The header's
+  «РОБОЧЕ МІСЦЕ ПРОДАВЦЯ» stays until the header is redrawn (P1-6).
+
+Built on 2026-10-15; see the [report](till-redesign-2-report.md).

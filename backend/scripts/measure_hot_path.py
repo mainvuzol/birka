@@ -357,6 +357,22 @@ def cases(world: World, headers: dict[str, str]) -> list[Case]:
             },
         )
 
+    def search(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
+        # What a seller types at the till (redesign P0-2): three letters that
+        # every model shares, a hundred rows to order, and «модель N», whose
+        # number every model or colour containing it matches too.
+        typed = "мод" if index % 2 == 0 else f"модель {index % VARIANTS}"
+        return client.get(
+            "/api/v1/catalog/stock-options",
+            headers=headers,
+            params={
+                "store_id": str(world.store_id),
+                "location_id": str(world.location_id),
+                "limit": 100,
+                "query": typed,
+            },
+        )
+
     return [
         ("GET /catalog/stock-options", options, 200, 1),
         ("GET /catalog/stock-options (6 sellers)", options, 300, 6),
@@ -371,6 +387,8 @@ def cases(world: World, headers: dict[str, str]) -> list[Case]:
             300,
             6,
         ),
+        ("GET /catalog/stock-options · search", search, 200, 1),
+        ("GET /catalog/stock-options · search (6 sellers)", search, 300, 6),
     ]
 
 

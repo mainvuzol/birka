@@ -174,7 +174,7 @@ export function App(): JSX.Element {
   if (failure instanceof ApiError && failure.code === "NO_ACCESS")
     return (
       <main>
-        <h1>birka</h1>
+        <h1>Бірка</h1>
         <h2>Доступу ще немає</h2>
         <p role="alert">
           Цей акаунт Telegram не має доступу до жодного магазину.
@@ -192,7 +192,7 @@ export function App(): JSX.Element {
   if (failure)
     return (
       <main>
-        <h1>birka</h1>
+        <h1>Бірка</h1>
         <h2>Вхід через Telegram</h2>
         <p role="alert">
           {failure.message === "TELEGRAM_REQUIRED"
@@ -205,7 +205,7 @@ export function App(): JSX.Element {
   if (token === undefined || me.data === undefined)
     return (
       <main>
-        <h1>birka</h1>
+        <h1>Бірка</h1>
         <p role="status">Входимо в магазин…</p>
       </main>
     );
@@ -227,7 +227,7 @@ export function App(): JSX.Element {
         <div>
           <span className="eyebrow">РОБОЧЕ МІСЦЕ ПРОДАВЦЯ</span>
           <h1>
-            birka <span> / магазин</span>
+            Бірка <span> / магазин</span>
           </h1>
         </div>
         <span>{visible(me.data.display_name)}</span>

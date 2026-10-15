@@ -152,6 +152,7 @@ async function openBroken(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Щось пішло не так" }),
   ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Бірка");
 }
 
 test.describe("a screen that breaks", () => {

@@ -425,3 +425,72 @@ its `ci` environment. Evidence:
   [`ab/`](../../output/verification/2026-10-08-hot-path/ab/).
 
 This closes row 22 again, for the laptop.
+
+## Update — 2026-10-15: the till's search and one tap of a size
+
+The till's second redesign part ([report](till-redesign-2-report.md)):
+a model is found by a few letters, and a tap on its size puts it in the
+basket, its quantity and price in the line. `GET /catalog/stock-options`
+gained an optional `query` and reads by the model's name; `POST /sales` is
+unchanged.
+
+**Taps: 3,** for a model with a price, in a store with one warehouse to sell
+from:
+
+| | taps |
+|---|---|
+| open «Продаж» (the app opens on it, redesign P0-1) | 0 |
+| choose the warehouse (one sellable: named) | 0 |
+| the search, and three letters typed | 1 |
+| the size's chip («M · 2») | 1 |
+| quantity (`1`) and price (the model's) | 0 |
+| a way: «Готівка», «Картка» or «Переказ» | 1 |
+| **total** | **3** |
+
+A model already on the list's first screen needs no search: 2. The next
+sale: «Новий продаж» puts the cursor in the search, so 3 again, or 2 for a
+model in view after it. A model with no price adds its price, typed; a
+store with two warehouses adds the choice of one, once. The journey
+`till-search.spec.ts` sells one priced coat by the search, its chip and a
+way on a 360 × 640 screen, and the next by «Новий продаж», a chip and a
+way; its store sells from several warehouses, so it chooses one first. The
+one warehouse named rather than asked is `sale.spec.ts`'s.
+
+**The search's cost.** Every word is a literal `LIKE` on the model's, the
+source's and the colour's normalised names, no index, as receiving's search
+is; the order adds receiving's order of sizes as a `CASE` over every size
+the organisation has. The list without a search reads by name too, through
+the same joins, for every screen that reads it («Продаж», «Залишки»,
+«Постачальникам», «Нове замовлення»); the first two cases measure it. The
+harness has two new cases, last, so the earlier eight compare as before:
+`GET /catalog/stock-options · search`, alone and by six sellers,
+alternating three letters every one of the 400 models shares (a hundred
+rows to order) and «модель N», whose number also matches every model and
+colour that contains it, about 160 of the 400: both broad, as a seller's
+few letters are.
+
+**The release reading,** checklist row 22: three runs, each on a fresh
+database migrated to head, on the laptop and PostgreSQL 16.2, the API in
+its `ci` environment, every case gated (`BIRKA_PERF_GATE=all`). Evidence:
+[`output/verification/2026-10-15-till-search-hot-path/`](../../output/verification/2026-10-15-till-search-hot-path/).
+
+| Case | p95, 2026-10-08 (worst of 3) | **p95, 2026-10-15 (worst of 3)** | p50 now | Budget |
+|---|---|---|---|---|
+| `GET /catalog/stock-options` | 11.9 | **12.2** | 7.6–9.8 | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 63.4 | **74.5** | 23.7–25.1 | 300 ms |
+| `POST /sales`, 1 line | 17.6 | **12.1** | 9.3–9.7 | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 52.2 | **53.3** | 33.8–34.3 | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 79.1 | **84.8** | 49.8–50.8 | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 85.9 | **87.7** | 37.7–38.3 | 500 ms |
+| `POST /sales`, paid in parts | 25.0 | **10.9** | 9.4–9.5 | 500 ms |
+| `POST /sales`, paid in parts, 6 sellers | 93.9 | **65.8** | 39.8–41.3 | 500 ms |
+| `GET /catalog/stock-options · search` | — | **19.3** | 8.4–16.9 | 300 ms |
+| `GET /catalog/stock-options · search`, 6 sellers | — | **95.5** | 28.6–31.1 | 300 ms |
+
+- **Every case passes in every run, gated.** The worst p95 is 95.5 ms, the
+  search by six sellers, against 300: about 3× headroom.
+- **The list without a search reads by name now,** through the joins the
+  search needs: by six sellers its p95 is 74.5 ms against 63.4 on
+  2026-10-08, one seller's unchanged.
+- **`POST /sales` is unchanged,** and its figures are within the earlier
+  readings' spread.

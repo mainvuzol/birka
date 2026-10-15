@@ -65,3 +65,43 @@ export async function openStore(
     label,
   );
 }
+
+/**
+ * A coat into the till's basket as a seller puts it (redesign P0-3): a tap
+ * on its size chip, under its model's tag. «Ще товари» is read until the
+ * chip is listed: a warehouse the specs share holds more than a page.
+ */
+export async function tapSize(
+  page: Page,
+  variantId: string,
+  sizeId: string,
+): Promise<void> {
+  const chip = page.locator(`button.chip[data-stock="${variantId}:${sizeId}"]`);
+  const more = page.getByRole("button", { name: "Ще товари" });
+  for (;;) {
+    await expect(page.getByText("Завантажуємо товари…")).toHaveCount(0);
+    if (await chip.isVisible()) break;
+    if (!(await more.isVisible())) break;
+    await more.click();
+    // The next page read: the chip, or «Ще товари» again.
+    await expect(
+      chip.or(more.and(page.locator("button:enabled"))).first(),
+    ).toBeVisible();
+  }
+  await chip.click();
+}
+
+/**
+ * The basket's last line, as the seller sets it (redesign P0-3): «Більше»
+ * until it holds as many, and the price typed over the one it started from.
+ */
+export async function fillLine(
+  page: Page,
+  { quantity = 1, price }: { quantity?: number; price?: string },
+): Promise<void> {
+  const line = page.locator(".line").last();
+  for (let held = 1; held < quantity; held += 1)
+    await line.getByRole("button", { name: "Більше" }).click();
+  await expect(line.locator("output")).toHaveText(String(quantity));
+  if (price !== undefined) await line.getByLabel("Ціна, грн").fill(price);
+}

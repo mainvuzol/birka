@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -84,15 +84,11 @@ function sales(page: Page): SaleBody[] {
 }
 
 async function pick(page: Page, option: Option): Promise<void> {
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${option.product_variant_id}:${option.size_id}`);
+  await tapSize(page, option.product_variant_id, option.size_id);
 }
 
 async function addToBasket(page: Page, quantity: number): Promise<void> {
-  await page.getByLabel("Кількість").fill(String(quantity));
-  await page.getByLabel("Ціна за одиницю, грн").fill("9000.00");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await fillLine(page, { quantity, price: "9000.00" });
 }
 
 function unknownOf(options: Option[]): Option {
@@ -158,10 +154,10 @@ test("a coat held with its size not known is sold with the size on its label", a
   // The till read the shelf again after the sale: one coat fewer without a size.
   await page.getByRole("button", { name: "Новий продаж" }).click();
   await expect(
-    page.locator("option", {
-      hasText: `розмір невідомий · доступно ${String(unknown.available_quantity - 1)}`,
-    }),
-  ).toHaveCount(1);
+    page.locator(
+      `button.chip[data-stock="${unknown.product_variant_id}:${unknown.size_id}"]`,
+    ),
+  ).toHaveText(`Розмір невідомий · ${String(unknown.available_quantity - 1)}`);
 });
 
 test("a sized line short of stock is answered from the coats without a size", async ({
@@ -196,11 +192,14 @@ test("when the till cannot see the coats without a size, the server's refusal of
 }) => {
   const sent = sales(page);
   // The list as a page that does not reach the size-not-known row would show
-  // it: only the M, at whatever the ledger holds.
+  // it: only the M, at whatever the ledger holds. Once the M is sold out, as
+  // a list read before a colleague sold the last one: «M · 1».
+  let held = 0;
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     const response = await route.fetch();
     const { items } = (await response.json()) as { items: Option[] };
     const m = items.find((o) => o.size_id === fixture.size_id);
+    held = m?.available_quantity ?? 0;
     await route.fulfill({
       response,
       json: {
@@ -211,9 +210,9 @@ test("when the till cannot see the coats without a size, the server's refusal of
             display_name: "Лоран шоколад",
             size_label: "M",
             size_is_unknown: false,
-            quantity: 0,
+            quantity: 1,
             reserved_quantity: 0,
-            available_quantity: 0,
+            available_quantity: 1,
           },
         ],
         has_more: false,
@@ -223,7 +222,8 @@ test("when the till cannot see the coats without a size, the server's refusal of
   const [m] = await enter(page);
   if (!m) throw new Error("stubbed");
   await pick(page, m);
-  await addToBasket(page, m.available_quantity + 1);
+  // One more than the ledger holds.
+  await addToBasket(page, held + 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await page.getByRole("button", { name: /Товар на місці/ }).click();
 

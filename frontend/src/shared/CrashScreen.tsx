@@ -78,7 +78,7 @@ function Crashed(): JSX.Element {
   }, []);
   return (
     <main data-crashed="">
-      <h1>birka</h1>
+      <h1>Бірка</h1>
       <h2>Щось пішло не так</h2>
       {kept ? (
         <p>

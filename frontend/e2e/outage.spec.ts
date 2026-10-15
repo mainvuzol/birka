@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -331,11 +331,8 @@ async function openTill(page: Page): Promise<void> {
 
 /** One coat of size M in the basket at 3000,00 грн. */
 async function basket(page: Page, size = ids.size): Promise<void> {
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${ids.variant}:${size}`);
-  await page.getByLabel("Ціна за одиницю, грн").fill("3000");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await tapSize(page, ids.variant, size);
+  await fillLine(page, { price: "3000" });
 }
 
 function pay(page: Page, label: string) {
@@ -465,7 +462,7 @@ test.describe("1. the seller is told to sell on paper", () => {
       .getByRole("button", { name: "Повторити завантаження" })
       .click();
     await expect(
-      page.getByRole("combobox", { name: "Товар і розмір", exact: true }),
+      page.getByRole("searchbox", { name: "Знайти модель" }),
     ).toBeVisible();
   });
 
@@ -722,7 +719,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
-      page.getByRole("combobox", { name: "Товар і розмір", exact: true }),
+      page.getByRole("searchbox", { name: "Знайти модель" }),
     ).toBeVisible();
     await expect.poll(() => server.sales.length).toBe(1);
     // Still no answer: kept, with no time it would wrongly claim to wait
@@ -938,10 +935,7 @@ test("4. an offline phone never leaves «Повторити» waiting, and reads
   await openTill(page);
   const warehouses = page.getByRole("combobox", { name: "Склад", exact: true });
   await warehouses.selectOption(ids.own);
-  const goods = page.getByRole("combobox", {
-    name: "Товар і розмір",
-    exact: true,
-  });
+  const goods = page.getByRole("searchbox", { name: "Знайти модель" });
   await expect(goods).toBeVisible();
   // Vite's development client reloads the whole page when its socket comes
   // back: this tells a page read again by itself from a page loaded anew.
@@ -1001,7 +995,7 @@ test("6. a sale typed from paper carries the mark, says who sold and from where,
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Продаж позначать «продано під час збою». Він увійде в сьогоднішній «Звіт» і в касу до наступного закриття.",
+      "Продаж позначать «продано під час збою». Він увійде в сьогоднішні продажі й у касу до наступного закриття.",
     ),
   ).toBeVisible();
   await page
@@ -1109,7 +1103,7 @@ test("6b. the series ends when the switch is unticked, and when the store is lef
   await openStore(page, /Подільський/);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(
-    page.getByRole("combobox", { name: "Товар і розмір", exact: true }),
+    page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeVisible();
   await expect(paper).not.toBeChecked();
   await expect(
@@ -1244,14 +1238,15 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
   test("no size read off a label in paper mode", async ({ page }) => {
     await serve(page);
     await openTill(page);
-    await page
-      .getByRole("combobox", { name: "Товар і розмір", exact: true })
-      .selectOption(`${ids.variant}:${ids.unknownSize}`);
+    await tapSize(page, ids.variant, ids.unknownSize);
     await expect(page.getByLabel("Розмір з етикетки")).toBeVisible();
     await page.getByLabel("Вношу продаж з паперу").check();
     await expect(page.getByLabel("Розмір з етикетки")).toHaveCount(0);
+    // Owner decision, 2026-10-15 (В5): «без розміру» read as «безрозмірна».
     await expect(
-      page.getByText("Товар без розміру вносьте як «розмір невідомий»."),
+      page.getByText(
+        "Товар з невідомим розміром вносьте як «розмір невідомий».",
+      ),
     ).toBeVisible();
   });
 
@@ -1462,11 +1457,8 @@ test.describe("8. the real server keeps the mark", () => {
       .selectOption({ label: "Ганна" });
     await page.getByLabel("Час з паперу").fill("19:40");
     await page.getByLabel("Це було вчора").check();
-    await page
-      .getByRole("combobox", { name: "Товар і розмір", exact: true })
-      .selectOption(`${coat.variant}:${coat.size}`);
-    await page.getByLabel("Ціна за одиницю, грн").fill("2500");
-    await page.getByRole("button", { name: "Додати в кошик" }).click();
+    await tapSize(page, coat.variant, coat.size);
+    await fillLine(page, { price: "2500" });
     await expect(page.getByText("Продавець: Ганна · склад:")).toBeVisible();
     const sold = page.waitForResponse(
       (r) =>

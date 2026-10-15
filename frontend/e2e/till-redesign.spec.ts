@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -107,11 +107,8 @@ async function oneLine(page: Page, quantity = 1): Promise<void> {
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.till_location_id);
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
-  await page.getByLabel("Кількість").fill(String(quantity));
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await fillLine(page, { quantity });
 }
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

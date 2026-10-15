@@ -22,8 +22,9 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.errors import (
     DamagedStockClosedError,
@@ -34,12 +35,20 @@ from app.core.errors import (
     ValidationFailedError,
 )
 from app.core.logging import get_logger
+from app.core.text import is_storable
 from app.modules.audit import service as audit
 from app.modules.authz.locations import readable_location_ids, require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
-from app.modules.catalog.models import EntityStatus, ProductVariant
-from app.modules.catalog.read import unknown_size_ids
+from app.modules.catalog.models import (
+    AttributeTerm,
+    CanonicalConcept,
+    EntityStatus,
+    ProductFamily,
+    ProductVariant,
+    SourceIdentity,
+)
+from app.modules.catalog.read import real_sizes, unknown_size_ids
 from app.modules.catalog.validation import (
     hold_current_variants,
     hold_stock_variants,
@@ -817,6 +826,145 @@ async def readable_stock(
     The query lives here rather than in the router so invariant I23 has
     somewhere to be enforced for reads at all.
     """
+    granted = await _readable_places(
+        session,
+        organization_id=organization_id,
+        store_id=store_id,
+        location_id=location_id,
+        scope=scope,
+    )
+    if not granted:
+        return []
+    rows = (
+        await session.scalars(
+            select(Inventory)
+            .where(Inventory.location_id.in_(granted), Inventory.quantity > 0)
+            .order_by(Inventory.location_id, Inventory.product_variant_id, Inventory.size_id)
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return [_stock_row(row) for row in rows]
+
+
+async def stock_for_sale(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    location_id: uuid.UUID,
+    scope: RequestScope,
+    query: str = "",
+    limit: int = 100,
+    offset: int = 0,
+) -> list[StockRow]:
+    """What one warehouse holds, as the till lists it: by name, a search narrowing it.
+
+    The same balances as `readable_stock`, under the same access (I23), and
+    only those above nothing. Ordered by the model's name, its source and its
+    colour, then its sizes in the order receiving reads them, so a model's
+    sizes stand together and pages never shuffle.
+
+    Every word of the query must match the model, the source or the colour,
+    as in receiving's search: "лоран шоколад" finds the chocolate Лоран and
+    not every Лоран. Matching is literal, and a merged model's old name leads
+    to the model that stays (owner decision, 2026-10-03). This is discovery,
+    never identity matching.
+    """
+    if len(query) > 200 or not is_storable(query):
+        raise ValidationFailedError("Search text must contain at most 200 valid characters")
+    granted = await _readable_places(
+        session,
+        organization_id=organization_id,
+        store_id=store_id,
+        location_id=location_id,
+        scope=scope,
+    )
+    if not granted:
+        return []
+    colour = aliased(AttributeTerm)
+    statement = (
+        select(Inventory)
+        .join(ProductVariant, ProductVariant.id == Inventory.product_variant_id)
+        .join(ProductFamily, ProductFamily.id == ProductVariant.product_family_id)
+        .join(CanonicalConcept, CanonicalConcept.id == ProductFamily.canonical_concept_id)
+        .outerjoin(SourceIdentity, SourceIdentity.id == ProductFamily.source_identity_id)
+        .outerjoin(colour, colour.id == ProductVariant.color_term_id)
+        .where(Inventory.location_id.in_(granted), Inventory.quantity > 0)
+    )
+    words = query.casefold().split()
+    if words:
+        named = aliased(ProductVariant)
+        named_family = aliased(ProductFamily)
+        named_concept = aliased(CanonicalConcept)
+        named_source = aliased(SourceIdentity)
+        named_colour = aliased(AttributeTerm)
+        matched = (
+            select(func.coalesce(named.merged_into_id, named.id))
+            .join(named_family, named_family.id == named.product_family_id)
+            .join(named_concept, named_concept.id == named_family.canonical_concept_id)
+            .outerjoin(named_source, named_source.id == named_family.source_identity_id)
+            .outerjoin(named_colour, named_colour.id == named.color_term_id)
+            .where(named_family.organization_id == organization_id)
+        )
+        for word in words:
+            pattern = _literal_pattern(word)
+            matched = matched.where(
+                or_(
+                    named_concept.normalized_name.like(pattern, escape="\\"),
+                    named_source.normalized_name.like(pattern, escape="\\"),
+                    named_colour.normalized_name.like(pattern, escape="\\"),
+                )
+            )
+        statement = statement.where(Inventory.product_variant_id.in_(matched))
+    # Receiving's order of sizes; "size not known" is not among them, and
+    # comes last.
+    ranks = {
+        option.size_id: rank
+        for rank, option in enumerate(await real_sizes(session, organization_id=organization_id))
+    }
+    size_order = case(ranks, value=Inventory.size_id, else_=len(ranks)) if ranks else literal(0)
+    rows = (
+        await session.scalars(
+            statement.order_by(
+                CanonicalConcept.normalized_name,
+                SourceIdentity.normalized_name.nulls_first(),
+                colour.normalized_name.nulls_first(),
+                Inventory.product_variant_id,
+                size_order,
+                Inventory.size_id,
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return [_stock_row(row) for row in rows]
+
+
+def _literal_pattern(value: str) -> str:
+    return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def _stock_row(row: Inventory) -> StockRow:
+    return StockRow(
+        location_id=row.location_id,
+        product_variant_id=row.product_variant_id,
+        size_id=row.size_id,
+        quantity=row.quantity,
+        reserved_quantity=row.reserved_quantity,
+        available_quantity=row.quantity - row.reserved_quantity,
+    )
+
+
+async def _readable_places(
+    session: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    store_id: uuid.UUID,
+    location_id: uuid.UUID | None,
+    scope: RequestScope | None,
+) -> set[uuid.UUID]:
+    """The warehouses whose stock this store may read, narrowed to one if named."""
     if scope is not None:
         if scope.organization_id != organization_id:
             raise PermissionDeniedError("Stock scope organization mismatch")
@@ -851,28 +999,7 @@ async def readable_stock(
         if location_id not in granted:
             raise PermissionDeniedError("Private stock requires a direct store permission")
         granted &= {location_id}
-    if not granted:
-        return []
-    rows = (
-        await session.scalars(
-            select(Inventory)
-            .where(Inventory.location_id.in_(granted), Inventory.quantity > 0)
-            .order_by(Inventory.location_id, Inventory.product_variant_id, Inventory.size_id)
-            .limit(limit)
-            .offset(offset)
-        )
-    ).all()
-    return [
-        StockRow(
-            location_id=row.location_id,
-            product_variant_id=row.product_variant_id,
-            size_id=row.size_id,
-            quantity=row.quantity,
-            reserved_quantity=row.reserved_quantity,
-            available_quantity=row.quantity - row.reserved_quantity,
-        )
-        for row in rows
-    ]
+    return granted
 
 
 async def units_held(
@@ -964,6 +1091,7 @@ __all__ = [
     "sale_correction_ids",
     "sale_reclassification_ids",
     "sale_shortage_ids",
+    "stock_for_sale",
     "stock_under_merged_models",
     "transfer_movement_ids",
     "validate_catalog_merges",
