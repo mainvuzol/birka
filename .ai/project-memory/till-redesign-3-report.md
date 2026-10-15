@@ -1,7 +1,9 @@
 # The till's receipt and its small things — 2026-10-15
 
 Baseline: `99e1a40` (the till's search and one tap of a size, PR #91).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty-six of twenty-six ways of breaking it caught. Not yet felt on a real
+phone.
 Branch: `feat/till-receipt`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 P1-1, P1-2, P1-8, P1-9. Owner: business-rules.md, "the till's receipt and
 its small things; the first days' paper" (2026-10-15).
@@ -97,11 +99,44 @@ Nothing about money, stock or who may do what changes.
 
 ## Review
 
-TODO(final).
+An independent review of `5cfb69c` found the receipt's counts true to the
+ledger in every scenario it built — a found coat, a shortage and two sizes
+read off labels in one sale, a line dropped as empty, replays — and the
+following, all addressed in `a1e0d7b`:
+- **The backend suite was red (a blocker, in tests only):** two replay
+  tests of answers kept from before pinned their exact shape, which now
+  gains the new fields as null.
+- **«Оформити повернення» could leave its sale to open later,** for another
+  customer, when the list could not be read or the tab was left before it
+  came.
+- **The error buzz answered the shelf's question,** against the task list's
+  criterion; it now answers a refusal only.
+- **The keyboard's action key only changed its label;** Enter now moves on.
+- **Tests that would pass with the feature broken:** one coat for one
+  movement, no mixed basket, the stale-list guard unexercised, the no-price
+  sentence unchecked.
+- **Nits:** Telegram's version read only from the hash, a size lookup for
+  every sale, «absent» for null, the 44 px rule's reach, and buzzes said of
+  every answer. A paper sale returned from its receipt is a paper return:
+  left as a reading for the owner.
 
 ## Evidence
 
-TODO(final).
+- [`output/verification/2026-10-15-till-receipt/`](../../output/verification/2026-10-15-till-receipt/):
+  `mutants.py` and `mutants.txt`, twenty-six ways of breaking it, all caught.
+- **CI, run locally at `f08300d`** ([summary](../../output/verification/2026-10-15-till-receipt-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 420 on PostgreSQL 17;
+  - e2e: 314 journeys;
+  - hot path: worst p95 94.5 ms (the search by six sellers) and 69.7 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- **A first run at the same commit failed one backend test, not this
+  change's:** `test_backup_limits.py::test_a_tool_that_hangs_is_stopped_and_its_step_says_so`
+  (from #67) stops a fake tool after 0.5 s, and under the run's load the
+  shell had not yet written its process id, so its file was missing. It
+  passed ten runs of ten on the idle laptop and in the second run; making
+  it independent of a shell's start is a task of its own.
 
 ## Not covered here
 
