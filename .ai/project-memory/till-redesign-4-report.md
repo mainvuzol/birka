@@ -52,10 +52,12 @@ the bot does not tell sellers; the till does.
   the till says «Сервер знову відповідає: продажі з паперу можна вносити.
   Внесіть їх до закриття каси.», with «Вношу продаж з паперу», which ticks
   the same switch as the tick, and «Пізніше».
-  - Either answers it, and so does the paper switch ticked on any screen;
-    it is said again only after the server is lost and back once more, and
-    never while the paper mode is on or the server does not answer. Its
-    button waits, as the tick does, while a sale is on its way.
+  - Either answers it, and so does the paper switch ticked on any screen,
+    or the server coming back while the paper mode is on: the paper is
+    being typed, and nothing is said once the switch is unticked. It is
+    said again only after the server is lost and back once more, and never
+    while the server does not answer. Its button waits, as the tick does,
+    while a sale is on its way.
   - Only in the phone's memory: a reopened app says nothing until it sees
     an outage itself. The bot tells sellers nothing (owner, В7 (б)).
 
@@ -63,11 +65,64 @@ Nothing about money, stock, marks or who may do what changes.
 
 ## How it was built and proven
 
-TODO(final)
+- **Journeys** (`till-sections.spec.ts`, 8):
+  - a seller's row at 360 px: the four and «Ще», one line, no label cut,
+    no sideways scroll, under «Центр · Ліда» with no «Змінити магазин»;
+    «Ще» holding exactly the seller's six; two taps to «Залишки», «Ще»
+    closing on it with the focus kept and marked as the section's own;
+    «Ще» never opening again on the till, nor on a section pressed again;
+  - whoever does none of the counter's work: «Ще» alone, holding only what
+    they may open;
+  - the owner's row at 360 px, «Ще ⚠» included, and «Ще» holding the
+    owner's sections;
+  - the reminder: said once the server is back, its button ticking the
+    switch, nothing after the switch is unticked; «Пізніше» putting it
+    away until the next outage, nothing said while the server is lost
+    again, the tick answering it; its button waiting while a sale is on
+    its way; a server back while the paper is typed asking for nothing;
+    a phone that never lost the server never reminded.
+- **Every journey opens sections as a person does** (`fixtures.ts`:
+  `section`, `more`, `sections`), and each one that says a section is
+  absent or held opens «Ще» first. The kept-command journeys of
+  «Постачальникам», «Накладні», «Моделі» and «Магазини» see their own
+  section open and «Залишки» held; «Замовлення» pressed on an order leads
+  back to the list; the receipt's «Оформити повернення» closes «Ще»; the
+  backups and the server's trouble mark «Ще ⚠» and «Резервні копії ⚠».
+- **Seen at 360 px** in light and dark: the row, «Ще» open, the reminder,
+  and the owner's «Ще ⚠» (screenshots taken locally, not kept).
+- **Mutation:** thirty-one ways of breaking it, one at a time, each against
+  the journeys meant to catch it on a fresh seed, after the unchanged tree
+  passed: all caught (`output/verification/2026-10-16-till-sections/`).
+  - A first run caught 25 of 28. Three survived, and a journey now closes
+    each: a section with a rule of its own held like every other while its
+    own command is kept; «Замовлення» leaving an order open; and the
+    reminder's guard against the paper mode, which nothing could reach.
+    That guard became a rule: the server back while the paper is typed
+    answers the reminder.
+  - The three other sections with rules of their own («Накладні»,
+    «Моделі», «Магазини») were added to the second run.
+  - The backups journey that counts nights fails on the shared E2E
+    database, which keeps every run's nights, unchanged as with each
+    mutant; it is left out of the verdicts, and passes in CI's fresh one.
 
 ## Review
 
-TODO(final)
+An independent review of the change before its first commit found no
+blocker and every section's right and rule the same as before, and the
+following, all addressed in `bdda1c6`:
+- **«Ще» opened again by itself** on the section it was opened on, coming
+  back to it, its menu over the till: a section chosen now forgets it.
+- **The check that the reminder goes while the server is lost again could
+  not fail:** it ran after «Пізніше» had put it away. It now runs first.
+- **The focus fell to the page** when the chosen button went with «Ще»: it
+  stays on «Ще», which now says when the section open is its own.
+- **The openings' «Рядки списку» filter spread out** on wide screens, by
+  the narrowed rule: restored.
+- **A row that cannot shrink** pushed the page sideways on a narrower
+  screen: a label is cut short instead, and the journeys check none is cut
+  at 360 px.
+- **Nothing checked «Резервні копії ⚠» for the server's trouble**, nor the
+  reminder's button while a sale is on its way: both are journeys now.
 
 ## Evidence
 

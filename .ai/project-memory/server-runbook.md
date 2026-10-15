@@ -218,7 +218,8 @@ Follow the [backup runbook](backup-restore-runbook.md#setting-it-up), steps
 - the read-only user for the owner's computer.
 
 **The release is not done until the owner's «Резервні копії» section shows
-a good night.**
+a good night.** It is under «Ще», beside «Продаж», «Повернення», «Борги» and
+«Каса»; «Ще ⚠» says a night or the server needs the owner.
 
 ### 8a. Being told when something fails
 

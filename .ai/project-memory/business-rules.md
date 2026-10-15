@@ -2329,8 +2329,9 @@ How it is carried out, not decided by the owner:
   the till says once:** «Сервер знову відповідає: продажі з паперу можна
   вносити. Внесіть їх до закриття каси.», with «Вношу продаж з паперу»,
   which ticks the same switch as the tick, and «Пізніше». Either answers it,
-  and so does ticking the switch on any screen; it is said again only after
-  the server is lost and back once more. It is the phone's own memory: a
-  reopened app says nothing until it sees an outage itself.
+  and so does ticking the switch on any screen, or the server coming back
+  while the paper mode is on: the paper is being typed. It is said again
+  only after the server is lost and back once more. It is the phone's own
+  memory: a reopened app says nothing until it sees an outage itself.
 
 Built on 2026-10-16; see the [report](till-redesign-4-report.md).
