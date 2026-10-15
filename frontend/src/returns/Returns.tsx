@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
@@ -50,11 +50,20 @@ export function Returns({
   token,
   journalKey,
   blocked,
+  open = null,
+  opened,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   blocked: boolean;
+  /**
+   * A sale to open at once, from its receipt (redesign P1-2): the store's
+   * newest, so it is on the first page; if it is not, the list shows.
+   */
+  open?: string | null;
+  /** Called once the sale asked for was looked for. */
+  opened?: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
   const [query, setQuery] = useState("");
@@ -80,6 +89,28 @@ export function Returns({
     enabled: searching,
     retry: false,
   });
+
+  useEffect(() => {
+    if (open === null) return;
+    // The list could not be read: the list's own failure shows, and the
+    // sale is not opened later, for another customer (review, 2026-10-15).
+    if (sales.isError) {
+      opened?.();
+      return;
+    }
+    // Read afresh, never from a page cached before the sale was made.
+    if (!sales.isSuccess || sales.isFetching) return;
+    const sale = sales.data.sales.find((each) => each.id === open);
+    if (sale) setSelected(sale);
+    opened?.();
+  }, [
+    open,
+    sales.isError,
+    sales.isSuccess,
+    sales.isFetching,
+    sales.data,
+    opened,
+  ]);
 
   async function settled(refund: Refund, sent: ReturnPart[]): Promise<void> {
     setDone({ refund, sent });

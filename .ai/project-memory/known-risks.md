@@ -1413,3 +1413,22 @@ See the [report](till-redesign-2-report.md).
   adds the rest under the same tag.
 - **On a real phone:** the keyboard over a line's price field, and how far
   the search scrolls the list, are not seen on a device yet.
+
+## The till's receipt and its small things — 2026-10-15
+
+See the [report](till-redesign-3-report.md).
+
+- **«Оформити повернення» opens the store's newest sales,** read afresh,
+  and the receipt's sale among them; if as many sales were made since as a
+  page holds (20), the list shows instead, and the seller finds it there.
+- **Haptics are asked of Telegram 6.1 and later only,** as its launch data
+  names its version; an older one, or none named, is not asked.
+- **A sale's answers stored before its sizes and counts** (any sale before
+  this change, read again or replayed) say the size from the basket the
+  phone sent, or none, and the corrections without a number.
+- **The first days' paper mark (В2) is decided, not built:** until it is,
+  the first days' paper sales are typed as the 2026-09-29 rule says.
+- **A paper sale returned from its own receipt is a paper return:** the
+  switch is the store's, so the return carries «під час збою» and says the
+  money was handed over then. For a typo in a paper sale this nets out in
+  the drawer; whether it is the reading wanted is a question for the owner.

@@ -776,6 +776,11 @@ Related changes elsewhere:
   the line's shortfall at that size. It needs `inventory:correct_during_sale`
   (sellers have it) and is audited. The response lists both movements in
   `size_reclassifications`.
+- A sale's answer (`POST /api/v1/sales`, `GET /api/v1/sales/{id}`) names each
+  line's frozen `size` («UNKNOWN» for a size not known) and counts its in-sale
+  corrections in units, from the movements written: `found_quantity`,
+  `missing_quantity` and `clarified: [{size, quantity}]` (redesign P1-1).
+  Answers stored before these fields give them as null.
 - `POST /inventory/adjustments` no longer accepts the two
   `SIZE_RECLASSIFICATION_*` reasons (422): each is half of a pair only a sale
   writes.

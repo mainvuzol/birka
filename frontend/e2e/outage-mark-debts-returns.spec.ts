@@ -177,6 +177,12 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   await expect(
     page.getByRole("region", { name: "Режим: з паперу" }),
   ).toContainText("Гроші, які віддали під час збою, вдруге не віддавайте.");
+  // A seller does not see «Звіт» (owner, 2026-10-15).
+  await expect(
+    page.getByRole("region", { name: "Режим: з паперу" }),
+  ).toContainText(
+    "Воно увійде в сьогоднішні повернення й у касу до наступного закриття.",
+  );
   await page
     .getByRole("combobox", { name: "Хто прийняв" })
     .selectOption({ label: "Ганна" });

@@ -42,11 +42,12 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NamedTuple
 
 from fastapi import APIRouter, Header, Query, Response, status
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ScopeDep, SessionDep, SettingsDep
 from app.core import idempotency
@@ -56,6 +57,7 @@ from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.cash.current import sale_methods
+from app.modules.catalog.read import size_labels
 from app.modules.credit import service as credit_service
 from app.modules.refunds.service import refunded_quantities
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
@@ -78,6 +80,7 @@ from app.modules.sales.service import (
     create_sale,
     reclassification_ids,
     shortage_ids,
+    units_of,
 )
 from app.modules.sales.shelf import ShelfLine, read_empty_shelf, report_empty_shelf
 from app.modules.tenancy.service import LocationCapability, back_on_sale_locations, store_names
@@ -271,6 +274,16 @@ class SaleItemResponse(BaseModel):
     final_unit_price: Decimal
     line_total: Decimal
     display_name: str
+    # The size as the receipt froze it, «UNKNOWN» for a size not known
+    # (redesign P1-1). Null in answers stored before it was given.
+    size: str | None = None
+
+
+class SaleClarifiedResponse(BaseModel):
+    """Coats sold with the size read off their label, out of "size not known"."""
+
+    size: str
+    quantity: int
 
 
 class SaleCreditResponse(BaseModel):
@@ -324,6 +337,12 @@ class SaleResponse(BaseModel):
         ),
     )
     credit: SaleCreditResponse | None = None
+    # The movements above, in units, for the receipt (redesign P1-1): found on
+    # the shelf and added, missing and written off, sold with a size read off
+    # a label. Counted from the ledger; null in answers stored before.
+    found_quantity: int | None = None
+    missing_quantity: int | None = None
+    clarified: list[SaleClarifiedResponse] | None = None
     # The way the seller pressed, in the answer to the command and its stored
     # snapshot. Absent from answers given before it was asked; on a read,
     # only for whoever sold it and the owner and managers (ADR-0012, G32).
@@ -334,6 +353,29 @@ class SaleResponse(BaseModel):
     outage: OutageMarkResponse | None = None
 
 
+class ReceiptUnits(NamedTuple):
+    found: int
+    missing: int
+    clarified: list[SaleClarifiedResponse]
+
+
+async def _units(session: AsyncSession, sale: Sale) -> ReceiptUnits:
+    """The receipt's units, from the movements the sale wrote."""
+    units = await units_of(session, sale)
+    # Most sales clarify nothing: no second query for them.
+    labels = await size_labels(session, list(units.clarified)) if units.clarified else {}
+    return ReceiptUnits(
+        found=units.found,
+        missing=units.missing,
+        clarified=[
+            SaleClarifiedResponse(size=labels[size_id], quantity=quantity)
+            for size_id, quantity in sorted(
+                units.clarified.items(), key=lambda pair: (labels[pair[0]], str(pair[0]))
+            )
+        ],
+    )
+
+
 def _to_response(
     sale: Sale,
     items: list[SaleItem],
@@ -342,8 +384,12 @@ def _to_response(
     reclassifications: list[uuid.UUID],
     credit: credit_service.CreditView | None = None,
     outage: MarkView | None = None,
+    units: ReceiptUnits | None = None,
 ) -> SaleResponse:
     return SaleResponse(
+        found_quantity=units.found if units else None,
+        missing_quantity=units.missing if units else None,
+        clarified=units.clarified if units else None,
         outage=_outage(outage),
         payment_method=sale.payment_method,
         credit=(
@@ -372,6 +418,7 @@ def _to_response(
                 final_unit_price=item.final_unit_price,
                 line_total=item.line_total,
                 display_name=item.display_name_snapshot,
+                size=item.variant_snapshot.get("size"),
             )
             for item in items
         ],
@@ -511,6 +558,7 @@ async def create(
             opened,
             # No query for an ordinary sale: it carries no mark.
             (await marks_of(session, [result.sale])).get(result.sale.id),
+            await _units(session, result.sale),
         )
     )
     result.sale.response_snapshot = body.model_dump(mode="json")
@@ -767,6 +815,7 @@ async def read_sale(sale_id: uuid.UUID, scope: ScopeDep, session: SessionDep) ->
             await shortage_ids(session, sale),
             await reclassification_ids(session, sale),
             outage=(await marks_of(session, [sale])).get(sale.id),
+            units=await _units(session, sale),
         )
     # Every holder of `sale:view` reads any of the store's sales, a seller
     # counting the drawer blind among them: the way only for whoever sold it

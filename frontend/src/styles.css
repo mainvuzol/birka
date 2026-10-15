@@ -319,6 +319,8 @@ textarea {
 .check {
   flex-direction: row;
   align-items: center;
+  /* The whole row is the target, at least 44 px (redesign P1-9). */
+  min-height: 44px;
 }
 .check input {
   width: 23px;
@@ -655,4 +657,17 @@ html {
 }
 .line .price-error {
   color: var(--debt);
+}
+
+/* A line priced at nothing (owner, В3 (а)): said, never refused. */
+.line .price-warn {
+  color: var(--warn);
+}
+/* The receipt's way to return what was sold by mistake (redesign P1-2). */
+.return-offer {
+  margin-top: 18px;
+}
+.return-offer button {
+  margin-top: 8px;
+  display: block;
 }

@@ -1073,6 +1073,7 @@ __all__ = [
     "MovementRequest",
     "OpenedLine",
     "OpeningBalanceLine",
+    "SaleUnits",
     "StockRow",
     "VariantBalance",
     "apply_catalog_merge",
@@ -1091,6 +1092,7 @@ __all__ = [
     "sale_correction_ids",
     "sale_reclassification_ids",
     "sale_shortage_ids",
+    "sale_units",
     "stock_for_sale",
     "stock_under_merged_models",
     "transfer_movement_ids",
@@ -1137,6 +1139,39 @@ async def sale_reclassification_ids(
     return await repository.sale_reclassification_ids(
         session, organization_id=organization_id, sale_id=sale_id
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SaleUnits:
+    """What a sale's in-sale adjustments did, in units, for its receipt."""
+
+    found: int
+    missing: int
+    # The size read off each label, and how many coats were sold as it.
+    clarified: dict[uuid.UUID, int]
+
+
+async def sale_units(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> SaleUnits:
+    """Units found on the shelf, written off as missing, and read off a label.
+
+    Counted from the movements the sale wrote, never from what was asked: a
+    shortage writes off what the ledger believed less what was there, which
+    only the ledger knows (redesign P1-1).
+    """
+    found = missing = 0
+    clarified: dict[uuid.UUID, int] = {}
+    for reason, size_id, delta in await repository.sale_adjustment_units(
+        session, organization_id=organization_id, sale_id=sale_id
+    ):
+        if reason == MovementReason.FOUND_DURING_SALE:
+            found += delta
+        elif reason == MovementReason.MISSING_AT_SALE:
+            missing -= delta
+        else:
+            clarified[size_id] = clarified.get(size_id, 0) + delta
+    return SaleUnits(found=found, missing=missing, clarified=clarified)
 
 
 async def refund_return_movement_ids(

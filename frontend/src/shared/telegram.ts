@@ -1,10 +1,15 @@
-import { isColorDark, on, postEvent } from "@telegram-apps/sdk-react";
+import { isColorDark, on, postEvent, supports } from "@telegram-apps/sdk-react";
 
 /** Launch credentials stay in memory: the SDK launch reader persists them. */
 export function telegramInitData(): string | null {
+  return launchParam("tgWebAppData");
+}
+
+/** A launch parameter, from the hash or the query, as Telegram passes it. */
+function launchParam(name: string): string | null {
   const hash = new URLSearchParams(window.location.hash.slice(1));
   const query = new URLSearchParams(window.location.search);
-  return hash.get("tgWebAppData") ?? query.get("tgWebAppData");
+  return hash.get(name) ?? query.get(name);
 }
 
 /**
@@ -78,4 +83,24 @@ export function connectTelegram(): () => void {
     /* A browser test can supply signed launch data without a Telegram host. */
   }
   return unsubscribe;
+}
+
+/**
+ * A buzz in the hand when the server answers the till's press (redesign
+ * P1-1): success once a sale is recorded, error once it is refused. Only
+ * inside Telegram, and only where its version has haptics.
+ */
+export function buzz(kind: "success" | "error"): void {
+  if (!telegramInitData()) return;
+  const version = launchParam("tgWebAppVersion");
+  try {
+    if (!version || !supports("web_app_trigger_haptic_feedback", version))
+      return;
+    postEvent("web_app_trigger_haptic_feedback", {
+      type: "notification",
+      notification_type: kind,
+    });
+  } catch {
+    /* No Telegram host to buzz. */
+  }
 }

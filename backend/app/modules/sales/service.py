@@ -86,6 +86,7 @@ from app.modules.inventory.service import (
     SIZE_RECLASSIFICATION_REASONS,
     AppliedMovement,
     MovementRequest,
+    SaleUnits,
     apply_movements,
     available_stock,
     lock_stock,
@@ -93,6 +94,7 @@ from app.modules.inventory.service import (
     sale_correction_ids,
     sale_reclassification_ids,
     sale_shortage_ids,
+    sale_units,
 )
 from app.modules.sales.models import Sale, SaleItem, ShelfShortage
 from app.modules.sales.outage import OutageMark, checked_mark, print_of_mark
@@ -652,6 +654,11 @@ async def reclassification_ids(session: AsyncSession, sale: Sale) -> list[uuid.U
     return await sale_reclassification_ids(
         session, organization_id=sale.organization_id, sale_id=sale.id
     )
+
+
+async def units_of(session: AsyncSession, sale: Sale) -> SaleUnits:
+    """What its in-sale adjustments did, in units, for the receipt (redesign P1-1)."""
+    return await sale_units(session, organization_id=sale.organization_id, sale_id=sale.id)
 
 
 async def lock_command(
