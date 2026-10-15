@@ -1,7 +1,9 @@
 # The till in the new design, first part — 2026-10-15
 
 Baseline: `cacfae1` (the approved redesign direction, PR #89).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty-three of twenty-three ways of breaking it caught. Not yet seen on a
+real phone.
 Branch: `feat/till-redesign`. Direction:
 [design-direction.md](redesign/design-direction.md) (approved 2026-10-11);
 tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
@@ -95,15 +97,49 @@ change.
   opened (120 places); journeys about
   the choice itself, or about leaving a store, give their person a second
   store; orders journeys open «Замовлення».
-- **Mutation:** TODO(final).
+- **Mutation:** twenty-three ways of breaking it, one at a time, all
+  caught, each by the journey meant to catch it. The unchanged tree runs
+  first and must pass, and the database is reseeded before every run.
+  - A first run was void: seeded once, the orders journeys ran out of
+    stock from the eighth mutant on, so every later catch was that.
+  - It left one survivor: a kept order that the phone cannot settle on
+    reopening left the person on the till, as the journey's own check
+    always settled it. A journey now closes it.
 
 ## Review
 
-TODO(final).
+An independent review of `3101c32` found the following, all addressed in
+`ee5b97f`:
+- **The shortage answer could open under the panel,** its «Прибрати з
+  кошика» covered. The panel's measured height is kept clear wherever the
+  page scrolls, and a journey checks the answer lies wholly above it.
+- **The till was not held by every unsettled journal** that held the
+  other tabs: the store states', suppliers', invoices' and corrections'.
+  It is now, and a journey proves it for an unreadable kept invoice.
+- **The dark theme was read by a brightness rule of its own.** It is now
+  Telegram's own `isColorDark`, applied before the first paint.
+- **В6 was not tested on reopening,** and `openStore()` did not check
+  which store opened. Both are now.
+- **Undeclared departures from the direction:** the panel on an empty
+  basket and without what is sold (direction §5), the cents as large as
+  the whole, invented tokens and hard-coded shadows, a focus colour too
+  light. Each is now the direction's or named as a departure.
+- **Docs:** the owner's answers worded as the recommended option, contrast
+  claims limited to what is measured, the seller's text made
+  gender-neutral.
 
 ## Evidence
 
-TODO(final).
+- [`output/verification/2026-10-15-till-redesign-1/`](../../output/verification/2026-10-15-till-redesign-1/):
+  `mutants.py` and `mutants.txt`, twenty-three ways of breaking it, all
+  caught.
+- **CI, run locally at `4594f2e`** ([summary](../../output/verification/2026-10-15-till-redesign-1-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 400 on PostgreSQL 17;
+  - e2e: 294 journeys;
+  - hot path: worst p95 67.1 ms (catalogue read) and 109.7 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
