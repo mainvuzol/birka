@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -113,12 +113,9 @@ async function till(page: Page): Promise<void> {
 }
 
 async function add(page: Page, coat: Model, quantity: number): Promise<void> {
-  await page
-    .getByRole("combobox", { name: "Товар і розмір" })
-    .selectOption(coat.option);
-  await page.getByLabel("Кількість").fill(String(quantity));
-  await page.getByLabel("Ціна за одиницю, грн").fill("2000");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  const [variant = "", size = ""] = coat.option.split(":");
+  await tapSize(page, variant, size);
+  await fillLine(page, { quantity, price: "2000" });
 }
 
 async function held(page: Page, coat: Model): Promise<number> {

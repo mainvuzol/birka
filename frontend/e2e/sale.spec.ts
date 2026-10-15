@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -58,16 +58,12 @@ async function pickFirstProduct(page: Page): Promise<number> {
   };
   const first = body.items[0];
   if (!first) throw new Error("Missing stock fixture");
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${first.product_variant_id}:${first.size_id}`);
+  await tapSize(page, first.product_variant_id, first.size_id);
   return first.available_quantity;
 }
 
 async function addToBasket(page: Page, quantity: number): Promise<void> {
-  await page.getByLabel("Кількість").fill(String(quantity));
-  await page.getByLabel("Ціна за одиницю, грн").fill("150.00");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await fillLine(page, { quantity, price: "150.00" });
 }
 
 /**
@@ -106,7 +102,10 @@ test("a seller sells stock the ledger agrees with, and the sale is recorded once
   await enter(page);
   await pickFirstProduct(page);
   await addToBasket(page, 2);
-  await expect(page.getByText("2 × 150,00 грн")).toBeVisible();
+  // How many and at what price, in the line itself (redesign P0-3).
+  const line = page.locator(".line");
+  await expect(line.locator("output")).toHaveText("2");
+  await expect(line.getByLabel("Ціна, грн")).toHaveValue("150.00");
   await expect(page.getByText("Разом 300,00 грн")).toBeVisible();
   // «Продати» is the way the customer pays (owner decision, 2026-10-04): the
   // press comes first, then the terminal, for the sum the receipt shows.
@@ -385,9 +384,7 @@ test("the three ways wait for a basket, and an answer recorded without a way nam
   echo = false;
   await page.getByRole("button", { name: "Новий продаж" }).click();
   // The warehouse stays chosen; only the product is picked again.
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
+  await tapSize(page, fixture.variant_id, fixture.size_id);
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
@@ -563,13 +560,16 @@ test("a store that reaches one sellable warehouse does not ask which", async ({
   });
   await stubStock(page, 4);
   await enter(page);
-  const warehouse = page.getByRole("combobox", { name: "Склад", exact: true });
-  await expect(warehouse).toHaveValue(fixture.till_location_id);
-  // No empty choice is offered, because there is no choice to make.
-  await expect(warehouse.locator("option")).toHaveCount(1);
+  // Named, not asked: there is no choice to make (redesign P0-2).
+  await expect(page.getByText(/^Склад: /)).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "Товар і розмір" }),
+    page.getByRole("combobox", { name: "Склад", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeVisible();
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await expect(page.locator(".line")).toHaveCount(1);
 });
 
 test("two sellable warehouses are still chosen explicitly", async ({
@@ -591,4 +591,11 @@ test("two sellable warehouses are still chosen explicitly", async ({
   const warehouse = page.getByRole("combobox", { name: "Склад", exact: true });
   await expect(warehouse).toHaveValue("");
   await expect(warehouse.locator("option")).toHaveCount(3);
+  await expect(warehouse.locator("option").first()).toHaveText(
+    "З якого складу віддаєте?",
+  );
+  // Nothing is listed until the warehouse is chosen.
+  await expect(
+    page.getByRole("searchbox", { name: "Знайти модель" }),
+  ).toHaveCount(0);
 });

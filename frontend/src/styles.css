@@ -573,3 +573,86 @@ html {
   border-left: 4px solid var(--warn);
   padding-left: 12px;
 }
+
+/* The till's search (redesign P0-2): one warehouse is named, not chosen;
+   the field is 52 px; each model is a tag — its name, its price, and a chip
+   per size held, 48 × 52 (direction §5, sizes). */
+.warehouse {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+input[type="search"] {
+  min-height: 52px;
+  border-radius: 14px;
+}
+.tag {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.tag-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.tag-price {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  min-width: 48px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.tag .hint,
+.empty p {
+  margin: 8px 0 0;
+}
+.empty button {
+  margin-top: 10px;
+}
+
+/* A basket line (P0-3): how many, with «−» and «+», and its price. */
+.line-edit {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.line-edit label {
+  margin: 0;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.line .stepper button {
+  align-self: center;
+  min-width: 48px;
+  padding: 0;
+  font-size: 22px;
+  border-radius: 14px;
+}
+.stepper output {
+  min-width: 32px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.line .price-error {
+  color: var(--debt);
+}

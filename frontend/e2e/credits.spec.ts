@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -176,35 +176,13 @@ async function basket(page: Page, coat: Coat, paper = false): Promise<void> {
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   // Ticked first: ticking it empties a basket (G20).
   if (paper) await page.getByLabel("Вношу продаж з паперу").check();
-  const loaded = () =>
-    page.waitForResponse(
-      (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
-    );
-  const first = loaded();
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.returns_location_id);
-  // The till offers a hundred models a page; the warehouse holds every
-  // journey's own, so this one may be further on.
-  let response = await first;
-  for (;;) {
-    const body = (await response.json()) as {
-      items: { product_variant_id: string }[];
-      has_more: boolean;
-    };
-    if (body.items.some((item) => item.product_variant_id === coat.variant))
-      break;
-    if (!body.has_more) throw new Error("The till does not offer the coat");
-    const next = loaded();
-    await page.getByRole("button", { name: "Наступні товари" }).click();
-    response = await next;
-  }
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${coat.variant}:${coat.size}`);
-  await page.getByLabel("Кількість").fill("2");
-  await page.getByLabel("Ціна за одиницю, грн").fill("1500");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  // The warehouse holds every journey's own models: «Ще товари» is read
+  // until this one is listed.
+  await tapSize(page, coat.variant, coat.size);
+  await fillLine(page, { quantity: 2, price: "1500" });
 }
 
 /** The till's ways to take a payment on a debt, under «Внесок». */

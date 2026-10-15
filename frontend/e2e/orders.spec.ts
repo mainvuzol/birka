@@ -252,6 +252,9 @@ test("browser without Telegram shows entry guidance", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Вхід через Telegram" }),
   ).toBeVisible();
+  // The app's name as the owner writes it (2026-10-15, В4).
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Бірка");
+  await expect(page).toHaveTitle("Бірка");
   await expect(
     page.getByRole("button", { name: "+ Нове замовлення" }),
   ).toHaveCount(0);

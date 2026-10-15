@@ -58,7 +58,7 @@ from app.modules.catalog.service import (
     VariantDraft,
     create_product,
 )
-from app.modules.inventory.service import readable_stock
+from app.modules.inventory.service import stock_for_sale
 from app.modules.tenancy.service import validate_active_stores
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -350,13 +350,17 @@ async def stock_options(
     session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
+    # The till's search (redesign P0-2): every word must match the model,
+    # its source or its colour. Empty, the whole warehouse, by name.
+    query: Annotated[str, Query(max_length=200)] = "",
 ) -> StockOptionsResponse:
-    rows = await readable_stock(
+    rows = await stock_for_sale(
         session,
         organization_id=scope.organization_id,
         store_id=store_id,
         location_id=location_id,
         scope=scope,
+        query=query,
         limit=limit + 1,
         offset=offset,
     )

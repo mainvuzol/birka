@@ -425,3 +425,42 @@ its `ci` environment. Evidence:
   [`ab/`](../../output/verification/2026-10-08-hot-path/ab/).
 
 This closes row 22 again, for the laptop.
+
+## Update — 2026-10-15: the till's search and one tap of a size
+
+The till's second redesign part ([report](till-redesign-2-report.md)):
+a model is found by a few letters, and a tap on its size puts it in the
+basket, its quantity and price in the line. `GET /catalog/stock-options`
+gained an optional `query` and reads by the model's name; `POST /sales` is
+unchanged.
+
+**Taps: 3,** for a model with a price, in a store with one warehouse to sell
+from:
+
+| | taps |
+|---|---|
+| open «Продаж» (the app opens on it, redesign P0-1) | 0 |
+| choose the warehouse (one sellable: named) | 0 |
+| the search, and three letters typed | 1 |
+| the size's chip («M · 2») | 1 |
+| quantity (`1`) and price (the model's) | 0 |
+| a way: «Готівка», «Картка» or «Переказ» | 1 |
+| **total** | **3** |
+
+A model already on the list's first screen needs no search: 2. The next
+sale: «Новий продаж» puts the cursor in the search, so 3 again, or 2 for a
+model in view after it. A model with no price adds its price, typed; a
+store with two warehouses adds the choice of one, once. The journey
+`till-search.spec.ts` sells one priced coat in exactly these three taps,
+on a 360 × 640 screen, and the next in three.
+
+**The search's cost.** Every word is a literal `LIKE` on the model's, the
+source's and the colour's normalised names, no index, as receiving's search
+is; the order adds receiving's order of sizes as a `CASE` on the page's
+sizes. The harness has two new cases, last, so the earlier eight compare as
+before: `GET /catalog/stock-options · search`, alone and by six sellers,
+each alternating three letters every one of the 400 models shares (a
+hundred rows to order) and one model's whole name, under the catalogue
+read's 300 ms.
+
+**The release reading,** checklist row 22: TODO(final).

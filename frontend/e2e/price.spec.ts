@@ -173,18 +173,39 @@ test("a store's price set on the stock screen is what its till suggests", async 
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.returns_location_id);
-  const product = page.getByRole("combobox", { name: "Товар і розмір" });
-  const price = page.getByLabel("Ціна за одиницю, грн");
-  await product.selectOption(unpriced.option);
-  await expect(price).toHaveValue("");
-  await product.selectOption(priced.option);
-  await expect(price).toHaveValue("1850,50");
-  await expect(page.getByText("Рекомендована 1850,50 грн.")).toBeVisible();
-  // A model with none never keeps the previous one's.
-  await product.selectOption(unpriced.option);
-  await expect(price).toHaveValue("");
-  await product.selectOption(priced.option);
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  const search = page.getByRole("searchbox", { name: "Знайти модель" });
+  const lines = page.locator(".line");
+  // A model with none: the line's price is empty and takes the cursor, and
+  // the ways wait for it (redesign P0-3).
+  await search.fill(unpriced.name);
+  await page.locator(`button.chip[data-stock="${unpriced.option}"]`).click();
+  const unpricedPrice = lines.first().getByLabel("Ціна, грн");
+  await expect(unpricedPrice).toHaveValue("");
+  await expect(unpricedPrice).toBeFocused();
+  await expect(
+    lines.first().getByText("Ціни продажу ще немає — впишіть домовлену."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Готівка", exact: true }),
+  ).toBeDisabled();
+  // The priced one starts from its price, and the other keeps none.
+  await search.fill(priced.name);
+  await expect(
+    page.getByRole("group", { name: new RegExp(priced.name) }),
+  ).toContainText("1850,50 грн");
+  await page.locator(`button.chip[data-stock="${priced.option}"]`).click();
+  await expect(lines.nth(1).getByLabel("Ціна, грн")).toHaveValue("1850,50");
+  await expect(
+    lines
+      .nth(1)
+      .getByText("Ціна продажу 1850,50 грн. Домовилися про іншу — змініть."),
+  ).toBeVisible();
+  await expect(unpricedPrice).toHaveValue("");
+  await lines
+    .first()
+    .getByRole("button", { name: `Прибрати ${unpriced.name}` })
+    .click();
+  await expect(lines).toHaveCount(1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),

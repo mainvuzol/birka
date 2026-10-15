@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -464,12 +464,8 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.returns_location_id);
   await options;
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${typo.variant}:${typo.size}`);
-  await page.getByLabel("Кількість").fill("1");
-  await page.getByLabel("Ціна за одиницю, грн").fill("150.00");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await tapSize(page, typo.variant, typo.size);
+  await fillLine(page, { price: "150.00" });
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(page.getByText("Незавершений продаж")).toBeVisible();
   // Meanwhile a manager merges the duplicate.

@@ -36,6 +36,10 @@ IN_PARTS = [
     ("POST /sales · paid in parts", 200, 1),
     ("POST /sales · paid in parts (6 sellers)", 300, 6),
 ]
+SEARCH = [
+    ("GET /catalog/stock-options · search", 200, 1),
+    ("GET /catalog/stock-options · search (6 sellers)", 300, 6),
+]
 WARM_UP = 20
 
 
@@ -82,7 +86,7 @@ async def test_every_sale_says_it_is_paid_in_cash() -> None:
     the one the drawer counts, and one the till's request takes."""
     cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
 
-    for name, builder, _, _ in cases[2:]:
+    for name, builder, _, _ in cases[2:8]:
         for body in await bodies_sent(builder, 3):
             assert body["payment_method"] == DRAWER_METHOD.value, name
             assert SaleRequest.model_validate(body).payment_method == "CASH", name
@@ -95,8 +99,8 @@ def test_a_sale_paid_in_parts_is_measured_alone_and_by_six_sellers(
     monkeypatch.setattr(harness, "GATE", gate)
     cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
 
-    assert [(name, count, sellers) for name, _, count, sellers in cases[6:]] == IN_PARTS
-    for name, _, count, sellers in cases[6:]:
+    assert [(name, count, sellers) for name, _, count, sellers in cases[6:8]] == IN_PARTS
+    for name, _, count, sellers in cases[6:8]:
         row = harness.summarise(name, sellers, [1.0] * count)
         assert row["budget"] == 500.0
         # The release reading gates every case, six sellers included (owner
@@ -108,7 +112,7 @@ async def test_every_sale_paid_in_parts_is_a_new_customer_the_till_accepts() -> 
     cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
 
     credits: list[tuple[dict[str, str], Decimal]] = []
-    for _, builder, count, _ in cases[6:]:
+    for _, builder, count, _ in cases[6:8]:
         # The warm-up asks the same indexes again before the measured run.
         for body in await bodies_sent(builder, WARM_UP) + await bodies_sent(builder, count):
             total = sum(Decimal(line["unit_price"]) * line["quantity"] for line in body["lines"])
@@ -127,6 +131,34 @@ async def test_every_sale_paid_in_parts_is_a_new_customer_the_till_accepts() -> 
     phones = {customer_key(digits(credit["customer_phone"])) for credit, _ in credits}
     names = {credit["customer_name"] for credit, _ in credits}
     assert len(phones) == len(names) == len(credits)
+
+
+@pytest.mark.parametrize("gate", harness.GATES)
+async def test_the_till_s_search_is_measured_last_within_the_catalogue_s_budget(
+    monkeypatch: pytest.MonkeyPatch, gate: str
+) -> None:
+    """Redesign P0-2: a search the whole seeded network matches, and a model's
+    whole name, alone and by six sellers, within the catalogue read's budget."""
+    monkeypatch.setattr(harness, "GATE", gate)
+    cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
+
+    assert [(name, count, sellers) for name, _, count, sellers in cases[8:]] == SEARCH
+    for name, builder, count, sellers in cases[8:]:
+        row = harness.summarise(name, sellers, [1.0] * count)
+        assert row["budget"] == 300.0
+        assert row["gated"] is (gate == "all" or sellers == 1)
+        asked: list[httpx.URL] = []
+
+        def answer(request: httpx.Request, asked: list[httpx.URL] = asked) -> httpx.Response:
+            asked.append(request.url)
+            return httpx.Response(200, json={"items": [], "has_more": False})
+
+        transport = httpx.MockTransport(answer)
+        async with httpx.AsyncClient(transport=transport, base_url="http://perf") as client:
+            for index in range(4):
+                await builder(client, index)
+        assert [url.path for url in asked] == ["/api/v1/catalog/stock-options"] * 4
+        assert [url.params["query"] for url in asked] == ["мод", "модель 1", "мод", "модель 3"]
 
 
 async def test_the_run_names_the_environment_the_api_says_it_runs_as() -> None:

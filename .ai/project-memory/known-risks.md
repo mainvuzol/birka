@@ -1381,3 +1381,30 @@ See the [report](till-redesign-1-report.md).
   screenshot from one).
 - **В1 and В3 are decided, not built:** a coat the books hold none of is
   not yet found at the till, and a 0 грн line has no warning yet.
+
+## The till's search and one tap of a size — 2026-10-15
+
+See the [report](till-redesign-2-report.md).
+
+- **The list's order is the database's collation.** Production, CI and
+  Compose collate by ICU `uk-UA`, so «Ґ», «Є», «І» and «Ї» take their place
+  in the alphabet; a cluster made with plain `C.UTF-8`, as the laptop's
+  test cluster is, puts them after «Я». The test of that order runs only
+  where the collation is ICU, and says so where it is skipped.
+- **The search reads no index.** Every word is a `LIKE '%…%'` on the
+  model's, the source's and the colour's names, as receiving's search is.
+  Measured on the hot path's 400 models × 6 sizes: p95 9.6 ms for one
+  seller and 89.7 ms for six, against 300. A network with tens of
+  thousands of models may need a trigram index (pg_trgm is installed).
+- **A size sold out since the list was read still shows its chip** until
+  the list is read again (after a sale, or a new search); the server then
+  answers with the shortage, as it did. A size whose every coat an order
+  holds offers no chip to tap; the old list let it be picked, to be
+  refused.
+- **Many of one coat are tapped one by one,** «+» or the chip again, up
+  to 1000: there is no field to type a count in. A sale of tens of one
+  size is rare at the counter; if it is not, a count field returns.
+- **A model's sizes may straddle a page** of a hundred rows: «Ще товари»
+  adds the rest under the same tag.
+- **On a real phone:** the keyboard over a line's price field, and how far
+  the search scrolls the list, are not seen on a device yet.

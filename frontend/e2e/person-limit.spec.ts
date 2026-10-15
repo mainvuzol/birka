@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -84,12 +84,8 @@ async function basket(page: Page): Promise<void> {
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.till_location_id);
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
-  await page.getByLabel("Кількість").fill("1");
-  await page.getByLabel("Ціна за одиницю, грн").fill("150.00");
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await fillLine(page, { price: "150.00" });
 }
 
 async function tooMany(route: Route): Promise<void> {

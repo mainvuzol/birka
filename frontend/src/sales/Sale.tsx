@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -14,6 +14,7 @@ import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
 import { submitSale, useSaleCommand } from "./commands";
+import { StockSearch, useSettled, useStock } from "./StockSearch";
 import { paperDay, setPaper, setSoldBy, usePaper } from "./paper";
 import type {
   EmptyShelf,
@@ -24,8 +25,6 @@ import type {
 } from "./types";
 import { markText, paidDuringOutage, stockKey } from "./types";
 
-const pageSize = 100;
-
 /**
  * A sale typed from paper refused for stock (owner decisions, 2026-10-04 and
  * 2026-10-07; ADR-0013 §6): never sold around the shortfall — nobody stands
@@ -34,13 +33,30 @@ const pageSize = 100;
  */
 const paperGone =
   "Цього товару вже немає в обліку — продаж з паперу не записано. Попросіть менеджера спершу виправити залишок, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
+/** A line's price that does not read as money (redesign P0-3). */
+const priceText = "Впишіть ціну: гривні й копійки, напр. 1850 або 1850,50.";
 const paperReserved =
   "Частина цих одиниць у резерві замовлення — продаж з паперу не записано. Менеджер має вирішити із замовленням, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
 
+/** A price as sent: the one typed, once it reads as money; else none. */
+function asPrice(typed: string): string {
+  const cents = kopecks(typed);
+  return cents === null ? "" : decimal(cents);
+}
+
 interface Draft {
+  /** What is sent; its `unit_price` is the price typed, once it reads as one. */
   line: SaleLine;
+  /** The price as typed in the line (redesign P0-3). */
+  price: string;
+  /** The model's price for this store, which the line starts from. */
+  suggested: string | null;
   name: string;
   size: string;
+  /** The balance the coat was picked from. */
+  stockSizeId: string;
+  /** That balance's size is not known (ADR-0005 §11). */
+  unknownStock: boolean;
   /** Sold as "size not known": there is no size to clarify, nothing to find. */
   unknownSize: boolean;
   /** Its size was read off a coat held with its size not known. */
@@ -66,9 +82,12 @@ interface Draft {
  * whose size is on its label can also be sold with that size from the start,
  * which is how an M the system holds none of is sold at all.
  *
- * The seller sells with the way the customer pays: «Готівка», «Картка» or
- * «Переказ» in place of «Продати», so a sale still takes five taps and
- * nothing is guessed (owner decision, 2026-10-04; ADR-0012 §B12). The press
+ * A coat is found by a few letters of its name or colour, and a tap on its
+ * size puts it in the basket, its price already in the line (redesign P0-2,
+ * P0-3). The seller sells with the way the customer pays: «Готівка»,
+ * «Картка» or «Переказ» in place of «Продати», so a sale of one priced coat
+ * takes three taps and nothing is guessed (owner decision, 2026-10-04;
+ * ADR-0012 §B12). The press
  * comes first, then the terminal is charged the sum the receipt shows: it may
  * still change when a coat is not on the shelf.
  *
@@ -76,7 +95,7 @@ interface Draft {
  * once it does, with «Вношу продаж з паперу» ticked (owner decisions,
  * 2026-10-04 and 2026-10-07; ADR-0013 §7): each is marked «продано під час
  * збою», with who sold and the paper's time when known. Off by default, so a
- * live sale still takes five taps and its body carries no mark. On, the till
+ * live sale takes no extra tap and its body carries no mark. On, the till
  * offers nothing that describes the shelf now — nobody stands at it — and
  * the pay buttons say the mode, who sold and from which warehouse, since a
  * wrong mark can never be changed.
@@ -101,10 +120,16 @@ export function Sale({
   fixMethod?: (sale: SaleReceipt) => void;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [option, setOption] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [price, setPrice] = useState("");
+  // What the seller types to find a model (redesign P0-2).
+  const [text, setText] = useState("");
+  const query = useSettled(text);
+  const searchRef = useRef<HTMLInputElement>(null);
+  // A line put in the basket with no price to start from: its price field
+  // takes the cursor (P0-3).
+  const priceRefs = useRef(new Map<string, HTMLInputElement>());
+  const [focusPrice, setFocusPrice] = useState<string | null>(null);
+  // «Новий продаж» puts the cursor in the search (P0-3).
+  const [focusSearch, setFocusSearch] = useState(false);
   const [draft, setDraft] = useState<Draft[]>([]);
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [found, setFound] = useState<Record<number, number>>({});
@@ -115,7 +140,6 @@ export function Sale({
   const [heldUnknown, setHeldUnknown] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [labelSize, setLabelSize] = useState("");
   const [shortfall, setShortfall] = useState<Shortfall | null>(null);
   const [refusal, setRefusal] = useState<unknown>(null);
   const [present, setPresent] = useState("");
@@ -139,6 +163,7 @@ export function Sale({
   const [paperTime, setPaperTime] = useState("");
   const [yesterday, setYesterday] = useState(false);
   const { busy, pending } = useSaleCommand();
+  const cache = useQueryClient();
 
   const mayCorrect = store.permissions.includes(
     "inventory:correct_during_sale",
@@ -158,24 +183,20 @@ export function Sale({
       api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
     retry: false,
   });
-  const stock = useQuery({
-    queryKey: ["sale-stock", journalKey, store.id, locationId, offset],
-    queryFn: () =>
-      api<{ items: StockOption[]; has_more: boolean }>(
-        `/catalog/stock-options?store_id=${store.id}&location_id=${locationId}&limit=${String(pageSize)}&offset=${String(offset)}`,
-        token,
-      ),
-    enabled: !!locationId && !locations.isError,
-    retry: false,
+  const stock = useStock({
+    store,
+    token,
+    journalKey,
+    locationId,
+    query,
+    enabled: !locations.isError,
   });
-  const selected = stock.data?.items.find(
-    (item) => `${item.product_variant_id}:${item.size_id}` === option,
-  );
+  const listed = (stock.data?.pages ?? []).flatMap((page) => page.items);
   const sizes = useQuery({
     queryKey: ["sale-sizes", journalKey, store.id],
     queryFn: () =>
       api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
-    enabled: mayReadLabel && !!selected?.size_is_unknown && !paper,
+    enabled: mayReadLabel && !paper && draft.some((d) => d.unknownStock),
     retry: false,
   });
   // Who may be named as having sold: read only while the switch is on
@@ -221,7 +242,6 @@ export function Sale({
     setYesterday(false);
     setRefusal(null);
     setValidation("");
-    setLabelSize("");
     if (on) {
       setFound({});
       setMissing({});
@@ -237,11 +257,7 @@ export function Sale({
       const reachable = locations.data.some(
         (location) => location.id === locationId,
       );
-      if (!reachable) {
-        setLocationId("");
-        setOption("");
-        setOffset(0);
-      }
+      if (!reachable) setLocationId("");
     }
   }, [locationId, locations.isSuccess, locations.data]);
 
@@ -272,57 +288,101 @@ export function Sale({
     if (!locationId && onlyWarehouse) setLocationId(onlyWarehouse.id);
   }, [locationId, onlyWarehouse]);
 
-  function add(): void {
-    const cents = kopecks(price);
-    const count = Number(quantity);
-    if (
-      !selected ||
-      cents === null ||
-      !/^\d+$/.test(quantity) ||
-      count < 1 ||
-      count > 1000
-    ) {
-      setValidation(
-        "Оберіть товар, кількість від 1 до 1000 та ціну з точністю до копійок.",
-      );
-      return;
-    }
-    const label = selected.size_is_unknown
-      ? sizes.data?.find((size) => size.size_id === labelSize)
-      : undefined;
+  /**
+   * A size chip tapped (redesign P0-3): the coat goes in the basket at its
+   * price, or one more of it if it is there already. The agreed price is the
+   * one sold at, so it stays editable in the line (owner decisions,
+   * 2026-09-15 and 2026-10-01); a model with none leaves it empty, never a
+   * previous one's, and its field takes the cursor.
+   */
+  function put(item: StockOption): void {
     const line: SaleLine = {
-      product_variant_id: selected.product_variant_id,
-      size_id: label ? label.size_id : selected.size_id,
+      product_variant_id: item.product_variant_id,
+      size_id: item.size_id,
       source_location_id: locationId,
-      quantity: count,
-      unit_price: decimal(cents),
+      quantity: 1,
+      unit_price: item.suggested_price ? asPrice(item.suggested_price) : "",
       discount_amount: "0.00",
     };
-    if (draft.some((d) => stockKey(d.line) === stockKey(line))) {
-      setValidation(
-        "Цей товар із цього складу вже в кошику. Видаліть рядок, щоб змінити кількість.",
-      );
+    const at = draft.findIndex((d) => stockKey(d.line) === stockKey(line));
+    setValidation("");
+    if (at >= 0) {
+      const held = draft[at];
+      if (held && held.line.quantity < 1000)
+        change(at, { quantity: held.line.quantity + 1 });
       return;
     }
+    if (draft.length >= 100) return;
     replaceDraft([
       ...draft,
       {
         line,
-        name: selected.display_name,
-        size: label
-          ? label.code
-          : selected.size_is_unknown
-            ? "розмір невідомий"
-            : selected.size_label,
-        unknownSize: selected.size_is_unknown && !label,
-        fromUnknown: label !== undefined,
+        price: item.suggested_price ? asInput(item.suggested_price) : "",
+        suggested: item.suggested_price,
+        name: item.display_name,
+        size: item.size_is_unknown ? "розмір невідомий" : item.size_label,
+        stockSizeId: item.size_id,
+        unknownStock: item.size_is_unknown,
+        unknownSize: item.size_is_unknown,
+        fromUnknown: false,
       },
     ]);
-    setPrice("");
-    setQuantity("1");
-    setOption("");
-    setLabelSize("");
+    if (!item.suggested_price) setFocusPrice(stockKey(line));
+  }
+
+  /** A line's quantity or price changed: a different basket (`replaceDraft`). */
+  function change(
+    index: number,
+    edit: { quantity?: number; price?: string },
+  ): void {
+    replaceDraft(
+      draft.map((d, i) => {
+        if (i !== index) return d;
+        const price = edit.price ?? d.price;
+        return {
+          ...d,
+          price,
+          line: {
+            ...d.line,
+            quantity: edit.quantity ?? d.line.quantity,
+            unit_price: asPrice(price),
+          },
+        };
+      }),
+    );
+  }
+
+  /**
+   * The size read off a coat held with its size not known: it is sold with
+   * that size (ADR-0005 §11). "" takes the reading back.
+   */
+  function relabel(index: number, sizeId: string): void {
+    const d = draft[index];
+    if (!d) return;
+    const label = sizes.data?.find((size) => size.size_id === sizeId);
+    const line = { ...d.line, size_id: label ? label.size_id : d.stockSizeId };
+    if (
+      draft.some(
+        (other, i) => i !== index && stockKey(other.line) === stockKey(line),
+      )
+    ) {
+      setValidation("Такий рядок уже є в кошику — змініть кількість у ньому.");
+      return;
+    }
     setValidation("");
+    replaceDraft(
+      draft.map((other, i) =>
+        i === index
+          ? {
+              ...other,
+              line,
+              size: label ? label.code : "розмір невідомий",
+              unknownSize: !label,
+              fromUnknown: label !== undefined,
+            }
+          : other,
+      ),
+    );
   }
 
   async function send(
@@ -331,6 +391,11 @@ export function Sale({
     nextMissing: Record<number, number>,
     nextClarified: Record<number, number>,
   ): Promise<void> {
+    // The buttons wait for every price; a sale is never sent without one.
+    if (draft.some((d) => d.line.unit_price === "")) {
+      setValidation(priceText);
+      return;
+    }
     // Nothing on the shelf of a line drops it from the sale (owner decision,
     // 2026-10-01; Q-G). Nothing on the shelf of any line leaves no sale to
     // make, and the basket records an empty shelf instead.
@@ -419,9 +484,19 @@ export function Sale({
       // for the series.
       setPaperTime("");
       setYesterday(false);
-      // The next customer is someone else.
+      // The next customer is someone else, and looks for something else.
       setCredit(noTerms);
-      await stock.refetch();
+      // The shelf is read again: the whole list, once the search is cleared.
+      if (query) {
+        setText("");
+        await cache.invalidateQueries({
+          queryKey: ["sale-stock", journalKey, store.id],
+          refetchType: "none",
+        });
+      } else {
+        setText("");
+        await stock.refetch();
+      }
     } else if (outcome.kind === "refused") {
       const { error, shortfall: short } = outcome;
       const { details } = error;
@@ -498,7 +573,7 @@ export function Sale({
         `${shortDraft.line.source_location_id}:${shortDraft.line.product_variant_id}`,
       ) ||
       (shortDraft.line.source_location_id === locationId &&
-        (stock.data?.items ?? []).some(
+        listed.some(
           (item) =>
             item.product_variant_id === shortDraft.line.product_variant_id &&
             item.size_is_unknown &&
@@ -539,6 +614,18 @@ export function Sale({
     shortRef.current?.scrollIntoView({ block: "nearest" });
     shortRef.current?.focus({ preventScroll: true });
   }, [shortfall]);
+  useEffect(() => {
+    if (focusPrice === null) return;
+    priceRefs.current.get(focusPrice)?.focus();
+    setFocusPrice(null);
+  }, [focusPrice]);
+  useEffect(() => {
+    if (!focusSearch || receipt) return;
+    searchRef.current?.focus();
+    setFocusSearch(false);
+  }, [focusSearch, receipt]);
+  // The ways wait until every line has its price (redesign P0-3).
+  const priced = draft.every((d) => d.line.unit_price !== "");
   // Paid in parts: what is paid now and what is left, as typed so far. The
   // receipt's figures are the server's.
   const paidNow = mayCredit && credit.inParts ? kopecks(credit.paid) : null;
@@ -567,6 +654,7 @@ export function Sale({
         next={() => {
           setReceipt(null);
           setDropped([]);
+          setFocusSearch(true);
         }}
         fixMethod={fixMethod}
       />
@@ -575,16 +663,13 @@ export function Sale({
   return (
     <section>
       <h2>Продаж</h2>
-      <p className="hint">
-        Оберіть склад, з якого фізично віддаєте товар. Ціна — остаточна після
-        торгу.
-      </p>
       {paper && (
         <section className="notice" aria-label="Режим: продаж з паперу">
           <h3>Режим: продаж з паперу</h3>
+          {/* The seller does not see «Звіт» (owner decision, 2026-10-15, В5). */}
           <p>
-            Продаж позначать «продано під час збою». Він увійде в сьогоднішній
-            «Звіт» і в касу до наступного закриття.
+            Продаж позначать «продано під час збою». Він увійде в сьогоднішні
+            продажі й у касу до наступного закриття.
           </p>
         </section>
       )}
@@ -662,6 +747,9 @@ export function Sale({
               void locations.refetch();
             }}
           />
+        ) : onlyWarehouse ? (
+          // One warehouse to sell from: nothing to choose (redesign P0-2).
+          <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
         ) : (
           <label>
             Склад
@@ -669,11 +757,9 @@ export function Sale({
               value={locationId}
               onChange={(event) => {
                 setLocationId(event.target.value);
-                setOffset(0);
-                setOption("");
               }}
             >
-              {!onlyWarehouse && <option value="">Оберіть склад явно</option>}
+              <option value="">З якого складу віддаєте?</option>
               {locations.data.map((location) => (
                 <option
                   key={location.id}
@@ -694,169 +780,46 @@ export function Sale({
             )}
           </label>
         )}
-        {locationId &&
-          (stock.isPending ? (
-            <p role="status">Завантажуємо товари…</p>
-          ) : stock.error ? (
-            <Failure
-              error={stock.error}
-              retry={() => {
-                void stock.refetch();
-              }}
-            />
-          ) : (
-            <>
-              <label>
-                Товар і розмір
-                <select
-                  value={option}
-                  onChange={(event) => {
-                    setOption(event.target.value);
-                    setLabelSize("");
-                    // The model's suggested price, which the seller may
-                    // change: the agreed price is the one sold at (owner
-                    // decisions, 2026-09-15 and 2026-10-01). A model with
-                    // none leaves the field empty, never a previous one's.
-                    const picked = stock.data.items.find(
-                      (item) =>
-                        `${item.product_variant_id}:${item.size_id}` ===
-                        event.target.value,
-                    );
-                    setPrice(
-                      picked?.suggested_price
-                        ? asInput(picked.suggested_price)
-                        : "",
-                    );
-                  }}
-                >
-                  <option value="">Оберіть товар</option>
-                  {stock.data.items.map((item) => (
-                    <option
-                      key={`${item.product_variant_id}:${item.size_id}`}
-                      value={`${item.product_variant_id}:${item.size_id}`}
-                    >
-                      {visible(item.display_name)} ·{" "}
-                      {item.size_is_unknown
-                        ? "розмір невідомий"
-                        : visible(item.size_label)}{" "}
-                      · доступно {item.available_quantity}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {stock.data.items.length === 0 && (
-                <p>На цьому складі немає товарів із додатним залишком.</p>
-              )}
-              {selected && (
-                <p className="hint">
-                  На складі {selected.quantity} · у резерві{" "}
-                  {selected.reserved_quantity} · доступно{" "}
-                  {selected.available_quantity}
-                  {selected.size_is_unknown &&
-                    " · розмір невідомий: продається як є"}
-                </p>
-              )}
-              {selected?.size_is_unknown && paper && (
-                // A size read off a coat in hand: on paper nobody holds it
-                // (G3).
-                <p className="hint">
-                  Товар без розміру вносьте як «розмір невідомий».
-                </p>
-              )}
-              {selected?.size_is_unknown && mayReadLabel && !paper && (
-                <label>
-                  Розмір з етикетки
-                  <select
-                    value={labelSize}
-                    onChange={(event) => {
-                      setLabelSize(event.target.value);
-                    }}
-                  >
-                    <option value="">Не читали — продати без розміру</option>
-                    {(sizes.data ?? []).map((size) => (
-                      <option key={size.size_id} value={size.size_id}>
-                        {visible(size.code)}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="hint">
-                    Прочитали розмір на етикетці — оберіть його, і товар
-                    продасться з цим розміром.
-                  </span>
-                </label>
-              )}
-              {sizes.error && (
+        {locationId && (
+          <StockSearch
+            text={text}
+            type={setText}
+            query={query}
+            stock={stock}
+            warehouse={
+              locations.data?.find((location) => location.id === locationId)
+                ?.name ?? ""
+            }
+            pick={put}
+            canAdd={(item) =>
+              draft.length < 100 ||
+              draft.some(
+                (d) =>
+                  stockKey(d.line) ===
+                  stockKey({
+                    source_location_id: locationId,
+                    product_variant_id: item.product_variant_id,
+                    size_id: item.size_id,
+                  }),
+              )
+            }
+            searchRef={searchRef}
+            failure={
+              stock.error ? (
                 <Failure
-                  error={sizes.error}
+                  error={stock.error}
                   retry={() => {
-                    void sizes.refetch();
+                    void stock.refetch();
                   }}
                 />
-              )}
-              <div className="toolbar">
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={offset === 0}
-                  onClick={() => {
-                    setOffset(Math.max(0, offset - pageSize));
-                    setOption("");
-                  }}
-                >
-                  Попередні товари
-                </button>
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={!stock.data.has_more}
-                  onClick={() => {
-                    setOffset(offset + pageSize);
-                    setOption("");
-                  }}
-                >
-                  Наступні товари
-                </button>
-              </div>
-            </>
-          ))}
-        <div className="fields">
-          <label>
-            Кількість
-            <input
-              inputMode="numeric"
-              value={quantity}
-              onChange={(event) => {
-                setQuantity(event.target.value);
-              }}
-            />
-          </label>
-          <label>
-            Ціна за одиницю, грн
-            <input
-              inputMode="decimal"
-              placeholder="0,00"
-              value={price}
-              onChange={(event) => {
-                setPrice(event.target.value);
-              }}
-            />
-            {selected?.suggested_price && (
-              <span className="hint">
-                Рекомендована {money(selected.suggested_price)}. Домовилися про
-                іншу — змініть.
-              </span>
-            )}
-          </label>
-        </div>
-        <button
-          type="button"
-          className="quiet"
-          disabled={!selected || draft.length >= 100}
-          onClick={add}
-        >
-          Додати в кошик
-        </button>
+              ) : null
+            }
+          />
+        )}
         {validation && <p role="alert">{validation}</p>}
+        {draft.length === 0 && locationId && (
+          <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
+        )}
         {draft.map((d, index) => (
           <div
             className={index === shortIndex ? "line short" : "line"}
@@ -865,9 +828,62 @@ export function Sale({
             <strong>
               {visible(d.name)} · {visible(d.size)}
             </strong>
-            <span>
-              {d.line.quantity} × {money(d.line.unit_price)}
-            </span>
+            <div className="line-edit">
+              <div
+                className="stepper"
+                role="group"
+                aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}`}
+              >
+                <button
+                  type="button"
+                  aria-label="Менше"
+                  disabled={d.line.quantity <= 1}
+                  onClick={() => {
+                    change(index, { quantity: d.line.quantity - 1 });
+                  }}
+                >
+                  −
+                </button>
+                <output>{d.line.quantity}</output>
+                <button
+                  type="button"
+                  aria-label="Більше"
+                  disabled={d.line.quantity >= 1000}
+                  onClick={() => {
+                    change(index, { quantity: d.line.quantity + 1 });
+                  }}
+                >
+                  +
+                </button>
+              </div>
+              <label>
+                Ціна, грн
+                <input
+                  ref={(input) => {
+                    if (input) priceRefs.current.set(stockKey(d.line), input);
+                    else priceRefs.current.delete(stockKey(d.line));
+                  }}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={d.price}
+                  onChange={(event) => {
+                    change(index, { price: event.target.value });
+                  }}
+                />
+              </label>
+            </div>
+            {d.line.unit_price === "" && (d.price.trim() || d.suggested) ? (
+              <span className="hint price-error">{priceText}</span>
+            ) : d.suggested ? (
+              <span className="hint">
+                Ціна продажу {money(d.suggested)}. Домовилися про іншу —
+                змініть.
+              </span>
+            ) : (
+              <span className="hint">
+                Ціни продажу ще немає — впишіть домовлену.
+              </span>
+            )}
             {found[index] !== undefined && (
               <span>Підтверджено на місці: +{found[index]}</span>
             )}
@@ -877,6 +893,35 @@ export function Sale({
               missing[index] !== undefined && (
                 <span>На місці лише {missing[index]}</span>
               )
+            )}
+            {d.unknownStock && paper && (
+              // A size read off a coat in hand: on paper nobody holds it (G3;
+              // owner decision, 2026-10-15, В5).
+              <span className="hint">
+                Товар з невідомим розміром вносьте як «розмір невідомий».
+              </span>
+            )}
+            {d.unknownStock && mayReadLabel && !paper && (
+              <label>
+                Розмір з етикетки
+                <select
+                  value={d.fromUnknown ? d.line.size_id : ""}
+                  onChange={(event) => {
+                    relabel(index, event.target.value);
+                  }}
+                >
+                  <option value="">Не читали — продати без розміру</option>
+                  {(sizes.data ?? []).map((size) => (
+                    <option key={size.size_id} value={size.size_id}>
+                      {visible(size.code)}
+                    </option>
+                  ))}
+                </select>
+                <span className="hint">
+                  Прочитали розмір на етикетці — оберіть його, і товар
+                  продасться з цим розміром.
+                </span>
+              </label>
             )}
             {d.fromUnknown && (
               <span className="hint">Розмір з етикетки товару без розміру</span>
@@ -897,6 +942,14 @@ export function Sale({
             </button>
           </div>
         ))}
+        {sizes.error && (
+          <Failure
+            error={sizes.error}
+            retry={() => {
+              void sizes.refetch();
+            }}
+          />
+        )}
         {mayCredit && (
           <TermsFields
             value={credit}
@@ -1108,7 +1161,7 @@ export function Sale({
               <button
                 key={way}
                 type="button"
-                disabled={blocked || working}
+                disabled={blocked || working || !priced}
                 onClick={() => {
                   void send(way, found, missing, clarified);
                 }}

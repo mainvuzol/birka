@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -160,12 +160,8 @@ async function sell(
   price: string,
   way: "Готівка" | "Картка" | "Переказ",
 ): Promise<Sold> {
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${coat.variant}:${coat.size}`);
-  await page.getByLabel("Кількість").fill("1");
-  await page.getByLabel("Ціна за одиницю, грн").fill(price);
-  await page.getByRole("button", { name: "Додати в кошик" }).click();
+  await tapSize(page, coat.variant, coat.size);
+  await fillLine(page, { price });
   const sold = page.waitForResponse(
     (r) => r.url().endsWith("/api/v1/sales") && r.request().method() === "POST",
   );
