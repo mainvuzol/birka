@@ -1,7 +1,9 @@
 # The sections and the header; the till's reminder after an outage — 2026-10-16
 
 Baseline: `e76e828` (the till's receipt and its small things, PR #92).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+thirty-one of thirty-one ways of breaking it caught. Not yet seen on a real
+phone.
 Branch: `feat/till-sections`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 P1-6, P1-7. Owner: business-rules.md, "the sections and the header; the
 till's reminder after an outage" (2026-10-15).
@@ -126,7 +128,21 @@ following, all addressed in `bdda1c6`:
 
 ## Evidence
 
-TODO(final)
+- [`output/verification/2026-10-16-till-sections/`](../../output/verification/2026-10-16-till-sections/):
+  `mutants.py` and `mutants.txt`, thirty-one ways of breaking it, all
+  caught.
+- **CI, run locally at `1768c58`** ([summary](../../output/verification/2026-10-16-till-sections-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 420 on PostgreSQL 17;
+  - e2e: 322 journeys, the backups one among them on CI's fresh database;
+  - hot path: worst p95 91.9 ms (the search by six sellers) and 70.0 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- **A first full run of the journeys was lost, not failed by this change:**
+  the test web server (Vite) stopped answering about two thirds through,
+  at full CPU, and every journey after it timed out signing in. Stopped,
+  and run again: 320 of 321 passed, the backups journey that counts the
+  shared database's nights the one left, as before this change.
 
 ## Not covered here
 
