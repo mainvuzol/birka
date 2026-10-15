@@ -1,5 +1,5 @@
 import { expect, test as base } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 /**
  * Playwright's `test`, except that:
@@ -58,12 +58,42 @@ export async function openStore(
       .first(),
   ).toBeVisible();
   if (!(await choice.isVisible())) return;
-  // The store chosen is the store opened: its name heads the workspace.
+  // The store chosen is the store opened: its name heads the workspace's
+  // line, «{Магазин} · {Ім’я}» (redesign P1-6).
   const label = (await choice.innerText()).split("\n")[0]?.trim() ?? "";
   await choice.click();
-  await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(
-    label,
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} · `),
   );
+}
+
+/** The counter's work, in the row of sections; every other is under «Ще». */
+const counter = ["Продаж", "Повернення", "Борги", "Каса"];
+
+/** The workspace's sections (redesign P1-6). */
+export function sections(page: Page): Locator {
+  return page.getByRole("navigation", { name: "Розділи" });
+}
+
+/**
+ * «Ще» opened, if it is not already: every section but the counter's is
+ * under it. A section looked for while «Ще» is closed is never found, so a
+ * journey that says one is absent, or disabled, opens it first.
+ */
+export async function more(page: Page): Promise<void> {
+  const button = sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
+  if ((await button.getAttribute("aria-expanded")) !== "true")
+    await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+}
+
+/**
+ * A section opened as a person opens it: one of the counter's from the
+ * row, any other from «Ще».
+ */
+export async function section(page: Page, name: string): Promise<void> {
+  if (!counter.includes(name)) await more(page);
+  await sections(page).getByRole("button", { name, exact: true }).click();
 }
 
 /**

@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  openStore,
+  section,
+  tapSize,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -737,7 +744,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // The till opens first (redesign P0-1); the order is in «Замовлення».
-  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+  await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
   await expect(
     page.getByText("Прибув на пошту", { exact: true }),
@@ -801,7 +808,7 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // The till opens first (redesign P0-1); the order is in «Замовлення».
-  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+  await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
   const collect = page.getByRole("button", {
     name: "Клієнт забрав",
@@ -867,7 +874,7 @@ test("collecting an order in parts needs the same permission", async ({
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // The till opens first (redesign P0-1); the order is in «Замовлення».
-  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+  await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
   await expect(
     page.getByRole("button", { name: "Клієнт забрав", exact: true }),

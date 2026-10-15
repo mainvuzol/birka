@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  openStore,
+  section,
+  tapSize,
+} from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -207,7 +214,7 @@ test("a correction refused for too many requests keeps its count, and is written
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Залишки", exact: true }).click();
+  await section(page, "Залишки");
   await page
     .getByLabel("Склад для перегляду")
     .selectOption(fixture.count_location_id);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ComponentProps, JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
@@ -117,6 +117,67 @@ import {
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import "./styles.css";
 
+type Tab =
+  | "list"
+  | "new"
+  | "catalog"
+  | "stock"
+  | "sale"
+  | "receive"
+  | "returns"
+  | "damaged"
+  | "openings"
+  | "credits"
+  | "backups"
+  | "stores"
+  | "suppliers"
+  | "invoices"
+  | "report"
+  | "models"
+  | "cash";
+
+/**
+ * The counter's work (redesign P1-6): these sections stand in the row,
+ * each for whoever may do it; every other is under «Ще».
+ */
+const counter: ReadonlySet<Tab> = new Set([
+  "sale",
+  "returns",
+  "credits",
+  "cash",
+]);
+
+/**
+ * The workspace's one line (redesign P1-6): the store and who works in it,
+ * and «Змінити магазин» for whoever has two or more stores. The app's name
+ * stands on the screens before a store opens, and in the title.
+ */
+function StoreLine({
+  store,
+  person,
+  changeStore,
+  blocked = false,
+}: {
+  store: string;
+  person: string;
+  changeStore: (() => void) | undefined;
+  blocked?: boolean;
+}): JSX.Element {
+  return (
+    <header className="store-line">
+      <h1>
+        {visible(store)}
+        <span> · {visible(person)}</span>
+      </h1>
+      {changeStore && (
+        <button className="quiet" disabled={blocked} onClick={changeStore}>
+          Змінити магазин
+        </button>
+      )}
+    </header>
+  );
+}
+
 /**
  * Signs in with the launch data Telegram signed, once. The token it gives is
  * what every later request carries: a seller stays signed in for 12 hours
@@ -223,15 +284,21 @@ export function App(): JSX.Element {
       : undefined;
   return (
     <main>
-      <header>
-        <div>
-          <span className="eyebrow">РОБОЧЕ МІСЦЕ ПРОДАВЦЯ</span>
-          <h1>
-            Бірка <span> / магазин</span>
-          </h1>
-        </div>
-        <span>{visible(me.data.display_name)}</span>
-      </header>
+      {!store ? (
+        <header>
+          <h1>Бірка</h1>
+          <span>{visible(me.data.display_name)}</span>
+        </header>
+      ) : (
+        store.state !== "ACTIVE" &&
+        store.permissions.length === 0 && (
+          <StoreLine
+            store={store.name}
+            person={me.data.display_name}
+            changeStore={changeStore}
+          />
+        )
+      )}
       {!store ? (
         <section>
           <h2>Оберіть магазин</h2>
@@ -258,15 +325,7 @@ export function App(): JSX.Element {
         // Its own people learn the state and since when, never why (owner
         // decision, 2026-10-01).
         <section>
-          <div className="toolbar">
-            <h2>{visible(store.name)}</h2>
-            {changeStore && (
-              <button className="quiet" onClick={changeStore}>
-                Змінити магазин
-              </button>
-            )}
-          </div>
-          <h3>{stateText(store)}</h3>
+          <h2>{stateText(store)}</h2>
           <p role="alert">
             Роботу в цьому магазині зупинено: продажі, приймання, повернення й
             оплати в ньому не проводяться. Зверніться до власника.
@@ -315,25 +374,7 @@ function Workspace({
   // A series of paper sales is this store's: another store, or leaving,
   // ends it (ADR-0013 §7).
   useEffect(() => clearPaper, []);
-  const [tab, setTab] = useState<
-    | "list"
-    | "new"
-    | "catalog"
-    | "stock"
-    | "sale"
-    | "receive"
-    | "returns"
-    | "damaged"
-    | "openings"
-    | "credits"
-    | "backups"
-    | "stores"
-    | "suppliers"
-    | "invoices"
-    | "report"
-    | "models"
-    | "cash"
-  >(
+  const [tab, setTab] = useState<Tab>(
     // The till first, for whoever sells there (redesign, P0-1): the book is
     // opened at the page of the day's work. Kept operations still turn to
     // their own tab, below.
@@ -341,6 +382,13 @@ function Workspace({
       ? "sale"
       : "list",
   );
+  // «Ще» is open on the section it was opened on (redesign P1-6): the app
+  // turning to another by itself closes it, and a section chosen forgets it,
+  // so coming back to that section does not open it again (review,
+  // 2026-10-16).
+  const [moreAt, setMoreAt] = useState<Tab | null>(null);
+  const moreId = useId();
+  const moreButton = useRef<HTMLButtonElement>(null);
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
   const trading = store.state === "ACTIVE";
@@ -981,213 +1029,178 @@ function Workspace({
     settled?.outage && settled.payment_method
       ? paidDuringOutage(settled.payment_method)
       : null;
+  // The sections (redesign P1-6), each by the same right as before: the
+  // counter's work in the row, and every other under «Ще», two taps away.
+  // An order left open is forgotten by the sections that always were.
+  const sections: {
+    tab: Tab;
+    label: string;
+    shown: boolean;
+    disabled: boolean;
+    forgetsOrder?: true;
+  }[] = [
+    {
+      tab: "sale",
+      label: "Продаж",
+      shown: store.permissions.includes("sale:create"),
+      disabled: blocked,
+      forgetsOrder: true,
+    },
+    {
+      tab: "returns",
+      label: "Повернення",
+      shown: canReturn,
+      disabled: blocked,
+    },
+    { tab: "credits", label: "Борги", shown: canSeeCredits, disabled: blocked },
+    {
+      tab: "cash",
+      label: "Каса",
+      shown: canSeeCash,
+      disabled: otherThanCash,
+      forgetsOrder: true,
+    },
+    {
+      tab: "list",
+      label: "Замовлення",
+      shown: true,
+      disabled: blocked,
+      forgetsOrder: true,
+    },
+    {
+      tab: "new",
+      label: "+ Нове замовлення",
+      shown: store.permissions.includes("sale:create"),
+      disabled: blocked,
+      forgetsOrder: true,
+    },
+    {
+      tab: "catalog",
+      label: "Каталог",
+      shown: store.permissions.includes("catalog:confirm"),
+      disabled: blocked,
+    },
+    {
+      tab: "receive",
+      label: "Приймання",
+      shown: store.permissions.includes("inventory:receive"),
+      disabled: blocked,
+    },
+    {
+      tab: "stock",
+      label: "Залишки",
+      shown: store.permissions.includes("inventory:view"),
+      disabled: blocked,
+    },
+    {
+      tab: "damaged",
+      label: "Брак",
+      shown: store.permissions.includes("damaged:handle"),
+      disabled: blocked,
+    },
+    {
+      tab: "openings",
+      label: "Початкові залишки",
+      shown: canSeeOpenings,
+      disabled: blocked,
+    },
+    {
+      tab: "backups",
+      label: `Резервні копії${backupsNeedYou ? " ⚠" : ""}`,
+      shown: canSeeBackups,
+      disabled: blocked,
+    },
+    {
+      tab: "suppliers",
+      label: "Постачальникам",
+      shown: canReturnToSupplier,
+      disabled: otherThanSuppliers,
+    },
+    {
+      tab: "invoices",
+      label: "Накладні",
+      shown: canSeeInvoices,
+      disabled: otherThanInvoices,
+    },
+    {
+      tab: "models",
+      label: "Моделі",
+      shown: canCorrect,
+      disabled: otherThanCorrections,
+    },
+    {
+      tab: "report",
+      label: "Звіт",
+      shown: canSeeReport,
+      disabled: blocked,
+    },
+    {
+      tab: "stores",
+      label: "Магазини",
+      shown: canManageStores,
+      disabled: otherThanStores,
+    },
+  ];
+  // Whatever section is open, «Ще» marks it when it is one of its own; its
+  // screen's heading names it. Open, it closes once a section is chosen.
+  const inMore = !counter.has(tab);
+  const moreOpen = moreAt === tab;
+  const sectionButton = (section: (typeof sections)[number]): JSX.Element => (
+    <button
+      key={section.tab}
+      className={tab === section.tab ? "active" : "quiet"}
+      aria-current={tab === section.tab ? "page" : undefined}
+      disabled={section.disabled}
+      onClick={() => {
+        setTab(section.tab);
+        if (section.forgetsOrder) setSelectedId(null);
+        // Chosen under «Ще», the button goes as «Ще» closes: the focus
+        // stays on «Ще», not lost to the page (review, 2026-10-16).
+        if (moreOpen && !counter.has(section.tab)) moreButton.current?.focus();
+        setMoreAt(null);
+      }}
+    >
+      {section.label}
+    </button>
+  );
+  const shown = sections.filter((section) => section.shown);
+  const rest = shown.filter((section) => !counter.has(section.tab));
   setScreen(tab);
   return (
     <>
-      <div className="toolbar">
-        <h2>{visible(store.name)}</h2>
-        {changeStore && (
-          <button className="quiet" disabled={blocked} onClick={changeStore}>
-            Змінити магазин
-          </button>
-        )}
-      </div>
+      <StoreLine
+        store={store.name}
+        person={me.display_name}
+        changeStore={changeStore}
+        blocked={blocked}
+      />
       {!trading && (
         <p className="notice" role="status">
           {stateText(store)}. Лише перегляд: продажі, приймання, повернення й
           оплати в цьому магазині зупинено.
         </p>
       )}
-      <nav aria-label="Розділи">
-        <button
-          className={tab === "list" ? "active" : "quiet"}
-          disabled={blocked}
-          onClick={() => {
-            setTab("list");
-            setSelectedId(null);
-          }}
-        >
-          Замовлення
-        </button>
-        {store.permissions.includes("sale:create") && (
+      <nav aria-label="Розділи" className="sections">
+        <div className="row">
+          {shown
+            .filter((section) => counter.has(section.tab))
+            .map(sectionButton)}
           <button
-            className={tab === "sale" ? "active" : "quiet"}
-            disabled={blocked}
+            ref={moreButton}
+            className={inMore ? "active" : "quiet"}
+            aria-current={inMore ? "true" : undefined}
+            aria-expanded={moreOpen}
+            aria-controls={moreId}
             onClick={() => {
-              setTab("sale");
-              setSelectedId(null);
+              setMoreAt(moreOpen ? null : tab);
             }}
           >
-            Продаж
+            Ще{backupsNeedYou ? " ⚠" : ""}
           </button>
-        )}
-        {store.permissions.includes("sale:create") && (
-          <button
-            className={tab === "new" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("new");
-              setSelectedId(null);
-            }}
-          >
-            + Нове замовлення
-          </button>
-        )}
-        {store.permissions.includes("catalog:confirm") && (
-          <button
-            className={tab === "catalog" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("catalog");
-            }}
-          >
-            Каталог
-          </button>
-        )}
-        {store.permissions.includes("inventory:receive") && (
-          <button
-            className={tab === "receive" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("receive");
-            }}
-          >
-            Приймання
-          </button>
-        )}
-        {store.permissions.includes("inventory:view") && (
-          <button
-            className={tab === "stock" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("stock");
-            }}
-          >
-            Залишки
-          </button>
-        )}
-        {canReturn && (
-          <button
-            className={tab === "returns" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("returns");
-            }}
-          >
-            Повернення
-          </button>
-        )}
-        {canSeeCredits && (
-          <button
-            className={tab === "credits" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("credits");
-            }}
-          >
-            Борги
-          </button>
-        )}
-        {canSeeCash && (
-          <button
-            className={tab === "cash" ? "active" : "quiet"}
-            disabled={otherThanCash}
-            onClick={() => {
-              setTab("cash");
-              setSelectedId(null);
-            }}
-          >
-            Каса
-          </button>
-        )}
-        {store.permissions.includes("damaged:handle") && (
-          <button
-            className={tab === "damaged" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("damaged");
-            }}
-          >
-            Брак
-          </button>
-        )}
-        {canSeeOpenings && (
-          <button
-            className={tab === "openings" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("openings");
-            }}
-          >
-            Початкові залишки
-          </button>
-        )}
-        {canSeeBackups && (
-          <button
-            className={tab === "backups" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("backups");
-            }}
-          >
-            Резервні копії{backupsNeedYou ? " ⚠" : ""}
-          </button>
-        )}
-        {canReturnToSupplier && (
-          <button
-            className={tab === "suppliers" ? "active" : "quiet"}
-            disabled={otherThanSuppliers}
-            onClick={() => {
-              setTab("suppliers");
-            }}
-          >
-            Постачальникам
-          </button>
-        )}
-        {canSeeInvoices && (
-          <button
-            className={tab === "invoices" ? "active" : "quiet"}
-            disabled={otherThanInvoices}
-            onClick={() => {
-              setTab("invoices");
-            }}
-          >
-            Накладні
-          </button>
-        )}
-        {canCorrect && (
-          <button
-            className={tab === "models" ? "active" : "quiet"}
-            disabled={otherThanCorrections}
-            onClick={() => {
-              setTab("models");
-            }}
-          >
-            Моделі
-          </button>
-        )}
-        {canSeeReport && (
-          <button
-            className={tab === "report" ? "active" : "quiet"}
-            disabled={blocked}
-            onClick={() => {
-              setTab("report");
-            }}
-          >
-            Звіт
-          </button>
-        )}
-        {canManageStores && (
-          <button
-            className={tab === "stores" ? "active" : "quiet"}
-            disabled={otherThanStores}
-            onClick={() => {
-              setTab("stores");
-            }}
-          >
-            Магазини
-          </button>
-        )}
+        </div>
+        <div id={moreId} className="more" hidden={!moreOpen}>
+          {rest.map(sectionButton)}
+        </div>
       </nav>
       {catalogStorageError && (
         <p role="alert">

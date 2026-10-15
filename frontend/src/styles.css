@@ -132,10 +132,27 @@ h2 {
 h3 {
   margin-top: 0;
 }
-.eyebrow {
-  font-size: 10px;
-  letter-spacing: 1.7px;
-  font-weight: 700;
+/* The workspace's one line (redesign P1-6): the store and who works in it,
+   small, so the screen's own heading is the one that stands out. */
+header.store-line {
+  padding-bottom: 10px;
+  align-items: center;
+}
+.store-line h1 {
+  font-size: 17px;
+  letter-spacing: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.store-line h1 span {
+  font-size: 15px;
+  color: var(--text-2);
+}
+.store-line button {
+  flex: none;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
 }
 section {
   background: var(--surface);
@@ -221,7 +238,7 @@ label .hint {
   font-weight: 400;
 }
 .toolbar,
-nav,
+nav:not(.sections),
 .actions,
 .fields {
   display: flex;
@@ -236,8 +253,35 @@ nav,
   margin: 0;
 }
 nav {
-  justify-content: flex-start;
   margin-top: 20px;
+}
+nav:not(.sections) {
+  justify-content: flex-start;
+}
+/* The sections (redesign P1-6): the counter's work and «Ще» in one row of
+   48 px targets, one line at 360 px; «Ще» opens every other below it. On a
+   narrower screen, or a larger text, a label is cut short rather than push
+   the page sideways (review, 2026-10-16). */
+nav.sections .row {
+  display: flex;
+  gap: 4px;
+}
+nav.sections .row button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 12px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+nav.sections .more {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+nav.sections .more[hidden] {
+  display: none;
 }
 .actions {
   flex-wrap: wrap;
@@ -360,16 +404,19 @@ button.active {
   .fields {
     gap: 10px;
   }
-  nav button {
+  nav:not(.sections) button {
     flex: 1;
     padding: 12px 8px;
+    font-size: 14px;
+  }
+  nav.sections button {
     font-size: 14px;
   }
   .actions button {
     width: 100%;
   }
 }
-nav {
+nav:not(.sections) {
   flex-wrap: wrap;
 }
 .catalog-raw {

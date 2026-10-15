@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  more,
+  openStore,
+  tapSize,
+} from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -387,6 +394,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(reason).toHaveAccessibleDescription(
       "Без імен і телефонів покупців.",
     );
+    await more(page);
     for (const name of otherTabs)
       await expect(
         page.getByRole("button", { name, exact: true }),
@@ -411,6 +419,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByText("Причину записано. Власник отримає повідомлення."),
     ).toBeVisible();
+    await more(page);
     for (const name of otherTabs)
       await expect(
         page.getByRole("button", { name, exact: true }),
@@ -489,6 +498,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(page.getByRole("alert")).toHaveText(
       /^Підрахунок не записано\. Касу сьогодні вже закрито о \d{2}:\d{2} · Оля\. Наступне закриття — завтра\.$/,
     );
+    await more(page);
     for (const name of otherTabs)
       await expect(
         page.getByRole("button", { name, exact: true }),
@@ -615,6 +625,7 @@ test("a take-out kept on the phone settles on the refusal of a close in between,
   await expect(page.getByRole("alert")).toHaveText(
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\. Якщо гроші взяли чи внесли вже після закриття — запишіть ще раз\. Якщо до нього — це запише менеджер до того закриття\.$/,
   );
+  await more(page);
   for (const name of otherTabs)
     await expect(page.getByRole("button", { name, exact: true })).toBeEnabled();
   expect(await page.evaluate((name) => localStorage.getItem(name), key)).toBe(

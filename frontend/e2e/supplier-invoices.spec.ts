@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -66,7 +66,7 @@ async function invoicesAt(page: Page, telegramUserId: string): Promise<void> {
     `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId) }).toString()}`,
   );
   await openStore(page, "Центр CENTRE");
-  await page.getByRole("button", { name: "Накладні", exact: true }).click();
+  await section(page, "Накладні");
 }
 
 function posts(page: Page, ending: RegExp): { bodies: unknown[] } {
@@ -312,9 +312,7 @@ test("goods returned are set off against an invoice, and their return waits for 
   ]);
 
   // The goods stay with the supplier while it counts them.
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   const card = page
     .getByRole("article", { name: new RegExp(`^Повернення ${supplier}`) })
     .filter({ hasText: "× 2" });
@@ -328,7 +326,7 @@ test("goods returned are set off against an invoice, and their return waits for 
     card.getByRole("button", { name: "Скасувати повернення" }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Накладні", exact: true }).click();
+  await section(page, "Накладні");
   await open(page, supplier);
   await page
     .getByRole("button", { name: "Скасувати: залік за повернення 1200,00 грн" })
@@ -342,9 +340,7 @@ test("goods returned are set off against an invoice, and their return waits for 
   ).toBeVisible();
   expect(await owed(page, invoiceId)).toBe("4000.00");
 
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   await expect(
     card.getByRole("button", { name: "Скасувати повернення" }),
   ).toBeVisible();

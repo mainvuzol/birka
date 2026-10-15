@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -57,7 +57,7 @@ async function enter(
     `/#${new URLSearchParams({ tgWebAppData: initData(who.id, who.name) }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: tab, exact: true }).click();
+  await section(page, tab);
 }
 
 async function token(page: Page): Promise<string> {
@@ -384,7 +384,7 @@ test("whoever does not set prices sees them and is offered no change", async ({
     }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Приймання", exact: true }).click();
+  await section(page, "Приймання");
   await page.getByLabel("Пошук у каталозі").fill(priced.name);
   await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: new RegExp(priced.name) }).click();

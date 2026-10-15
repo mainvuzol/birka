@@ -1432,3 +1432,25 @@ See the [report](till-redesign-3-report.md).
   switch is the store's, so the return carries «під час збою» and says the
   money was handed over then. For a typo in a paper sale this nets out in
   the drawer; whether it is the reading wanted is a question for the owner.
+
+## The sections and the till's reminder after an outage — 2026-10-16
+
+See the [report](till-redesign-4-report.md).
+
+- **The row fits 360 px with little to spare:** the owner's «Продаж ·
+  Повернення · Борги · Каса · Ще ⚠» leaves about 6 px at the standard text
+  size with this Mac's fonts (Android's are narrower). On a narrower
+  screen, or with the phone's text set larger, the labels are cut short
+  («Поверне…») rather than push the page sideways; the journeys measure
+  the row, uncut, at 360 px and the standard size only.
+- **The reminder is the phone's own memory:** it is said on a phone that
+  saw the server lost and back while the app was open. A phone opened only
+  after the server came back says nothing, and the bot does not tell
+  sellers (В7 (б)); the owner and the administrator are told by the bot as
+  before, and closing the drawer still asks about paper (G7).
+- **One request that got no answer is enough:** a single 502, 503 or 504,
+  or a timeout, then any answer, and the till reminds, though nobody may
+  have written on paper. «Пізніше» puts it away until the next time.
+- **A section a journey says is absent must be looked for under «Ще»:**
+  closed, «Ще» shows none, so such a check passes whatever the rights.
+  The journeys that say so open «Ще» first.

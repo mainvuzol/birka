@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -167,7 +167,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   const supplier = await aSupplier(page);
   const receipts = posts(page, /\/inventory\/receipts$/);
   await openAs(page, hanna);
-  await page.getByRole("button", { name: "Приймання", exact: true }).click();
+  await section(page, "Приймання");
   await page.getByLabel("Пошук у каталозі").fill(coat.model);
   await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: new RegExp(coat.model) }).click();
@@ -213,9 +213,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     }),
   ]);
 
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   const lot = card(page, coat, supplier.name);
   await expect(lot).toContainText(
     "1500,00 грн за од. · взято 3 · продано 0 · повернено 0 · на руках 3",
@@ -229,7 +227,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   ).toBeVisible();
   await expect(lot).toContainText("продано 2 · повернено 0 · на руках 1");
 
-  await page.getByRole("button", { name: "Накладні", exact: true }).click();
+  await section(page, "Накладні");
   await expect(
     page.getByRole("article", {
       name: new RegExp(`^Накладна ${supplier.name}`),
@@ -245,9 +243,7 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
   const lotId = await borrowed(page, coat, supplier.id, 2);
   const returns = posts(page, /\/supplier-returns$/);
   await openAs(page, hanna);
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   const lot = card(page, coat, supplier.name);
   await lot.getByLabel("Скільки одиниць").fill("3");
   await lot.getByRole("button", { name: "Повернути постачальнику" }).click();
@@ -294,7 +290,7 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
   expect(await onHand(page, lotId)).toBe(0);
 
   await openAs(page, hanna);
-  await page.getByRole("button", { name: "Накладні", exact: true }).click();
+  await section(page, "Накладні");
   await page
     .getByRole("button", {
       name: new RegExp(`^Відкрити накладну ${supplier.name} `),
@@ -310,9 +306,7 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
     page.getByText(/^Скасовано .* ще не продали/).first(),
   ).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   await expect(card(page, coat, supplier.name)).toContainText(
     "продано 0 · повернено 0 · на руках 1",
   );
@@ -320,13 +314,14 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
 
 test("a seller takes only the shop's own goods", async ({ page }) => {
   await openAs(page, lida);
-  await page.getByRole("button", { name: "Приймання", exact: true }).click();
+  await section(page, "Приймання");
   await expect(
     page.getByRole("heading", { name: "Приймання товару" }),
   ).toBeVisible();
   await expect(
     page.getByRole("combobox", { name: "Як надійшов", exact: true }),
   ).toHaveCount(0);
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Постачальникам", exact: true }),
   ).toHaveCount(0);
@@ -349,9 +344,7 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
     } else await route.continue();
   });
   await openAs(page, hanna);
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   await card(page, coat, supplier.name)
     .getByRole("button", { name: "Продано" })
     .click();

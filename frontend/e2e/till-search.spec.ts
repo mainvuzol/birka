@@ -202,9 +202,10 @@ test("a model past the first hundred is found by three letters and sold in three
   const asked = await stubList(page, [...alpacas, laurent]);
   const sent = await stubSale(page);
   await onTheTill(page);
-  // The app's name as the owner writes it (2026-10-15, В4).
+  // The header is one line, the store and who works in it (redesign P1-6);
+  // the app's name is on the screens before a store opens (owner, В4).
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Бірка / магазин",
+    /^Основний · Оля$/,
   );
   await expect(
     page.getByText("Кошик порожній — знайдіть модель угорі."),

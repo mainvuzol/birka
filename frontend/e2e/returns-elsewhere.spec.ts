@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -233,7 +233,7 @@ test("goods bought at another store come back here, and this store hands the mon
   );
   // The damaged one stays here, in «Основний»'s «Брак».
   expect(await held(page, fixture.bin_location_id, variant)).toBe(1);
-  await page.getByRole("button", { name: "Брак", exact: true }).click();
+  await section(page, "Брак");
   await expect(
     page.getByRole("article").filter({ hasText: model }),
   ).toHaveCount(1);
@@ -322,7 +322,7 @@ test("a unit from the other store's own warehouse goes back on sale here, where 
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Брак", exact: true }).click();
+  await section(page, "Брак");
   const unit = page.getByRole("article").filter({ hasText: model });
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
   await unit.getByRole("button", { name: "Повернути в продаж" }).click();

@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, sections } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -36,7 +36,12 @@ async function enter(page: Page, telegramUserId: string): Promise<void> {
 }
 
 function tab(page: Page) {
-  return page.getByRole("button", { name: /^Резервні копії/ });
+  return sections(page).getByRole("button", { name: /^Резервні копії/ });
+}
+
+/** «Ще», which holds the section and is marked as it is (redesign P1-6). */
+function moreTab(page: Page) {
+  return sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
 }
 
 const hour = 3_600_000;
@@ -72,6 +77,9 @@ test("the owner is shown last night's failed copy, and why Telegram did not say 
   page,
 }) => {
   await enter(page, fixture.owner_telegram_user_id);
+  // Seen before «Ще» is opened.
+  await expect(moreTab(page)).toHaveText("Ще ⚠");
+  await more(page);
   await expect(tab(page)).toHaveText("Резервні копії ⚠");
   await tab(page).click();
 
@@ -110,10 +118,12 @@ test("a seller, even holding every permission for the store, has no such section
     if (request.url().includes("/api/v1/backups")) asked.push(request.url());
   });
   await enter(page, fixture.telegram_user_id);
+  await more(page);
   await expect(
-    page.getByRole("button", { name: "Залишки", exact: true }),
+    sections(page).getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
   await expect(tab(page)).toHaveCount(0);
+  await expect(moreTab(page)).toHaveText("Ще");
   expect(asked).toEqual([]);
 });
 
@@ -135,10 +145,13 @@ test("copies in order leave the tab unmarked and say when and how big", async ({
     },
   });
   await enter(page, fixture.owner_telegram_user_id);
+  await more(page);
   await tab(page).click();
   const verdict = page.locator('[data-state="OK"]');
   await expect(verdict.getByRole("heading")).toHaveText("Копії в порядку");
   // Read once the state has arrived: before it, the tab is unmarked anyway.
+  await expect(moreTab(page)).toHaveText("Ще");
+  await more(page);
   await expect(tab(page)).toHaveText("Резервні копії");
   await expect(verdict).toContainText("перевірена відновленням за 0,4 с.");
   await expect(verdict).toContainText("Розмір: 2,4 МБ.");
@@ -156,6 +169,7 @@ test("a schedule that stopped is told in hours since the last attempt", async ({
     nights: [last],
   });
   await enter(page, fixture.owner_telegram_user_id);
+  await more(page);
   await tab(page).click();
   const verdict = page.locator('[data-state="OVERDUE"]');
   await expect(verdict.getByRole("heading")).toHaveText(
@@ -175,6 +189,8 @@ test("a server never backed up says so plainly", async ({ page }) => {
     nights: [],
   });
   await enter(page, fixture.owner_telegram_user_id);
+  await expect(moreTab(page)).toHaveText("Ще ⚠");
+  await more(page);
   await expect(tab(page)).toHaveText("Резервні копії ⚠");
   await tab(page).click();
   await expect(

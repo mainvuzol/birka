@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -32,7 +32,7 @@ function launch(): string {
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Залишки", exact: true }).click();
+  await section(page, "Залишки");
 }
 
 test("stock screen explicitly selects warehouse and shows real API balances without mutations", async ({
@@ -104,6 +104,7 @@ test("stock navigation requires inventory permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toHaveCount(0);

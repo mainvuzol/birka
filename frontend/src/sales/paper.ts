@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { backNoted } from "@/shared/reach";
 
 /**
  * The till's paper mode, «Вношу продаж з паперу» (ADR-0013 §7; owner
@@ -39,8 +40,13 @@ export const usePaper = create<Paper>(() => ({
   takenBy: nobody,
 }));
 
-/** The switch, ticked or unticked: either way nobody is named yet. */
+/**
+ * The switch, ticked or unticked: either way nobody is named yet. Ticked on
+ * any screen, it answers the till's reminder that the server is back
+ * (redesign P1-7): the paper is being typed.
+ */
 export function setPaper(storeId: string, on: boolean): void {
+  if (on) backNoted();
   usePaper.setState({
     storeId: on ? storeId : null,
     soldBy: null,

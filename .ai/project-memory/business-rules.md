@@ -2297,3 +2297,40 @@ How it is carried out, not decided by the owner:
   them; ticking «Оплата частинами» puts the cursor in «Ім’я покупця».
 
 Built on 2026-10-15; see the [report](till-redesign-3-report.md).
+
+## Owner decision — 2026-10-15 (the sections and the header; the till's reminder after an outage)
+
+Asked after the till's receipt merged (PR #92):
+- **Next: the sections and the header, and the reminder after an outage**
+  (the task list's P1-6, P1-7), the option recommended when asked.
+- **A paper sale returned from its own receipt is a paper return,** marked
+  «під час збою», as built in PR #92 (the option recommended): the paper
+  switch is the store's, and a return made by mistake nets out in the
+  till's cash with the sale it corrects.
+- **В7: the bot does not tell sellers that the server answers again** (the
+  option not recommended when asked). The owner and the administrator are
+  told as before (G10); a seller is reminded at the till alone.
+
+How it is carried out, not decided by the owner:
+- **The counter's work stands in one row:** «Продаж», «Повернення»,
+  «Борги», «Каса», each for whoever may do it, and «Ще», which opens every
+  other section, each by the same right as before. Any section is two taps
+  away. «Ще» is marked when the section open is one of its own, whose
+  heading names it, and says «Ще ⚠» when the backups or the server need the
+  owner. The row stays at the top, as the task list has it, not as tabs at
+  the bottom (the design direction): the till's payment panel holds the
+  bottom of the screen, and the tabs the direction draws («Товар»,
+  «Клієнти», «Огляд») are screens not built yet.
+- **The header is one line,** «{Магазин} · {Ім’я}», with «Змінити магазин»
+  beside it for whoever has two or more stores. «РОБОЧЕ МІСЦЕ ПРОДАВЦЯ» is
+  gone; the app's name, «Бірка», stays on the screens before a store opens,
+  on the crash screen and in the title.
+- **Once this phone has seen the server come back after it did not answer,
+  the till says once:** «Сервер знову відповідає: продажі з паперу можна
+  вносити. Внесіть їх до закриття каси.», with «Вношу продаж з паперу»,
+  which ticks the same switch as the tick, and «Пізніше». Either answers it,
+  and so does ticking the switch on any screen; it is said again only after
+  the server is lost and back once more. It is the phone's own memory: a
+  reopened app says nothing until it sees an outage itself.
+
+Built on 2026-10-16; see the [report](till-redesign-4-report.md).

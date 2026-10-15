@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import { execFileSync } from "node:child_process";
 import { createHmac, randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -89,7 +89,7 @@ test("someone the shop has not added sees their number, and is let in once added
     String(stranger),
   );
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Залишки", exact: true }).click();
+  await section(page, "Залишки");
   await expect(
     page.getByText("Доступ до магазину закрито. Зверніться до власника."),
   ).toBeVisible();
