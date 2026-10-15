@@ -139,9 +139,10 @@ test("the receipt names each line's size, and the shelf's corrections in coats",
   await stubList(page);
   await stubSale(page, {
     items: [item({ size: "M" })],
+    // Two coats found, one movement: the receipt says two.
     corrections: [randomUUID()],
     size_reclassifications: [randomUUID(), randomUUID()],
-    found_quantity: 1,
+    found_quantity: 2,
     missing_quantity: 0,
     clarified: [{ size: "L", quantity: 1 }],
   });
@@ -155,7 +156,7 @@ test("the receipt names each line's size, and the shelf's corrections in coats",
   await expect(line.locator("strong")).toHaveText("Лоран шоколад · M");
   await expect(line.locator("span")).toHaveText("1 × 1850,00 грн");
   await expect(
-    page.getByText("Знайдене на полиці додано в облік: 1 шт."),
+    page.getByText("Знайдене на полиці додано в облік: 2 шт."),
   ).toBeVisible();
   await expect(
     page.getByText("Розмір з етикетки записано: 1 шт. як L."),
@@ -178,6 +179,10 @@ test("an answer stored before the server named sizes and coats is read from the 
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await pay(page, "Готівка").click();
+  // The receipt, not the basket's line still on screen before it.
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
   await expect(page.locator(".line strong")).toHaveText("Лоран шоколад · M");
   await expect(
     page.getByText("Знайдене на полиці додано в облік.", { exact: true }),

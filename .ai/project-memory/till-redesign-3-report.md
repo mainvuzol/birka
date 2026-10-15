@@ -83,7 +83,17 @@ Nothing about money, stock or who may do what changes.
   the cursor in the name and the keyboard's action key moving on. The
   receipt journeys of `sale.spec.ts` and `size.spec.ts` read the new words,
   and the return's paper text is checked (`outage-mark-debts-returns.spec.ts`).
-- **Mutation:** TODO(final).
+- **Mutation:** twenty-six ways of breaking it, one at a time — six on the
+  server against its tests, twenty on the screens against the journeys on a
+  fresh seed each — after the unchanged tree passed both ways: all caught,
+  each by the test meant to catch it.
+  - Two survived a first run, and the journey now closes each: one read the
+    receipt's line before the receipt replaced the basket, whose line said
+    «· M» already; another's answer had one coat for one movement, so
+    counting movements could not be told from counting coats.
+  - Two more, among the review's fixes, survived until their journeys
+    waited for the returns list's answer: the form they must not open came
+    a moment after.
 
 ## Review
 
