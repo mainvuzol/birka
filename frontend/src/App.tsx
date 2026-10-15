@@ -519,6 +519,12 @@ function Workspace({
   // and pressed again would answer it once more without saying it may have
   // been paid out already.
   const [returnsEpoch, setReturnsEpoch] = useState(0);
+  // A sale whose receipt offered its own return: «Повернення» opens on it
+  // (redesign P1-2).
+  const [returnOf, setReturnOf] = useState<string | null>(null);
+  const returnOpened = useCallback(() => {
+    setReturnOf(null);
+  }, []);
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -1555,6 +1561,14 @@ function Workspace({
               correctionUnsettled
             }
             {...fixFromReceipt}
+            {...(canReturn
+              ? {
+                  returnSale: (sale: SaleReceipt) => {
+                    setReturnOf(sale.id);
+                    setTab("returns");
+                  },
+                }
+              : {})}
           />
         ) : (
           <p role="alert">Немає права оформлювати продаж.</p>
@@ -1607,6 +1621,8 @@ function Workspace({
             store={store}
             token={token}
             journalKey={returnKey}
+            open={returnOf}
+            opened={returnOpened}
             blocked={
               storageError ||
               catalogStorageError ||

@@ -25,6 +25,15 @@ export interface SaleItem extends SaleLine {
   final_unit_price: string;
   line_total: string;
   display_name: string;
+  /** The size as the receipt froze it, «UNKNOWN» for one not known; absent
+   * from answers stored before it was given (redesign P1-1). */
+  size?: string | null;
+}
+
+/** Coats sold with the size read off their label. */
+export interface Clarified {
+  size: string;
+  quantity: number;
 }
 
 export interface Sale {
@@ -38,6 +47,14 @@ export interface Sale {
   corrections: string[];
   shortages: string[];
   size_reclassifications: string[];
+  /**
+   * The corrections above in units, counted by the server from what it wrote
+   * (redesign P1-1): found on the shelf, written off as missing, sold with a
+   * size read off a label. Absent from answers stored before them.
+   */
+  found_quantity?: number | null;
+  missing_quantity?: number | null;
+  clarified?: Clarified[] | null;
   /** A sale paid in parts: what was paid now and what is owed. */
   credit?: SaleCredit | null;
   /**

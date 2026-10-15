@@ -12,6 +12,7 @@ import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
@@ -111,6 +112,7 @@ export function Sale({
   journalKey,
   blocked,
   fixMethod,
+  returnSale,
 }: {
   store: Store;
   token: string;
@@ -123,6 +125,11 @@ export function Sale({
    * §B6.4).
    */
   fixMethod?: (sale: SaleReceipt) => void;
+  /**
+   * Opens «Повернення» on this sale, for whoever may take returns: a sale is
+   * never changed, a mistake is returned and sold again (I8; redesign P1-2).
+   */
+  returnSale?: (sale: SaleReceipt) => void;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   // What the seller types to find a model (redesign P0-2).
@@ -151,6 +158,9 @@ export function Sale({
   const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
   // Lines dropped from the receipt's sale because nothing was on the shelf.
   const [dropped, setDropped] = useState<string[]>([]);
+  // Each line's size as the basket said it: the receipt's, for an answer
+  // stored before the server named the size (redesign P1-1).
+  const [sentSizes, setSentSizes] = useState<Record<string, string>>({});
   const [nothingSold, setNothingSold] = useState<EmptyShelf | null>(null);
   const [validation, setValidation] = useState("");
   // Paying in parts (owner decisions, 2026-10-01): the customer takes the
@@ -484,6 +494,10 @@ export function Sale({
     if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
       if (outcome.kind === "sold") {
         setReceipt(outcome.sale);
+        setSentSizes(
+          Object.fromEntries(draft.map((d) => [stockKey(d.line), d.size])),
+        );
+        buzz("success");
         setDropped(empty.map((d) => `${visible(d.name)} · ${visible(d.size)}`));
       } else {
         setNothingSold(outcome.shelf);
@@ -514,6 +528,7 @@ export function Sale({
         await stock.refetch();
       }
     } else if (outcome.kind === "refused") {
+      buzz("error");
       const { error, shortfall: short } = outcome;
       const { details } = error;
       if (
@@ -678,6 +693,8 @@ export function Sale({
           setFocusSearch(true);
         }}
         fixMethod={fixMethod}
+        returnSale={returnSale}
+        sizes={sentSizes}
       />
     );
 
@@ -903,7 +920,14 @@ export function Sale({
               </span>
             ) : (
               <span className="hint">
-                Ціни продажу ще немає — впишіть домовлену.
+                Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає
+                менеджер у «Залишках».
+              </span>
+            )}
+            {d.line.unit_price === "0.00" && (
+              // A gift is allowed, a slip is not caught (owner, В3 (а)).
+              <span className="hint price-warn">
+                Ціна 0,00 грн. Це справді подарунок? Перевірте ціну.
               </span>
             )}
             {found[index] !== undefined && (
@@ -1231,11 +1255,16 @@ function Receipt({
   dropped,
   next,
   fixMethod,
+  returnSale,
+  sizes,
 }: {
   receipt: SaleReceipt;
   dropped: string[];
   next: () => void;
   fixMethod: ((sale: SaleReceipt) => void) | undefined;
+  returnSale: ((sale: SaleReceipt) => void) | undefined;
+  /** The basket's sizes by stock key, for an answer that names none. */
+  sizes: Record<string, string>;
 }): JSX.Element {
   // An answer recorded before the way was asked names none (ADR-0012 §B12).
   const way = receipt.payment_method ?? null;
@@ -1309,36 +1338,60 @@ function Receipt({
           <p className="hint">Наступні внески — у розділі «Борги».</p>
         </div>
       )}
-      {receipt.items.map((item) => (
-        <div className="line" key={item.id}>
-          <strong>{visible(item.display_name)}</strong>
-          <span>
-            {item.quantity} × {money(item.final_unit_price)} ={" "}
-            {money(item.line_total)}
-          </span>
-        </div>
-      ))}
-      {receipt.corrections.length > 0 && (
+      {/* Each line as a tag: the model, its size, how many at what price
+          (redesign P1-1). */}
+      {receipt.items.map((item) => {
+        const sent = sizes[stockKey(item)];
+        const size =
+          item.size !== undefined && item.size !== null
+            ? sizeLabel(item.size)
+            : sent !== undefined
+              ? visible(sent)
+              : null;
+        return (
+          <div className="line" key={item.id}>
+            <strong>
+              {visible(item.display_name)}
+              {size !== null && ` · ${size}`}
+            </strong>
+            <span>
+              {item.quantity} × {money(item.final_unit_price)}
+            </span>
+          </div>
+        );
+      })}
+      {/* What the sale did to the books, in coats, as the server counted
+          them; an answer stored before it counted says it without. */}
+      {(receipt.found_quantity ?? receipt.corrections.length) > 0 && (
         <p className="hint">
-          Оприходовано знайдене на місці: {receipt.corrections.length} рух(и)
-          складу.
+          Знайдене на полиці додано в облік
+          {typeof receipt.found_quantity === "number"
+            ? `: ${String(receipt.found_quantity)} шт.`
+            : "."}
         </p>
       )}
       {dropped.length > 0 && (
         <p>Не продано — на полиці не було: {dropped.join(", ")}.</p>
       )}
-      {receipt.shortages.length > 0 && (
+      {(receipt.missing_quantity ?? receipt.shortages.length) > 0 && (
         <p className="hint">
-          Списано як фізично відсутнє: {receipt.shortages.length} рух(и) складу.
+          На полиці не знайшли — з обліку знято
+          {typeof receipt.missing_quantity === "number"
+            ? `: ${String(receipt.missing_quantity)} шт.`
+            : "."}{" "}
           Перевірте склад із менеджером.
         </p>
       )}
-      {receipt.size_reclassifications.length > 0 && (
-        <p className="hint">
-          Уточнено розмір: {receipt.size_reclassifications.length} рух(и)
-          складу.
-        </p>
-      )}
+      {receipt.clarified
+        ? receipt.clarified.map((clarified) => (
+            <p className="hint" key={clarified.size}>
+              Розмір з етикетки записано: {clarified.quantity} шт. як{" "}
+              {sizeLabel(clarified.size)}.
+            </p>
+          ))
+        : receipt.size_reclassifications.length > 0 && (
+            <p className="hint">Розмір з етикетки записано.</p>
+          )}
       {fixMethod && way !== null && (
         <button
           type="button"
@@ -1353,6 +1406,22 @@ function Receipt({
       <button type="button" onClick={next}>
         Новий продаж
       </button>
+      {returnSale && (
+        // A sale is never changed: a mistake is returned, then sold again
+        // (I8; redesign P1-2).
+        <p className="hint return-offer">
+          Помилилися з товаром чи ціною?{" "}
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => {
+              returnSale(receipt);
+            }}
+          >
+            Оформити повернення
+          </button>
+        </p>
+      )}
     </section>
   );
 }

@@ -215,9 +215,11 @@ test("«товар на місці» answers a real refusal and completes the sa
       `Картка · Проведіть на терміналі ${receipt.total.replace(".", ",")} грн`,
     ),
   ).toBeVisible();
+  // In coats, as the server counted them (redesign P1-1).
   await expect(
-    page.getByText(/Оприходовано знайдене на місці: 1 рух/),
+    page.getByText("Знайдене на полиці додано в облік: 1 шт."),
   ).toBeVisible();
+  await expect(page.getByText(/рух\(и\)/)).toHaveCount(0);
 });
 
 test("«на місці лише стільки» sends the count present, not the shortage", async ({
@@ -315,8 +317,12 @@ test("«на місці лише стільки» sends the count present, not t
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
+  // This stubbed answer counts nothing, as one stored before the counts
+  // did: said without a number (redesign P1-1).
   await expect(
-    page.getByText(/Списано як фізично відсутнє: 1 рух/),
+    page.getByText(
+      "На полиці не знайшли — з обліку знято. Перевірте склад із менеджером.",
+    ),
   ).toBeVisible();
   // A transfer is checked before the goods go (ADR-0012 G38).
   await expect(

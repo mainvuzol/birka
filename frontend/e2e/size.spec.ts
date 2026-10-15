@@ -141,7 +141,7 @@ test("a coat held with its size not known is sold with the size on its label", a
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Уточнено розмір: 2 рух(и) складу."),
+    page.getByText("Розмір з етикетки записано: 1 шт. як L."),
   ).toBeVisible();
   expect(sent).toHaveLength(2);
   expect(sent[0]?.size_clarified).toEqual([]);

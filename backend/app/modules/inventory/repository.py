@@ -375,6 +375,39 @@ async def sale_reclassification_ids(
     )
 
 
+async def sale_adjustment_units(
+    session: AsyncSession, *, organization_id: uuid.UUID, sale_id: uuid.UUID
+) -> list[tuple[MovementReason, uuid.UUID, int]]:
+    """Each of a sale's in-sale adjustments as its reason, size and change.
+
+    Goods found and goods missing, and the half of each size clarification
+    that went into the size read off the label: what a receipt counts.
+    """
+    rows = await session.execute(
+        select(
+            StockMovement.reason_code, StockMovement.size_id, StockMovement.quantity_delta
+        ).where(
+            StockMovement.organization_id == organization_id,
+            StockMovement.reference_type == "sale",
+            StockMovement.reference_id == sale_id,
+            StockMovement.movement_type == MovementType.ADJUSTMENT,
+            StockMovement.reason_code.in_(
+                [
+                    MovementReason.FOUND_DURING_SALE,
+                    MovementReason.MISSING_AT_SALE,
+                    MovementReason.SIZE_RECLASSIFICATION_IN,
+                ]
+            ),
+        )
+    )
+    return [
+        (reason, size_id, delta)
+        for reason, size_id, delta in rows.tuples()
+        # Never None: the filter names the reasons.
+        if reason is not None
+    ]
+
+
 async def refund_return_movement_ids(
     session: AsyncSession, *, organization_id: uuid.UUID, refund_id: uuid.UUID
 ) -> list[uuid.UUID]:

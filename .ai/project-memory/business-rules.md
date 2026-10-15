@@ -2247,7 +2247,52 @@ How it is carried out, not decided by the owner:
 - **«Новий продаж» puts the cursor in the search.**
 - **Not changed here:** the return's own paper text says the same of
   «Звіт» («Воно увійде в сьогоднішній «Звіт» і в касу…»); В5 named the
-  sale's, so it waits for the owner. The header's
+  sale's, so it waits for the owner. (Changed after the owner's answer of
+  2026-10-15, below.) The header's
   «РОБОЧЕ МІСЦЕ ПРОДАВЦЯ» stays until the header is redrawn (P1-6).
 
 Built on 2026-10-15; see the [report](till-redesign-2-report.md).
+
+## Owner decision — 2026-10-15 (the till's receipt and its small things; the first days' paper)
+
+Asked after the till's search merged (PR #91), each answer the option
+recommended when asked:
+- **Next: the receipt and the till's small things** (the task list's P1-1,
+  P1-2, P1-8, P1-9): the receipt by tags, the way to return a sale made by
+  mistake, a warning on a line at 0,00 грн (В3, answered 2026-10-14), and
+  the till's ticks as targets a thumb hits.
+- **В2. Sales written on paper in the first days,** while a warehouse waits
+  for its opening list to be approved, are typed in with a mark of their
+  own, «з паперу», with no word of an outage: the till offers nothing about
+  the shelf, as for paper typed after an outage, and the mark stays true.
+  It needs a new value of the mark on the server. Built with the till's
+  empty states (task P1-5), not yet.
+- **The return's paper text changes like the sale's** (В5): «Повернення
+  позначать «під час збою». Воно увійде в сьогоднішні повернення й у касу
+  до наступного закриття. Гроші, які віддали під час збою, вдруге не
+  віддавайте.», since a seller does not see «Звіт».
+
+How it is carried out, not decided by the owner:
+- **A receipt line is a tag:** «Лоран шоколад · M» and «1 × 1850,00 грн»;
+  the size is the one the sale froze, and «розмір невідомий» for a size not
+  known.
+- **The shelf's corrections are said in coats,** counted by the server from
+  the movements the sale wrote: «Знайдене на полиці додано в облік: 1 шт.»,
+  «На полиці не знайшли — з обліку знято: 2 шт. Перевірте склад із
+  менеджером.», «Розмір з етикетки записано: 1 шт. як M.» A shortage writes
+  off what the books believed less what was on the shelf, which only the
+  server knows; an answer stored before the counts says the same without a
+  number.
+- **Telegram buzzes when the server answers:** success once a sale is
+  recorded, error once it is refused, where Telegram has haptics.
+- **«Помилилися з товаром чи ціною? Оформити повернення»** under «Новий
+  продаж» opens «Повернення» on that very sale, for whoever may take
+  returns; the return follows its usual rules. A sale is never changed.
+- **A line at 0,00 грн says «Ціна 0,00 грн. Це справді подарунок? Перевірте
+  ціну.»** and still sells. A model with no price says who sets one: «Ціни
+  продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у
+  «Залишках».»
+- **Each tick of the till is a row of at least 44 px;** ticking «Оплата
+  частинами» puts the cursor in «Ім’я покупця».
+
+Built on 2026-10-15; see the [report](till-redesign-3-report.md).
