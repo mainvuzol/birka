@@ -469,4 +469,28 @@ rows to order) and «модель N», whose number also matches every model and
 colour that contains it, about 160 of the 400: both broad, as a seller's
 few letters are.
 
-**The release reading,** checklist row 22: TODO(final).
+**The release reading,** checklist row 22: three runs, each on a fresh
+database migrated to head, on the laptop and PostgreSQL 16.2, the API in
+its `ci` environment, every case gated (`BIRKA_PERF_GATE=all`). Evidence:
+[`output/verification/2026-10-15-till-search-hot-path/`](../../output/verification/2026-10-15-till-search-hot-path/).
+
+| Case | p95, 2026-10-08 (worst of 3) | **p95, 2026-10-15 (worst of 3)** | p50 now | Budget |
+|---|---|---|---|---|
+| `GET /catalog/stock-options` | 11.9 | **12.2** | 7.6–9.8 | 300 ms |
+| `GET /catalog/stock-options`, 6 sellers | 63.4 | **74.5** | 23.7–25.1 | 300 ms |
+| `POST /sales`, 1 line | 17.6 | **12.1** | 9.3–9.7 | 500 ms |
+| `POST /sales`, 1 line, 6 sellers | 52.2 | **53.3** | 33.8–34.3 | 500 ms |
+| `POST /sales`, 4 lines, 6 sellers | 79.1 | **84.8** | 49.8–50.8 | 500 ms |
+| `POST /sales`, same coat, 6 sellers | 85.9 | **87.7** | 37.7–38.3 | 500 ms |
+| `POST /sales`, paid in parts | 25.0 | **10.9** | 9.4–9.5 | 500 ms |
+| `POST /sales`, paid in parts, 6 sellers | 93.9 | **65.8** | 39.8–41.3 | 500 ms |
+| `GET /catalog/stock-options · search` | — | **19.3** | 8.4–16.9 | 300 ms |
+| `GET /catalog/stock-options · search`, 6 sellers | — | **95.5** | 28.6–31.1 | 300 ms |
+
+- **Every case passes in every run, gated.** The worst p95 is 95.5 ms, the
+  search by six sellers, against 300: about 3× headroom.
+- **The list without a search reads by name now,** through the joins the
+  search needs: by six sellers its p95 is 74.5 ms against 63.4 on
+  2026-10-08, one seller's unchanged.
+- **`POST /sales` is unchanged,** and its figures are within the earlier
+  readings' spread.

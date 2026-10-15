@@ -107,7 +107,16 @@ not change. The stock list's order changes for every screen that reads it.
     with none never keeps another's (`price.spec.ts`); the label's size in
     paper mode (`outage.spec.ts`); the app's name on the sign-in and crash
     screens.
-- **Mutation:** TODO(final).
+- **Mutation:** thirty-seven ways of breaking it, one at a time — twelve on
+  the server, run against its tests, and twenty-five on the screens, against
+  the journeys on a fresh seed each — after the unchanged tree passed both
+  ways: thirty-six caught, each by the test meant to catch it.
+  - Two survived a first run, and a test now closes each: one model's colours
+    were never asserted in order, and the size-unknown journey tapped before
+    its second search had narrowed the list.
+  - The one left is equivalent on the till's path: without the
+    `location_id not in granted` check, `require_stock_access` has already
+    refused a private warehouse, since the till always passes a scope.
 
 ## Review
 
