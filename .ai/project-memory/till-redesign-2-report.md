@@ -1,7 +1,9 @@
 # The till's search and one tap of a size — 2026-10-15
 
 Baseline: `c641a52` (the till in the new design, first part, PR #90).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+thirty-six of thirty-seven ways of breaking it caught (the other an
+equivalent). Not yet seen on a real phone.
 Branch: `feat/till-search`. Direction:
 [design-direction.md](redesign/design-direction.md) (approved 2026-10-11);
 tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
@@ -120,11 +122,51 @@ not change. The stock list's order changes for every screen that reads it.
 
 ## Review
 
-TODO(final).
+An independent review of `edf3d4a` found no blocker and no major issue:
+the price shown is the price sent, every change to the basket is a new
+command, and the server's access is unchanged. It found the following, all
+addressed in `96dea90`:
+- **The shortage could offer «Товар на місці»** for a model held with no
+  size, which the server refuses, once the seller had searched for another
+  model: the till judged it from the list on screen. A line now remembers
+  it from when it was put in.
+- **A size read off a label could go out from paper,** the line saying the
+  opposite: it now holds the ways (G3).
+- **«Склад: A» could name another warehouse than the one sold from,** once
+  that one stopped selling: it stops being the till's.
+- **«Разом» showed a partial sum** while a line had no price: «—» now.
+- **Paper mode lost the server's reserve refusal** for a size an order
+  holds whole: from paper it is offered, as before.
+- **Two journeys proved less than they said:** one letter was never typed
+  alone, and no answer was given before the line changed.
+- **The docs claimed more than was shown:** the tap journey's store has two
+  warehouses, the harness's "whole name" is a broad search, the size order
+  is over every size the organisation has, and the stock list's order
+  changes for every screen that reads it.
+- **Nits:** the search field's cap and its style's reach, the cursor after
+  an empty shelf, focus kept when a line is relabelled, the tags memoised.
 
 ## Evidence
 
-TODO(final).
+- [`output/verification/2026-10-15-till-search/`](../../output/verification/2026-10-15-till-search/):
+  `mutants.py` and `mutants.txt`, thirty-seven ways of breaking it,
+  thirty-six caught and one equivalent.
+- [`output/verification/2026-10-15-till-search-hot-path/`](../../output/verification/2026-10-15-till-search-hot-path/):
+  the release reading, three runs, every case gated.
+- **CI, run locally at `714d344`** ([summary](../../output/verification/2026-10-15-till-search-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 413 on PostgreSQL 17, the alphabet's order on ICU `uk-UA`
+    among them;
+  - e2e: 304 journeys;
+  - hot path: worst p95 97.3 ms (the search by six sellers) and 102.8 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- **Two earlier runs failed the backend job on one test, the alphabet's
+  order on ICU.** At `a1d3e60` it skipped, which CI refuses: the
+  database's collation provider is a one-byte "char" the driver reads as
+  bytes, so CI's ICU database looked like none (`70a68a4`). At `70a68a4`
+  it ran, and the order was right, Вега to Яна, but the test named «Лоран»
+  without stocking it (`714d344`). Every other job passed in both runs.
 
 ## Not covered here
 
