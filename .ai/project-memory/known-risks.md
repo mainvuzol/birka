@@ -1428,3 +1428,7 @@ See the [report](till-redesign-3-report.md).
   phone sent, or none, and the corrections without a number.
 - **The first days' paper mark (В2) is decided, not built:** until it is,
   the first days' paper sales are typed as the 2026-09-29 rule says.
+- **A paper sale returned from its own receipt is a paper return:** the
+  switch is the store's, so the return carries «під час збою» and says the
+  money was handed over then. For a typo in a paper sale this nets out in
+  the drawer; whether it is the reading wanted is a question for the owner.

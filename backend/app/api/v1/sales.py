@@ -275,7 +275,7 @@ class SaleItemResponse(BaseModel):
     line_total: Decimal
     display_name: str
     # The size as the receipt froze it, «UNKNOWN» for a size not known
-    # (redesign P1-1). Absent from answers stored before it was given.
+    # (redesign P1-1). Null in answers stored before it was given.
     size: str | None = None
 
 
@@ -339,7 +339,7 @@ class SaleResponse(BaseModel):
     credit: SaleCreditResponse | None = None
     # The movements above, in units, for the receipt (redesign P1-1): found on
     # the shelf and added, missing and written off, sold with a size read off
-    # a label. Counted from the ledger; absent from answers stored before.
+    # a label. Counted from the ledger; null in answers stored before.
     found_quantity: int | None = None
     missing_quantity: int | None = None
     clarified: list[SaleClarifiedResponse] | None = None
@@ -362,7 +362,8 @@ class ReceiptUnits(NamedTuple):
 async def _units(session: AsyncSession, sale: Sale) -> ReceiptUnits:
     """The receipt's units, from the movements the sale wrote."""
     units = await units_of(session, sale)
-    labels = await size_labels(session, list(units.clarified))
+    # Most sales clarify nothing: no second query for them.
+    labels = await size_labels(session, list(units.clarified)) if units.clarified else {}
     return ReceiptUnits(
         found=units.found,
         missing=units.missing,

@@ -801,6 +801,20 @@ async def cache(session: AsyncSession, endpoint: str, print_: str, answer: dict)
     await session.flush()
 
 
+def as_replayed(answer: dict) -> dict:
+    """An answer stored before a field existed, as the API gives it back now:
+    each later field null — no way, no mark (ADR-0013 §5.6), no size and no
+    count in units (redesign P1-1) — and nothing else changed."""
+    return answer | {
+        "payment_method": None,
+        "outage": None,
+        "found_quantity": None,
+        "missing_quantity": None,
+        "clarified": None,
+        "items": [item | {"size": None} for item in answer["items"]],
+    }
+
+
 async def rows(maker, model: Any) -> int:
     async with maker() as session:
         return await session.scalar(
@@ -825,8 +839,8 @@ async def test_a_sale_kept_from_before_replays_never_refused(old_world, cached):
 
     assert replayed.status_code == 201, replayed.text
     # What #67 answered, and no way: an old receipt never shows one. Nor a
-    # mark, which no sale had then (ADR-0013 §5.6).
-    assert replayed.json() == OLD_SALE_ANSWER | {"payment_method": None, "outage": None}
+    # mark, which no sale had then (ADR-0013 §5.6), nor sizes and units.
+    assert replayed.json() == as_replayed(OLD_SALE_ANSWER)
     assert await rows(old_world, Sale) == 1
 
 
@@ -849,7 +863,7 @@ async def test_a_sale_in_parts_kept_from_before_replays_never_refused(old_world,
         )
 
     assert replayed.status_code == 201, replayed.text
-    assert replayed.json() == answer | {"payment_method": None, "outage": None}
+    assert replayed.json() == as_replayed(answer)
     assert (await rows(old_world, Sale), await rows(old_world, CreditEntry)) == (1, 1)
 
 

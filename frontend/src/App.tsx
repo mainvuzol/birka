@@ -525,6 +525,11 @@ function Workspace({
   const returnOpened = useCallback(() => {
     setReturnOf(null);
   }, []);
+  // Left before «Повернення» opened it: never opened later, for another
+  // customer (review, 2026-10-15).
+  useEffect(() => {
+    if (tab !== "returns") setReturnOf(null);
+  }, [tab]);
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;

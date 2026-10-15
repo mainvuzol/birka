@@ -91,12 +91,26 @@ export function Returns({
   });
 
   useEffect(() => {
+    if (open === null) return;
+    // The list could not be read: the list's own failure shows, and the
+    // sale is not opened later, for another customer (review, 2026-10-15).
+    if (sales.isError) {
+      opened?.();
+      return;
+    }
     // Read afresh, never from a page cached before the sale was made.
-    if (open === null || !sales.isSuccess || sales.isFetching) return;
+    if (!sales.isSuccess || sales.isFetching) return;
     const sale = sales.data.sales.find((each) => each.id === open);
     if (sale) setSelected(sale);
     opened?.();
-  }, [open, sales.isSuccess, sales.isFetching, sales.data, opened]);
+  }, [
+    open,
+    sales.isError,
+    sales.isSuccess,
+    sales.isFetching,
+    sales.data,
+    opened,
+  ]);
 
   async function settled(refund: Refund, sent: ReturnPart[]): Promise<void> {
     setDone({ refund, sent });

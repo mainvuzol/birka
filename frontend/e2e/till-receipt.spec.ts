@@ -192,7 +192,7 @@ test("an answer stored before the server named sizes and coats is read from the 
   ).toBeVisible();
 });
 
-test("Telegram buzzes once the server has answered: success when sold, error when refused", async ({
+test("Telegram buzzes once the server has answered: success when sold, error when refused, nothing for the shelf's question", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -210,10 +210,11 @@ test("Telegram buzzes once the server has answered: success when sold, error whe
     };
   });
   await stubList(page);
-  let refuse = true;
+  let answers = 0;
   await page.route("**/api/v1/sales", async (route) => {
-    if (refuse) {
-      refuse = false;
+    answers += 1;
+    if (answers === 1) {
+      // The shelf's question: not a failure (the task list, P1-1).
       await route.fulfill({
         status: 409,
         json: {
@@ -227,6 +228,17 @@ test("Telegram buzzes once the server has answered: success when sold, error whe
             available: 0,
             correctable: true,
           },
+        },
+      });
+      return;
+    }
+    if (answers === 2) {
+      await route.fulfill({
+        status: 422,
+        json: {
+          code: "VALIDATION_ERROR",
+          message: "Request failed validation",
+          details: {},
         },
       });
       return;
@@ -248,25 +260,33 @@ test("Telegram buzzes once the server has answered: success when sold, error whe
       },
     });
   });
-  const buzzes = () =>
-    page.evaluate(() => (window as unknown as { buzzes: string[] }).buzzes);
+  const buzzes = async () =>
+    (
+      await page.evaluate(
+        () => (window as unknown as { buzzes: string[] }).buzzes,
+      )
+    ).map((data) => JSON.parse(data) as unknown);
   await onTheTill(page, "8.0");
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  expect(await buzzes()).toEqual([]);
   await pay(page, "Готівка").click();
   await expect(
     page.getByRole("alert", { name: "Залишку не вистачає" }),
   ).toBeVisible();
-  expect((await buzzes()).map((data) => JSON.parse(data) as unknown)).toEqual([
-    { type: "notification", notification_type: "error" },
-  ]);
+  expect(await buzzes()).toEqual([]);
   await page
     .getByRole("button", { name: "Товар на місці — продати 1 · Готівка" })
     .click();
   await expect(
+    page.getByText(/Кошик збережено — нічого не продано/),
+  ).toBeVisible();
+  expect(await buzzes()).toEqual([
+    { type: "notification", notification_type: "error" },
+  ]);
+  await pay(page, "Готівка").click();
+  await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  expect((await buzzes()).map((data) => JSON.parse(data) as unknown)).toEqual([
+  expect(await buzzes()).toEqual([
     { type: "notification", notification_type: "error" },
     { type: "notification", notification_type: "success" },
   ]);
@@ -360,6 +380,10 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   const coat = await model(page);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  // «Повернення» read before the sale: its page then is not the one opened.
+  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.returns_location_id);
@@ -456,6 +480,13 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
     expect((await row.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   await parts.click();
   await expect(page.getByLabel("Ім’я покупця")).toBeFocused();
+  // The keyboard's action key moves on, and closes after the sum.
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Телефон покупця")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Сплачує зараз, грн")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Сплачує зараз, грн")).not.toBeFocused();
   await expect(page.getByLabel("Ім’я покупця")).toHaveAttribute(
     "enterkeyhint",
     "next",
@@ -468,4 +499,91 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
   await page.getByLabel("Час з паперу").fill("10:00");
   const yesterday = page.locator("label.check", { hasText: "Це було вчора" });
   expect((await yesterday.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+});
+
+/** One coat of a model of its own sold at the till, at 1300, its receipt on screen. */
+async function soldOne(page: Page): Promise<{ name: string }> {
+  const coat = await model(page);
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page
+    .getByRole("combobox", { name: "Склад", exact: true })
+    .selectOption(fixture.returns_location_id);
+  await page.getByRole("searchbox", { name: "Знайти модель" }).fill(coat.name);
+  const [variant = "", size = ""] = coat.option.split(":");
+  await tapSize(page, variant, size);
+  await fillLine(page, { price: "1300" });
+  await pay(page, "Готівка").click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  return coat;
+}
+
+test("a return asked from the receipt whose list could not be read opens no sale later", async ({
+  page,
+}) => {
+  const coat = await soldOne(page);
+  let fail = true;
+  await page.route("**/api/v1/sales?store_id=**", async (route) => {
+    if (fail)
+      await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+    else await route.continue();
+  });
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(page.getByRole("alert")).toBeVisible();
+  // The list read again, on the same screen: the list, not that sale.
+  fail = false;
+  const read = page.waitForResponse(
+    (r) => r.url().includes("/api/v1/sales?store_id=") && r.ok(),
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await read;
+  // A moment for what the answer would open: the list stays.
+  await page.waitForTimeout(500);
+  await expect(
+    page.getByRole("article").filter({ hasText: coat.name }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "До списку продажів" }),
+  ).toHaveCount(0);
+});
+
+test("a return asked from the receipt and left before its list came opens no sale later", async ({
+  page,
+}) => {
+  const coat = await soldOne(page);
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let first = true;
+  await page.route("**/api/v1/sales?store_id=**", async (route) => {
+    if (first) {
+      first = false;
+      await held;
+    }
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  // Left at once, for the till; the list comes after.
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  release();
+  const read = page.waitForResponse(
+    (r) => r.url().includes("/api/v1/sales?store_id=") && r.ok(),
+  );
+  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await read;
+  // A moment for what the answer would open: the list stays.
+  await page.waitForTimeout(500);
+  await expect(
+    page.getByRole("article").filter({ hasText: coat.name }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "До списку продажів" }),
+  ).toHaveCount(0);
 });

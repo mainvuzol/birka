@@ -528,7 +528,6 @@ export function Sale({
         await stock.refetch();
       }
     } else if (outcome.kind === "refused") {
-      buzz("error");
       const { error, shortfall: short } = outcome;
       const { details } = error;
       if (
@@ -561,6 +560,9 @@ export function Sale({
         // seller answers afresh rather than resending what cannot pass.
         setClarified({});
         setRefusal(error);
+        // A refusal buzzes; the shelf's question above does not: it asks,
+        // it does not fail (redesign P1-1).
+        buzz("error");
       }
       setPresent("");
     }

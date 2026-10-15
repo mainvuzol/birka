@@ -2283,8 +2283,9 @@ How it is carried out, not decided by the owner:
   off what the books believed less what was on the shelf, which only the
   server knows; an answer stored before the counts says the same without a
   number.
-- **Telegram buzzes when the server answers:** success once a sale is
-  recorded, error once it is refused, where Telegram has haptics.
+- **Telegram buzzes when the server answers the till's press:** success
+  once a sale is recorded, error once it is refused, nothing for the
+  shelf's question, where Telegram has haptics.
 - **«Помилилися з товаром чи ціною? Оформити повернення»** under «Новий
   продаж» opens «Повернення» on that very sale, for whoever may take
   returns; the return follows its usual rules. A sale is never changed.
@@ -2292,7 +2293,7 @@ How it is carried out, not decided by the owner:
   ціну.»** and still sells. A model with no price says who sets one: «Ціни
   продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у
   «Залишках».»
-- **Each tick of the till is a row of at least 44 px;** ticking «Оплата
-  частинами» puts the cursor in «Ім’я покупця».
+- **Every tick of the app is a row of at least 44 px,** the till's among
+  them; ticking «Оплата частинами» puts the cursor in «Ім’я покупця».
 
 Built on 2026-10-15; see the [report](till-redesign-3-report.md).

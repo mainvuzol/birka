@@ -780,7 +780,7 @@ Related changes elsewhere:
   line's frozen `size` («UNKNOWN» for a size not known) and counts its in-sale
   corrections in units, from the movements written: `found_quantity`,
   `missing_quantity` and `clarified: [{size, quantity}]` (redesign P1-1).
-  Answers stored before these fields lack them.
+  Answers stored before these fields give them as null.
 - `POST /inventory/adjustments` no longer accepts the two
   `SIZE_RECLASSIFICATION_*` reasons (422): each is half of a pair only a sale
   writes.

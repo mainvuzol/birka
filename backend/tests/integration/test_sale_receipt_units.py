@@ -122,15 +122,16 @@ async def test_a_plain_sale_names_each_line_s_size_and_no_correction(maker):
 
 
 async def test_goods_found_on_the_shelf_are_counted_in_units(maker):
+    """One movement of two coats: two, never one."""
     async with maker() as session:
         shop = await make_shop(session)
-        await give_stock(session, shop, 2)
+        await give_stock(session, shop, 1)
     async with client_for(maker, shop) as client:
         sold = await sell(
-            client, sale_of(shop, 3, found_in_store=[{"line_index": 0, "quantity": 1}])
+            client, sale_of(shop, 3, found_in_store=[{"line_index": 0, "quantity": 2}])
         )
     assert sold.status_code == 201, sold.text
-    assert sold.json()["found_quantity"] == 1
+    assert sold.json()["found_quantity"] == 2
     assert len(sold.json()["corrections"]) == 1
 
 
@@ -151,19 +152,19 @@ async def test_a_shortage_writes_off_what_the_ledger_believed_less_what_was_ther
 
 
 async def test_a_size_read_off_a_label_is_counted_once_by_its_size(maker):
-    """Two movements, out of "size not known" and into M: one coat."""
+    """Two movements, out of "size not known" and into M, for two coats: two."""
     async with maker() as session:
         shop = await make_shop(session)
-    await held_with_no_size(maker, shop, 2)
+    await held_with_no_size(maker, shop, 3)
     async with client_for(maker, shop) as client:
         sold = await sell(
-            client, sale_of(shop, 1, size_clarified=[{"line_index": 0, "quantity": 1}])
+            client, sale_of(shop, 2, size_clarified=[{"line_index": 0, "quantity": 2}])
         )
         read = await client.get(f"/api/v1/sales/{sold.json()['id']}")
     assert sold.status_code == 201, sold.text
     body = sold.json()
     assert len(body["size_reclassifications"]) == 2
-    assert body["clarified"] == [{"size": "M", "quantity": 1}]
+    assert body["clarified"] == [{"size": "M", "quantity": 2}]
     assert read.json()["clarified"] == body["clarified"]
 
 
@@ -218,3 +219,66 @@ async def test_an_answer_stored_before_the_units_keeps_its_shape(maker):
         None,
     )
     assert [item["size"] for item in body["items"]] == [None]
+
+
+async def test_one_sale_found_written_off_and_read_off_two_labels_says_each_in_coats(maker):
+    """Found on one size, missing on another, two sizes read off labels: each
+    counted on its own, by the ledger."""
+    async with maker() as session:
+        shop = await make_shop(session)  # «Лоран шоколад», M
+        system = await session.scalar(select(Size.size_system_id).where(Size.id == shop.size_id))
+        large = Size(size_system_id=system, code="L")
+        small = Size(size_system_id=system, code="S")
+        extra = Size(size_system_id=system, code="XL")
+        session.add_all([large, small, extra])
+        await session.commit()
+    await held_with_no_size(maker, shop, 3)
+    async with maker() as session:
+        await apply_movements(
+            session,
+            organization_id=shop.organization_id,  # type: ignore[arg-type]
+            requests=[
+                MovementRequest(
+                    location_id=shop.location_id,  # type: ignore[arg-type]
+                    acting_store_id=shop.store_id,  # type: ignore[arg-type]
+                    product_variant_id=shop.variant_id,  # type: ignore[arg-type]
+                    size_id=size_id,
+                    quantity_delta=held,
+                    movement_type=MovementType.DELIVERY,
+                )
+                for size_id, held in ((shop.size_id, 1), (extra.id, 3))
+            ],
+        )
+        await session.commit()
+
+    def line(size_id: uuid.UUID, quantity: int) -> dict:
+        return {
+            "product_variant_id": str(shop.variant_id),
+            "size_id": str(size_id),
+            "source_location_id": str(shop.location_id),
+            "quantity": quantity,
+            "unit_price": "1200.00",
+        }
+
+    body = sale_of(shop, 1)
+    body["lines"] = [
+        line(shop.size_id, 2),  # M: one in the books, two in hand
+        line(extra.id, 3),  # XL: three in the books, one on the shelf
+        line(large.id, 2),  # L read off two labels
+        line(small.id, 1),  # S read off one
+    ]
+    body["found_in_store"] = [{"line_index": 0, "quantity": 1}]
+    body["missing_in_store"] = [{"line_index": 1, "quantity": 1}]
+    body["size_clarified"] = [
+        {"line_index": 2, "quantity": 2},
+        {"line_index": 3, "quantity": 1},
+    ]
+    async with client_for(maker, shop) as client:
+        sold = await sell(client, body)
+        read = await client.get(f"/api/v1/sales/{sold.json()['id']}")
+    assert sold.status_code == 201, sold.text
+    answer = sold.json()
+    assert (answer["found_quantity"], answer["missing_quantity"]) == (1, 2)
+    assert answer["clarified"] == [{"size": "L", "quantity": 2}, {"size": "S", "quantity": 1}]
+    assert [item["size"] for item in answer["items"]] == ["M", "XL", "L", "S"]
+    assert read.json() == answer

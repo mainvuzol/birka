@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { JSX } from "react";
+import type { JSX, KeyboardEvent } from "react";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { CreditTerms } from "@/sales/types";
 import { phoneDigits } from "./types";
@@ -61,6 +61,17 @@ export function TermsFields({
   // Ticked, the cursor goes to the customer's name: one tap fewer with the
   // customer waiting (redesign P1-9).
   const nameRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const paidRef = useRef<HTMLInputElement>(null);
+  // The keyboard's action key moves on, and closes after the sum.
+  const onEnter =
+    (next: HTMLInputElement | null) =>
+    (event: KeyboardEvent<HTMLInputElement>): void => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      if (next) next.focus();
+      else event.currentTarget.blur();
+    };
   const wasInParts = useRef(value.inParts);
   useEffect(() => {
     if (value.inParts && !wasInParts.current) nameRef.current?.focus();
@@ -86,6 +97,9 @@ export function TermsFields({
             <input
               ref={nameRef}
               enterKeyHint="next"
+              onKeyDown={(event) => {
+                onEnter(phoneRef.current)(event);
+              }}
               value={value.name}
               maxLength={200}
               autoComplete="off"
@@ -98,8 +112,12 @@ export function TermsFields({
             Телефон покупця
             <input
               type="tel"
+              ref={phoneRef}
               inputMode="tel"
               enterKeyHint="next"
+              onKeyDown={(event) => {
+                onEnter(paidRef.current)(event);
+              }}
               value={value.phone}
               maxLength={40}
               autoComplete="off"
@@ -111,8 +129,12 @@ export function TermsFields({
           <label>
             Сплачує зараз, грн
             <input
+              ref={paidRef}
               inputMode="decimal"
               enterKeyHint="done"
+              onKeyDown={(event) => {
+                onEnter(null)(event);
+              }}
               placeholder="0,00"
               value={value.paid}
               onChange={(event) => {

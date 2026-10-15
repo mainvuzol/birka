@@ -25,8 +25,8 @@ export interface SaleItem extends SaleLine {
   final_unit_price: string;
   line_total: string;
   display_name: string;
-  /** The size as the receipt froze it, «UNKNOWN» for one not known; absent
-   * from answers stored before it was given (redesign P1-1). */
+  /** The size as the receipt froze it, «UNKNOWN» for one not known; null
+   * in answers stored before it was given (redesign P1-1). */
   size?: string | null;
 }
 
@@ -50,7 +50,7 @@ export interface Sale {
   /**
    * The corrections above in units, counted by the server from what it wrote
    * (redesign P1-1): found on the shelf, written off as missing, sold with a
-   * size read off a label. Absent from answers stored before them.
+   * size read off a label. Null in answers stored before them.
    */
   found_quantity?: number | null;
   missing_quantity?: number | null;
