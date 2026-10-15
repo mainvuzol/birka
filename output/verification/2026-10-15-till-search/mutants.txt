@@ -1,0 +1,50 @@
+- unchanged tree (server): passed 
+- unchanged tree (screen): passed 
+- the search needs only its first word: caught by test_every_word_must_match_the_model_the_source_or_the_colour
+- a typed % or _ is a wildcard: caught by test_wildcards_typed_by_a_person_are_literal
+- a merged model's old name finds nothing: caught by test_a_merged_model_s_old_name_finds_the_model_that_stays
+- the source is not searched: caught by test_every_word_must_match_the_model_the_source_or_the_colour
+- the colour is not searched: caught by test_every_word_must_match_the_model_the_source_or_the_colour
+- sizes are not in receiving's order: caught by test_the_list_reads_by_name_with_each_model_s_sizes_in_order
+- a size not known comes first: caught by test_the_list_reads_by_name_with_each_model_s_sizes_in_order
+- the list is not by name: caught by test_the_list_reads_by_name_with_each_model_s_sizes_in_order
+- the list is not by colour: SURVIVED
+- a sold-out size is listed: caught by test_a_model_sold_out_is_not_listed
+- an unreadable search is taken: caught by test_a_search_that_cannot_be_read_is_refused[\u043b\u043e\u0440\x00\u0430\u043d]
+- the till's list skips the warehouse check: SURVIVED
+- one letter is a search: caught by a model past the first hundred is found by three letters and sold in three taps
+- «Ще товари» replaces the list: caught by «Ще товари» reads the next hundred under the first
+- a size an order holds whole can be tapped: caught by a size whose every coat an order holds offers nothing, and the tag says so
+- nothing found says nothing: caught by nothing found says where, and «Очистити» brings the list back
+- «Очистити» leaves the cursor: caught by nothing found says where, and «Очистити» brings the list back
+- the tag does not say what orders hold: caught by a size whose every coat an order holds offers nothing, and the tag says so
+- the same chip again is a second line: caught by the same size twice is one line of two, and «Менше» never takes a line away
+- a changed line keeps the sale's command: caught by a line changed after the server's shortage answer is a new sale, its answers gone
+- the ways do not wait for a price: caught by a model with no price: its field takes the cursor, and the ways wait for a price; a store's price set on the stock screen is what its till suggests
+- a line without a price does not take the cursor: caught by a model with no price: its field takes the cursor, and the ways wait for a price; a store's price set on the stock screen is what its till suggests
+- the line does not show the model's price: caught by a line changed after the server's shortage answer is a new sale, its answers gone; a line keeps knowing its model is held with no size, whatever is searched after; a model past the first hundred is found by three letters and sold in three taps; a store's price set on the stock screen is what its till suggests; in Telegram's dark theme the shortage answer and a paper sale's mark read at 4.5:1; the same size twice is one line of two, and «Менше» never takes a line away; the server's shortage opens above the panel, in view and focused; a seller who may not wri
+- «Менше» takes a line to nothing: caught by the same size twice is one line of two, and «Менше» never takes a line away
+- a price that is not money says nothing: caught by a model with no price: its field takes the cursor, and the ways wait for a price
+- «Новий продаж» leaves the cursor: caught by a model past the first hundred is found by three letters and sold in three taps
+- a searched sale leaves the search: caught by a model past the first hundred is found by three letters and sold in three taps
+- one warehouse is asked: caught by a store that reaches one sellable warehouse does not ask which; a warehouse that stops selling is not the till's any more
+- the paper band names «Звіт»: caught by 6. a sale typed from paper carries the mark, says who sold and from where, and the next on
+- the label's text in paper mode is the old one: caught by 7. a paper sale refused on stock offers no way around it › no size read off a label in pap; a size read off a label holds the ways once the sale is from paper
+- a line forgets its model is held with no size: SURVIVED
+- a warehouse no longer sold from stays the till's: caught by a warehouse that stops selling is not the till's any more
+- a size read off a label is sold from paper: caught by a size read off a label holds the ways once the sale is from paper
+- the sum shows before every price: caught by a model with no price: its field takes the cursor, and the ways wait for a price
+- from paper a size an order holds is not offered: caught by a size whose every coat an order holds offers nothing, and the tag says so
+- «Новий продаж» after an empty shelf leaves the cursor: caught by a basket with nothing on the shelf records the shortage and sells nothing
+- the app is «birka» on the sign-in screen: caught by browser without Telegram shows entry guidance
+34 of 37 caught
+
+Second run, after two tests were sharpened (the unchanged tree first, as above):
+- the list is not by colour: caught by test_the_pages_neither_repeat_nor_skip_a_row
+- a line forgets its model is held with no size: caught by a line keeps knowing its model is held with no size, whatever is searched after
+
+The one left, «the till's list skips the warehouse check», is equivalent on the
+till's path: `stock_for_sale` always passes the person's scope, so
+`require_stock_access` has already refused a private warehouse the store may
+not read before `location_id not in granted` is reached; that check guards
+only `readable_stock` called with no scope. 36 of 37 caught, 1 equivalent.

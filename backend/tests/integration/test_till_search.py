@@ -347,6 +347,13 @@ async def test_the_pages_neither_repeat_nor_skip_a_row(maker):
             assert page.json()["has_more"] is (offset + 4 < 9)
     assert len(whole) == 9
     assert pages == whole
+    # One model's colours read in order, each with its sizes together.
+    assert [name for name, _ in whole] == [
+        *["Лоран беж"] * 3,
+        *["Лоран бордо"] * 3,
+        *["Лоран графіт"] * 3,
+    ]
+    assert [size for _, size in whole] == ["S", "M", "L"] * 3
 
 
 async def test_a_model_sold_out_is_not_listed(maker):

@@ -495,10 +495,16 @@ test("a line keeps knowing its model is held with no size, whatever is searched 
   ]);
   await stubSale(page, { requested: 2, available: 1 });
   await onTheTill(page);
+  // Each search narrows the list before anything is tapped: the list on
+  // screen at the press is the one for «міл», with no Лоран in it.
   await search(page).fill("лор");
+  await expect(page.getByRole("group", { name: "Мілан бордо" })).toHaveCount(0);
   await chip(page, "Лоран шоколад", "M · 1").click();
   await page.locator(".line").getByRole("button", { name: "Більше" }).click();
   await search(page).fill("міл");
+  await expect(
+    page.getByRole("group", { name: "Лоран шоколад", exact: true }),
+  ).toHaveCount(0);
   await chip(page, "Мілан бордо", "S · 1").click();
   await pay(page, "Готівка").click();
   // The coat in hand may be one held with no size: that answer, and not
