@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { JSX, RefObject } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/shared/api";
@@ -102,7 +102,8 @@ function sizeText(item: StockOption): string {
 /**
  * The till's search (redesign P0-2): a few letters of the name or the colour,
  * and each model as a tag whose size chips put a coat in the basket (P0-3).
- * A chip whose every unit is held for an order offers nothing to sell.
+ * A chip whose every unit is held for an order offers nothing to sell, but
+ * from paper.
  */
 export function StockSearch({
   text,
@@ -112,6 +113,7 @@ export function StockSearch({
   warehouse,
   pick,
   canAdd,
+  offerHeld,
   searchRef,
   failure,
 }: {
@@ -125,19 +127,25 @@ export function StockSearch({
   /** Whether this chip may still go in the basket: a full one takes more of
    * what it holds, never a new line. */
   canAdd: (item: StockOption) => boolean;
+  /** From paper, a size an order holds whole is still offered: the server's
+   * refusal says what to do (ADR-0013 §6). */
+  offerHeld: boolean;
   searchRef: RefObject<HTMLInputElement>;
   /** What the till shows when the list could not be read. */
   failure: JSX.Element | null;
 }): JSX.Element {
-  const items = (stock.data?.pages ?? []).flatMap((page) => page.items);
-  const models = tags(items);
+  const models = useMemo(
+    () => tags((stock.data?.pages ?? []).flatMap((page) => page.items)),
+    [stock.data],
+  );
   return (
     <>
-      <label>
+      <label className="till-search">
         Знайти модель
         <input
           ref={searchRef}
           type="search"
+          maxLength={200}
           enterKeyHint="search"
           autoComplete="off"
           placeholder="Назва або колір"
@@ -193,7 +201,10 @@ export function StockSearch({
                       className="chip"
                       key={size.size_id}
                       data-stock={`${size.product_variant_id}:${size.size_id}`}
-                      disabled={size.available_quantity <= 0 || !canAdd(size)}
+                      disabled={
+                        (size.available_quantity <= 0 && !offerHeld) ||
+                        !canAdd(size)
+                      }
                       onClick={() => {
                         pick(size);
                       }}

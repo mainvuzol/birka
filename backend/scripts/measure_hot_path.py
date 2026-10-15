@@ -359,7 +359,8 @@ def cases(world: World, headers: dict[str, str]) -> list[Case]:
 
     def search(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
         # What a seller types at the till (redesign P0-2): three letters that
-        # every model shares, a hundred rows to order, and a whole name.
+        # every model shares, a hundred rows to order, and «модель N», whose
+        # number every model or colour containing it matches too.
         typed = "мод" if index % 2 == 0 else f"модель {index % VARIANTS}"
         return client.get(
             "/api/v1/catalog/stock-options",

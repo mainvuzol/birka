@@ -582,7 +582,7 @@ html {
   font-size: 14px;
   color: var(--text-2);
 }
-input[type="search"] {
+.till-search input {
   min-height: 52px;
   border-radius: 14px;
 }

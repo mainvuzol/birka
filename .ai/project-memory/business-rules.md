@@ -2227,18 +2227,23 @@ How it is carried out, not decided by the owner:
   the database's collation, `uk-UA` in production.
 - **Each model is a tag:** its name, its price for this store, and a chip
   per size held, «M · 2»; a chip whose every coat an order holds offers
-  nothing to sell. Only what the warehouse holds is listed, as before.
+  nothing to sell, but from paper, where the server's refusal says to let
+  a manager decide about the order first, as before (ADR-0013 §6). Only
+  what the warehouse holds is listed, as before.
 - **A tap on a chip puts one coat in the basket,** a second tap one more.
   The line has «−» and «+» (1 to 1000) and its own price field, filled
   with the model's price and changed freely; a model with none leaves it
-  empty, with the cursor in it, and the three ways wait for a price in
-  every line. Any change to the basket is a new sale, as before: the
+  empty, with the cursor in it, and the three ways and «Разом» wait for a
+  price in every line. Any change to the basket is a new sale, as before: the
   server's earlier answers about the shelf no longer apply.
 - **«Розмір з етикетки» moves into the line** of a coat held with its size
   not known; its texts are unchanged, «без розміру» included, until the
-  till's words are settled together (task P2-2).
+  till's words are settled together (task P2-2). A line so read before
+  «Вношу продаж з паперу» is ticked holds the ways until it is taken out:
+  from paper no size is read off a label (G3).
 - **One warehouse to sell from is named, not asked** («Склад: …»); with
-  two, «З якого складу віддаєте?».
+  two, «З якого складу віддаєте?». A warehouse paused or no longer sold
+  from stops being the till's.
 - **«Новий продаж» puts the cursor in the search.**
 - **Not changed here:** the return's own paper text says the same of
   «Звіт» («Воно увійде в сьогоднішній «Звіт» і в касу…»); В5 named the

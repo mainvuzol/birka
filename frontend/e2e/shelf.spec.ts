@@ -206,6 +206,10 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   expect(recorded).toHaveLength(1);
   expect(await held(page, empty)).toBe(0);
   await page.getByRole("button", { name: "Новий продаж" }).click();
+  // The next customer's search, ready (redesign P0-3).
+  await expect(
+    page.getByRole("searchbox", { name: "Знайти модель" }),
+  ).toBeFocused();
   // An empty basket offers none of the three ways to sell, nor their panel
   // (redesign direction §5).
   await expect(

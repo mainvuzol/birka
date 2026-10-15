@@ -45,6 +45,8 @@ function asPrice(typed: string): string {
 }
 
 interface Draft {
+  /** The line's own, whatever its size becomes: its key and its price field. */
+  id: string;
   /** What is sent; its `unit_price` is the price typed, once it reads as one. */
   line: SaleLine;
   /** The price as typed in the line (redesign P0-3). */
@@ -57,6 +59,9 @@ interface Draft {
   stockSizeId: string;
   /** That balance's size is not known (ADR-0005 §11). */
   unknownStock: boolean;
+  /** When it was put in, its model was listed here with coats whose size is
+   * not known: the coat in hand may be one of those. */
+  unknownNearby: boolean;
   /** Sold as "size not known": there is no size to clarify, nothing to find. */
   unknownSize: boolean;
   /** Its size was read off a coat held with its size not known. */
@@ -254,10 +259,13 @@ export function Sale({
 
   useEffect(() => {
     if (locationId && locations.isSuccess) {
-      const reachable = locations.data.some(
-        (location) => location.id === locationId,
+      // Paused, or no longer sold from: not the till's any more, though
+      // still listed (review, 2026-10-15).
+      const sellableHere = locations.data.some(
+        (location) =>
+          location.id === locationId && location.is_active && location.can_sell,
       );
-      if (!reachable) setLocationId("");
+      if (!sellableHere) setLocationId("");
     }
   }, [locationId, locations.isSuccess, locations.data]);
 
@@ -313,9 +321,11 @@ export function Sale({
       return;
     }
     if (draft.length >= 100) return;
+    const id = crypto.randomUUID();
     replaceDraft([
       ...draft,
       {
+        id,
         line,
         price: item.suggested_price ? asInput(item.suggested_price) : "",
         suggested: item.suggested_price,
@@ -323,11 +333,17 @@ export function Sale({
         size: item.size_is_unknown ? "розмір невідомий" : item.size_label,
         stockSizeId: item.size_id,
         unknownStock: item.size_is_unknown,
+        unknownNearby: listed.some(
+          (other) =>
+            other.product_variant_id === item.product_variant_id &&
+            other.size_is_unknown &&
+            other.available_quantity > 0,
+        ),
         unknownSize: item.size_is_unknown,
         fromUnknown: false,
       },
     ]);
-    if (!item.suggested_price) setFocusPrice(stockKey(line));
+    if (!item.suggested_price) setFocusPrice(id);
   }
 
   /** A line's quantity or price changed: a different basket (`replaceDraft`). */
@@ -569,6 +585,7 @@ export function Sale({
     shortDraft !== undefined &&
     !shortDraft.unknownSize &&
     (shortDraft.fromUnknown ||
+      shortDraft.unknownNearby ||
       heldUnknown.has(
         `${shortDraft.line.source_location_id}:${shortDraft.line.product_variant_id}`,
       ) ||
@@ -626,6 +643,9 @@ export function Sale({
   }, [focusSearch, receipt]);
   // The ways wait until every line has its price (redesign P0-3).
   const priced = draft.every((d) => d.line.unit_price !== "");
+  // From paper, no size is read off a label (G3): a line read so before
+  // the switch was ticked holds the ways until it is taken out.
+  const labelledOnPaper = paper && draft.some((d) => d.fromUnknown);
   // Paid in parts: what is paid now and what is left, as typed so far. The
   // receipt's figures are the server's.
   const paidNow = mayCredit && credit.inParts ? kopecks(credit.paid) : null;
@@ -642,6 +662,7 @@ export function Sale({
         shelf={nothingSold}
         next={() => {
           setNothingSold(null);
+          setFocusSearch(true);
         }}
       />
     );
@@ -803,6 +824,7 @@ export function Sale({
                   }),
               )
             }
+            offerHeld={paper}
             searchRef={searchRef}
             failure={
               stock.error ? (
@@ -823,7 +845,7 @@ export function Sale({
         {draft.map((d, index) => (
           <div
             className={index === shortIndex ? "line short" : "line"}
-            key={stockKey(d.line)}
+            key={d.id}
           >
             <strong>
               {visible(d.name)} · {visible(d.size)}
@@ -860,8 +882,8 @@ export function Sale({
                 Ціна, грн
                 <input
                   ref={(input) => {
-                    if (input) priceRefs.current.set(stockKey(d.line), input);
-                    else priceRefs.current.delete(stockKey(d.line));
+                    if (input) priceRefs.current.set(d.id, input);
+                    else priceRefs.current.delete(d.id);
                   }}
                   inputMode="decimal"
                   placeholder="0,00"
@@ -1145,7 +1167,13 @@ export function Sale({
               : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} од.`}
           </p>
           <p className="pay-total">
-            {owing ? (
+            {!priced ? (
+              // A sum without a line's price is no sum to say (review,
+              // 2026-10-15).
+              <>
+                Разом <strong className="sum">—</strong>
+              </>
+            ) : owing ? (
               <>
                 Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
                 <Sum value={money(decimal(owing.left))} />
@@ -1161,7 +1189,7 @@ export function Sale({
               <button
                 key={way}
                 type="button"
-                disabled={blocked || working || !priced}
+                disabled={blocked || working || !priced || labelledOnPaper}
                 onClick={() => {
                   void send(way, found, missing, clarified);
                 }}

@@ -115,6 +115,8 @@ interface Sent {
   command_id: string;
   lines: { quantity: number; unit_price: string }[];
   found_in_store: unknown[];
+  missing_in_store: unknown[];
+  size_clarified: unknown[];
   payment_method: string;
 }
 
@@ -122,12 +124,13 @@ interface Sent {
 async function stubSale(
   page: Page,
   short: { requested: number; available: number } | null = null,
+  refusals = 1,
 ): Promise<Sent[]> {
   const sent: Sent[] = [];
   await page.route("**/api/v1/sales", async (route) => {
     const body = route.request().postDataJSON() as Sent;
     sent.push(body);
-    if (short && sent.length === 1) {
+    if (short && sent.length <= refusals) {
       await route.fulfill({
         status: 409,
         json: {
@@ -214,7 +217,12 @@ test("a model past the first hundred is found by three letters and sold in three
 
   // One: the search, typed. Two: the size. Three: the way.
   await search(page).click();
-  await search(page).pressSequentially("лор", { delay: 40 });
+  // One letter, and a pause longer than the search waits: no search.
+  await search(page).pressSequentially("л");
+  await page.waitForTimeout(600);
+  expect(asked.filter((query) => query !== "")).toEqual([]);
+  await expect(chip(page, "Альпака 001", "S · 1")).toBeVisible();
+  await search(page).pressSequentially("ор", { delay: 40 });
   const tag = page.getByRole("group", { name: "Лоран шоколад", exact: true });
   await expect(tag).toContainText("1850,00 грн");
   await expect(page.getByRole("group", { name: "Альпака 001" })).toHaveCount(0);
@@ -239,7 +247,7 @@ test("a model past the first hundred is found by three letters and sold in three
   expect(sent[0]?.lines).toEqual([
     expect.objectContaining({ quantity: 1, unit_price: "1850.00" }),
   ]);
-  // The search waited for three letters and a pause: a letter is not a search.
+  // The search waited for two letters at least, and a pause.
   expect(asked.filter((query) => query !== "")).toEqual(["лор"]);
 
   // The next customer: «Новий продаж», the size, the way.
@@ -300,6 +308,10 @@ test("a size whose every coat an order holds offers nothing, and the tag says so
   await expect(
     page.getByRole("group", { name: "Лоран шоколад" }),
   ).toContainText("Ще 3 шт. у резерві замовлення");
+  // From paper it is offered: the server's refusal says what to do then
+  // (ADR-0013 §6), as before the chips.
+  await page.getByLabel("Вношу продаж з паперу").check();
+  await expect(chip(page, "Лоран шоколад", "M · 0")).toBeEnabled();
 });
 
 test("the same size twice is one line of two, and «Менше» never takes a line away", async ({
@@ -344,6 +356,7 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
     page.getByText("Ціни продажу ще немає — впишіть домовлену."),
   ).toBeVisible();
   await expect(pay(page, "Готівка")).toBeDisabled();
+  await expect(page.getByText("Разом —")).toBeVisible();
   await price.fill("1500,5");
   await expect(pay(page, "Готівка")).toBeEnabled();
   await price.fill("15,5,5");
@@ -363,26 +376,140 @@ test("a line changed after the server's shortage answer is a new sale, its answe
   page,
 }) => {
   await stubList(page, [laurent]);
-  const sent = await stubSale(page, { requested: 3, available: 2 });
+  // The shelf is short, and still short after «Товар на місці»: the answer
+  // stands on the basket when its price is changed.
+  const sent = await stubSale(page, { requested: 3, available: 2 }, 2);
   await onTheTill(page);
   await chip(page, "Лоран шоколад", "M · 2").click();
   const line = page.locator(".line");
   await line.getByRole("button", { name: "Більше" }).click();
   await line.getByRole("button", { name: "Більше" }).click();
   await pay(page, "Готівка").click();
-  await expect(
-    page.getByRole("alert", { name: "Залишку не вистачає" }),
-  ).toBeVisible();
-  await line.getByRole("button", { name: "Менше" }).click();
-  await expect(
-    page.getByRole("alert", { name: "Залишку не вистачає" }),
-  ).toHaveCount(0);
+  const short = page.getByRole("alert", { name: "Залишку не вистачає" });
+  await short
+    .getByRole("button", { name: "Товар на місці — продати 3 · Готівка" })
+    .click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.found_in_store).toEqual([{ line_index: 0, quantity: 1 }]);
+  expect(sent[1]?.command_id).toBe(sent[0]?.command_id);
+  await expect(short).toBeVisible();
+  // The price agreed again: another sale, the answer gone with the old one.
+  await line.getByLabel("Ціна, грн").fill("1800");
+  await expect(short).toHaveCount(0);
   await pay(page, "Готівка").click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  expect(sent).toHaveLength(2);
-  expect(sent[1]?.command_id).not.toBe(sent[0]?.command_id);
-  expect(sent[1]?.found_in_store).toEqual([]);
-  expect(sent[1]?.lines[0]?.quantity).toBe(2);
+  expect(sent).toHaveLength(3);
+  expect(sent[2]?.command_id).not.toBe(sent[0]?.command_id);
+  expect(sent[2]?.found_in_store).toEqual([]);
+  expect(sent[2]?.missing_in_store).toEqual([]);
+  expect(sent[2]?.size_clarified).toEqual([]);
+  expect(sent[2]?.lines).toEqual([
+    expect.objectContaining({ quantity: 3, unit_price: "1800.00" }),
+  ]);
+});
+
+test("a size read off a label holds the ways once the sale is from paper", async ({
+  page,
+}) => {
+  await stubList(page, [
+    coat("Лоран шоколад", "?", 3, {
+      product_variant_id: fixture.variant_id,
+      size_is_unknown: true,
+    }),
+  ]);
+  await stubSale(page);
+  await onTheTill(page);
+  await chip(page, "Лоран шоколад", "Розмір невідомий · 3").click();
+  const label = page.locator(".line").getByLabel("Розмір з етикетки");
+  await label.selectOption({ index: 1 });
+  await expect(
+    page.getByText("Розмір з етикетки товару без розміру"),
+  ).toBeVisible();
+  await expect(pay(page, "Готівка")).toBeEnabled();
+  // From paper no size is read off a label (G3).
+  await page.getByLabel("Вношу продаж з паперу").check();
+  await expect(
+    page.getByText("Товар з невідомим розміром вносьте як «розмір невідомий»."),
+  ).toBeVisible();
+  await expect(pay(page, "З паперу · Готівка")).toBeDisabled();
+  await page
+    .locator(".line")
+    .getByRole("button", { name: /^Прибрати/ })
+    .click();
+  await chip(page, "Лоран шоколад", "Розмір невідомий · 3").click();
+  await expect(pay(page, "З паперу · Готівка")).toBeEnabled();
+});
+
+test("a warehouse that stops selling is not the till's any more", async ({
+  page,
+}) => {
+  const own = {
+    id: randomUUID(),
+    name: "Свій",
+    is_active: true,
+    can_sell: true,
+  };
+  const shared = {
+    id: randomUUID(),
+    name: "Спільний",
+    is_active: true,
+    can_sell: true,
+  };
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    await route.fulfill({ json: [own, shared] });
+  });
+  await stubList(page, [laurent]);
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page
+    .getByRole("combobox", { name: "Склад", exact: true })
+    .selectOption(shared.id);
+  await expect(chip(page, "Лоран шоколад", "M · 2")).toBeVisible();
+  // A manager stops «Спільний» selling; the till reads its warehouses again.
+  shared.can_sell = false;
+  const listed = page.waitForRequest((request) =>
+    request.url().includes(`location_id=${own.id}`),
+  );
+  // What TanStack Query hears when the app comes back to the screen.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(page.getByText("Склад: Свій")).toBeVisible();
+  // The till lists, and sells from, the warehouse it names.
+  await listed;
+  await expect(chip(page, "Лоран шоколад", "M · 2")).toBeVisible();
+});
+
+test("a line keeps knowing its model is held with no size, whatever is searched after", async ({
+  page,
+}) => {
+  await stubList(page, [
+    { ...laurent, quantity: 1, available_quantity: 1 },
+    coat("Лоран шоколад", "?", 2, {
+      product_variant_id: fixture.variant_id,
+      size_is_unknown: true,
+    }),
+    coat("Мілан бордо", "S", 1),
+  ]);
+  await stubSale(page, { requested: 2, available: 1 });
+  await onTheTill(page);
+  await search(page).fill("лор");
+  await chip(page, "Лоран шоколад", "M · 1").click();
+  await page.locator(".line").getByRole("button", { name: "Більше" }).click();
+  await search(page).fill("міл");
+  await chip(page, "Мілан бордо", "S · 1").click();
+  await pay(page, "Готівка").click();
+  // The coat in hand may be one held with no size: that answer, and not
+  // «Товар на місці», which the server refuses for it.
+  const short = page.getByRole("alert", { name: "Залишку не вистачає" });
+  await expect(
+    short.getByRole("button", {
+      name: "Це товар без розміру — продати як M · Готівка",
+    }),
+  ).toBeVisible();
+  await expect(
+    short.getByRole("button", { name: /Товар на місці/ }),
+  ).toHaveCount(0);
 });

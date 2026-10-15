@@ -1393,14 +1393,19 @@ See the [report](till-redesign-2-report.md).
   where the collation is ICU, and says so where it is skipped.
 - **The search reads no index.** Every word is a `LIKE '%…%'` on the
   model's, the source's and the colour's names, as receiving's search is.
-  Measured on the hot path's 400 models × 6 sizes: p95 9.6 ms for one
-  seller and 89.7 ms for six, against 300. A network with tens of
-  thousands of models may need a trigram index (pg_trgm is installed).
+  Measured on the hot path's 400 models × 6 sizes (release reading,
+  [hot path report](hot-path-budget-report.md#update--2026-10-15-the-tills-search-and-one-tap-of-a-size)).
+  A network with tens of thousands of models may need a trigram index
+  (pg_trgm is installed).
 - **A size sold out since the list was read still shows its chip** until
   the list is read again (after a sale, or a new search); the server then
   answers with the shortage, as it did. A size whose every coat an order
-  holds offers no chip to tap; the old list let it be picked, to be
-  refused.
+  holds offers no chip to tap, but from paper; the old list let it be
+  picked, to be refused.
+- **Every screen that reads the stock list reads it by name now**
+  («Залишки», «Постачальникам», «Нове замовлення»), through five joins and
+  a sort over the warehouse; the unsearched list is the hot path's first
+  two cases.
 - **Many of one coat are tapped one by one,** «+» or the chip again, up
   to 1000: there is no field to type a count in. A sale of tens of one
   size is rare at the counter; if it is not, a count field returns.

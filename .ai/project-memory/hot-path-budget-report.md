@@ -451,16 +451,22 @@ A model already on the list's first screen needs no search: 2. The next
 sale: «Новий продаж» puts the cursor in the search, so 3 again, or 2 for a
 model in view after it. A model with no price adds its price, typed; a
 store with two warehouses adds the choice of one, once. The journey
-`till-search.spec.ts` sells one priced coat in exactly these three taps,
-on a 360 × 640 screen, and the next in three.
+`till-search.spec.ts` sells one priced coat by the search, its chip and a
+way on a 360 × 640 screen, and the next by «Новий продаж», a chip and a
+way; its store sells from several warehouses, so it chooses one first. The
+one warehouse named rather than asked is `sale.spec.ts`'s.
 
 **The search's cost.** Every word is a literal `LIKE` on the model's, the
 source's and the colour's normalised names, no index, as receiving's search
-is; the order adds receiving's order of sizes as a `CASE` on the page's
-sizes. The harness has two new cases, last, so the earlier eight compare as
-before: `GET /catalog/stock-options · search`, alone and by six sellers,
-each alternating three letters every one of the 400 models shares (a
-hundred rows to order) and one model's whole name, under the catalogue
-read's 300 ms.
+is; the order adds receiving's order of sizes as a `CASE` over every size
+the organisation has. The list without a search reads by name too, through
+the same joins, for every screen that reads it («Продаж», «Залишки»,
+«Постачальникам», «Нове замовлення»); the first two cases measure it. The
+harness has two new cases, last, so the earlier eight compare as before:
+`GET /catalog/stock-options · search`, alone and by six sellers,
+alternating three letters every one of the 400 models shares (a hundred
+rows to order) and «модель N», whose number also matches every model and
+colour that contains it, about 160 of the 400: both broad, as a seller's
+few letters are.
 
 **The release reading,** checklist row 22: TODO(final).
