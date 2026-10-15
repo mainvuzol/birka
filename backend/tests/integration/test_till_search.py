@@ -317,6 +317,7 @@ async def test_ukrainian_letters_read_in_the_alphabet_s_order(maker):
     async with maker() as session:
         shop = await make_shop(session)
     m = (await sizes(maker, shop, "M"))["M"]
+    await stock(maker, shop, shop.variant_id, {m: 1})  # «Лоран», between «Ї» and «Я»
     for name in ("Яна", "Їжачок", "Ірис", "Жасмин", "Єва", "Ґудзик", "Вега"):
         await stock(maker, shop, await a_model(maker, shop, name), {m: 1})
     async with client_for(maker, shop) as client:
