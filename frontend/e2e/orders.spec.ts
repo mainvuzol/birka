@@ -216,7 +216,10 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   const retry = reopened.getByRole("button", {
     name: "Повторити ту саму команду",
   });
-  await expect.poll(() => lost).toBe(2);
+  // Its own check on opening, and once more if another read answers after
+  // that check was lost — the server is back (`useAutoCheck`): which comes
+  // first is timing. The command is the same each time (below).
+  await expect.poll(() => lost).toBeGreaterThanOrEqual(2);
   await expect(retry).toBeEnabled();
   await expect(reopened.getByRole("heading", { name: "Продаж" })).toHaveCount(
     0,
