@@ -95,9 +95,11 @@ M = [
      "            !ready || (!sale.paid_in_parts && way === null)\n", PAPER_RETURNS),
     ("a payment is sent before the kind is said", CREDITS,
      "                disabled={!paperMark.ready}\n", "", PAPER_RETURNS),
+    # Kept only while the switch is off, the kind is never read (equivalent,
+    # a first run's survivor): kept into the next series, it is.
     ("a new series keeps the kind", PAPER,
-     "    firstDays: on ? firstDays : null,\n", "    firstDays: on ? firstDays : usePaper.getState().firstDays,\n",
-     TILL),
+     "    firstDays: on ? firstDays : null,\n",
+     "    firstDays: firstDays ?? usePaper.getState().firstDays,\n", TILL),
     ("another kind keeps the day and time", SALE,
      "  }, [firstDays]);\n", "  }, []);\n", TILL),
     ("the reminder leaves the kind unsaid", SALE,
@@ -164,8 +166,9 @@ def failed(run: subprocess.CompletedProcess[str], journeys: bool) -> list[str]:
                    if l.startswith("FAILED ")})
 
 
-only = sys.argv[1] if len(sys.argv) > 1 else ""
-chosen = [m for m in M if not only or only in m[0]]
+# An optional argument: names, or parts of names, separated by "|".
+only = [part for part in (sys.argv[1] if len(sys.argv) > 1 else "").split("|") if part]
+chosen = [m for m in M if not only or any(part in m[0] for part in only)]
 journeys_all = sorted({spec for m in chosen if m[4] for spec in m[4]})
 if any(m[1] in SERVER for m in chosen):
     base = server()

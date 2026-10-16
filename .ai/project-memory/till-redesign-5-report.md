@@ -67,11 +67,98 @@ and payments are «з паперу» too.
 
 ## How it was built and proven
 
-TODO(final)
+- **Server tests** (`test_first_days_mark.py`, 10):
+  - a sale of the first days: marked so, dated today, its paper day kept,
+    and «з паперу» in its answer, read back, in the store's list and in
+    «Звіт»;
+  - the first days' paper goes back to the thirteenth day before today
+    and no further; an outage's to yesterday; each refusal says its days;
+  - the first days' paper says nothing of the shelf, and its shortfall is
+    never correctable;
+  - the kind is part of the command, for a sale, a return and a payment:
+    the other kind conflicts, the same replays, and an outage's stated
+    `first_days: false` is the outage's own; the prints of both kinds;
+  - a return and a payment of the first days carry it, with the same two
+    weeks;
+  - the database keeps it: never without the mark, never changed on a
+    sale, a return or the debt's ledger;
+  - `/stock-locations` says a warehouse that has recorded nothing awaits,
+    with its list typed or not, and one delivery opens it;
+  - revision 0041 goes back only while no row carries the mark.
+  The tests that pin the mark's exact shape now say `first_days: false`,
+  and `test_old_prints_are_pinned.py` is unchanged: an outage's prints are
+  the same bytes.
+- **Journeys** (`till-first-days.spec.ts`, 6, and one in
+  `outage-mark-debts-returns.spec.ts`):
+  - a warehouse with nothing recorded says to sell on paper, with nothing
+    to search, no basket hint and no catalogue;
+  - an empty warehouse names itself, and a coat from the catalogue goes in
+    the basket at its price and is sold through «Товар на місці», the second
+    body saying the coat found; against the real API, a model never
+    received is sold so;
+  - a search that finds nothing offers the catalogue; from paper, or
+    without the rights, it does not, and an open panel closes as the paper
+    mode comes on;
+  - the paper switch asks which paper it is and holds the pay buttons until
+    it is said; the first days' band, hint, receipt and money line say «з
+    паперу» and never «збою»; the day's range is today and the thirteen
+    days before; a time without its day, or a day without its time, is held;
+    the series keeps its kind for the next sale and asks the day anew;
+  - an outage's paper is sent as it always was; a refusal of a time too
+    old says the outage's words for an outage and the first days' for the
+    first days; another kind asks the day and time anew; a new series asks
+    which paper again;
+  - a return and a payment of the first days, from a day nine days back:
+    the return held until the kind is said, «Повернено з паперу» and «…
+    повернули раніше», «Внесок з паперу», «оплату вже провели», the bodies
+    with `first_days`, and «Звіт» saying it.
+- **Every journey that types paper** now says which paper it is
+  (`fixtures.ts`: `fromPaper`), «Сервер не відповідав» for an outage; the
+  reminder's button says it too. The outage payment journey sees its
+  buttons held until it is said.
+- **A reminder journey of #93 was made steady:** it lost the server while a
+  request of the till's was still in flight, whose late answer rightly
+  counted as the server's return; it now waits for the till's requests to
+  settle first.
+- **Mutation:** thirty-five ways of breaking it, one at a time — thirteen
+  on the server against its tests, twenty-two on the screens against the
+  journeys meant to catch each, on a fresh seed — after the unchanged tree
+  passed both ways: all caught
+  (`output/verification/2026-10-16-till-first-days/`).
+  - A first run caught 32 of 35, and each survivor is closed: a sold-out
+    warehouse, its movements without stock, is checked to stay open; «Це
+    було вчора» is checked absent once the first days' time is typed; and
+    «a new series keeps the kind» was equivalent — the kind it kept while
+    the switch was off is never read — and is replaced by one that carries
+    the kind into the next series, which the journeys catch.
+  - The backups journey that counts nights is left out of the screens'
+    verdicts: the shared E2E database keeps every run's nights.
 
 ## Review
 
-TODO(final)
+An independent review of the change before its first commit found no
+blocker, the migration, the prints, the idempotency and the texts by kind
+right, and the following, all addressed in `8a215eb`:
+- **«Знайти в каталозі» on a warehouse that has recorded nothing** — no list
+  typed yet — would write its first movement and close it to its opening
+  list for good. Asked of the owner: such a warehouse says to sell on
+  paper, as one waiting for its list, and `/stock-locations` says
+  `awaiting_first_stock`, in one query.
+- **The first days' day was guessed as today** when only a time was typed,
+  and a day without a time was dropped: they now go together, or the send
+  waits with a hint.
+- **Another kind kept the other's day, time and «вчора»:** asked anew now.
+- **«Повернення» spoke of an outage before the kind was said;** the sends
+  relied on held buttons alone: both fixed.
+- **«Two weeks» read as fifteen days:** today and the thirteen days before,
+  the same on the server, the field and the texts.
+- **Docs:** the catalogue lists every active model, not only those the
+  store holds none of; the guides said the till names a waiting warehouse
+  only once its list is typed.
+- **Tests that could pass broken, and gaps:** the catalogue's absence from
+  paper re-checked beside the no-result text, a realistic too-old refusal
+  and the outage's own words, the panel closing on paper, the kind
+  conflict of returns and payments, a warehouse opened by a delivery.
 
 ## Evidence
 

@@ -444,6 +444,8 @@ test("the paper switch asks which paper it is; the first days' is «з папе�
   // A time without its day, or a day without its time: held, never guessed.
   const time = page.getByLabel("Час з паперу");
   await time.fill("12:30");
+  // «Це було вчора» is an outage's: the first days pick their day.
+  await expect(page.getByLabel("Це було вчора")).toHaveCount(0);
   await expect(page.getByText("Вкажіть день з паперу.")).toBeVisible();
   await expect(pay(page, "З паперу · Картка")).toBeDisabled();
   const written = await daysAgo(page, 9);

@@ -389,8 +389,29 @@ async def test_the_till_is_told_a_warehouse_has_recorded_nothing_yet(maker):
         )
         assert received.status_code == 201, received.text
         opened = await waiting(client, delivered_world)
+        # Sold out, it stays open: what was recorded there is history.
+        sold = await client.post(
+            "/api/v1/sales",
+            json={
+                "store_id": str(delivered_world["main"]),
+                "command_id": str(uuid.uuid4()),
+                "payment_method": "CASH",
+                "lines": [
+                    {
+                        "product_variant_id": str(variant),
+                        "size_id": str(sizes["M"]),
+                        "source_location_id": str(delivered_world["shared"]),
+                        "quantity": 1,
+                        "unit_price": "1500.00",
+                    }
+                ],
+            },
+            headers=idempotent(),
+        )
+        assert sold.status_code == 201, sold.text
+        sold_out = await waiting(client, delivered_world)
 
-    assert (fresh, held, before, opened) == (True, True, True, False)
+    assert (fresh, held, before, opened, sold_out) == (True, True, True, False, False)
 
 
 async def test_revision_0041_goes_back_only_without_the_first_days_mark():
