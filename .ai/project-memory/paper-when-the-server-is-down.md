@@ -15,7 +15,7 @@
 > Step 6 updated on 2026-10-16 for the owner's decision that whoever types
 > paper says once which paper it is («Сервер не відповідав» here; «Перші
 > дні, до затвердження залишків» is the first days', in the server guide);
-> the new wording is not yet confirmed by the owner.
+> the owner confirmed the new wording on 2026-10-16.
 > Print from the line below.
 
 ---

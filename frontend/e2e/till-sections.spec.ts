@@ -433,7 +433,7 @@ test("the reminder's button waits while a sale is being sent, as the tick does",
   await expect(paper).toBeDisabled();
   release();
   // No answer: the sale is kept, and the server lost again.
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
   await expect(reminder(page)).toHaveCount(0);
 });
 

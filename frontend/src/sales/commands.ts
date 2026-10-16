@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
+import { decimal, kopecks } from "@/orders/types";
 import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { isSince, sinceOf } from "@/shared/reach";
@@ -216,6 +217,54 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
     throw new Error("Некоректний збережений продаж. Зверніться до менеджера.");
   }
   return attempt;
+}
+
+/**
+ * What a kept sale was sent for, as its banner says it (redesign P1-4): each
+ * line at its price, a line answered «на місці лише N» at N; or, paid in
+ * parts, the part paid now. The attempt's own figures, never the server's
+ * total: nobody knows yet whether it was recorded. Null when a price does
+ * not read as money.
+ */
+export function attemptSum(body: SaleBody): {
+  sum: string | null;
+  inParts: boolean;
+} {
+  // Read from storage, whatever TypeScript was told: a field that does not
+  // read gives no sum, and never breaks the banner (review, 2026-10-16).
+  const read = (value: unknown): bigint | null =>
+    typeof value === "string" ? kopecks(value) : null;
+  const count = (value: unknown): number | null =>
+    Number.isInteger(value) && (value as number) >= 0
+      ? (value as number)
+      : null;
+  if (body.credit) {
+    const paid = read(body.credit.paid_now);
+    return { sum: paid === null ? null : decimal(paid), inParts: true };
+  }
+  const reports: unknown = body.missing_in_store;
+  let total = 0n;
+  for (const [index, line] of body.lines.entries()) {
+    const price = read(line.unit_price);
+    const discount = read(line.discount_amount);
+    const asked = count(line.quantity);
+    if (
+      price === null ||
+      discount === null ||
+      asked === null ||
+      discount > price
+    )
+      return { sum: null, inParts: false };
+    const report = Array.isArray(reports)
+      ? (reports as { line_index?: unknown; quantity?: unknown }[]).find(
+          (entry) => entry.line_index === index,
+        )
+      : undefined;
+    const present = report === undefined ? asked : count(report.quantity);
+    if (present === null) return { sum: null, inParts: false };
+    total += (price - discount) * BigInt(present);
+  }
+  return { sum: decimal(total), inParts: false };
 }
 
 export function loadSale(key: string): SaleAttempt | null {

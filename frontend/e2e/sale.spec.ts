@@ -159,7 +159,7 @@ test("a seller sells stock the ledger agrees with, and the sale is recorded once
   ).toBeVisible();
   await expect(page.getByText("Готівка · Разом 300,00 грн")).toBeVisible();
   // Nothing is left in the journal to recover.
-  await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
+  await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,
@@ -539,7 +539,14 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   await pickFirstProduct(page);
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
+  // Which customer it was: the attempt's sum and way, not confirmed yet
+  // (redesign P1-4).
+  await expect(
+    page.getByText(
+      "Продаж на 150,00 грн · Готівка — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    ),
+  ).toBeVisible();
   // Everything else is locked while one sale's outcome is unknown.
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
@@ -551,7 +558,13 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
     .click();
-  await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
+  await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
+  await expect(
+    // The stubbed answer names no way, as one recorded before ways did.
+    page.getByText("Продаж записано один раз: разом 150,00 грн.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   // The journal replays the attempt it wrote down, under its own key.
   expect(keys[0]).toBe(keys[1]);
   await expect(

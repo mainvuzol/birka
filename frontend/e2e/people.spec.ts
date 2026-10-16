@@ -48,7 +48,7 @@ function people(...args: string[]): string {
   );
 }
 
-test("someone the shop has not added sees their number, and is let in once added", async ({
+test("someone the shop has not added sees their Telegram ID, and is let in once added", async ({
   page,
 }) => {
   const stranger = randomInt(2 ** 40, 2 ** 47);

@@ -360,7 +360,7 @@ async function soldWithNoAnswer(
   };
   await pay(page, way).click();
   await expect(
-    page.getByRole("heading", { name: "Незавершений продаж" }),
+    page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
   ).toBeVisible();
 }
 
@@ -417,6 +417,71 @@ function keptSale(way: string): string {
     },
   });
 }
+
+test("a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way for an attempt kept from before", async ({
+  page,
+}) => {
+  const lost = async (route: Route): Promise<void> => {
+    await route.abort("connectionreset");
+  };
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+  });
+  const waits =
+    "сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.";
+
+  // A line answered «на місці лише 1» of two sells one.
+  const short = JSON.parse(keptSale("CARD")) as {
+    body: { lines: { quantity: number }[]; missing_in_store: unknown[] };
+  };
+  const [line] = short.body.lines;
+  if (line) line.quantity = 2;
+  short.body.missing_in_store = [{ line_index: 0, quantity: 1 }];
+  await seed(page, { [saleKey]: JSON.stringify(short) });
+  let server = await serve(page);
+  server.sale = lost;
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  await expect(banner).toContainText(
+    `Продаж на 3000,00 грн · Картка — ${waits}`,
+  );
+  // Not the old words, which named neither.
+  await expect(banner).not.toContainText("Нові операції заблоковано");
+
+  // Paid in parts: the part paid now.
+  const parts = JSON.parse(keptSale("TRANSFER")) as {
+    body: Record<string, unknown>;
+  };
+  parts.body.credit = {
+    customer_name: "Оксана Петренко",
+    customer_phone: "+380 67 123 45 67",
+    paid_now: "1000.00",
+  };
+  await page.unrouteAll({ behavior: "wait" });
+  await seed(page, { [saleKey]: JSON.stringify(parts) });
+  server = await serve(page);
+  server.sale = lost;
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  await expect(banner).toContainText(
+    `Продаж частинами, зараз 1000,00 грн · Переказ — ${waits}`,
+  );
+
+  // Kept from before the way was asked: no way named.
+  const old = JSON.parse(keptSale("CASH")) as {
+    body: Record<string, unknown>;
+  };
+  delete old.body.payment_method;
+  await page.unrouteAll({ behavior: "wait" });
+  await seed(page, { [saleKey]: JSON.stringify(old) });
+  server = await serve(page);
+  server.sale = lost;
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  await expect(banner).toContainText(`Продаж на 3000,00 грн — ${waits}`);
+  // Its own lines, by the person's own phone, as before (G17).
+  await expect(banner).toContainText("Запишіть цю операцію на папері");
+});
 
 test.describe("1. the seller is told to sell on paper", () => {
   test("at sign-in, for 503, 502, 504 and no answer at all", async ({
@@ -553,7 +618,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await basket(page);
     await soldWithNoAnswer(page, server);
     const banner = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: /продаж/ }),
+      has: page.getByRole("heading", { name: /продаж/i }),
     });
     const since = await keptSince(page);
     await expect(banner).toContainText(
@@ -577,7 +642,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await expect.poll(() => server.readies).toBe(3);
     expect(server.sales).toHaveLength(1);
     await expect(
-      page.getByRole("heading", { name: "Незавершений продаж" }),
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
     ).toBeVisible();
 
     // The server is back, and the phone hears it: the sale is resent with
@@ -597,6 +662,12 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     release();
     await expect(
       page.getByRole("heading", { name: "Продаж підтверджено" }),
+    ).toBeVisible();
+    // Said once, with its way (redesign P1-4).
+    await expect(
+      page.getByText("Продаж записано один раз: разом 3000,00 грн готівкою.", {
+        exact: true,
+      }),
     ).toBeVisible();
     const [first, second] = server.sales;
     expect(second?.key).toBe(first?.key);
@@ -648,7 +719,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await page.waitForTimeout(1500);
     expect(server.sales).toHaveLength(2);
     await expect(
-      page.getByRole("heading", { name: "Незавершений продаж" }),
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
     ).toBeVisible();
 
     // The whole server goes again, and the till's reads get no answer. Going
@@ -738,7 +809,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     });
     await expect(check).toBeEnabled();
     const banner = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Незавершений продаж" }),
+      has: page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
     });
     await expect(banner).toContainText(
       `Запишіть цю операцію на папері з позначкою «у телефоні — ${person}»`,
@@ -781,7 +852,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
       has: page.getByRole("heading", { name: "Продаж підтверджено" }),
     });
     await expect(confirmed).toContainText(
-      "Якщо картку ще не провели — проведіть на терміналі 3000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+      "Продаж записано один раз: разом 3000,00 грн карткою. Якщо картку ще не провели — проведіть на терміналі 3000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
     await expect(confirmed).not.toContainText(
       /Проведіть на терміналі 3000,00 грн\./,
@@ -901,7 +972,7 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
         .getByRole("button", { name: "Перевірити результат продажу" })
         .click();
       await expect(
-        page.getByRole("heading", { name: "Незавершений продаж" }),
+        page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
       ).toHaveCount(0);
       await expect(
         page.getByText(
@@ -1572,7 +1643,7 @@ test.describe("8. the real server keeps the mark", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Незавершений продаж" }),
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
     ).toHaveCount(0);
     expect(
       await page.evaluate((name) => localStorage.getItem(name), key),

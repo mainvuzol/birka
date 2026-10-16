@@ -416,7 +416,7 @@ for (const [name, theme, scheme] of [
     await oneLine(page);
     await page.getByRole("button", { name: "Готівка", exact: true }).click();
     const kept = page.locator("section.notice", {
-      hasText: "Незавершений продаж",
+      hasText: "Продаж ще не підтверджено",
     });
     await expect(kept).toBeVisible();
     expect(await contrast(kept.locator("p").first())).toBeGreaterThanOrEqual(

@@ -1477,6 +1477,26 @@ See the [report](till-redesign-5-report.md).
 - **A coat from the catalogue kept in the basket when the paper switch is
   ticked** is refused at the press, as any coat the books hold none of is
   from paper (ADR-0013 §6), and the refusal says to ask a manager.
-- **The guides' new words are not yet confirmed by the owner:** the paper
-  guide's «Сервер не відповідав» and the server guides' first-days step
-  follow the answers of 2026-10-16, as built.
+- **The guides' new words** (the paper guide's «Сервер не відповідав», the
+  server guides' first-days step) were confirmed by the owner on
+  2026-10-16.
+
+## The first sign-in and the kept sale's banner — 2026-10-16
+
+See the [report](till-redesign-6-report.md).
+
+- **«Скопіювати ID» needs the phone to let the app copy:** where it does
+  not, the button is not shown and the ID is selected whole at a touch; a
+  copy refused says to select it.
+- **A kept sale's sum is the attempt's,** as the phone sent it: the server
+  may have recorded something else (a line answered at the shelf
+  differently later is another attempt). It is said as not confirmed, and
+  the confirmation then says the server's total.
+- **Launch data the server refuses** (past its hour, or not the shop's
+  bot's) says to open the app again from the bot; «Спробувати ще раз» sends
+  the same data and is refused the same way until it is. A command kept from
+  an earlier opening is found once it is.
+- **«Сервер не відповів» on a kept sale's banner is not always so:** a sale
+  kept after a 500, a 429 or a resend still in progress shows it too; the
+  server answered, but not with the sale's outcome. The banner's point — not
+  confirmed, never twice — holds.

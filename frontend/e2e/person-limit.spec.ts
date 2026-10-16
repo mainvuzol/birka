@@ -153,7 +153,7 @@ test("a new sale refused for too many requests is not done, says how long to wai
   await expect(page.getByText(WAIT)).toBeVisible();
   await expect(page.getByText("не записано")).toHaveCount(0);
   // Nothing is kept: the till is the seller's at once, nothing blocked.
-  await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
+  await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toBeEnabled();
@@ -179,7 +179,7 @@ test("a sale kept on the phone, refused for too many requests when checked, stay
   });
   await basket(page);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
 
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
@@ -188,7 +188,7 @@ test("a sale kept on the phone, refused for too many requests when checked, stay
   // The first sending may have been recorded: the refusal proves nothing
   // about it, so the sale stays kept and the till stays blocked.
   await expect(page.getByText(WAIT)).toBeVisible();
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toBeDisabled();
@@ -196,7 +196,11 @@ test("a sale kept on the phone, refused for too many requests when checked, stay
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
     .click();
-  await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
+  // Settled, not merely being checked.
+  await expect(
+    page.getByRole("heading", { name: "Продаж підтверджено" }),
+  ).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   // Every check resent the very attempt it kept.
   expect(new Set(keys).size).toBe(1);
   expect(keys).toHaveLength(3);

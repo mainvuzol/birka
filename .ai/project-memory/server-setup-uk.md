@@ -25,7 +25,7 @@ Telegram.
 | Годинник | синхронізований: `timedatectl` показує `System clock synchronized: yes`. Дані входу з Telegram із часом у майбутньому або старші за годину сервер не приймає. |
 | Бот Telegram | створений через @BotFather. Його токен підписує кожен вхід; на сервері має бути той самий. |
 | Ключ власника для копій (age) | створений на комп’ютері власника (крок 8, пункт 1). На сервер іде лише його відкрита частина. |
-| Хто дізнається про проблеми | власник — через бота, і адміністратор — його номер у Telegram (рішення власника 2026-10-03). Адміністратора ще не названо. |
+| Хто дізнається про проблеми | власник — через бота, і адміністратор — його Telegram ID (рішення власника 2026-10-03). Адміністратора ще не названо. |
 | Зовнішній сервіс перевірки | обліковий запис на ім’я власника, щоб помітити сервер, який зупинився повністю (крок 8a). |
 
 Часовий пояс сервера — Київ, щоб нічна копія о 03:15 була ніччю для
@@ -70,7 +70,7 @@ cp .env.example .env && chmod 600 .env
 | `BIRKA_TELEGRAM_BOT_TOKEN` | від @BotFather |
 | `BIRKA_SESSION_SECRET` | `openssl rand -base64 48` |
 | `BIRKA_BACKUP_AGE_RECIPIENTS` | відкритий ключ власника, `age1…` |
-| `BIRKA_ADMIN_TELEGRAM_IDS` | номер адміністратора в Telegram; кілька — через кому (крок 8a) |
+| `BIRKA_ADMIN_TELEGRAM_IDS` | Telegram ID адміністратора; кілька — через кому (крок 8a) |
 | `BIRKA_HEARTBEAT_URL` | адреса перевірки зовнішнього сервісу (крок 8a). Хто її знає, може «відмічатися» замість сервера, тож вона лишається лише в `.env` |
 | `BIRKA_SENTRY_DSN` | порожньо: подробиці помилок лишаються в журналі сервера (рішення власника 2026-10-03) |
 
@@ -122,16 +122,16 @@ docker compose ps                          # api за хвилину-дві по
 3. Вкажіть адресу кнопки `https://<домен>/`.
 
 Відкрийте бота в Telegram і натисніть кнопку. Застосунок покаже «Доступу ще
-немає» з номером Telegram цієї людини.
+немає» з Telegram ID цієї людини (це не номер телефону).
 
 ### 6. Власник і місця магазину
 
-Власник відкриває застосунок, як у кроці 5, і передає номер, який той
+Власник відкриває застосунок, як у кроці 5, і передає Telegram ID, який той
 показав. Тоді:
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.seed_organization \
-  --telegram-user-id <номер власника> --owner-name "<ім’я>" --org-name "<магазин>" \
+  --telegram-user-id <Telegram ID власника> --owner-name "<ім’я>" --org-name "<магазин>" \
   --main-name "<назва основного магазину>" --second-name "<назва другого магазину>"
 ```
 
@@ -152,19 +152,21 @@ docker compose run --rm --no-deps api python -m scripts.seed_organization \
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.stores rename \
-  --approved-by <номер власника> --store MAIN --name "<нова назва>"
+  --approved-by <Telegram ID власника> --store MAIN --name "<нова назва>"
 ```
 
-Власник натискає «Спробувати ще раз» — і входить.
+Власник закриває застосунок і відкриває його знову кнопкою в боті (протягом
+години можна й натиснути «Спробувати ще раз») — і входить.
 
 ### 7. Люди
 
-Кожен продавець відкриває застосунок, як у кроці 5, і передає свій номер.
+Кожен продавець відкриває застосунок, як у кроці 5, і передає свій Telegram ID
+(кнопка «Скопіювати ID»).
 На слово власника:
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.people grant \
-  --approved-by <номер власника> --telegram-user-id <їхній номер> \
+  --approved-by <Telegram ID власника> --telegram-user-id <їхній Telegram ID> \
   --store MAIN --role SELLER
 docker compose run --rm --no-deps api python -m scripts.people list
 ```
@@ -178,7 +180,7 @@ docker compose run --rm --no-deps api python -m scripts.people list
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.people sign-out \
-  --approved-by <номер власника> --telegram-user-id <їхній номер>
+  --approved-by <Telegram ID власника> --telegram-user-id <їхній Telegram ID>
 ```
 
 Хто тримає загублений телефон, ще може відкрити застосунок через Telegram
@@ -304,7 +306,7 @@ sh infra/pull-backups.sh
 налаштовувати не треба.
 
 1. **Адміністратор** відкриває бота магазину, натискає «Start», потім
-   відкриває з нього застосунок: «Доступу ще немає» показує номер.
+   відкриває з нього застосунок: «Доступу ще немає» показує Telegram ID.
    Впишіть його в `BIRKA_ADMIN_TELEGRAM_IDS` і виконайте
    `docker compose up -d backup-watch`.
    `docker compose logs backup-watch | grep backup_watch.started` покаже,
