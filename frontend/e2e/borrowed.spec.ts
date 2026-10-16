@@ -216,13 +216,13 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   await section(page, "Постачальникам");
   const lot = card(page, coat, supplier.name);
   await expect(lot).toContainText(
-    "1500,00 грн за од. · взято 3 · продано 0 · повернено 0 · на руках 3",
+    "1 500,00 грн за од. · взято 3 · продано 0 · повернено 0 · на руках 3",
   );
   await lot.getByLabel("Скільки одиниць").fill("2");
   await lot.getByRole("button", { name: "Продано" }).click();
   await expect(
     page.getByText(
-      `Продано 2 од.: у «Накладних» борг «${supplier.name}» 3000,00 грн.`,
+      `Продано 2 од.: у «Накладних» борг «${supplier.name}» 3 000,00 грн.`,
     ),
   ).toBeVisible();
   await expect(lot).toContainText("продано 2 · повернено 0 · на руках 1");

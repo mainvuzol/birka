@@ -5,7 +5,10 @@ import { visible } from "@/shared/visible";
 import { refusalText as debtRefusalText } from "@/credits/Credits";
 import { refusalText as correctionRefusalText } from "@/inventory/Correction";
 import { refusalText as returnRefusalText } from "@/returns/Returns";
-import { refusalText as tillRefusalText } from "@/sales/Sale";
+import {
+  refusalText as tillRefusalText,
+  TILL_CONFLICT_TEXT,
+} from "@/sales/Sale";
 import { isPaymentMethod } from "./types";
 import type { CashBody } from "./types";
 
@@ -150,6 +153,9 @@ function saleReason(error: unknown): string {
     return error.details.reserved === true
       ? "частина цих одиниць у резерві замовлення — спершу менеджер має вирішити із замовленням"
       : "цього товару вже немає в обліку — спершу попросіть менеджера виправити залишок";
+  // Not «спробуйте ще раз»: the basket is gone, and it is typed from paper.
+  if (tillRefusalText(error) === TILL_CONFLICT_TEXT)
+    return "дані змінилися, поки сервер не відповідав";
   const text = tillRefusalText(error).replace(/\.$/, "");
   return text.charAt(0).toLowerCase() + text.slice(1);
 }

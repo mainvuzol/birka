@@ -162,7 +162,7 @@ export const collectMethods: readonly {
 /** What collecting records, and what it does not: the carrier's cash on
  * delivery is checked separately, later. */
 export const collectHint =
-  "Продаж фіксуємо, коли клієнт забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.";
+  "Продаж записуємо, коли покупець забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.";
 export type Destination = "UKRAINE" | "ABROAD";
 export type Carrier = "NOVA_POSHTA" | "UKRPOSHTA" | "MEEST";
 export const carrierLabels: Record<Carrier, string> = {
@@ -210,7 +210,12 @@ export function kopecks(value: string): bigint | null {
 export function decimal(value: bigint): string {
   return `${(value / 100n).toString()}.${(value % 100n).toString().padStart(2, "0")}`;
 }
+/** «1 850,00 грн»: thousands apart by a no-break space, so the figure never
+ * breaks across lines (sale-slice TZ, P2-1). An input keeps «1850,50»,
+ * which `kopecks()` reads. */
 export function money(value: string): string {
   const parsed = kopecks(value);
-  return parsed === null ? "—" : `${decimal(parsed).replace(".", ",")} грн`;
+  if (parsed === null) return "—";
+  const [whole = "0", fraction = "00"] = decimal(parsed).split(".");
+  return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction} грн`;
 }

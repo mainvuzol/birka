@@ -172,7 +172,7 @@ test("a line with nothing on the shelf is dropped, and the rest is sold", async 
   await expect(
     page.getByText(`Не продано — на полиці не було: ${empty.name} сірий · M.`),
   ).toBeVisible();
-  await expect(page.getByText("Готівка · Разом 2000,00 грн")).toBeVisible();
+  await expect(page.getByText("Готівка · Разом 2 000,00 грн")).toBeVisible();
   expect(sent[1]?.missing_in_store).toEqual([{ line_index: 0, quantity: 0 }]);
   // The two the ledger believed in were taken off; the one there was sold.
   expect(await held(page, empty)).toBe(0);
@@ -202,7 +202,7 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   await expect(
     page.getByRole("heading", { name: "Продажу немає" }),
   ).toBeVisible();
-  await expect(page.getByText("Знято з обліку: 1 од.")).toBeVisible();
+  await expect(page.getByText("Знято з обліку: 1 шт.")).toBeVisible();
   expect(recorded).toHaveLength(1);
   expect(await held(page, empty)).toBe(0);
   await page.getByRole("button", { name: "Новий продаж" }).click();

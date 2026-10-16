@@ -94,6 +94,9 @@
   background: var(--bg);
   font-synthesis: none;
   font-size: 16px;
+  /* Every sum and count in even digits, so figures under one another do not
+     dance (direction §4; sale-slice TZ, P2-1). */
+  font-variant-numeric: tabular-nums;
 }
 * {
   box-sizing: border-box;
@@ -591,7 +594,6 @@ html {
 .pay-total {
   margin: 0 0 10px;
   font-size: 18px;
-  font-variant-numeric: tabular-nums;
 }
 .pay-total .sum {
   font-size: 26px;
@@ -651,7 +653,6 @@ html {
   flex-shrink: 0;
   font-size: 14px;
   color: var(--text-2);
-  font-variant-numeric: tabular-nums;
 }
 .chips {
   display: flex;
@@ -665,7 +666,6 @@ html {
   border-radius: 14px;
   background: var(--accent-soft);
   color: var(--accent-text);
-  font-variant-numeric: tabular-nums;
 }
 .tag .hint,
 .empty p {
@@ -700,7 +700,6 @@ html {
   min-width: 32px;
   text-align: center;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 .line .price-error {
   color: var(--debt);
@@ -723,5 +722,4 @@ html {
 .telegram-id {
   user-select: all;
   -webkit-user-select: all;
-  font-variant-numeric: tabular-nums;
 }

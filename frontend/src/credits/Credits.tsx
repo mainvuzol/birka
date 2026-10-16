@@ -372,7 +372,7 @@ const entryLabels: Record<CreditEntry["kind"], string> = {
 
 /**
  * What a history line says of how money moved (ADR-0012 §B12): «· готівка»
- * after a payment, «(повернено 1000,00 грн на картку)» after a return that
+ * after a payment, «(повернено 1 000,00 грн на картку)» after a return that
  * handed money back. A payment recorded before the way was asked reads «не
  * вказано», and is never guessed (owner decision, 2026-10-04).
  */

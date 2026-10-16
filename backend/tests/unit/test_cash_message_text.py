@@ -1,7 +1,8 @@
 """What the bot says of a close's difference (ADR-0012, B8).
 
-Plain and impersonal, like the app's texts; money printed as the app prints
-it — «6100,00 грн», a comma and no separator between thousands; the reason
+Plain and impersonal, like the app's texts; money printed as the app printed
+it until 2026-10-17 — «6100,00 грн», a comma and no separator between
+thousands (the app now writes «6 100,00 грн», P2-1); the reason
 quoted, or said to be missing; the days nobody closed named. Nothing in it is
 a customer's.
 """

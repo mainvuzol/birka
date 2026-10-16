@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
+import { sizeLabel } from "@/returns/types";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { submitReturnToSupplier } from "./commands";
@@ -221,7 +222,7 @@ function LotCard({
       aria-label={`${visible(lot.display_name)}, ${visible(lot.size ?? "")} від ${visible(lot.supplier.name)}`}
     >
       <strong>
-        {visible(lot.display_name)}, {visible(lot.size ?? "розмір не вказано")}
+        {visible(lot.display_name)}, {sizeLabel(lot.size)}
       </strong>
       <small>
         {lot.acquisition_type === "BORROWED" ? "Позичено" : "Під реалізацію"} у

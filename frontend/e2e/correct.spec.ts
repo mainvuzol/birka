@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, openStore, section, waitsFor } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -256,6 +256,7 @@ test("a correction whose outcome is unknown blocks the app until it is resent un
   await page.getByLabel("Скільки списати, од.").fill("1");
   await page.getByRole("button", { name: "Записати коригування" }).click();
   await expect(page.getByText("Незавершене коригування")).toBeVisible();
+  await waitsFor(page, /коригування/);
   // The till waits too: nothing else happens until this is settled.
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),

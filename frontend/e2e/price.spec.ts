@@ -160,7 +160,7 @@ test("a store's price set on the stock screen is what its till suggests", async 
     page.getByText(`Ціну продажу збережено: ${priced.name}`),
   ).toBeVisible();
   await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1850,50 грн",
+    "Ціна продажу: 1 850,50 грн",
   );
 
   // The till: the price is there before the seller types anything.
@@ -192,13 +192,13 @@ test("a store's price set on the stock screen is what its till suggests", async 
   await search.fill(priced.name);
   await expect(
     page.getByRole("group", { name: new RegExp(priced.name) }),
-  ).toContainText("1850,50 грн");
+  ).toContainText("1 850,50 грн");
   await page.locator(`button.chip[data-stock="${priced.option}"]`).click();
   await expect(lines.nth(1).getByLabel("Ціна, грн")).toHaveValue("1850,50");
   await expect(
     lines
       .nth(1)
-      .getByText("Ціна продажу 1850,50 грн. Домовилися про іншу — змініть."),
+      .getByText("Ціна продажу 1 850,50 грн. Домовилися про іншу — змініть."),
   ).toBeVisible();
   await expect(unpricedPrice).toHaveValue("");
   await lines
@@ -230,7 +230,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   await page.getByLabel("Нова ціна, грн").fill("2000");
   await page.getByRole("button", { name: "Зберегти ціну" }).click();
   await expect(
-    page.getByText("Ціна продажу: 2000,00 грн — спільна для всіх магазинів"),
+    page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Змінити ціну продажу" }).click();
@@ -238,12 +238,12 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
     .getByRole("combobox", { name: "Яку ціну змінюємо" })
     .selectOption("STORE");
   await expect(
-    page.getByText("Зараз: своєї ціни немає, діє спільна 2000,00 грн."),
+    page.getByText("Зараз: своєї ціни немає, діє спільна 2 000,00 грн."),
   ).toBeVisible();
   await page.getByLabel("Нова ціна, грн").fill("1900");
   await page.getByRole("button", { name: "Зберегти ціну" }).click();
   await expect(
-    page.getByText("Ціна продажу: 1900,00 грн — ціна магазину «Основний»"),
+    page.getByText("Ціна продажу: 1 900,00 грн — ціна магазину «Основний»"),
   ).toBeVisible();
 
   // Removing the store's own price brings the shared one back.
@@ -253,7 +253,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   ).toHaveValue("STORE");
   await page.getByRole("button", { name: "Прибрати ціну магазину" }).click();
   await expect(
-    page.getByText("Ціна продажу: 2000,00 грн — спільна для всіх магазинів"),
+    page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
   ).toBeVisible();
 });
 
@@ -286,17 +286,17 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
     .getByRole("button", { name: "Зберегти ціну" })
     .click();
   await expect(row(page, priced.name).getByRole("alert")).toContainText(
-    "Цю ціну щойно змінив хтось інший: тепер 1700,00 грн",
+    "Цю ціну щойно змінив хтось інший: тепер 1 700,00 грн",
   );
   await expect(
-    row(page, priced.name).getByText("Зараз: 1700,00 грн"),
+    row(page, priced.name).getByText("Зараз: 1 700,00 грн"),
   ).toBeVisible();
   // Now seen, it is saved over.
   await row(page, priced.name)
     .getByRole("button", { name: "Зберегти ціну" })
     .click();
   await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1850,00 грн",
+    "Ціна продажу: 1 850,00 грн",
   );
 });
 
@@ -341,7 +341,7 @@ test("whoever may set only this store's price is told so, and sets that", async 
     suggested_price: "1850.00",
   });
   await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1850,00 грн",
+    "Ціна продажу: 1 850,00 грн",
   );
 });
 
@@ -376,7 +376,7 @@ test("whoever does not set prices sees them and is offered no change", async ({
   await enter(page, seller, "Залишки");
   await stockOf(page);
   await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1850,00 грн",
+    "Ціна продажу: 1 850,00 грн",
   );
   await expect(
     row(page, priced.name).getByRole("button", {
@@ -389,7 +389,7 @@ test("whoever does not set prices sees them and is offered no change", async ({
   await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: new RegExp(priced.name) }).click();
   await expect(
-    page.getByText("Ціна продажу: 1850,00 грн — ціна магазину «Основний»"),
+    page.getByText("Ціна продажу: 1 850,00 грн — ціна магазину «Основний»"),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /ціну продажу/ })).toHaveCount(
     0,

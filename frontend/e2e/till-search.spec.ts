@@ -73,7 +73,7 @@ function coat(
   };
 }
 
-/** «Лоран шоколад», size M, two of them, at 1850,00 грн. */
+/** «Лоран шоколад», size M, two of them, at 1 850,00 грн. */
 const laurent = coat("Лоран шоколад", "M", 2, {
   product_variant_id: fixture.variant_id,
   size_id: fixture.size_id,
@@ -225,16 +225,16 @@ test("a model past the first hundred is found by three letters and sold in three
   await expect(chip(page, "Альпака 001", "S · 1")).toBeVisible();
   await search(page).pressSequentially("ор", { delay: 40 });
   const tag = page.getByRole("group", { name: "Лоран шоколад", exact: true });
-  await expect(tag).toContainText("1850,00 грн");
+  await expect(tag).toContainText("1 850,00 грн");
   await expect(page.getByRole("group", { name: "Альпака 001" })).toHaveCount(0);
   await chip(page, "Лоран шоколад", "M · 2").click();
   const line = page.locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("1850,00");
   await expect(
-    line.getByText("Ціна продажу 1850,00 грн. Домовилися про іншу — змініть."),
+    line.getByText("Ціна продажу 1 850,00 грн. Домовилися про іншу — змініть."),
   ).toBeVisible();
-  await expect(page.getByText("Разом 1850,00 грн")).toBeInViewport();
+  await expect(page.getByText("Разом 1 850,00 грн")).toBeInViewport();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,
@@ -327,13 +327,13 @@ test("the same size twice is one line of two, and «Менше» never takes a l
   await expect(line).toHaveCount(1);
   await expect(line.locator("output")).toHaveText("2");
   await expect(page.getByText("Лоран шоколад · M × 2")).toBeVisible();
-  await expect(page.getByText("Разом 3700,00 грн")).toBeVisible();
+  await expect(page.getByText("Разом 3 700,00 грн")).toBeVisible();
   await line.getByRole("button", { name: "Менше" }).click();
   await expect(line.locator("output")).toHaveText("1");
   await expect(line.getByRole("button", { name: "Менше" })).toBeDisabled();
   await line.getByRole("button", { name: "Більше" }).click();
   await line.getByLabel("Ціна, грн").fill("1700");
-  await expect(page.getByText("Разом 3400,00 грн")).toBeVisible();
+  await expect(page.getByText("Разом 3 400,00 грн")).toBeVisible();
   await pay(page, "Готівка").click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -428,7 +428,7 @@ test("a size read off a label holds the ways once the sale is from paper", async
   const label = page.locator(".line").getByLabel("Розмір з етикетки");
   await label.selectOption({ index: 1 });
   await expect(
-    page.getByText("Розмір з етикетки товару без розміру"),
+    page.getByText("Розмір з етикетки; в обліку — «розмір невідомий»"),
   ).toBeVisible();
   await expect(pay(page, "Готівка")).toBeEnabled();
   // From paper no size is read off a label (G3).
@@ -515,7 +515,7 @@ test("a line keeps knowing its model is held with no size, whatever is searched 
   const short = page.getByRole("alert", { name: "Залишку не вистачає" });
   await expect(
     short.getByRole("button", {
-      name: "Це товар без розміру — продати як M · Готівка",
+      name: "Розмір з етикетки — продати як M · Готівка",
     }),
   ).toBeVisible();
   await expect(

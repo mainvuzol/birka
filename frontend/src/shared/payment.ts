@@ -38,7 +38,7 @@ export const methodLabels: Record<PaymentMethod, string> = {
   CARRIER_COD: "Накладений платіж",
 };
 
-/** How a sum was paid, after it: «Сплачено зараз 1000,00 грн готівкою». */
+/** How a sum was paid, after it: «Сплачено зараз 1 000,00 грн готівкою». */
 export const methodHow: Record<PaymentMethod, string> = {
   CASH: "готівкою",
   CARD: "карткою",
@@ -49,7 +49,7 @@ export const methodHow: Record<PaymentMethod, string> = {
 
 /**
  * How money goes back on a return, after its sum: «Повернути покупцю
- * 3000,00 грн на картку». Only the till's ways hand money back.
+ * 3 000,00 грн на картку». Only the till's ways hand money back.
  */
 export const refundHow: Record<TillMethod, string> = {
   CASH: "готівкою",

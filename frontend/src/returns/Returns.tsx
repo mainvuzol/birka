@@ -644,7 +644,7 @@ function ReturnForm({
                 {visible(item.display_name)}, {sizeLabel(item.size)}
               </h3>
               <p className="hint">
-                {money(item.final_unit_price)} за одиницю · продано{" "}
+                {money(item.final_unit_price)} за 1 шт. · продано{" "}
                 {item.quantity}
                 {item.refunded > 0 &&
                   `, уже повернено ${String(item.refunded)}`}{" "}

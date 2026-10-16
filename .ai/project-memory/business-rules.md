@@ -2434,3 +2434,59 @@ How it is carried out, not decided by the owner:
   грн готівкою.»
 
 Built on 2026-10-16; see the [report](till-redesign-6-report.md).
+
+## Owner decision — 2026-10-17 (money in one format; the till's words; its refusals)
+
+Asked after the first sign-in merged (PR #95), each answer the option
+recommended when asked:
+- **Next: money in one format, one word for each thing at the till, and
+  refusals that do not speak of an order** (the task list's P2-1, P2-2,
+  P2-4). Only what the screen shows changes; the server does not.
+- **The till's words are the task list's glossary (§9):** «розмір
+  невідомий», not «без розміру»; «шт.», not «од.»; «Покупець», not
+  «Клієнт»; «Спробувати ще раз», not «Повторити завантаження»; a kept sale
+  confirmed, «Продаж записано один раз», not «Продаж підтверджено». The
+  texts the owner approved keep their words.
+
+How it is carried out, not decided by the owner:
+- **Money** reads «1 850,00 грн» wherever the app writes a sum: the
+  thousands apart by a no-break space, so the figure never breaks across
+  two lines (a «грн» may still wrap after it), and every figure in even
+  digits. A price is typed as before, «1850,50». The bot's message of a
+  close's difference is the server's, and keeps «6100,00 грн».
+- **At the till:** «Не читали — продати як «розмір невідомий»»; a line
+  sold with the label's size from unknown stock, «Розмір з етикетки; в
+  обліку — «розмір невідомий»»; the shelf's offer, «Розмір з етикетки —
+  продати як M»; counts in «шт.» («У кошику: 3 шт.», «На місці фактично
+  є, шт.», «Знято з обліку: 1 шт.»); a short shelf, «у кошику 2 шт., в
+  обліку 1 шт.», with «поза резервом замовлення» when an order holds the
+  rest; «Спробувати ще раз» where a read failed, the catalogue's too
+  (shared with «Приймання»); and «Кошик» names only the lines to pay, no
+  longer the whole form. A word in a sentence stays a word — «частина цих
+  одиниць у резерві замовлення»; a count is «шт.».
+- **A kept sale confirmed** says «Продаж записано один раз» / «Разом 3 000,00
+  грн карткою.», with what it said of the card before.
+- **Where the glossary names screens beyond the till:** the order's card
+  («Розмір невідомий», «… за 1 шт.», «покупець винен», «Продаж
+  записано.», «Продаж записуємо, коли покупець забрав товар.») and form
+  («З якого складу віддаєте?», «Ціна, грн», «Прибрати», «Покупець забирає
+  замовлення…», a coat of unknown size as «розмір невідомий»); a return's
+  «за 1 шт.»; the supplier screens' «розмір невідомий».
+- **Every banner that said «Нові операції заблоковано.»** — a kept
+  delivery, return, payment, correction, count, order, and the drawer's —
+  now ends «Поки чекаємо, інші дії недоступні.», as the kept sale's does.
+- **A refusal the till knows no more of:** a conflict says «Дані змінилися,
+  поки ви працювали. Спробуйте ще раз.», a request it could not read
+  «Перевірте товар, кількість і ціну.», each followed by «Кошик збережено —
+  нічого не продано.». A kept sale so refused on its resend says «Продаж не
+  записано (дані змінилися, поки сервер не відповідав).», since its basket
+  is gone and it is typed from paper. Other screens keep their words.
+- **Kept as they were:** «Клієнт забрав», an order's status (ADR-0012);
+  the kept banners of the catalogue, models, stores, suppliers and stock
+  lists, which never said «Нові операції заблоковано»; «Повторити
+  завантаження» in the catalogue's own screens, «Залишки», the suggested
+  price, «Приймання» and the stocktake; and «од.» in the stocktake,
+  corrections, «Приймання», stock lists, stores, suppliers, invoices and
+  the report — screens the glossary does not name.
+
+Built on 2026-10-17; see the [report](till-redesign-7-report.md).

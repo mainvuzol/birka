@@ -198,7 +198,7 @@ test("a sale kept on the phone, refused for too many requests when checked, stay
     .click();
   // Settled, not merely being checked.
   await expect(
-    page.getByRole("heading", { name: "Продаж підтверджено" }),
+    page.getByRole("heading", { name: "Продаж записано один раз" }),
   ).toBeVisible();
   await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   // Every check resent the very attempt it kept.

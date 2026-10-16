@@ -192,7 +192,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   await expect(page.getByText("Хто прийняв: Ганна.")).toBeVisible();
   await page
     .getByRole("button", {
-      name: "З паперу · Повернути покупцю 2500,00 грн готівкою",
+      name: "З паперу · Повернути покупцю 2 500,00 грн готівкою",
     })
     .click();
 
@@ -203,7 +203,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
     .filter({ hasText: "Повернення оформлено" });
   await expect(done).toContainText(mark);
   await expect(done).toContainText(
-    "2500,00 грн готівкою повернули під час збою — вдруге не повертайте.",
+    "2 500,00 грн готівкою повернули під час збою — вдруге не повертайте.",
   );
   await expect(done).not.toContainText("Поверніть покупцю");
   expect(sent).toHaveLength(1);
@@ -258,7 +258,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
 
   await expect(
     page.getByText(
-      "Внесок 300,00 грн з паперу записано: карткою — оплату провели під час збою, на терміналі не проводьте ще раз. Залишок боргу 1700,00 грн.",
+      "Внесок 300,00 грн з паперу записано: карткою — оплату провели під час збою, на терміналі не проводьте ще раз. Залишок боргу 1 700,00 грн.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
@@ -329,7 +329,7 @@ test("the switch is one for the store: ticked on «Повернення», the t
   await page.getByLabel("Цілих").fill("1");
   await expect(
     page.getByRole("button", {
-      name: "Повернути покупцю 2500,00 грн готівкою",
+      name: "Повернути покупцю 2 500,00 грн готівкою",
     }),
   ).toBeVisible();
 });
@@ -391,7 +391,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
   await page.getByLabel("Час з паперу").fill("12:30");
   await page
     .getByRole("button", {
-      name: "З паперу · Повернути покупцю 2500,00 грн готівкою",
+      name: "З паперу · Повернути покупцю 2 500,00 грн готівкою",
     })
     .click();
   const mark = `Повернено з паперу · за папером ${day.shown}, 12:30`;
@@ -400,7 +400,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
     .filter({ hasText: "Повернення оформлено" });
   await expect(done).toContainText(mark);
   await expect(done).toContainText(
-    "2500,00 грн готівкою повернули раніше — вдруге не повертайте.",
+    "2 500,00 грн готівкою повернули раніше — вдруге не повертайте.",
   );
   expect(returns[0]?.outage).toEqual({
     by_user_id: null,
@@ -423,7 +423,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
     .click();
   await expect(
     page.getByText(
-      "Внесок 300,00 грн з паперу записано: карткою — оплату вже провели, на терміналі не проводьте ще раз. Залишок боргу 1700,00 грн.",
+      "Внесок 300,00 грн з паперу записано: карткою — оплату вже провели, на терміналі не проводьте ще раз. Залишок боргу 1 700,00 грн.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(

@@ -227,7 +227,8 @@ The phone reads a 503 as unreachable, so the seller sees the paper text
   answer. A 500 keeps its number.
 - **Where,** all through `errorText`, so no screen is missed:
   - sign-in: «Вхід через Telegram», the text, «Спробувати ще раз»;
-  - the till's failed reads: the text and «Повторити завантаження»;
+  - the till's failed reads: the text and «Спробувати ще раз» («Повторити
+    завантаження» until 2026-10-17, P2-2);
   - each kept operation's banner, when its last attempt went unanswered;
   - «Каса»: the drawer's read and its journal. When the drawer cannot be
     read, it adds the close (G26):
@@ -542,7 +543,8 @@ No tap is added to a normal sale.
     терміналі нічого не проводьте.» (G19);
   - on a refusal for stock, the text of §6 or its reserved variant, and
     none of «Товар на місці — продати», «На полиці немає жодної…», «На місці
-    фактично є», «Це товар без розміру — продати як…».
+    фактично є», «Розмір з етикетки — продати як…» («Це товар без розміру —
+    продати як…» until 2026-10-17, P2-2).
 - **The mode is tied to the basket** (G20). The server refuses the shelf
   answers only for a marked body (§6), and a refused basket stays on the
   till. Resent without the mark, it would get `INSUFFICIENT_STOCK` with

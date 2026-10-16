@@ -1,4 +1,12 @@
-import { test, expect, more, openStore, section, sections } from "./fixtures";
+import {
+  test,
+  expect,
+  grn,
+  more,
+  openStore,
+  section,
+  sections,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -154,7 +162,7 @@ test("an invoice is recorded and paid in parts until it is settled", async ({
     .click();
   await expect(
     page.getByText(
-      `Накладну «${supplier}» на 5000,00 грн записано. Залишок 3999,50 грн.`,
+      `Накладну «${supplier}» на 5 000,00 грн записано. Залишок 3 999,50 грн.`,
     ),
   ).toBeVisible();
   expect(recorded.bodies).toEqual([
@@ -171,19 +179,19 @@ test("an invoice is recorded and paid in parts until it is settled", async ({
   await page.getByLabel("Сума оплати, грн").fill("999,50");
   await page.getByRole("button", { name: "Сплатити" }).click();
   await expect(
-    page.getByText("Оплату 999,50 грн записано. Залишок 3000,00 грн."),
+    page.getByText("Оплату 999,50 грн записано. Залишок 3 000,00 грн."),
   ).toBeVisible();
   await page.getByRole("button", { name: "До списку накладних" }).click();
   await expect(
     page.getByRole("list", { name: "Борги за постачальниками" }),
-  ).toContainText(`${supplier} — 3000,00 грн`);
+  ).toContainText(`${supplier} — 3 000,00 грн`);
 
   await open(page, supplier);
   await page.getByRole("button", { name: "Увесь залишок" }).click();
   await expect(page.getByLabel("Сума оплати, грн")).toHaveValue("3000,00");
   await page.getByRole("button", { name: "Сплатити" }).click();
   await expect(
-    page.getByText("Оплату 3000,00 грн записано. Накладну сплачено повністю."),
+    page.getByText("Оплату 3 000,00 грн записано. Накладну сплачено повністю."),
   ).toBeVisible();
   await expect(
     page.getByText("Сплачено повністю", { exact: true }),
@@ -301,7 +309,7 @@ test("goods returned are set off against an invoice, and their return waits for 
   await page.getByLabel("Скільки зарахував постачальник, грн").fill("1200");
   await page.getByRole("button", { name: "Зарахувати" }).click();
   await expect(
-    page.getByText("Залік 1200,00 грн записано. Залишок 2800,00 грн."),
+    page.getByText("Залік 1 200,00 грн записано. Залишок 2 800,00 грн."),
   ).toBeVisible();
   expect(counted.bodies).toEqual([
     {
@@ -317,7 +325,7 @@ test("goods returned are set off against an invoice, and their return waits for 
     .getByRole("article", { name: new RegExp(`^Повернення ${supplier}`) })
     .filter({ hasText: "× 2" });
   await expect(card).toContainText(
-    "Постачальник зарахував 1200,00 грн у накладну",
+    "Постачальник зарахував 1 200,00 грн у накладну",
   );
   await expect(card).toContainText(
     "Щоб скасувати повернення, спершу скасуйте залік у «Накладних».",
@@ -329,7 +337,9 @@ test("goods returned are set off against an invoice, and their return waits for 
   await section(page, "Накладні");
   await open(page, supplier);
   await page
-    .getByRole("button", { name: "Скасувати: залік за повернення 1200,00 грн" })
+    .getByRole("button", {
+      name: "Скасувати: залік за повернення 1 200,00 грн",
+    })
     .click();
   await page.getByLabel("Чому скасовуємо").fill("постачальник передумав");
   await page.getByRole("button", { name: "Так, скасувати" }).click();
@@ -409,14 +419,14 @@ test("what is left is written off by the owner, never by a manager", async ({
   await open(page, supplier);
   await page.getByRole("button", { name: "Списати залишок" }).click();
   await page.getByLabel("Чому списуємо").fill("постачальник пробачив");
-  await page.getByRole("button", { name: "Так, списати 1500,00 грн" }).click();
-  await expect(page.getByText("Списано 1500,00 грн.")).toBeVisible();
+  await page.getByRole("button", { name: "Так, списати 1 500,00 грн" }).click();
+  await expect(page.getByText("Списано 1 500,00 грн.")).toBeVisible();
   await expect(
     page.getByText("Залишок списано", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("list", { name: "Історія накладної" }),
-  ).toContainText("Списано 1500,00 грн · Тест · постачальник пробачив");
+  ).toContainText("Списано 1 500,00 грн · Тест · постачальник пробачив");
   await expect(page.getByRole("button", { name: /^Скасувати/ })).toHaveCount(0);
 });
 
@@ -452,7 +462,7 @@ test("an archived store's invoice is paid by a store that trades", async ({
   await page.getByRole("button", { name: "Сплатити" }).click();
   await expect(
     page.getByText(
-      `Оплату 100,00 грн записано. Залишок ${(before - 100).toFixed(2).replace(".", ",")} грн.`,
+      `Оплату 100,00 грн записано. Залишок ${grn((before - 100).toFixed(2))}.`,
     ),
   ).toBeVisible();
   await expect(

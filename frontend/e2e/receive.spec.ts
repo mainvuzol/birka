@@ -144,7 +144,7 @@ test("a delivery carries what the shop paid, and shows back what was stored", as
   await page.getByLabel("Закупівельна ціна за од., грн").fill("1850,50");
   await page.getByRole("button", { name: "Додати до поставки" }).click();
   await expect(
-    page.getByText("5 од. · Закупівля · 1850,50 грн за од."),
+    page.getByText("5 од. · Закупівля · 1 850,50 грн за од."),
   ).toBeVisible();
 
   // A second line with no price: counted in units, left out of the value.
@@ -156,7 +156,7 @@ test("a delivery carries what the shop paid, and shows back what was stored", as
   await page.getByRole("button", { name: "Додати до поставки" }).click();
   await expect(page.getByText("Разом 7 од.")).toBeVisible();
   await expect(
-    page.getByText("Закупівельна вартість 9252,50 грн"),
+    page.getByText("Закупівельна вартість 9 252,50 грн"),
   ).toBeVisible();
   await expect(page.getByText(/Рядків без ціни: 1/)).toBeVisible();
 
@@ -180,10 +180,10 @@ test("a delivery carries what the shop paid, and shows back what was stored", as
     page.getByRole("heading", { name: "Товар прийнято" }),
   ).toBeVisible();
   await expect(
-    page.getByText(/\+5 · тепер на складі \d+ · 1850,50 грн за од\./),
+    page.getByText(/\+5 · тепер на складі \d+ · 1\s850,50 грн за од\./),
   ).toBeVisible();
   await expect(
-    page.getByText("Закупівельна вартість 9252,50 грн"),
+    page.getByText("Закупівельна вартість 9 252,50 грн"),
   ).toBeVisible();
 });
 

@@ -229,6 +229,12 @@ export function refusedOutright(error: unknown): error is ApiError {
   );
 }
 
+/** What any screen says of a conflict or a request it could not read when
+ * nothing more is known; the till says its own (`@/sales/Sale`, P2-4). */
+export const CONFLICT_TEXT =
+  "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
+export const INVALID_TEXT = "Перевірте дані та поточний статус замовлення.";
+
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;
@@ -250,7 +256,7 @@ export function errorText(error: unknown): string {
   if (error.details.reason === "PERIOD")
     return "Оберіть період від одного дня до року; перший день — не пізніше останнього.";
   if (error.details.reason === "PAID_IN_FULL")
-    return "Клієнт сплачує все одразу — це звичайний продаж. Зніміть «Оплата частинами».";
+    return "Покупець сплачує все одразу — це звичайний продаж. Зніміть «Оплата частинами».";
   if (error.details.reason === "CUSTOMER_NAME")
     return "Вкажіть ім’я покупця, який платить частинами.";
   if (error.details.reason === "CUSTOMER_PHONE")
@@ -312,16 +318,14 @@ export function errorText(error: unknown): string {
     return "Цю інвентаризацію вже завершили. Щоб рахувати далі, почніть нову.";
   if (error.code === "IDEMPOTENCY_IN_PROGRESS")
     return "Попередня спроба ще виконується. Зачекайте кілька секунд і перевірте результат.";
-  if (error.status === 409)
-    return "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
+  if (error.status === 409) return CONFLICT_TEXT;
   // A stock list's file refused: which line, and what is wrong in it
   // (ADR-0014 §15). Every other 422 reads as before. It names the file's own
   // keys and values, so it is shown as `visible()` shows them.
   const fileIssue = error.validation.find(isFileIssue);
   if (error.status === 422 && fileIssue)
     return visible(fileProblemText(fileIssue));
-  if (error.status === 422)
-    return "Перевірте дані та поточний статус замовлення.";
+  if (error.status === 422) return INVALID_TEXT;
   // A server error is logged under the request's number: the seller can
   // quote its start to whoever reads the log.
   if (error.status >= 500 && error.requestId)

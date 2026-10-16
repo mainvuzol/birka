@@ -173,6 +173,10 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
   // The list a seller pages through never says how a sale was paid (G32).
   await expect(page.getByRole("article")).not.toContainText(/картк/i);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
+  // Its price «за 1 шт.», as at the till (sale-slice TZ, P2-2).
+  await expect(page.locator(".line-return .hint")).toContainText(
+    / за 1 шт\. · продано 2 · можна повернути 2$/,
+  );
 
   await page.getByLabel("Цілих").fill("1");
   await page.getByLabel("Пошкоджених").fill("1");
@@ -191,13 +195,13 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
   await expect(way.getByRole("radio", { name: "На картку" })).toBeChecked();
   await expect(
     page.getByRole("button", {
-      name: "Повернути покупцю 6000,00 грн на картку",
+      name: "Повернути покупцю 6 000,00 грн на картку",
     }),
   ).toBeVisible();
   await way.getByRole("radio", { name: "Готівкою" }).check();
   await page
     .getByRole("button", {
-      name: "Повернути покупцю 6000,00 грн готівкою",
+      name: "Повернути покупцю 6 000,00 грн готівкою",
       exact: true,
     })
     .click();
@@ -206,7 +210,7 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
     page.getByRole("heading", { name: "Повернення оформлено" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Поверніть покупцю 6000,00 грн готівкою."),
+    page.getByText("Поверніть покупцю 6 000,00 грн готівкою."),
   ).toBeVisible();
   await expect(
     page.getByText("Пошкоджений товар — на складі «Брак» магазину."),
@@ -268,7 +272,7 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Цілих").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
 
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
@@ -287,13 +291,13 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   ).toBeEnabled();
   // The settled return still says how to give the money back.
   await expect(
-    page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
+    page.getByText("Поверніть покупцю 3 000,00 грн готівкою."),
   ).toBeVisible();
   // «Повернення» opens afresh: the form that sent it is gone, so it cannot be
   // pressed again and answered as though nothing had been given back yet.
   await expect(
     page.getByRole("button", {
-      name: "Повернути покупцю 3000,00 грн готівкою",
+      name: "Повернути покупцю 3 000,00 грн готівкою",
     }),
   ).toHaveCount(0);
   expect(sent.bodies).toHaveLength(2);
@@ -312,14 +316,14 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
   ).toBeChecked();
   await page
     .getByRole("button", {
-      name: "Повернути покупцю 3000,00 грн на картку",
+      name: "Повернути покупцю 3 000,00 грн на картку",
       exact: true,
     })
     .click();
   // Answered at once: the money goes back now, said plainly (owner
   // decision, 2026-10-08: only a kept return confirmed later hedges it).
   await expect(
-    page.getByText("Поверніть 3000,00 грн на картку покупця через термінал.", {
+    page.getByText("Поверніть 3 000,00 грн на картку покупця через термінал.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -357,12 +361,14 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
   await page.getByRole("radio", { name: "Переказом", exact: true }).check();
   await page
     .getByRole("button", {
-      name: "Повернути покупцю 3000,00 грн переказом",
+      name: "Повернути покупцю 3 000,00 грн переказом",
       exact: true,
     })
     .click();
   await expect(
-    page.getByText("Надішліть покупцю 3000,00 грн переказом.", { exact: true }),
+    page.getByText("Надішліть покупцю 3 000,00 грн переказом.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(sent.bodies[1]?.payment_method).toBe("TRANSFER");
 });
@@ -385,7 +391,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Пошкоджених").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
   await expect(page.getByRole("alert")).toContainText(
     "ще немає складу «Брак» для пошкодженого товару",

@@ -1,4 +1,4 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import { test, expect, grn, more, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -254,11 +254,11 @@ function kopecks(value: string): bigint {
   return negative ? -amount : amount;
 }
 
-// As the screen writes it: «3000,00 грн», «−1500,00 грн».
+// As the screen writes it: «3 000,00 грн», «−1 500,00 грн».
 function uah(amount: bigint): string {
   const sign = amount < 0n ? "−" : "";
   const size = amount < 0n ? -amount : amount;
-  return `${sign}${(size / 100n).toString()},${(size % 100n).toString().padStart(2, "0")} грн`;
+  return `${sign}${grn(`${(size / 100n).toString()}.${(size % 100n).toString().padStart(2, "0")}`)}`;
 }
 
 const wayLabels: Record<Way, string> = {
@@ -425,7 +425,7 @@ test("the owner reads each store, the stores together, and the money through eac
       .getByRole("list", { name: "Продажі й повернення" })
       .getByRole("listitem")
       .filter({ hasText: atMarket.model })
-      .filter({ hasText: "Продаж 3000,00 грн" }),
+      .filter({ hasText: "Продаж 3 000,00 грн" }),
   ).toContainText("частинами, внесено 500,00 грн готівкою · «Ринок»");
   await page
     .getByRole("combobox", { name: "Моделі й продажі" })
@@ -439,7 +439,7 @@ test("the owner reads each store, the stores together, and the money through eac
       .getByRole("list", { name: "Моделі" })
       .getByRole("listitem")
       .filter({ hasText: atCentre.model }),
-  ).toContainText("2 шт. на 3000,00 грн · повернено 1 шт. на 1500,00 грн");
+  ).toContainText("2 шт. на 3 000,00 грн · повернено 1 шт. на 1 500,00 грн");
   const entries = page.getByRole("list", { name: "Продажі й повернення" });
   await expect(
     entries.getByRole("listitem").filter({ hasText: atMarket.model }),
@@ -448,20 +448,20 @@ test("the owner reads each store, the stores together, and the money through eac
     entries
       .getByRole("listitem")
       .filter({ hasText: atCentre.model })
-      .filter({ hasText: "Продаж 3000,00 грн" }),
+      .filter({ hasText: "Продаж 3 000,00 грн" }),
   ).toContainText("Ганна");
   await expect(
     entries
       .getByRole("listitem")
       .filter({ hasText: atCentre.model })
-      .filter({ hasText: "Продаж 3000,00 грн" }),
+      .filter({ hasText: "Продаж 3 000,00 грн" }),
   ).toContainText("оплачено повністю карткою");
   await expect(
     entries
       .getByRole("listitem")
       .filter({ hasText: atCentre.model })
-      .filter({ hasText: "Повернення −1500,00 грн" }),
-  ).toContainText("віддано 1500,00 грн на картку");
+      .filter({ hasText: "Повернення −1 500,00 грн" }),
+  ).toContainText("віддано 1 500,00 грн на картку");
 });
 
 test("a manager reads their store alone, and a seller has no report", async ({
