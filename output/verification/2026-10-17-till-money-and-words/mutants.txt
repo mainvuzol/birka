@@ -1,0 +1,30 @@
+- unchanged tree: passed 
+- thousands run together again: caught by sums read «12 950,00 грн», thousands kept together, in even digits, and the price field ke
+- thousands apart by a plain space: caught by sums read «12 950,00 грн», thousands kept together, in even digits, and the price field ke
+- figures in proportional digits: caught by sums read «12 950,00 грн», thousands kept together, in even digits, and the price field ke
+- a conflict at the till speaks of an order: caught by a conflict the till knows no more of says to try again, and a request it could not read to
+- a request the till could not read speaks of an order: caught by a conflict the till knows no more of says to try again, and a request it could not read to
+- the whole form is «Кошик» again: caught by the basket of two lines counts «шт.», and «Кошик» names no more than the lines
+- the basket counts «од.»: caught by the basket of two lines counts «шт.», and «Кошик» names no more than the lines
+- a short shelf does not say an order holds the rest: caught by a shelf short of what an order holds says how many are free of it, in «шт.»
+- a short shelf says «доступно», not «шт.»: caught by «товар на місці» answers a real refusal and completes the same sale; a sized line short of stock is answered from the coats without a size
+- the unread label sells «без розміру»: caught by a coat held with its size not known is sold with the size on its label
+- a label's size from unknown stock is «без розміру»: caught by a coat held with its size not known is sold with the size on its label
+- the shelf offers «Це товар без розміру»: caught by a clarification refused for its own reason is explained and withdrawn; a coat held with its size not known is sold with the size on its label; a sized line short of stock is answered from the coats without a size; when the till cannot see the coats without a size, the server's refusal of «товар на місці
+- too few of unknown size says «без розміру»: caught by a clarification refused for its own reason is explained and withdrawn
+- the count present asks «одиниць»: caught by «на місці лише стільки» sends the count present, not the shortage
+- nothing sold counts «од.»: caught by a basket with nothing on the shelf records the shortage and sells nothing
+- a till read that failed says «Повторити завантаження»: caught by 1. the seller is told to sell on paper › at the till, whose stock read went unanswered, wi
+- a kept delivery says new operations are blocked: caught by a delivery whose answer was lost settles when its model was retired meanwhile
+- a kept order says new operations are blocked: caught by lost committed response survives reopening and reuses the same command
+- a kept payment says new operations are blocked: caught by a payment whose answer is lost blocks the app until it is resent unchanged, and counts onc
+- a kept close says new operations are blocked: caught by 9. what to do with money after the outage › «Каса»: a close whose answer was lost is marke
+- an order's line is priced «за одиницю»: caught by reserve, dispatch, arrive, collect through real API
+- an order sold says «Продаж зафіксовано»: caught by reserve, dispatch, arrive, collect through real API
+- an order's form asks «Домовлена ціна за одиницю»: caught by reserve, dispatch, arrive, collect through real API
+- a kept sale confirmed is «Продаж підтверджено» again: caught by 2. a kept sale is checked by the phone itself › once the server is back: the same sale und; 2. a kept sale is checked by the phone itself › once when the app is opened again, with no; a sale kept on the phone, refused for too many requests when checked, stays kept until che
+- a kept sale's conflict says to try again: caught by 3. a kept sale refused on resend settles the phone › a conflict the server names no more o
+- the lines are not named «Кошик»: caught by the basket of two lines counts «шт.», and «Кошик» names no more than the lines
+- a return's line is priced «за одиницю»: caught by one coat back intact goes where it was sold, one damaged to the store's «Брак»
+- an order paid in parts says «клієнт винен»: caught by an order collected may be paid in parts, by the till's rules
+28 of 28 caught

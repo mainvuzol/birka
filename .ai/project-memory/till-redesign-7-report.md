@@ -77,7 +77,63 @@ bot does, now say it no longer does.
 
 ## How it was built and proven
 
-TODO
+- **Journeys** (`till-money-words.spec.ts`, 4, the goods and the server's
+  answers stubbed):
+  - seven coats at 1850,00: «Разом 12 950,00 грн» with a no-break space,
+    read by a regex, which is not normalised, and in even digits; the
+    price typed «1850,50» stays so, and the receipt says «7 × 1 850,50 грн»
+    and «12 953,50 грн»;
+  - two lines: «У кошику: 3 шт.», the lines a group named «Кошик», and no
+    «Кошик» or «од.» on the screen;
+  - a short shelf an order holds: «у кошику 2 шт., в обліку 1 шт. поза
+    резервом замовлення.»;
+  - a conflict (`IDEMPOTENCY_CONFLICT`) and an unread request (422): the
+    till's own words with «Кошик збережено — нічого не продано.», nothing
+    of «замовлення», and the basket kept.
+- **The journeys before:**
+  - 158 sums of a thousand or more read in the new format: strings with a
+    plain space, which Playwright normalises, regexes with `\s`; `grn()`
+    in the fixtures writes a sum as the app does;
+  - every check of an old word reads the new one;
+  - six kept banners a journey shows — a delivery, a payment, a return, a
+    correction, an order, the drawer's — are seen to end «Поки чекаємо,
+    інші дії недоступні.» (`waitsFor()`);
+  - a kept sale refused on resend for a conflict says «дані змінилися,
+    поки сервер не відповідав»;
+  - the order's card «… за 1 шт.», a return's «за 1 шт. · продано 2», and
+    the unread label's «Не читали — продати як «розмір невідомий»».
+- **Mutation:** 28 ways of breaking it, one at a time, each against the
+  journeys meant to catch it on a fresh seed, after the unchanged tree
+  passed: all caught on the first run
+  (`output/verification/2026-10-17-till-money-and-words/`) — the thousands
+  run together or apart by a plain space, proportional digits, each
+  refusal and each old word back, the form named «Кошик» or the lines not,
+  four kept banners blocked again, the order's words, a return's, and a
+  kept sale's conflict told to try again.
+
+## Review
+
+An independent review before the first commit found the money's
+arithmetic, the refusals' order and every owner-approved text right, and
+the following, all addressed in `5af53d7`:
+- **A blocker:** the blind count's check that the seller is not shown what
+  the drawer should hold looked for «2050,00», which the app no longer
+  writes, so it could not fail. It reads «2 050,00» now.
+- **A coat of unknown size read «UNKNOWN»** on an order's card and form and
+  on the supplier screens: the server sends the code, not nothing. Now
+  «розмір невідомий».
+- **The catalogue's search at the till** still said «Повторити
+  завантаження»; the order's card and form still said «клієнт».
+- **«Продаж підтверджено» kept** departed from the glossary the owner took
+  as written: now «Продаж записано один раз».
+- **The docs claimed more than the code:** the banners that changed are
+  those that said «Нові операції заблоковано.»; the screens that keep «од.»
+  and «Повторити завантаження» are named as they are.
+- **Smaller:** a kept sale's conflict no longer told to try again; the
+  unknown-size refusal «з невідомим розміром», as the owner's text says it;
+  the lines a group named «Кошик»; checks that wait rather than read once;
+  «the figure never breaks», not «the sum»; old quotes in ADR-0013 and
+  comments.
 
 ## Evidence
 
