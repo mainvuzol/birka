@@ -481,6 +481,20 @@ test("a kept sale's banner says which sale it was: its sum and way, the part pai
   await expect(banner).toContainText(`Продаж на 3000,00 грн — ${waits}`);
   // Its own lines, by the person's own phone, as before (G17).
   await expect(banner).toContainText("Запишіть цю операцію на папері");
+
+  // Figures that do not read never break the banner: the way alone.
+  const odd = JSON.parse(keptSale("CARD")) as {
+    body: { lines: Record<string, unknown>[] };
+  };
+  const [oddLine] = odd.body.lines;
+  if (oddLine) oddLine.unit_price = 3000;
+  await page.unrouteAll({ behavior: "wait" });
+  await seed(page, { [saleKey]: JSON.stringify(odd) });
+  server = await serve(page);
+  server.sale = lost;
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  await expect(banner).toContainText(`Продаж · Картка — ${waits}`);
 });
 
 test.describe("1. the seller is told to sell on paper", () => {
