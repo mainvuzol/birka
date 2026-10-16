@@ -1,4 +1,12 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  more,
+  openStore,
+  sections,
+  tapSize,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -401,9 +409,15 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   await expect(page.getByText("Помилилися з товаром чи ціною?")).toBeVisible();
+  // «Ще» left open over the receipt closes as the app turns to «Повернення»
+  // by itself (redesign P1-6).
+  await more(page);
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+  ).toHaveAttribute("aria-expanded", "false");
   await expect(
     page.getByRole("button", { name: "До списку продажів" }),
   ).toBeVisible();

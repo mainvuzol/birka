@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, sections } from "./fixtures";
 import type { Page, Request, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -607,14 +607,18 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     });
   }
 
+  /** «Ще», which holds «Резервні копії» and is marked as it is (P1-6). */
   function tab(page: Page) {
-    return page.getByRole("button", { name: /^Резервні копії/ });
+    return sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
   }
 
   async function open(page: Page): Promise<void> {
     await page.goto(signedLaunch(fixture.owner_telegram_user_id));
     await openStore(page, "Основний MAIN");
-    await tab(page).click();
+    await more(page);
+    await sections(page)
+      .getByRole("button", { name: /^Резервні копії/ })
+      .click();
   }
 
   test("the owner sees what is wrong now and since when, what was wrong this week, and that the watcher looks", async ({
@@ -640,8 +644,13 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
       ],
     }));
     await open(page);
-    // Marked as backups are while something needs the owner.
-    await expect(tab(page)).toHaveText("Резервні копії ⚠");
+    // Marked as backups are while something needs the owner: «Ще», and the
+    // section under it.
+    await expect(tab(page)).toHaveText("Ще ⚠");
+    await more(page);
+    await expect(
+      sections(page).getByRole("button", { name: /^Резервні копії/ }),
+    ).toHaveText("Резервні копії ⚠");
 
     const block = page.locator('[data-server="TROUBLE"]');
     await expect(block.getByRole("heading")).toHaveText("Проблема на сервері");
@@ -686,7 +695,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     await expect(watcher).toHaveText(
       "Сторож перевіряв щойно. Проблем не помічено.",
     );
-    await expect(tab(page)).toHaveText("Резервні копії");
+    await expect(tab(page)).toHaveText("Ще");
 
     const refresh = page.getByRole("button", { name: "Оновити" });
     lookedMinutesAgo = 40;
@@ -702,7 +711,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
       "Сторож ще не перевіряв сервер. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
     );
     // The section shows the quiet watcher; the tab is marked for trouble only.
-    await expect(tab(page)).toHaveText("Резервні копії");
+    await expect(tab(page)).toHaveText("Ще");
   });
 });
 

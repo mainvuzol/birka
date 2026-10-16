@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -46,7 +46,7 @@ async function enter(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // The till opens first for whoever sells (redesign P0-1).
-  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+  await section(page, "Замовлення");
 }
 
 /** The app opened again: a kept order turns to «Замовлення» by itself. */
@@ -55,7 +55,7 @@ async function reopen(page: Page): Promise<void> {
   await openStore(page, "Основний MAIN");
 }
 async function draft(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "+ Нове замовлення" }).click();
+  await section(page, "+ Нове замовлення");
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.location_id);
@@ -131,6 +131,14 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     path: "test-results/order-collected-mobile.png",
     fullPage: true,
   });
+  // «Замовлення» pressed again leaves the order for the store's list.
+  await section(page, "Замовлення");
+  await expect(
+    page.getByRole("heading", { name: "Замовлення магазину" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Замовлення №/ })).toHaveCount(
+    0,
+  );
 });
 test("lost committed response survives reopening and reuses the same command", async ({
   page,
@@ -293,6 +301,7 @@ test("uncertain command stays blocked after access denial, then reconciles", asy
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
+  await more(page);
   await expect(
     page.getByRole("button", { name: "+ Нове замовлення" }),
   ).toBeDisabled();
@@ -475,6 +484,7 @@ test("a «Клієнт забрав» saved before the way was asked is refused 
     "Замовлення не позначено як забране — вкажіть, як оплачено, і натисніть «Клієнт забрав» ще раз.",
   );
   await expect(resend).toHaveCount(0);
+  await more(page);
   await expect(
     page.getByRole("button", { name: "+ Нове замовлення" }),
   ).toBeEnabled();

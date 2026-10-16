@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -29,14 +29,10 @@ function launch(): string {
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
-async function open(page: Page, section: string): Promise<void> {
+async function open(page: Page, name: string): Promise<void> {
   await page.goto(launch());
-  // The app remembers the store after the first time.
-  const store = page.getByRole("button", { name: "Основний MAIN" });
-  const tab = page.getByRole("button", { name: section, exact: true });
-  await expect(store.or(tab).first()).toBeVisible();
-  if (await store.isVisible()) await store.click();
-  await tab.click();
+  await openStore(page, "Основний MAIN");
+  await section(page, name);
 }
 
 /** Creates a model from a description with the size as typed. */

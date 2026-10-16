@@ -1,4 +1,13 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  more,
+  openStore,
+  section,
+  sections,
+  tapSize,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -48,7 +57,7 @@ async function enter(page: Page, tab: string): Promise<void> {
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: tab, exact: true }).click();
+  await section(page, tab);
 }
 
 async function token(page: Page): Promise<string> {
@@ -277,6 +286,14 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+  // Its own section stays open under «Ще», every other is held (P1-6).
+  await more(page);
+  await expect(
+    sections(page).getByRole("button", { name: "Моделі", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    sections(page).getByRole("button", { name: "Залишки", exact: true }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Перевірити результат зміни" })
@@ -583,6 +600,7 @@ test("«Моделі» is the owner's and managers' alone", async ({ page }) => 
     await route.fulfill({ response, json: body });
   });
   await enter(page, "Продаж");
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Моделі", exact: true }),
   ).toHaveCount(0);
@@ -682,7 +700,7 @@ test("a similar name refused is not left over the queue after another tab", asyn
   // A first attempt refused kept nothing: the refusal answered that form,
   // and goes with it.
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page.getByRole("button", { name: "Каталог", exact: true }).click();
+  await section(page, "Каталог");
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
@@ -1058,7 +1076,7 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   await page.getByRole("button", { name: "← До черги перевірки" }).click();
   await expect(kept).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page.getByRole("button", { name: "Каталог", exact: true }).click();
+  await section(page, "Каталог");
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();

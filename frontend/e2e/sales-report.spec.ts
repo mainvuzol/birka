@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -70,7 +70,7 @@ async function reportAs(
     `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId, name) }).toString()}`,
   );
   await openStore(page, "Центр CENTRE");
-  await page.getByRole("button", { name: "Звіт", exact: true }).click();
+  await section(page, "Звіт");
 }
 
 async function as(
@@ -489,6 +489,7 @@ test("a manager reads their store alone, and a seller has no report", async ({
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeVisible();
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Звіт", exact: true }),
   ).toHaveCount(0);

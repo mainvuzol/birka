@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -48,7 +48,7 @@ async function enter(page: Page): Promise<void> {
   );
   await openStore(page, "Основний MAIN");
   // The till opens first for whoever sells (redesign P0-1).
-  await page.getByRole("button", { name: "Замовлення", exact: true }).click();
+  await section(page, "Замовлення");
 }
 
 /** The app opened again: a kept order turns to «Замовлення» by itself. */
@@ -62,7 +62,7 @@ async function reopen(page: Page): Promise<void> {
 
 /** A new order of one coat, its goods picked, nothing said yet of where it goes. */
 async function draft(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "+ Нове замовлення" }).click();
+  await section(page, "+ Нове замовлення");
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.location_id);

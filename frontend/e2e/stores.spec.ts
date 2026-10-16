@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section, sections } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -194,7 +194,7 @@ function card(page: Page, name: string) {
 async function storesSection(page: Page): Promise<void> {
   await openAs(page, owner);
   await openStore(page, "Центр CENTRE");
-  await page.getByRole("button", { name: "Магазини", exact: true }).click();
+  await section(page, "Магазини");
 }
 
 test("the owner blocks a store; its seller sees only that, and the owner reads it", async ({
@@ -242,6 +242,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await openAs(page, owner);
   await openStore(page, /^Ринок MARKET/);
   await expect(page.getByText(/Лише перегляд/)).toBeVisible();
+  await more(page);
   for (const name of [
     "Продаж",
     "+ Нове замовлення",
@@ -262,7 +263,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   ).toBeVisible();
   await expect(page.getByLabel("Де брали в борг")).toHaveCount(0);
   // «Брак» is shown as it stands, with nothing to press.
-  await page.getByRole("button", { name: "Брак", exact: true }).click();
+  await section(page, "Брак");
   await expect(page.getByText(/тут лише перегляд/)).toBeVisible();
   await expect(
     page.locator("[data-status=AWAITING] .damaged-unit").first(),
@@ -272,7 +273,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   ).toHaveCount(0);
 
   // Unblocked, Петро works as before.
-  await page.getByRole("button", { name: "Магазини", exact: true }).click();
+  await section(page, "Магазини");
   await card(page, "Ринок")
     .getByRole("button", { name: "Розблокувати" })
     .click();
@@ -292,6 +293,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeVisible();
   // The stores' states are the network owner's alone.
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Магазини", exact: true }),
   ).toHaveCount(0);
@@ -511,6 +513,14 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     await expect(page.getByText("Незавершена зміна стану")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Борги", exact: true }),
+    ).toBeDisabled();
+    // Its own section stays open under «Ще», every other is held (P1-6).
+    await more(page);
+    await expect(
+      sections(page).getByRole("button", { name: "Магазини", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      sections(page).getByRole("button", { name: "Залишки", exact: true }),
     ).toBeDisabled();
     // Written down before it was sent: a reload still knows what to ask about.
     await page.reload();

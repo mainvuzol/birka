@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -105,7 +105,7 @@ async function openings(page: Page): Promise<void> {
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Початкові залишки" }).click();
+  await section(page, "Початкові залишки");
 }
 
 async function typeList(
@@ -315,7 +315,7 @@ test("a list typed is kept on the phone, and saved once when its answer is lost"
   // A reload loses nothing typed.
   await page.reload();
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Початкові залишки" }).click();
+  await section(page, "Початкові залишки");
   await page.getByRole("button", { name: "Новий список" }).click();
   await expect(
     page.getByLabel("Рядки списку — кожен товар з нового рядка, як написано"),
@@ -371,6 +371,7 @@ test("approving is for whoever may approve, and the section for whoever handles 
   drop = ["snapshot:approve", "snapshot:import"];
   await page.reload();
   await openStore(page, "Основний MAIN");
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
@@ -397,7 +398,7 @@ test("nothing is received into a warehouse while its list waits, and it is once 
   ).toBeVisible();
 
   async function receiveOne(): Promise<void> {
-    await page.getByRole("button", { name: "Приймання", exact: true }).click();
+    await section(page, "Приймання");
     await page
       .getByRole("combobox", { name: "Склад", exact: true })
       .selectOption(fixture.waiting_location_id);
@@ -421,7 +422,7 @@ test("nothing is received into a warehouse while its list waits, and it is once 
   ).toBeVisible();
   await expect(page.getByText(/нічого не прийнято/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Початкові залишки" }).click();
+  await section(page, "Початкові залишки");
   await page
     .getByRole("article", { name: `Список ${source}` })
     .getByRole("button", { name: "Відкрити" })

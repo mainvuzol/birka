@@ -10,24 +10,41 @@ import { visible } from "@/shared/visible";
  * A call declared slow that runs out of its own 60 s notes nothing: the
  * server may still be working on it (`SlowAnswer`, ADR-0014 §16).
  * `since` is when it went down, kept from the first failure until an answer.
+ * `back` is that this phone saw it come back, until the till's reminder is
+ * answered or it goes down again (redesign P1-7).
  * Only in memory: a reopened app starts by asking.
  */
 export interface Reach {
   down: boolean;
   since: string | null;
+  back: boolean;
 }
 
-export const useReach = create<Reach>(() => ({ down: false, since: null }));
+export const useReach = create<Reach>(() => ({
+  down: false,
+  since: null,
+  back: false,
+}));
 
 /** No answer: the server is down from now, or still since the first one. */
 export function noteUnreachable(): void {
   if (!useReach.getState().down)
-    useReach.setState({ down: true, since: new Date().toISOString() });
+    useReach.setState({
+      down: true,
+      since: new Date().toISOString(),
+      back: false,
+    });
 }
 
 /** An answer of the server's own: it is back. */
 export function noteAnswered(): void {
-  if (useReach.getState().down) useReach.setState({ down: false, since: null });
+  if (useReach.getState().down)
+    useReach.setState({ down: false, since: null, back: true });
+}
+
+/** The till's reminder answered: not shown again until the next return. */
+export function backNoted(): void {
+  if (useReach.getState().back) useReach.setState({ back: false });
 }
 
 /**

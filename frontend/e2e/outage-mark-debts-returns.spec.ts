@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -213,7 +213,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
 
   // The owner reads it in today's «Звіт»: taken by «Ганна», typed by «Ліда».
   await openAs(page, fixture.network_owner_telegram_user_id, "Власник мережі");
-  await page.getByRole("button", { name: "Звіт", exact: true }).click();
+  await section(page, "Звіт");
   const entry = page
     .getByRole("list", { name: "Продажі й повернення" })
     .getByRole("listitem")

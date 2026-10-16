@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -417,6 +417,7 @@ test("taking returns needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
@@ -430,11 +431,11 @@ test("the «Брак» takes no deliveries, and is named in the stock", async ({
 }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Приймання", exact: true }).click();
+  await section(page, "Приймання");
   const offered = page.locator(`option[value="${fixture.bin_location_id}"]`);
   await expect(offered).toHaveAttribute("disabled", "");
   await expect(offered).toContainText("брак, лише для повернень");
-  await page.getByRole("button", { name: "Залишки", exact: true }).click();
+  await section(page, "Залишки");
   await expect(
     page.locator(`option[value="${fixture.bin_location_id}"]`),
   ).toContainText("брак, не продається");

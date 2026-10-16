@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  openStore,
+  section,
+  tapSize,
+} from "./fixtures";
 import type { Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -1481,7 +1488,7 @@ test.describe("8. the real server keeps the mark", () => {
       fixture.network_owner_telegram_user_id,
       "Власник мережі",
     );
-    await page.getByRole("button", { name: "Звіт", exact: true }).click();
+    await section(page, "Звіт");
     const entry = page
       .getByRole("list", { name: "Продажі й повернення" })
       .getByRole("listitem")

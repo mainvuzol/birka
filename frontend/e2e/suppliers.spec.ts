@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section, sections } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -142,9 +142,7 @@ function posts(page: Page, ending: string): { bodies: unknown[] } {
 async function newReturn(page: Page): Promise<void> {
   await openAs(page, hanna);
   await openStore(page, "Центр CENTRE");
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   await page
     .getByRole("button", { name: "+ Повернути товар постачальнику" })
     .click();
@@ -308,7 +306,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   const supplier = `Брак-постачальник ${randomUUID().slice(0, 6)}`;
   await openAs(page, petro);
   await openStore(page, /^Ринок MARKET/);
-  await page.getByRole("button", { name: "Брак", exact: true }).click();
+  await section(page, "Брак");
   const unit = page.getByRole("article", { name: coat.model });
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
   await unit.getByRole("button", { name: "Брак підтверджений" }).click();
@@ -326,9 +324,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
     .click();
   await expect(unit).toHaveCount(0);
 
-  await page
-    .getByRole("button", { name: "Постачальникам", exact: true })
-    .click();
+  await section(page, "Постачальникам");
   const card = page.getByRole("article", {
     name: new RegExp(`^Повернення ${supplier}`),
   });
@@ -338,7 +334,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   await card.getByRole("button", { name: "Так, скасувати повернення" }).click();
   await expect(card.getByText(/^Скасовано/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Брак", exact: true }).click();
+  await section(page, "Брак");
   await expect(
     page
       .locator("[data-status=CONFIRMED]")
@@ -370,6 +366,14 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Борги", exact: true }),
+  ).toBeDisabled();
+  // Its own section stays open under «Ще», every other is held (P1-6).
+  await more(page);
+  await expect(
+    sections(page).getByRole("button", { name: "Постачальникам", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    sections(page).getByRole("button", { name: "Залишки", exact: true }),
   ).toBeDisabled();
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();

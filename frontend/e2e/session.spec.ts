@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -105,7 +105,7 @@ test("the owner changes a store's state over an hour after opening the app, and 
     await openAs(page, owner);
     await openStore(page, "Центр CENTRE");
     const signIns = await launchDataExpired(page);
-    await page.getByRole("button", { name: "Магазини", exact: true }).click();
+    await section(page, "Магазини");
     const card = page.getByRole("article", { name: "Магазин Ринок" });
     await card.getByRole("button", { name: "Заблокувати" }).click();
     await card.getByLabel(/^Причина/).fill("Ревізія каси");

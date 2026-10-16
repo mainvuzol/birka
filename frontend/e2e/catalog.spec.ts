@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, more, openStore, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -32,7 +32,7 @@ function launch(): string {
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Каталог", exact: true }).click();
+  await section(page, "Каталог");
 }
 async function draft(page: Page, raw: string): Promise<void> {
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
@@ -104,7 +104,7 @@ test("reject proposal and retrieve its preserved reason from history", async ({
   ).toBeVisible();
   await page.reload();
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Каталог", exact: true }).click();
+  await section(page, "Каталог");
   await page.getByLabel("Стан пропозицій").selectOption({ label: "Відхилені" });
   await page.getByRole("button", { name: new RegExp(raw) }).click();
   await expect(
@@ -198,6 +198,7 @@ test("catalog navigation requires catalog permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Каталог", exact: true }),
   ).toHaveCount(0);

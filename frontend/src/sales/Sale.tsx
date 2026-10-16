@@ -12,6 +12,7 @@ import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import { backNoted, useReach } from "@/shared/reach";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { submitSale, useSaleCommand } from "./commands";
@@ -177,6 +178,11 @@ export function Sale({
   );
   const [paperTime, setPaperTime] = useState("");
   const [yesterday, setYesterday] = useState(false);
+  // This phone saw the server come back (redesign P1-7): the paper written
+  // meanwhile is typed before the drawer closes, or it reads as a surplus and
+  // a shortage. Said once, until answered or the next time it comes back;
+  // never with the paper mode on, which answers it (`./paper`).
+  const back = useReach((state) => state.back);
   const { busy, pending } = useSaleCommand();
   const cache = useQueryClient();
 
@@ -703,6 +709,27 @@ export function Sale({
   return (
     <section>
       <h2>Продаж</h2>
+      {back && (
+        <section className="notice" aria-label="Сервер знову відповідає">
+          <p>
+            Сервер знову відповідає: продажі з паперу можна вносити. Внесіть їх
+            до закриття каси.
+          </p>
+          <div className="actions">
+            <button
+              disabled={blocked || working}
+              onClick={() => {
+                turnPaper(true);
+              }}
+            >
+              Вношу продаж з паперу
+            </button>
+            <button className="quiet" onClick={backNoted}>
+              Пізніше
+            </button>
+          </div>
+        </section>
+      )}
       {paper && (
         <section className="notice" aria-label="Режим: продаж з паперу">
           <h3>Режим: продаж з паперу</h3>
