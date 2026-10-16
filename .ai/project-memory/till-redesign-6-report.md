@@ -2,7 +2,9 @@
 
 Baseline: `911bcd3` (the till's empty states and the first days' paper,
 PR #94).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+fifteen of fifteen ways of breaking it caught. Not yet tried on a real
+phone.
 Branch: `feat/till-first-sign-in`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 P1-3, P1-4. Owner: business-rules.md, "the first sign-in and the kept sale;
 the guides; В8" (2026-10-16).
@@ -108,7 +110,15 @@ the server's, and the following, all addressed in `174d923`:
 
 ## Evidence
 
-TODO(final)
+- [`output/verification/2026-10-16-till-first-sign-in/`](../../output/verification/2026-10-16-till-first-sign-in/):
+  `mutants.py` and `mutants.txt`, fifteen ways of breaking it, all caught.
+- **CI, run locally at `7813b56`** ([summary](../../output/verification/2026-10-16-till-first-sign-in-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 431 on PostgreSQL 17 (unchanged by this work);
+  - e2e: 333 journeys;
+  - hot path: worst p95 92.9 ms (the search by six sellers) and 67.9 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
