@@ -1,7 +1,9 @@
 # The till's empty states and the first days' paper — 2026-10-16
 
 Baseline: `7d6835d` (the sections and the reminder, PR #93).
-Status: TODO(final).
+Status: built, reviewed and proven: the whole CI run locally passed, and
+thirty-five of thirty-five ways of breaking it caught. Not yet seen on a
+real phone.
 Branch: `feat/till-first-days`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 P1-5. Owner: business-rules.md, "the till's empty states; the first days'
 paper" (2026-10-16), with В1 (а) of 2026-10-14 and В2 (в) of 2026-10-15.
@@ -162,7 +164,18 @@ right, and the following, all addressed in `8a215eb`:
 
 ## Evidence
 
-TODO(final)
+- [`output/verification/2026-10-16-till-first-days/`](../../output/verification/2026-10-16-till-first-days/):
+  `mutants.py` and `mutants.txt`, thirty-five ways of breaking it, all
+  caught.
+- **CI, run locally at `66df268`** ([summary](../../output/verification/2026-10-16-till-first-days-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 431 on PostgreSQL 17; the migration drift check
+    (`alembic check`) and the downgrade round trip passed with revision
+    0041;
+  - e2e: 329 journeys;
+  - hot path: worst p95 97.7 ms (the search by six sellers) and 74.8 ms
+    (`POST /sales` paid in parts), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
