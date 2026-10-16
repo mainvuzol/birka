@@ -53,11 +53,58 @@ untouched.
 
 ## How it was built and proven
 
-TODO(final)
+- **Journeys** (`first-sign-in.spec.ts`, 3, with the server stubbed):
+  - someone not yet added: the ID said not to be a phone number, the
+    exact words, «Скопіювати ID» copying exactly the ID and saying so,
+    «Спробувати ще раз» kept, no sideways scroll at 360 px, and in the dark
+    theme the ID at a contrast of 4.5 or more;
+  - a copy refused says to select the ID; a phone that cannot copy shows
+    no button, and the ID is selected whole;
+  - launch data the server refuses (`INVALID_INIT_DATA`, as it refuses data
+    past its hour) says to open the app again from the bot, nothing of a
+    kept command, and keeps «Спробувати ще раз».
+- **The kept sale** (`outage.spec.ts`): from attempts kept on the phone,
+  the banner says a line answered «на місці лише 1» of two at its one,
+  the part paid now and its way when in parts, no way for an attempt kept
+  from before it was asked, and only the way for one whose figures do not
+  read — never a broken screen. A sale confirmed says «Продаж записано один
+  раз: разом 3000,00 грн готівкою.», and by card the same and when to charge.
+  `sale.spec.ts` sees the sum and way of a sale whose answer was lost;
+  `shelf.spec.ts` sees an empty shelf kept said as one.
+- **Twenty checks on the old heading** read the new one; none of them met
+  a kept empty shelf. A check that passed while the banner still read
+  «Перевіряємо продаж…» (`person-limit.spec.ts`) now waits for the sale
+  confirmed.
+- **Mutation:** fifteen ways of breaking it, one at a time, each against
+  the journeys meant to catch it on a fresh seed, after the unchanged tree
+  passed: all caught on the first run
+  (`output/verification/2026-10-16-till-first-sign-in/`) — the ID called a
+  number, the copy offered where none can be made, a copy made or refused
+  unsaid, the wrong text copied, refused launch data speaking of a kept
+  command, a session ending after sign-in losing its words, the ID not
+  selectable whole, the banner counting what was asked, the whole sum when
+  in parts, no way named, an unreadable attempt breaking it, an empty shelf
+  said as a sale, and the old words of the heading and the confirmation.
 
 ## Review
 
-TODO(final)
+An independent review before the first commit found no blocker, the
+order of the sign-in's refusals and the banner's arithmetic right against
+the server's, and the following, all addressed in `174d923`:
+- **A kept attempt whose figures do not read** — a price that is not text,
+  a count that is not whole — made the banner throw, and every reopening
+  with it: now it names only its way. A discount that does not read gives
+  no sum, never a larger one.
+- **The reason given for the sign-in's words was not true:** a command
+  kept from an earlier opening may be on the phone when launch data is
+  refused; opening from the bot finds it. Said so now, and for any refused
+  launch data, not only data past its hour.
+- **The confirmation with its way was never checked:** it is, for cash and
+  for a card.
+- **Smaller:** a guarded copy, a status line present from the start, the
+  way kept when the sum does not read, the real server code in the
+  journey, the dark theme's contrast, the server guides' «номер» now
+  «Telegram ID», and the new words recorded where the task list's differ.
 
 ## Evidence
 
