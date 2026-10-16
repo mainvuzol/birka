@@ -2393,3 +2393,44 @@ How it is carried out, not decided by the owner:
   паперу перших днів».
 
 Built on 2026-10-16; see the [report](till-redesign-5-report.md).
+
+## Owner decision — 2026-10-16 (the first sign-in and the kept sale; the guides; В8)
+
+Asked after the till's first days merged (PR #94), each answer the option
+recommended when asked:
+- **Next: the first sign-in and the kept sale's banner** (the task list's
+  P1-3 and P1-4).
+- **The guides' new words are confirmed:** the seller's paper guide types
+  an outage's paper with «Сервер не відповідав», and the server guides type
+  the first days' paper with «Перші дні, до затвердження залишків» and its
+  day and time.
+- **В8: the seller sees «Сьогодні ви продали N шт.»,** units only, no sums
+  and no ways, so the drawer's blind count (G32) keeps nothing to go by.
+  Not built yet: it needs a count from the server, and comes with the next
+  work on the till.
+
+How it is carried out, not decided by the owner:
+- **Someone not yet added** sees «Ваш Telegram ID: … — це не номер
+  телефону. Надішліть його власнику магазину. Коли вас додадуть, закрийте
+  застосунок і відкрийте його знову кнопкою в боті.», with «Скопіювати ID»
+  where the phone lets the app copy, the ID selected whole where it does
+  not, and «Спробувати ще раз» as before. People are still added on the
+  server, on the owner's word.
+- **Launch data the server refuses** — past its hour, or not signed by the
+  shop's bot — says «Відкрийте застосунок знову кнопкою в боті вашого
+  магазину.»: opened from the bot, the app signs in anew and finds any
+  command kept from an earlier opening, so it does not speak of one here.
+  A session that ends later keeps its words.
+- **A kept sale's banner** says «Продаж ще не підтверджено» and which sale
+  it was: «Продаж на 1850,00 грн · Картка — сервер не відповів. Двічі він
+  не запишеться. Поки чекаємо, інші дії недоступні.» (the heading already
+  says «ще не підтверджено», so the line does not repeat it); paid in
+  parts, the part paid now; an attempt kept from before the way was asked
+  names none, and one whose figures do not read names only its way. An
+  empty shelf kept says «Запис нестачі ще не підтверджено» / «Сервер не
+  відповів. Двічі нестача не запишеться. Поки чекаємо, інші дії
+  недоступні.» The owner's line under it (G17, G18) is unchanged.
+- **A kept sale confirmed** says «Продаж записано один раз: разом 1850,00
+  грн готівкою.»
+
+Built on 2026-10-16; see the [report](till-redesign-6-report.md).

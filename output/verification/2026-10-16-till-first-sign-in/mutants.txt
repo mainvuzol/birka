@@ -1,0 +1,17 @@
+- unchanged tree: passed 
+- the ID is called a number again: caught by someone not yet added sees their Telegram ID, said not to be a phone number, and copies it
+- the copy is offered where the phone cannot copy: caught by where copying is refused, it says to select the ID; where the phone cannot copy, the ID is
+- a copy made is not said: caught by someone not yet added sees their Telegram ID, said not to be a phone number, and copies it
+- a copy refused is not said: caught by where copying is refused, it says to select the ID; where the phone cannot copy, the ID is
+- the wrong text is copied: caught by someone not yet added sees their Telegram ID, said not to be a phone number, and copies it
+- refused launch data speaks of a kept command: caught by launch data too old to sign in says to open the app again from the bot, and nothing of a k
+- a session ending after sign-in loses its words: caught by a session past its 12 hours asks for the app to be opened again, and never signs in with t
+- the ID cannot be selected whole: caught by where copying is refused, it says to select the ID; where the phone cannot copy, the ID is
+- a line answered at the shelf counts what was asked: caught by a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way
+- paid in parts says the whole sum: caught by a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way
+- the banner names no way: caught by a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way
+- an attempt that does not read breaks the banner: caught by a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way
+- a kept empty shelf is said as a sale: caught by an empty shelf whose answer was lost is checked, and not recorded twice
+- the confirmation says the old words: caught by 2. a kept sale is checked by the phone itself › a card sale it confirms says not to charge; 2. a kept sale is checked by the phone itself › once the server is back: the same sale und; a sale whose outcome is unknown blocks the till until it is settled
+- the heading keeps the old words: caught by a sale whose outcome is unknown blocks the till until it is settled
+15 of 15 caught

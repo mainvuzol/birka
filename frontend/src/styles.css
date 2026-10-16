@@ -718,3 +718,10 @@ html {
   margin-top: 8px;
   display: block;
 }
+/* Someone not yet added copies their Telegram ID, or selects it whole where
+   the phone does not let the app copy (redesign P1-3). */
+.telegram-id {
+  user-select: all;
+  -webkit-user-select: all;
+  font-variant-numeric: tabular-nums;
+}

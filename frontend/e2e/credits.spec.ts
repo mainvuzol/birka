@@ -401,7 +401,7 @@ test("a sale paid in parts whose answer is lost is resent with the same terms", 
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
 
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
     .click();

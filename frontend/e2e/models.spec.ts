@@ -484,7 +484,7 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
   await tapSize(page, typo.variant, typo.size);
   await fillLine(page, { price: "150.00" });
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Незавершений продаж")).toBeVisible();
+  await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
   // Meanwhile a manager merges the duplicate.
   const merged = await page.request.post(
     `/api/v1/catalog/models/${typo.variant}/merge`,
@@ -507,7 +507,7 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
     .click();
-  await expect(page.getByText("Незавершений продаж")).toHaveCount(0);
+  await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   await expect(
     page.getByText(
       "Продаж не записано (цю модель об’єднано з іншою. Виберіть товар ще раз: стара назва тепер веде до моделі, що лишилась). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.",

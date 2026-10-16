@@ -272,7 +272,7 @@ test.describe("a screen that breaks", () => {
     await openStore(page, /Подільський/);
     await expect.poll(() => resent.length).toBe(1);
     await expect(
-      page.getByRole("heading", { name: "Незавершений продаж" }),
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
     ).toBeVisible();
     const first = JSON.parse(saved) as { key: string; body: unknown };
     expect(resent[0]?.key).toBe(first.key);
@@ -910,7 +910,7 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     await refusedAsUnrecorded(response);
 
     await expect(
-      page.getByRole("heading", { name: "Незавершений продаж" }),
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
     ).toHaveCount(0);
     // Whatever the reason, a kept sale not recorded says how to type it from
     // paper (ADR-0013 §8).

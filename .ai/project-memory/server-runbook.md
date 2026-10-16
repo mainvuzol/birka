@@ -144,16 +144,16 @@ In @BotFather:
 3. Set the button's URL to `https://<domain>/`.
 
 Then open the bot in Telegram and press the button. The app shows «Доступу
-ще немає», with the Telegram number of whoever opened it.
+ще немає», with the Telegram ID of whoever opened it (not a phone number).
 
 ### 6. The owner, and the shop's places
 
-The owner opens the app as in step 5 and passes on the number it shows.
+The owner opens the app as in step 5 and passes on the Telegram ID it shows.
 Then:
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.seed_organization \
-  --telegram-user-id <the owner's number> --owner-name "<name>" --org-name "<shop>" \
+  --telegram-user-id <the owner's Telegram ID> --owner-name "<name>" --org-name "<shop>" \
   --main-name "<the main store's name>" --second-name "<the second store's name>"
 ```
 
@@ -174,19 +174,21 @@ with a role in `SECOND` itself (`scripts.people grant … --store SECOND`, step
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.stores rename \
-  --approved-by <the owner's number> --store MAIN --name "<the new name>"
+  --approved-by <the owner's Telegram ID> --store MAIN --name "<the new name>"
 ```
 
-The owner presses «Спробувати ще раз» and is in.
+The owner closes the app and opens it again from the bot (within the hour
+«Спробувати ще раз» works too) and is in.
 
 ### 7. The people
 
-Each seller opens the app as in step 5 and passes on their number. On the
+Each seller opens the app as in step 5 and passes on their Telegram ID
+(«Скопіювати ID»). On the
 owner's word:
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.people grant \
-  --approved-by <the owner's number> --telegram-user-id <their number> \
+  --approved-by <the owner's Telegram ID> --telegram-user-id <their Telegram ID> \
   --store MAIN --role SELLER
 docker compose run --rm --no-deps api python -m scripts.people list
 ```
@@ -200,7 +202,7 @@ app again on the new phone.
 
 ```sh
 docker compose run --rm --no-deps api python -m scripts.people sign-out \
-  --approved-by <the owner's number> --telegram-user-id <their number>
+  --approved-by <the owner's Telegram ID> --telegram-user-id <their Telegram ID>
 ```
 
 Whoever holds the lost phone could still open the app through the person's
@@ -251,7 +253,7 @@ the network's owner only, never whoever finished it, always silent, written
 when it is finished and retried for a day, with nothing more to set up.
 
 1. **The administrator** opens the shop's bot and presses «Start», then
-   opens the app from it: «Доступу ще немає» shows their Telegram number. Put
+   opens the app from it: «Доступу ще немає» shows their Telegram ID. Put
    it in `BIRKA_ADMIN_TELEGRAM_IDS`, and `docker compose up -d backup-watch`.
    `docker compose logs backup-watch | grep backup_watch.started` shows how
    many administrators it has: a part of the setting that is not a number is

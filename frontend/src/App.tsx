@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ComponentProps, JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
-import { methodHow } from "@/shared/payment";
+import { methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
@@ -41,7 +41,13 @@ import { Stock } from "@/inventory/Stock";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
-import { loadSale, resolve, useSaleCommand } from "@/sales/commands";
+import {
+  attemptSum,
+  loadSale,
+  resolve,
+  useSaleCommand,
+} from "@/sales/commands";
+import type { SaleAttempt } from "@/sales/commands";
 import { clearPaper } from "@/sales/paper";
 import { markText, paidDuringOutage } from "@/sales/types";
 import { Receive } from "@/inventory/Receive";
@@ -195,6 +201,73 @@ async function signIn(): Promise<string> {
   );
   return auth.access_token;
 }
+/**
+ * Someone the shop has not added yet (redesign P1-3). People are added on
+ * the server, by their Telegram ID, on the owner's word (owner decision,
+ * 2026-10-01); the ID is often taken for a phone number, so it says it is
+ * not, and is copied with one tap where the phone lets the app copy, or
+ * selected whole where it does not.
+ */
+function NoAccess({ readAgain }: { readAgain: () => void }): JSX.Element {
+  const id = telegramUserId();
+  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  // Absent outside a secure page, whatever the types say.
+  const clipboard = (navigator as { clipboard?: Partial<Clipboard> }).clipboard;
+  const write = clipboard?.writeText?.bind(clipboard);
+  const copy =
+    id !== null && write !== undefined
+      ? () => {
+          try {
+            write(String(id)).then(
+              () => {
+                setCopied("yes");
+              },
+              () => {
+                setCopied("no");
+              },
+            );
+          } catch {
+            setCopied("no");
+          }
+        }
+      : null;
+  return (
+    <main>
+      <h1>Бірка</h1>
+      <h2>Доступу ще немає</h2>
+      <p role="alert">
+        Цей акаунт Telegram не має доступу до жодного магазину.
+      </p>
+      {id !== null ? (
+        <p>
+          Ваш Telegram ID: <strong className="telegram-id">{id}</strong> — це не
+          номер телефону. Надішліть його власнику магазину. Коли вас додадуть,
+          закрийте застосунок і відкрийте його знову кнопкою в боті.
+        </p>
+      ) : (
+        <p>
+          Не вдалося прочитати ваш Telegram ID. Відкрийте застосунок кнопкою в
+          боті вашого магазину.
+        </p>
+      )}
+      {copy && (
+        <button className="quiet" onClick={copy}>
+          Скопіювати ID
+        </button>
+      )}
+      {/* Present from the start, so a reader hears it filled. */}
+      <p role="status">
+        {copied === "yes"
+          ? "ID скопійовано."
+          : copied === "no"
+            ? "Не вдалося скопіювати — виділіть ID і скопіюйте його."
+            : ""}
+      </p>
+      <button onClick={readAgain}>Спробувати ще раз</button>
+    </main>
+  );
+}
+
 export function App(): JSX.Element {
   useEffect(connectTelegram, []);
   const session = useQuery({
@@ -233,23 +306,7 @@ export function App(): JSX.Element {
   // screen says which. A store's own screens name themselves.
   setScreen(me.data === undefined ? "sign-in" : "store-choice");
   if (failure instanceof ApiError && failure.code === "NO_ACCESS")
-    return (
-      <main>
-        <h1>Бірка</h1>
-        <h2>Доступу ще немає</h2>
-        <p role="alert">
-          Цей акаунт Telegram не має доступу до жодного магазину.
-        </p>
-        {/* People are added on the server, by this number, on the owner's
-            word (owner decision, 2026-10-01). */}
-        <p>
-          Ваш номер у Telegram: <strong>{telegramUserId() ?? "—"}</strong>.
-          Передайте його власнику магазину. Коли вас додадуть, натисніть
-          «Спробувати ще раз».
-        </p>
-        <button onClick={readAgain}>Спробувати ще раз</button>
-      </main>
-    );
+    return <NoAccess readAgain={readAgain} />;
   if (failure)
     return (
       <main>
@@ -258,7 +315,15 @@ export function App(): JSX.Element {
         <p role="alert">
           {failure.message === "TELEGRAM_REQUIRED"
             ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
-            : errorText(failure)}
+            : token === undefined &&
+                failure instanceof ApiError &&
+                failure.status === 401
+              ? // Launch data refused — taken for an hour only, or not
+                // signed by the shop's bot — is answered by opening the app
+                // from the bot again, which also finds any command kept
+                // from an earlier opening (redesign P1-3).
+                "Відкрийте застосунок знову кнопкою в боті вашого магазину."
+              : errorText(failure)}
         </p>
         <button onClick={readAgain}>Спробувати ще раз</button>
       </main>
@@ -1259,12 +1324,15 @@ function Workspace({
       {saleCommand.pending && (
         <section className="notice">
           <h3>
-            {saleCommand.busy ? "Перевіряємо продаж…" : "Незавершений продаж"}
+            {saleCommand.busy
+              ? "Перевіряємо продаж…"
+              : saleCommand.pending.emptyShelf
+                ? "Запис нестачі ще не підтверджено"
+                : "Продаж ще не підтверджено"}
           </h3>
-          <p>
-            Невідомо, чи записано попередній продаж. Перевірте результат — та
-            сама операція не продасться двічі. Нові операції заблоковано.
-          </p>
+          {/* Which customer it was: the attempt's own sum and way, never
+              the server's total (redesign P1-4). */}
+          <p>{keptSaleText(saleCommand.pending)}</p>
           <p>{keptText(saleCommand.pending.since, me.display_name)}</p>
           <button disabled={saleCommand.busy} onClick={checkSale}>
             Перевірити результат продажу
@@ -1991,12 +2059,6 @@ function Workspace({
   );
 }
 /**
- * A card operation whose answer was lost, confirmed — maybe by the phone
- * itself, minutes or hours after the press. Following the paper text, the
- * seller may have charged the terminal meanwhile, so it says to charge it
- * only if nobody did (owner decision, 2026-10-07; ADR-0013 §5.6, G19).
- */
-/**
  * A kept payment typed from paper, confirmed: what the till says of money
  * taken during the outage, by its way (ADR-0021) — never to charge again.
  */
@@ -2007,6 +2069,31 @@ function paidOnPaper(way: PaymentMethod | null, firstDays: boolean): string {
     : ` ${paid.charAt(0).toUpperCase()}${paid.slice(1)}.`;
 }
 
+/**
+ * A kept sale's banner (redesign P1-4): which sale it was — its sum and how
+ * it was paid, as the attempt sent them, so the seller knows which customer
+ * and whether to take the money again — and that it is not confirmed yet.
+ * An attempt kept from before the way was asked names none.
+ */
+function keptSaleText(attempt: SaleAttempt): string {
+  const waits =
+    "сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.";
+  if (attempt.emptyShelf)
+    return "Сервер не відповів. Двічі нестача не запишеться. Поки чекаємо, інші дії недоступні.";
+  const { sum, inParts } = attemptSum(attempt.body);
+  const way = attempt.body.payment_method;
+  const how = way ? ` · ${methodLabels[way]}` : "";
+  // A sum that does not read: the way alone, never a guess.
+  if (sum === null) return `Продаж${how} — ${waits}`;
+  return `Продаж ${inParts ? "частинами, зараз" : "на"} ${money(sum)}${how} — ${waits}`;
+}
+
+/**
+ * A card operation whose answer was lost, confirmed — maybe by the phone
+ * itself, minutes or hours after the press. Following the paper text, the
+ * seller may have charged the terminal meanwhile, so it says to charge it
+ * only if nobody did (owner decision, 2026-10-07; ADR-0013 §5.6, G19).
+ */
 function chargeOnce(amount: string): string {
   return `Якщо картку ще не провели — проведіть на терміналі ${money(amount)}. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.`;
 }
@@ -2031,9 +2118,9 @@ function SettledSale({ sale }: { sale: SaleReceipt }): JSX.Element {
     <>
       {mark && <p className="badge">{markText(mark)}</p>}
       <p>
-        Операцію було записано. Разом {money(sale.total)}
+        Продаж записано один раз: разом {money(sale.total)}
         {way ? ` ${methodHow[way]}` : ""}
-        {paid !== null && ` — ${paid}`}. Повторно вона не пройде.
+        {paid !== null && ` — ${paid}`}.
         {way === "CARD" && paid === null && ` ${chargeOnce(sale.total)}`}
       </p>
     </>

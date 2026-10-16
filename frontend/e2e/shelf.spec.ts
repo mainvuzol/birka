@@ -240,8 +240,14 @@ test("an empty shelf whose answer was lost is checked, and not recorded twice", 
       exact: true,
     })
     .click();
+  // An empty shelf kept: said as one, not as a sale (redesign P1-4).
   await expect(
-    page.getByRole("heading", { name: "Незавершений продаж" }),
+    page.getByRole("heading", { name: "Запис нестачі ще не підтверджено" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Сервер не відповів. Двічі нестача не запишеться. Поки чекаємо, інші дії недоступні.",
+    ),
   ).toBeVisible();
 
   await page
