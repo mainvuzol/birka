@@ -116,6 +116,7 @@ export function StockSearch({
   offerHeld,
   searchRef,
   failure,
+  offer,
 }: {
   text: string;
   type: (text: string) => void;
@@ -133,6 +134,12 @@ export function StockSearch({
   searchRef: RefObject<HTMLInputElement>;
   /** What the till shows when the list could not be read. */
   failure: JSX.Element | null;
+  /**
+   * The way to a coat in hand the list does not show (redesign P1-5): under
+   * a search, and when the warehouse holds nothing. Null for whoever may
+   * not take it, and from paper.
+   */
+  offer: JSX.Element | null;
 }): JSX.Element {
   const models = useMemo(
     () => tags((stock.data?.pages ?? []).flatMap((page) => page.items)),
@@ -175,9 +182,15 @@ export function StockSearch({
               >
                 Очистити
               </button>
+              {offer}
             </div>
           ) : (
-            <p>На цьому складі немає товарів із додатним залишком.</p>
+            <div className="empty">
+              <p>
+                На складі «{visible(warehouse)}» зараз немає товару в обліку.
+              </p>
+              {offer}
+            </div>
           )
         ) : (
           <div className="tags">
@@ -234,6 +247,8 @@ export function StockSearch({
           Ще товари
         </button>
       )}
+      {/* Found something, but maybe not the coat in hand. */}
+      {failure === null && query && models.length > 0 && offer}
     </>
   );
 }

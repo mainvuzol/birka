@@ -463,7 +463,11 @@ async def _mark_of(session: AsyncSession, refund: Refund) -> PaperView | None:
         return None
     named = {refund.outage_taken_by} if refund.outage_taken_by is not None else set()
     return paper_view(
-        True, refund.outage_taken_by, refund.outage_taken_at, await names_of(session, named)
+        True,
+        refund.outage_taken_by,
+        refund.outage_taken_at,
+        await names_of(session, named),
+        first_days=refund.outage_first_days,
     )
 
 
@@ -789,6 +793,7 @@ async def create_refund(
             during_outage=mark is not None,
             outage_taken_by=mark.by_user_id if mark is not None else None,
             outage_taken_at=mark.at if mark is not None else None,
+            outage_first_days=mark is not None and mark.first_days,
         )
         session.add(refund)
         await session.flush()

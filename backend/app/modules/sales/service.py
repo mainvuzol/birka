@@ -1075,6 +1075,7 @@ async def _new_sale(
         sale.during_outage = True
         sale.outage_sold_by = mark.sold_by_user_id
         sale.outage_sold_at = mark.sold_at
+        sale.outage_first_days = mark.first_days
     session.add(sale)
     await session.flush()
 
@@ -1184,6 +1185,7 @@ async def _new_sale(
         total=str(sale.total),
         payment_method=sale.payment_method,
         during_outage=mark is not None,
+        first_days=mark is not None and mark.first_days,
     )
     return SaleResult(
         sale=sale,

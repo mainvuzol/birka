@@ -490,6 +490,7 @@ function OutageLine({ entry }: { entry: Entry }): JSX.Element | null {
               by_user_id: null,
               by: outage.sold_by,
               at: outage.sold_at,
+              first_days: outage.first_days === true,
             })
           : markText(outage)}{" "}
         · внесено: {visible(entry.by)}

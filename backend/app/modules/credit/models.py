@@ -226,6 +226,11 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
         nullable=True,
     )
     outage_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The first days' paper, «з паперу» (owner decisions, 2026-10-15 and
+    # 2026-10-16; revision 0041): typed from paper written while a warehouse
+    # waited for its opening list, with no word of an outage. Only on a
+    # marked row, and never changed, as the mark.
+    outage_first_days: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
     __table_args__ = (
         CheckConstraint("kind IN ('PAYMENT', 'RETURN', 'WRITE_OFF')", name="kind_known"),
@@ -263,6 +268,7 @@ class CreditEntry(UUIDPrimaryKey, TimestampMixin, Base):
             "during_outage OR (outage_taken_by IS NULL AND outage_taken_at IS NULL)",
             name="outage_details_need_the_mark",
         ),
+        CheckConstraint("NOT outage_first_days OR during_outage", name="first_days_need_the_mark"),
         ForeignKeyConstraint(
             ["organization_id", "taken_at_store_id"],
             ["store.organization_id", "store.id"],

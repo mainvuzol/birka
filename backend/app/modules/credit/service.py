@@ -492,6 +492,7 @@ async def pay(
                 during_outage=mark is not None,
                 outage_taken_by=mark.by_user_id if mark is not None else None,
                 outage_taken_at=mark.at if mark is not None else None,
+                outage_first_days=mark is not None and mark.first_days,
             )
         )
         await session.flush()
@@ -792,7 +793,11 @@ async def view(session: AsyncSession, credit: CustomerCredit) -> CreditView:
                 note=entry.note,
                 taken_at=names[entry.taken_at_store_id] if entry.taken_at_store_id else None,
                 outage=paper_view(
-                    entry.during_outage, entry.outage_taken_by, entry.outage_taken_at, people
+                    entry.during_outage,
+                    entry.outage_taken_by,
+                    entry.outage_taken_at,
+                    people,
+                    first_days=entry.outage_first_days,
                 ),
             )
             for entry, name in entries

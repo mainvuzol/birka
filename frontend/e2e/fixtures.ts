@@ -135,3 +135,23 @@ export async function fillLine(
   await expect(line.locator("output")).toHaveText(String(quantity));
   if (price !== undefined) await line.getByLabel("Ціна, грн").fill(price);
 }
+
+/**
+ * The paper switch ticked, and the paper said to be an outage's — or, with
+ * `firstDays`, the first days', «з паперу» (owner decision, 2026-10-16):
+ * nothing typed from paper is sent until the series says which it is.
+ */
+export async function fromPaper(
+  page: Page,
+  label = "Вношу продаж з паперу",
+  firstDays = false,
+): Promise<void> {
+  await page.getByLabel(label).check();
+  await page
+    .getByRole("radio", {
+      name: firstDays
+        ? "Перші дні, до затвердження залишків"
+        : "Сервер не відповідав",
+    })
+    .check();
+}

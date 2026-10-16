@@ -590,8 +590,10 @@ function Workspace({
     credit: Credit;
     amount: string | null;
     way: PaymentMethod | null;
-    // Typed from paper: the card was charged during the outage (ADR-0021).
+    // Typed from paper: the card was charged during the outage (ADR-0021),
+    // or before the app, from the first days' paper (owner, 2026-10-16).
     fromPaper?: boolean;
+    firstDays?: boolean;
   } | null>(null);
   // Which command a resent attempt refused as recording nothing was, and
   // how a payment was pressed: what to give back says it (ADR-0013 §8).
@@ -828,6 +830,7 @@ function Workspace({
                 amount: attempt.body.amount,
                 way: attempt.body.payment_method ?? null,
                 fromPaper: !!attempt.body.outage,
+                firstDays: attempt.body.outage?.first_days === true,
               }
             : { amount: null, way: null }),
         });
@@ -1027,7 +1030,10 @@ function Workspace({
   // its receipt (ADR-0013 §5.6).
   const settledPaid =
     settled?.outage && settled.payment_method
-      ? paidDuringOutage(settled.payment_method)
+      ? paidDuringOutage(
+          settled.payment_method,
+          settled.outage.first_days === true,
+        )
       : null;
   // The sections (redesign P1-6), each by the same right as before: the
   // counter's work in the row, and every other under «Ще», two taps away.
@@ -1419,7 +1425,7 @@ function Workspace({
             . {visible(creditSettled.credit.customer_name ?? erasedCustomer)}:
             залишок боргу {money(creditSettled.credit.owed)}.
             {creditSettled.fromPaper
-              ? paidOnPaper(creditSettled.way)
+              ? paidOnPaper(creditSettled.way, creditSettled.firstDays === true)
               : creditSettled.amount !== null &&
                 creditSettled.way === "CARD" &&
                 ` ${chargeOnce(creditSettled.amount)}`}
@@ -1994,8 +2000,8 @@ function Workspace({
  * A kept payment typed from paper, confirmed: what the till says of money
  * taken during the outage, by its way (ADR-0021) — never to charge again.
  */
-function paidOnPaper(way: PaymentMethod | null): string {
-  const paid = way === null ? null : paidDuringOutage(way);
+function paidOnPaper(way: PaymentMethod | null, firstDays: boolean): string {
+  const paid = way === null ? null : paidDuringOutage(way, firstDays);
   return paid === null
     ? ""
     : ` ${paid.charAt(0).toUpperCase()}${paid.slice(1)}.`;
@@ -2017,7 +2023,10 @@ function chargeOnce(amount: string): string {
 function SettledSale({ sale }: { sale: SaleReceipt }): JSX.Element {
   const way = sale.credit ? null : (sale.payment_method ?? null);
   const mark = sale.outage ?? null;
-  const paid = mark !== null && way !== null ? paidDuringOutage(way) : null;
+  const paid =
+    mark !== null && way !== null
+      ? paidDuringOutage(way, mark.first_days === true)
+      : null;
   return (
     <>
       {mark && <p className="badge">{markText(mark)}</p>}

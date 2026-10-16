@@ -2335,3 +2335,61 @@ How it is carried out, not decided by the owner:
   memory: a reopened app says nothing until it sees an outage itself.
 
 Built on 2026-10-16; see the [report](till-redesign-4-report.md).
+
+## Owner decision — 2026-10-16 (the till's empty states; the first days' paper)
+
+Asked after the sections merged (PR #93), each answer the option
+recommended when asked:
+- **Next: the till's empty states and the mark «з паперу»** (the task
+  list's P1-5, with В1 (а) of 2026-10-14 and В2 (в) of 2026-10-15).
+- **The money of the first days' paper goes into the drawer** until its
+  next close, as every sale's and every outage's does: no new rule of the
+  drawer.
+- **Whoever types paper says once per series which paper it is:** the
+  first days', before the opening list was approved, or an outage's.
+  Nothing is guessed: the mark is permanent.
+- **The first days' paper may be dated any day of the last two weeks**:
+  an opening list may wait days for its review. An outage's paper keeps
+  today or yesterday (G1). The sale is still dated the day it is typed.
+- **Returns and debt payments typed from the first days' paper are
+  «з паперу» too**, not «під час збою».
+- **A warehouse where nothing has been recorded yet** — no opening list
+  approved, no delivery — **is treated as one waiting for its list**: the
+  till says to sell on paper there, and offers no coat from the catalogue
+  until its first approved list or first delivery. A «Товар на місці» there
+  would be its first movement and close it to its opening list for good
+  (asked when the review found it, 2026-10-16).
+
+How it is carried out, not decided by the owner:
+- **A warehouse where nothing is recorded yet**, its list typed or not,
+  says so at the till: «На складі «{склад}» зараз немає товару в обліку.
+  Поки власник не затвердить початкові залишки, продавайте на папері.»,
+  with nothing to search or sell (`GET /stock-locations` says
+  `awaiting_first_stock`).
+- **An empty warehouse** that has recorded stock names itself: «На складі
+  «{склад}» зараз немає товару в обліку.» With nothing found by a search,
+  with nothing at all, or under what a search found (the coat in hand may
+  be another model's colour), the till asks «Товар у руках, а в списку його
+  немає?» and offers «Знайти в каталозі»: the model from the whole catalogue, its size tapped, the line
+  at its price. Pressed, the sale says the books hold none, and «Товар на
+  місці — продати N» records the coat found, exactly what the sale is short
+  of (F30, I18). For whoever may answer «Товар на місці» and read the
+  catalogue (`inventory:correct_during_sale`, `inventory:receive`); never
+  from paper. The server needed no change: a sale's «фізично є» on a key
+  the warehouse never held already worked.
+- **The mark «з паперу»** is the outage mark with `first_days` (revision
+  0041; ADR-0013 §5.8): the same shelf rule, people and permanence. Shown
+  as «Продано з паперу», «Повернено з паперу», «Внесок з паперу»; the paper
+  mode's texts say «з паперу» and «вже взяли» instead of «під час збою».
+- **The choice** is asked when the paper switch is ticked: «Що вносите з
+  паперу?» — «Перші дні, до затвердження залишків» or «Сервер не
+  відповідав». Until it is said, the buttons that send are held. The
+  till's reminder that the server is back says «Сервер не відповідав»; it
+  can be changed. The first days' paper asks «День з паперу» among the last
+  14 days, today among them, beside «Час з паперу»: the two go together or
+  not at all, and nothing guesses the one left out. «Це було вчора» is an
+  outage's. Another kind chosen asks the day and time anew.
+- **«Каса»** offers a third quick reason for a difference: «Продажі з
+  паперу перших днів».
+
+Built on 2026-10-16; see the [report](till-redesign-5-report.md).

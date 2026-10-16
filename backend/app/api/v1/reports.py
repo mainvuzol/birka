@@ -122,10 +122,12 @@ class ModelsResponse(PeriodResponse):
 
 class OutageEntryResponse(BaseModel):
     """«Продано під час збою»: who sold and when, as the paper says; each
-    None when the paper named none."""
+    None when the paper named none. `first_days` is «з паперу», the first
+    days' paper, with no word of an outage."""
 
     sold_by: str | None
     sold_at: datetime | None
+    first_days: bool
 
 
 class EntryResponse(BaseModel):
@@ -295,7 +297,11 @@ async def sales_entries(
                 paid_in_parts=view.paid_in_parts,
                 goods=view.goods,
                 outage=(
-                    OutageEntryResponse(sold_by=view.outage.sold_by, sold_at=view.outage.sold_at)
+                    OutageEntryResponse(
+                        sold_by=view.outage.sold_by,
+                        sold_at=view.outage.sold_at,
+                        first_days=view.outage.first_days,
+                    )
                     if view.outage is not None
                     else None
                 ),

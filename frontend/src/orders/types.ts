@@ -75,6 +75,13 @@ export interface Location {
   can_receive: boolean;
   /** The store's «Брак»: damaged returns go here, and nothing sells from it. */
   damaged_returns: boolean;
+  /**
+   * Nothing has been recorded there yet: its opening list, typed or not, or
+   * its first delivery is awaited (owner decisions, 2026-10-02 and
+   * 2026-10-16). The till says to sell on paper and offers no coat from the
+   * catalogue (redesign P1-5). Absent from a server before it said so.
+   */
+  awaiting_first_stock?: boolean;
 }
 export interface StockOption {
   product_variant_id: string;

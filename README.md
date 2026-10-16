@@ -781,6 +781,16 @@ Related changes elsewhere:
   corrections in units, from the movements written: `found_quantity`,
   `missing_quantity` and `clarified: [{size, quantity}]` (redesign P1-1).
   Answers stored before these fields give them as null.
+- The paper mark (`outage`) on a sale, a return and a debt payment takes
+  `first_days: true` for the first days' paper, «з паперу» (ADR-0013 §5.8,
+  revision 0041): its paper time may be of the last 14 days, today among
+  them, an outage's of today or yesterday; `OUTAGE_TIME_TOO_OLD` says
+  `days`, the days before today taken (13 or 1). Every answer that
+  carries the mark, and «Звіт»'s entries, say `first_days`; absent or false
+  is an outage's mark, printed as before.
+- `GET /stock-locations` says `awaiting_first_stock` for a warehouse where
+  nothing has been recorded yet, its opening list typed or not: the till
+  says to sell on paper there (redesign P1-5; owner, 2026-10-16).
 - `POST /inventory/adjustments` no longer accepts the two
   `SIZE_RECLASSIFICATION_*` reasons (422): each is half of a pair only a sale
   writes.

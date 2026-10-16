@@ -85,6 +85,12 @@ for them might be added later (backlog). Without it:
    sale's own and carries the sale's mark; a write-off, the owner's; an
    order collected, which is typed as a sale.
 
+**The first days' paper** (owner decision, 2026-10-16). A return or a debt
+payment typed from the paper of a warehouse's first days, while it waited
+for its opening list, carries `first_days`, «з паперу», as a sale does
+(ADR-0013 §5.8): the same rules, its time of the last two weeks, no word of
+an outage.
+
 ## Consequences
 
 - **The seller must tick the switch.** A return or payment typed from paper

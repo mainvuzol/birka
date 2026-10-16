@@ -1454,3 +1454,29 @@ See the [report](till-redesign-4-report.md).
 - **A section a journey says is absent must be looked for under «Ще»:**
   closed, «Ще» shows none, so such a check passes whatever the rights.
   The journeys that say so open «Ще» first.
+
+## The till's empty states and the first days' paper — 2026-10-16
+
+See the [report](till-redesign-5-report.md).
+
+- **Which paper it is rests on whoever types it:** the series says it
+  once, and nothing guesses it. Typed as an outage's when it was the first
+  days', the mark is permanent and wrong, as a forgotten switch's is (G6).
+  The till's reminder says «Сервер не відповідав» for them; it can be
+  changed before the first press.
+- **The first days' paper reaches two weeks back:** a review longer than
+  that leaves the oldest lines typed without their time, as an outage's
+  older than yesterday are.
+- **«Знайти в каталозі» lists every active model of the catalogue,** and
+  every size of the organization: a size the model never had can be put in
+  the basket and sold through «Товар на місці», as at receiving. The coat in
+  hand is the check.
+- **A warehouse that has recorded nothing is read when the till opens:** a
+  list approved, or a first delivery, meanwhile shows only once the till is
+  opened again.
+- **A coat from the catalogue kept in the basket when the paper switch is
+  ticked** is refused at the press, as any coat the books hold none of is
+  from paper (ADR-0013 §6), and the refusal says to ask a manager.
+- **The guides' new words are not yet confirmed by the owner:** the paper
+  guide's «Сервер не відповідав» and the server guides' first-days step
+  follow the answers of 2026-10-16, as built.

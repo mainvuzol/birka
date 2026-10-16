@@ -872,12 +872,14 @@ function CloseForm({
 /**
  * One tap for the reasons an outage leaves (owner decision, 2026-10-04;
  * ADR-0013 §9, G8): a sale typed after the close it belonged to, and a
- * return or a debt payment typed so. Each puts its words in the field, to
- * be edited: the reason stays free text.
+ * return or a debt payment typed so; and the first days' paper, whose money
+ * comes into the drawer as any sale's (owner decision, 2026-10-16). Each
+ * puts its words in the field, to be edited: the reason stays free text.
  */
 const outageReasons = [
   "Продаж під час збою",
   "Повернення чи внесок під час збою",
+  "Продажі з паперу перших днів",
 ] as const;
 
 /** Why the count differs, written only by whoever counted (G12). */

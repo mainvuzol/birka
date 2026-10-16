@@ -171,19 +171,24 @@ PaperTime = Annotated[str, Field(min_length=16, max_length=16), AfterValidator(_
 
 class OutageMarkPayload(BaseModel):
     """«Продано під час збою»: a sale typed from paper (ADR-0013 §5.2). `{}`
-    marks it with nobody and no time named.
+    marks it with nobody and no time named. With `first_days`, «з паперу»:
+    the first days' paper, typed once the warehouse's opening list is
+    approved, with no word of an outage (owner decisions, 2026-10-15 and
+    2026-10-16; ADR-0013 §5.8).
 
     Only the shape: a real date and time, written `YYYY-MM-DDTHH:MM`. Whether
-    the person may be named, and whether the time is today's or yesterday's,
-    is decided after the replay lookup, never here."""
+    the person may be named, and whether the time is recent enough, is
+    decided after the replay lookup, never here."""
 
     model_config = ConfigDict(extra="forbid")
 
     # Who sold, as the paper says: one of the store's people.
     sold_by_user_id: uuid.UUID | None = None
     # The paper's time, the store's own wall clock with no offset; the phone
-    # fills in the day, today or yesterday.
+    # fills in the day: today or yesterday, or the first days' paper's.
     sold_at: PaperTime | None = None
+    # The first days' paper, not an outage's.
+    first_days: bool = False
 
 
 class PaperMarkPayload(BaseModel):
@@ -199,25 +204,41 @@ class PaperMarkPayload(BaseModel):
     by_user_id: uuid.UUID | None = None
     # The paper's time, that store's wall clock with no offset.
     at: PaperTime | None = None
+    # The first days' paper, «з паперу», not an outage's (owner decision,
+    # 2026-10-16).
+    first_days: bool = False
 
     def mark(self) -> PaperMark:
-        return PaperMark(by_user_id=self.by_user_id, at=self.at)
+        return PaperMark(by_user_id=self.by_user_id, at=self.at, first_days=self.first_days)
+
+
+def printed_mark(body: dict[str, object]) -> None:
+    """A body's mark as its 7-day print reads it: an outage's exactly as
+    before the first days' paper existed, so an attempt kept from then still
+    matches what the cache stored; the first days' paper says so."""
+    mark = body.get("outage")
+    if isinstance(mark, dict) and not mark.get("first_days"):
+        mark.pop("first_days", None)
 
 
 class PaperMarkResponse(BaseModel):
     """A return's or a payment's mark (ADR-0021): who took it as the paper
     says, by name too, and the paper's time; each None when the paper named
-    none. Who typed it is the entry's own `by`."""
+    none. Who typed it is the entry's own `by`. `first_days` is «з паперу»,
+    the first days' paper; false in answers stored before it existed."""
 
     by_user_id: uuid.UUID | None
     by: str | None
     at: datetime | None
+    first_days: bool = False
 
 
 def paper_response(view: PaperView | None) -> PaperMarkResponse | None:
     if view is None:
         return None
-    return PaperMarkResponse(by_user_id=view.by_user_id, by=view.by, at=view.at)
+    return PaperMarkResponse(
+        by_user_id=view.by_user_id, by=view.by, at=view.at, first_days=view.first_days
+    )
 
 
 class SaleRequest(BaseModel):
@@ -254,13 +275,18 @@ class SaleRequest(BaseModel):
             del body["payment_method"]
         if body["outage"] is None:
             del body["outage"]
+        printed_mark(body)
         return body
 
     def mark(self) -> OutageMark | None:
         """The mark, as the service takes it."""
         if self.outage is None:
             return None
-        return OutageMark(sold_by_user_id=self.outage.sold_by_user_id, sold_at=self.outage.sold_at)
+        return OutageMark(
+            sold_by_user_id=self.outage.sold_by_user_id,
+            sold_at=self.outage.sold_at,
+            first_days=self.outage.first_days,
+        )
 
 
 class SaleItemResponse(BaseModel):
@@ -298,18 +324,24 @@ class SaleCreditResponse(BaseModel):
 class OutageMarkResponse(BaseModel):
     """«Продано під час збою» (ADR-0013 §5.6): who sold as the paper says, by
     name too, and the paper's time; each None when the paper named none. Who
-    typed it is whoever sold it here, as for any sale."""
+    typed it is whoever sold it here, as for any sale. `first_days` is
+    «з паперу», the first days' paper (§5.8); false in answers stored before
+    it existed."""
 
     sold_by_user_id: uuid.UUID | None
     sold_by: str | None
     sold_at: datetime | None
+    first_days: bool = False
 
 
 def _outage(view: MarkView | None) -> OutageMarkResponse | None:
     if view is None:
         return None
     return OutageMarkResponse(
-        sold_by_user_id=view.sold_by_user_id, sold_by=view.sold_by, sold_at=view.sold_at
+        sold_by_user_id=view.sold_by_user_id,
+        sold_by=view.sold_by,
+        sold_at=view.sold_at,
+        first_days=view.first_days,
     )
 
 
@@ -836,5 +868,6 @@ __all__ = [
     "TillMethodValue",
     "method_of",
     "paper_response",
+    "printed_mark",
     "router",
 ]

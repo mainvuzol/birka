@@ -285,7 +285,11 @@ function SaleCard({
       {!here && <span>Продано в магазині «{visible(sale.store_name)}»</span>}
       {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
       {soldDuringOutage(sale) && (
-        <span className="badge">Продано під час збою</span>
+        <span className="badge">
+          {sale.outage?.first_days === true
+            ? "Продано з паперу"
+            : "Продано під час збою"}
+        </span>
       )}
       <ul>
         {sale.items.map((item) => (
@@ -340,14 +344,16 @@ function handBackOnce(
 
 /**
  * A return typed from paper: the money went back while the server did not
- * answer, the way the seller pressed (ADR-0021).
+ * answer, the way the seller pressed (ADR-0021); or, from the first days'
+ * paper, before the app took returns (owner decision, 2026-10-16).
  */
 function handedBack(
   amount: string,
   way: TillMethod | null | undefined,
+  firstDays: boolean,
 ): string {
   const how = way ? ` ${refundHow[way]}` : "";
-  return `${money(amount)}${how} повернули під час збою — вдруге не повертайте.`;
+  return `${money(amount)}${how} повернули ${firstDays ? "раніше" : "під час збою"} — вдруге не повертайте.`;
 }
 
 export function Done({
@@ -371,7 +377,12 @@ export function Done({
 }): JSX.Element {
   // Typed from paper: the money went back during the outage (owner
   // decision, 2026-10-10; ADR-0021), so it is never said to hand it back.
-  const back = refund.outage ? handedBack : kept ? handBackOnce : handBack;
+  const back = refund.outage
+    ? (amount: string, way: TillMethod | null | undefined) =>
+        handedBack(amount, way, refund.outage?.first_days === true)
+    : kept
+      ? handBackOnce
+      : handBack;
   const damaged = refund.items.some((item) => item.condition === "DAMAGED");
   const intact = refund.items.some((item) => item.condition === "INTACT");
   // Intact goods the seller sent to a warehouse of this store (owner
@@ -563,6 +574,9 @@ function ReturnForm({
   }
 
   async function send(): Promise<void> {
+    // From paper, nothing is sent until the series says which paper it is
+    // (owner decision, 2026-10-16): the button waits, and so does this.
+    if (!mark.ready) return;
     setRefusal(null);
     const trimmed = reason.trim();
     const outage = mark.body();
@@ -620,7 +634,7 @@ function ReturnForm({
       )}
       <fieldset disabled={blocked || working}>
         <legend>Що повертають</legend>
-        <PaperFields mark={mark} what="return" />
+        <PaperFields mark={mark} what="return" storeId={store.id} />
         {lines.map((item) => {
           const left = item.quantity - item.refunded;
           const entered = counts[item.id] ?? { intact: "", damaged: "" };
@@ -701,8 +715,12 @@ function ReturnForm({
           <legend>
             {mark.paper
               ? sale.paid_in_parts
-                ? "Як повертали гроші під час збою (якщо повертали)"
-                : "Як повернули гроші під час збою"
+                ? mark.firstDays === false
+                  ? "Як повертали гроші під час збою (якщо повертали)"
+                  : "Як повертали гроші (якщо повертали)"
+                : mark.firstDays === false
+                  ? "Як повернули гроші під час збою"
+                  : "Як повернули гроші"
               : sale.paid_in_parts
                 ? "Як повертаємо гроші (якщо буде що повертати)"
                 : "Як повертаємо гроші"}
@@ -729,25 +747,32 @@ function ReturnForm({
         ))}
         <button
           type="button"
-          disabled={!ready || (!sale.paid_in_parts && way === null)}
+          disabled={
+            !ready || !mark.ready || (!sale.paid_in_parts && way === null)
+          }
           onClick={() => {
             void send();
           }}
         >
           {!ready
             ? "Вкажіть, що повертають"
-            : `${mark.paper ? "З паперу · " : ""}${
-                sale.paid_in_parts
-                  ? `Оформити повернення на ${money(decimal(total))}`
-                  : way === null
-                    ? "Оберіть, як повертаєте гроші"
-                    : `Повернути покупцю ${money(decimal(total))} ${refundHow[way]}`
-              }`}
+            : !mark.ready
+              ? "Оберіть, що вносите з паперу"
+              : `${mark.paper ? "З паперу · " : ""}${
+                  sale.paid_in_parts
+                    ? `Оформити повернення на ${money(decimal(total))}`
+                    : way === null
+                      ? "Оберіть, як повертаєте гроші"
+                      : `Повернути покупцю ${money(decimal(total))} ${refundHow[way]}`
+                }`}
         </button>
         {mark.paper && (
           <p className="hint">
-            Гроші, які віддали під час збою, вдруге не віддавайте: оберіть, як
-            їх віддавали, і натисніть.
+            {mark.firstDays === null
+              ? "Оберіть угорі, що вносите з паперу."
+              : mark.firstDays
+                ? "Гроші, які вже віддали, вдруге не віддавайте: оберіть, як їх віддавали, і натисніть."
+                : "Гроші, які віддали під час збою, вдруге не віддавайте: оберіть, як їх віддавали, і натисніть."}
             {` Хто прийняв: ${mark.named ? visible(mark.named.display_name) : "не вказано"}.`}
           </p>
         )}
@@ -769,7 +794,7 @@ function ReturnForm({
 export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
     // Typed from paper, refused for its mark (ADR-0021).
-    const paper = paperRefusal(error.details.reason);
+    const paper = paperRefusal(error.details.reason, error.details.days);
     if (paper !== null) return paper;
     if (error.code === "DAMAGED_RETURNS_UNAVAILABLE")
       return error.details.reason === "SOLD_FROM"

@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, fromPaper, openStore, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -173,7 +173,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
     .filter({ hasText: model })
     .getByRole("button", { name: "Оформити повернення" })
     .click();
-  await page.getByLabel("Вношу повернення з паперу").check();
+  await fromPaper(page, "Вношу повернення з паперу");
   await expect(
     page.getByRole("region", { name: "Режим: з паперу" }),
   ).toContainText("Гроші, які віддали під час збою, вдруге не віддавайте.");
@@ -235,7 +235,15 @@ test("a card payment typed from paper never says to charge the card, and the deb
   await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
   await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("button", { name: `Відкрити борг ${name}` }).click();
+  // Ticked, nothing is paid until the series says which paper it is.
   await page.getByLabel("Вношу внесок з паперу").check();
+  await page.getByLabel("Сума внеску, грн").fill("300");
+  await expect(
+    page
+      .getByRole("group", { name: "Внесок", exact: true })
+      .getByRole("button", { name: "З паперу · Картка" }),
+  ).toBeDisabled();
+  await page.getByRole("radio", { name: "Сервер не відповідав" }).check();
   await expect(
     page.getByRole("region", { name: "Режим: з паперу" }),
   ).toContainText("на терміналі нічого не проводьте");
@@ -275,7 +283,7 @@ test("the switch is one for the store: ticked on «Повернення», the t
 
   // At the till: paper mode, «Ганна» named as having sold.
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   await page
     .getByRole("combobox", { name: "Хто продав" })
     .selectOption({ label: "Ганна" });
@@ -324,4 +332,116 @@ test("the switch is one for the store: ticked on «Повернення», the t
       name: "Повернути покупцю 2500,00 грн готівкою",
     }),
   ).toBeVisible();
+});
+
+/** The phone's own date `days` ago: the form's value and as a receipt
+ * writes it. */
+async function daysAgoOf(
+  page: Page,
+  days: number,
+): Promise<{ value: string; shown: string }> {
+  return page.evaluate((back) => {
+    const at = new Date();
+    at.setDate(at.getDate() - back);
+    const two = (n: number): string => String(n).padStart(2, "0");
+    return {
+      value: `${String(at.getFullYear())}-${two(at.getMonth() + 1)}-${two(at.getDate())}`,
+      shown: `${two(at.getDate())}.${two(at.getMonth() + 1)}`,
+    };
+  }, days);
+}
+
+test("the first days' paper: a return and a payment typed from it are «з паперу», of a day nine days back, with no word of an outage, in «Звіт» and the debt's history", async ({
+  page,
+}) => {
+  const name = `Перші ${randomUUID().slice(0, 6)}`;
+  const phone = `067${String(randomBytes(4).readUInt32BE() % 10_000_000).padStart(7, "0")}`;
+  await soldAtCentre(page, { customer_name: name, customer_phone: phone });
+  const { model } = await soldAtCentre(page);
+  const returns = bodiesOf(page, "/refunds");
+  const payments = bodiesOf(page, "/payments");
+  const day = await daysAgoOf(page, 9);
+
+  await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
+  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await page.getByLabel("Пошук за назвою товару").fill(model);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await page
+    .getByRole("article")
+    .filter({ hasText: model })
+    .getByRole("button", { name: "Оформити повернення" })
+    .click();
+  await page.getByLabel("Вношу повернення з паперу").check();
+  // Nothing is sent until the series says which paper it is.
+  await page.getByLabel("Цілих").fill("1");
+  const press = page.getByRole("button", {
+    name: "Оберіть, що вносите з паперу",
+  });
+  await expect(press).toBeDisabled();
+  await page
+    .getByRole("radio", { name: "Перші дні, до затвердження залишків" })
+    .check();
+  const band = page.getByRole("region", { name: "Режим: з паперу" });
+  await expect(band).toContainText(
+    "Повернення позначать «з паперу». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які вже віддали, вдруге не віддавайте.",
+  );
+  await expect(band).not.toContainText("збою");
+  await expect(page.getByLabel("Це було вчора")).toHaveCount(0);
+  await page.getByLabel("День з паперу").fill(day.value);
+  await page.getByLabel("Час з паперу").fill("12:30");
+  await page
+    .getByRole("button", {
+      name: "З паперу · Повернути покупцю 2500,00 грн готівкою",
+    })
+    .click();
+  const mark = `Повернено з паперу · за папером ${day.shown}, 12:30`;
+  const done = page
+    .getByRole("status")
+    .filter({ hasText: "Повернення оформлено" });
+  await expect(done).toContainText(mark);
+  await expect(done).toContainText(
+    "2500,00 грн готівкою повернули раніше — вдруге не повертайте.",
+  );
+  expect(returns[0]?.outage).toEqual({
+    by_user_id: null,
+    at: `${day.value}T12:30`,
+    first_days: true,
+  });
+
+  // «Борги»: the series is the first days' paper there too.
+  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByRole("button", { name: `Відкрити борг ${name}` }).click();
+  await expect(
+    page.getByRole("radio", { name: "Перші дні, до затвердження залишків" }),
+  ).toBeChecked();
+  await page.getByLabel("Сума внеску, грн").fill("300");
+  await page
+    .getByRole("group", { name: "Внесок", exact: true })
+    .getByRole("button", { name: "З паперу · Картка" })
+    .click();
+  await expect(
+    page.getByText(
+      "Внесок 300,00 грн з паперу записано: карткою — оплату вже провели, на терміналі не проводьте ще раз. Залишок боргу 1700,00 грн.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
+    "Внесок з паперу · внесено: Ліда",
+  );
+  expect(payments[0]?.outage).toEqual({
+    by_user_id: null,
+    at: null,
+    first_days: true,
+  });
+
+  await openAs(page, fixture.network_owner_telegram_user_id, "Власник мережі");
+  await section(page, "Звіт");
+  await expect(
+    page
+      .getByRole("list", { name: "Продажі й повернення" })
+      .getByRole("listitem")
+      .filter({ hasText: model })
+      .filter({ hasText: "Повернення" }),
+  ).toContainText(`${mark} · внесено: Ліда`);
 });

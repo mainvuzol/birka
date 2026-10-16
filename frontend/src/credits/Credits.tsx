@@ -477,7 +477,7 @@ function Debt({
       setDone(
         body.kind === "write-off"
           ? `Борг списано: ${money(outcome.result.written_off)}.`
-          : `${paymentTaken(body.amount, body.payment_method, !!body.outage)} ${
+          : `${paymentTaken(body.amount, body.payment_method, !!body.outage, body.outage?.first_days === true)} ${
               outcome.result.status === "SETTLED"
                 ? "Борг сплачено повністю."
                 : `Залишок боргу ${money(outcome.result.owed)}.`
@@ -538,6 +538,9 @@ function Debt({
   }
 
   function pay(way: TillMethod): void {
+    // From paper, nothing is sent until the series says which paper it is
+    // (owner decision, 2026-10-16): the buttons wait, and so does this.
+    if (!paperMark.ready) return;
     const cents = kopecks(amount);
     if (cents === null || cents <= 0n) {
       setProblem("Вкажіть суму внеску з точністю до копійок.");
@@ -632,7 +635,7 @@ function Debt({
       {credit.status === "OPEN" && !readOnly && (
         <fieldset disabled={blocked || working}>
           <legend>Внесок</legend>
-          <PaperFields mark={paperMark} what="payment" />
+          <PaperFields mark={paperMark} what="payment" storeId={store.id} />
           <label>
             Сума внеску, грн
             <input
@@ -649,6 +652,7 @@ function Debt({
               <button
                 key={way}
                 type="button"
+                disabled={!paperMark.ready}
                 onClick={() => {
                   pay(way);
                 }}
@@ -670,8 +674,11 @@ function Debt({
           </div>
           {paperMark.paper && (
             <p className="hint">
-              Внесок взяли під час збою: натисніть, як заплатили. На терміналі
-              нічого не проводьте.
+              {paperMark.firstDays === null
+                ? "Оберіть угорі, що вносите з паперу."
+                : paperMark.firstDays
+                  ? "Внесок уже взяли: натисніть, як заплатили. На терміналі нічого не проводьте."
+                  : "Внесок взяли під час збою: натисніть, як заплатили. На терміналі нічого не проводьте."}
               {` Хто прийняв: ${paperMark.named ? visible(paperMark.named.display_name) : "не вказано"}.`}
             </p>
           )}
@@ -806,15 +813,17 @@ function Debt({
 /**
  * «Внесок 300,00 грн прийнято карткою.», or for one typed from paper the
  * same with what the till says of money taken during the outage: never to
- * charge the card again (owner decision, 2026-10-10; ADR-0021).
+ * charge the card again (owner decision, 2026-10-10; ADR-0021). The first
+ * days' paper says it with no word of an outage.
  */
 export function paymentTaken(
   amount: string,
   way: TillMethod,
   fromPaper: boolean,
+  firstDays = false,
 ): string {
   if (!fromPaper) return `Внесок ${money(amount)} прийнято ${methodHow[way]}.`;
-  const paid = paidDuringOutage(way);
+  const paid = paidDuringOutage(way, firstDays);
   return `Внесок ${money(amount)} з паперу записано: ${methodHow[way]}${paid ? ` — ${paid}` : ""}.`;
 }
 
@@ -852,7 +861,7 @@ function moreThanOwed(owed: string, way: TillMethod | null): string {
 export function refusalText(error: unknown, way?: TillMethod | null): string {
   if (error instanceof ApiError) {
     // Typed from paper, refused for its mark (ADR-0021).
-    const paper = paperRefusal(error.details.reason);
+    const paper = paperRefusal(error.details.reason, error.details.days);
     if (paper !== null) return paper;
     switch (error.details.reason) {
       case "MORE_THAN_OWED":

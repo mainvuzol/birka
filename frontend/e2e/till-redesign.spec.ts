@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  fromPaper,
+  openStore,
+  tapSize,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -397,7 +404,7 @@ for (const [name, theme, scheme] of [
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
 
-    await page.getByLabel("Вношу продаж з паперу").check();
+    await fromPaper(page);
     const band = page.getByRole("region", { name: "Режим: продаж з паперу" });
     await expect(band).toBeVisible();
     expect(await contrast(band.locator("p"))).toBeGreaterThanOrEqual(4.5);
@@ -501,7 +508,7 @@ test("in Telegram's dark theme the shortage answer and a paper sale's mark read 
 
   await short.getByRole("button", { name: "Прибрати з кошика" }).click();
   answer = "sold";
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   await oneLine(page);
   await page
     .getByRole("button", { name: "З паперу · Готівка", exact: true })

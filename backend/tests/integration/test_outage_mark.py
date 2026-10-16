@@ -261,7 +261,13 @@ async def test_the_mark_shows_on_the_receipt_the_sale_and_the_stores_list(maker)
     for shown in (marked.json(), read_back.json(), rebuilt.json()):
         assert {k: shown["outage"][k] for k in expected} == expected
         assert datetime.fromisoformat(shown["outage"]["sold_at"]) == moment(written)
-    assert nobody.json()["outage"] == {"sold_by_user_id": None, "sold_by": None, "sold_at": None}
+    # An outage's mark, not the first days' paper (ADR-0013 §5.8).
+    assert nobody.json()["outage"] == {
+        "sold_by_user_id": None,
+        "sold_by": None,
+        "sold_at": None,
+        "first_days": False,
+    }
     assert live.json()["outage"] is None
     by_id = {sale["id"]: sale for sale in listed.json()["sales"]}
     assert by_id[marked.json()["id"]]["outage"]["sold_by"] == "seller"
@@ -269,6 +275,7 @@ async def test_the_mark_shows_on_the_receipt_the_sale_and_the_stores_list(maker)
         "sold_by_user_id": None,
         "sold_by": None,
         "sold_at": None,
+        "first_days": False,
     }
     assert by_id[live.json()["id"]]["outage"] is None
     # The list still carries no way of paying (ADR-0012, G32).

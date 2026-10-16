@@ -451,6 +451,36 @@ paper's rule can.
    /api/v1/stores/{store_id}/sellers` answers `{"sellers": [{"user_id",
    "display_name"}]}`, sorted by name: exactly `nameable_sellers`. It needs
    `sale:create` in that store, so a blocked store gives nothing.
+8. **The first days' paper, «з паперу»** (owner, 2026-10-15 В2, and
+   2026-10-16). Sales written on paper while a warehouse waited for its
+   opening list are typed once the list is approved (2026-09-29, Q2) with a
+   mark of their own: the same mark, with `first_days`, and no word of an
+   outage. Revision 0041 adds `outage_first_days` to `sale`, `refund` and
+   `credit_entry`: false on every row before it, on every live row and on
+   every outage's; a CHECK keeps it off an unmarked row; a guard of its own
+   (`BEFORE UPDATE OF` it only, on `sale` and `refund`; the ledger's guard
+   on `credit_entry`) keeps it permanent.
+   - **The request:** `outage: {…, first_days: true}` on a sale, a return
+     or a debt payment (ADR-0021). Absent or false is an outage's mark, and
+     its prints are exactly as before: `first_days` is printed only when
+     true (the pins in `test_old_prints_are_pinned.py` are unchanged).
+     Another kind under the same `command_id` is `IDEMPOTENCY_CONFLICT`.
+   - **The paper's time** may be of any of the last `FIRST_DAYS_PAPER_DAYS`
+     (14) days in the store's zone, today among them (owner, 2026-10-16:
+     two weeks); an outage's stays today or yesterday (G1). A time too old
+     is `OUTAGE_TIME_TOO_OLD` with `details.days`, the days before today
+     taken: 13, or 1.
+   - **Everything else is the outage mark's:** the shelf's rule (§6), who
+     may be named, the sale's date and drawer period, and its money, which
+     comes into the drawer as any sale's (owner, 2026-10-16).
+   - **Shown** as «Продано з паперу», «Повернено з паперу», «Внесок з
+     паперу»: `first_days` in every answer that carries the mark, false in
+     answers stored before it existed.
+   - **Chosen once per series** (owner, 2026-10-16): ticking the paper
+     switch asks «Що вносите з паперу?» — «Перші дні, до затвердження
+     залишків» or «Сервер не відповідав» — and nothing typed from paper is
+     sent until it is said. The till's reminder that the server is back
+     (redesign P1-7) says it is an outage's; it can be changed.
 
 ### 6. A late sale whose goods are gone
 
