@@ -1,7 +1,9 @@
 # Money in one format, the till's words, its refusals — 2026-10-17
 
 Baseline: `7fe4051` (the first sign-in and the kept sale's banner, PR #95).
-Status: TODO.
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty-eight of twenty-eight ways of breaking it caught. Not yet tried on
+a real phone.
 Branch: `feat/till-money-and-words`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 P2-1, P2-2, P2-4. Owner: business-rules.md, "money in one format; the till's
 words; its refusals" (2026-10-17).
@@ -137,7 +139,23 @@ the following, all addressed in `5af53d7`:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-17-till-money-and-words/`](../../output/verification/2026-10-17-till-money-and-words/):
+  `mutants.py` and `mutants.txt`, twenty-eight ways of breaking it, all
+  caught.
+- **CI, run locally at `74b4857`** ([summary](../../output/verification/2026-10-17-till-money-and-words-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 431 on PostgreSQL 17 (unchanged by this work);
+  - e2e: 338 journeys;
+  - hot path: worst p95 88.4 ms (the search by six sellers) and 73.9 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- **The run before it, at `040e95a`** ([summary and log](../../output/verification/2026-10-17-till-money-and-words-ci-local-first/)),
+  failed one journey this work did not touch: a kept order reopened was
+  checked three times, not two. Its own check on opening was lost, then the
+  order list's read answered, and `useAutoCheck` took the server as back
+  and checked once more (ADR-0013 §4.3), with the same command. Which comes
+  first is timing; the journey now counts at least two, and still checks
+  the command is one (`74b4857`).
 
 ## Not covered here
 
