@@ -2,6 +2,7 @@ import {
   test,
   expect,
   fillLine,
+  fromPaper,
   openStore,
   section,
   tapSize,
@@ -182,7 +183,7 @@ async function basket(page: Page, coat: Coat, paper = false): Promise<void> {
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   // Ticked first: ticking it empties a basket (G20).
-  if (paper) await page.getByLabel("Вношу продаж з паперу").check();
+  if (paper) await fromPaper(page);
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.returns_location_id);

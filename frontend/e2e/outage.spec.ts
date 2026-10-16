@@ -2,6 +2,7 @@ import {
   test,
   expect,
   fillLine,
+  fromPaper,
   openStore,
   section,
   tapSize,
@@ -996,7 +997,7 @@ test("6. a sale typed from paper carries the mark, says who sold and from where,
 }) => {
   const server = await serve(page);
   await openTill(page);
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   await expect(
     page.getByRole("heading", { name: "Режим: продаж з паперу" }),
   ).toBeVisible();
@@ -1123,7 +1124,7 @@ test("6c. a paper time with no «вчора» is today's, and «вчора» goe
 }) => {
   const server = await serve(page);
   await openTill(page);
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   const time = page.getByLabel("Час з паперу");
   const yesterday = page.getByLabel("Це було вчора");
   await time.fill("00:05");
@@ -1157,7 +1158,7 @@ test("6d. the pay buttons name the basket's warehouses, not the one chosen to lo
   await openTill(page);
   const warehouses = page.getByRole("combobox", { name: "Склад", exact: true });
   await warehouses.selectOption(ids.own);
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   await basket(page);
   // Another warehouse looked at: the coat still leaves from «Свій».
   await warehouses.selectOption(ids.shared);
@@ -1233,7 +1234,7 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
         });
       };
       await openTill(page);
-      await page.getByLabel("Вношу продаж з паперу").check();
+      await fromPaper(page);
       await basket(page);
       await pay(page, "З паперу · Готівка").click();
       await expect(page.getByText(shortfall.said)).toBeVisible();
@@ -1247,7 +1248,7 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     await openTill(page);
     await tapSize(page, ids.variant, ids.unknownSize);
     await expect(page.getByLabel("Розмір з етикетки")).toBeVisible();
-    await page.getByLabel("Вношу продаж з паперу").check();
+    await fromPaper(page);
     await expect(page.getByLabel("Розмір з етикетки")).toHaveCount(0);
     // Owner decision, 2026-10-15 (В5): «без розміру» read as «безрозмірна».
     await expect(
@@ -1281,7 +1282,7 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
       });
     };
     await openTill(page);
-    await page.getByLabel("Вношу продаж з паперу").check();
+    await fromPaper(page);
     await basket(page);
     await pay(page, "З паперу · Готівка").click();
     await expect(page.getByText("Залишку не вистачає")).toBeVisible();
@@ -1329,7 +1330,7 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
 
     // The seller turns to the paper instead: the question about the shelf
     // goes, and nothing says a paper sale was refused.
-    await page.getByLabel("Вношу продаж з паперу").check();
+    await fromPaper(page);
     await expect(page.getByText("Залишку не вистачає")).toHaveCount(0);
     await expect(page.getByText(/продаж з паперу не записано/)).toHaveCount(0);
     for (const offer of offers)
@@ -1458,7 +1459,7 @@ test.describe("8. the real server keeps the mark", () => {
     // «Ліда» types yesterday's paper line: «Ганна» sold it at 19:40.
     await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
-    await page.getByLabel("Вношу продаж з паперу").check();
+    await fromPaper(page);
     await page
       .getByRole("combobox", { name: "Хто продав" })
       .selectOption({ label: "Ганна" });

@@ -16,7 +16,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select, text, tuple_, update
+from sqlalchemy import column, exists, select, text, tuple_, update, values
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -488,6 +489,28 @@ async def location_has_stock_history(
         .limit(1)
     )
     return balance is not None
+
+
+async def locations_without_stock_history(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
+    """The warehouses among these that have never recorded stock, by
+    `location_has_stock_history`'s measure, in one query: an index probe per
+    warehouse, whatever its ledger's length."""
+    if not location_ids:
+        return set()
+    asked = values(column("id", postgresql.UUID(as_uuid=True)), name="asked").data(
+        [(location_id,) for location_id in location_ids]
+    )
+    moved = exists().where(
+        StockMovement.organization_id == organization_id,
+        StockMovement.location_id == asked.c.id,
+    )
+    held = exists().where(
+        Inventory.location_id == asked.c.id,
+        (Inventory.quantity > 0) | (Inventory.reserved_quantity > 0),
+    )
+    return set((await session.scalars(select(asked.c.id).where(~moved, ~held))).all())
 
 
 async def locations_awaiting_opening_list(

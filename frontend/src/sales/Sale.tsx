@@ -17,7 +17,15 @@ import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
-import { paperDay, setPaper, setSoldBy, usePaper } from "./paper";
+import { setPaper, setSoldBy, usePaper } from "./paper";
+import {
+  PaperKind,
+  PaperWhen,
+  paperAt,
+  paperWhenProblem,
+  tooOldText,
+} from "./paperMark";
+import { FromCatalog } from "./FromCatalog";
 import type {
   EmptyShelf,
   OutageBody,
@@ -176,8 +184,22 @@ export function Sale({
   const soldBy = usePaper((state) =>
     state.storeId === store.id ? state.soldBy : null,
   );
+  // Which paper the series is: the first days' or an outage's, said once
+  // (owner decision, 2026-10-16); null until said, and nothing is sold.
+  const firstDays = usePaper((state) =>
+    state.storeId === store.id ? state.firstDays : null,
+  );
+  const [paperDate, setPaperDate] = useState("");
   const [paperTime, setPaperTime] = useState("");
   const [yesterday, setYesterday] = useState(false);
+  const paperProblem = paperWhenProblem(firstDays, paperDate, paperTime);
+  // Another kind of paper: its day and time are asked anew, never carried
+  // over from the other's (review, 2026-10-16).
+  useEffect(() => {
+    setPaperDate("");
+    setPaperTime("");
+    setYesterday(false);
+  }, [firstDays]);
   // This phone saw the server come back (redesign P1-7): the paper written
   // meanwhile is typed before the drawer closes, or it reads as a surplus and
   // a shortage. Said once, until answered or the next time it comes back;
@@ -196,6 +218,10 @@ export function Sale({
   // for `inventory:receive`; the default seller holds both.
   const mayReadLabel =
     mayCorrect && store.permissions.includes("inventory:receive");
+  // A coat in hand the list does not show, found in the catalogue and sold
+  // through «Товар на місці» (owner decision, 2026-10-14, В1 (а)): the same
+  // two rights, and never from paper (ADR-0013 §6).
+  const [fromCatalog, setFromCatalog] = useState(false);
   const mayCredit = store.permissions.includes("sale:credit");
 
   const locations = useQuery({
@@ -204,15 +230,22 @@ export function Sale({
       api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
     retry: false,
   });
+  // The warehouse sold from, named, and whether nothing has been recorded
+  // there yet: nothing is sold or read there until its opening list or its
+  // first delivery (owner decisions, 2026-10-02 and 2026-10-16; P1-5).
+  const chosen = locations.data?.find((location) => location.id === locationId);
+  const warehouse = chosen?.name ?? "";
+  const waiting = chosen?.awaiting_first_stock === true;
   const stock = useStock({
     store,
     token,
     journalKey,
     locationId,
     query,
-    enabled: !locations.isError,
+    enabled: !locations.isError && !waiting,
   });
   const listed = (stock.data?.pages ?? []).flatMap((page) => page.items);
+  const mayFindInCatalog = mayReadLabel && !paper;
   const sizes = useQuery({
     queryKey: ["sale-sizes", journalKey, store.id],
     queryFn: () =>
@@ -257,8 +290,11 @@ export function Sale({
    * `command_id`: sent unmarked, its shortfall would offer «Товар на місці»
    * and record a coat found that never was.
    */
-  function turnPaper(on: boolean): void {
-    setPaper(store.id, on);
+  function turnPaper(on: boolean, firstDaysPaper: boolean | null = null): void {
+    setPaper(store.id, on, firstDaysPaper);
+    // From paper nobody stands at the shelf: no coat is found in hand.
+    setFromCatalog(false);
+    setPaperDate("");
     setPaperTime("");
     setYesterday(false);
     setRefusal(null);
@@ -423,6 +459,10 @@ export function Sale({
     nextMissing: Record<number, number>,
     nextClarified: Record<number, number>,
   ): Promise<void> {
+    // From paper, nothing is sent until the series says which paper it is,
+    // and the first days' day and time go together (owner decision,
+    // 2026-10-16): the buttons wait, and so does this.
+    if (paper && (firstDays === null || paperProblem !== null)) return;
     // The buttons wait for every price; a sale is never sent without one.
     if (draft.some((d) => d.line.unit_price === "")) {
       setValidation(priceText);
@@ -447,12 +487,13 @@ export function Sale({
       setValidation(terms);
       return;
     }
-    // The paper's time as its day and hour, the store's wall clock (G1).
-    const time = /^\d{2}:\d{2}/.exec(paperTime)?.[0];
+    // The paper's time as its day and hour, the store's wall clock (G1);
+    // the first days' paper says so (ADR-0013 §5.8).
     const mark: OutageBody | null = paper
       ? {
           sold_by_user_id: named?.user_id ?? null,
-          sold_at: time ? `${paperDay(yesterday)}T${time}` : null,
+          sold_at: paperAt(firstDays, paperDate, paperTime, yesterday),
+          ...(firstDays === true ? { first_days: true as const } : {}),
         }
       : null;
     let key: string;
@@ -516,8 +557,9 @@ export function Sale({
       setPresent("");
       setMethod(null);
       // A paper's time is one sale's: left, it would go on the next one,
-      // and a wrong time is permanent (§7). The switch and who sold stay
-      // for the series.
+      // and a wrong time is permanent (§7). The switch, which paper it is
+      // and who sold stay for the series.
+      setPaperDate("");
       setPaperTime("");
       setYesterday(false);
       // The next customer is someone else, and looks for something else.
@@ -719,7 +761,9 @@ export function Sale({
             <button
               disabled={blocked || working}
               onClick={() => {
-                turnPaper(true);
+                // The paper of an outage the phone saw: said so, and still
+                // changeable below (owner decision, 2026-10-16).
+                turnPaper(true, false);
               }}
             >
               Вношу продаж з паперу
@@ -734,10 +778,13 @@ export function Sale({
         <section className="notice" aria-label="Режим: продаж з паперу">
           <h3>Режим: продаж з паперу</h3>
           {/* The seller does not see «Звіт» (owner decision, 2026-10-15, В5). */}
-          <p>
-            Продаж позначать «продано під час збою». Він увійде в сьогоднішні
-            продажі й у касу до наступного закриття.
-          </p>
+          {firstDays !== null && (
+            <p>
+              {firstDays
+                ? "Продаж позначать «з паперу». Він увійде в сьогоднішні продажі й у касу до наступного закриття."
+                : "Продаж позначать «продано під час збою». Він увійде в сьогоднішні продажі й у касу до наступного закриття."}
+            </p>
+          )}
         </section>
       )}
       <fieldset disabled={blocked || working}>
@@ -754,6 +801,7 @@ export function Sale({
         </label>
         {paper && (
           <>
+            <PaperKind storeId={store.id} firstDays={firstDays} />
             <label>
               Хто продав
               <select
@@ -778,31 +826,18 @@ export function Sale({
                 }}
               />
             )}
-            <div className="fields">
-              <label>
-                Час з паперу
-                <input
-                  type="time"
-                  value={paperTime}
-                  onChange={(event) => {
-                    setPaperTime(event.target.value);
-                    if (!event.target.value) setYesterday(false);
-                  }}
-                />
-              </label>
-              {paperTime && (
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={yesterday}
-                    onChange={(event) => {
-                      setYesterday(event.target.checked);
-                    }}
-                  />
-                  Це було вчора
-                </label>
-              )}
-            </div>
+            <PaperWhen
+              firstDays={firstDays}
+              day={paperDate}
+              time={paperTime}
+              yesterday={yesterday}
+              onDay={setPaperDate}
+              onTime={(value) => {
+                setPaperTime(value);
+                if (!value) setYesterday(false);
+              }}
+              onYesterday={setYesterday}
+            />
           </>
         )}
         {locations.isPending ? (
@@ -824,6 +859,7 @@ export function Sale({
               value={locationId}
               onChange={(event) => {
                 setLocationId(event.target.value);
+                setFromCatalog(false);
               }}
             >
               <option value="">З якого складу віддаєте?</option>
@@ -847,45 +883,79 @@ export function Sale({
             )}
           </label>
         )}
-        {locationId && (
-          <StockSearch
-            text={text}
-            type={setText}
-            query={query}
-            stock={stock}
-            warehouse={
-              locations.data?.find((location) => location.id === locationId)
-                ?.name ?? ""
-            }
+        {locationId && waiting ? (
+          // Nothing is sold there until the list is approved (owner
+          // decision, 2026-10-02): the shop sells on paper meanwhile, and
+          // the paper is typed in once it is (redesign P1-5).
+          <p className="empty">
+            На складі «{visible(warehouse)}» зараз немає товару в обліку. Поки
+            власник не затвердить початкові залишки, продавайте на папері.
+          </p>
+        ) : locationId && fromCatalog ? (
+          <FromCatalog
+            store={store}
+            token={token}
+            scopeKey={journalKey}
+            warehouse={warehouse}
             pick={put}
-            canAdd={(item) =>
-              draft.length < 100 ||
-              draft.some(
-                (d) =>
-                  stockKey(d.line) ===
-                  stockKey({
-                    source_location_id: locationId,
-                    product_variant_id: item.product_variant_id,
-                    size_id: item.size_id,
-                  }),
-              )
-            }
-            offerHeld={paper}
-            searchRef={searchRef}
-            failure={
-              stock.error ? (
-                <Failure
-                  error={stock.error}
-                  retry={() => {
-                    void stock.refetch();
-                  }}
-                />
-              ) : null
-            }
+            close={() => {
+              setFromCatalog(false);
+            }}
           />
+        ) : (
+          locationId && (
+            <StockSearch
+              text={text}
+              type={setText}
+              query={query}
+              stock={stock}
+              warehouse={warehouse}
+              pick={put}
+              canAdd={(item) =>
+                draft.length < 100 ||
+                draft.some(
+                  (d) =>
+                    stockKey(d.line) ===
+                    stockKey({
+                      source_location_id: locationId,
+                      product_variant_id: item.product_variant_id,
+                      size_id: item.size_id,
+                    }),
+                )
+              }
+              offerHeld={paper}
+              searchRef={searchRef}
+              failure={
+                stock.error ? (
+                  <Failure
+                    error={stock.error}
+                    retry={() => {
+                      void stock.refetch();
+                    }}
+                  />
+                ) : null
+              }
+              offer={
+                mayFindInCatalog ? (
+                  <p className="hint">
+                    Товар у руках, а в списку його немає?{" "}
+                    <button
+                      type="button"
+                      className="quiet"
+                      onClick={() => {
+                        setFromCatalog(true);
+                      }}
+                    >
+                      Знайти в каталозі
+                    </button>
+                  </p>
+                ) : null
+              }
+            />
+          )
         )}
         {validation && <p role="alert">{validation}</p>}
-        {draft.length === 0 && locationId && (
+        {draft.length === 0 && locationId && !waiting && !fromCatalog && (
           <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
         )}
         {draft.map((d, index) => (
@@ -1035,8 +1105,13 @@ export function Sale({
         )}
         <p className="hint">
           {paper
-            ? // The card was charged during the outage (G19).
-              "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
+            ? firstDays === null
+              ? "Оберіть угорі, що вносите з паперу."
+              : firstDays
+                ? // The card was charged before the app (owner, 2026-10-16).
+                  "Оплату вже взяли: натисніть, як оплатили. На терміналі нічого не проводьте."
+                : // The card was charged during the outage (G19).
+                  "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
             : "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці."}
         </p>
       </fieldset>
@@ -1242,7 +1317,13 @@ export function Sale({
               <button
                 key={way}
                 type="button"
-                disabled={blocked || working || !priced || labelledOnPaper}
+                disabled={
+                  blocked ||
+                  working ||
+                  !priced ||
+                  labelledOnPaper ||
+                  (paper && (firstDays === null || paperProblem !== null))
+                }
                 onClick={() => {
                   void send(way, found, missing, clarified);
                 }}
@@ -1300,7 +1381,10 @@ function Receipt({
   // A sale typed from paper (ADR-0013 §5.6): its mark, and money taken
   // during the outage is never charged again.
   const mark = receipt.outage ?? null;
-  const paid = mark !== null && way !== null ? paidDuringOutage(way) : null;
+  const paid =
+    mark !== null && way !== null
+      ? paidDuringOutage(way, mark.first_days === true)
+      : null;
   return (
     <section>
       <h2>Продаж записано</h2>
@@ -1523,7 +1607,9 @@ export function refusalText(error: unknown): string {
     case "OUTAGE_TIME_FUTURE":
       return "Цей час ще не настав. Перевірте час і день з паперу.";
     case "OUTAGE_TIME_TOO_OLD":
-      return "Час з паперу можна вказати лише за сьогодні або вчора. Для давнішого продажу залиште час порожнім.";
+      return typeof details.days === "number" && details.days > 1
+        ? tooOldText(true)
+        : "Час з паперу можна вказати лише за сьогодні або вчора. Для давнішого продажу залиште час порожнім.";
     default:
       return errorText(error);
   }

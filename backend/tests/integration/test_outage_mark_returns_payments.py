@@ -238,6 +238,7 @@ async def test_a_return_typed_from_paper_is_stored_with_its_mark_and_shown_in_th
         "by_user_id": str(net.seller),
         "by": "seller",
         "at": typed.json()["outage"]["at"],
+        "first_days": False,
     }
     assert datetime.fromisoformat(typed.json()["outage"]["at"]) == datetime.combine(
         kyiv_day(1), time(19, 40), KYIV
@@ -331,13 +332,15 @@ async def test_naming_nobody_and_no_time_is_still_the_mark(maker):
     sale = await sold(maker, net)
     taken = await take_back(maker, net, net.seller, sale, a_return(sale, mark={}))
     assert taken.status_code == 201, taken.text
-    assert taken.json()["outage"] == {"by_user_id": None, "by": None, "at": None}
+    # An outage's mark, not the first days' paper (ADR-0013 §5.8).
+    nobody = {"by_user_id": None, "by": None, "at": None, "first_days": False}
+    assert taken.json()["outage"] == nobody
     assert (await refund_row(maker, taken.json()["id"])).during_outage is True
 
     credit_id = await on_credit(maker, net)
     paid = await pay(maker, net, net.seller, credit_id, a_payment(mark={}))
     assert paid.status_code == 201, paid.text
-    assert paid.json()["entries"][-1]["outage"] == {"by_user_id": None, "by": None, "at": None}
+    assert paid.json()["entries"][-1]["outage"] == nobody
 
 
 # --- the prints ---------------------------------------------------------------------

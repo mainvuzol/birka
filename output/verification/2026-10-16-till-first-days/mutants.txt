@@ -1,0 +1,43 @@
+# The first run, at 8a215eb: 32 of 35 caught. Its three survivors were closed
+# (a sold-out warehouse stays open; «Це було вчора» absent once the first days'
+# time is typed; the equivalent «a new series keeps the kind» replaced by one
+# that carries the kind into the next series) and run again: 3 of 3 caught.
+
+- unchanged tree (server): passed 
+- unchanged tree (screens): passed 
+- an outage's mark is printed with the first days' key: caught by test_a_sale_typed_from_paper_keeps_both_prints[nothing-named]; test_a_sale_typed_from_paper_keeps_both_prints[who-and-when]; test_an_outage_s_mark_is_printed_as_before_and_the_first_days_say_so; test_the_mark_is_in_the_print_and_the_store_s_zone_is_not
+- the first days' kind is left out of a sale's print: caught by test_an_outage_s_mark_is_printed_as_before_and_the_first_days_say_so; test_the_kind_is_part_of_the_command
+- the first days' kind is left out of a return's and a payment's print: caught by test_an_outage_s_mark_is_printed_as_before_and_the_first_days_say_so; test_the_kind_is_part_of_a_return_s_and_a_payment_s_command
+- the first days' paper is held to yesterday: caught by test_a_return_and_a_payment_of_the_first_days_carry_it_too; test_a_sale_of_the_first_days_is_marked_so_and_shown_so; test_the_first_days_paper_goes_two_weeks_back_and_an_outage_s_one_day; test_the_kind_is_part_of_the_command
+- an outage's paper goes two weeks back: caught by test_a_marked_return_and_payment_replay_after_their_day_aged_out; test_a_marked_sale_replays_after_its_day_aged_out; test_the_first_days_paper_goes_two_weeks_back_and_an_outage_s_one_day; test_the_paper_s_day_is_the_store_s_and_five_minutes_ahead_is_the_limit; test_the_paper_time_is_today_or_yesterday_and_never_ahead
+- the first days' paper goes fifteen days back: caught by test_a_return_and_a_payment_of_the_first_days_carry_it_too; test_the_first_days_paper_goes_two_weeks_back_and_an_outage_s_one_day
+- a sale's kind is not stored: caught by test_a_sale_of_the_first_days_is_marked_so_and_shown_so
+- a sale read back says no kind: caught by test_a_sale_of_the_first_days_is_marked_so_and_shown_so
+- a return's kind is not stored: caught by test_a_return_and_a_payment_of_the_first_days_carry_it_too
+- a payment's kind is not stored: caught by test_a_return_and_a_payment_of_the_first_days_carry_it_too
+- «Звіт» says no kind of a sale: caught by test_a_sale_of_the_first_days_is_marked_so_and_shown_so
+- an outage's body states its kind in the 7-day print: caught by test_a_refund_keeps_both_prints[from-paper-nothing-named]; test_a_refund_keeps_both_prints[from-paper]; test_a_sale_typed_from_paper_keeps_both_prints[nothing-named]; test_a_sale_typed_from_paper_keeps_both_prints[who-and-when]
+- a warehouse with history is said to await its first stock: caught by test_the_till_is_told_a_warehouse_has_recorded_nothing_yet   [second run]
+- the till sends no kind: caught by an outage's paper is sent as it always was; a time too old is said for its kind; another k; the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- a return and a payment send no kind: caught by the first days' paper: a return and a payment typed from it are «з паперу», of a day nine 
+- the first days' day is left out: caught by an outage's paper is sent as it always was; a time too old is said for its kind; another k; the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- a time without its day is sent: caught by the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- a day without its time is sent: caught by the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- the till sells before the kind is said: caught by an outage's paper is sent as it always was; a time too old is said for its kind; another k; the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- a return is sent before the kind is said: caught by the first days' paper: a return and a payment typed from it are «з паперу», of a day nine 
+- a payment is sent before the kind is said: caught by a card payment typed from paper never says to charge the card, and the debt's history name
+- a new series keeps the kind: caught by an outage's paper is sent as it always was; a time too old is said for its kind; another k   [second run]
+- another kind keeps the day and time: caught by an outage's paper is sent as it always was; a time too old is said for its kind; another k
+- the reminder leaves the kind unsaid: caught by a phone that never lost the server is never reminded; a phone that saw the server come back says once, at the till, to type the paper, and its b; a server back while the paper is being typed is the reminder answered, and the switch unti; the reminder's button waits while a sale is being sent, as the tick does; «Пізніше» puts the reminder away until the server is lost and back again; the tick answers
+- the first days' paper is still «під час збою» on the receipt: caught by the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- a return of the first days is «під час збою»: caught by the first days' paper: a return and a payment typed from it are «з паперу», of a day nine 
+- the first days' card money says an outage: caught by the first days' paper: a return and a payment typed from it are «з паперу», of a day nine ; the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- the first days' day reaches fifteen days back: caught by the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi
+- the first days ask «Це було вчора»: caught by the paper switch asks which paper it is; the first days' is «з паперу», of a day picked wi   [second run]
+- a warehouse with nothing recorded offers goods: caught by a warehouse where nothing is recorded yet says to sell on paper, and offers nothing to sel
+- the catalogue is offered from paper: caught by a search that finds nothing offers the catalogue; without the rights, or from paper, it is
+- the catalogue is offered without the rights: caught by a search that finds nothing offers the catalogue; without the rights, or from paper, it is
+- a coat from the catalogue comes with no price: caught by an empty warehouse names itself, and a coat in hand is found in the catalogue and sold thr
+- the catalogue panel stays after a size: caught by an empty warehouse names itself, and a coat in hand is found in the catalogue and sold thr
+- the paper mode leaves the catalogue panel open: caught by a search that finds nothing offers the catalogue; without the rights, or from paper, it is
+35 of 35 caught

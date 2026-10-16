@@ -44,6 +44,7 @@ from app.api.v1.sales import (
     TillMethodValue,
     method_of,
     paper_response,
+    printed_mark,
 )
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
@@ -128,6 +129,7 @@ class RefundRequest(BaseModel):
             del body["payment_method"]
         if body["outage"] is None:
             del body["outage"]
+        printed_mark(body)
         for line in body["lines"]:
             if line["location_id"] is None:
                 del line["location_id"]

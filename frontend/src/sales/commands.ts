@@ -143,7 +143,7 @@ function isTerms(value: unknown): boolean {
 /**
  * The mark of a sale typed from paper: exactly its two fields, each null or
  * what the till fills — a person's id, and the paper's time as
- * `YYYY-MM-DDTHH:MM`.
+ * `YYYY-MM-DDTHH:MM` — and `first_days`, true, for the first days' paper.
  */
 function isOutage(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -151,8 +151,9 @@ function isOutage(value: unknown): boolean {
   const mark = value as Record<string, unknown>;
   return (
     Object.keys(mark).every((field) =>
-      ["sold_by_user_id", "sold_at"].includes(field),
+      ["sold_by_user_id", "sold_at", "first_days"].includes(field),
     ) &&
+    (mark.first_days === undefined || mark.first_days === true) &&
     (mark.sold_by_user_id === null ||
       (typeof mark.sold_by_user_id === "string" &&
         isUuid.test(mark.sold_by_user_id))) &&

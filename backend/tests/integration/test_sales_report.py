@@ -1012,4 +1012,4 @@ async def test_a_sale_typed_from_paper_naming_nobody_still_says_so(maker):
     entry = (await entries_of(maker, net, store_id=primary))[typed["id"]]
 
     assert entry["by"] == "seller"
-    assert entry["outage"] == {"sold_by": None, "sold_at": None}
+    assert entry["outage"] == {"sold_by": None, "sold_at": None, "first_days": False}

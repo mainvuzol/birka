@@ -1084,6 +1084,7 @@ __all__ = [
     "current_variants",
     "find_divergences",
     "hold_for_opening_list",
+    "locations_awaiting_first_stock",
     "lock_stock",
     "opening_balance_movement_ids",
     "readable_stock",
@@ -1713,6 +1714,20 @@ async def awaiting_opening_list(
         await repository.locations_awaiting_opening_list(
             session, organization_id=organization_id, location_ids={location_id}
         )
+    )
+
+
+async def locations_awaiting_first_stock(
+    session: AsyncSession, *, organization_id: uuid.UUID, location_ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
+    """The warehouses among these where nothing has been recorded yet: their
+    opening list, typed or not, or their first delivery is awaited. The till
+    says to sell on paper there, as for a warehouse whose list waits, and
+    offers no coat in hand from the catalogue: a «Товар на місці» would be
+    the warehouse's first movement, and close it to its opening list for
+    good (owner decisions, 2026-10-02 and 2026-10-16; redesign P1-5)."""
+    return await repository.locations_without_stock_history(
+        session, organization_id=organization_id, location_ids=location_ids
     )
 
 

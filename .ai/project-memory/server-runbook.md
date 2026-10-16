@@ -398,9 +398,14 @@ For each warehouse, in this order:
    owner's role there (Q5). The network's owner and managers do not reach
    it through their network-wide roles.
 7. **The paper sales.** Sales made on paper since the count are entered at
-   the till as ordinary sales, only after the approval (Q2). Each is dated
-   the day it is entered. One entered before the approval closes the
-   warehouse to its list.
+   the till only after the approval (Q2), with the mark «з паперу» (owner
+   decisions, 2026-10-15 and 2026-10-16): «Вношу продаж з паперу» →
+   «Перші дні, до затвердження залишків» → the paper's day, within the last
+   two weeks, and its time. Each is dated the day it is entered, and its
+   money comes into the drawer. Returns and debt payments of those days go
+   the same way. One entered before the approval closes the warehouse to
+   its list. Until a warehouse records anything, its list approved or its
+   first delivery received, the till says to sell on paper there.
 8. **Only then** are new deliveries received and sales made in the app.
 
 **How large a list may be.** One list opens a warehouse, once, and its

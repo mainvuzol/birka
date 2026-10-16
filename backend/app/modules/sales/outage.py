@@ -11,6 +11,15 @@ the owner put the same mark on returns and debt payments typed from paper:
 who took one and at what hour, as the paper says, both optional
 (`PaperMark`, ADR-0021).
 
+On 2026-10-15 the owner gave the first days' paper a mark of its own,
+«з паперу», with no word of an outage: sales written on paper while a
+warehouse waited for its opening list, typed in once it is approved. On
+2026-10-16: whoever types them says once per series which paper it is, the
+paper's time may be any day of the last two weeks, and returns and debt
+payments of those days carry it too (`first_days`, ADR-0013 §5.8). Its
+money goes into the drawer as any sale's. Everything else is the outage
+mark's: the same shelf rule, the same people, the same permanence.
+
 A sale's request may carry the mark (`OutageMark`), and everything here is
 checked **after** the sale's replay lookup found nothing (`checked_mark`,
 ADR-0013 §5.3). Who may be named, and which day it is, depend on people and
@@ -30,8 +39,9 @@ what it did, never refused. A refusal from here then says `recorded: false`
   function, so it never offers a name the check refuses.
 - **The paper's time.** The store's own wall clock, to the minute, exactly as
   the request writes it (`YYYY-MM-DDTHH:MM`): today or yesterday in the
-  store's zone, and not ahead of the server by more than its clocks may
-  differ (G1). Stored as a moment composed in that zone; the sale's print
+  store's zone, or for the first days' paper any of the last
+  `FIRST_DAYS_PAPER_DAYS` days, and not ahead of the server by more than
+  its clocks may differ (G1). Stored as a moment composed in that zone; the sale's print
   keeps the literal, so it never depends on the store's zone setting.
 
 Nothing here moves `sold_at`, the day in «Звіт» or the drawer period: the
@@ -63,6 +73,11 @@ PAPER_TIME = "%Y-%m-%dT%H:%M"
 # a phone or a wall clock a few minutes fast. A technical tolerance, not a
 # rule (ADR-0013 §5.3).
 CLOCKS_DIFFER_BY = timedelta(minutes=5)
+# How many days the first days' paper may be dated, today among them: an
+# opening list may wait days for its review (owner decision, 2026-10-16:
+# "any day of two weeks"). The outage mark's paper is today's or
+# yesterday's (G1).
+FIRST_DAYS_PAPER_DAYS = 14
 
 
 def _now() -> datetime:
@@ -89,18 +104,22 @@ def paper_time(written: str) -> datetime:
 @dataclass(frozen=True, slots=True)
 class OutageMark:
     """The mark as a sale's request states it. `sold_at` is the paper's time
-    exactly as the body carried it."""
+    exactly as the body carried it; `first_days` says it is the first days'
+    paper, «з паперу», rather than an outage's."""
 
     sold_by_user_id: uuid.UUID | None = None
     sold_at: str | None = None
+    first_days: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class CheckedMark:
-    """The mark as it is stored: who sold, and the paper's time as a moment."""
+    """The mark as it is stored: who sold, the paper's time as a moment, and
+    whether it is the first days' paper."""
 
     sold_by_user_id: uuid.UUID | None
     sold_at: datetime | None
+    first_days: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +132,7 @@ class MarkView:
     sold_by_user_id: uuid.UUID | None
     sold_by: str | None
     sold_at: datetime | None
+    first_days: bool = False
 
 
 def print_of_mark(mark: OutageMark | None) -> dict[str, object]:
@@ -123,17 +143,20 @@ def print_of_mark(mark: OutageMark | None) -> dict[str, object]:
     time as the literal the body carried, never the moment composed in the
     store's zone: a print never depends on how the store's zone is set. The
     same command resent with another mark, or without one, is another sale.
+    The first days' paper says so; an outage's mark is printed as it always
+    was, so every sale marked before the first days' mark existed replays.
     """
     if mark is None:
         return {}
-    return {
-        "outage": {
-            "sold_by_user_id": (
-                str(mark.sold_by_user_id) if mark.sold_by_user_id is not None else None
-            ),
-            "sold_at": mark.sold_at,
-        }
+    printed: dict[str, object] = {
+        "sold_by_user_id": (
+            str(mark.sold_by_user_id) if mark.sold_by_user_id is not None else None
+        ),
+        "sold_at": mark.sold_at,
     }
+    if mark.first_days:
+        printed["first_days"] = True
+    return {"outage": printed}
 
 
 async def nameable_sellers(
@@ -201,30 +224,36 @@ async def checked_mark(
             written=mark.sold_at,
             now=now or _now(),
             detail="sold_at",
+            first_days=mark.first_days,
         )
         if mark.sold_at is not None
         else None
     )
-    return CheckedMark(sold_by_user_id=mark.sold_by_user_id, sold_at=sold_at)
+    return CheckedMark(
+        sold_by_user_id=mark.sold_by_user_id, sold_at=sold_at, first_days=mark.first_days
+    )
 
 
 @dataclass(frozen=True, slots=True)
 class PaperMark:
     """The mark as a return's or a debt payment's request states it
     (ADR-0021): who took it, and the paper's time exactly as the body
-    carried it, each None when the paper names none."""
+    carried it, each None when the paper names none; and whether it is the
+    first days' paper (owner decision, 2026-10-16)."""
 
     by_user_id: uuid.UUID | None = None
     at: str | None = None
+    first_days: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class CheckedPaper:
-    """A return's or a payment's mark as it is stored: who took it, and the
-    paper's time as a moment."""
+    """A return's or a payment's mark as it is stored: who took it, the
+    paper's time as a moment, and whether it is the first days' paper."""
 
     by_user_id: uuid.UUID | None
     at: datetime | None
+    first_days: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,21 +264,24 @@ class PaperView:
     by_user_id: uuid.UUID | None
     by: str | None
     at: datetime | None
+    first_days: bool = False
 
 
 def print_of_paper(mark: PaperMark | None) -> dict[str, object]:
     """What a return's or a payment's prints carry of its mark: nothing when
     there is none, so every one recorded before the mark existed keeps its
     print and still replays; otherwise who and the literal time, as a
-    sale's do (ADR-0021)."""
+    sale's do (ADR-0021). The first days' paper says so; an outage's mark is
+    printed as it always was."""
     if mark is None:
         return {}
-    return {
-        "outage": {
-            "by_user_id": str(mark.by_user_id) if mark.by_user_id is not None else None,
-            "at": mark.at,
-        }
+    printed: dict[str, object] = {
+        "by_user_id": str(mark.by_user_id) if mark.by_user_id is not None else None,
+        "at": mark.at,
     }
+    if mark.first_days:
+        printed["first_days"] = True
+    return {"outage": printed}
 
 
 async def checked_paper(
@@ -264,8 +296,9 @@ async def checked_paper(
     """The mark of a new return or debt payment as it is stored, or a
     refusal, by the sale's rules (ADR-0021): whoever is named may take one in
     `store_id`, the store taking it (`may`), and the paper's time is that
-    store's today or yesterday. Called only after the replay lookup found
-    nothing, so a refusal proves nothing was recorded."""
+    store's today or yesterday, or for the first days' paper any of the last
+    two weeks. Called only after the replay lookup found nothing, so a
+    refusal proves nothing was recorded."""
     if mark.by_user_id is not None and mark.by_user_id not in (
         await nameable_sellers(session, organization_id, store_id, may)
     ):
@@ -282,11 +315,12 @@ async def checked_paper(
             written=mark.at,
             now=now or _now(),
             detail="at",
+            first_days=mark.first_days,
         )
         if mark.at is not None
         else None
     )
-    return CheckedPaper(by_user_id=mark.by_user_id, at=at)
+    return CheckedPaper(by_user_id=mark.by_user_id, at=at, first_days=mark.first_days)
 
 
 async def _moment(
@@ -297,11 +331,14 @@ async def _moment(
     written: str,
     now: datetime,
     detail: str,
+    first_days: bool = False,
 ) -> datetime:
     """The paper's time as a moment, in the store's zone: today's or
-    yesterday's there, and not after the server's now by more than clocks
-    differ (owner decision, 2026-10-07; G1). A refusal names the time under
-    `detail`, the request's own name for it."""
+    yesterday's there (owner decision, 2026-10-07; G1), or for the first
+    days' paper any of the last `FIRST_DAYS_PAPER_DAYS` days (owner decision,
+    2026-10-16); and not after the server's now by more than clocks differ.
+    A refusal names the time under `detail`, the request's own name for it,
+    and how many days back are taken."""
     timezone = await session.scalar(
         select(Store.timezone).where(Store.id == store_id, Store.organization_id == organization_id)
     )
@@ -311,10 +348,18 @@ async def _moment(
     wall_clock = paper_time(written)
     # The day first: a date that old can never be ahead of now, so the two
     # refusals never meet, and a moment is composed only from a recent date.
-    if wall_clock.date() < now.astimezone(zone).date() - timedelta(days=1):
+    # How many days before today are taken: one, yesterday, for an outage.
+    back = FIRST_DAYS_PAPER_DAYS - 1 if first_days else 1
+    if wall_clock.date() < now.astimezone(zone).date() - timedelta(days=back):
         raise ValidationFailedError(
-            "A time from paper is today's or yesterday's; type an older one without it",
+            (
+                f"A time from the first days' paper is of the last "
+                f"{FIRST_DAYS_PAPER_DAYS} days; type an older one without it"
+                if first_days
+                else "A time from paper is today's or yesterday's; type an older one without it"
+            ),
             reason="OUTAGE_TIME_TOO_OLD",
+            days=back,
             **{detail: written},
         )
     # fold=0: an hour the clocks repeat in autumn reads as its first pass.
@@ -340,7 +385,11 @@ async def names_of(session: AsyncSession, named: set[uuid.UUID]) -> dict[uuid.UU
 
 
 def paper_view(
-    marked: bool, by_user_id: uuid.UUID | None, at: datetime | None, names: dict[uuid.UUID, str]
+    marked: bool,
+    by_user_id: uuid.UUID | None,
+    at: datetime | None,
+    names: dict[uuid.UUID, str],
+    first_days: bool = False,
 ) -> PaperView | None:
     """A return's or a payment's mark from its stored columns, or None for
     one typed live."""
@@ -350,6 +399,7 @@ def paper_view(
         by_user_id=by_user_id,
         by=names.get(by_user_id) if by_user_id is not None else None,
         at=at,
+        first_days=first_days,
     )
 
 
@@ -377,6 +427,7 @@ async def marks_of(session: AsyncSession, sales: Sequence[Sale]) -> dict[uuid.UU
             sold_by_user_id=sale.outage_sold_by,
             sold_by=names.get(sale.outage_sold_by) if sale.outage_sold_by is not None else None,
             sold_at=sale.outage_sold_at,
+            first_days=sale.outage_first_days,
         )
         for sale in marked
     }
@@ -384,6 +435,7 @@ async def marks_of(session: AsyncSession, sales: Sequence[Sale]) -> dict[uuid.UU
 
 __all__ = [
     "CLOCKS_DIFFER_BY",
+    "FIRST_DAYS_PAPER_DAYS",
     "PAPER_TIME",
     "CheckedMark",
     "CheckedPaper",

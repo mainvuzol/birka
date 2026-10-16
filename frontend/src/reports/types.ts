@@ -107,7 +107,13 @@ export interface Entry {
   // still whoever typed it. A return typed from paper carries it too (owner
   // decision, 2026-10-10; ADR-0021): `sold_by` is then who took it back.
   // Null on every other entry.
-  outage?: { sold_by: string | null; sold_at: string | null } | null;
+  outage?: {
+    sold_by: string | null;
+    sold_at: string | null;
+    // «З паперу», the first days' paper (owner decisions, 2026-10-15 and
+    // 2026-10-16); absent from a server before it said so.
+    first_days?: boolean;
+  } | null;
 }
 
 export interface Entries extends Period {

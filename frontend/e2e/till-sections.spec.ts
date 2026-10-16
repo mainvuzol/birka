@@ -276,6 +276,8 @@ async function tillAfterOutage(page: Page): Promise<{ down: boolean }> {
   await expect(till(page)).toBeVisible();
   // Nothing lost yet: nothing to remind of.
   await expect(reminder(page)).toHaveCount(0);
+  // Nothing in flight: an answer sent before the outage would be its end.
+  await page.waitForLoadState("networkidle");
   server.down = true;
   await tillAgain(page);
   await expect(failed(page).first()).toBeVisible();
@@ -331,6 +333,10 @@ test("a phone that saw the server come back says once, at the till, to type the 
     .click();
   // The same as the tick: the mode is on, and the reminder is answered.
   await expect(paper).toBeChecked();
+  // The paper of an outage the phone saw, said so (owner, 2026-10-16).
+  await expect(
+    page.getByRole("radio", { name: "Сервер не відповідав" }),
+  ).toBeChecked();
   await expect(page.getByText("Режим: продаж з паперу")).toBeVisible();
   await expect(reminder(page)).toHaveCount(0);
   // The paper typed, the switch is unticked: the reminder does not return.
@@ -348,6 +354,8 @@ test("«Пізніше» puts the reminder away until the server is lost and bac
   await answered(page, server);
   await expect(reminder(page)).toBeVisible();
   // Lost again before it is answered: nothing said while it does not answer.
+  // Nothing in flight: an answer sent before the outage would be its end.
+  await page.waitForLoadState("networkidle");
   server.down = true;
   await tillAgain(page);
   await expect(failed(page).first()).toBeVisible();
@@ -362,6 +370,8 @@ test("«Пізніше» puts the reminder away until the server is lost and bac
   await expect(reminder(page)).toHaveCount(0);
 
   // Lost again: nothing said while it does not answer.
+  // Nothing in flight: an answer sent before the outage would be its end.
+  await page.waitForLoadState("networkidle");
   server.down = true;
   await tillAgain(page);
   await expect(failed(page).first()).toBeVisible();

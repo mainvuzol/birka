@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, fromPaper, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -311,7 +311,7 @@ test("a size whose every coat an order holds offers nothing, and the tag says so
   ).toContainText("Ще 3 шт. у резерві замовлення");
   // From paper it is offered: the server's refusal says what to do then
   // (ADR-0013 §6), as before the chips.
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   await expect(chip(page, "Лоран шоколад", "M · 0")).toBeEnabled();
 });
 
@@ -432,7 +432,7 @@ test("a size read off a label holds the ways once the sale is from paper", async
   ).toBeVisible();
   await expect(pay(page, "Готівка")).toBeEnabled();
   // From paper no size is read off a label (G3).
-  await page.getByLabel("Вношу продаж з паперу").check();
+  await fromPaper(page);
   await expect(
     page.getByText("Товар з невідомим розміром вносьте як «розмір невідомий»."),
   ).toBeVisible();

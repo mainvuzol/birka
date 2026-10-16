@@ -66,8 +66,8 @@ export interface Sale {
   payment_method?: PaymentMethod | null;
   /**
    * The mark «продано під час збою» of a sale typed from paper (ADR-0013
-   * §5.6). Absent or null on every other sale, and on an answer recorded
-   * before the mark existed.
+   * §5.6), or «з паперу» for the first days' paper (§5.8). Absent or null on
+   * every other sale, and on an answer recorded before the mark existed.
    */
   outage?: OutageMark | null;
 }
@@ -76,33 +76,44 @@ export interface Sale {
  * What the till sends for a sale typed from paper (ADR-0013 §5.2): who sold,
  * one of the store's sellers, and the paper's time as the store's wall clock,
  * `YYYY-MM-DDTHH:MM`, today or yesterday (owner decision, 2026-10-07). Both
- * optional: null says nobody or no time was named.
+ * optional: null says nobody or no time was named. `first_days` is the first
+ * days' paper, «з паперу», whose time may be of the last two weeks (owner
+ * decisions, 2026-10-15 and 2026-10-16; §5.8); sent only when true, so an
+ * outage's mark is sent as it always was.
  */
 export interface OutageBody {
   sold_by_user_id: string | null;
   sold_at: string | null;
+  first_days?: true;
 }
 
 /**
  * The mark as the server shows it (ADR-0013 §5.6): the person's name as it
  * was when the sale was typed, and the paper's time as a moment.
+ * `first_days` is absent from answers recorded before it existed.
  */
 export interface OutageMark {
   sold_by_user_id: string | null;
   sold_by: string | null;
   sold_at: string | null;
+  first_days?: boolean;
 }
 
 /**
  * «Продано під час збою · продавець: Марина · за папером 06.10, 19:40», as
  * the receipt, the confirmation, the sales list and «Звіт» write it, by the
- * phone's own clock. What the paper did not name is left out.
+ * phone's own clock; «Продано з паперу · …» for the first days' paper, with
+ * no word of an outage (owner decision, 2026-10-15, В2). What the paper did
+ * not name is left out.
  */
 export function markText(mark: {
   sold_by: string | null;
   sold_at: string | null;
+  first_days?: boolean;
 }): string {
-  const parts = ["Продано під час збою"];
+  const parts = [
+    mark.first_days === true ? "Продано з паперу" : "Продано під час збою",
+  ];
   if (mark.sold_by !== null) parts.push(`продавець: ${visible(mark.sold_by)}`);
   if (mark.sold_at !== null && !Number.isNaN(Date.parse(mark.sold_at))) {
     const at = new Date(mark.sold_at);
@@ -116,15 +127,23 @@ export function markText(mark: {
 /**
  * The money line of a sale paid during the outage, by card or transfer (owner
  * decision, 2026-10-07; ADR-0013 §5.6): the customer is gone and a second
- * charge is the risk, so it never says to charge the terminal. Cash says
- * nothing more; neither does a way the till does not take.
+ * charge is the risk, so it never says to charge the terminal. The first
+ * days' paper says it with no word of an outage. Cash says nothing more;
+ * neither does a way the till does not take.
  */
-export function paidDuringOutage(way: PaymentMethod): string | null {
+export function paidDuringOutage(
+  way: PaymentMethod,
+  firstDays = false,
+): string | null {
   switch (way) {
     case "CARD":
-      return "оплату провели під час збою, на терміналі не проводьте ще раз";
+      return firstDays
+        ? "оплату вже провели, на терміналі не проводьте ще раз"
+        : "оплату провели під час збою, на терміналі не проводьте ще раз";
     case "TRANSFER":
-      return "отримано під час збою, звірте з папером";
+      return firstDays
+        ? "отримано раніше, звірте з папером"
+        : "отримано під час збою, звірте з папером";
     default:
       return null;
   }

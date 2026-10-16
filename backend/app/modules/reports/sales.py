@@ -253,10 +253,13 @@ class OutageView:
     """«Продано під час збою»: a sale typed from paper (ADR-0013 §5.6). Who
     sold and when, as the paper says; each None when the paper named none.
     A return typed from paper carries it too (owner decision, 2026-10-10;
-    ADR-0021): `sold_by` is then who took it back, as `by` is who typed it."""
+    ADR-0021): `sold_by` is then who took it back, as `by` is who typed it.
+    `first_days` is «з паперу», the first days' paper, with no word of an
+    outage (owner decisions, 2026-10-15 and 2026-10-16)."""
 
     sold_by: str | None
     sold_at: datetime | None
+    first_days: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -811,7 +814,11 @@ async def _sale_entries(
                 for item in items.get(sale.id, [])
             ],
             outage=(
-                OutageView(sold_by=sold_by, sold_at=sale.outage_sold_at)
+                OutageView(
+                    sold_by=sold_by,
+                    sold_at=sale.outage_sold_at,
+                    first_days=sale.outage_first_days,
+                )
                 if sale.during_outage
                 else None
             ),
@@ -872,7 +879,11 @@ async def _return_entries(
                 for refund_item, sale_item in lines.get(refund.id, [])
             ],
             outage=(
-                OutageView(sold_by=taken_by, sold_at=refund.outage_taken_at)
+                OutageView(
+                    sold_by=taken_by,
+                    sold_at=refund.outage_taken_at,
+                    first_days=refund.outage_first_days,
+                )
                 if refund.during_outage
                 else None
             ),
