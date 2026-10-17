@@ -2,6 +2,7 @@ import {
   test,
   expect,
   fillLine,
+  grn,
   more,
   openStore,
   tapSize,
@@ -186,7 +187,7 @@ test("«товар на місці» answers a real refusal and completes the sa
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
   await expect(
     page.getByText(
-      `у кошику ${String(available + 1)}, в обліку доступно ${String(available)}`,
+      `у кошику ${String(available + 1)} шт., в обліку ${String(available)} шт.`,
     ),
   ).toBeVisible();
   const sold = page.waitForResponse(
@@ -218,9 +219,7 @@ test("«товар на місці» answers a real refusal and completes the sa
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      `Картка · Проведіть на терміналі ${receipt.total.replace(".", ",")} грн`,
-    ),
+    page.getByText(`Картка · Проведіть на терміналі ${grn(receipt.total)}`),
   ).toBeVisible();
   // In coats, as the server counted them (redesign P1-1).
   await expect(
@@ -301,7 +300,7 @@ test("«на місці лише стільки» sends the count present, not t
   await expect(page.getByText("Залишку не вистачає")).toBeVisible();
 
   // Refuses a count that is not a shortage at all, and names the zero case.
-  await page.getByLabel("На місці фактично є, одиниць").fill("3");
+  await page.getByLabel("На місці фактично є, шт.").fill("3");
   await page
     .getByRole("button", {
       name: "Продати стільки, скільки є · Переказ",
@@ -314,7 +313,7 @@ test("«на місці лише стільки» sends the count present, not t
     page.getByText(/натисніть «На полиці немає жодної»/),
   ).toBeVisible();
 
-  await page.getByLabel("На місці фактично є, одиниць").fill("1");
+  await page.getByLabel("На місці фактично є, шт.").fill("1");
   await page
     .getByRole("button", {
       name: "Продати стільки, скільки є · Переказ",
@@ -561,7 +560,7 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   await expect(
     // The stubbed answer names no way, as one recorded before ways did.
-    page.getByText("Продаж записано один раз: разом 150,00 грн.", {
+    page.getByText("Разом 150,00 грн.", {
       exact: true,
     }),
   ).toBeVisible();

@@ -54,8 +54,9 @@ TOLD_WITHIN = timedelta(hours=24)
 
 
 def grn(value: Decimal) -> str:
-    """Money as the app prints it (`money()` in the frontend): «6100,00 грн»,
-    a comma, no separator between thousands."""
+    """Money as the bot prints it: «6100,00 грн», a comma, no separator
+    between thousands. The app has written «6 100,00 грн» since 2026-10-17
+    (sale-slice TZ, P2-1); the bot's own words are the server's, unchanged."""
     return f"{money(value)}".replace(".", ",") + " грн"
 
 

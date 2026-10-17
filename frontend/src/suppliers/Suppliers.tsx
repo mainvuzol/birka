@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { money } from "@/orders/types";
+import { sizeLabel } from "@/returns/types";
 import type { StockOption, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import { visible } from "@/shared/visible";
@@ -482,8 +483,8 @@ function ReturnCard({
       <ul aria-label="Що повернули">
         {item.lines.map((line) => (
           <li key={`${line.product_variant_id}:${line.size_id}`}>
-            {visible(line.display_name)},{" "}
-            {visible(line.size ?? "розмір не вказано")} × {line.quantity}
+            {visible(line.display_name)}, {sizeLabel(line.size)} ×{" "}
+            {line.quantity}
           </li>
         ))}
       </ul>

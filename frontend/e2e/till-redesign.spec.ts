@@ -237,7 +237,7 @@ test("the total and the three ways are in view on a small phone, below the baske
     name: "Продати — як платить покупець",
   });
   await expect(panel.getByText("Лоран шоколад · M")).toBeInViewport();
-  await expect(panel.getByText("Разом 1850,00 грн")).toBeInViewport();
+  await expect(panel.getByText("Разом 1 850,00 грн")).toBeInViewport();
   for (const way of ["Готівка", "Картка", "Переказ"])
     await expect(
       panel.getByRole("button", { name: way, exact: true }),
@@ -270,7 +270,7 @@ test("paid in parts, the panel says what is paid now and what is left", async ({
     name: "Продати — як платить покупець",
   });
   await expect(
-    panel.getByText("Зараз 1000,00 грн · винен 850,00 грн"),
+    panel.getByText("Зараз 1 000,00 грн · винен 850,00 грн"),
   ).toBeVisible();
 });
 

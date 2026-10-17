@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
  *
  * In a store of its own, «Каса», so that no other journey's sales move the
  * figures: «Оля» sells there with a seller's default rights, and its drawer
- * was first counted yesterday evening — close #1, 1000,00 грн
+ * was first counted yesterday evening — close #1, 1 000,00 грн
  * (`seed_orders_e2e.seed_drawer`).
  */
 interface Fixture {
@@ -338,7 +338,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // Blind: nothing tells what the drawer should hold, and no list of their
     // sales with their sums (G32).
     await expect(page.getByText(/Мало бути/)).toHaveCount(0);
-    await expect(page.getByText(/2050,00/)).toHaveCount(0);
+    await expect(page.getByText(/2\s?050,00/)).toHaveCount(0);
     await expect(page.getByText(/500,00|700,00/)).toHaveCount(0);
     await expect(page.getByRole("list", { name: "Ваші операції" })).toHaveCount(
       0,
@@ -353,7 +353,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
       .click();
     await expect(
       page.getByText(
-        "Закрити касу: у касі 2000,00 грн? Змінити потім не можна.",
+        "Закрити касу: у касі 2 000,00 грн? Змінити потім не можна.",
       ),
     ).toBeVisible();
     const closed = page.waitForResponse(isClose);
@@ -378,7 +378,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // 1000 counted yesterday + 500 cash + 700 fixed to cash − 150 for bags.
     await expect(
       page.getByText(
-        "Касу закрито. Мало бути 2050,00 грн, порахували 2000,00 грн. Нестача 50,00 грн.",
+        "Касу закрито. Мало бути 2 050,00 грн, порахували 2 000,00 грн. Нестача 50,00 грн.",
       ),
     ).toBeVisible();
     await expect(
@@ -550,12 +550,12 @@ test.describe("«Оля»'s day at «Каса»", () => {
       name: `Закриття ${dayOf(today.business_day)}`,
     });
     await expect(row).toContainText(
-      "Порахували 2000,00 грн, мало бути 2050,00 грн. Нестача 50,00 грн.",
+      "Порахували 2 000,00 грн, мало бути 2 050,00 грн. Нестача 50,00 грн.",
     );
     await expect(row).toContainText("Причина: «помилилась зі здачею» · Оля");
     await expect(
       closes.getByRole("listitem").filter({ hasText: "Перший підрахунок" }),
-    ).toContainText("Перший підрахунок: 1000,00 грн.");
+    ).toContainText("Перший підрахунок: 1 000,00 грн.");
 
     // The owner took 50 for themselves before that count, and recorded it
     // only now: against that close, which it explains (G7).

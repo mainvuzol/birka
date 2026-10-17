@@ -69,7 +69,7 @@ async function draft(page: Page): Promise<void> {
   await page
     .getByRole("combobox", { name: "Товар і розмір", exact: true })
     .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
-  await page.getByLabel("Домовлена ціна за одиницю, грн").fill("900");
+  await page.getByLabel("Ціна, грн").fill("900");
   await page.getByRole("button", { name: "Додати товар", exact: true }).click();
 }
 
@@ -263,7 +263,7 @@ test("where an order goes is corrected while it is open, and every version stays
   await page
     .getByRole("button", { name: "Клієнт забрав", exact: true })
     .click();
-  await expect(page.getByText("Продаж зафіксовано.")).toBeVisible();
+  await expect(page.getByText("Продаж записано.")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Змінити доставку" }),
   ).toHaveCount(0);

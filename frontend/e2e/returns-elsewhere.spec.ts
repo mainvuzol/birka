@@ -205,7 +205,7 @@ test("goods bought at another store come back here, and this store hands the mon
   ).toBeChecked();
   await page
     .getByRole("button", {
-      name: "Повернути покупцю 6000,00 грн на картку",
+      name: "Повернути покупцю 6 000,00 грн на картку",
       exact: true,
     })
     .click();
@@ -216,7 +216,7 @@ test("goods bought at another store come back here, and this store hands the mon
     ),
   ).toBeVisible();
   await expect(
-    page.getByText("Поверніть 6000,00 грн на картку покупця через термінал."),
+    page.getByText("Поверніть 6 000,00 грн на картку покупця через термінал."),
   ).toBeVisible();
   await expect(
     page.getByText("Цілий товар повернуто на склад, з якого його продали."),
@@ -271,7 +271,7 @@ test("goods sold from the other store's own warehouse go to one of this store's,
   ).toHaveCount(0);
   await place.selectOption(fixture.returns_location_id);
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
 
   await expect(
@@ -359,7 +359,7 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Цілих").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
 
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
@@ -378,7 +378,7 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
     fixture.store_id,
   );
   await expect(
-    page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
+    page.getByText("Поверніть покупцю 3 000,00 грн готівкою."),
   ).toBeVisible();
 });
 
@@ -404,7 +404,7 @@ test("a kept return of goods from the other store's own warehouse, checked by th
     .getByLabel("Цілий товар — на склад вашого магазину")
     .selectOption(fixture.returns_location_id);
   await page
-    .getByRole("button", { name: "Повернути покупцю 3000,00 грн готівкою" })
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
 
@@ -433,7 +433,7 @@ test("a kept return of goods from the other store's own warehouse, checked by th
   ).toBeVisible();
   await expect(
     confirmed.getByText(
-      "Якщо гроші ще не повернули — поверніть покупцю 3000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      "Якщо гроші ще не повернули — поверніть покупцю 3 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
       { exact: true },
     ),
   ).toBeVisible();
@@ -519,12 +519,12 @@ test("a sale of this store is returned as before, with no store named", async ({
   await page.getByLabel("Цілих").fill("1");
   await page
     .getByRole("button", {
-      name: "Повернути покупцю 3000,00 грн готівкою",
+      name: "Повернути покупцю 3 000,00 грн готівкою",
       exact: true,
     })
     .click();
   await expect(
-    page.getByText("Поверніть покупцю 3000,00 грн готівкою."),
+    page.getByText("Поверніть покупцю 3 000,00 грн готівкою."),
   ).toBeVisible();
   await expect(page.getByText(/гроші віддаєте ви/)).toHaveCount(0);
   expect(Object.keys(sent.bodies[0] ?? {}).sort()).toEqual([

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, CONFLICT_TEXT, errorText, INVALID_TEXT } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
@@ -788,7 +788,6 @@ export function Sale({
         </section>
       )}
       <fieldset disabled={blocked || working}>
-        <legend>Кошик</legend>
         <label className="check">
           <input
             type="checkbox"
@@ -958,135 +957,144 @@ export function Sale({
         {draft.length === 0 && locationId && !waiting && !fromCatalog && (
           <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
         )}
-        {draft.map((d, index) => (
-          <div
-            className={index === shortIndex ? "line short" : "line"}
-            key={d.id}
-          >
-            <strong>
-              {visible(d.name)} · {visible(d.size)}
-            </strong>
-            <div className="line-edit">
+        {draft.length > 0 && (
+          // «Кошик» names the lines to pay, and nothing else (P2-2).
+          <div role="group" aria-label="Кошик">
+            {draft.map((d, index) => (
               <div
-                className="stepper"
-                role="group"
-                aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}`}
+                className={index === shortIndex ? "line short" : "line"}
+                key={d.id}
               >
+                <strong>
+                  {visible(d.name)} · {visible(d.size)}
+                </strong>
+                <div className="line-edit">
+                  <div
+                    className="stepper"
+                    role="group"
+                    aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}`}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Менше"
+                      disabled={d.line.quantity <= 1}
+                      onClick={() => {
+                        change(index, { quantity: d.line.quantity - 1 });
+                      }}
+                    >
+                      −
+                    </button>
+                    <output>{d.line.quantity}</output>
+                    <button
+                      type="button"
+                      aria-label="Більше"
+                      disabled={d.line.quantity >= 1000}
+                      onClick={() => {
+                        change(index, { quantity: d.line.quantity + 1 });
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <label>
+                    Ціна, грн
+                    <input
+                      ref={(input) => {
+                        if (input) priceRefs.current.set(d.id, input);
+                        else priceRefs.current.delete(d.id);
+                      }}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={d.price}
+                      onChange={(event) => {
+                        change(index, { price: event.target.value });
+                      }}
+                    />
+                  </label>
+                </div>
+                {d.line.unit_price === "" && (d.price.trim() || d.suggested) ? (
+                  <span className="hint price-error">{priceText}</span>
+                ) : d.suggested ? (
+                  <span className="hint">
+                    Ціна продажу {money(d.suggested)}. Домовилися про іншу —
+                    змініть.
+                  </span>
+                ) : (
+                  <span className="hint">
+                    Ціни продажу ще немає — впишіть домовлену. Ціну для всіх
+                    задає менеджер у «Залишках».
+                  </span>
+                )}
+                {d.line.unit_price === "0.00" && (
+                  // A gift is allowed, a slip is not caught (owner, В3 (а)).
+                  <span className="hint price-warn">
+                    Ціна 0,00 грн. Це справді подарунок? Перевірте ціну.
+                  </span>
+                )}
+                {found[index] !== undefined && (
+                  <span>Підтверджено на місці: +{found[index]}</span>
+                )}
+                {missing[index] === 0 ? (
+                  <span>На полиці немає — не продається</span>
+                ) : (
+                  missing[index] !== undefined && (
+                    <span>На місці лише {missing[index]}</span>
+                  )
+                )}
+                {d.unknownStock && paper && (
+                  // A size read off a coat in hand: on paper nobody holds it (G3;
+                  // owner decision, 2026-10-15, В5).
+                  <span className="hint">
+                    Товар з невідомим розміром вносьте як «розмір невідомий».
+                  </span>
+                )}
+                {d.unknownStock && mayReadLabel && !paper && (
+                  <label>
+                    Розмір з етикетки
+                    <select
+                      value={d.fromUnknown ? d.line.size_id : ""}
+                      onChange={(event) => {
+                        relabel(index, event.target.value);
+                      }}
+                    >
+                      <option value="">
+                        Не читали — продати як «розмір невідомий»
+                      </option>
+                      {(sizes.data ?? []).map((size) => (
+                        <option key={size.size_id} value={size.size_id}>
+                          {visible(size.code)}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="hint">
+                      Прочитали розмір на етикетці — оберіть його, і товар
+                      продасться з цим розміром.
+                    </span>
+                  </label>
+                )}
+                {d.fromUnknown && (
+                  <span className="hint">
+                    Розмір з етикетки; в обліку — «розмір невідомий»
+                  </span>
+                )}
+                {clarified[index] !== undefined && (
+                  <span>
+                    Розмір уточнено: {clarified[index]} шт. з «розмір невідомий»
+                  </span>
+                )}
                 <button
                   type="button"
-                  aria-label="Менше"
-                  disabled={d.line.quantity <= 1}
+                  className="quiet"
                   onClick={() => {
-                    change(index, { quantity: d.line.quantity - 1 });
+                    replaceDraft(draft.filter((_, i) => i !== index));
                   }}
                 >
-                  −
-                </button>
-                <output>{d.line.quantity}</output>
-                <button
-                  type="button"
-                  aria-label="Більше"
-                  disabled={d.line.quantity >= 1000}
-                  onClick={() => {
-                    change(index, { quantity: d.line.quantity + 1 });
-                  }}
-                >
-                  +
+                  Прибрати {visible(d.name)}
                 </button>
               </div>
-              <label>
-                Ціна, грн
-                <input
-                  ref={(input) => {
-                    if (input) priceRefs.current.set(d.id, input);
-                    else priceRefs.current.delete(d.id);
-                  }}
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  value={d.price}
-                  onChange={(event) => {
-                    change(index, { price: event.target.value });
-                  }}
-                />
-              </label>
-            </div>
-            {d.line.unit_price === "" && (d.price.trim() || d.suggested) ? (
-              <span className="hint price-error">{priceText}</span>
-            ) : d.suggested ? (
-              <span className="hint">
-                Ціна продажу {money(d.suggested)}. Домовилися про іншу —
-                змініть.
-              </span>
-            ) : (
-              <span className="hint">
-                Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає
-                менеджер у «Залишках».
-              </span>
-            )}
-            {d.line.unit_price === "0.00" && (
-              // A gift is allowed, a slip is not caught (owner, В3 (а)).
-              <span className="hint price-warn">
-                Ціна 0,00 грн. Це справді подарунок? Перевірте ціну.
-              </span>
-            )}
-            {found[index] !== undefined && (
-              <span>Підтверджено на місці: +{found[index]}</span>
-            )}
-            {missing[index] === 0 ? (
-              <span>На полиці немає — не продається</span>
-            ) : (
-              missing[index] !== undefined && (
-                <span>На місці лише {missing[index]}</span>
-              )
-            )}
-            {d.unknownStock && paper && (
-              // A size read off a coat in hand: on paper nobody holds it (G3;
-              // owner decision, 2026-10-15, В5).
-              <span className="hint">
-                Товар з невідомим розміром вносьте як «розмір невідомий».
-              </span>
-            )}
-            {d.unknownStock && mayReadLabel && !paper && (
-              <label>
-                Розмір з етикетки
-                <select
-                  value={d.fromUnknown ? d.line.size_id : ""}
-                  onChange={(event) => {
-                    relabel(index, event.target.value);
-                  }}
-                >
-                  <option value="">Не читали — продати без розміру</option>
-                  {(sizes.data ?? []).map((size) => (
-                    <option key={size.size_id} value={size.size_id}>
-                      {visible(size.code)}
-                    </option>
-                  ))}
-                </select>
-                <span className="hint">
-                  Прочитали розмір на етикетці — оберіть його, і товар
-                  продасться з цим розміром.
-                </span>
-              </label>
-            )}
-            {d.fromUnknown && (
-              <span className="hint">Розмір з етикетки товару без розміру</span>
-            )}
-            {clarified[index] !== undefined && (
-              <span>
-                Розмір уточнено: {clarified[index]} од. з «розмір невідомий»
-              </span>
-            )}
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                replaceDraft(draft.filter((_, i) => i !== index));
-              }}
-            >
-              Прибрати {visible(d.name)}
-            </button>
+            ))}
           </div>
-        ))}
+        )}
         {sizes.error && (
           <Failure
             error={sizes.error}
@@ -1138,8 +1146,9 @@ export function Sale({
             <>
               <p>
                 {visible(shortDraft.name)} · {visible(shortDraft.size)}: у
-                кошику {shortfall.requested}, в обліку доступно{" "}
-                {shortfall.available}.
+                кошику {shortfall.requested} шт., в обліку {shortfall.available}{" "}
+                шт.
+                {shortfall.reserved === true && " поза резервом замовлення."}
               </p>
               {paper ? (
                 // Nothing that describes the shelf now (§6, §7).
@@ -1172,7 +1181,7 @@ export function Sale({
                           answer(found, missing, next);
                         }}
                       >
-                        Це товар без розміру — продати як{" "}
+                        Розмір з етикетки — продати як{" "}
                         {visible(shortDraft.size)}
                         {how}
                       </button>
@@ -1218,7 +1227,7 @@ export function Sale({
                   {mayReportMissing && shortfall.requested > 1 && (
                     <>
                       <label>
-                        На місці фактично є, одиниць
+                        На місці фактично є, шт.
                         <input
                           inputMode="numeric"
                           value={present}
@@ -1238,7 +1247,7 @@ export function Sale({
                             count >= shortfall.requested
                           ) {
                             setValidation(
-                              `Вкажіть від 1 до ${String(shortfall.requested - 1)} одиниць. Якщо немає жодної — натисніть «На полиці немає жодної».`,
+                              `Вкажіть від 1 до ${String(shortfall.requested - 1)} шт. Якщо немає жодної — натисніть «На полиці немає жодної».`,
                             );
                             return;
                           }
@@ -1292,7 +1301,7 @@ export function Sale({
           <p className="pay-what">
             {draft.length === 1 && draft[0]
               ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
-              : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} од.`}
+              : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} шт.`}
           </p>
           <p className="pay-total">
             {!priced ? (
@@ -1561,7 +1570,7 @@ function NothingSold({
           </strong>
           <span>
             {line.removed > 0
-              ? `Знято з обліку: ${String(line.removed)} од.`
+              ? `Знято з обліку: ${String(line.removed)} шт.`
               : "Облік і так не мав цих одиниць — нічого не знято."}
           </span>
         </div>
@@ -1578,11 +1587,15 @@ function NothingSold({
  * What the till can say about a refusal it knows the cause of. A kept sale
  * refused on resend says it too (`@/cash/errors`, ADR-0013 §8).
  */
+/** A conflict the till knows nothing more of (sale-slice TZ, P2-4). */
+export const TILL_CONFLICT_TEXT =
+  "Дані змінилися, поки ви працювали. Спробуйте ще раз.";
+
 export function refusalText(error: unknown): string {
   const details = (error as Partial<ApiError> | null)?.details ?? {};
   switch (details.reason) {
     case "SIZE_NOT_KNOWN_SHORT":
-      return `Одиниць цієї моделі без розміру на складі менше, ніж треба уточнити (є ${String(details.available)}). Зменшіть кількість або продайте товар без розміру.`;
+      return `Одиниць цієї моделі з невідомим розміром на складі менше, ніж треба уточнити (є ${String(details.available)} шт.). Зменшіть кількість або продайте як «розмір невідомий».`;
     case "SIZE_CLARIFIED":
       return "Облік змінився, поки ви відповідали. Натисніть «Готівка», «Картка» або «Переказ» ще раз, щоб побачити, чого бракує тепер.";
     case "SIZE_NOT_KNOWN_AMBIGUOUS":
@@ -1610,8 +1623,14 @@ export function refusalText(error: unknown): string {
       return typeof details.days === "number" && details.days > 1
         ? tooOldText(true)
         : "Час з паперу можна вказати лише за сьогодні або вчора. Для давнішого продажу залиште час порожнім.";
-    default:
-      return errorText(error);
+    default: {
+      // The till's own words where any screen would speak of an order:
+      // the seller sells (sale-slice TZ, P2-4).
+      const text = errorText(error);
+      if (text === CONFLICT_TEXT) return TILL_CONFLICT_TEXT;
+      if (text === INVALID_TEXT) return "Перевірте товар, кількість і ціну.";
+      return text;
+    }
   }
 }
 
@@ -1626,7 +1645,7 @@ function Failure({
     <div role="alert">
       <p>{errorText(error)}</p>
       <button type="button" onClick={retry}>
-        Повторити завантаження
+        Спробувати ще раз
       </button>
     </div>
   );

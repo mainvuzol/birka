@@ -6,6 +6,7 @@ import {
   openStore,
   section,
   tapSize,
+  waitsFor,
 } from "./fixtures";
 import type { Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -337,7 +338,7 @@ async function openTill(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
 }
 
-/** One coat of size M in the basket at 3000,00 грн. */
+/** One coat of size M in the basket at 3 000,00 грн. */
 async function basket(page: Page, size = ids.size): Promise<void> {
   await tapSize(page, ids.variant, size);
   await fillLine(page, { price: "3000" });
@@ -443,7 +444,7 @@ test("a kept sale's banner says which sale it was: its sum and way, the part pai
   await page.goto(launch());
   await openStore(page, /Подільський/);
   await expect(banner).toContainText(
-    `Продаж на 3000,00 грн · Картка — ${waits}`,
+    `Продаж на 3 000,00 грн · Картка — ${waits}`,
   );
   // Not the old words, which named neither.
   await expect(banner).not.toContainText("Нові операції заблоковано");
@@ -464,7 +465,7 @@ test("a kept sale's banner says which sale it was: its sum and way, the part pai
   await page.goto(launch());
   await openStore(page, /Подільський/);
   await expect(banner).toContainText(
-    `Продаж частинами, зараз 1000,00 грн · Переказ — ${waits}`,
+    `Продаж частинами, зараз 1 000,00 грн · Переказ — ${waits}`,
   );
 
   // Kept from before the way was asked: no way named.
@@ -478,7 +479,7 @@ test("a kept sale's banner says which sale it was: its sum and way, the part pai
   server.sale = lost;
   await page.goto(launch());
   await openStore(page, /Подільський/);
-  await expect(banner).toContainText(`Продаж на 3000,00 грн — ${waits}`);
+  await expect(banner).toContainText(`Продаж на 3 000,00 грн — ${waits}`);
   // Its own lines, by the person's own phone, as before (G17).
   await expect(banner).toContainText("Запишіть цю операцію на папері");
 
@@ -532,7 +533,7 @@ test.describe("1. the seller is told to sell on paper", () => {
     }
   });
 
-  test("at the till, whose stock read went unanswered, with «Повторити завантаження»", async ({
+  test("at the till, whose stock read went unanswered, with «Спробувати ще раз»", async ({
     page,
   }) => {
     const server = await serve(page);
@@ -541,13 +542,11 @@ test.describe("1. the seller is told to sell on paper", () => {
     const failed = page.getByRole("alert");
     await expect(failed).toContainText(UNREACHABLE);
     await expect(
-      failed.getByRole("button", { name: "Повторити завантаження" }),
+      failed.getByRole("button", { name: "Спробувати ще раз" }),
     ).toBeVisible();
 
     server.stock = "ok";
-    await failed
-      .getByRole("button", { name: "Повторити завантаження" })
-      .click();
+    await failed.getByRole("button", { name: "Спробувати ще раз" }).click();
     await expect(
       page.getByRole("searchbox", { name: "Знайти модель" }),
     ).toBeVisible();
@@ -675,11 +674,11 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await expect(banner).toContainText(`Чекає відповіді сервера з ${since}.`);
     release();
     await expect(
-      page.getByRole("heading", { name: "Продаж підтверджено" }),
+      page.getByRole("heading", { name: "Продаж записано один раз" }),
     ).toBeVisible();
     // Said once, with its way (redesign P1-4).
     await expect(
-      page.getByText("Продаж записано один раз: разом 3000,00 грн готівкою.", {
+      page.getByText("Разом 3 000,00 грн готівкою.", {
         exact: true,
       }),
     ).toBeVisible();
@@ -846,7 +845,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
-      page.getByRole("heading", { name: "Продаж підтверджено" }),
+      page.getByRole("heading", { name: "Продаж записано один раз" }),
     ).toBeVisible();
     await page.waitForTimeout(500);
     expect(server.sales).toHaveLength(1);
@@ -863,13 +862,13 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Продаж підтверджено" }),
+      has: page.getByRole("heading", { name: "Продаж записано один раз" }),
     });
     await expect(confirmed).toContainText(
-      "Продаж записано один раз: разом 3000,00 грн карткою. Якщо картку ще не провели — проведіть на терміналі 3000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+      "Разом 3 000,00 грн карткою. Якщо картку ще не провели — проведіть на терміналі 3 000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
     await expect(confirmed).not.toContainText(
-      /Проведіть на терміналі 3000,00 грн\./,
+      /Проведіть на терміналі 3\s000,00 грн\./,
     );
     expect(server.sales).toHaveLength(1);
   });
@@ -903,10 +902,10 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Продаж підтверджено" }),
+      has: page.getByRole("heading", { name: "Продаж записано один раз" }),
     });
     await expect(confirmed).toContainText(
-      "Оплата частинами: сплачено зараз 1000,00 грн карткою, покупець винен 2000,00 грн. Якщо картку ще не провели — проведіть на терміналі 1000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+      "Оплата частинами: сплачено зараз 1 000,00 грн карткою, покупець винен 2 000,00 грн. Якщо картку ще не провели — проведіть на терміналі 1 000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
     await expect(confirmed).not.toContainText(/Проведіть на терміналі/);
     expect(server.sales).toHaveLength(1);
@@ -958,6 +957,18 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
         "частина цих одиниць у резерві замовлення — спершу менеджер має вирішити із замовленням",
     },
     {
+      // A conflict the till knows no more of: not «спробуйте ще раз», the
+      // basket being gone (sale-slice TZ, P2-4).
+      name: "a conflict the server names no more of",
+      status: 409,
+      json: {
+        code: "CONFLICT",
+        message: "Conflict",
+        details: { recorded: false },
+      },
+      reason: "дані змінилися, поки сервер не відповідав",
+    },
+    {
       name: "too few coats of no size to clarify",
       status: 422,
       json: {
@@ -970,7 +981,7 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
         },
       },
       reason:
-        "одиниць цієї моделі без розміру на складі менше, ніж треба уточнити (є 0). Зменшіть кількість або продайте товар без розміру",
+        "одиниць цієї моделі з невідомим розміром на складі менше, ніж треба уточнити (є 0 шт.). Зменшіть кількість або продайте як «розмір невідомий»",
     },
   ])
     test(`${refusal.name}: said, and nothing sold later`, async ({ page }) => {
@@ -994,7 +1005,7 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
         ),
       ).toBeVisible();
       await expect(
-        page.getByText("Перевірте дані та поточний статус замовлення."),
+        page.getByText("Перевірте товар, кількість і ціну."),
       ).toHaveCount(0);
       expect(
         await page.evaluate((key) => localStorage.getItem(key), saleKey),
@@ -1017,7 +1028,7 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
     });
 });
 
-test("4. an offline phone never leaves «Повторити» waiting, and reads again by itself once online", async ({
+test("4. an offline phone never leaves «Спробувати ще раз» waiting, and reads again by itself once online", async ({
   page,
   context,
 }) => {
@@ -1041,7 +1052,7 @@ test("4. an offline phone never leaves «Повторити» waiting, and reads
   await warehouses.selectOption(ids.shared);
   const failed = page.getByRole("alert");
   await expect(failed).toContainText(UNREACHABLE, { timeout: 3000 });
-  await failed.getByRole("button", { name: "Повторити завантаження" }).click();
+  await failed.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(failed).toContainText(UNREACHABLE, { timeout: 3000 });
   await expect(page.getByText("Завантажуємо товари…")).toHaveCount(0);
 
@@ -1275,7 +1286,7 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     /Товар на місці/,
     /На полиці немає жодної/,
     /На місці фактично є/,
-    /Це товар без розміру/,
+    /Розмір з етикетки — продати як/,
   ];
 
   for (const shortfall of [
@@ -1580,7 +1591,7 @@ test.describe("8. the real server keeps the mark", () => {
       .getByRole("listitem")
       .filter({ hasText: coat.model });
     await expect(entry).toContainText(`${mark} · внесено: Ліда`);
-    await expect(entry).toContainText("Продаж 2500,00 грн");
+    await expect(entry).toContainText("Продаж 2 500,00 грн");
   });
 
   test("a kept sale refused by the real server for goods gone settles the phone, and says to type it from paper", async ({
@@ -1757,6 +1768,7 @@ test.describe("9. what to do with money after the outage", () => {
     const banner = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Незавершена операція каси" }),
     });
+    await waitsFor(page, /Незавершена операція каси/);
     await expect(banner).toContainText(
       `Запишіть цю операцію на папері з позначкою «у телефоні — ${person}» і не вносьте її з паперу: телефон перевірить її сам.`,
     );
@@ -1839,17 +1851,17 @@ test.describe("9. what to do with money after the outage", () => {
     {
       button: "Готівка",
       said: "За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю. Поки не повернули, вони зайві в касі: при закритті вкажіть причину.",
-      more: "Це більше, ніж винні: залишок боргу 2000,00 грн. Прийміть 2000,00 грн, а решту поверніть покупцю.",
+      more: "Це більше, ніж винні: залишок боргу 2 000,00 грн. Прийміть 2 000,00 грн, а решту поверніть покупцю.",
     },
     {
       button: "Картка",
       said: "За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю на картку через термінал. На касу це не впливає.",
-      more: "Це більше, ніж винні: залишок боргу 2000,00 грн. Прийміть 2000,00 грн, а решту поверніть покупцю на картку через термінал.",
+      more: "Це більше, ніж винні: залишок боргу 2 000,00 грн. Прийміть 2 000,00 грн, а решту поверніть покупцю на картку через термінал.",
     },
     {
       button: "Переказ",
       said: "За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю переказом. На касу це не впливає.",
-      more: "Це більше, ніж винні: залишок боргу 2000,00 грн. Прийміть 2000,00 грн, а решту поверніть покупцю переказом.",
+      more: "Це більше, ніж винні: залишок боргу 2 000,00 грн. Прийміть 2 000,00 грн, а решту поверніть покупцю переказом.",
     },
   ]) {
     test(`«Борги»: a payment by ${way.button} refused as not owed says to give the money back`, async ({
@@ -1975,7 +1987,7 @@ test.describe("9. what to do with money after the outage", () => {
       has: page.getByRole("heading", { name: "Внесок підтверджено" }),
     });
     await expect(confirmed).toContainText(
-      "Його було записано один раз: 500,00 грн карткою. Оксана Петренко: залишок боргу 1500,00 грн. Якщо картку ще не провели — проведіть на терміналі 500,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+      "Його було записано один раз: 500,00 грн карткою. Оксана Петренко: залишок боргу 1 500,00 грн. Якщо картку ще не провели — проведіть на терміналі 500,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
     await expect(confirmed).not.toContainText(/Проведіть на терміналі/);
     expect(payments).toHaveLength(1);
@@ -2483,18 +2495,18 @@ test.describe("10. a kept operation the phone settles says what became of it", (
   const ways = [
     {
       way: "CASH",
-      live: "Поверніть покупцю 3000,00 грн готівкою.",
-      said: "Якщо гроші ще не повернули — поверніть покупцю 3000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      live: "Поверніть покупцю 3 000,00 грн готівкою.",
+      said: "Якщо гроші ще не повернули — поверніть покупцю 3 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
     },
     {
       way: "CARD",
-      live: "Поверніть 3000,00 грн на картку покупця через термінал.",
-      said: "Якщо гроші ще не повернули — поверніть 3000,00 грн на картку покупця через термінал. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      live: "Поверніть 3 000,00 грн на картку покупця через термінал.",
+      said: "Якщо гроші ще не повернули — поверніть 3 000,00 грн на картку покупця через термінал. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
     },
     {
       way: "TRANSFER",
-      live: "Надішліть покупцю 3000,00 грн переказом.",
-      said: "Якщо гроші ще не повернули — надішліть покупцю 3000,00 грн переказом. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      live: "Надішліть покупцю 3 000,00 грн переказом.",
+      said: "Якщо гроші ще не повернули — надішліть покупцю 3 000,00 грн переказом. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
     },
   ];
 
@@ -2567,7 +2579,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toBeVisible();
     await expect(
       page.getByText(
-        "3000,00 грн готівкою повернули під час збою — вдруге не повертайте.",
+        "3 000,00 грн готівкою повернули під час збою — вдруге не повертайте.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -2661,12 +2673,12 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Якщо гроші ще не повернули — поверніть покупцю 1000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+        "Якщо гроші ще не повернули — поверніть покупцю 1 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
         { exact: true },
       ),
     ).toBeVisible();
     await expect(
-      page.getByText("Поверніть покупцю 1000,00 грн готівкою.", {
+      page.getByText("Поверніть покупцю 1 000,00 грн готівкою.", {
         exact: true,
       }),
     ).toHaveCount(0);
@@ -2797,7 +2809,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ).toBeVisible();
       await expect(
         confirmed.getByText(
-          "Якщо гроші ще не повернули — поверніть покупцю 3000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+          "Якщо гроші ще не повернули — поверніть покупцю 3 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
           { exact: true },
         ),
       ).toBeVisible();

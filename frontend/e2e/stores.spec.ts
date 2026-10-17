@@ -390,7 +390,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
       .click();
     await expect(
       page.getByText(
-        "Внесок 500,00 грн прийнято карткою. Залишок боргу 1500,00 грн.",
+        "Внесок 500,00 грн прийнято карткою. Залишок боргу 1 500,00 грн.",
       ),
     ).toBeVisible();
     expect(payments.bodies).toEqual([

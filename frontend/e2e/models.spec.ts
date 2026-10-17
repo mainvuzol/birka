@@ -7,6 +7,7 @@ import {
   section,
   sections,
   tapSize,
+  waitsFor,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -863,6 +864,7 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
   await page.getByRole("button", { name: "Додати до поставки" }).click();
   await page.getByRole("button", { name: "Прийняти на склад" }).click();
   await expect(page.getByText("Незавершене приймання")).toBeVisible();
+  await waitsFor(page, /приймання/);
   // Meanwhile a manager retires the model.
   const retired = await page.request.post(
     `/api/v1/catalog/models/${made.variant}/retire`,

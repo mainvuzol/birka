@@ -83,7 +83,7 @@ export function CatalogPicker({
                 void variants.refetch();
               }}
             >
-              Повторити завантаження
+              Спробувати ще раз
             </button>
           </div>
         ) : (

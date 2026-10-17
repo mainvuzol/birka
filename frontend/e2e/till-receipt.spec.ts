@@ -162,7 +162,7 @@ test("the receipt names each line's size, and the shelf's corrections in coats",
   ).toBeVisible();
   const line = page.locator(".line");
   await expect(line.locator("strong")).toHaveText("Лоран шоколад · M");
-  await expect(line.locator("span")).toHaveText("1 × 1850,00 грн");
+  await expect(line.locator("span")).toHaveText("1 × 1 850,00 грн");
   await expect(
     page.getByText("Знайдене на полиці додано в облік: 2 шт."),
   ).toBeVisible();
@@ -421,14 +421,14 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expect(
     page.getByRole("button", { name: "До списку продажів" }),
   ).toBeVisible();
-  await expect(page.getByText(/на 1300,00 грн\./)).toBeVisible();
+  await expect(page.getByText(/на 1\s300,00 грн\./)).toBeVisible();
   await expect(
     page.getByRole("heading", { name: new RegExp(`^${coat.name}.*, M$`) }),
   ).toBeVisible();
   // Returned as any return is: intact, the money back in cash.
   await page.getByLabel("Цілих").fill("1");
   await page
-    .getByRole("button", { name: "Повернути покупцю 1300,00 грн готівкою" })
+    .getByRole("button", { name: "Повернути покупцю 1 300,00 грн готівкою" })
     .click();
   await expect(
     page.getByRole("heading", { name: "Повернення оформлено" }),

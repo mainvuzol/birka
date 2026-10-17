@@ -1,4 +1,4 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import { test, expect, more, openStore, section, waitsFor } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -62,7 +62,7 @@ async function draft(page: Page): Promise<void> {
   await page
     .getByRole("combobox", { name: "Товар і розмір", exact: true })
     .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
-  await page.getByLabel("Домовлена ціна за одиницю, грн").fill("1200,15");
+  await page.getByLabel("Ціна, грн").fill("1200,15");
   await page.getByRole("button", { name: "Додати товар", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Перевізник", exact: true })
@@ -101,7 +101,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     ).not.toBeChecked();
   await expect(
     page.getByText(
-      "Продаж фіксуємо, коли клієнт забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.",
+      "Продаж записуємо, коли покупець забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.",
     ),
   ).toBeVisible();
   const collect = page.getByRole("button", {
@@ -117,12 +117,14 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     .getByRole("radio", { name: "Готівкою — зараз, на касі", exact: true })
     .check();
   await collect.click();
-  await expect(page.getByText("Продаж зафіксовано.")).toBeVisible();
+  await expect(page.getByText("Продаж записано.")).toBeVisible();
   await expect(page.getByText("Оплачено готівкою.")).toBeVisible();
   expect(sent).toEqual([
     { command_id: expect.any(String) as string, payment_method: "CASH" },
   ]);
-  await expect(page.getByText("1200,15 грн", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 200,15 грн", { exact: true })).toBeVisible();
+  // A line's price is «за 1 шт.», as at the till (sale-slice TZ, P2-2).
+  await expect(page.getByText("1 200,15 грн за 1 шт.")).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
@@ -163,6 +165,7 @@ test("lost committed response survives reopening and reuses the same command", a
   await expect(
     page.getByRole("button", { name: "Повторити ту саму команду" }),
   ).toBeEnabled();
+  await waitsFor(page, /Незавершена операція/);
   await page.close();
   const reopened = await context.newPage();
   // Read from the phone's storage, it is checked at once, with no tap
@@ -213,7 +216,10 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   const retry = reopened.getByRole("button", {
     name: "Повторити ту саму команду",
   });
-  await expect.poll(() => lost).toBe(2);
+  // Its own check on opening, and once more if another read answers after
+  // that check was lost — the server is back (`useAutoCheck`): which comes
+  // first is timing. The command is the same each time (below).
+  await expect.poll(() => lost).toBeGreaterThanOrEqual(2);
   await expect(retry).toBeEnabled();
   await expect(reopened.getByRole("heading", { name: "Продаж" })).toHaveCount(
     0,
@@ -426,7 +432,7 @@ test("an order paid by cash on delivery is collected outside the till", async ({
   await page
     .getByRole("button", { name: "Клієнт забрав", exact: true })
     .click();
-  await expect(page.getByText("Продаж зафіксовано.")).toBeVisible();
+  await expect(page.getByText("Продаж записано.")).toBeVisible();
   await expect(page.getByText("Оплачено накладеним платежем.")).toBeVisible();
   expect(sent).toEqual([
     { command_id: expect.any(String) as string, payment_method: "CARRIER_COD" },

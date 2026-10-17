@@ -1341,7 +1341,7 @@ function Workspace({
       )}
       {settled && (
         <section className="notice" role="status">
-          <h3>Продаж підтверджено</h3>
+          <h3>Продаж записано один раз</h3>
           <SettledSale sale={settled} />
           {settled.credit && (
             <p>
@@ -1399,7 +1399,8 @@ function Workspace({
           </h3>
           <p>
             Невідомо, чи записано попередню поставку. Перевірте результат — та
-            сама поставка не буде прийнята двічі. Нові операції заблоковано.
+            сама поставка не буде прийнята двічі. Поки чекаємо, інші дії
+            недоступні.
           </p>
           <p>{keptText(receiptCommand.pending.since, me.display_name)}</p>
           <button disabled={receiptCommand.busy} onClick={checkReceipt}>
@@ -1426,7 +1427,7 @@ function Workspace({
           <p>
             Невідомо, чи записано попереднє повернення. Перевірте результат — те
             саме повернення не буде оформлено двічі, і гроші не повернуться
-            двічі. Нові операції заблоковано.
+            двічі. Поки чекаємо, інші дії недоступні.
           </p>
           <p>{keptText(returnCommand.pending.since, me.display_name)}</p>
           <button disabled={returnCommand.busy} onClick={checkReturn}>
@@ -1469,8 +1470,8 @@ function Workspace({
           </h3>
           <p>
             Невідомо, чи записано попередній внесок або списання боргу.
-            Перевірте результат — та сама операція не запишеться двічі. Нові
-            операції заблоковано.
+            Перевірте результат — та сама операція не запишеться двічі. Поки
+            чекаємо, інші дії недоступні.
           </p>
           <p>{keptText(creditCommand.pending.since, me.display_name)}</p>
           <button disabled={creditCommand.busy} onClick={checkCredit}>
@@ -1531,8 +1532,8 @@ function Workspace({
           </h3>
           <p>
             Невідомо, чи записано попереднє коригування залишку. Перевірте
-            результат — те саме коригування не застосується двічі. Нові операції
-            заблоковано.
+            результат — те саме коригування не застосується двічі. Поки чекаємо,
+            інші дії недоступні.
           </p>
           <p>{keptText(adjustmentCommand.pending.since, me.display_name)}</p>
           <button disabled={adjustmentCommand.busy} onClick={checkAdjustment}>
@@ -1576,7 +1577,7 @@ function Workspace({
           <p>
             Невідомо, чи записано попередній підрахунок інвентаризації.
             Перевірте результат — той самий підрахунок не застосується двічі.
-            Нові операції заблоковано.
+            Поки чекаємо, інші дії недоступні.
           </p>
           <p>{keptText(countCommand.pending.since, me.display_name)}</p>
           <button disabled={countCommand.busy} onClick={checkCount}>
@@ -1608,10 +1609,7 @@ function Workspace({
       {pending && (
         <section className="notice">
           <h3>{busy ? "Перевіряємо результат…" : "Незавершена операція"}</h3>
-          <p>
-            {pending.label}. До підтвердження результату нові операції
-            заблоковано.
-          </p>
+          <p>{pending.label}. Поки чекаємо, інші дії недоступні.</p>
           <p>{keptText(pending.since, me.display_name)}</p>
           <button disabled={busy} onClick={checkOrder}>
             {pending.acknowledged
@@ -2118,7 +2116,7 @@ function SettledSale({ sale }: { sale: SaleReceipt }): JSX.Element {
     <>
       {mark && <p className="badge">{markText(mark)}</p>}
       <p>
-        Продаж записано один раз: разом {money(sale.total)}
+        Разом {money(sale.total)}
         {way ? ` ${methodHow[way]}` : ""}
         {paid !== null && ` — ${paid}`}.
         {way === "CARD" && paid === null && ` ${chargeOnce(sale.total)}`}
@@ -2136,7 +2134,7 @@ function Failure({
   return (
     <div role="alert">
       <p>{errorText(error)}</p>
-      <button onClick={retry}>Повторити</button>
+      <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );
 }
@@ -2204,11 +2202,13 @@ function OrderDetail({
         <div className="line" key={item.id}>
           <strong>{visible(item.display_name)}</strong>
           <span>
-            Розмір: {visible(item.size_label ?? "Не вказано")} · {item.quantity}{" "}
-            шт.
+            {item.size_label === null || item.size_label === "UNKNOWN"
+              ? "Розмір невідомий"
+              : `Розмір: ${visible(item.size_label)}`}{" "}
+            · {item.quantity} шт.
           </span>
           <span>
-            {money(item.unit_price)} за одиницю
+            {money(item.unit_price)} за 1 шт.
             {kopecks(item.discount_amount) !== 0n
               ? ` · знижка ${money(item.discount_amount)}`
               : ""}
@@ -2221,7 +2221,7 @@ function OrderDetail({
       <p className="hint">{collectHint}</p>
       {order.sale_id && (
         <p role="status">
-          Продаж зафіксовано.
+          Продаж записано.
           {order.payment_method
             ? ` Оплачено ${methodHow[order.payment_method]}.`
             : ""}
@@ -2229,7 +2229,7 @@ function OrderDetail({
       )}
       {order.credit && (
         <p>
-          Оплата частинами: сплачено {money(order.credit.paid)}, клієнт винен{" "}
+          Оплата частинами: сплачено {money(order.credit.paid)}, покупець винен{" "}
           {money(order.credit.owed)}. Наступні внески — у розділі «Борги».
         </p>
       )}
@@ -2264,7 +2264,7 @@ function OrderDetail({
                 setProblem("");
               }}
               total={kopecks(order.total) ?? 0n}
-              hint="Клієнт забирає замовлення, сплачує частину зараз, решту винен цьому магазину. Наступні внески — у розділі «Борги»."
+              hint="Покупець забирає замовлення, сплачує частину зараз, решту винен цьому магазину. Наступні внески — у розділі «Борги»."
             />
           </fieldset>
         )}
@@ -2574,7 +2574,7 @@ function NewOrder({
                 setOption("");
               }}
             >
-              <option value="">Оберіть склад явно</option>
+              <option value="">З якого складу віддаєте?</option>
               {locations.data.map((l) => (
                 <option
                   key={l.id}
@@ -2622,7 +2622,10 @@ function NewOrder({
                       value={`${item.product_variant_id}:${item.size_id}`}
                       disabled={item.available_quantity <= 0}
                     >
-                      {visible(item.display_name)} · {visible(item.size_label)}{" "}
+                      {visible(item.display_name)} ·{" "}
+                      {item.size_is_unknown
+                        ? "розмір невідомий"
+                        : visible(item.size_label)}{" "}
                       · доступно {item.available_quantity}
                     </option>
                   ))}
@@ -2676,7 +2679,7 @@ function NewOrder({
             />
           </label>
           <label>
-            Домовлена ціна за одиницю, грн
+            Ціна, грн
             <input
               inputMode="decimal"
               placeholder="0,00"
@@ -2717,7 +2720,7 @@ function NewOrder({
                 setDraft(draft.filter((_, i) => i !== index));
               }}
             >
-              Видалити {visible(d.name)}
+              Прибрати {visible(d.name)}
             </button>
           </div>
         ))}

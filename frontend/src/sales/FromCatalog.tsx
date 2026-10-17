@@ -88,7 +88,7 @@ export function FromCatalog({
                 void sizes.refetch();
               }}
             >
-              Повторити завантаження
+              Спробувати ще раз
             </button>
           </div>
         ) : sizes.isPending ? (

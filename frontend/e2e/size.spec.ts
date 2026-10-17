@@ -103,6 +103,13 @@ test("a coat held with its size not known is sold with the size on its label", a
   const sent = sales(page);
   const unknown = unknownOf(await enter(page));
   await pick(page, unknown);
+  // Not read, the coat sells as it is held (sale-slice TZ, P2-2).
+  await expect(
+    page
+      .getByRole("combobox", { name: "Розмір з етикетки" })
+      .locator("option")
+      .first(),
+  ).toHaveText("Не читали — продати як «розмір невідомий»");
   await page
     .getByRole("combobox", { name: "Розмір з етикетки" })
     .selectOption({ label: "L" });
@@ -110,7 +117,7 @@ test("a coat held with its size not known is sold with the size on its label", a
   // The basket's line; the panel says it too.
   await expect(page.locator(".line").getByText(/· L$/)).toBeVisible();
   await expect(
-    page.getByText("Розмір з етикетки товару без розміру"),
+    page.getByText("Розмір з етикетки; в обліку — «розмір невідомий»"),
   ).toBeVisible();
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
 
@@ -132,7 +139,7 @@ test("a coat held with its size not known is sold with the size on its label", a
   // The answer sells the same way the seller pressed, and says so.
   await page
     .getByRole("button", {
-      name: "Це товар без розміру — продати як L · Готівка",
+      name: "Розмір з етикетки — продати як L · Готівка",
       exact: true,
     })
     .click();
@@ -172,14 +179,14 @@ test("a sized line short of stock is answered from the coats without a size", as
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByText(
-      `у кошику ${String(m.available_quantity + 1)}, в обліку доступно ${String(m.available_quantity)}`,
+      `у кошику ${String(m.available_quantity + 1)} шт., в обліку ${String(m.available_quantity)} шт.`,
     ),
   ).toBeVisible();
   await expect(
     page.getByText(/є на складі з невідомим розміром/),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Це товар без розміру — продати як M" })
+    .getByRole("button", { name: "Розмір з етикетки — продати як M" })
     .click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -234,7 +241,7 @@ test("when the till cannot see the coats without a size, the server's refusal of
     page.getByRole("button", { name: /Товар на місці/ }),
   ).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Це товар без розміру — продати як M" })
+    .getByRole("button", { name: "Розмір з етикетки — продати як M" })
     .click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -296,7 +303,7 @@ test("a line sold as size not known is never offered «товар на місц�
     page.getByRole("button", { name: /Товар на місці/ }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: /Це товар без розміру/ }),
+    page.getByRole("button", { name: /Розмір з етикетки — продати як/ }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Прибрати з кошика" }),
@@ -374,10 +381,10 @@ test("a clarification refused for its own reason is explained and withdrawn", as
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await page
-    .getByRole("button", { name: "Це товар без розміру — продати як M" })
+    .getByRole("button", { name: "Розмір з етикетки — продати як M" })
     .click();
   await expect(page.getByRole("alert")).toContainText(
-    "Одиниць цієї моделі без розміру на складі менше",
+    "Одиниць цієї моделі з невідомим розміром на складі менше",
   );
   await expect(page.getByRole("alert")).toContainText(
     "Кошик збережено — нічого не продано.",
@@ -453,7 +460,9 @@ test("a sale written down before clarifications existed is resent exactly as sto
   await openStore(page, "Основний MAIN");
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3).
-  await expect(page.getByText("Продаж підтверджено")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано один раз" }),
+  ).toBeVisible();
   expect(resent).toHaveLength(1);
   expect(resent[0]?.key).toBe(stored.key);
   expect(JSON.parse(resent[0]?.body ?? "{}")).toEqual(stored.body);

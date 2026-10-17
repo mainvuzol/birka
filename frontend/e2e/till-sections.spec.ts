@@ -304,7 +304,7 @@ async function answered(page: Page, server: { down: boolean }): Promise<void> {
     if ((await failed(page).count()) > 0)
       await failed(page)
         .first()
-        .getByRole("button", { name: "Повторити завантаження" })
+        .getByRole("button", { name: "Спробувати ще раз" })
         .click({ timeout: 1000 });
     await expect(failed(page)).toHaveCount(0, { timeout: 1000 });
   }).toPass();

@@ -40,6 +40,23 @@ export const test = base.extend<{ pageErrorsExpected: boolean }>({
 
 export { expect } from "@playwright/test";
 
+/** The banner of a command kept on the phone, under its `heading`, says
+ * what waits for it, as the till's does (sale-slice TZ, P2-2). */
+export async function waitsFor(page: Page, heading: RegExp): Promise<void> {
+  await expect(
+    page.locator("section.notice", {
+      has: page.getByRole("heading", { name: heading }),
+    }),
+  ).toContainText("Поки чекаємо, інші дії недоступні.");
+}
+
+/** A sum of the server's, «1850.00», as the app writes it: «1 850,00 грн»,
+ * thousands apart by a no-break space (sale-slice TZ, P2-1). */
+export function grn(sum: string): string {
+  const [whole = "0", fraction = "00"] = sum.split(".");
+  return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction.padEnd(2, "0")} грн`;
+}
+
 /**
  * Into a store's workspace. A person with one store is taken into it as the
  * app opens (redesign P0-1); with two or more, the store is chosen, and this

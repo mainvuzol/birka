@@ -562,8 +562,8 @@ export function Cash({
           </h3>
           <p>
             Невідомо, чи записано {pendingLabels[pending.body.command]}.
-            Перевірте результат — та сама операція не запишеться двічі. Нові
-            операції заблоковано.
+            Перевірте результат — та сама операція не запишеться двічі. Поки
+            чекаємо, інші дії недоступні.
           </p>
           <p>{keptText(pending.since, person)}</p>
           <button disabled={busy} onClick={check}>
