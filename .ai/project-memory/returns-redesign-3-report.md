@@ -1,7 +1,9 @@
 # A kept return named, the paper's line and the buzz — 2026-10-18
 
 Baseline: `4aaa57b` (one sale's return and its result, PR #100).
-Status: TODO
+Status: built, reviewed and proven: the whole CI run locally passed, and
+sixteen of sixteen ways of breaking it caught, one after its journey was
+strengthened. Not yet tried on a real phone.
 Branch: `feat/returns-kept-paper-buzz`. Tasks: [the returns task list](redesign/2026-10-17-redesign-tz-returns.md),
 P1-2, P1-4, P2-5. Owner: business-rules.md, "«Повернення»: two words after
 #100, and what next" (2026-10-18).
@@ -136,7 +138,18 @@ the first commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-18-returns-kept-paper-buzz/`](../../output/verification/2026-10-18-returns-kept-paper-buzz/):
+  `mutants.py`, `mutants-run-1.txt` (fifteen of sixteen caught) and
+  `mutants-run-2.txt` (the survivor caught once its journey looked before
+  the reload).
+- **CI, run locally at `699f7a0`** ([summary](../../output/verification/2026-10-18-returns-kept-paper-buzz-ci-local/summary.md)),
+  on the host's Node 24.18: every job passed, the backend with its
+  declared gap.
+  - backend: 3 445 on PostgreSQL 17 (unchanged by this work);
+  - e2e: 383 journeys;
+  - hot path: worst p95 90.3 ms (the search by six sellers) and 144.5 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
