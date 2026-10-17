@@ -717,6 +717,54 @@ html {
   margin-top: 8px;
   display: block;
 }
+/* «Повернення»'s list (returns task list, P0-1): a sale a row, the whole
+   row one target, its goods first; never a sum or a way (G32). */
+.sale-day {
+  margin: 18px 0 2px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.sale-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+.sale-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.sale-goods {
+  display: flex;
+  flex-direction: column;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.sale-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.sale-open {
+  font-size: 24px;
+  color: var(--text-2);
+}
 /* Read by a screen reader, never seen. */
 .visually-hidden {
   position: absolute;

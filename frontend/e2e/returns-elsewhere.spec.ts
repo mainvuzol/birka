@@ -147,9 +147,12 @@ async function findElsewhere(page: Page, model: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Де купили").selectOption("ELSEWHERE");
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  // Under this store's list (owner decision, 2026-10-17, В3 (а)).
+  await page
+    .getByRole("button", { name: "Шукати в інших магазинах мережі" })
+    .click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).toHaveCount(1);
 }
 
@@ -182,17 +185,20 @@ test("goods bought at another store come back here, and this store hands the mon
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Де купили").selectOption("ELSEWHERE");
+  // Under this store's list (owner decision, 2026-10-17, В3 (а)).
+  await page
+    .getByRole("button", { name: "Шукати в інших магазинах мережі" })
+    .click();
   // The other stores' sales are found, never browsed.
   await expect(
     page.getByText("Введіть назву товару, щоб знайти продаж іншого магазину."),
   ).toBeVisible();
   expect(searches).toEqual([]);
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   const card = page.getByRole("article");
   await expect(card).toHaveCount(1);
-  await expect(card).toContainText("Продано в магазині «Другий»");
+  await expect(card).toContainText("Магазин «Другий»");
 
   await card.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByText(/у магазині «Другий»\./)).toBeVisible();
@@ -510,11 +516,9 @@ test("a sale of this store is returned as before, with no store named", async ({
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await expect(page.getByRole("article")).not.toContainText(
-    "Продано в магазині",
-  );
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
+  await expect(page.getByRole("article")).not.toContainText("Магазин «");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await page.getByLabel("Цілих").fill("1");
   await page

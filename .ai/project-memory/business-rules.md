@@ -2560,3 +2560,47 @@ How it is carried out, not decided by the owner:
   nothing under it moves under the finger.
 
 Built on 2026-10-17; see the [report](till-redesign-9-report.md).
+
+## Owner decision — 2026-10-17 («Повернення» in the new design: its task list's questions)
+
+The returns section's task list
+([redesign/2026-10-17-redesign-tz-returns.md](redesign/2026-10-17-redesign-tz-returns.md))
+asked six questions; each answer the option recommended:
+- **В1: no sums in the list of sales, for anyone** — sellers, managers and
+  the owner alike, one list for all. A sale's sum shows once it is opened.
+- **В2: a return made by mistake is undone by selling those goods again**
+  at the till; damaged goods are first put back on sale in «Брак»; a
+  mistake with a sale paid in parts is the owner's to settle.
+- **В3: a sale of another store of the network is searched by a button
+  under the results,** «Шукати в інших магазинах мережі»: never mixed with
+  this store's.
+- **В4: «Повернення» stays a button in the sections' row,** as decided on
+  2026-10-15, until the bottom bar of five tabs.
+- **В5: goods sold from the notebook, before Бірка,** are the manager's to
+  decide; the app says to call the manager. No new rule.
+- **В6: how far a debt paid in parts falls is said after the press,** as
+  now; not before.
+
+Then chosen next: the task list's P0-1 (the list) and P0-2 («Показати
+ще»). How they are carried out, not decided by the owner:
+- **«Що повертають?»** searches as it is typed, from two letters, after a
+  pause, as the till does; Enter at once. A row is the sale's goods
+  («Лоран шоколад · M», two lines, then «+ ще N»), its hour and count,
+  and its marks — «Оплата частинами», «Продано з паперу» / «Продано під
+  час збою», «Магазин «Другий»», «Усе вже повернено» — under the day's
+  heading («Сьогодні», «Вчора», «15 жовтня»); the whole row opens it, and a
+  sale returned whole opens nothing.
+- **«Оновити» and the two lines of explanation go:** the list is read
+  again when the section opens and the app comes back.
+- **«Де купили» becomes the button under the results** (В3),
+  «Шукати в інших магазинах мережі» / «Шукати в цьому магазині», what was
+  typed kept when it changes. Only the button moved: the rest of the task
+  list's P1-1 — its own words, shown from two letters, the heading of the
+  other stores' list, warehouse chips — is still to do.
+- **A list read again and refused says so** above the rows it had, with
+  «Спробувати ще раз»; back from a sale, the list is read again.
+- **«Показати ще» reads twenty more at a time** by `offset`, never past the
+  server's fifty, a sale read twice shown once; a page that cannot be read
+  keeps those read, with «Спробувати ще раз».
+
+Built on 2026-10-17; see the [report](returns-redesign-1-report.md).

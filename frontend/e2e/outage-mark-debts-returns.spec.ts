@@ -166,8 +166,8 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await page
     .getByRole("article")
     .filter({ hasText: model })
@@ -290,8 +290,8 @@ test("the switch is one for the store: ticked on «Повернення», the t
 
   // «Повернення»: in paper mode too, and nobody named for the return.
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await page
     .getByRole("article")
     .filter({ hasText: model })
@@ -318,8 +318,8 @@ test("the switch is one for the store: ticked on «Повернення», the t
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page.getByLabel("Вношу продаж з паперу").uncheck();
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await page
     .getByRole("article")
     .filter({ hasText: model })
@@ -364,8 +364,8 @@ test("the first days' paper: a return and a payment typed from it are «з па�
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await page
     .getByRole("article")
     .filter({ hasText: model })

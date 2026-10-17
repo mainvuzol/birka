@@ -1,6 +1,10 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api, errorText } from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
@@ -14,9 +18,12 @@ import {
   paperText,
   usePaperMark,
 } from "@/sales/paperMark";
+import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
+import { SaleRow, dayOf, dayTitle } from "./SaleRow";
 import { useBackOnSale } from "./places";
 import { refundLabels, sizeLabel } from "./types";
+import type { InfiniteData } from "@tanstack/react-query";
 import type {
   Refund,
   ReturnPart,
@@ -66,9 +73,13 @@ export function Returns({
   opened?: () => void;
 }): JSX.Element {
   const cache = useQueryClient();
+  // What the seller types, searched once they pause, from two letters, as
+  // the till's search (returns task list, P0-1); Enter searches at once.
   const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
-  const [shown, setShown] = useState(pageSize);
+  const field = useRef<HTMLInputElement>(null);
+  const typed = useSettled(query);
+  const [pressed, setPressed] = useState("");
+  const search = pressed !== "" && pressed === query.trim() ? pressed : typed;
   // Bought at another store of the network: found only by a search.
   const [elsewhere, setElsewhere] = useState(false);
   const [selected, setSelected] = useState<SaleSummary | null>(null);
@@ -77,18 +88,40 @@ export function Returns({
     sent: ReturnPart[];
   } | null>(null);
   const searching = !elsewhere || search.length >= 2;
-  const sales = useQuery({
-    queryKey: ["store-sales", store.id, elsewhere, search, shown],
-    queryFn: () =>
+  // Twenty at a time, each page under those read (returns task list,
+  // P0-2): the server takes fifty at most, and a growing `limit` broke the
+  // list after forty.
+  const sales = useInfiniteQuery({
+    queryKey: ["store-sales", store.id, elsewhere, search],
+    queryFn: ({ pageParam }) =>
       api<SaleList>(
-        `/sales?store_id=${store.id}&limit=${String(shown)}${
+        `/sales?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}${
           elsewhere ? "&elsewhere=true" : ""
         }${search ? `&q=${encodeURIComponent(search)}` : ""}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: SaleList, pages: SaleList[]) =>
+      last.has_more ? pages.length * pageSize : undefined,
     enabled: searching,
     retry: false,
+    // A search typed keeps the list in place until the new one comes, as at
+    // the till: this store's list or the other stores', never one for the
+    // other (review, 2026-10-17).
+    placeholderData: (
+      previous: InfiniteData<SaleList, number> | undefined,
+      before,
+    ) => (before?.queryKey[2] === elsewhere ? previous : undefined),
   });
+  // A sale made meanwhile moves the pages' edge: a row read twice is shown
+  // once.
+  const listed = [
+    ...new Map(
+      (sales.data?.pages ?? [])
+        .flatMap((page) => page.sales)
+        .map((sale) => [sale.id, sale]),
+    ).values(),
+  ];
 
   useEffect(() => {
     if (open === null) return;
@@ -100,7 +133,7 @@ export function Returns({
     }
     // Read afresh, never from a page cached before the sale was made.
     if (!sales.isSuccess || sales.isFetching) return;
-    const sale = sales.data.sales.find((each) => each.id === open);
+    const sale = listed.find((each) => each.id === open);
     if (sale) setSelected(sale);
     opened?.();
   }, [
@@ -136,28 +169,16 @@ export function Returns({
         }}
         back={() => {
           setSelected(null);
+          // Read again: what may still come back may have changed meanwhile,
+          // by another seller's return (review, 2026-10-17).
+          void cache.invalidateQueries({ queryKey: ["store-sales", store.id] });
         }}
       />
     );
 
   return (
     <section>
-      <div className="toolbar">
-        <h2>Повернення</h2>
-        <button
-          className="quiet"
-          disabled={sales.isFetching}
-          onClick={() => {
-            void sales.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        Знайдіть продаж, з якого повертають товар. Цілий товар повернеться на
-        склад, з якого його продали, пошкоджений — на склад «Брак» магазину.
-      </p>
+      <h2>Повернення</h2>
       {done && (
         <Done
           store={store}
@@ -166,86 +187,155 @@ export function Returns({
           sent={done.sent}
         />
       )}
-      <label>
-        Де купили
-        <select
-          value={elsewhere ? "ELSEWHERE" : "HERE"}
-          onChange={(event) => {
-            setElsewhere(event.target.value === "ELSEWHERE");
-            setShown(pageSize);
-          }}
-        >
-          <option value="HERE">У цьому магазині</option>
-          <option value="ELSEWHERE">В іншому магазині мережі</option>
-        </select>
-      </label>
-      {elsewhere && (
-        <p className="hint">
-          Повернення приймає будь-який магазин мережі, і гроші покупцю віддаєте
-          ви. Продаж іншого магазину знаходять за назвою товару.
-        </p>
-      )}
       <form
         className="search"
+        role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          setSearch(query.trim());
-          setShown(pageSize);
+          setPressed(query.trim().length >= 2 ? query.trim() : "");
         }}
       >
-        <label>
-          Пошук за назвою товару
+        <label className="till-search">
+          Що повертають?
           <input
             type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            placeholder="Модель або колір"
+            ref={field}
+            maxLength={100}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
             }}
           />
         </label>
-        <button type="submit">Знайти</button>
       </form>
+      {elsewhere && (
+        <p className="hint">
+          Повернення приймає будь-який магазин мережі, і гроші покупцю віддаєте
+          ви. Продаж іншого магазину знаходять за назвою товару.
+        </p>
+      )}
       {!searching ? (
         <p>Введіть назву товару, щоб знайти продаж іншого магазину.</p>
-      ) : sales.isPending ? (
+      ) : sales.isPending ||
+        (sales.isPlaceholderData && listed.length === 0) ? (
         <p role="status">Завантажуємо продажі…</p>
-      ) : sales.error ? (
-        <p role="alert">{errorText(sales.error)}</p>
-      ) : sales.data.sales.length === 0 ? (
-        <p>
-          {elsewhere
-            ? "В інших магазинах продажів із таким товаром не знайдено."
-            : search
-              ? "Продажів із таким товаром не знайдено."
-              : "У цьому магазині ще немає продажів."}
-        </p>
-      ) : (
-        <>
-          {sales.data.sales.map((sale) => (
-            <SaleCard
-              key={sale.id}
-              sale={sale}
-              here={sale.store_id === store.id}
-              choose={() => {
-                setDone(null);
-                setSelected(sale);
-              }}
-              blocked={blocked}
-            />
-          ))}
-          {sales.data.has_more && (
+      ) : !sales.data ? (
+        <div role="alert">
+          <p>{errorText(sales.error)}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void sales.refetch();
+            }}
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      ) : listed.length === 0 ? (
+        search ? (
+          <div className="empty">
+            <p>
+              {elsewhere
+                ? `За «${visible(search)}» в інших магазинах продажів не знайдено. Перевірте назву або очистіть пошук.`
+                : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`}
+            </p>
             <button
+              type="button"
               className="quiet"
-              disabled={sales.isFetching}
               onClick={() => {
-                setShown(shown + pageSize);
+                setQuery("");
+                setPressed("");
+                field.current?.focus();
               }}
             >
-              Показати ще
+              Очистити
             </button>
+          </div>
+        ) : (
+          <p>Продажів у магазині ще немає.</p>
+        )
+      ) : (
+        <>
+          {sales.isError && !sales.isFetchNextPageError && (
+            // Read again and refused: the rows below are as they were, and
+            // that is said (ADR-0011; review, 2026-10-17).
+            <div role="alert">
+              <p>{errorText(sales.error)}</p>
+              <button
+                type="button"
+                disabled={sales.isFetching}
+                onClick={() => {
+                  void sales.refetch();
+                }}
+              >
+                Спробувати ще раз
+              </button>
+            </div>
+          )}
+          {listed.map((sale, index) => (
+            <div key={sale.id}>
+              {(index === 0 ||
+                dayOf(listed[index - 1]?.sold_at ?? "") !==
+                  dayOf(sale.sold_at)) && (
+                <h3 className="sale-day">{dayTitle(sale.sold_at)}</h3>
+              )}
+              <SaleRow
+                sale={sale}
+                here={sale.store_id === store.id}
+                choose={() => {
+                  setDone(null);
+                  setSelected(sale);
+                }}
+                blocked={blocked}
+              />
+            </div>
+          ))}
+          {sales.isFetchNextPageError ? (
+            // The next page could not be read: those read stay.
+            <div role="alert">
+              <p>{errorText(sales.error)}</p>
+              <button
+                type="button"
+                disabled={sales.isFetching}
+                onClick={() => {
+                  void sales.fetchNextPage();
+                }}
+              >
+                Спробувати ще раз
+              </button>
+            </div>
+          ) : (
+            sales.hasNextPage && (
+              <button
+                type="button"
+                className="quiet"
+                disabled={sales.isFetching}
+                onClick={() => {
+                  void sales.fetchNextPage();
+                }}
+              >
+                Показати ще
+              </button>
+            )
           )}
         </>
       )}
+      {/* Under the results: the other stores' sales, never mixed with this
+          one's (owner decision, 2026-10-17, В3 (а)). */}
+      <button
+        type="button"
+        className="quiet elsewhere"
+        onClick={() => {
+          setElsewhere(!elsewhere);
+        }}
+      >
+        {elsewhere
+          ? "Шукати в цьому магазині"
+          : "Шукати в інших магазинах мережі"}
+      </button>
     </section>
   );
 }
@@ -255,60 +345,6 @@ function when(iso: string): string {
     dateStyle: "short",
     timeStyle: "short",
   });
-}
-
-/**
- * A sale typed from paper (ADR-0013 §5.6): the list carries its mark, never
- * its sum or way, so the drawer's blind count is untouched.
- */
-function soldDuringOutage(sale: SaleSummary): boolean {
-  return sale.outage !== undefined && sale.outage !== null;
-}
-
-function SaleCard({
-  sale,
-  here,
-  choose,
-  blocked,
-}: {
-  sale: SaleSummary;
-  here: boolean;
-  choose: () => void;
-  blocked: boolean;
-}): JSX.Element {
-  const returnable = sale.items.some((item) => item.refunded < item.quantity);
-  return (
-    <article className="order-card">
-      <strong>
-        {when(sale.sold_at)} · {money(sale.total)}
-      </strong>
-      {!here && <span>Продано в магазині «{visible(sale.store_name)}»</span>}
-      {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
-      {soldDuringOutage(sale) && (
-        <span className="badge">
-          {sale.outage?.first_days === true
-            ? "Продано з паперу"
-            : "Продано під час збою"}
-        </span>
-      )}
-      <ul>
-        {sale.items.map((item) => (
-          <li key={item.id}>
-            {visible(item.display_name)}, {sizeLabel(item.size)} —{" "}
-            {item.quantity} шт
-            {item.refunded > 0 && <small> (повернено {item.refunded})</small>}
-          </li>
-        ))}
-      </ul>
-      {returnable ? (
-        <button disabled={blocked} onClick={choose}>
-          Оформити повернення
-        </button>
-      ) : (
-        <span className="badge">Усе вже повернено</span>
-      )}
-    </article>
-  );
 }
 
 /**
@@ -801,7 +837,7 @@ export function refusalText(error: unknown): string {
         ? "Склад «Брак» цього магазину налаштований як склад для продажу, тож пошкоджений товар туди не приймається. Зверніться до власника."
         : "У цього магазину ще немає складу «Брак» для пошкодженого товару. Зверніться до власника.";
     if (error.code === "REFUND_EXCEEDS_SOLD")
-      return "Частину цього товару вже повернули. Поверніться до списку й оновіть продаж.";
+      return "Частину цього товару вже повернули. Поверніться до списку: він покаже, що можна повернути тепер.";
     if (
       error.details.reason === "CHOOSE_A_WAREHOUSE" ||
       error.details.reason === "NOT_A_WAREHOUSE_OF_THIS_STORE"
