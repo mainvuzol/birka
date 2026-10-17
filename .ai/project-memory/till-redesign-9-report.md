@@ -1,7 +1,9 @@
 # Both warehouses in the till's search; the screen kept in place — 2026-10-17
 
 Baseline: `7f8aa3e` (the day's count on the receipt, PR #97).
-Status: TODO.
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty-one of twenty-one ways of breaking it caught. Not yet tried on a
+real phone.
 Branch: `feat/till-search-both-warehouses`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 P2-5, P2-6. Owner: business-rules.md, "both warehouses in the till's
 search; the screen kept in place" (2026-10-17).
@@ -140,7 +142,20 @@ filter right, and the following, all addressed before the first commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-17-till-search-both-warehouses/`](../../output/verification/2026-10-17-till-search-both-warehouses/):
+  `mutants.py` and `mutants.txt`, twenty-one ways of breaking it, all
+  caught.
+- **CI, run locally at `2b682be`** ([summary](../../output/verification/2026-10-17-till-search-both-warehouses-ci-local/summary.md)),
+  on the host's Node 24.18 (CI pins 24.21; the Homebrew Node 26.5 hung the
+  dev server three times): every job passed, the backend with its declared
+  gap.
+  - backend: 3 445 on PostgreSQL 17, the four new among them;
+  - e2e: 357 journeys;
+  - hot path: 12 cases, the new read of every warehouse p95 15.0 ms alone
+    and 87.3 ms by six sellers, within 300; the worst p95 92.2 ms (the
+    search by six sellers) and 106.1 ms (`POST /sales`), within 300 and
+    500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
