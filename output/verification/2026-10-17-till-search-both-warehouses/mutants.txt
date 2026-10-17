@@ -1,0 +1,23 @@
+- unchanged tree: passed 
+- every warehouse it may read is listed, selling or not: caught by test_with_no_warehouse_named_every_one_it_sells_from_is_listed_each_row_saying_where
+- a paused warehouse is listed: caught by test_with_no_warehouse_named_every_one_it_sells_from_is_listed_each_row_saying_where
+- rows do not say their warehouse: caught by test_a_private_warehouse_is_listed_only_for_whoever_reads_that_store_s_own; test_the_pages_neither_repeat_nor_skip_a_row_across_warehouses; test_with_no_warehouse_named_every_one_it_sells_from_is_listed_each_row_saying_where
+- a private warehouse is listed through a network-wide right: caught by test_a_private_warehouse_is_listed_only_for_whoever_reads_that_store_s_own
+- a model's sizes ranked across every model listed: caught by a model's sizes keep its own order, whatever another model lists first
+- a basket's lines do not say their warehouse: caught by a shortfall says which warehouse's shelf to look at, and the receipt where each coat left ; both warehouses are listed at once, a chip each, and the coat leaves from the chip's
+- a receipt's lines do not say their warehouse: caught by a shortfall says which warehouse's shelf to look at, and the receipt where each coat left 
+- the catalogue remembers the last warehouse: caught by a coat in hand from the catalogue is asked its warehouse, and leaves from the one said
+- a two-warehouse store asks for one first: caught by a coat in hand from the catalogue is asked its warehouse, and leaves from the one said; a model held with its size not known in one warehouse is offered «Розмір з етикетки» only ; a model's sizes keep its own order, whatever another model lists first; a shortfall says which warehouse's shelf to look at, and the receipt where each coat left ; a warehouse waiting for its opening list is said to sell on paper, and the other's goods a; another warehouse chosen shows its own list's places while it is read, never the one befor; both waiting, the till says to sell on paper, and lists nothing; both warehouses are listed at once, a chip each, and the coat leaves from the chip's; from paper, the press names both warehouses the lines leave from; one warehouse chosen alone is listed alone, its chips as a one-warehouse store's
+- chips do not name their warehouse: caught by a model's sizes keep its own order, whatever another model lists first; a warehouse waiting for its opening list is said to sell on paper, and the other's goods a; both warehouses are listed at once, a chip each, and the coat leaves from the chip's
+- the coat leaves from the warehouse chosen, not the chip's: caught by a coat in hand from the catalogue is asked its warehouse, and leaves from the one said; a model held with its size not known in one warehouse is offered «Розмір з етикетки» only ; a shortfall says which warehouse's shelf to look at, and the receipt where each coat left ; both warehouses are listed at once, a chip each, and the coat leaves from the chip's; from paper, the press names both warehouses the lines leave from
+- a size's chips are in the server's order: caught by both warehouses are listed at once, a chip each, and the coat leaves from the chip's
+- a waiting warehouse is not said: caught by a warehouse waiting for its opening list is said to sell on paper, and the other's goods a
+- both waiting, the goods are still asked for: caught by both waiting, the till says to sell on paper, and lists nothing
+- the catalogue does not ask the warehouse: caught by a coat in hand from the catalogue is asked its warehouse, and leaves from the one said
+- a stale empty list speaks under the new words: caught by a search with nothing found, typed further, never says «нічого немає» under the new words 
+- a search blanks the list: caught by a search typed keeps the list where it was until the new one comes, and the pay panel with
+- another warehouse's list is kept while the new one is read: caught by another warehouse chosen shows its own list's places while it is read, never the one befor
+- the places say nothing to a screen reader: caught by a search with nothing found, typed further, never says «нічого немає» under the new words ; signing in keeps the till's places, and says «Входимо в магазин…»; the goods being read keep three tags' places, and say «Завантажуємо товари…»; the warehouses being read keep the field's and the tags' places, and say so
+- no field's place while signing in: caught by signing in keeps the till's places, and says «Входимо в магазин…»
+- the field's place takes no room: caught by signing in keeps the till's places, and says «Входимо в магазин…»; the warehouses being read keep the field's and the tags' places, and say so
+21 of 21 caught
