@@ -1,0 +1,32 @@
+- unchanged tree: passed 
+- a unit is preset intact: caught by a return refused is said above the panel, in view, and the counts are kept; a warehouse to choose, for goods from another store's own, is brought above the panel with; before a tap: nine things to see, nothing to type and nothing to press; a unit counted bri; from paper, the panel's large line says so too, and never what to hand back later; in the dark theme the tags, the panel and the result read at 4.5:1; in the light theme the tags, the panel and the result read at 4.5:1; paid in parts, a sale that suggests no way is returned without one (G35), and nothing back; the way not read says so, the seller's own goes, and the result's sum is the server's; two lines: each tag counts its own, and the panel says how many in all; without «Брак» and the till, the result names no section and offers only «До списку»; a return whose outcome is unknown blocks the app until it is resent unchanged; a store without a «Брак» is told so, and nothing is returned; money back on a card goes through the terminal, and a transfer is sent; one coat back intact goes where it was sold, one damaged to the store's «Брак»; the counts stop at what may still come back, and nothing is sent before the press
+- «+» goes past what may come back: caught by the counts stop at what may still come back, and nothing is sent before the press
+- «−» goes below none: caught by the counts stop at what may still come back, and nothing is sent before the press
+- «Пошкоджені» counts as intact: caught by a store without a «Брак» is told so, and nothing is returned; one coat back intact goes where it was sold, one damaged to the store's «Брак»; the counts stop at what may still come back, and nothing is sent before the press
+- the reason is open from the start: caught by one coat back intact goes where it was sold, one damaged to the store's «Брак»
+- the panel shows before a unit is counted: caught by before a tap: nine things to see, nothing to type and nothing to press; a unit counted bri
+- the panel's sum is the sale's: caught by before a tap: nine things to see, nothing to type and nothing to press; a unit counted bri; from paper, the panel's large line says so too, and never what to hand back later
+- a way not read is not said: caught by the way not read says so, the seller's own goes, and the result's sum is the server's
+- the sale's way is not offered: caught by a return refused is said above the panel, in view, and the counts are kept; before a tap: nine things to see, nothing to type and nothing to press; a unit counted bri; in the dark theme the tags, the panel and the result read at 4.5:1; in the light theme the tags, the panel and the result read at 4.5:1; two lines: each tag counts its own, and the panel says how many in all; without «Брак» and the till, the result names no section and offers only «До списку»; a return whose outcome is unknown blocks the app until it is resent unchanged; a store without a «Брак» is told so, and nothing is returned; money back on a card goes through the terminal, and a transfer is sent; one coat back intact goes where it was sold, one damaged to the store's «Брак»
+- the panel's button is not held with the app: caught by a return whose outcome is unknown blocks the app until it is resent unchanged
+- the panel's ways are not held with the app: caught by a return whose outcome is unknown blocks the app until it is resent unchanged
+- the counted tag is left under the panel: caught by a warehouse to choose, for goods from another store's own, is brought above the panel with; before a tap: nine things to see, nothing to type and nothing to press; a unit counted bri
+- the count is heard without its row: caught by before a tap: nine things to see, nothing to type and nothing to press; a unit counted bri
+- from paper, the panel's large line hides it: caught by from paper, the panel's large line says so too, and never what to hand back later
+- from paper, the parts' note says what comes later: caught by from paper, the panel's large line says so too, and never what to hand back later
+- a sale in parts must have a way: caught by paid in parts, a sale that suggests no way is returned without one (G35), and nothing back
+- a refusal is left where it is: caught by a return refused is said above the panel, in view, and the counts are kept
+- the warehouse is not asked for: caught by goods sold from the other store's own warehouse go to one of this store's, chosen
+- the parts' note is not said: caught by a return of a sale paid in parts lowers the debt first, and says what cash goes back
+- the result does not replace the form: caught by in the dark theme the tags, the panel and the result read at 4.5:1; in the light theme the tags, the panel and the result read at 4.5:1; paid in parts, a sale that suggests no way is returned without one (G35), and nothing back; the way not read says so, the seller's own goes, and the result's sum is the server's; two lines: each tag counts its own, and the panel says how many in all; without «Брак» and the till, the result names no section and offers only «До списку»
+- «Ще повернення» loses the search: caught by one coat back intact goes where it was sold, one damaged to the store's «Брак»
+- the result's sum is worked out, not the server's: caught by the way not read says so, the seller's own goes, and the result's sum is the server's
+- a paper return says to hand the money back: caught by a return typed from paper by «Ліда» naming «Ганна» says not to give the money back again, ; the first days' paper: a return and a payment typed from it are «з паперу», of a day nine 
+- nothing back shows a sum to hand: caught by a return of a sale paid in parts lowers the debt first, and says what cash goes back
+- the screen reader hears no sentence: caught by money back on a card goes through the terminal, and a transfer is sent; one coat back intact goes where it was sold, one damaged to the store's «Брак»
+- «Брак» is pointed to for everyone: caught by without «Брак» and the till, the result names no section and offers only «До списку»
+- «Новий продаж» for whoever may not sell: caught by without «Брак» and the till, the result names no section and offers only «До списку»
+- «Новий продаж» leaves the search without the cursor: caught by a sale made by mistake is returned from its own receipt, by the usual rules
+- the till's panel keeps no room: caught by the server's shortage opens above the panel, in view and focused; a seller who may not wri
+29 of 29 caught
+exit 0

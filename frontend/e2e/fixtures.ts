@@ -154,6 +154,36 @@ export async function fillLine(
 }
 
 /**
+ * A return's units counted as a seller counts them (returns task list,
+ * P0-3): «Цілі: більше» and «Пошкоджені: більше», tapped, never typed — in
+ * the tag of `line` when the sale has more than one. Each count is checked
+ * as it ends.
+ */
+export async function returnUnits(
+  page: Page,
+  {
+    intact = 0,
+    damaged = 0,
+    line,
+  }: { intact?: number; damaged?: number; line?: string },
+): Promise<void> {
+  const tag = line
+    ? page.getByRole("group", { name: line, exact: true })
+    : page.locator(".line-return");
+  for (const [name, times] of [
+    ["Цілі", intact],
+    ["Пошкоджені", damaged],
+  ] as const) {
+    for (let tapped = 0; tapped < times; tapped += 1)
+      await tag.getByRole("button", { name: `${name}: більше` }).click();
+    if (times > 0)
+      await expect(
+        tag.locator(".return-step", { hasText: name }).locator(".return-count"),
+      ).toHaveText(String(times));
+  }
+}
+
+/**
  * The paper switch ticked, and the paper said to be an outage's — or, with
  * `firstDays`, the first days', «з паперу» (owner decision, 2026-10-16):
  * nothing typed from paper is sent until the series says which it is.

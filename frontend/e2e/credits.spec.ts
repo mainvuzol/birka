@@ -5,6 +5,7 @@ import {
   fromPaper,
   grn,
   openStore,
+  returnUnits,
   section,
   tapSize,
   waitsFor,
@@ -571,14 +572,18 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).toContainText("Оплата частинами");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await expect(
-    page.getByText("Цей продаж оплачували частинами."),
-  ).toBeVisible();
-  await page.getByLabel("Цілих").fill("1");
-  // The till cannot say up front what goes back in cash.
+  await expect(page.locator(".sale-marks")).toHaveText("Оплата частинами");
+  await returnUnits(page, { intact: 1 });
+  // The till cannot say up front what goes back in cash (owner decision,
+  // 2026-10-17, В6 (а)): the goods' worth, and what comes after.
   await expect(
     page.getByRole("button", { name: /Повернути покупцю/ }),
   ).toHaveCount(0);
+  const panel = page.getByRole("group", { name: "Повернення: сума і спосіб" });
+  await expect(panel.locator(".pay-total")).toHaveText("Товар на 1 500,00 грн");
+  await expect(panel).toContainText(
+    "Спершу зменшимо борг; скільки віддати — покажемо після.",
+  );
   // How money would go back is the sale's way, asked only if any does
   // (ADR-0012 G5, G35): one payment, in cash.
   const way = page.getByRole("group", {
@@ -586,10 +591,11 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   });
   await expect(way.getByRole("radio", { name: "Готівкою" })).toBeChecked();
   await page
-    .getByRole("button", { name: "Оформити повернення на 1 500,00 грн" })
+    .getByRole("button", { name: "Повернути товар на 1 500,00 грн" })
     .click();
 
   // Paid 1000 of 3000, keeps a coat worth 1500: owes 500, gets nothing back.
+  await expect(page.locator(".hand-back-sum")).toHaveText("0,00 грн");
   await expect(
     page.getByText("Борг покупця зменшено на 1 500,00 грн."),
   ).toBeVisible();
@@ -605,10 +611,11 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
       await route.abort("connectionreset");
     } else await route.continue();
   });
+  await page.getByRole("button", { name: "Ще повернення" }).click();
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await page
-    .getByRole("button", { name: "Оформити повернення на 1 500,00 грн" })
+    .getByRole("button", { name: "Повернути товар на 1 500,00 грн" })
     .click();
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
   await waitsFor(page, /повернення/);

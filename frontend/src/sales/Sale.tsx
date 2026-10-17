@@ -14,6 +14,8 @@ import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { backNoted, useReach } from "@/shared/reach";
 import { buzz } from "@/shared/telegram";
+import { usePanelRoom } from "@/shared/panel";
+import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { submitSale, useSaleCommand } from "./commands";
@@ -124,6 +126,7 @@ export function Sale({
   blocked,
   fixMethod,
   returnSale,
+  searchFirst = false,
 }: {
   store: Store;
   token: string;
@@ -144,6 +147,11 @@ export function Sale({
    * never changed, a mistake is returned and sold again (I8; redesign P1-2).
    */
   returnSale?: (sale: SaleReceipt) => void;
+  /**
+   * Opened by a return's «Новий продаж»: the cursor goes to the search once
+   * it is there (returns task list, P0-5).
+   */
+  searchFirst?: boolean;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   // What the seller types to find a model (redesign P0-2).
@@ -155,7 +163,7 @@ export function Sale({
   const priceRefs = useRef(new Map<string, HTMLInputElement>());
   const [focusPrice, setFocusPrice] = useState<string | null>(null);
   // «Новий продаж» puts the cursor in the search (P0-3).
-  const [focusSearch, setFocusSearch] = useState(false);
+  const [focusSearch, setFocusSearch] = useState(searchFirst);
   const [draft, setDraft] = useState<Draft[]>([]);
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [found, setFound] = useState<Record<number, number>>({});
@@ -714,28 +722,7 @@ export function Sale({
   // shortage answer, a field in focus — so nothing ends under it (review,
   // 2026-10-15).
   const panelRef = useRef<HTMLDivElement>(null);
-  const hasGoods = draft.length > 0;
-  useEffect(() => {
-    const root = document.documentElement;
-    const panel = panelRef.current;
-    if (!hasGoods || !panel) {
-      root.style.removeProperty("--pay-panel-h");
-      return;
-    }
-    const keep = (): void => {
-      root.style.setProperty(
-        "--pay-panel-h",
-        `${String(panel.offsetHeight)}px`,
-      );
-    };
-    keep();
-    const watch = new ResizeObserver(keep);
-    watch.observe(panel);
-    return () => {
-      watch.disconnect();
-      root.style.removeProperty("--pay-panel-h");
-    };
-  }, [hasGoods]);
+  usePanelRoom(panelRef, draft.length > 0);
   useEffect(() => {
     if (!shortfall) return;
     shortRef.current?.scrollIntoView({ block: "nearest" });
@@ -748,9 +735,12 @@ export function Sale({
   }, [focusPrice]);
   useEffect(() => {
     if (!focusSearch || receipt) return;
-    searchRef.current?.focus();
+    // The search may still be on its way, behind the warehouses being read:
+    // the cursor waits for it.
+    if (!searchRef.current) return;
+    searchRef.current.focus();
     setFocusSearch(false);
-  }, [focusSearch, receipt]);
+  }, [focusSearch, receipt, locations.isPending, locationId]);
   // The ways wait until every line has its price (redesign P0-3).
   const priced = draft.every((d) => d.line.unit_price !== "");
   // From paper, no size is read off a label (G3): a line read so before
@@ -1477,19 +1467,6 @@ export function Sale({
         </div>
       )}
     </section>
-  );
-}
-
-/** «1850» large, «,00 грн» smaller and quieter (direction §4, money). */
-function Sum({ value }: { value: string }): JSX.Element {
-  const at = value.indexOf(",");
-  return at < 0 ? (
-    <strong className="sum">{value}</strong>
-  ) : (
-    <strong className="sum">
-      {value.slice(0, at)}
-      <span className="sum-rest">{value.slice(at)}</span>
-    </strong>
   );
 }
 

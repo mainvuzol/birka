@@ -4,6 +4,7 @@ import {
   fillLine,
   more,
   openStore,
+  returnUnits,
   sections,
   tapSize,
 } from "./fixtures";
@@ -419,20 +420,26 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
     sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
   ).toHaveAttribute("aria-expanded", "false");
   await expect(
-    page.getByRole("button", { name: "До списку продажів" }),
+    page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/на 1\s300,00 грн\./)).toBeVisible();
+  await expect(page.getByText(/ · 1\s300,00 грн$/)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: new RegExp(`^${coat.name}.*, M$`) }),
+    page.getByRole("heading", { name: new RegExp(`^${coat.name}.* · M$`) }),
   ).toBeVisible();
   // Returned as any return is: intact, the money back in cash.
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await page
     .getByRole("button", { name: "Повернути покупцю 1 300,00 грн готівкою" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Повернення оформлено" }),
+    page.getByRole("heading", { name: "Повернення записано" }),
   ).toBeVisible();
+  // Sold again, as a mistake is mended (owner decision, 2026-10-17, В2 (а)):
+  // the till, its cursor in the search (returns task list, P0-5).
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+  await expect(
+    page.getByRole("searchbox", { name: "Знайти модель" }),
+  ).toBeFocused();
 });
 
 test("whoever may not take returns is not offered one on the receipt", async ({
@@ -567,7 +574,7 @@ test("a return asked from the receipt whose list could not be read opens no sale
     page.getByRole("article").filter({ hasText: coat.name }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "До списку продажів" }),
+    page.getByRole("button", { name: "До списку", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -603,6 +610,6 @@ test("a return asked from the receipt and left before its list came opens no sal
     page.getByRole("article").filter({ hasText: coat.name }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "До списку продажів" }),
+    page.getByRole("button", { name: "До списку", exact: true }),
   ).toHaveCount(0);
 });

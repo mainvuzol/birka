@@ -1,4 +1,11 @@
-import { test, expect, fromPaper, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  fromPaper,
+  openStore,
+  returnUnits,
+  section,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -188,7 +195,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
     .selectOption({ label: "Ганна" });
   await page.getByLabel("Час з паперу").fill("19:40");
   await page.getByLabel("Це було вчора").check();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await expect(page.getByText("Хто прийняв: Ганна.")).toBeVisible();
   await page
     .getByRole("button", {
@@ -198,14 +205,21 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
 
   const yesterday = await yesterdayOf(page);
   const mark = `Повернено під час збою · хто прийняв: Ганна · за папером ${yesterday}, 19:40`;
-  const done = page
-    .getByRole("status")
-    .filter({ hasText: "Повернення оформлено" });
+  // Handed back already: what went, large, and never «Поверніть»
+  // (returns task list, P0-5).
+  const done = page.locator("section.return-result");
+  await expect(
+    done.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeVisible();
   await expect(done).toContainText(mark);
+  await expect(done.locator(".hand-back-what")).toHaveText(
+    "Уже повернули під час збою",
+  );
+  await expect(done.locator(".hand-back-sum")).toHaveText("2 500,00 грн");
   await expect(done).toContainText(
     "2 500,00 грн готівкою повернули під час збою — вдруге не повертайте.",
   );
-  await expect(done).not.toContainText("Поверніть покупцю");
+  await expect(done).not.toContainText(/Поверніть/i);
   expect(sent).toHaveLength(1);
   const outage = sent[0]?.outage as { by_user_id: unknown; at: unknown };
   expect(typeof outage.by_user_id).toBe("string");
@@ -326,7 +340,7 @@ test("the switch is one for the store: ticked on «Повернення», the t
     .getByRole("button", { name: "Оформити повернення" })
     .click();
   await expect(page.getByLabel("Вношу повернення з паперу")).not.toBeChecked();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await expect(
     page.getByRole("button", {
       name: "Повернути покупцю 2 500,00 грн готівкою",
@@ -373,7 +387,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
     .click();
   await page.getByLabel("Вношу повернення з паперу").check();
   // Nothing is sent until the series says which paper it is.
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   const press = page.getByRole("button", {
     name: "Оберіть, що вносите з паперу",
   });
@@ -395,10 +409,12 @@ test("the first days' paper: a return and a payment typed from it are «з па�
     })
     .click();
   const mark = `Повернено з паперу · за папером ${day.shown}, 12:30`;
-  const done = page
-    .getByRole("status")
-    .filter({ hasText: "Повернення оформлено" });
+  const done = page.locator("section.return-result");
   await expect(done).toContainText(mark);
+  await expect(done.locator(".hand-back-what")).toHaveText(
+    "Уже повернули раніше",
+  );
+  await expect(done).not.toContainText(/Поверніть/i);
   await expect(done).toContainText(
     "2 500,00 грн готівкою повернули раніше — вдруге не повертайте.",
   );

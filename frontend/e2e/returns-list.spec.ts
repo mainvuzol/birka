@@ -182,7 +182,7 @@ test("the list shows no sum and no way, the sale opened shows its sum; a row ope
   await page
     .getByRole("button", { name: /^Оформити повернення: Лоран шоколад · M, / })
     .click();
-  await expect(page.getByText(/на 3\s000,00 грн/)).toBeVisible();
+  await expect(page.getByText(/^Продаж .* · 3\s000,00 грн$/)).toBeVisible();
 });
 
 test("the search runs as it is typed, from two letters; Enter at once; one letter lists every sale", async ({
@@ -432,7 +432,7 @@ test("back from a sale, the list is read again", async ({ page }) => {
   await page
     .getByRole("button", { name: /^Оформити повернення: Лоран шоколад/ })
     .click();
-  await page.getByRole("button", { name: "До списку продажів" }).click();
+  await page.getByRole("button", { name: "До списку", exact: true }).click();
   await expect.poll(() => asked.length).toBeGreaterThan(before);
 });
 

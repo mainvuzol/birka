@@ -532,10 +532,9 @@ nav:not(.sections) {
 }
 .line-return h3 {
   margin: 0 0 4px;
-}
-.line-return .fields label,
-.line-return .fields label:first-child {
-  flex: 1;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 /* A list line's size and its count: the size takes two shares, so its
    choice reads whole on a phone («Оберіть розмір», «Розмір невідомий»). */
@@ -581,7 +580,8 @@ nav:not(.sections) {
   border-radius: 16px;
   box-shadow: 0 -6px 18px var(--panel-shadow);
 }
-/* The panel's height, kept clear wherever the page scrolls to (Sale.tsx). */
+/* The panel's height, kept clear wherever the page scrolls to
+   (`shared/panel.ts`). */
 html {
   scroll-padding-bottom: calc(var(--pay-panel-h, 0px) + 12px);
 }
@@ -764,6 +764,158 @@ html {
 .sale-open {
   font-size: 24px;
   color: var(--text-2);
+}
+/* One sale's return (returns task list, P0-3): its context in one line,
+   each line a tag whose units are counted with «−» and «+», «Пошкоджені» in
+   the colour of «Брак». */
+.sale-context {
+  margin: 0 0 8px;
+}
+.sale-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.return-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.return-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 2px 12px;
+  border-radius: 14px;
+  background: var(--field);
+}
+.return-step-name {
+  font-weight: 650;
+}
+.return-step .stepper button {
+  min-width: 48px;
+  padding: 0;
+  font-size: 22px;
+  border-radius: 12px;
+}
+.return-step.damaged {
+  background: var(--damaged-bg);
+  color: var(--damaged);
+}
+.return-step.damaged .stepper button {
+  background: var(--damaged);
+  color: var(--surface);
+}
+.add-reason {
+  margin-top: 12px;
+}
+/* The return's panel (P0-4): the till's, with the way as a switch over the
+   one button. */
+.pay-note {
+  margin: -6px 0 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.way-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--field);
+}
+.way-switch label {
+  position: relative;
+  display: block;
+  margin: 0;
+  cursor: pointer;
+}
+.way-switch span {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 4px;
+  border-radius: 11px;
+  text-align: center;
+}
+/* The whole segment is the radio's target. */
+.way-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+/* Drawn on the label's text, which follows its radio: no `:has()`, which
+   older web views lack (review, 2026-10-17). */
+.way-switch input:checked + span {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.way-switch input:focus-visible + span {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.way-switch:disabled span {
+  opacity: 0.45;
+}
+.way-switch:disabled label,
+.way-switch:disabled input {
+  cursor: not-allowed;
+}
+.return-go {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 15px;
+}
+/* A return's result (P0-5): what to hand back, large, the way a pill over
+   it, then where the goods went. */
+.return-result h2:focus {
+  outline: none;
+}
+.hand-back {
+  margin: 18px 0;
+}
+.hand-back .badge,
+.hand-back-what {
+  margin: 0 0 6px;
+}
+.way-pill {
+  font-size: 14px;
+}
+.hand-back-what {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.hand-back-sum {
+  margin: 0;
+  line-height: 1.15;
+}
+.hand-back-sum .sum {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.return-goods p {
+  margin: 6px 0;
+}
+.result-next {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
 }
 /* Read by a screen reader, never seen. */
 .visually-hidden {

@@ -2604,3 +2604,31 @@ Then chosen next: the task list's P0-1 (the list) and P0-2 («Показати
   keeps those read, with «Спробувати ще раз».
 
 Built on 2026-10-17; see the [report](returns-redesign-1-report.md).
+
+Then chosen next: P0-3 (one sale's screen), P0-4 (the panel under the
+thumb) and P0-5 (the result). How they are carried out, not decided by the
+owner:
+- **Each unit's state is counted with «−» and «+», from none:** «Цілі» and
+  «Пошкоджені» under each line's tag, «Лоран шоколад · M», never preset
+  (owner decisions, 2026-09-15, §3); «+» stops at what may still come back,
+  and the server checks it again (I9). No field opens the keyboard; the
+  reason is behind «Додати причину».
+- **What comes back, its sum and the way are in a panel under the thumb**
+  once a unit is counted: «Повернути 3 000,00 грн» large, a switch
+  «Готівкою | На картку | Переказом» with the sale's own way chosen (G4,
+  G5), and one button with its words as before. Paid in parts: «Товар на
+  …» and «Спершу зменшимо борг; скільки віддати — покажемо після.» (В6).
+  From paper, the large line carries the button's «З паперу · », and that
+  note is not said. A way that cannot be read says so; nothing is chosen.
+- **The result replaces the form:** «Повернення записано», the sum to hand
+  back large, from the server's answer, the way as a pill over it; from
+  paper, «Уже повернули …» and never «Поверніть»; where each coat went, by
+  the answer's lines, «Цілі: 1 шт. — …», «Пошкоджені: 1 шт. — у «Брак».»,
+  the pointer to «Брак» only for whoever handles it. «Новий продаж» opens
+  the till with its cursor in the search (В2: a mistake is mended by
+  selling again); «Ще повернення» goes back to the list as searched;
+  whoever may not sell gets «До списку».
+- **Not changed:** the body sent, the kept return's notice (the task
+  list's P1-2), the paper line under the button (P1-4).
+
+Built on 2026-10-17; see the [report](returns-redesign-2-report.md).

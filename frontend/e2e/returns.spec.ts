@@ -1,4 +1,11 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  returnUnits,
+  section,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -173,13 +180,31 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
   // The list a seller pages through never says how a sale was paid (G32).
   await expect(page.getByRole("article")).not.toContainText(/картк/i);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  // Its price «за 1 шт.», as at the till (sale-slice TZ, P2-2).
+  // A tag, as at the till: «Назва · M», its price «за 1 шт.» (sale-slice TZ,
+  // P2-2) and what may come back, in units (returns task list, P0-3).
+  await expect(
+    page.getByRole("heading", { name: new RegExp(`^${model}.* · M$`) }),
+  ).toBeVisible();
   await expect(page.locator(".line-return .hint")).toContainText(
-    / за 1 шт\. · продано 2 · можна повернути 2$/,
+    / за 1 шт\. · можна повернути 2 шт\.$/,
   );
+  // Nothing counted, nothing to press: the state of each unit is the
+  // seller's to name (owner decisions, 2026-09-15, §3).
+  await expect(page.locator(".line-return .return-count")).toHaveText([
+    "0",
+    "0",
+  ]);
+  await expect(page.getByRole("button", { name: /Повернути/ })).toHaveCount(0);
 
-  await page.getByLabel("Цілих").fill("1");
-  await page.getByLabel("Пошкоджених").fill("1");
+  await returnUnits(page, { intact: 1, damaged: 1 });
+  // The reason only when the seller has one.
+  await expect(
+    page.getByLabel("Причина повернення (необов’язково)"),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Додати причину" }).click();
+  await expect(
+    page.getByLabel("Причина повернення (необов’язково)"),
+  ).toBeFocused();
   await expect(
     page.getByLabel("Причина повернення (необов’язково)"),
   ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
@@ -206,14 +231,26 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
     })
     .click();
 
+  // The result, in place of the form (returns task list, P0-5): the sum to
+  // hand back, large, the way over it; heard as one sentence.
   await expect(
-    page.getByRole("heading", { name: "Повернення оформлено" }),
+    page.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeVisible();
+  await expect(page.getByText("Готівка · Поверніть покупцю")).toBeVisible();
+  await expect(page.locator(".hand-back-sum")).toHaveText("6 000,00 грн");
+  await expect(
+    page.getByText("Поверніть покупцю 6 000,00 грн готівкою.", { exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText("Цілі: 1 шт. — на склад, з якого продали.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
-    page.getByText("Поверніть покупцю 6 000,00 грн готівкою."),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Пошкоджений товар — на складі «Брак» магазину."),
+    page.getByText(
+      "Пошкоджені: 1 шт. — у «Брак». Перевірити можна в розділі «Брак».",
+      { exact: true },
+    ),
   ).toBeVisible();
   expect(sent.bodies).toHaveLength(1);
   expect(sent.bodies[0]?.lines.map((l) => l.condition).sort()).toEqual([
@@ -234,25 +271,46 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
     before + 1,
   );
   expect(await held(page, token, fixture.bin_location_id, variant)).toBe(1);
+  // «Ще повернення»: the list, its search as it was.
+  await page.getByRole("button", { name: "Ще повернення" }).click();
+  await expect(page.getByLabel("Що повертають?")).toHaveValue(model);
   await expect(page.getByRole("article")).toContainText("повернено 2 шт.");
   await expect(page.getByText("Усе вже повернено")).toBeVisible();
 });
 
-test("more than is left to return is stopped before anything is sent", async ({
+test("the counts stop at what may still come back, and nothing is sent before the press", async ({
   page,
 }) => {
   const { model } = await sold(page, 2);
   const sent = returns(page);
   await find(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("2");
-  await page.getByLabel("Пошкоджених").fill("1");
-  await expect(page.getByRole("alert")).toContainText(
-    "можна повернути не більше 2",
-  );
   await expect(
-    page.getByRole("button", { name: "Вкажіть, що повертають" }),
+    page.getByRole("button", { name: "Цілі: менше" }),
   ).toBeDisabled();
+  await returnUnits(page, { intact: 2 });
+  // Both states share what is left: two intact leave room for none damaged.
+  await expect(
+    page.getByRole("button", { name: "Цілі: більше" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Пошкоджені: більше" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Цілі: менше" }).click();
+  await returnUnits(page, { damaged: 1 });
+  await expect(
+    page.getByRole("button", { name: "Пошкоджені: більше" }),
+  ).toBeDisabled();
+  await expect(page.locator(".line-return .return-count")).toHaveText([
+    "1",
+    "1",
+  ]);
+  // Back to none: the panel goes, and there is nothing to press.
+  await page.getByRole("button", { name: "Цілі: менше" }).click();
+  await page.getByRole("button", { name: "Пошкоджені: менше" }).click();
+  await expect(
+    page.getByRole("group", { name: "Повернення: сума і спосіб" }),
+  ).toHaveCount(0);
   expect(sent.bodies).toEqual([]);
 });
 
@@ -270,7 +328,7 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   });
   await find(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
@@ -278,6 +336,18 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+  // The panel is held as the form is: nothing pressed twice, no way changed.
+  const panel = page.getByRole("group", { name: "Повернення: сума і спосіб" });
+  await expect(
+    panel.getByRole("button", {
+      name: "Повернути покупцю 3 000,00 грн готівкою",
+    }),
+  ).toBeDisabled();
+  for (const option of ["Готівкою", "На картку", "Переказом"])
+    await expect(panel.getByRole("radio", { name: option })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Цілі: менше" }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Перевірити результат повернення" })
@@ -310,7 +380,7 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
   const sent = returns(page);
   await find(page, card.model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await expect(
     page.getByRole("radio", { name: "На картку", exact: true }),
   ).toBeChecked();
@@ -323,10 +393,14 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
   // Answered at once: the money goes back now, said plainly (owner
   // decision, 2026-10-08: only a kept return confirmed later hedges it).
   await expect(
+    page.getByText("Картка · Поверніть на картку через термінал"),
+  ).toBeVisible();
+  await expect(page.locator(".hand-back-sum")).toHaveText("3 000,00 грн");
+  await expect(
     page.getByText("Поверніть 3 000,00 грн на картку покупця через термінал.", {
       exact: true,
     }),
-  ).toBeVisible();
+  ).toHaveCount(1);
   expect(sent.bodies[0]?.payment_method).toBe("CARD");
 
   // A sale whose way suggests nothing — sold before the way was asked, or in
@@ -350,7 +424,7 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
   );
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await asked;
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   for (const option of ["Готівкою", "На картку", "Переказом"])
     await expect(
       page.getByRole("radio", { name: option, exact: true }),
@@ -366,10 +440,13 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
     })
     .click();
   await expect(
+    page.getByText("Переказ · Надішліть покупцю переказом"),
+  ).toBeVisible();
+  await expect(
     page.getByText("Надішліть покупцю 3 000,00 грн переказом.", {
       exact: true,
     }),
-  ).toBeVisible();
+  ).toHaveCount(1);
   expect(sent.bodies[1]?.payment_method).toBe("TRANSFER");
 });
 
@@ -389,7 +466,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
   });
   await find(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Пошкоджених").fill("1");
+  await returnUnits(page, { damaged: 1 });
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
