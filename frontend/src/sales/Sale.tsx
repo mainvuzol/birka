@@ -118,6 +118,7 @@ interface Draft {
 export function Sale({
   store,
   token,
+  userId,
   journalKey,
   blocked,
   fixMethod,
@@ -125,6 +126,9 @@ export function Sale({
 }: {
   store: Store;
   token: string;
+  /** Who is signed in: a sale typed from paper for someone else adds
+   * nothing to their «Сьогодні ви продали» (owner decision, 2026-10-17). */
+  userId: string;
   journalKey: string;
   blocked: boolean;
   /**
@@ -736,6 +740,9 @@ export function Sale({
     return (
       <Receipt
         receipt={receipt}
+        storeId={store.id}
+        token={token}
+        userId={userId}
         dropped={dropped}
         next={() => {
           setReceipt(null);
@@ -1369,8 +1376,44 @@ function Sum({ value }: { value: string }): JSX.Element {
   );
 }
 
+/**
+ * «Сьогодні ви продали N шт.» under the receipt's heading (owner decisions,
+ * 2026-10-16, В8, and 2026-10-17): the seller's own units today, less those
+ * returned, as the server counts them, read once for each receipt. Never a
+ * sum or a way (G32). Its line is there from the start, so nothing moves
+ * under the finger when the figure comes; it stays empty if the server does
+ * not answer, and the receipt is the same.
+ */
+function SoldToday({
+  storeId,
+  token,
+  saleId,
+}: {
+  storeId: string;
+  token: string;
+  saleId: string;
+}): JSX.Element {
+  const sold = useQuery({
+    queryKey: ["sold-today", storeId, saleId],
+    queryFn: () =>
+      api<{ business_day: string; units: number }>(
+        `/sales/sold-today?store_id=${encodeURIComponent(storeId)}`,
+        token,
+      ),
+    staleTime: Infinity,
+  });
+  return (
+    <p className="sold-today" role="status">
+      {sold.data ? `Сьогодні ви продали ${String(sold.data.units)} шт.` : ""}
+    </p>
+  );
+}
+
 function Receipt({
   receipt,
+  storeId,
+  token,
+  userId,
   dropped,
   next,
   fixMethod,
@@ -1378,6 +1421,9 @@ function Receipt({
   sizes,
 }: {
   receipt: SaleReceipt;
+  storeId: string;
+  token: string;
+  userId: string;
   dropped: string[];
   next: () => void;
   fixMethod: ((sale: SaleReceipt) => void) | undefined;
@@ -1397,6 +1443,13 @@ function Receipt({
   return (
     <section>
       <h2>Продаж записано</h2>
+      {/* A sale typed from paper for someone else is theirs, and says
+          nothing of the seller's own day (owner decision, 2026-10-17). */}
+      {(mark === null ||
+        mark.sold_by_user_id === null ||
+        mark.sold_by_user_id === userId) && (
+        <SoldToday storeId={storeId} token={token} saleId={receipt.id} />
+      )}
       {mark && <p className="badge">{markText(mark)}</p>}
       {receipt.credit ? (
         // Paid in parts, the terminal takes only what is paid now: the sum

@@ -2490,3 +2490,39 @@ How it is carried out, not decided by the owner:
   the report — screens the glossary does not name.
 
 Built on 2026-10-17; see the [report](till-redesign-7-report.md).
+
+## Owner decision — 2026-10-17 (the day's count at the till, В8)
+
+Asked after money and the till's words merged (PR #96), each answer the
+option recommended when asked:
+- **Next: «Сьогодні ви продали N шт.»** (В8, decided on 2026-10-16).
+- **The day is the store's business day, 06:00 to 06:00,** as the drawer's.
+- **Counted: today's sales, less what was returned from those same sales:**
+  a sale returned by «Помилилися?» adds nothing.
+- **A sale typed from paper counts for whoever is named under «Хто
+  продав»;** naming nobody, for whoever typed it.
+- **Shown on the receipt after a sale,** under «Продаж записано»; not on
+  an empty till.
+- **A collected order is not counted:** only the till's sales.
+- **After a sale typed from paper for someone else, the receipt says
+  nothing** of the seller's count.
+
+How it is carried out, not decided by the owner:
+- **The server counts it each time it is asked** (`GET /sales/sold-today`),
+  for whoever asks, in the till's store, and only for someone who may sell
+  there (`sale:create`). It says the units and the day and nothing else: no
+  sum, no way, nobody else's (G32).
+- **A sale typed from paper counts on the day it was typed,** as in «Звіт»
+  and the drawer, and as the till tells the seller («Він увійде в
+  сьогоднішні продажі»), whatever day the paper says.
+- **Every unit returned from those sales counts,** whoever took it back and
+  wherever, and whether or not the goods came back.
+- **Each store its own:** someone who sells in two stores sees each store's
+  count.
+- **The line is kept while the figure is read,** so nothing on the receipt
+  moves under the finger. If the server does not answer, it stays empty and
+  the receipt is the same.
+- **Not on «Продажу немає»** (nothing was on the shelf), nor on a kept sale
+  confirmed later: neither is the receipt after a sale.
+
+Built on 2026-10-17; see the [report](till-redesign-8-report.md).
