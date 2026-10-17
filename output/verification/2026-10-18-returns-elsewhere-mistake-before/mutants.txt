@@ -1,0 +1,19 @@
+- unchanged tree: passed 
+- the other stores offered before two letters: caught by at 360 px only the heading and the field stand above the sales, by day; a row is a target ; the other stores are offered from two letters under this store's results, headed, and left
+- the other stores never offered: caught by nothing found here says to call the manager for goods sold before Бірка; nothing found els; switching to the other stores never shows this store's rows under their heading; the other stores are offered from two letters under this store's results, headed, and left; the other stores' sales show no sum and no way either; a kept return of goods from the other store's own warehouse, checked by the phone itself o; a return taken elsewhere whose answer is lost is resent unchanged, and says who pays; goods bought at another store come back here, and this store hands the money back; goods sold from the other store's own warehouse go to one of this store's, chosen
+- switching shows this store's rows under the other stores' heading: caught by switching to the other stores never shows this store's rows under their heading
+- the other stores' results unheaded: caught by switching to the other stores never shows this store's rows under their heading; the other stores are offered from two letters under this store's results, headed, and left
+- no way back to this store: caught by the other stores are offered from two letters under this store's results, headed, and left
+- the field cleared keeps the other stores: caught by the other stores are offered from two letters under this store's results, headed, and left
+- goods before Бірка said in the other stores too: caught by nothing found here says to call the manager for goods sold before Бірка; nothing found els
+- goods before Бірка never said: caught by nothing found here says to call the manager for goods sold before Бірка; nothing found els
+- a warehouse chosen beforehand: caught by goods sold from the other store's own warehouse go to one of this store's, chosen
+- «Брак» offered as a chip: caught by goods sold from the other store's own warehouse go to one of this store's, chosen
+- a mistake's mending not said: caught by one coat back intact goes where it was sold, one damaged to the store's «Брак»
+- the till offered to whoever may not sell: caught by without sale:create alone, a mistake's mending says that part as how it is done; without «Брак» and the till, the result offers no section to open, says a mistake's mendin
+- «Брак» offered to whoever may not handle it: caught by without damaged:handle alone, a mistake's mending says that part as how it is done; without «Брак» and the till, the result offers no section to open, says a mistake's mendin
+- «Брак» said when nothing damaged came back: caught by the way not read says so, the seller's own goes, and the result's sum is the server's
+- a sale in parts mended at the till: caught by a return of a sale paid in parts lowers the debt first, and says what cash goes back
+- a mistake's mending on a kept notice: caught by Telegram buzzes once the server answers a return: an error refused, a success recorded; a 
+16 of 16 caught
+exit 0

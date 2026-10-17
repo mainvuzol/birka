@@ -2671,3 +2671,28 @@ How they are carried out, not decided by the owner:
   kept one confirmed later.
 
 Built on 2026-10-18; see the [report](returns-redesign-3-report.md).
+
+Then chosen next, the same day: P1-1's rest, P1-5 and P1-6, by the
+answers of 2026-10-17 (В3, В2, В5, each (а)). How they are carried out,
+not decided by the owner:
+- **The other stores are offered under this store's results once two
+  letters are typed:** «Купили в іншому магазині мережі? Шукати там»;
+  their results headed «В інших магазинах мережі», with «← У своєму
+  магазині»; fewer than two letters typed, and it is this store's list
+  again. Nothing of theirs is asked before (the server's own rule).
+- **Intact goods sold from another store's own warehouse** go to one of
+  this store's chosen by a chip, «Цілі — на який склад?», «Продали з
+  власного складу іншого магазину.»; none chosen beforehand.
+- **Under a return's result** (В2): «Помилилися з поверненням? Продайте ці
+  речі знову на касі; пошкоджене спершу поверніть у продаж у «Браку».» —
+  the «Брак» part only when damaged goods came back; to whoever may not
+  sell or handle «Брак», said as how it is done («Ці речі продають знову
+  на касі», «… спершу повертають у продаж у «Браку»»); for a sale in
+  parts, «Помилилися з поверненням? Помилку з продажем частинами вирішує
+  власник.» Not on a kept return's notice.
+- **Nothing found in this store** (В5) adds «Продали ще до Бірки? Покличте
+  менеджера — таке повернення вирішує він.», after the other stores'
+  offer, which is tried first; nothing found in the other stores does
+  not.
+
+Built on 2026-10-18; see the [report](returns-redesign-4-report.md).

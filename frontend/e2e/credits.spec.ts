@@ -601,6 +601,14 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   ).toBeVisible();
   await expect(page.getByText("Грошей покупцю не повертаємо.")).toBeVisible();
   await expect(page.getByText("Покупець ще винен 500,00 грн.")).toBeVisible();
+  // A mistake with a sale in parts is the owner's (owner decision,
+  // 2026-10-17, В2 (а); P1-5).
+  await expect(
+    page.getByText(
+      "Помилилися з поверненням? Помилку з продажем частинами вирішує власник.",
+      { exact: true },
+    ),
+  ).toBeVisible();
 
   // The last coat back, with its answer lost: the settled return still says
   // what to give back.

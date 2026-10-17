@@ -106,6 +106,30 @@ export function handedBack(
   return `${money(amount)}${how} повернули ${firstDays ? "раніше" : "під час збою"} — вдруге не повертайте.`;
 }
 
+/**
+ * «Помилилися з поверненням? …», under a return's result (P1-5): the till
+ * and «Брак» as instructions to whoever may use them, as how it is done to
+ * anyone else.
+ */
+function mistakeText(
+  inParts: boolean,
+  damaged: boolean,
+  sells: boolean,
+  handlesDamaged: boolean,
+): string {
+  if (inParts)
+    return "Помилилися з поверненням? Помилку з продажем частинами вирішує власник.";
+  const sell = sells
+    ? "Продайте ці речі знову на касі"
+    : "Ці речі продають знову на касі";
+  const first = !damaged
+    ? ""
+    : handlesDamaged
+      ? "; пошкоджене спершу поверніть у продаж у «Браку»"
+      : "; пошкоджене спершу повертають у продаж у «Браку»";
+  return `Помилилися з поверненням? ${sell}${first}.`;
+}
+
 /** Over the sum to hand back: the way, and what to do with it (P0-5). */
 const wayPills: Record<TillMethod, string> = {
   CASH: "Готівка · Поверніть покупцю",
@@ -318,6 +342,20 @@ export function Result({
           </p>
         )}
       </div>
+      {!kept && (
+        // How a mistaken return is mended (owner decision, 2026-10-17,
+        // В2 (а); returns task list, P1-5): sold again at the till, damaged
+        // goods first put back on sale in «Брак»; a sale in parts, by the
+        // owner. What this person cannot open is said, never offered.
+        <p className="hint return-mistake">
+          {mistakeText(
+            !!credit,
+            damaged > 0,
+            store.permissions.includes("sale:create"),
+            store.permissions.includes("damaged:handle"),
+          )}
+        </p>
+      )}
     </>
   );
   if (next.kept) return <div className="return-result kept">{body}</div>;

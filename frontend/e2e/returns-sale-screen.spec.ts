@@ -410,6 +410,10 @@ test("the way not read says so, the seller's own goes, and the result's sum is t
     }),
   ).toHaveCount(1);
   await expect(page.getByText(/3\s000,00/)).toHaveCount(0);
+  // Nothing damaged: the till alone mends a mistake (P1-5).
+  await expect(page.locator(".return-mistake")).toHaveText(
+    "Помилилися з поверненням? Продайте ці речі знову на касі.",
+  );
   await noSideScroll(page);
 });
 
@@ -499,7 +503,7 @@ test("a return refused is said above the panel, in view, and the counts are kept
   ]);
 });
 
-test("without «Брак» and the till, the result names no section and offers only «До списку»", async ({
+test("without «Брак» and the till, the result offers no section to open, says a mistake's mending as how it is done, and offers only «До списку»", async ({
   page,
 }) => {
   await without(page, ["damaged:handle", "sale:create"]);
@@ -514,6 +518,10 @@ test("without «Брак» and the till, the result names no section and offers 
     page.getByText("Пошкоджені: 1 шт. — у «Брак».", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/розділі «Брак»/)).toHaveCount(0);
+  // The till and «Брак» said as how it is done, never offered (P1-5).
+  await expect(page.locator(".return-mistake")).toHaveText(
+    "Помилилися з поверненням? Ці речі продають знову на касі; пошкоджене спершу повертають у продаж у «Браку».",
+  );
   await expect(page.getByRole("button", { name: "Новий продаж" })).toHaveCount(
     0,
   );
@@ -639,9 +647,28 @@ test("a warehouse to choose, for goods from another store's own, is brought abov
 }) => {
   const coat = { ...line("Лоран шоколад"), back_to_sold_from: false };
   await oneSale(page, [coat]);
+  // A store's two warehouses, as a store has: the shared test store holds
+  // every journey's.
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    await route.fulfill({
+      json: [
+        ["Основний склад", "4f1c2b3a-0d9e-4c7b-8a6f-5e4d3c2b1a01"],
+        ["Склад повернень", "4f1c2b3a-0d9e-4c7b-8a6f-5e4d3c2b1a02"],
+      ].map(([name, id]) => ({
+        id,
+        store_id: fixture.store_id,
+        name,
+        is_active: true,
+        can_receive: true,
+        damaged_returns: false,
+      })),
+    });
+  });
   await opened(page);
   await returnUnits(page, { intact: 1 });
-  const place = page.getByLabel("Цілий товар — на склад вашого магазину");
+  // A chip each (P1-1), brought into view with the tag.
+  const place = page.getByRole("group", { name: "Цілі — на який склад?" });
+  await expect(place.locator(".chip").first()).toBeVisible();
   await expect(place).toBeInViewport({ ratio: 1 });
   const tag = await page.locator(".line-return").boundingBox();
   const under = await panelOf(page).boundingBox();
@@ -776,6 +803,7 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
   await expect(
     notice.getByText(/^Пошкоджені: 1 шт\. — у «Брак»\./),
   ).toBeVisible();
+  await expect(notice.locator(".return-mistake")).toHaveCount(0);
   await expect(
     notice.getByRole("button", { name: "Новий продаж" }),
   ).toHaveCount(0);
@@ -809,3 +837,27 @@ test("paid in parts, a way not read asks for one only if money goes back", async
     }),
   ).toBeEnabled();
 });
+
+for (const rights of [
+  {
+    lacking: "damaged:handle",
+    said: "Помилилися з поверненням? Продайте ці речі знову на касі; пошкоджене спершу повертають у продаж у «Браку».",
+  },
+  {
+    lacking: "sale:create",
+    said: "Помилилися з поверненням? Ці речі продають знову на касі; пошкоджене спершу поверніть у продаж у «Браку».",
+  },
+])
+  test(`without ${rights.lacking} alone, a mistake's mending says that part as how it is done`, async ({
+    page,
+  }) => {
+    await without(page, [rights.lacking]);
+    const coat = line("Лоран шоколад");
+    await oneSale(page, [coat]);
+    await opened(page);
+    await returnUnits(page, { damaged: 1 });
+    await panelOf(page)
+      .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
+      .click();
+    await expect(page.locator(".return-mistake")).toHaveText(rights.said);
+  });
