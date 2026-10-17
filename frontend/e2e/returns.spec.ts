@@ -146,8 +146,8 @@ async function find(page: Page, model: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).toHaveCount(1);
 }
 
@@ -234,7 +234,7 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
     before + 1,
   );
   expect(await held(page, token, fixture.bin_location_id, variant)).toBe(1);
-  await expect(page.getByRole("article")).toContainText("(повернено 2)");
+  await expect(page.getByRole("article")).toContainText("повернено 2 шт.");
   await expect(page.getByText("Усе вже повернено")).toBeVisible();
 });
 
@@ -404,10 +404,10 @@ test("the search says when no sale has such goods", async ({ page }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(`немає ${randomUUID()}`);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(`немає ${randomUUID()}`);
+  await page.getByLabel("Що повертають?").press("Enter");
   await expect(
-    page.getByText("Продажів із таким товаром не знайдено."),
+    page.getByText(/^За «немає .*» продажів не знайдено\./),
   ).toBeVisible();
 });
 

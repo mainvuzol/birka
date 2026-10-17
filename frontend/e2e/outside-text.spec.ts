@@ -291,8 +291,8 @@ test("text from outside is shown with its hidden characters marked, on every scr
 
   // «Повернення»: the seller's sale, found by the model.
   await open(page, fixture.telegram_user_id, "Оля", "Повернення");
-  await page.getByLabel("Пошук за назвою товару").fill(tag);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(tag);
+  await page.getByLabel("Що повертають?").press("Enter");
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`);
 
   // «Каса»: the seller's own sale, among what they may correct.

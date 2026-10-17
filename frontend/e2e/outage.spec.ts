@@ -2845,7 +2845,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await openStore(page, /Подільський/);
     await expect(
       page.getByText(
-        "Повернення не записано. Частину цього товару вже повернули. Поверніться до списку й оновіть продаж.",
+        "Повернення не записано. Частину цього товару вже повернули. Поверніться до списку: він покаже, що можна повернути тепер.",
         { exact: true },
       ),
     ).toBeVisible();

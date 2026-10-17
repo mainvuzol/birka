@@ -1,0 +1,19 @@
+- unchanged tree: passed 
+- each sale shows its sum again: caught by the list shows no sum and no way, the sale opened shows its sum; a row opens whole, a sale; the other stores' sales show no sum and no way either
+- the row opens nothing: caught by back from a sale, the list is read again; the list shows no sum and no way, the sale opened shows its sum; a row opens whole, a sale
+- a sale returned whole still opens: caught by the list shows no sum and no way, the sale opened shows its sum; a row opens whole, a sale
+- the search waits for Enter: caught by a search typed keeps the list where it was until the new one comes; the search runs as it is typed, from two letters; Enter at once; one letter lists every sa
+- one letter filters: caught by the search runs as it is typed, from two letters; Enter at once; one letter lists every sa
+- «Показати ще» grows the limit again: caught by a next page that cannot be read keeps the sales read, and offers to try again; a sale read twice across a page's edge is shown once; «Показати ще» reads twenty more at a time, never past the server's fifty, each sale once
+- a sale read twice is shown twice: caught by a sale read twice across a page's edge is shown once
+- a next page that fails loses the list: caught by a next page that cannot be read keeps the sales read, and offers to try again; the list read again and refused says so above the rows it had, and is read again on asking
+- a next page that fails offers nothing: caught by a next page that cannot be read keeps the sales read, and offers to try again
+- the days are not headed: caught by at 360 px only the heading and the field stand above the sales, by day; a row is a target 
+- the other stores are never searched: caught by a kept return of goods from the other store's own warehouse, checked by the phone itself o; a return taken elsewhere whose answer is lost is resent unchanged, and says who pays; goods bought at another store come back here, and this store hands the money back; goods sold from the other store's own warehouse go to one of this store's, chosen
+- a list read again and refused says nothing: caught by the list read again and refused says so above the rows it had, and is read again on asking
+- back from a sale, the list is not read again: caught by back from a sale, the list is read again
+- Enter does nothing: caught by the search runs as it is typed, from two letters; Enter at once; one letter lists every sa
+- a search blanks the list: caught by a search typed keeps the list where it was until the new one comes; the search runs as it is typed, from two letters; Enter at once; one letter lists every sa
+- a row's marks are not its description: caught by the list shows no sum and no way, the sale opened shows its sum; a row opens whole, a sale
+- «Очистити» keeps the words: caught by the search runs as it is typed, from two letters; Enter at once; one letter lists every sa
+17 of 17 caught

@@ -567,8 +567,8 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  await page.getByLabel("Пошук за назвою товару").fill(model);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).toContainText("Оплата частинами");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(
