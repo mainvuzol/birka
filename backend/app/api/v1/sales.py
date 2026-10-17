@@ -40,7 +40,7 @@ it carries no sum or way, so the blind count is untouched.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal, NamedTuple
 
@@ -57,6 +57,7 @@ from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
 from app.modules.cash.current import sale_methods
+from app.modules.cash.sold_today import sold_today
 from app.modules.catalog.read import size_labels
 from app.modules.credit import service as credit_service
 from app.modules.refunds.service import refunded_quantities
@@ -816,6 +817,29 @@ async def list_store_sales(
             for sale in page.sales
         ],
     )
+
+
+class SoldTodayResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    business_day: date
+    units: int
+
+
+@router.get("/sales/sold-today", response_model=SoldTodayResponse)
+async def read_sold_today(
+    scope: ScopeDep,
+    session: SessionDep,
+    store_id: Annotated[uuid.UUID, Query()],
+) -> SoldTodayResponse:
+    """«Сьогодні ви продали N шт.» on the till's receipt: the caller's own
+    units sold today in this store, less those returned, and nothing else —
+    no sum, no way, nobody else's (owner decisions, 2026-10-16, В8, and
+    2026-10-17; `cash.sold_today`). Declared before `/sales/{sale_id}`,
+    which would take its path for a sale's id."""
+    scope.require(Permission.SALE_CREATE, store_id)
+    figure = await sold_today(session, scope=scope, store_id=store_id)
+    return SoldTodayResponse(business_day=figure.business_day, units=figure.units)
 
 
 @router.get("/sales/{sale_id}", response_model=SaleResponse)

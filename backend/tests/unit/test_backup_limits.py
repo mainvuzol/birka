@@ -73,8 +73,10 @@ async def test_a_tool_that_hangs_is_stopped_and_its_step_says_so(tmp_path):
     pidfile = tmp_path / "pid"
     started = time.monotonic()
 
-    with pytest.raises(ToolError, match=r"^pg_dump did not finish within 0\.5 s and was stopped$"):
-        await run(tool, str(pidfile), timeout=0.5)
+    # 2 s, not less: a tool stopped before its shell wrote its id would leave
+    # nothing to check the stop by (it failed so once in ten runs at 0.5 s).
+    with pytest.raises(ToolError, match=r"^pg_dump did not finish within 2 s and was stopped$"):
+        await run(tool, str(pidfile), timeout=2)
 
     assert time.monotonic() - started < 10
     assert gone(int(pidfile.read_text())), "the hung tool was killed, not left behind"
@@ -86,15 +88,15 @@ async def test_each_step_has_its_own_limit_and_its_variable_changes_it(tmp_path,
     assert timeout_for("age") == 30 * 60
     assert timeout_for("rsync") == 30 * 60, "any other tool is limited too"
 
-    monkeypatch.setenv("BIRKA_BACKUP_RESTORE_TIMEOUT_SECONDS", "0.5")
-    assert timeout_for("pg_restore") == 0.5
+    monkeypatch.setenv("BIRKA_BACKUP_RESTORE_TIMEOUT_SECONDS", "2")
+    assert timeout_for("pg_restore") == 2
     assert timeout_for("pg_dump") == 2 * 3600
     tool = hanging(tmp_path / "bin", "pg_restore")
     pidfile = tmp_path / "pid"
     with pytest.raises(ToolError) as refused:
         await run(tool, str(pidfile))
     assert str(refused.value) == (
-        "pg_restore did not finish within 0.5 s and was stopped; "
+        "pg_restore did not finish within 2 s and was stopped; "
         "BIRKA_BACKUP_RESTORE_TIMEOUT_SECONDS gives it longer"
     )
     assert gone(int(pidfile.read_text()))

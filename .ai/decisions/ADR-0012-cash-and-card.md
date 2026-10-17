@@ -168,7 +168,10 @@ business days in between on which money moved; never the counted day.
   - their own operations of the open period are listed by time and goods
     only (`GET /cash/events?mine=true`);
   - the way of one sale is given only where it is needed: the sale being
-    returned or fixed.
+    returned or fixed;
+  - `GET /sales/sold-today?store_id=` (2026-10-17, В8, `cash.sold_today`)
+    gives the caller's own units sold today, less those returned, and the
+    day: no sum, no way, nobody else's; `sale:create` there.
 - **After their close** the seller sees what it should have held, what they
   counted, the difference, card and transfer, and the days not closed. They
   do not see the order ways, «не вказано» or the cash's breakdown. A
@@ -424,9 +427,10 @@ append-only `cash_movement` row.
   are append-only; `cash_message`'s status moves, as a backup alert's does.
 - **`0034` is frozen** in the same change.
 - **Module `cash`** (ADR-0001 amendment, 2026-10-04): `models`, `current`
-  (current ways, read-only), `service`, `read`, `messages`. No money module
-  imports it: the stamp is a trigger, and the API merges current ways into
-  answers. 31 import contracts.
+  (current ways, read-only), `service`, `read`, `messages`, and, since
+  2026-10-17, `sold_today` (the seller's units of the day, read-only). No
+  money module imports it: the stamp is a trigger, and the API merges
+  current ways into answers. 31 import contracts.
 
 ### 16. The hot path
 

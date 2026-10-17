@@ -1,0 +1,22 @@
+- unchanged tree: passed 
+- a paper sale counts for whoever typed it: caught by test_a_sale_typed_from_paper_counts_for_whoever_is_named_as_selling
+- everyone's sales count: caught by test_a_sale_typed_from_paper_counts_for_whoever_is_named_as_selling; test_only_the_caller_s_own_sales_count
+- a collected order counts: caught by test_a_collected_order_is_not_counted
+- returns are not taken off: caught by test_a_seller_s_units_today_less_those_returned_and_nothing_else; test_only_the_caller_s_own_sales_count
+- the day begins at midnight: caught by test_a_day_runs_from_six_to_six_by_the_store_s_own_clock
+- the day is counted by UTC: caught by test_a_day_runs_from_six_to_six_by_the_store_s_own_clock
+- the store's returns of the day are taken off, whoever's sale: caught by test_a_day_runs_from_six_to_six_by_the_store_s_own_clock; test_only_the_caller_s_own_sales_count
+- a return after the day's end is taken off: caught by test_a_day_runs_from_six_to_six_by_the_store_s_own_clock
+- another store's sales count: caught by test_each_store_counts_its_own
+- the day never ends: caught by test_a_day_runs_from_six_to_six_by_the_store_s_own_clock; test_the_day_is_the_store_s_from_six_to_six
+- the days before count: caught by test_a_day_runs_from_six_to_six_by_the_store_s_own_clock; test_the_day_is_the_store_s_from_six_to_six
+- anyone reads it: caught by test_only_someone_who_may_sell_there_reads_it
+- the receipt never says it: caught by a sale typed from paper naming nobody, or the seller, is the seller's, and says their day; after a sale the receipt says how many units the seller sold today, as the server counts t; the line is kept while the figure comes, so nothing on the receipt moves
+- the path doubles /api/v1: caught by a sale typed from paper naming nobody, or the seller, is the seller's, and says their day; after a sale the receipt says how many units the seller sold today, as the server counts t
+- the store is not named: caught by a figure the server does not give leaves the receipt as it is; a sale typed from paper naming nobody, or the seller, is the seller's, and says their day; after a sale the receipt says how many units the seller sold today, as the server counts t; the line is kept while the figure comes, so nothing on the receipt moves
+- a paper sale for someone else says it: caught by a sale typed from paper for someone else says nothing of the seller's day
+- a paper sale for the seller says nothing: caught by a sale typed from paper naming nobody, or the seller, is the seller's, and says their day
+- a paper sale naming nobody says nothing: caught by a sale typed from paper naming nobody, or the seller, is the seller's, and says their day
+- the line is not kept while the figure comes: caught by the line is kept while the figure comes, so nothing on the receipt moves
+- the figure is not announced: caught by after a sale the receipt says how many units the seller sold today, as the server counts t
+20 of 20 caught

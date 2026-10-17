@@ -1627,6 +1627,7 @@ function Workspace({
             key={saleEpoch}
             store={store}
             token={token}
+            userId={me.user_id}
             journalKey={saleKey}
             blocked={
               storageError ||
