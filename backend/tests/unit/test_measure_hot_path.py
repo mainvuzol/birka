@@ -67,6 +67,31 @@ async def bodies_sent(builder: harness.RequestBuilder, count: int) -> list[dict[
     return sent
 
 
+async def test_the_till_of_two_warehouses_is_read_naming_none() -> None:
+    """The read of a store that sells from two warehouses (sale-slice TZ,
+    P2-5): no warehouse named, alone and by six sellers, gated as reads."""
+    cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
+    every = [case for case in cases if "every warehouse" in case[0]]
+    assert [(name, count, sellers) for name, _, count, sellers in every] == [
+        ("GET /catalog/stock-options · every warehouse", 200, 1),
+        ("GET /catalog/stock-options · every warehouse (6 sellers)", 300, 6),
+    ]
+    asked: list[httpx.URL] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url)
+        return httpx.Response(200, json={})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(answer), base_url="http://perf"
+    ) as client:
+        for index in range(3):
+            await every[0][1](client, index)
+    assert all("location_id" not in url.params for url in asked)
+    assert [url.params.get("query") for url in asked] == [None, "мод", "модель 2"]
+    assert harness.summarise(every[0][0], 1, [1.0])["budget"] == 300.0
+
+
 def test_the_six_earlier_cases_run_first_and_unchanged() -> None:
     cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
 
@@ -134,7 +159,7 @@ async def test_every_sale_paid_in_parts_is_a_new_customer_the_till_accepts() -> 
 
 
 @pytest.mark.parametrize("gate", harness.GATES)
-async def test_the_till_s_search_is_measured_last_within_the_catalogue_s_budget(
+async def test_the_till_s_search_is_measured_after_the_sales_within_the_catalogue_s_budget(
     monkeypatch: pytest.MonkeyPatch, gate: str
 ) -> None:
     """Redesign P0-2: a search the whole seeded network matches, and a model's
@@ -142,8 +167,8 @@ async def test_the_till_s_search_is_measured_last_within_the_catalogue_s_budget(
     monkeypatch.setattr(harness, "GATE", gate)
     cases = harness.cases(a_world(), {"Authorization": "Bearer t"})
 
-    assert [(name, count, sellers) for name, _, count, sellers in cases[8:]] == SEARCH
-    for name, builder, count, sellers in cases[8:]:
+    assert [(name, count, sellers) for name, _, count, sellers in cases[8:10]] == SEARCH
+    for name, builder, count, sellers in cases[8:10]:
         row = harness.summarise(name, sellers, [1.0] * count)
         assert row["budget"] == 300.0
         assert row["gated"] is (gate == "all" or sellers == 1)

@@ -7,6 +7,7 @@ import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
+import { Placeholder } from "@/shared/Placeholder";
 import {
   connectTelegram,
   telegramInitData,
@@ -332,7 +333,7 @@ export function App(): JSX.Element {
     return (
       <main>
         <h1>Бірка</h1>
-        <p role="status">Входимо в магазин…</p>
+        <Placeholder said="Входимо в магазин…" field />
       </main>
     );
   // One store needs no choice: the app opens on it (redesign, P0-1). With

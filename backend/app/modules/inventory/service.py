@@ -66,6 +66,7 @@ from app.modules.inventory.models import (
 )
 from app.modules.tenancy.models import StockLocation
 from app.modules.tenancy.service import (
+    LocationCapability,
     accessible_locations,
     damaged_returns_locations,
     hold_trading_stores,
@@ -852,13 +853,19 @@ async def stock_for_sale(
     *,
     organization_id: uuid.UUID,
     store_id: uuid.UUID,
-    location_id: uuid.UUID,
+    location_id: uuid.UUID | None,
     scope: RequestScope,
     query: str = "",
     limit: int = 100,
     offset: int = 0,
 ) -> list[StockRow]:
     """What one warehouse holds, as the till lists it: by name, a search narrowing it.
+
+    With no warehouse named, every warehouse the store sells from now —
+    active, with `can_sell` — and the caller may read (sale-slice TZ, P2-5):
+    a store with two finds a coat in either at once, and each row says
+    where it is, so the seller still chooses the warehouse, line by line
+    (owner decision, 2026-09-17; 2026-10-17, a chip per warehouse).
 
     The same balances as `readable_stock`, under the same access (I23), and
     only those above nothing. Ordered by the model's name, its source and its
@@ -880,6 +887,20 @@ async def stock_for_sale(
         location_id=location_id,
         scope=scope,
     )
+    if location_id is None:
+        selling = await accessible_locations(
+            session,
+            organization_id=organization_id,
+            store_id=store_id,
+            capability=LocationCapability.SELL,
+        )
+        granted &= set(
+            await session.scalars(
+                select(StockLocation.id).where(
+                    StockLocation.id.in_(selling), StockLocation.is_active.is_(True)
+                )
+            )
+        )
     if not granted:
         return []
     colour = aliased(AttributeTerm)
@@ -933,6 +954,7 @@ async def stock_for_sale(
                 Inventory.product_variant_id,
                 size_order,
                 Inventory.size_id,
+                Inventory.location_id,
             )
             .limit(limit)
             .offset(offset)

@@ -65,8 +65,12 @@ async function enter(page: Page): Promise<Option[]> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  // That warehouse's list, not every warehouse's (P2-5).
   const listed = page.waitForResponse(
-    (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
+    (r) =>
+      r.url().includes("/catalog/stock-options?") &&
+      r.url().includes(`location_id=${fixture.legacy_location_id}`) &&
+      r.status() === 200,
   );
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
