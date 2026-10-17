@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, CONFLICT_TEXT, errorText, INVALID_TEXT } from "@/shared/api";
@@ -15,6 +15,7 @@ import type { TillMethod } from "@/shared/payment";
 import { backNoted, useReach } from "@/shared/reach";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Placeholder } from "@/shared/Placeholder";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
 import { setPaper, setSoldBy, usePaper } from "./paper";
@@ -240,13 +241,43 @@ export function Sale({
   const chosen = locations.data?.find((location) => location.id === locationId);
   const warehouse = chosen?.name ?? "";
   const waiting = chosen?.awaiting_first_stock === true;
+  const sellable = (locations.data ?? []).filter(
+    (location) => location.is_active && location.can_sell,
+  );
+  const onlyWarehouse = sellable.length === 1 ? sellable[0] : undefined;
+  // A store that sells from two or more lists them all at once, unless the
+  // seller narrows it to one; each chip says its warehouse and sells from
+  // there (sale-slice TZ, P2-5; owner decision, 2026-10-17).
+  const searchAll = sellable.length >= 2 && locationId === "";
+  // Those still waiting for their opening list sell on paper meanwhile;
+  // the others are listed (owner decision, 2026-10-17).
+  const ready = sellable.filter((location) => !location.awaiting_first_stock);
+  const stillWaiting = sellable.filter(
+    (location) => location.awaiting_first_stock === true,
+  );
+  const places = useMemo(
+    () =>
+      searchAll
+        ? new Map(
+            (locations.data ?? [])
+              .filter((location) => location.is_active && location.can_sell)
+              .map((location) => [location.id, location.name]),
+          )
+        : null,
+    [searchAll, locations.data],
+  );
+  // From the catalogue, with every warehouse listed: which one the coat in
+  // hand is from, said by the seller, never guessed (owner decision,
+  // 2026-09-17).
+  const [catalogAt, setCatalogAt] = useState("");
+  const catalogPlace = ready.find((location) => location.id === catalogAt);
   const stock = useStock({
     store,
     token,
     journalKey,
-    locationId,
+    locationId: searchAll ? null : locationId,
     query,
-    enabled: !locations.isError && !waiting,
+    enabled: !locations.isError && !waiting && (!searchAll || ready.length > 0),
   });
   const listed = (stock.data?.pages ?? []).flatMap((page) => page.items);
   const mayFindInCatalog = mayReadLabel && !paper;
@@ -325,10 +356,14 @@ export function Sale({
     }
   }, [locationId, locations.isSuccess, locations.data]);
 
-  const sellable = (locations.data ?? []).filter(
-    (location) => location.is_active && location.can_sell,
-  );
-  const onlyWarehouse = sellable.length === 1 ? sellable[0] : undefined;
+  // A line says its warehouse while every one is listed, or the basket holds
+  // more than one (review, 2026-10-17): two «Лоран шоколад · M» are then
+  // told apart, and a shortfall says which shelf to look at.
+  const spans = new Set(draft.map((d) => d.line.source_location_id)).size > 1;
+  const placeOf = (id: string): string =>
+    searchAll || spans
+      ? ` · ${visible(locations.data?.find((location) => location.id === id)?.name ?? "")}`
+      : "";
   // Where the goods leave from, named on a paper sale's press: a store may
   // sell from two warehouses, and the paper says which (G21).
   const from = [
@@ -360,10 +395,14 @@ export function Sale({
    * previous one's, and its field takes the cursor.
    */
   function put(item: StockOption): void {
+    // A chip's own warehouse; an answer from a server before it said one
+    // is the warehouse chosen; and never none (the server never chooses).
+    const place = item.location_id || locationId;
+    if (!place) return;
     const line: SaleLine = {
       product_variant_id: item.product_variant_id,
       size_id: item.size_id,
-      source_location_id: locationId,
+      source_location_id: place,
       quantity: 1,
       unit_price: item.suggested_price ? asPrice(item.suggested_price) : "",
       discount_amount: "0.00",
@@ -391,6 +430,7 @@ export function Sale({
         unknownStock: item.size_is_unknown,
         unknownNearby: listed.some(
           (other) =>
+            (other.location_id || locationId) === place &&
             other.product_variant_id === item.product_variant_id &&
             other.size_is_unknown &&
             other.available_quantity > 0,
@@ -658,13 +698,14 @@ export function Sale({
       heldUnknown.has(
         `${shortDraft.line.source_location_id}:${shortDraft.line.product_variant_id}`,
       ) ||
-      (shortDraft.line.source_location_id === locationId &&
-        listed.some(
-          (item) =>
-            item.product_variant_id === shortDraft.line.product_variant_id &&
-            item.size_is_unknown &&
-            item.available_quantity > 0,
-        )));
+      listed.some(
+        (item) =>
+          (item.location_id || locationId) ===
+            shortDraft.line.source_location_id &&
+          item.product_variant_id === shortDraft.line.product_variant_id &&
+          item.size_is_unknown &&
+          item.available_quantity > 0,
+      ));
   const working = busy || pending !== null;
   // The server's answer to a shortage opens above the panel, in view and
   // focused, so it is never past the edge of the screen (redesign P0-4).
@@ -740,6 +781,12 @@ export function Sale({
     return (
       <Receipt
         receipt={receipt}
+        placeOf={(id) =>
+          searchAll ||
+          new Set(receipt.items.map((item) => item.source_location_id)).size > 1
+            ? ` · ${visible(locations.data?.find((location) => location.id === id)?.name ?? "")}`
+            : ""
+        }
         storeId={store.id}
         token={token}
         userId={userId}
@@ -847,7 +894,7 @@ export function Sale({
           </>
         )}
         {locations.isPending ? (
-          <p role="status">Завантажуємо склади…</p>
+          <Placeholder said="Завантажуємо склади…" field />
         ) : locations.error ? (
           <Failure
             error={locations.error}
@@ -868,7 +915,11 @@ export function Sale({
                 setFromCatalog(false);
               }}
             >
-              <option value="">З якого складу віддаєте?</option>
+              <option value="">
+                {sellable.length >= 2
+                  ? "Усі склади"
+                  : "З якого складу віддаєте?"}
+              </option>
               {locations.data.map((location) => (
                 <option
                   key={location.id}
@@ -897,73 +948,137 @@ export function Sale({
             На складі «{visible(warehouse)}» зараз немає товару в обліку. Поки
             власник не затвердить початкові залишки, продавайте на папері.
           </p>
+        ) : searchAll && ready.length === 0 ? (
+          <p className="empty">
+            На складах магазину зараз немає товару в обліку. Поки власник не
+            затвердить початкові залишки, продавайте на папері.
+          </p>
+        ) : fromCatalog && searchAll ? (
+          <>
+            <label>
+              З якого складу віддаєте?
+              <select
+                value={catalogAt}
+                onChange={(event) => {
+                  setCatalogAt(event.target.value);
+                }}
+              >
+                <option value="">Оберіть склад</option>
+                {ready.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {visible(location.name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {catalogPlace ? (
+              <FromCatalog
+                store={store}
+                token={token}
+                scopeKey={journalKey}
+                warehouse={catalogPlace.name}
+                locationId={catalogPlace.id}
+                pick={put}
+                close={() => {
+                  setFromCatalog(false);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setFromCatalog(false);
+                }}
+              >
+                Назад до списку
+              </button>
+            )}
+          </>
         ) : locationId && fromCatalog ? (
           <FromCatalog
             store={store}
             token={token}
             scopeKey={journalKey}
             warehouse={warehouse}
+            locationId={locationId}
             pick={put}
             close={() => {
               setFromCatalog(false);
             }}
           />
         ) : (
-          locationId && (
-            <StockSearch
-              text={text}
-              type={setText}
-              query={query}
-              stock={stock}
-              warehouse={warehouse}
-              pick={put}
-              canAdd={(item) =>
-                draft.length < 100 ||
-                draft.some(
-                  (d) =>
-                    stockKey(d.line) ===
-                    stockKey({
-                      source_location_id: locationId,
-                      product_variant_id: item.product_variant_id,
-                      size_id: item.size_id,
-                    }),
-                )
-              }
-              offerHeld={paper}
-              searchRef={searchRef}
-              failure={
-                stock.error ? (
-                  <Failure
-                    error={stock.error}
-                    retry={() => {
-                      void stock.refetch();
-                    }}
-                  />
-                ) : null
-              }
-              offer={
-                mayFindInCatalog ? (
-                  <p className="hint">
-                    Товар у руках, а в списку його немає?{" "}
-                    <button
-                      type="button"
-                      className="quiet"
-                      onClick={() => {
-                        setFromCatalog(true);
+          (locationId || searchAll) && (
+            <>
+              {searchAll && stillWaiting.length > 0 && (
+                // Owner decision, 2026-10-17: the others listed, these on
+                // paper meanwhile (P1-5).
+                <p className="hint">
+                  {stillWaiting.length === 1
+                    ? `Склад «${visible(stillWaiting[0]?.name ?? "")}» ще чекає початкових залишків: його товар продавайте на папері.`
+                    : `Склади ${stillWaiting.map((location) => `«${visible(location.name)}»`).join(", ")} ще чекають початкових залишків: їхній товар продавайте на папері.`}
+                </p>
+              )}
+              <StockSearch
+                text={text}
+                type={setText}
+                query={query}
+                stock={stock}
+                warehouse={warehouse}
+                places={places}
+                pick={put}
+                canAdd={(item) =>
+                  draft.length < 100 ||
+                  draft.some(
+                    (d) =>
+                      stockKey(d.line) ===
+                      stockKey({
+                        source_location_id: item.location_id || locationId,
+                        product_variant_id: item.product_variant_id,
+                        size_id: item.size_id,
+                      }),
+                  )
+                }
+                offerHeld={paper}
+                searchRef={searchRef}
+                failure={
+                  stock.error ? (
+                    <Failure
+                      error={stock.error}
+                      retry={() => {
+                        void stock.refetch();
                       }}
-                    >
-                      Знайти в каталозі
-                    </button>
-                  </p>
-                ) : null
-              }
-            />
+                    />
+                  ) : null
+                }
+                offer={
+                  mayFindInCatalog ? (
+                    <p className="hint">
+                      Товар у руках, а в списку його немає?{" "}
+                      <button
+                        type="button"
+                        className="quiet"
+                        onClick={() => {
+                          setCatalogAt("");
+                          setFromCatalog(true);
+                        }}
+                      >
+                        Знайти в каталозі
+                      </button>
+                    </p>
+                  ) : null
+                }
+              />
+            </>
           )
         )}
         {validation && <p role="alert">{validation}</p>}
-        {draft.length === 0 && locationId && !waiting && !fromCatalog && (
-          <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
-        )}
+        {draft.length === 0 &&
+          (locationId || (searchAll && ready.length > 0)) &&
+          !waiting &&
+          !fromCatalog && (
+            <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
+          )}
         {draft.length > 0 && (
           // «Кошик» names the lines to pay, and nothing else (P2-2).
           <div role="group" aria-label="Кошик">
@@ -974,12 +1089,13 @@ export function Sale({
               >
                 <strong>
                   {visible(d.name)} · {visible(d.size)}
+                  {placeOf(d.line.source_location_id)}
                 </strong>
                 <div className="line-edit">
                   <div
                     className="stepper"
                     role="group"
-                    aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}`}
+                    aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
                   >
                     <button
                       type="button"
@@ -1097,6 +1213,7 @@ export function Sale({
                   }}
                 >
                   Прибрати {visible(d.name)}
+                  {placeOf(d.line.source_location_id)}
                 </button>
               </div>
             ))}
@@ -1152,9 +1269,9 @@ export function Sale({
           ) : (
             <>
               <p>
-                {visible(shortDraft.name)} · {visible(shortDraft.size)}: у
-                кошику {shortfall.requested} шт., в обліку {shortfall.available}{" "}
-                шт.
+                {visible(shortDraft.name)} · {visible(shortDraft.size)}
+                {placeOf(shortDraft.line.source_location_id)}: у кошику{" "}
+                {shortfall.requested} шт., в обліку {shortfall.available} шт.
                 {shortfall.reserved === true && " поза резервом замовлення."}
               </p>
               {paper ? (
@@ -1307,7 +1424,7 @@ export function Sale({
         >
           <p className="pay-what">
             {draft.length === 1 && draft[0]
-              ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
+              ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${placeOf(draft[0].line.source_location_id)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
               : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} шт.`}
           </p>
           <p className="pay-total">
@@ -1411,6 +1528,7 @@ function SoldToday({
 
 function Receipt({
   receipt,
+  placeOf,
   storeId,
   token,
   userId,
@@ -1421,6 +1539,8 @@ function Receipt({
   sizes,
 }: {
   receipt: SaleReceipt;
+  /** « · Свій» after a line, where the sale's warehouses need telling apart. */
+  placeOf: (id: string) => string;
   storeId: string;
   token: string;
   userId: string;
@@ -1528,6 +1648,7 @@ function Receipt({
             <strong>
               {visible(item.display_name)}
               {size !== null && ` · ${size}`}
+              {placeOf(item.source_location_id)}
             </strong>
             <span>
               {item.quantity} × {money(item.final_unit_price)}

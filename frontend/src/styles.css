@@ -717,6 +717,52 @@ html {
   margin-top: 8px;
   display: block;
 }
+/* Read by a screen reader, never seen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* The places of what is being read (P2-6): the field and the tags to come,
+   in their sizes, so nothing moves when they come. */
+.skeleton {
+  display: block;
+  border-radius: 10px;
+  background: var(--line);
+  animation: skeleton-breathe 1.4s ease-in-out infinite;
+}
+.skeleton-label {
+  width: 7em;
+  height: 1.1em;
+  margin: 0 0 8px;
+}
+.skeleton-field {
+  height: 52px;
+  border-radius: 14px;
+}
+.skeleton-name {
+  width: 55%;
+  height: 1.2em;
+}
+.chip.skeleton {
+  width: 72px;
+}
+@keyframes skeleton-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
 /* «Сьогодні ви продали N шт.» on the receipt: its line kept while the
    figure is read, so the receipt does not move (В8). */
 .sold-today {

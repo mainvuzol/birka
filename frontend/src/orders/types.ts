@@ -84,6 +84,9 @@ export interface Location {
   awaiting_first_stock?: boolean;
 }
 export interface StockOption {
+  /** Where it is: the warehouse asked for, or each the store sells from
+   * when the till asks for all (sale-slice TZ, P2-5). */
+  location_id: string;
   product_variant_id: string;
   size_id: string;
   display_name: string;

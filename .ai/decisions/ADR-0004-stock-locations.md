@@ -273,3 +273,18 @@ Taking goods out of «Брак» was built the same day, as the owner decided
   store's «Брак» unless the caller is one of these two, or a return taken
   damaged (`DAMAGED_STOCK_CLOSED`). That holds for a delivery, a transfer, a
   correction and a stock list alike.
+
+## 2026-10-17 amendment — the till lists every warehouse it sells from
+
+The owner's choice of 2026-10-17 (business-rules.md; sale-slice TZ, P2-5):
+a store that sells from two warehouses finds a coat in either at once, a
+chip per warehouse.
+
+- `GET /catalog/stock-options` takes `location_id` as before, and without
+  it lists every warehouse the store sells from now — active, with
+  `can_sell` — that the caller may read (I23 unchanged). Each row names its
+  warehouse (`location_id`), and rows are ordered as before, then by
+  warehouse, so pages neither repeat nor skip one.
+- **The warehouse stays explicit on every sale line** (§6, 2026-09-17): the
+  chip tapped is the line's warehouse; the server never chooses, and a
+  shortfall is still `INSUFFICIENT_STOCK`, never another warehouse.

@@ -410,9 +410,11 @@ pre-dispatch cancellation and confirmed physical return before collection.
 
 `GET /api/v1/orders?store_id=...&limit=50&offset=0` returns `orders` and `has_more`;
 access filtering happens before pagination. `GET /api/v1/catalog/stock-options`
-accepts `store_id`, `location_id`, `limit`, `offset` and an optional `query`
+accepts `store_id`, an optional `location_id`, `limit`, `offset` and an optional `query`
 (every word in the model's name, source or colour), returning named stock
-options by name, each model's sizes together, and `has_more`. Order responses now document frozen size labels and
+options by name, each model's sizes together, and `has_more`; each row names its
+warehouse (`location_id`), and without `location_id` every warehouse the store
+sells from is listed (ADR-0004, 2026-10-17). Order responses now document frozen size labels and
 creation dates in OpenAPI; old command snapshots remain compatible.
 
 Run `npm run dev` in `frontend/`; `/api` proxies to `http://127.0.0.1:8000` by

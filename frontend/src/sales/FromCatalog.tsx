@@ -25,14 +25,17 @@ export function FromCatalog({
   token,
   scopeKey,
   warehouse,
+  locationId,
   pick,
   close,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
-  /** The warehouse sold from, named. */
+  /** The warehouse sold from, named, and its id: the seller's choice,
+   * never the server's (owner decision, 2026-09-17). */
   warehouse: string;
+  locationId: string;
   pick: (item: StockOption) => void;
   close: () => void;
 }): JSX.Element {
@@ -107,6 +110,7 @@ export function FromCatalog({
                 disabled={!priced}
                 onClick={() => {
                   pick({
+                    location_id: locationId,
                     product_variant_id: variant.product_variant_id,
                     size_id: size.size_id,
                     display_name: variant.display_name,

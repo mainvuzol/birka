@@ -325,6 +325,9 @@ async def _create_once(
 
 
 class StockOption(BaseModel):
+    # Where it is: the warehouse named, or each of those the store sells from
+    # when none is (sale-slice TZ, P2-5).
+    location_id: uuid.UUID
     product_variant_id: uuid.UUID
     size_id: uuid.UUID
     display_name: str
@@ -345,9 +348,10 @@ class StockOptionsResponse(BaseModel):
 @router.get("/stock-options", response_model=StockOptionsResponse)
 async def stock_options(
     store_id: uuid.UUID,
-    location_id: uuid.UUID,
     scope: ScopeDep,
     session: SessionDep,
+    # None: every warehouse the store sells from (sale-slice TZ, P2-5).
+    location_id: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
     # The till's search (redesign P0-2): every word must match the model,
@@ -377,6 +381,7 @@ async def stock_options(
     return StockOptionsResponse(
         items=[
             StockOption(
+                location_id=row.location_id,
                 product_variant_id=row.product_variant_id,
                 size_id=row.size_id,
                 display_name=descriptions[row.product_variant_id].display_name,

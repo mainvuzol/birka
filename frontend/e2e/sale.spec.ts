@@ -51,8 +51,12 @@ async function enter(page: Page): Promise<void> {
 
 /** Pick the warehouse and the seeded product, returning what the ledger holds. */
 async function pickFirstProduct(page: Page): Promise<number> {
+  // The till's own warehouse's list, not every warehouse's (P2-5).
   const options = page.waitForResponse(
-    (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
+    (r) =>
+      r.url().includes("/catalog/stock-options?") &&
+      r.url().includes(`location_id=${fixture.till_location_id}`) &&
+      r.status() === 200,
   );
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
@@ -596,32 +600,4 @@ test("a store that reaches one sellable warehouse does not ask which", async ({
   ).toBeVisible();
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await expect(page.locator(".line")).toHaveCount(1);
-});
-
-test("two sellable warehouses are still chosen explicitly", async ({
-  page,
-}) => {
-  // Exactly two, whatever else the fixture provisions for other specs.
-  await page.route("**/api/v1/stock-locations?**", async (route) => {
-    const response = await route.fetch();
-    const rows = (await response.json()) as { id: string }[];
-    await route.fulfill({
-      response,
-      json: rows.filter((row) =>
-        [fixture.location_id, fixture.till_location_id].includes(row.id),
-      ),
-    });
-  });
-  await stubStock(page, 4);
-  await enter(page);
-  const warehouse = page.getByRole("combobox", { name: "Склад", exact: true });
-  await expect(warehouse).toHaveValue("");
-  await expect(warehouse.locator("option")).toHaveCount(3);
-  await expect(warehouse.locator("option").first()).toHaveText(
-    "З якого складу віддаєте?",
-  );
-  // Nothing is listed until the warehouse is chosen.
-  await expect(
-    page.getByRole("searchbox", { name: "Знайти модель" }),
-  ).toHaveCount(0);
 });

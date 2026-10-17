@@ -2526,3 +2526,37 @@ How it is carried out, not decided by the owner:
   confirmed later: neither is the receipt after a sale.
 
 Built on 2026-10-17; see the [report](till-redesign-8-report.md).
+
+## Owner decision — 2026-10-17 (both warehouses in the till's search; the screen kept in place)
+
+Chosen after the day's count merged (PR #97): the task list's P2-5 and P2-6.
+Asked, each answer the option recommended:
+- **A store that sells from two warehouses lists both at once, a chip per
+  warehouse:** «M · Свій 1», «M · Спільний 2». One tap puts the coat in the
+  basket from that very warehouse. A store with one is as before, «M · 3».
+- **A warehouse still waiting for its opening list,** while the other
+  sells: the other's goods are listed, and the till says «Склад «Свій» ще
+  чекає початкових залишків: його товар продавайте на папері.»
+
+How it is carried out, not decided by the owner:
+- **The warehouse is still the seller's choice, line by line** (owner
+  decision, 2026-09-17): each chip names its own, and the server never
+  picks one. A coat in hand from the catalogue, with both listed, is asked
+  «З якого складу віддаєте?» before anything is offered.
+- **One may still be chosen alone:** «Склад» offers «Усі склади» first, and
+  each warehouse after it; chosen alone, its chips read as a one-warehouse
+  store's. A store may sell from more than two, and a seller may want one.
+- **Both waiting:** «На складах магазину зараз немає товару в обліку. Поки
+  власник не затвердить початкові залишки, продавайте на папері.»
+- **A line says its warehouse** — in the basket, its count, «Прибрати», a
+  shortfall and the receipt — while every warehouse is listed or the basket
+  holds more than one: two «Лоран шоколад · M» are told apart, and a
+  shortfall says which shelf to look at.
+- **What is being read keeps its place** (P2-6): signing in and the
+  warehouses show the places of the search field and three tags, the goods
+  those of three tags, in their sizes, and a screen reader still hears
+  «Входимо в магазин…», «Завантажуємо склади…», «Завантажуємо товари…». A
+  search typed keeps the list where it was until the new one comes, so
+  nothing under it moves under the finger.
+
+Built on 2026-10-17; see the [report](till-redesign-9-report.md).

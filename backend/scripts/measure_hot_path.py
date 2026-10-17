@@ -130,6 +130,9 @@ class World:
     store_id: uuid.UUID
     location_id: uuid.UUID
     keys: list[tuple[uuid.UUID, uuid.UUID]]
+    # A second warehouse the store sells from, holding every other model's
+    # sizes: what the till reads when it names none (sale-slice TZ, P2-5).
+    shared_location_id: uuid.UUID | None = None
 
 
 def init_data_for(telegram_user_id: int, bot_token: str) -> str:
@@ -156,21 +159,25 @@ async def seed(url: str) -> World:
         await session.flush()
         store = Store(organization_id=org.id, name="Основний", code="MAIN", kind=StoreKind.PRIMARY)
         location = StockLocation(organization_id=org.id, name="Основний склад", code="PERF")
+        shared = StockLocation(organization_id=org.id, name="Спільний склад", code="PERF-SHARED")
         system = SizeSystem(organization_id=org.id, code=SizeSystemCode.ALPHA, name="Alpha")
         telegram_user_id = uuid.uuid4().int % 2**52
         user = AppUser(telegram_user_id=telegram_user_id, display_name="Перф")
-        session.add_all([store, location, system, user])
+        session.add_all([store, location, shared, system, user])
         await session.flush()
         sizes = [Size(size_system_id=system.id, code=code) for code in SIZES]
         session.add_all(sizes)
-        session.add(
-            StoreLocationAccess(
-                organization_id=org.id,
-                store_id=store.id,
-                location_id=location.id,
-                can_sell=True,
-                can_receive=True,
-            )
+        session.add_all(
+            [
+                StoreLocationAccess(
+                    organization_id=org.id,
+                    store_id=store.id,
+                    location_id=place.id,
+                    can_sell=True,
+                    can_receive=True,
+                )
+                for place in (location, shared)
+            ]
         )
         role = Role(organization_id=org.id, code="PERF", name="Перф-продавець")
         session.add(role)
@@ -224,11 +231,32 @@ async def seed(url: str) -> World:
                     for variant_id, size_id in keys[start : start + 500]
                 ],
             )
+        # Every other model in the second warehouse too: a model's size is
+        # then in both, as in a store with its own warehouse and a shared one.
+        held_twice = [key for index, key in enumerate(keys) if index // len(sizes) % 2 == 0]
+        for start in range(0, len(held_twice), 500):
+            await apply_movements(
+                session,
+                organization_id=org.id,
+                actor_user_id=user.id,
+                requests=[
+                    MovementRequest(
+                        location_id=shared.id,
+                        acting_store_id=store.id,
+                        product_variant_id=variant_id,
+                        size_id=size_id,
+                        quantity_delta=STOCK_PER_KEY,
+                        movement_type=MovementType.DELIVERY,
+                    )
+                    for variant_id, size_id in held_twice[start : start + 500]
+                ],
+            )
         world = World(
             telegram_user_id=telegram_user_id,
             store_id=store.id,
             location_id=location.id,
             keys=keys,
+            shared_location_id=shared.id,
         )
     await engine.dispose()
     return world
@@ -373,6 +401,20 @@ def cases(world: World, headers: dict[str, str]) -> list[Case]:
             },
         )
 
+    def every(client: httpx.AsyncClient, index: int) -> Awaitable[httpx.Response]:
+        # The till of a store that sells from two warehouses (P2-5): no
+        # warehouse named, the whole list or a search, as `search` types it.
+        typed = ("", "мод", f"модель {index % VARIANTS}")[index % 3]
+        return client.get(
+            "/api/v1/catalog/stock-options",
+            headers=headers,
+            params={
+                "store_id": str(world.store_id),
+                "limit": 100,
+                **({"query": typed} if typed else {}),
+            },
+        )
+
     return [
         ("GET /catalog/stock-options", options, 200, 1),
         ("GET /catalog/stock-options (6 sellers)", options, 300, 6),
@@ -389,6 +431,8 @@ def cases(world: World, headers: dict[str, str]) -> list[Case]:
         ),
         ("GET /catalog/stock-options · search", search, 200, 1),
         ("GET /catalog/stock-options · search (6 sellers)", search, 300, 6),
+        ("GET /catalog/stock-options · every warehouse", every, 200, 1),
+        ("GET /catalog/stock-options · every warehouse (6 sellers)", every, 300, 6),
     ]
 
 
