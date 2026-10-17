@@ -2,7 +2,9 @@
 
 Baseline: `6643802` (a kept return named, the paper's line and the buzz,
 PR #101).
-Status: TODO
+Status: built, reviewed and proven: the whole CI run locally passed, and
+sixteen of sixteen ways of breaking it caught. Not yet tried on a real
+phone.
 Branch: `feat/returns-elsewhere-mistake-before`. Tasks: [the returns task list](redesign/2026-10-17-redesign-tz-returns.md),
 P1-1 (its rest), P1-5, P1-6. Owner: business-rules.md, "«Повернення» in
 the new design: its task list's questions" (2026-10-17: В3, В2, В5, each
@@ -130,7 +132,16 @@ before the first commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-18-returns-elsewhere-mistake-before/`](../../output/verification/2026-10-18-returns-elsewhere-mistake-before/):
+  `mutants.py` and `mutants.txt`, sixteen ways of breaking it, all caught.
+- **CI, run locally at `acc983b`** ([summary](../../output/verification/2026-10-18-returns-elsewhere-mistake-before-ci-local/summary.md)),
+  on the host's Node 24.18: every job passed, the backend with its
+  declared gap.
+  - backend: 3 445 on PostgreSQL 17 (unchanged by this work);
+  - e2e: 388 journeys;
+  - hot path: worst p95 96.0 ms (the search by six sellers) and 105.0 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
