@@ -644,6 +644,15 @@ function Workspace({
   useEffect(() => {
     if (tab !== "returns") setReturnOf(null);
   }, [tab]);
+  // «Новий продаж» on a return's result opens the till with its cursor in
+  // the search (returns task list, P0-5). The till takes it as it mounts,
+  // once: the next tab change clears it, so neither the till opened any
+  // other way nor one mounted afresh on that visit takes the cursor
+  // (review, 2026-10-17).
+  const [searchFirst, setSearchFirst] = useState(false);
+  useEffect(() => {
+    setSearchFirst(false);
+  }, [tab]);
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -1630,6 +1639,7 @@ function Workspace({
             token={token}
             userId={me.user_id}
             journalKey={saleKey}
+            searchFirst={searchFirst}
             blocked={
               storageError ||
               catalogStorageError ||
@@ -1715,6 +1725,14 @@ function Workspace({
             journalKey={returnKey}
             open={returnOf}
             opened={returnOpened}
+            sell={
+              store.permissions.includes("sale:create")
+                ? () => {
+                    setSearchFirst(true);
+                    setTab("sale");
+                  }
+                : undefined
+            }
             blocked={
               storageError ||
               catalogStorageError ||

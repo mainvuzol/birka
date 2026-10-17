@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, openStore, returnUnits, section } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -201,9 +201,15 @@ test("goods bought at another store come back here, and this store hands the mon
   await expect(card).toContainText("Магазин «Другий»");
 
   await card.getByRole("button", { name: "Оформити повернення" }).click();
-  await expect(page.getByText(/у магазині «Другий»\./)).toBeVisible();
-  await page.getByLabel("Цілих").fill("1");
-  await page.getByLabel("Пошкоджених").fill("1");
+  await expect(page.getByText(/ · магазин «Другий»$/)).toBeVisible();
+  // One line of explanation (returns task list, P0-3).
+  await expect(
+    page.getByText(
+      "Куплено в іншому магазині: гроші віддаєте ви, пошкоджене лишається у вашому «Браку».",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await returnUnits(page, { intact: 1, damaged: 1 });
   // The other store's sale says how it was paid, for this one return only:
   // by card, so the money goes back to the card, through this terminal.
   await expect(
@@ -222,10 +228,21 @@ test("goods bought at another store come back here, and this store hands the mon
     ),
   ).toBeVisible();
   await expect(
-    page.getByText("Поверніть 6 000,00 грн на картку покупця через термінал."),
+    page.getByText("Картка · Поверніть на картку через термінал"),
+  ).toBeVisible();
+  await expect(page.locator(".hand-back-sum")).toHaveText("6 000,00 грн");
+  await expect(
+    page.getByText("Поверніть 6 000,00 грн на картку покупця через термінал.", {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText("Цілі: 1 шт. — на склад, з якого продали.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
-    page.getByText("Цілий товар повернуто на склад, з якого його продали."),
+    page.getByText(/^Пошкоджені: 1 шт\. — у «Брак»\./),
   ).toBeVisible();
   expect(sent.bodies).toHaveLength(1);
   expect((sent.bodies[0] as { store_id: string }).store_id).toBe(
@@ -256,14 +273,13 @@ test("goods sold from the other store's own warehouse go to one of this store's,
   const sent = refunds(page);
   await findElsewhere(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
-  await expect(page.getByRole("alert")).toContainText(
-    "оберіть склад вашого магазину для цілого товару",
-  );
-  await expect(
-    page.getByRole("button", { name: "Вкажіть, що повертають" }),
-  ).toBeDisabled();
+  // Asked only once an intact one is counted.
   const place = page.getByLabel("Цілий товар — на склад вашого магазину");
+  await expect(place).toHaveCount(0);
+  await returnUnits(page, { intact: 1 });
+  await expect(
+    page.getByRole("button", { name: "Оберіть склад для цілого товару" }),
+  ).toBeDisabled();
   // Offered once this store's warehouses are read: never «Брак», and never
   // the other store's own.
   await expect(
@@ -282,9 +298,11 @@ test("goods sold from the other store's own warehouse go to one of this store's,
 
   await expect(
     page.getByText(
-      "Цілий товар повернуто на склад «Склад повернень» вашого магазину.",
+      "Цілі: 1 шт. — на склад «Склад повернень» вашого магазину.",
+      { exact: true },
     ),
   ).toBeVisible();
+  await expect(page.getByText(/з якого продали/)).toHaveCount(0);
   const body = sent.bodies[0] as {
     store_id: string;
     lines: { location_id?: string }[];
@@ -363,7 +381,7 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
   });
   await findElsewhere(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
@@ -405,7 +423,7 @@ test("a kept return of goods from the other store's own warehouse, checked by th
   });
   await findElsewhere(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await page
     .getByLabel("Цілий товар — на склад вашого магазину")
     .selectOption(fixture.returns_location_id);
@@ -520,16 +538,17 @@ test("a sale of this store is returned as before, with no store named", async ({
   await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).not.toContainText("Магазин «");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await page.getByLabel("Цілих").fill("1");
+  await returnUnits(page, { intact: 1 });
   await page
     .getByRole("button", {
       name: "Повернути покупцю 3 000,00 грн готівкою",
       exact: true,
     })
     .click();
+  await expect(page.getByText("Готівка · Поверніть покупцю")).toBeVisible();
   await expect(
-    page.getByText("Поверніть покупцю 3 000,00 грн готівкою."),
-  ).toBeVisible();
+    page.getByText("Поверніть покупцю 3 000,00 грн готівкою.", { exact: true }),
+  ).toHaveCount(1);
   await expect(page.getByText(/гроші віддаєте ви/)).toHaveCount(0);
   expect(Object.keys(sent.bodies[0] ?? {}).sort()).toEqual([
     "command_id",
