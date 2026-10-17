@@ -196,7 +196,14 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   await page.getByLabel("Час з паперу").fill("19:40");
   await page.getByLabel("Це було вчора").check();
   await returnUnits(page, { intact: 1 });
-  await expect(page.getByText("Хто прийняв: Ганна.")).toBeVisible();
+  // One line under the button (returns task list, P1-4), and the warning
+  // not to hand money back twice said once, in the band.
+  await expect(
+    page.getByText("Хто прийняв: Ганна · за папером вчора, 19:40", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/вдруге не віддавайте/)).toHaveCount(1);
   await page
     .getByRole("button", {
       name: "З паперу · Повернути покупцю 2 500,00 грн готівкою",
@@ -399,10 +406,17 @@ test("the first days' paper: a return and a payment typed from it are «з па�
   await expect(band).toContainText(
     "Повернення позначать «з паперу». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які вже віддали, вдруге не віддавайте.",
   );
+  // Said once, in the band (P1-4).
+  await expect(page.getByText(/вдруге не віддавайте/)).toHaveCount(1);
   await expect(band).not.toContainText("збою");
   await expect(page.getByLabel("Це було вчора")).toHaveCount(0);
   await page.getByLabel("День з паперу").fill(day.value);
   await page.getByLabel("Час з паперу").fill("12:30");
+  await expect(
+    page.getByText(`Хто прийняв: не вказано · за папером ${day.shown}, 12:30`, {
+      exact: true,
+    }),
+  ).toBeVisible();
   await page
     .getByRole("button", {
       name: "З паперу · Повернути покупцю 2 500,00 грн готівкою",

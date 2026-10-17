@@ -333,7 +333,16 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
 
-  await expect(page.getByText("Незавершене повернення")).toBeVisible();
+  // Which customer it is: the goods, the sum and the way the attempt kept
+  // beside its body (returns task list, P1-2).
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+  });
+  await expect(banner.locator("p").first()).toHaveText(
+    new RegExp(
+      `^Повернення: ${model}.* · M × 1 · 3\\s000,00 грн готівкою — сервер не відповів\\. Двічі воно не запишеться, і гроші двічі не повернуться\\. Поки чекаємо, інші дії недоступні\\.`,
+    ),
+  );
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
@@ -352,8 +361,13 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await page
     .getByRole("button", { name: "Перевірити результат повернення" })
     .click();
-  await expect(page.getByText("Незавершене повернення")).toHaveCount(0);
+  await expect(banner).toHaveCount(0);
   expect(sent.bodies).toHaveLength(2);
+  // What the banner named is the phone's own: never sent.
+  expect(sent.bodies[0]).not.toHaveProperty("shown");
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано один раз" }),
+  ).toBeVisible();
   expect(sent.bodies[1]).toEqual(sent.bodies[0]);
   expect(sent.keys[1]).toBe(sent.keys[0]);
   await expect(
@@ -474,7 +488,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
     "ще немає складу «Брак» для пошкодженого товару",
   );
   await expect(page.getByRole("alert")).toContainText("Нічого не повернено.");
-  await expect(page.getByText("Незавершене повернення")).toHaveCount(0);
+  await expect(page.getByText("Повернення ще не підтверджено")).toHaveCount(0);
 });
 
 test("the search says when no sale has such goods", async ({ page }) => {

@@ -2,13 +2,15 @@ import { useEffect, useRef } from "react";
 import type { JSX } from "react";
 import { kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { refundHow } from "@/shared/payment";
+import { methodLabels, refundHow } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
 import { paperText } from "@/sales/paperMark";
+import { isRecord } from "@/shared/journal";
 import { useBackOnSale } from "./places";
-import type { Refund, ReturnPart } from "./types";
+import { sizeLabel } from "./types";
+import type { Refund, ReturnBody, ReturnPart } from "./types";
 
 /**
  * What the seller does with the money, by the way it goes back (ADR-0012
@@ -28,6 +30,66 @@ export function handBack(
     default:
       return `Поверніть покупцю ${money(amount)}.`;
   }
+}
+
+/**
+ * A kept return confirmed — maybe by the phone itself, hours after the
+ * press. Following the paper text, the money may have been given back
+ * meanwhile, so it says to give it back only if nobody did, as a card does
+ * at the till (owner decision, 2026-10-08).
+ */
+export function handBackOnce(
+  amount: string,
+  way: TillMethod | null | undefined,
+): string {
+  const step = handBack(amount, way).replace(/\.$/, "");
+  return `Якщо гроші ще не повернули — ${step.charAt(0).toLowerCase()}${step.slice(1)}. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.`;
+}
+
+/**
+ * A kept return's banner (returns task list, P1-2): which customer it is —
+ * the goods as counted, the sum as the button said it and the way — from
+ * what the attempt kept beside its body, never the server's figures:
+ * nobody knows yet whether it was recorded. A sale in parts names no sum.
+ * An attempt kept before it said its goods, or whose goods do not read,
+ * names its units and its way alone.
+ */
+export function keptReturnText(body: ReturnBody): string {
+  const waits =
+    "сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.";
+  const how = body.payment_method ? refundHow[body.payment_method] : null;
+  // Read back from storage, whatever TypeScript was told.
+  const shown: unknown = body.shown;
+  const tags = isRecord(shown) ? tagsOf(shown.lines) : null;
+  if (tags !== null && isRecord(shown) && shown.parts === true)
+    return `Повернення частинами: ${tags} — ${waits}`;
+  const sum =
+    isRecord(shown) && typeof shown.sum === "string" ? shown.sum : null;
+  if (tags !== null && sum !== null && kopecks(sum) !== null)
+    return `Повернення: ${tags} · ${money(sum)}${how ? ` ${how}` : ""} — ${waits}`;
+  const units = body.lines.reduce((n, line) => n + line.quantity, 0);
+  return `Повернення ${String(units)} шт.${how ? ` · ${how}` : ""} — ${waits}`;
+}
+
+/** «Лоран шоколад · M × 1, …», or nothing when a line does not read. */
+function tagsOf(lines: unknown): string | null {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  const tags: string[] = [];
+  for (const line of lines as unknown[]) {
+    if (
+      !isRecord(line) ||
+      typeof line.name !== "string" ||
+      (line.size !== null && typeof line.size !== "string") ||
+      typeof line.units !== "number" ||
+      !Number.isInteger(line.units) ||
+      line.units < 1
+    )
+      return null;
+    tags.push(
+      `${visible(line.name)} · ${sizeLabel(line.size)} × ${String(line.units)}`,
+    );
+  }
+  return tags.join(", ");
 }
 
 /**
@@ -92,40 +154,54 @@ export function useChosenPlaces(
   };
 }
 
+/** What follows the result: a live one's next steps, or a kept one's notice. */
+type Next =
+  | {
+      /** A kept return confirmed, in its notice (`App.tsx`), compact. */
+      kept: true;
+    }
+  | {
+      kept?: false;
+      /** «Новий продаж»: the till, its cursor in the search; only for
+       * whoever may sell. */
+      sell?: (() => void) | undefined;
+      /** Back to the list, its search as it was. */
+      more: () => void;
+      /** Whatever holds the sections holds the way to the till too. */
+      blocked: boolean;
+    };
+
 /**
  * A return recorded (returns task list, P0-5): in place of its form, as the
  * till's receipt is, what to hand back from the drawer, large — from the
  * server's answer, never worked out here — with the way as a pill over it,
  * and where each coat went, by the answer's lines. Typed from paper, the
  * money went back already, and it is never said to hand it back.
+ *
+ * A kept return confirmed later shows the same block, compact, in its
+ * notice (P1-2): «Повернення записано один раз», and the money to give back
+ * only if nobody did meanwhile (owner decision, 2026-10-08).
  */
 export function Result({
   store,
   token,
   refund,
   sent,
-  sell,
-  more,
-  blocked,
+  ...next
 }: {
   store: Store;
   token: string;
   refund: Refund;
   /** The lines as sent: a line naming a warehouse is one the seller chose. */
   sent: readonly ReturnPart[];
-  /** «Новий продаж»: the till, its cursor in the search; only for whoever
-   * may sell. */
-  sell?: (() => void) | undefined;
-  /** Back to the list, its search as it was. */
-  more: () => void;
-  /** Whatever holds the sections holds the way to the till too. */
-  blocked: boolean;
-}): JSX.Element {
+} & Next): JSX.Element {
   // The form is gone: the screen reader starts here, and so does the page.
+  // A kept one's notice comes above whatever is open, and takes nothing.
   const heading = useRef<HTMLHeadingElement>(null);
+  const kept = next.kept === true;
   useEffect(() => {
-    heading.current?.focus();
-  }, []);
+    if (!kept) heading.current?.focus();
+  }, [kept]);
   const paper = refund.outage ?? null;
   const firstDays = paper?.first_days === true;
   const way = refund.payment_method ?? null;
@@ -146,11 +222,15 @@ export function Result({
     (item) => item.condition === "INTACT" && chose.has(item.sale_item_id),
   );
   const damaged = units((item) => item.condition === "DAMAGED");
-  return (
-    <section className="return-result">
-      <h2 ref={heading} tabIndex={-1}>
-        Повернення записано
-      </h2>
+  const body = (
+    <>
+      {kept ? (
+        <h3>Повернення записано один раз</h3>
+      ) : (
+        <h2 ref={heading} tabIndex={-1}>
+          Повернення записано
+        </h2>
+      )}
       {paper && <p className="badge">{paperText("return", paper)}</p>}
       {elsewhere && (
         <p>
@@ -183,13 +263,27 @@ export function Result({
         ) : (
           // Seen as the way and the sum; heard as the one sentence.
           <>
-            <p className="badge way-pill" aria-hidden="true">
-              {way ? wayPills[way] : "Поверніть покупцю"}
-            </p>
+            {/* Confirmed later, the way alone: «Поверніть» is said only
+                under «Якщо гроші ще не повернули» (owner decision,
+                2026-10-08; review, 2026-10-18). */}
+            {(!kept || way) && (
+              <p className="badge way-pill" aria-hidden="true">
+                {kept && way
+                  ? methodLabels[way]
+                  : way
+                    ? wayPills[way]
+                    : "Поверніть покупцю"}
+              </p>
+            )}
             <p className="hand-back-sum" aria-hidden="true">
               <Sum value={money(amount)} />
             </p>
-            <p className="visually-hidden">{handBack(amount, way)}</p>
+            {kept ? (
+              // Confirmed later: said whole, and only if nobody did.
+              <p>{handBackOnce(amount, way)}</p>
+            ) : (
+              <p className="visually-hidden">{handBack(amount, way)}</p>
+            )}
           </>
         )}
       </div>
@@ -224,18 +318,24 @@ export function Result({
           </p>
         )}
       </div>
-      {sell ? (
+    </>
+  );
+  if (next.kept) return <div className="return-result kept">{body}</div>;
+  return (
+    <section className="return-result">
+      {body}
+      {next.sell ? (
         <div className="result-next">
-          <button type="button" disabled={blocked} onClick={sell}>
+          <button type="button" disabled={next.blocked} onClick={next.sell}>
             Новий продаж
           </button>
-          <button type="button" className="quiet" onClick={more}>
+          <button type="button" className="quiet" onClick={next.more}>
             Ще повернення
           </button>
         </div>
       ) : (
         <div className="result-next">
-          <button type="button" onClick={more}>
+          <button type="button" onClick={next.more}>
             До списку
           </button>
         </div>

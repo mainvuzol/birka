@@ -386,7 +386,7 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
 
-  await expect(page.getByText("Незавершене повернення")).toBeVisible();
+  await expect(page.getByText("Повернення ще не підтверджено")).toBeVisible();
   await page
     .getByRole("button", { name: "Перевірити результат повернення" })
     .click();
@@ -430,7 +430,7 @@ test("a kept return of goods from the other store's own warehouse, checked by th
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
-  await expect(page.getByText("Незавершене повернення")).toBeVisible();
+  await expect(page.getByText("Повернення ще не підтверджено")).toBeVisible();
 
   // Closed, and opened again once the server answers: the form and its
   // choice are gone, and the phone checks what it kept by itself.
@@ -439,16 +439,16 @@ test("a kept return of goods from the other store's own warehouse, checked by th
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   const confirmed = page.locator("section.notice", {
-    has: page.getByRole("heading", { name: "Повернення оформлено" }),
+    has: page.getByRole("heading", { name: "Повернення записано один раз" }),
   });
   await expect(confirmed).toBeVisible();
   await expect(
     confirmed.getByText(
-      "Цілий товар повернуто на склад «Склад повернень» вашого магазину.",
+      "Цілі: 1 шт. — на склад «Склад повернень» вашого магазину.",
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(confirmed.getByText(/з якого його продали/)).toHaveCount(0);
+  await expect(confirmed.getByText(/з якого продали/)).toHaveCount(0);
   await expect(
     confirmed.getByText(
       "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",

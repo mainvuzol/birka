@@ -14,17 +14,14 @@ import { isTillMethod, refundHow, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
-import {
-  PaperFields,
-  paperRefusal,
-  paperText,
-  usePaperMark,
-} from "@/sales/paperMark";
+import { PaperFields, paperRefusal, usePaperMark } from "@/sales/paperMark";
+import type { PaperMarkState } from "@/sales/paperMark";
+import { buzz } from "@/shared/telegram";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
 import { SaleRow, dayOf, dayTitle } from "./SaleRow";
 import { useBackOnSale } from "./places";
-import { Result, handBack, handedBack, useChosenPlaces } from "./Result";
+import { Result } from "./Result";
 import { refundLabels, sizeLabel } from "./types";
 import type { InfiniteData } from "@tanstack/react-query";
 import type {
@@ -358,104 +355,25 @@ export function Returns({
 }
 
 /**
- * A kept return confirmed — maybe by the phone itself, hours after the
- * press. Following the paper text, the money may have been given back
- * meanwhile, so it says to give it back only if nobody did, as a card does
- * at the till (owner decision, 2026-10-08).
+ * «Хто прийняв: Ганна · за папером вчора, 19:40», the one line under the
+ * panel's button from paper (returns task list, P1-4): seen before the
+ * press, so a switch left on is seen, as the till's «Продавець: …» is (G6).
+ * The paper's time only when it reads.
  */
-function handBackOnce(
-  amount: string,
-  way: TillMethod | null | undefined,
-): string {
-  const step = handBack(amount, way).replace(/\.$/, "");
-  return `Якщо гроші ще не повернули — ${step.charAt(0).toLowerCase()}${step.slice(1)}. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.`;
-}
-
-/**
- * A kept return confirmed (`App.tsx`), in the words it had before the
- * result screen (returns task list, P1-2, will give it that screen's block).
- */
-export function Done({
-  store,
-  token,
-  refund,
-  sent,
-  kept = false,
-}: {
-  store: Store;
-  token: string;
-  refund: Refund;
-  /**
-   * The lines as sent: the form's, or a kept attempt's, read back from the
-   * phone after a reopen. A line naming a warehouse is one whose intact goods
-   * go to a warehouse of this store the seller chose.
-   */
-  sent: readonly ReturnPart[];
-  /** A kept attempt confirmed, never a return answered at once. */
-  kept?: boolean;
-}): JSX.Element {
-  // Typed from paper: the money went back during the outage (owner
-  // decision, 2026-10-10; ADR-0021), so it is never said to hand it back.
-  const back = refund.outage
-    ? (amount: string, way: TillMethod | null | undefined) =>
-        handedBack(amount, way, refund.outage?.first_days === true)
-    : kept
-      ? handBackOnce
-      : handBack;
-  const damaged = refund.items.some((item) => item.condition === "DAMAGED");
-  const intact = refund.items.some((item) => item.condition === "INTACT");
-  const { placed, chosen } = useChosenPlaces(store, token, refund, sent);
-  const { credit } = refund;
-  const elsewhere =
-    !!refund.taken_at_store_id && refund.taken_at_store_id !== refund.store_id;
-  return (
-    <div className="section-block" role="status">
-      <h3>Повернення оформлено</h3>
-      {refund.outage && (
-        <p className="badge">{paperText("return", refund.outage)}</p>
-      )}
-      {elsewhere && (
-        <p>
-          {refund.outage
-            ? "Товар куплено в іншому магазині мережі — гроші віддавав ваш магазин."
-            : "Товар куплено в іншому магазині мережі — гроші віддаєте ви."}
-        </p>
-      )}
-      {credit ? (
-        <>
-          {(kopecks(credit.debt_reduced) ?? 0n) > 0n && (
-            <p>Борг покупця зменшено на {money(credit.debt_reduced)}.</p>
-          )}
-          <p>
-            {(kopecks(credit.cash_back) ?? 0n) > 0n
-              ? back(credit.cash_back, refund.payment_method)
-              : "Грошей покупцю не повертаємо."}
-          </p>
-          <p>
-            {(kopecks(credit.owed_after) ?? 0n) > 0n
-              ? `Покупець ще винен ${money(credit.owed_after)}.`
-              : "Покупець більше нічого не винен."}
-          </p>
-        </>
-      ) : (
-        <p>{back(refund.total_amount, refund.payment_method)}</p>
-      )}
-      {intact &&
-        (placed === 0 ? (
-          <p>Цілий товар повернуто на склад, з якого його продали.</p>
-        ) : chosen ? (
-          <p>Цілий товар повернуто на склад «{chosen}» вашого магазину.</p>
-        ) : (
-          <p>Цілий товар повернуто на склад вашого магазину.</p>
-        ))}
-      {damaged && (
-        <p>
-          Пошкоджений товар — на складі «Брак» магазину. Його можна перевірити в
-          розділі «Брак».
-        </p>
-      )}
-    </div>
+function takenBy(mark: PaperMarkState): string {
+  const who = mark.named ? visible(mark.named.display_name) : "не вказано";
+  const at = /^\d{4}-(\d{2})-(\d{2})T(\d{2}:\d{2})$/.exec(
+    mark.body()?.at ?? "",
   );
+  if (!at) return `Хто прийняв: ${who}`;
+  const [, month = "", day = "", time = ""] = at;
+  const when =
+    mark.firstDays === true
+      ? `${day}.${month}`
+      : mark.yesterday
+        ? "вчора"
+        : "сьогодні";
+  return `Хто прийняв: ${who} · за папером ${when}, ${time}`;
 }
 
 type Counts = Record<string, { intact: number; damaged: number }>;
@@ -680,13 +598,28 @@ function ReturnForm({
         // when money goes back (ADR-0012 G35).
         ...(way ? { payment_method: way } : {}),
         ...(outage ? { outage } : {}),
+        // For the banner, should the answer be lost: never sent (P1-2).
+        shown: {
+          lines: picked.map(({ item, units: count }) => ({
+            name: item.display_name,
+            size: item.size,
+            units: count,
+          })),
+          ...(sale.paid_in_parts
+            ? { parts: true as const }
+            : { sum: decimal(total) }),
+        },
       },
     });
+    // A buzz in the hand once the server answers, as at the till (P2-5); a
+    // lost answer, and a kept return confirmed later, none.
     if (outcome.kind === "done") {
+      buzz("success");
       setCommandId(crypto.randomUUID());
       mark.forgetTime();
       settled(outcome.result, parts);
     } else if (outcome.kind === "refused") {
+      buzz("error");
       setRefusal(outcome.error);
       setCommandId(crypto.randomUUID());
     }
@@ -859,7 +792,11 @@ function ReturnForm({
           )}
           {paid.isError && (
             <p className="pay-note">
-              Не вдалося прочитати, як платили. Оберіть, як повертаєте.
+              {/* In parts, a way only if money goes back (G35; owner,
+                  2026-10-18). */}
+              {sale.paid_in_parts
+                ? "Не вдалося прочитати, як платили. Якщо буде що повертати — оберіть, як."
+                : "Не вдалося прочитати, як платили. Оберіть, як повертаєте."}
             </p>
           )}
           <fieldset className="way-switch" disabled={blocked || working}>
@@ -916,16 +853,7 @@ function ReturnForm({
                         : `Повернути покупцю ${sum} ${refundHow[way]}`
                   }`}
           </button>
-          {mark.paper && (
-            <p className="pay-seller">
-              {mark.firstDays === null
-                ? "Оберіть угорі, що вносите з паперу."
-                : mark.firstDays
-                  ? "Гроші, які вже віддали, вдруге не віддавайте: оберіть, як їх віддавали, і натисніть."
-                  : "Гроші, які віддали під час збою, вдруге не віддавайте: оберіть, як їх віддавали, і натисніть."}
-              {` Хто прийняв: ${mark.named ? visible(mark.named.display_name) : "не вказано"}.`}
-            </p>
-          )}
+          {mark.paper && <p className="pay-seller">{takenBy(mark)}</p>}
         </div>
       )}
     </section>

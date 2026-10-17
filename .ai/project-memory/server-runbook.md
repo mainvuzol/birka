@@ -554,7 +554,7 @@ type it in when the server answers
   drawer is closed the next evening (owner, 2026-10-07).
 - **Open the app on every phone that holds a kept operation.** It checks it
   by itself once the store is chosen: «… підтверджено» (a return:
-  «Повернення оформлено»), or «… не записано», and only then is its paper
+  «Повернення записано один раз»), or «… не записано», and only then is its paper
   line typed. A phone left closed keeps it. A
   lost phone's lines go to a manager, who checks its sales and returns in
   «Звіт» and its debt payments in «Борги» before typing them: «Звіт» shows

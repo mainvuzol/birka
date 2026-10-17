@@ -1456,7 +1456,9 @@ not open at all) were decided before.
       повернули, поки сервер не відповідав, — не повертайте вдруге.»
     - A kept return of another store's sale, confirmed by the phone, names
       the warehouse of this store the goods went into; when its name cannot
-      be read: «Цілий товар повернуто на склад вашого магазину.»
+      be read: «Цілий товар повернуто на склад вашого магазину.» *Since
+      2026-10-18 (returns task list, P0-5, P1-2): «Цілі: 1 шт. — на склад
+      вашого магазину.», in «Повернення записано один раз».*
     - Питання: «Чи погоджуєте нові тексти застосунку (список додається)?»
 14. A paper sale typed without «Вношу продаж з паперу» could be offered
     «Товар на місці», and the ledger would record a found coat that never
@@ -2632,3 +2634,40 @@ owner:
   list's P1-2), the paper line under the button (P1-4).
 
 Built on 2026-10-17; see the [report](returns-redesign-2-report.md).
+
+## Owner decision — 2026-10-18 («Повернення»: two words after #100, and what next)
+
+Asked after #100, each answer the option recommended:
+- **From paper, the panel's large line stays «З паперу · Повернути …»,**
+  the button's own words; the warning not to hand money back twice stays
+  in the band «Режим: з паперу».
+- **A sale paid in parts whose way cannot be read** says «Не вдалося
+  прочитати, як платили. Якщо буде що повертати — оберіть, як.», the words
+  of the choice's own name; every other sale keeps «… Оберіть, як
+  повертаєте.»
+- **Next:** the task list's P2-5 (a buzz on the server's answer), P1-2 (a
+  kept return says which it is) and P1-4 (one line under the button from
+  paper).
+
+How they are carried out, not decided by the owner:
+- **A kept return's banner** is «Повернення ще не підтверджено» and names
+  it: «Повернення: Лоран шоколад · M × 1 · 3 000,00 грн готівкою — сервер
+  не відповів. Двічі воно не запишеться, і гроші двічі не повернуться.
+  Поки чекаємо, інші дії недоступні.»; in parts with no sum, «Повернення
+  частинами: …»; an attempt kept before, or whose goods do not read, by its
+  units and way, «Повернення 2 шт. · готівкою — …». The goods and the sum
+  are the attempt's own, kept beside what is sent and never sent: a resend
+  is byte for byte the same.
+- **Confirmed later,** it is «Повернення записано один раз» with the
+  result's block, compact — the money said to give back only if nobody did
+  (2026-10-08), the pill over the sum naming the way alone, «Готівка», from
+  paper «… повернули під час збою — вдруге не повертайте.», the goods
+  where they went — and «Зрозуміло».
+- **From paper, one line under the button:** «Хто прийняв: Ганна · за
+  папером вчора, 19:40» («сьогодні», or the first days' «08.10»), the time
+  only when given; «вдруге не віддавайте» is said once, in the band.
+- **A buzz in the hand,** inside Telegram where it can: success once a
+  return is recorded, error once it is refused; none for a lost answer or a
+  kept one confirmed later.
+
+Built on 2026-10-18; see the [report](returns-redesign-3-report.md).
