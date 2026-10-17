@@ -2,7 +2,9 @@
 
 Baseline: `2e148d3` (money in one format, the till's words and its refusals,
 PR #96).
-Status: TODO.
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twenty of twenty ways of breaking it caught. Not yet tried on a real
+phone.
 Branch: `feat/till-sold-today`. Tasks: [the till's task list](redesign/2026-10-11-redesign-tz-sale.md),
 §11 В8. Owner: business-rules.md, "the day's count at the till, В8"
 (2026-10-17); В8 (а) itself on 2026-10-16.
@@ -115,7 +117,24 @@ addressed before the first commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-17-till-sold-today/`](../../output/verification/2026-10-17-till-sold-today/):
+  `mutants.py` and `mutants.txt`, twenty ways of breaking it, all caught.
+- **CI, run locally at `718be05`** ([summary](../../output/verification/2026-10-17-till-sold-today-ci-local/summary.md)):
+  every job passed, the backend with its declared gap.
+  - backend: 3 440 on PostgreSQL 17, the nine new among them;
+  - e2e: 343 journeys;
+  - hot path: worst p95 97.5 ms (the search by six sellers) and 72.6 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
+- **The run before it, at `c51b615`** ([summary and logs](../../output/verification/2026-10-17-till-sold-today-ci-local-first/)),
+  failed for two reasons this work did not cause:
+  - the Vite dev server hung on a V8 abort of Node 26.5 («Lazy deopt after
+    a fast API call with return value is unsupported»), as once during #93,
+    and 112 journeys timed out behind it; Vite was stopped so the run could
+    finish and give back what it started;
+  - a backup test stopped a fake hung `pg_dump` after 0.5 s, at times
+    before its shell wrote the id its stop is checked by: once in ten runs
+    on a quiet machine. At 2 s, fifteen of fifteen passed (`718be05`).
 
 ## Not covered here
 
