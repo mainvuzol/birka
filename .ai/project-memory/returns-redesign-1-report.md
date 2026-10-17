@@ -1,7 +1,9 @@
 # «Повернення»'s list in the new design — 2026-10-17
 
 Baseline: `353c5d3` (both warehouses in the till's search, PR #98).
-Status: TODO.
+Status: built, reviewed and proven: the whole CI run locally passed, and
+seventeen of seventeen ways of breaking it caught. Not yet tried on a real
+phone.
 Branch: `feat/returns-list`. Tasks: [the returns task list](redesign/2026-10-17-redesign-tz-returns.md),
 P0-1, P0-2 (with P1-1's button). Owner: business-rules.md, "«Повернення» in
 the new design: its task list's questions" (2026-10-17).
@@ -127,7 +129,17 @@ commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-17-returns-list/`](../../output/verification/2026-10-17-returns-list/):
+  `mutants.py` and `mutants.txt`, seventeen ways of breaking it, all
+  caught.
+- **CI, run locally at `6d844d2`** ([summary](../../output/verification/2026-10-17-returns-list-ci-local/summary.md)),
+  on the host's Node 24.18: every job passed, the backend with its
+  declared gap.
+  - backend: 3 445 on PostgreSQL 17 (unchanged by this work);
+  - e2e: 367 journeys;
+  - hot path: worst p95 94.5 ms (the search by six sellers) and 117.7 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
