@@ -920,7 +920,7 @@ the review of the built change raised.
 - **The money for a kept return may be given back twice.** The seller gives
   it back during the outage, as the sellers' page says, and the phone
   confirms the return by itself later, perhaps hours later and on another
-  shift. Its «Повернення оформлено» then says, as for a card (owner,
+  shift. Its «Повернення записано один раз» then says, as for a card (owner,
   2026-10-08): if the money has not been given back yet, give it back; if it
   was given back while the server did not answer, not a second time.
   Nothing can check which. A transfer, which needs no customer at the

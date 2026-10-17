@@ -2522,15 +2522,10 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       await openStore(page, /Подільський/);
       // Checked by itself on opening, with no tap, and recorded.
       await expect(
-        page.getByRole("heading", { name: "Повернення оформлено" }),
+        page.getByRole("heading", { name: "Повернення записано один раз" }),
       ).toBeVisible();
       await expect(page.getByText(said, { exact: true })).toBeVisible();
       await expect(page.getByText(live, { exact: true })).toHaveCount(0);
-      await expect(
-        page.getByText(
-          "Його було записано один раз — повторно воно не пройде.",
-        ),
-      ).toBeVisible();
       expect(sent).toHaveLength(1);
       expect(
         await page.evaluate((key) => localStorage.getItem(key), returnKey),
@@ -2575,7 +2570,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
-      page.getByRole("heading", { name: "Повернення оформлено" }),
+      page.getByRole("heading", { name: "Повернення записано один раз" }),
     ).toBeVisible();
     await expect(
       page.getByText(
@@ -2590,6 +2585,60 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       (JSON.parse(sent[0] ?? "{}") as { outage?: unknown }).outage,
     ).toEqual(outage);
   });
+
+  for (const kept of [
+    {
+      name: "names the goods, the sum and the way it kept",
+      shown: { lines: [{ name: coat, size: "M", units: 1 }], sum: "3000.00" },
+      said: `Повернення: ${coat} · M × 1 · 3 000,00 грн готівкою — сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.`,
+    },
+    {
+      name: "whose goods are not even a list names its units and way, and is still resent",
+      shown: null,
+      said: "Повернення 1 шт. · готівкою — сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      name: "whose goods do not read names its units and way, and is still resent",
+      shown: { lines: "щось інше", sum: 3000 },
+      said: "Повернення 1 шт. · готівкою — сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.",
+    },
+  ])
+    test(`a kept return reopened ${kept.name}, and never sends them`, async ({
+      page,
+    }) => {
+      const stored = JSON.parse(keptReturn("CASH")) as {
+        body: Record<string, unknown>;
+      };
+      stored.body.shown = kept.shown;
+      await seed(page, { [returnKey]: JSON.stringify(stored) });
+      await serve(page);
+      // Still being written by its first send: kept, its banner shown.
+      let first = true;
+      const sent = await returns(page, async (route, way) => {
+        if (first) {
+          first = false;
+          await route.fulfill({
+            status: 409,
+            json: {
+              code: "IDEMPOTENCY_IN_PROGRESS",
+              message: "An identical request is currently being processed",
+            },
+          });
+        } else await recorded(route, way);
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(page.getByText(kept.said, { exact: true })).toBeVisible();
+      await page
+        .getByRole("button", { name: "Перевірити результат повернення" })
+        .click();
+      await expect(
+        page.getByRole("heading", { name: "Повернення записано один раз" }),
+      ).toBeVisible();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]).toBe(sent[0]);
+      expect(JSON.parse(sent[0] ?? "{}")).not.toHaveProperty("shown");
+    });
 
   test("a kept return confirmed by its button says the same", async ({
     page,
@@ -2617,6 +2666,13 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(
       page.getByText(
         "Попередня спроба ще виконується. Зачекайте кілька секунд і перевірте результат.",
+      ),
+    ).toBeVisible();
+    // Kept before it said its goods: its units and its way (P1-2).
+    await expect(
+      page.getByText(
+        "Повернення 1 шт. · переказом — сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.",
+        { exact: true },
       ),
     ).toBeVisible();
     const check = page.getByRole("button", {
@@ -2669,7 +2725,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
-      page.getByRole("heading", { name: "Повернення оформлено" }),
+      page.getByRole("heading", { name: "Повернення записано один раз" }),
     ).toBeVisible();
     await expect(
       page.getByText(
@@ -2684,10 +2740,58 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toHaveCount(0);
   });
 
+  test("a kept return of a sale paid in parts with nothing beyond the goods kept says no money goes back", async ({
+    page,
+  }) => {
+    await seed(page, { [returnKey]: keptReturn("CASH") });
+    await serve(page);
+    await returns(page, async (route, way) => {
+      await route.fulfill({
+        status: 201,
+        json: {
+          id: randomUUID(),
+          sale_id: ids.sale,
+          store_id: ids.store,
+          taken_at_store_id: null,
+          total_amount: "3000.00",
+          items: [
+            {
+              sale_item_id: item,
+              quantity: 1,
+              amount: "3000.00",
+              condition: "INTACT",
+              destination_location_id: ids.shared,
+              display_name: `${coat} · M`,
+            },
+          ],
+          credit: {
+            debt_reduced: "3000.00",
+            cash_back: "0.00",
+            owed_after: "500.00",
+          },
+          payment_method: way,
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const notice = page.locator("section.notice", {
+      has: page.getByRole("heading", { name: "Повернення записано один раз" }),
+    });
+    await expect(notice).toBeVisible();
+    await expect(notice.locator(".hand-back-sum")).toHaveText("0,00 грн");
+    await expect(notice).toContainText("Грошей покупцю не повертаємо.");
+    await expect(notice).toContainText(
+      "Борг покупця зменшено на 3 000,00 грн.",
+    );
+    await expect(notice).toContainText("Покупець ще винен 500,00 грн.");
+    await expect(notice).not.toContainText(/Поверніть/i);
+  });
+
   /** The kept return's notice, once the phone has settled it. */
   function confirmedReturn(page: Page) {
     return page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Повернення оформлено" }),
+      has: page.getByRole("heading", { name: "Повернення записано один раз" }),
     });
   }
 
@@ -2702,10 +2806,9 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     const confirmed = confirmedReturn(page);
     await expect(confirmed).toBeVisible();
     await expect(
-      confirmed.getByText(
-        "Цілий товар повернуто на склад, з якого його продали.",
-        { exact: true },
-      ),
+      confirmed.getByText("Цілі: 1 шт. — на склад, з якого продали.", {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(confirmed.getByText(/вашого магазину/)).toHaveCount(0);
     await expect(confirmed.getByText(/гроші віддаєте ви/)).toHaveCount(0);
@@ -2753,13 +2856,13 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         warehouse(ids.shared, "Спільний"),
         warehouse(ids.own, "Склад Б"),
       ],
-      said: "Цілий товар повернуто на склад «Склад Б» вашого магазину.",
+      said: "Цілі: 1 шт. — на склад «Склад Б» вашого магазину.",
     },
     {
       // Closed since the seller chose it: no longer among this store's.
       name: "with that warehouse closed since, names none",
       warehouses: [warehouse(ids.shared, "Спільний")],
-      said: "Цілий товар повернуто на склад вашого магазину.",
+      said: "Цілі: 1 шт. — на склад вашого магазину.",
     },
   ])
     test(`a kept return of another store's sale, its warehouse chosen, the phone confirms by itself ${read.name}, and never says it went where it was sold from`, async ({
@@ -2813,7 +2916,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
           { exact: true },
         ),
       ).toBeVisible();
-      await expect(confirmed.getByText(/з якого його продали/)).toHaveCount(0);
+      await expect(confirmed.getByText(/з якого продали/)).toHaveCount(0);
       await expect.poll(() => reads).toBeGreaterThan(0);
       await expect(
         confirmed.getByText(read.said, { exact: true }),
@@ -2850,7 +2953,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Незавершене повернення" }),
+      page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
     ).toHaveCount(0);
     expect(sent).toHaveLength(1);
     expect(

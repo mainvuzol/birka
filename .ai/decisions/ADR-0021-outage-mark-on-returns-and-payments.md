@@ -42,7 +42,10 @@ for them might be added later (backlog). Without it:
 3. **The screens say the money was already handed over** (owner):
    - a return: «… повернули під час збою — вдруге не повертайте.», with
      the mark, on «Повернення оформлено», and the same when the phone
-     confirms a kept one by itself;
+     confirms a kept one by itself; *the headings since 2026-10-18 (the
+     returns task list, P0-5, P1-2): «Повернення записано», and for a kept
+     one «Повернення записано один раз»; the words about the money and this
+     rule are unchanged;*
    - a payment: «Внесок … з паперу записано: карткою — оплату провели під
      час збою, на терміналі не проводьте ще раз.» (a transfer: «отримано
      під час збою, звірте з папером»), and a kept one confirmed later says

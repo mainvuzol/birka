@@ -1018,7 +1018,7 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     await refusedAsUnrecorded(response);
 
     await expect(
-      page.getByRole("heading", { name: "Незавершене повернення" }),
+      page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
     ).toHaveCount(0);
     await expect(
       page.getByText(

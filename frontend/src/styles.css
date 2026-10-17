@@ -908,6 +908,15 @@ html {
   font-weight: 800;
   letter-spacing: -1px;
 }
+/* A kept return confirmed later, in its notice (P1-2): the same block,
+   compact. */
+.return-result.kept .hand-back {
+  margin: 10px 0;
+}
+.return-result.kept .hand-back-sum .sum {
+  font-size: 28px;
+  letter-spacing: 0;
+}
 .return-goods p {
   margin: 6px 0;
 }

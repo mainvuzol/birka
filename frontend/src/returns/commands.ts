@@ -45,6 +45,9 @@ const returns = journal<ReturnBody, Refund>({
     (body.elsewhere === undefined || typeof body.elsewhere === "boolean") &&
     (body.payment_method === undefined || isTillMethod(body.payment_method)) &&
     (body.outage === undefined || isPaperBody(body.outage)) &&
+    // `shown` is not checked here: only shown, never sent, it is read where
+    // it is shown, and what does not read is left unsaid while the attempt
+    // is still resent (returns task list, P1-2; review, 2026-10-18).
     Array.isArray(body.lines) &&
     body.lines.length > 0 &&
     body.lines.every(isPart),

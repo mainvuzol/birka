@@ -71,7 +71,8 @@ import {
 import type { CountResult } from "@/inventory/stocktakeTypes";
 import { countErrorText } from "@/inventory/Stocktake";
 import { Backups, useBackups } from "@/backups/Backups";
-import { Done as ReturnDone, Returns } from "@/returns/Returns";
+import { Returns } from "@/returns/Returns";
+import { Result as ReturnResult, keptReturnText } from "@/returns/Result";
 import type { Refund, ReturnPart } from "@/returns/types";
 import { Credits } from "@/credits/Credits";
 import {
@@ -1432,13 +1433,11 @@ function Workspace({
           <h3>
             {returnCommand.busy
               ? "Перевіряємо повернення…"
-              : "Незавершене повернення"}
+              : "Повернення ще не підтверджено"}
           </h3>
-          <p>
-            Невідомо, чи записано попереднє повернення. Перевірте результат — те
-            саме повернення не буде оформлено двічі, і гроші не повернуться
-            двічі. Поки чекаємо, інші дії недоступні.
-          </p>
+          {/* Which customer it was: the goods and the sum the attempt kept
+              beside its body, never the server's (returns task list, P1-2). */}
+          <p>{keptReturnText(returnCommand.pending.body)}</p>
           <p>{keptText(returnCommand.pending.since, me.display_name)}</p>
           <button disabled={returnCommand.busy} onClick={checkReturn}>
             Перевірити результат повернення
@@ -1446,15 +1445,14 @@ function Workspace({
         </section>
       )}
       {returnSettled && (
-        <section className="notice">
-          <ReturnDone
+        <section className="notice" role="status">
+          <ReturnResult
             store={store}
             token={token}
             refund={returnSettled.refund}
             sent={returnSettled.sent}
             kept
           />
-          <p>Його було записано один раз — повторно воно не пройде.</p>
           <button
             onClick={() => {
               setReturnSettled(null);

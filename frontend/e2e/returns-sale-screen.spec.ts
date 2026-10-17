@@ -26,7 +26,7 @@ const fixture = JSON.parse(
 const DARK = { bg_color: "#17212b", text_color: "#f5f5f5" };
 const LIGHT = { bg_color: "#ffffff", text_color: "#000000" };
 
-function launch(theme?: Record<string, string>): string {
+function launch(theme?: Record<string, string>, version?: string): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
@@ -41,6 +41,7 @@ function launch(theme?: Record<string, string>): string {
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
   const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
   if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  if (version) hash.set("tgWebAppVersion", version);
   return `/#${hash.toString()}`;
 }
 
@@ -193,12 +194,13 @@ async function without(page: Page, rights: string[]): Promise<void> {
 async function opened(
   page: Page,
   theme?: Record<string, string>,
+  version?: string,
 ): Promise<void> {
   await page.setViewportSize({ width: 360, height: 640 });
   const asked = page.waitForResponse((r) =>
     r.url().includes("/api/v1/cash/sales/"),
   );
-  await page.goto(launch(theme));
+  await page.goto(launch(theme, version));
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByRole("button", { name: /^Оформити повернення: / }).click();
@@ -614,6 +616,15 @@ test("from paper, the panel's large line says so too, and never what to hand bac
   await expect(panel.locator(".pay-total")).toHaveText(
     "З паперу · Товар на 3 000,00 грн",
   );
+  // One line under the button: who took it, and the paper's time once it
+  // is given — today's says so (P1-4).
+  await expect(panel.locator(".pay-seller")).toHaveText(
+    "Хто прийняв: не вказано",
+  );
+  await page.getByLabel("Час з паперу").fill("10:15");
+  await expect(panel.locator(".pay-seller")).toHaveText(
+    "Хто прийняв: не вказано · за папером сьогодні, 10:15",
+  );
   await expect(panel).not.toContainText("скільки віддати");
   await expect(
     panel.getByRole("button", {
@@ -641,4 +652,160 @@ test("a warehouse to choose, for goods from another store's own, is brought abov
       name: "Оберіть склад для цілого товару",
     }),
   ).toBeDisabled();
+});
+
+test("Telegram buzzes once the server answers a return: an error refused, a success recorded; a kept one confirmed later, nothing — and its banner and notice name it", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  const buzzes = async (): Promise<unknown[]> =>
+    (
+      await page.evaluate(
+        () => (window as unknown as { buzzes: string[] }).buzzes,
+      )
+    ).map((data) => JSON.parse(data) as unknown);
+  const coat = line("Лоран шоколад");
+  const other = line("Альпака сіра", 1);
+  let answers = 0;
+  const { sent, saleId } = await oneSale(page, [coat, other], {
+    answer: (body) => {
+      answers += 1;
+      return answers === 1
+        ? {
+            status: 409,
+            json: {
+              code: "DAMAGED_RETURNS_UNAVAILABLE",
+              message:
+                "The store has no «Брак» warehouse to take damaged goods",
+              details: { reason: "NOT_SET_UP" },
+            },
+          }
+        : {
+            status: 201,
+            json: refundOf(saleId, body.lines, body.payment_method ?? null),
+          };
+    },
+  });
+  // The kept one: its first answer lost, its body kept to compare.
+  let lose = false;
+  let lost: unknown = null;
+  await page.route("**/api/v1/sales/*/refunds", async (route) => {
+    if (lose) {
+      lose = false;
+      lost = route.request().postDataJSON();
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.fallback();
+  });
+  await opened(page, undefined, "8.0");
+  await returnUnits(page, { intact: 1, line: "Лоран шоколад · M" });
+  const press = panelOf(page).getByRole("button", {
+    name: "Повернути покупцю 3 000,00 грн готівкою",
+  });
+  await press.click();
+  await expect(page.getByRole("alert")).toContainText("Нічого не повернено.");
+  expect(await buzzes()).toEqual([
+    { type: "notification", notification_type: "error" },
+  ]);
+  await press.click();
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeVisible();
+  expect(await buzzes()).toEqual([
+    { type: "notification", notification_type: "error" },
+    { type: "notification", notification_type: "success" },
+  ]);
+
+  // Another, its answer lost: the banner names it, and its confirmation
+  // later buzzes nothing.
+  await page.getByRole("button", { name: "Ще повернення" }).click();
+  await page.getByRole("button", { name: /^Оформити повернення: / }).click();
+  await returnUnits(page, { intact: 1, line: "Лоран шоколад · M" });
+  await returnUnits(page, { damaged: 1, line: "Альпака сіра · M" });
+  lose = true;
+  await panelOf(page)
+    .getByRole("button", { name: "Повернути покупцю 6 000,00 грн готівкою" })
+    .click();
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+  });
+  await expect(banner.locator("p").first()).toHaveText(
+    "Повернення: Лоран шоколад · M × 1, Альпака сіра · M × 1 · 6 000,00 грн готівкою — сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.",
+  );
+  // A lost answer buzzes nothing: it is not an answer (P2-5).
+  expect(await buzzes()).toHaveLength(2);
+  // Hours later, the app opened again: the phone confirms it by itself,
+  // and buzzes nothing either.
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  const notice = page.locator("section.notice", {
+    has: page.getByRole("heading", { name: "Повернення записано один раз" }),
+  });
+  await expect(notice).toBeVisible();
+  expect(await buzzes()).toEqual([]);
+  // The way alone over the sum: «Поверніть» only where it is conditional.
+  await expect(notice.locator(".way-pill")).toHaveText("Готівка");
+  await expect(notice.getByText(/^Поверніть|· Поверніть/)).toHaveCount(0);
+  // The result's block, compact: the sum, and to give it only if nobody did.
+  await expect(notice.locator(".hand-back-sum")).toHaveText("6 000,00 грн");
+  await expect(
+    notice.getByText(
+      "Якщо гроші ще не повернули — поверніть покупцю 6 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    notice.getByText("Цілі: 1 шт. — на склад, з якого продали.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    notice.getByText(/^Пошкоджені: 1 шт\. — у «Брак»\./),
+  ).toBeVisible();
+  await expect(
+    notice.getByRole("button", { name: "Новий продаж" }),
+  ).toHaveCount(0);
+  // Resent as it was first sent: what the banner named never goes.
+  expect(sent).toHaveLength(3);
+  expect(sent[2]).toEqual(lost);
+  expect(lost).not.toHaveProperty("shown");
+  await notice.getByRole("button", { name: "Зрозуміло" }).click();
+  await expect(notice).toHaveCount(0);
+});
+
+test("paid in parts, a way not read asks for one only if money goes back", async ({
+  page,
+}) => {
+  const coat = line("Лоран шоколад");
+  await oneSale(page, [coat], { way: "REFUSED", parts: true });
+  await opened(page);
+  await returnUnits(page, { intact: 1 });
+  const panel = panelOf(page);
+  await expect(
+    panel.getByText(
+      "Не вдалося прочитати, як платили. Якщо буде що повертати — оберіть, як.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(panel.getByText(/Оберіть, як повертаєте/)).toHaveCount(0);
+  await expect(
+    panel.getByRole("button", {
+      name: "Повернути товар на 3 000,00 грн",
+      exact: true,
+    }),
+  ).toBeEnabled();
 });

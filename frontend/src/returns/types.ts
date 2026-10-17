@@ -93,6 +93,23 @@ export interface ReturnBody {
    * return typed live.
    */
   outage?: PaperBody;
+  /**
+   * What the banner of a kept return names (returns task list, P1-2):
+   * never sent — `payload` leaves it out — so a resend is byte for byte the
+   * same. Absent from an attempt kept before it was written.
+   */
+  shown?: KeptShown;
+}
+
+/**
+ * A kept return's goods as the form counted them, and its sum as the button
+ * said it; a sale in parts has none, its cash the server's to work out.
+ * Read back from storage, each part is checked where it is shown.
+ */
+export interface KeptShown {
+  lines: { name: string; size: string | null; units: number }[];
+  sum?: string;
+  parts?: true;
 }
 
 export interface Refund {

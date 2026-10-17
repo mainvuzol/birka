@@ -617,7 +617,15 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await page
     .getByRole("button", { name: "Повернути товар на 1 500,00 грн" })
     .click();
-  await expect(page.getByText("Незавершене повернення")).toBeVisible();
+  // In parts, the banner names the goods and no sum: the cash is the
+  // server's to work out (returns task list, P1-2).
+  await expect(
+    page.getByText(
+      new RegExp(
+        `^Повернення частинами: ${model}.* · [^ ]+ × 1 — сервер не відповів\\.`,
+      ),
+    ),
+  ).toBeVisible();
   await waitsFor(page, /повернення/);
   await page
     .getByRole("button", { name: "Перевірити результат повернення" })
@@ -625,9 +633,15 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await expect(
     page.getByText("Борг покупця зменшено на 500,00 грн."),
   ).toBeVisible();
+  // Confirmed later: to give the cash back only if nobody did (owner,
+  // 2026-10-08), never plainly.
   await expect(
-    page.getByText("Поверніть покупцю 1 000,00 грн готівкою."),
+    page.getByText(
+      "Якщо гроші ще не повернули — поверніть покупцю 1 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+      { exact: true },
+    ),
   ).toBeVisible();
+  await expect(page.getByText("Готівка · Поверніть покупцю")).toHaveCount(0);
   await expect(
     page.getByText("Покупець більше нічого не винен."),
   ).toBeVisible();
