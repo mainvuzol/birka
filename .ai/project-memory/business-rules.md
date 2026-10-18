@@ -2931,3 +2931,57 @@ owner:
   accent, the same once called — asked for in the session.
 
 Built on 2026-10-18; see the [report](credits-redesign-3-report.md).
+
+## Owner decision — 2026-10-18 («Борги»: three readings after #108, and what next)
+
+Asked after #108:
+- **The result's main button, for a debt opened from a customer's card,**
+  stays the customer's name, back to the card, as «←» is.
+- **The sentence a screen reader hears after a card or a transfer payment**
+  stays the one it heard before: «Внесок 500,00 грн прийнято карткою.
+  Залишок боргу 1 500,00 грн.» — what to do with the money is in the pill,
+  not said (the option recommended was to say it, as a return's result
+  does; the owner chose not to).
+- **Every good of a debt is read on the debt alone;** the list's row and the
+  customer's card name the first and «+ ще N».
+- **Next:** a debt found by each word of a name (P1-3), and «Борги»'s
+  refusals in their own words, never an order's (P2-2).
+
+How they are carried out, not decided by the owner:
+- **A name is found word by word, as the till finds a model and
+  «Повернення» a sale:** each word typed, literally, in any order and
+  letter case, in the name of one debt; two spaces, or a space pasted from
+  a contact, part two words as one does; a word typed twice is no
+  different. Words of two debts of one customer do not add up: a customer
+  whose debts are written «Ірина» and «Коваль» is not found by «Ірина
+  Коваль». The customer found is shown with all their debts, as before. A
+  query written as a phone, and the other stores' debts by a whole number,
+  are as they were.
+- **A payment or a write-off refused, as it is pressed, with nothing more
+  than a conflict or a request refused** says what was not recorded, and
+  why in the debt's words: «Внесок не записано. Дані боргу змінилися, поки
+  ви працювали: перевірте залишок і спробуйте ще раз.», «Внесок не
+  записано. Перевірте суму й спробуйте ще раз.»; a write-off's «Списання не
+  записано. …», and for a request refused «Перевірте причину й спробуйте
+  ще раз.», as a write-off has a reason, not a sum.
+- **A kept one, not proven unrecorded, answered with a conflict or a
+  request refused,** is not told to try again, as a return's is not (owner
+  decisions, 2026-10-18): «Внесок ще не підтверджено:
+  сервер відповів, що дані змінилися.» or «… сервер не прийняв запит.», and
+  «Перевірте результат ще раз — двічі він не запишеться.» («воно» for
+  «Списання»). Proven unrecorded: «Внесок не записано. Дані змінилися, поки
+  сервер не відповідав.» or «Сервер не прийняв запит.», and «Відкрийте борг
+  у «Боргах» і спробуйте ще раз.», the section named, as the banner may
+  stand over any tab. Any other answer — a server's error, a request it
+  could not find — keeps the words every screen shares, as a kept return's
+  does.
+- **A kept write-off is named so everywhere:** «Списання ще не
+  підтверджено», «Перевірити результат списання», and once refused, its
+  words drawn with its kind, never «Внесок» for a moment.
+- **Other reads of «Борги»** — the list, a customer's card, erasing — keep
+  the words they had.
+- **The words are the task list's,** where it gives them; the write-off's,
+  and the kept ones for a request refused, follow them, and wait for the
+  owner's confirmation at hand-over, as «Повернення»'s did.
+
+Built on 2026-10-18; see the [report](credits-redesign-4-report.md).

@@ -937,12 +937,18 @@ def _whole_phone(wanted: str) -> str | None:
 def _found_by(wanted: str) -> Any:
     """The customer's name, or any spelling of their phone.
 
+    Each word typed, literally and in any letter case, in the name of one
+    debt, in any order, as the till and «Повернення» read each word (credits
+    task list, P1-3): «петренко оксана» finds «Оксана Петренко», and two
+    spaces are one. Words of two debts do not add up; a word typed twice is
+    looked for once.
+
     Only a query written as a phone is looked for among phones: the digits of
     «Ірина 2» are part of a name, and would find whoever's number holds a 2.
     """
-    conditions: list[Any] = [
-        func.lower(CustomerCredit.customer_name).contains(wanted.lower(), autoescape=True)
-    ]
+    name = func.lower(CustomerCredit.customer_name)
+    words = dict.fromkeys(wanted.lower().split())
+    conditions: list[Any] = [and_(*(name.contains(word, autoescape=True) for word in words))]
     if _PHONE_LIKE.fullmatch(wanted) and digits(wanted):
         conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))
         conditions.append(CUSTOMER.contains(customer_key(digits(wanted)), autoescape=True))

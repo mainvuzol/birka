@@ -545,6 +545,52 @@ async def test_one_phone_is_one_customer_whatever_the_name(maker):
     assert (everything["owed"], everything["open_debts"]) == ("2000.00", 1)
 
 
+async def test_a_customer_is_found_by_each_word_of_a_debts_name_in_any_order(maker):
+    shops = await make_two_shops(maker)
+    oksana = await sold_to(maker, shops, "Оксана Петренко", "067 111 11 11")
+    await sold_to(maker, shops, "Петро Оксанюк", "067 222 22 22")
+    # One customer, two debts, a word of her name in each.
+    iryna = await sold_to(maker, shops, "Ірина", "067 333 33 33")
+    koval = await sold_to(maker, shops, "Коваль", "067 333 33 33")
+
+    async def names(query: str) -> list[str]:
+        return [found["customer_name"] for found in await customers(maker, shops, query=query)]
+
+    # Credits task list, P1-3: each word, in any order and letter case, as
+    # the till and «Повернення» read each word.
+    assert await names("петренко оксана") == ["Оксана Петренко"]
+    assert await names("Оксана  Петренко") == ["Оксана Петренко"]
+    assert await names("ПЕТРЕНКО") == ["Оксана Петренко"]
+    # A word typed twice still finds her; a space pasted from a contact,
+    # not the keyboard's, still parts two words.
+    assert await names("оксана оксана") == ["Оксана Петренко"]
+    assert await names("петренко\u00a0оксана") == ["Оксана Петренко"]
+    # Parts of words find both; a word neither name holds, none.
+    assert sorted(await names("окс петр")) == ["Оксана Петренко", "Петро Оксанюк"]
+    assert await names("оксана петро") == []
+    # Literally: «%» and «_» are letters typed, never a pattern.
+    assert await names("о%а") == []
+    assert await names("о_сана") == []
+    # Words of two debts do not add up: each word is in the name of one.
+    assert await names("ірина коваль") == []
+    # Found by one debt, the customer is shown with both.
+    [found] = await customers(maker, shops, query="коваль")
+    assert {debt["id"] for debt in found["credits"]} == {
+        iryna["credit"]["credit_id"],
+        koval["credit"]["credit_id"],
+    }
+    # A name's digits are part of the name, never a phone to look for.
+    assert await names("Оксана 067") == []
+
+    # The list of debts reads the same words.
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        listed = await client.get(
+            "/api/v1/credits",
+            params={"store_id": str(shops.primary_store), "query": "петренко  оксана"},
+        )
+    assert [item["id"] for item in listed.json()["items"]] == [oksana["credit"]["credit_id"]]
+
+
 async def test_customers_come_a_page_at_a_time(maker):
     shops = await make_two_shops(maker)
     for index in range(3):

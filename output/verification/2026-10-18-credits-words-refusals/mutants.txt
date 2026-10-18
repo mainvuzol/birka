@@ -1,0 +1,16 @@
+- unchanged tree: passed 
+- the name searched as one string: caught by test_a_customer_is_found_by_each_word_of_a_debts_name_in_any_order
+- a «%» typed read as a pattern: caught by test_a_customer_is_found_by_each_word_of_a_debts_name_in_any_order
+- the letter case of the words read: caught by test_a_customer_is_found_by_each_word_of_a_debts_name_in_any_order; test_one_phone_is_one_customer_whatever_the_name
+- a live conflict in an order's words: caught by a payment refused with nothing more than a 409 says what was not recorded in the debt's wo; a write-off refused with nothing more than a 409 says what was not recorded in the debt's 
+- a live request refused in an order's words: caught by a payment refused with nothing more than a 422 says what was not recorded in the debt's wo; a write-off refused with nothing more than a 422 says what was not recorded in the debt's 
+- a live write-off refused called a payment: caught by a write-off refused with nothing more than a 409 says what was not recorded in the debt's ; a write-off refused with nothing more than a 422 says what was not recorded in the debt's 
+- a kept conflict not proven unrecorded in an order's words: caught by 9. what to do with money after the outage › «Борги»: a payment answered with a conflict th
+- a kept request refused not proven unrecorded in an order's words: caught by 9. what to do with money after the outage › «Борги»: a write-off answered with a request r
+- a kept write-off still unconfirmed called «він»: caught by 9. what to do with money after the outage › «Борги»: a write-off answered with a request r
+- a kept write-off still unconfirmed called a payment: caught by 9. what to do with money after the outage › «Борги»: a write-off answered with a request r
+- a refused write-off's kind drawn after its words: caught by 9. what to do with money after the outage › «Борги»: a write-off the server says it did no
+- a kept write-off's button named a payment's: caught by 9. what to do with money after the outage › «Борги»: a write-off answered with a request r
+- a kept conflict recorded nothing in an order's words: caught by 9. what to do with money after the outage › «Борги»: a payment the server says it did not 
+- a kept request refused recorded nothing in an order's words: caught by 9. what to do with money after the outage › «Борги»: a write-off the server says it did no
+14 of 14 caught

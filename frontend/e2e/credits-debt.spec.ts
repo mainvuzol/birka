@@ -633,6 +633,58 @@ test("the owner's write-off, at the end of a long history, says what was done wh
   await expect(page.getByText("Борг списано: 1 234,56 грн.")).toBeAttached();
 });
 
+for (const [kind, status, said] of [
+  [
+    "payment",
+    409,
+    "Внесок не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок і спробуйте ще раз.",
+  ],
+  ["payment", 422, "Внесок не записано. Перевірте суму й спробуйте ще раз."],
+  [
+    "write-off",
+    409,
+    "Списання не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок і спробуйте ще раз.",
+  ],
+  [
+    "write-off",
+    422,
+    "Списання не записано. Перевірте причину й спробуйте ще раз.",
+  ],
+] as const)
+  test(`a ${kind} refused with nothing more than a ${String(status)} says what was not recorded in the debt's words, never an order's (P2-2)`, async ({
+    page,
+  }) => {
+    const one = debt();
+    await serve(page, one);
+    await page.route(
+      `**/api/v1/credits/${one.id}/${kind === "payment" ? "payments" : "write-off"}`,
+      async (route) => {
+        await route.fulfill({
+          status,
+          json: {
+            code: status === 409 ? "CONFLICT" : "VALIDATION_ERROR",
+            message: "Refused",
+            details: {},
+          },
+        });
+      },
+    );
+    await opened(page);
+    if (kind === "payment") {
+      await page.getByLabel("Сума внеску, грн").fill("100");
+      await panel(page).getByRole("button", { name: "Готівка" }).click();
+    } else {
+      await page.getByRole("button", { name: "Списати борг" }).click();
+      await page.getByLabel("Чому списуємо").fill("виїхала");
+      await page
+        .getByRole("button", { name: "Так, списати 1 234,56 грн" })
+        .click();
+    }
+    await expect(page.getByRole("alert")).toHaveText(said);
+    // The «Ще» menu's «+ Нове замовлення» aside: the debt never says it.
+    await expect(page.locator(".debt-detail")).not.toContainText("замовлення");
+  });
+
 test("a closed debt says how it closed and when, and takes no payment", async ({
   page,
 }) => {
