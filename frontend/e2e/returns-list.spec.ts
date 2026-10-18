@@ -212,8 +212,10 @@ test("the search runs as it is typed, from two letters; Enter at once; one lette
   expect(asked.every((params) => !params.has("q"))).toBe(true);
   await expect(page.getByRole("article")).toHaveCount(2);
 
-  // Three letters, no key: searched once the pause has gone by.
+  // Three letters, no key: not before the pause, searched once it has gone
+  // by.
   await field.fill("лор");
+  await wait(200);
   expect(searched("лор")).toBe(false);
   await expect
     .poll(async () => {
@@ -221,7 +223,14 @@ test("the search runs as it is typed, from two letters; Enter at once; one lette
       return searched("лор");
     })
     .toBe(true);
-  await expect(page.getByRole("article")).toHaveCount(1);
+  // The answer is drawn on the query's own timer, which moves only when
+  // the clock is moved: moved until it is (the pause already proven above).
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(100);
+      return page.getByRole("article").count();
+    })
+    .toBe(1);
   await expect(page.getByRole("article")).toContainText("Лоран шоколад · M");
   expect(searched("лор")).toBe(true);
 
@@ -349,11 +358,8 @@ test("at 360 px only the heading and the field stand above the sales, by day; a 
     const box = await row.getByRole("button").boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
-  const last = await page.getByRole("article").last().boundingBox();
-  const elsewhere = await page
-    .getByRole("button", { name: "Шукати в інших магазинах мережі" })
-    .boundingBox();
-  expect((elsewhere?.y ?? 0) > (last?.y ?? 0)).toBe(true);
+  // Nothing typed, nothing offered of the other stores (P1-1).
+  await expect(page.getByRole("button", { name: "Шукати там" })).toHaveCount(0);
   const overflow = await page.evaluate(
     () =>
       document.documentElement.scrollWidth -
@@ -384,11 +390,9 @@ test("the other stores' sales show no sum and no way either", async ({
     });
   });
   await returns(page);
-  await page
-    .getByRole("button", { name: "Шукати в інших магазинах мережі" })
-    .click();
   await page.getByLabel("Що повертають?").fill("деінде");
   await page.getByLabel("Що повертають?").press("Enter");
+  await page.getByRole("button", { name: "Шукати там" }).click();
   const row = page.getByRole("article");
   await expect(row).toContainText("Магазин «Другий»");
   await expect(row).not.toContainText(/грн|готів|картк|переказ/i);
@@ -472,5 +476,145 @@ test("a search typed keeps the list where it was until the new one comes", async
   await expect(page.getByRole("article")).toHaveCount(2);
   await expect(page.getByText("Завантажуємо продажі…")).toHaveCount(0);
   release();
+  await expect(page.getByRole("article")).toHaveCount(1);
+});
+
+test("the other stores are offered from two letters under this store's results, headed, and left in one tap; clearing the field leaves them", async ({
+  page,
+}) => {
+  const asked = await sales(page, [
+    sale("Лоран шоколад", ago(0)),
+    sale("Альпака сіра", ago(0, 1)),
+  ]);
+  await returns(page);
+  await expect(page.getByRole("article")).toHaveCount(2);
+  const field = page.getByLabel("Що повертають?");
+  const offer = page.getByRole("button", { name: "Шукати там" });
+  // Nothing typed, or one letter: not offered, never asked.
+  await expect(offer).toHaveCount(0);
+  await field.fill("л");
+  await expect(offer).toHaveCount(0);
+  await field.fill("лор");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  // Under this store's results.
+  const row = await page.getByRole("article").boundingBox();
+  const under = await offer.boundingBox();
+  if (!row || !under) throw new Error("not laid out");
+  expect(under.y).toBeGreaterThan(row.y);
+  expect(asked.some((params) => params.get("elsewhere") === "true")).toBe(
+    false,
+  );
+  await offer.click();
+  await expect(
+    page.getByRole("heading", { name: "В інших магазинах мережі" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      asked.some(
+        (params) =>
+          params.get("elsewhere") === "true" && params.get("q") === "лор",
+      ),
+    )
+    .toBe(true);
+  await expect(offer).toHaveCount(0);
+  // Back in one tap, what was typed kept.
+  await page.getByRole("button", { name: "У своєму магазині" }).click();
+  await expect(
+    page.getByRole("heading", { name: "В інших магазинах мережі" }),
+  ).toHaveCount(0);
+  await expect(field).toHaveValue("лор");
+  await expect(offer).toBeVisible();
+  // There again, and one letter left: this store's list.
+  await offer.click();
+  await field.fill("л");
+  await expect(
+    page.getByRole("heading", { name: "В інших магазинах мережі" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("article")).toHaveCount(2);
+  // Typed again, it is this store's again, the other stores offered anew.
+  await field.fill("лор");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(offer).toBeVisible();
+  // Nothing of the other stores was ever asked without two letters.
+  const there = asked.filter((params) => params.get("elsewhere") === "true");
+  expect(there.length).toBeGreaterThan(0);
+  expect(there.every((params) => (params.get("q") ?? "").length >= 2)).toBe(
+    true,
+  );
+});
+
+test("switching to the other stores never shows this store's rows under their heading", async ({
+  page,
+}) => {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/sales?**", async (route) => {
+    const there =
+      new URL(route.request().url()).searchParams.get("elsewhere") === "true";
+    if (there) await held;
+    await route.fulfill({
+      json: {
+        sales: there
+          ? [
+              sale("Лоран деінде", ago(0), {
+                store_id: randomUUID(),
+                store_name: "Другий",
+              }),
+            ]
+          : [sale("Лоран шоколад", ago(0))],
+        has_more: false,
+      },
+    });
+  });
+  await returns(page);
+  await page.getByLabel("Що повертають?").fill("лор");
+  await expect(page.getByRole("article")).toContainText("Лоран шоколад");
+  await page.getByRole("button", { name: "Шукати там" }).click();
+  await expect(
+    page.getByRole("heading", { name: "В інших магазинах мережі" }),
+  ).toBeVisible();
+  // Their answer held: being read, and this store's row is gone.
+  await expect(page.getByRole("status")).toContainText("Завантажуємо продажі…");
+  await expect(page.getByRole("article")).toHaveCount(0);
+  release();
+  await expect(page.getByRole("article")).toContainText("Магазин «Другий»");
+  await expect(page.getByText("Лоран шоколад")).toHaveCount(0);
+});
+
+test("nothing found here says to call the manager for goods sold before Бірка; nothing found elsewhere, not", async ({
+  page,
+}) => {
+  await sales(page, [sale("Лоран шоколад", ago(0))]);
+  await returns(page);
+  const before = page.getByText(
+    "Продали ще до Бірки? Покличте менеджера — таке повернення вирішує він.",
+    { exact: true },
+  );
+  await page.getByLabel("Що повертають?").fill("немає");
+  await page.getByLabel("Що повертають?").press("Enter");
+  await expect(
+    page.getByText(
+      "За «немає» продажів не знайдено. Перевірте назву або очистіть пошук.",
+    ),
+  ).toBeVisible();
+  // В5 (а): the manager decides (returns task list, P1-6).
+  await expect(before).toBeVisible();
+  await page.getByRole("button", { name: "Шукати там" }).click();
+  await expect(
+    page.getByText(
+      "В інших магазинах мережі за «немає» продажів не знайдено.",
+      {
+        exact: true,
+      },
+    ),
+  ).toBeVisible();
+  await expect(before).toHaveCount(0);
+  // «Очистити» there: this store's list again.
+  await page.getByRole("button", { name: "Очистити" }).click();
+  await expect(
+    page.getByRole("heading", { name: "В інших магазинах мережі" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("article")).toHaveCount(1);
 });

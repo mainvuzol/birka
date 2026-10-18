@@ -86,23 +86,37 @@ export function Returns({
   const typed = useSettled(query);
   const [pressed, setPressed] = useState("");
   const search = pressed !== "" && pressed === query.trim() ? pressed : typed;
-  // Bought at another store of the network: found only by a search.
+  // Bought at another store of the network: found only by a search of two
+  // letters or more, asked for under this store's results (owner decision,
+  // 2026-10-17, В3 (а); returns task list, P1-1). Fewer letters, and it is
+  // this store's list again.
   const [elsewhere, setElsewhere] = useState(false);
+  const words = query.trim().length >= 2;
+  // Read in the same render it is typed, so not one more is drawn or asked
+  // for the other stores (review, 2026-10-18); and left for good.
+  const away = elsewhere && words;
+  useEffect(() => {
+    if (!words) setElsewhere(false);
+  }, [words]);
+  const offerId = useId();
   const [selected, setSelected] = useState<SaleSummary | null>(null);
   const [done, setDone] = useState<{
     refund: Refund;
     sent: ReturnPart[];
   } | null>(null);
-  const searching = !elsewhere || search.length >= 2;
+  const searching = !away || search.length >= 2;
+  // The other stores, offered once there is something to look for, and
+  // what is looked for is what is typed.
+  const offerElsewhere = !away && search.length >= 2 && search === query.trim();
   // Twenty at a time, each page under those read (returns task list,
   // P0-2): the server takes fifty at most, and a growing `limit` broke the
   // list after forty.
   const sales = useInfiniteQuery({
-    queryKey: ["store-sales", store.id, elsewhere, search],
+    queryKey: ["store-sales", store.id, away, search],
     queryFn: ({ pageParam }) =>
       api<SaleList>(
         `/sales?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}${
-          elsewhere ? "&elsewhere=true" : ""
+          away ? "&elsewhere=true" : ""
         }${search ? `&q=${encodeURIComponent(search)}` : ""}`,
         token,
       ),
@@ -117,7 +131,7 @@ export function Returns({
     placeholderData: (
       previous: InfiniteData<SaleList, number> | undefined,
       before,
-    ) => (before?.queryKey[2] === elsewhere ? previous : undefined),
+    ) => (before?.queryKey[2] === away ? previous : undefined),
   });
   // A sale made meanwhile moves the pages' edge: a row read twice is shown
   // once.
@@ -226,15 +240,22 @@ export function Returns({
           />
         </label>
       </form>
-      {elsewhere && (
-        <p className="hint">
-          Повернення приймає будь-який магазин мережі, і гроші покупцю віддаєте
-          ви. Продаж іншого магазину знаходять за назвою товару.
-        </p>
+      {away && (
+        // Never mixed with this store's: headed, and left in one tap.
+        <div className="toolbar elsewhere-head">
+          <h3>В інших магазинах мережі</h3>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => {
+              setElsewhere(false);
+            }}
+          >
+            <span aria-hidden="true">← </span>У своєму магазині
+          </button>
+        </div>
       )}
-      {!searching ? (
-        <p>Введіть назву товару, щоб знайти продаж іншого магазину.</p>
-      ) : sales.isPending ||
+      {!searching ? null : sales.isPending ||
         (sales.isPlaceholderData && listed.length === 0) ? (
         <p role="status">Завантажуємо продажі…</p>
       ) : !sales.data ? (
@@ -253,10 +274,11 @@ export function Returns({
         search ? (
           <div className="empty">
             <p>
-              {elsewhere
-                ? `За «${visible(search)}» в інших магазинах продажів не знайдено. Перевірте назву або очистіть пошук.`
+              {away
+                ? `В інших магазинах мережі за «${visible(search)}» продажів не знайдено.`
                 : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`}
             </p>
+
             <button
               type="button"
               className="quiet"
@@ -337,19 +359,37 @@ export function Returns({
           )}
         </>
       )}
-      {/* Under the results: the other stores' sales, never mixed with this
-          one's (owner decision, 2026-10-17, В3 (а)). */}
-      <button
-        type="button"
-        className="quiet elsewhere"
-        onClick={() => {
-          setElsewhere(!elsewhere);
-        }}
-      >
-        {elsewhere
-          ? "Шукати в цьому магазині"
-          : "Шукати в інших магазинах мережі"}
-      </button>
+      {offerElsewhere && (
+        // Under the results, what was typed kept (owner decision,
+        // 2026-10-17, В3 (а)).
+        <p className="hint elsewhere-offer">
+          <span id={offerId}>Купили в іншому магазині мережі?</span>{" "}
+          <button
+            type="button"
+            className="quiet"
+            aria-describedby={offerId}
+            onClick={() => {
+              setElsewhere(true);
+            }}
+          >
+            Шукати там
+          </button>
+        </p>
+      )}
+      {!away &&
+        search !== "" &&
+        !!sales.data &&
+        !sales.isPlaceholderData &&
+        listed.length === 0 && (
+          // Found in neither store, a coat sold from the notebook, before
+          // Бірка: the manager decides (owner decision, 2026-10-17, В5 (а);
+          // returns task list, P1-6). Said after the other stores' offer,
+          // which comes first.
+          <p className="hint">
+            Продали ще до Бірки? Покличте менеджера — таке повернення вирішує
+            він.
+          </p>
+        )}
     </section>
   );
 }
@@ -557,7 +597,10 @@ function ReturnForm({
   usePanelRoom(panelRef, shown);
   useEffect(() => {
     touched.current?.scrollIntoView({ block: "nearest" });
-  }, [counts]);
+    // This store's warehouses are read as the form opens; read slowly, they
+    // come after a count, and their chips grow the tag, brought above the
+    // panel again once they do.
+  }, [counts, ownPlaces.data]);
   useEffect(() => {
     if (asking) reasonRef.current?.focus();
   }, [asking]);
@@ -704,26 +747,47 @@ function ReturnForm({
                 />
               </div>
               {!item.back_to_sold_from && entered.intact > 0 && (
-                <label>
-                  Цілий товар — на склад вашого магазину
-                  <select
-                    value={places[item.id] ?? ""}
-                    onChange={(event) => {
-                      setPlaces({ ...places, [item.id]: event.target.value });
-                    }}
-                  >
-                    <option value="">Оберіть склад</option>
+                // Which of this store's warehouses takes the intact ones: a
+                // chip each, one tap, none chosen beforehand (owner
+                // decision, 2026-10-01; returns task list, P1-1).
+                <div
+                  className="return-place"
+                  role="group"
+                  aria-labelledby={`${heading}-place`}
+                >
+                  <p className="return-place-ask" id={`${heading}-place`}>
+                    Цілі — на який склад?
+                  </p>
+                  <div className="chips">
+                    {ownPlaces.isPending && (
+                      // Their places while they are read, so nothing moves.
+                      <>
+                        <span className="visually-hidden" role="status">
+                          Завантажуємо склади…
+                        </span>
+                        <span className="chip skeleton" aria-hidden="true" />
+                        <span className="chip skeleton" aria-hidden="true" />
+                      </>
+                    )}
                     {(ownPlaces.data ?? []).map((location) => (
-                      <option key={location.id} value={location.id}>
+                      <button
+                        type="button"
+                        className="chip"
+                        key={location.id}
+                        data-location={location.id}
+                        aria-pressed={places[item.id] === location.id}
+                        onClick={() => {
+                          setPlaces({ ...places, [item.id]: location.id });
+                        }}
+                      >
                         {visible(location.name)}
-                      </option>
+                      </button>
                     ))}
-                  </select>
-                  <span className="hint">
-                    Його продали з власного складу іншого магазину, куди ваш
-                    магазин не має доступу.
-                  </span>
-                </label>
+                  </div>
+                  <p className="hint">
+                    Продали з власного складу іншого магазину.
+                  </p>
+                </div>
               )}
             </div>
           );

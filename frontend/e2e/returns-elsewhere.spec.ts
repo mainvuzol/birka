@@ -147,13 +147,17 @@ async function findElsewhere(page: Page, model: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  // Under this store's list (owner decision, 2026-10-17, В3 (а)).
-  await page
-    .getByRole("button", { name: "Шукати в інших магазинах мережі" })
-    .click();
+  // Typed first; the other stores offered under this store's results
+  // (owner decision, 2026-10-17, В3 (а); returns task list, P1-1).
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
+  await page.getByRole("button", { name: "Шукати там" }).click();
   await expect(page.getByRole("article")).toHaveCount(1);
+}
+
+/** This store's warehouses as chips, for intact goods it does not reach. */
+function places(page: Page) {
+  return page.getByRole("group", { name: "Цілі — на який склад?" });
 }
 
 function refunds(page: Page): { bodies: unknown[]; keys: string[] } {
@@ -185,17 +189,24 @@ test("goods bought at another store come back here, and this store hands the mon
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
-  // Under this store's list (owner decision, 2026-10-17, В3 (а)).
-  await page
-    .getByRole("button", { name: "Шукати в інших магазинах мережі" })
-    .click();
-  // The other stores' sales are found, never browsed.
-  await expect(
-    page.getByText("Введіть назву товару, щоб знайти продаж іншого магазину."),
-  ).toBeVisible();
+  // The other stores' sales are found, never browsed: nothing is asked of
+  // them, nor offered, before two letters (returns task list, P1-1).
+  await page.getByLabel("Що повертають?").fill(model.slice(0, 1));
+  await expect(page.getByRole("button", { name: "Шукати там" })).toHaveCount(0);
   expect(searches).toEqual([]);
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
+  // Not this store's: said, and the other stores offered under it.
+  await expect(page.getByText(/^За «.*» продажів не знайдено\./)).toBeVisible();
+  expect(searches).toEqual([]);
+  await page.getByRole("button", { name: "Шукати там" }).click();
+  await expect(
+    page.getByRole("heading", { name: "В інших магазинах мережі" }),
+  ).toBeVisible();
+  await expect.poll(() => searches.length).toBeGreaterThan(0);
+  expect(
+    searches.every((url) => url.includes(`q=${encodeURIComponent(model)}`)),
+  ).toBe(true);
   const card = page.getByRole("article");
   await expect(card).toHaveCount(1);
   await expect(card).toContainText("Магазин «Другий»");
@@ -274,24 +285,29 @@ test("goods sold from the other store's own warehouse go to one of this store's,
   await findElsewhere(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   // Asked only once an intact one is counted.
-  const place = page.getByLabel("Цілий товар — на склад вашого магазину");
+  const place = places(page);
   await expect(place).toHaveCount(0);
   await returnUnits(page, { intact: 1 });
   await expect(
     page.getByRole("button", { name: "Оберіть склад для цілого товару" }),
   ).toBeDisabled();
-  // Offered once this store's warehouses are read: never «Брак», and never
-  // the other store's own.
   await expect(
-    place.locator(`option[value="${fixture.returns_location_id}"]`),
-  ).toHaveCount(1);
-  await expect(
-    place.locator(`option[value="${fixture.bin_location_id}"]`),
-  ).toHaveCount(0);
-  await expect(
-    place.locator(`option[value="${fixture.second_location_id}"]`),
-  ).toHaveCount(0);
-  await place.selectOption(fixture.returns_location_id);
+    page.getByText("Продали з власного складу іншого магазину.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  // A chip each, once this store's warehouses are read: never «Брак», and
+  // never the other store's own; none chosen beforehand.
+  const chip = (id: string) => place.locator(`[data-location="${id}"]`);
+  await expect(chip(fixture.returns_location_id)).toHaveCount(1);
+  await expect(chip(fixture.bin_location_id)).toHaveCount(0);
+  await expect(chip(fixture.second_location_id)).toHaveCount(0);
+  await expect(place.locator('[aria-pressed="true"]')).toHaveCount(0);
+  await chip(fixture.returns_location_id).click();
+  await expect(chip(fixture.returns_location_id)).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();
@@ -424,9 +440,9 @@ test("a kept return of goods from the other store's own warehouse, checked by th
   await findElsewhere(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await returnUnits(page, { intact: 1 });
-  await page
-    .getByLabel("Цілий товар — на склад вашого магазину")
-    .selectOption(fixture.returns_location_id);
+  await places(page)
+    .locator(`[data-location="${fixture.returns_location_id}"]`)
+    .click();
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();

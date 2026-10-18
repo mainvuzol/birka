@@ -252,6 +252,13 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
       { exact: true },
     ),
   ).toBeVisible();
+  // How a mistake is mended (owner decision, 2026-10-17, В2 (а); P1-5).
+  await expect(
+    page.getByText(
+      "Помилилися з поверненням? Продайте ці речі знову на касі; пошкоджене спершу поверніть у продаж у «Браку».",
+      { exact: true },
+    ),
+  ).toBeVisible();
   expect(sent.bodies).toHaveLength(1);
   expect(sent.bodies[0]?.lines.map((l) => l.condition).sort()).toEqual([
     "DAMAGED",

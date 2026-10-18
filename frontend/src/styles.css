@@ -812,6 +812,38 @@ html {
 .add-reason {
   margin-top: 12px;
 }
+/* Another store's own warehouse sold it: this store's, a chip each
+   (P1-1). */
+.return-place-ask {
+  margin: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.return-place .hint {
+  margin: 8px 0 0;
+}
+/* The other stores' sales, headed, and offered under this store's (P1-1). */
+.elsewhere-head {
+  margin: 12px 0 0;
+}
+.elsewhere-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.elsewhere-offer {
+  margin-top: 16px;
+}
+.elsewhere-offer button {
+  display: block;
+  margin-top: 8px;
+}
+.return-mistake {
+  margin-top: 14px;
+}
 /* The return's panel (P0-4): the till's, with the way as a switch over the
    one button. */
 .pay-note {
