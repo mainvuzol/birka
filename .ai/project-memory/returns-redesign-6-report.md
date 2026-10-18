@@ -2,7 +2,10 @@
 
 Baseline: `98123f4` (a sale found by each word, a return's own refusals,
 PR #103).
-Status: TODO
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twelve of twelve ways of breaking it caught. «Повернення»'s task list is
+closed, but for P2-6, which the owner's В4 (а) leaves undone. Not yet tried
+on a real phone.
 Branch: `feat/returns-words-skeletons-pills`. Tasks: [the returns task list](redesign/2026-10-17-redesign-tz-returns.md),
 P2-1, P2-3, P2-4 — the last of it but P2-6, which the owner's В4 (а) leaves
 undone. Owner: business-rules.md, "«Повернення»: three readings after
@@ -130,7 +133,18 @@ tokens. It found the following, all addressed before the first commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-18-returns-words-skeletons-pills/`](../../output/verification/2026-10-18-returns-words-skeletons-pills/):
+  `mutants.py` and `mutants.txt`, twelve ways of breaking it, all caught;
+  the list, the form and the result at 360 px, light and dark
+  (`returns-list-*.png`, `returns-form-*.png`, `returns-result-*.png`).
+- **CI, run locally at `370a19a`** ([summary](../../output/verification/2026-10-18-returns-words-skeletons-pills-ci-local/summary.md)),
+  on the host's Node 24.18: every job passed, the backend with its
+  declared gap.
+  - backend: 3 447 on PostgreSQL 17;
+  - e2e: 396 journeys;
+  - hot path: worst p95 94.5 ms (the search by six sellers) and 71.4 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
