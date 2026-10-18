@@ -210,7 +210,15 @@ test("when the till cannot see the coats without a size, the server's refusal of
     const response = await route.fetch();
     const { items } = (await response.json()) as { items: Option[] };
     const m = items.find((o) => o.size_id === fixture.size_id);
-    held = m?.available_quantity ?? 0;
+    // What «Старі залишки» holds, where the sale draws: never another
+    // warehouse's list read meanwhile, which may come back last.
+    if (
+      route
+        .request()
+        .url()
+        .includes(`location_id=${fixture.legacy_location_id}`)
+    )
+      held = m?.available_quantity ?? 0;
     await route.fulfill({
       response,
       json: {
