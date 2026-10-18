@@ -3,19 +3,13 @@ import type { JSX } from "react";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import { number, plural } from "@/openings/types";
+import { goodsOf } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
-import type { Credit, Customer } from "./types";
+import type { Customer } from "./types";
 
 /** «2 борги»: how many debts a row stands for. */
 export function debtsCount(count: number): string {
   return `${number(count)} ${plural(count, "борг", "борги", "боргів")}`;
-}
-
-/** «Лоран шоколад · M», and «+ ще 2» for the rest of a debt's goods. */
-export function goodsOf(credit: Credit): string {
-  const [first, ...rest] = credit.goods.map(visible);
-  if (first === undefined) return "";
-  return rest.length > 0 ? `${first} + ще ${String(rest.length)}` : first;
 }
 
 /** The customer's first letter, for the row's mark; «—» once erased. A

@@ -8,7 +8,7 @@ import {
 import { methodLabels, notStated } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
-import { refusalText as debtRefusalText } from "@/credits/Credits";
+import { refusalText as debtRefusalText } from "@/credits/Debt";
 import { refusalText as correctionRefusalText } from "@/inventory/Correction";
 import {
   refusalText as returnRefusalText,

@@ -21,8 +21,12 @@ import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
-import { PaperFields, paperRefusal, usePaperMark } from "@/sales/paperMark";
-import type { PaperMarkState } from "@/sales/paperMark";
+import {
+  PaperFields,
+  paperRefusal,
+  takenBy,
+  usePaperMark,
+} from "@/sales/paperMark";
 import { buzz } from "@/shared/telegram";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
@@ -417,28 +421,6 @@ function hasWord(text: string): boolean {
       /[\t\n\v\f\r \x1c-\x1f\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/,
     )
     .some((word) => Array.from(word).length >= 2);
-}
-
-/**
- * «Хто прийняв: Ганна · за папером вчора, 19:40», the one line under the
- * panel's button from paper (returns task list, P1-4): seen before the
- * press, so a switch left on is seen, as the till's «Продавець: …» is (G6).
- * The paper's time only when it reads.
- */
-function takenBy(mark: PaperMarkState): string {
-  const who = mark.named ? visible(mark.named.display_name) : "не вказано";
-  const at = /^\d{4}-(\d{2})-(\d{2})T(\d{2}:\d{2})$/.exec(
-    mark.body()?.at ?? "",
-  );
-  if (!at) return `Хто прийняв: ${who}`;
-  const [, month = "", day = "", time = ""] = at;
-  const when =
-    mark.firstDays === true
-      ? `${day}.${month}`
-      : mark.yesterday
-        ? "вчора"
-        : "сьогодні";
-  return `Хто прийняв: ${who} · за папером ${when}, ${time}`;
 }
 
 type Counts = Record<string, { intact: number; damaged: number }>;

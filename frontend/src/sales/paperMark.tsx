@@ -84,6 +84,29 @@ export function paperText(kind: "return" | "payment", mark: PaperView): string {
   return parts.join(" · ");
 }
 
+/**
+ * «Хто прийняв: Ганна · за папером вчора, 19:40», the one line under the
+ * panel's buttons from paper — a return's (returns task list, P1-4) and a
+ * debt payment's (credits task list, P0-4): seen before the press, so a
+ * switch left on is seen, as the till's «Продавець: …» is (G6). The paper's
+ * time only when it reads.
+ */
+export function takenBy(mark: PaperMarkState): string {
+  const who = mark.named ? visible(mark.named.display_name) : "не вказано";
+  const at = /^\d{4}-(\d{2})-(\d{2})T(\d{2}:\d{2})$/.exec(
+    mark.body()?.at ?? "",
+  );
+  if (!at) return `Хто прийняв: ${who}`;
+  const [, month = "", day = "", time = ""] = at;
+  const when =
+    mark.firstDays === true
+      ? `${day}.${month}`
+      : mark.yesterday
+        ? "вчора"
+        : "сьогодні";
+  return `Хто прийняв: ${who} · за папером ${when}, ${time}`;
+}
+
 /** Why a paper time was too old: an outage's is today's or yesterday's, the
  * first days' of the last two weeks (owner decisions, 2026-10-07 and
  * 2026-10-16). */
@@ -270,7 +293,7 @@ export function usePaperMark(
   namedFor: "refund" | "credit",
 ) {
   const paper = usePaper((state) => state.storeId === store.id);
-  const takenBy = usePaper((state) =>
+  const taker = usePaper((state) =>
     state.storeId === store.id ? state.takenBy[namedFor] : null,
   );
   const firstDays = usePaper((state) =>
@@ -299,9 +322,9 @@ export function usePaperMark(
     retry: false,
   });
   const named =
-    takenBy === null
+    taker === null
       ? undefined
-      : people.data?.sellers.find((person) => person.user_id === takenBy);
+      : people.data?.sellers.find((person) => person.user_id === taker);
   return {
     paper,
     firstDays,

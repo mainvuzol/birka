@@ -2859,3 +2859,36 @@ How they are carried out, not decided by the owner:
   «Сплачено» or «Списано»; of more, «Нічого не винні».
 
 Built on 2026-10-18; see the [report](credits-redesign-1-report.md).
+
+## Owner decision — 2026-10-18 («Борги»: five readings after #106, and what next)
+
+Asked after #106, each answer the option recommended — each confirms what
+was built:
+- **The customer card** — the name, the phone, «Винні всього» large, a row
+  a debt with its goods, «з 01.10 · останній внесок 12.10» and what is owed
+  — is approved; the seller chooses which debt is paid.
+- **A customer whose one debt is closed** says on the row how it closed,
+  «Сплачено» or «Списано»; of more, «Нічого не винні».
+- **A kept return to a warehouse closed** reads «Повернення не записано.
+  Склад, куди йшов цей товар, закрито. Зверніться до менеджера.», with the
+  owner's sentence on money handed back.
+- **A person who lost their right only at a private warehouse** is answered
+  their kept return as a store that lost its reach of a warehouse is.
+- **A «Брак» undone, or a warehouse to choose again,** also says
+  «Якщо гроші вже повернули — передайте папір менеджеру, щоб внести
+  повернення з паперу.»
+- **Next:** the debt and the payment (P0-3, P0-4).
+
+How the debt and the payment are carried out, not decided by the owner:
+- **«← До боргів» leads back to the list;** a debt opened from a customer's
+  card leads back to it by their name: one name for the «Борги» tab and a
+  way back would be two buttons alike.
+- **The payment's sum is named in its field** («Сума, грн»; read as «Сума
+  внеску, грн»), so a usual debt's sum and ways are seen at 360 × 640
+  without scrolling; the panel says the sum typed, or «Вкажіть суму внеску з
+  точністю до копійок.» for one it cannot read.
+- **«Вношу внесок з паперу» stands under the sum,** a group of its own.
+- **Another store's payment in the history** reads «прийняв магазин
+  «Центр»»: the store took it, never a verb of the person before it.
+
+Built on 2026-10-18; see the [report](credits-redesign-2-report.md).

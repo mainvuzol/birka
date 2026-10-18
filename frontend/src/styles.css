@@ -908,11 +908,113 @@ html {
   color: var(--debt);
 }
 .credits .back {
-  margin: 4px 0 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  font-weight: 650;
+}
+.credits .back + h2 {
+  margin-top: 4px;
 }
 .elsewhere-ask,
 .owed-mode {
   margin-top: 12px;
+}
+/* One debt (credits task list, P0-3, P0-4): who and what in one line, what
+   is owed large with a bar of how much is closed, the payment's sum under it
+   and its ways in the panel, the history a row an entry. */
+.debt-context {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.debt-bar {
+  height: 6px;
+  margin: 10px 0 0;
+  border-radius: 999px;
+  background: var(--field);
+  overflow: hidden;
+}
+.debt-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.debt-detail .owed-card {
+  margin: 10px 0 12px;
+  padding: 12px 14px;
+}
+.debt-detail .owed-sum .sum {
+  font-size: 34px;
+}
+.debt-closed {
+  margin: 12px 0 0;
+}
+.debt-closed p {
+  margin: 0 0 6px;
+}
+.pay-in {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pay-amount {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.pay-amount label {
+  flex: 1;
+  margin: 0;
+}
+.pay-amount input {
+  min-height: 52px;
+  border-radius: 14px;
+}
+.pay-amount input::placeholder {
+  color: var(--text-2);
+  opacity: 1;
+}
+.pay-amount button {
+  min-height: 52px;
+  white-space: nowrap;
+}
+.history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.history-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.history-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.history-what {
+  font-weight: 650;
+}
+.history-meta {
+  font-size: 14px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.history-sum {
+  flex-shrink: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.rare {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
 }
 /* The other stores' sales, headed, and offered under this store's (P1-1). */
 .elsewhere-head {
