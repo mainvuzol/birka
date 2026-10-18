@@ -6,11 +6,14 @@ import { readFileSync } from "node:fs";
 /**
  * A coat a legacy list loaded with its size not known, sold with its size.
  *
- * The seed opens «Старі залишки» from a list — three of the coat with their
+ * The seed opens «Старі залишки» from a list — thirty of the coat with their
  * size not known — and then delivers one M. The first three tests sell from
- * it against the real API, in order; each reads the balance it starts from,
- * so a fresh seed runs any of them alone. The rest are about what the till
- * does with an answer, and state their own.
+ * it against the real API. Each reads the balance it starts from, and the
+ * one that sells an M beyond the ledger brings its own M in first, so each
+ * runs alone, in any order and again, until the seed's coats without a size
+ * are used up, which it says. Nothing but a list brings such a coat in, so
+ * a test cannot add its own. The rest are about what the till does with an
+ * answer, and state their own.
  */
 interface Fixture {
   telegram_user_id: string;
@@ -44,7 +47,7 @@ interface SaleBody {
   payment_method?: string;
 }
 
-function launch(): string {
+function initData(): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
@@ -57,7 +60,11 @@ function launch(): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  return fields.toString();
+}
+
+function launch(): string {
+  return `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`;
 }
 
 /** Open the till at «Старі залишки» and return the balances it listed. */
@@ -95,10 +102,45 @@ async function addToBasket(page: Page, quantity: number): Promise<void> {
   await fillLine(page, { quantity, price: "9000.00" });
 }
 
+/** The seed's coats without a size, used up: what to do about it. */
+const usedUp =
+  "No coat without a size is left on «Старі залишки»: the seed's are used up. Seed the E2E database again.";
+
 function unknownOf(options: Option[]): Option {
   const row = options.find((o) => o.size_is_unknown);
-  if (!row) throw new Error("The seed holds the coat with its size not known");
+  if (!row || row.available_quantity < 1) throw new Error(usedUp);
   return row;
+}
+
+/** One M delivered to «Старі залишки», as any delivery is: a test that sells
+ * an M beyond the ledger never leans on the M the seed delivered, or on what
+ * another test left of it. */
+async function deliverAnM(page: Page): Promise<void> {
+  const auth = await page.request.post("/api/v1/auth/telegram", {
+    data: { init_data: initData() },
+  });
+  const { access_token: token } = (await auth.json()) as {
+    access_token: string;
+  };
+  const delivered = await page.request.post("/api/v1/inventory/receipts", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Idempotency-Key": randomUUID(),
+    },
+    data: {
+      store_id: fixture.store_id,
+      location_id: fixture.legacy_location_id,
+      command_id: randomUUID(),
+      lines: [
+        {
+          product_variant_id: fixture.variant_id,
+          size_id: fixture.size_id,
+          quantity: 1,
+        },
+      ],
+    },
+  });
+  expect(delivered.status()).toBe(201);
 }
 
 test("a coat held with its size not known is sold with the size on its label", async ({
@@ -175,9 +217,11 @@ test("a sized line short of stock is answered from the coats without a size", as
   page,
 }) => {
   const sent = sales(page);
+  await deliverAnM(page);
   const options = await enter(page);
+  unknownOf(options);
   const m = options.find((o) => o.size_id === fixture.size_id);
-  if (!m) throw new Error("The seed delivers one M after the list");
+  if (!m) throw new Error("An M was just delivered to «Старі залишки»");
   await pick(page, m);
   await addToBasket(page, m.available_quantity + 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
@@ -206,10 +250,18 @@ test("when the till cannot see the coats without a size, the server's refusal of
   // it: only the M, at whatever the ledger holds. Once the M is sold out, as
   // a list read before a colleague sold the last one: «M · 1».
   let held = 0;
+  let unknown: Option | undefined;
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     const response = await route.fetch();
     const { items } = (await response.json()) as { items: Option[] };
     const m = items.find((o) => o.size_id === fixture.size_id);
+    if (
+      route
+        .request()
+        .url()
+        .includes(`location_id=${fixture.legacy_location_id}`)
+    )
+      unknown = items.find((o) => o.size_is_unknown);
     // What «Старі залишки» holds, where the sale draws: never another
     // warehouse's list read meanwhile, which may come back last.
     if (
@@ -240,6 +292,8 @@ test("when the till cannot see the coats without a size, the server's refusal of
   });
   const [m] = await enter(page);
   if (!m) throw new Error("stubbed");
+  // The answer it waits for draws on the coats the list here hides.
+  unknownOf(unknown ? [unknown] : []);
   await pick(page, m);
   // One more than the ledger holds.
   await addToBasket(page, held + 1);
