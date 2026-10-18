@@ -1,7 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import {
+  ApiError,
+  CONFLICT_TEXT,
+  INVALID_TEXT,
+  api,
+  errorText,
+} from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -303,8 +309,9 @@ export function Debt({
       setCommandId(crypto.randomUUID());
       setAsking(false);
       tell(
-        refusalText(
+        pressRefusalText(
           outcome.error,
+          body.kind,
           body.kind === "payment" ? body.payment_method : undefined,
         ),
       );
@@ -760,6 +767,26 @@ function backTo(way: TillMethod | null): string {
  */
 function moreThanOwed(owed: string, way: TillMethod | null): string {
   return `Це більше, ніж винні: залишок боргу ${money(owed)}. Прийміть ${money(owed)}, а решту поверніть покупцю${backTo(way)}.`;
+}
+
+/**
+ * A payment or a write-off refused as it was pressed: what was not recorded
+ * first, in the debt's words where the shared ones would speak of an order
+ * (credits task list, P2-2). Proven to have recorded nothing, so «спробуйте
+ * ще раз»; the debt is read again after it.
+ */
+export function pressRefusalText(
+  error: unknown,
+  kind: "payment" | "write-off",
+  way?: TillMethod | null,
+): string {
+  const said = refusalText(error, way);
+  const what = kind === "payment" ? "Внесок" : "Списання";
+  if (said === CONFLICT_TEXT)
+    return `${what} не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок і спробуйте ще раз.`;
+  if (said === INVALID_TEXT)
+    return `${what} не записано. Перевірте ${kind === "payment" ? "суму" : "причину"} й спробуйте ще раз.`;
+  return said;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ComponentProps, JSX } from "react";
+import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
@@ -937,13 +938,17 @@ function Workspace({
         });
       } else if (outcome.kind === "refused") {
         // Proven to have recorded nothing: settled, and said, with what to
-        // do with money already taken.
-        setCreditRefused({
-          kind: attempt.body.kind,
-          way:
-            attempt.body.kind === "payment"
-              ? (attempt.body.payment_method ?? null)
-              : null,
+        // do with money already taken. Which command it was is drawn before
+        // its words: the store's error renders first, and a write-off read
+        // as «Внесок не записано» for a moment, aloud (review, 2026-10-18).
+        flushSync(() => {
+          setCreditRefused({
+            kind: attempt.body.kind,
+            way:
+              attempt.body.kind === "payment"
+                ? (attempt.body.payment_method ?? null)
+                : null,
+          });
         });
         useCreditCommand.setState({ error: outcome.error });
       }
@@ -1508,7 +1513,9 @@ function Workspace({
           <p>{keptCreditText(creditCommand.pending.body)}</p>
           <p>{keptText(creditCommand.pending.since, me.display_name)}</p>
           <button disabled={creditCommand.busy} onClick={checkCredit}>
-            Перевірити результат внеску
+            {creditCommand.pending.body.kind === "payment"
+              ? "Перевірити результат внеску"
+              : "Перевірити результат списання"}
           </button>
         </section>
       )}
@@ -1560,7 +1567,8 @@ function Workspace({
         <p role="alert">
           {creditErrorText(
             creditCommand.error,
-            creditRefused.kind,
+            // Still kept: its own kind; settled as refused: the one it was.
+            creditCommand.pending?.body.kind ?? creditRefused.kind,
             creditRefused.way,
           )}
         </p>

@@ -268,7 +268,19 @@ export function creditErrorText(
   kind: "payment" | "write-off",
   way: TillMethod | null = null,
 ): string {
-  if (!recordedNothing(error)) return errorText(error);
+  const what = kind === "payment" ? "Внесок" : "Списання";
+  // Not said to have recorded nothing: still unconfirmed, never «спробуйте
+  // ще раз», which could take the money twice, and never an order's words
+  // (credits task list, P2-2; as «Повернення», owner decisions, 2026-10-18).
+  if (!recordedNothing(error)) {
+    const text = errorText(error);
+    const twice = `Перевірте результат ще раз — двічі ${kind === "payment" ? "він" : "воно"} не запишеться.`;
+    if (text === CONFLICT_TEXT)
+      return `${what} ще не підтверджено: сервер відповів, що дані змінилися. ${twice}`;
+    if (text === INVALID_TEXT)
+      return `${what} ще не підтверджено: сервер не прийняв запит. ${twice}`;
+    return text;
+  }
   if (
     error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
@@ -282,7 +294,14 @@ export function creditErrorText(
     error.details.reason === "NOT_OWED"
   )
     return why;
-  return `${kind === "payment" ? "Внесок" : "Списання"} не записано. ${why}`;
+  // Resent after the server did not answer: it changed meanwhile, not while
+  // the seller worked; the section named, as the banner may stand over any
+  // tab.
+  if (why === CONFLICT_TEXT)
+    return `${what} не записано. Дані змінилися, поки сервер не відповідав. Відкрийте борг у «Боргах» і спробуйте ще раз.`;
+  if (why === INVALID_TEXT)
+    return `${what} не записано. Сервер не прийняв запит. Відкрийте борг у «Боргах» і спробуйте ще раз.`;
+  return `${what} не записано. ${why}`;
 }
 
 const notRecorded: Record<CashBody["command"], string> = {

@@ -2164,6 +2164,115 @@ test.describe("9. what to do with money after the outage", () => {
       expect(sent[0]).not.toHaveProperty("goods");
     });
 
+  for (const refused of [
+    {
+      what: "a payment answered with a conflict that proves nothing is still unconfirmed",
+      body: { kind: "payment", amount: "500.00", payment_method: "CASH" },
+      status: 409,
+      recorded: undefined,
+      said: "Внесок ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі він не запишеться.",
+      kept: "Внесок ще не підтверджено",
+    },
+    {
+      what: "a write-off answered with a request refused that proves nothing is still unconfirmed",
+      body: { kind: "write-off", reason: "виїхав" },
+      status: 422,
+      recorded: undefined,
+      said: "Списання ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.",
+      kept: "Списання ще не підтверджено",
+    },
+    {
+      what: "a payment the server says it did not record after a conflict",
+      body: { kind: "payment", amount: "500.00", payment_method: "CARD" },
+      status: 409,
+      recorded: false,
+      said: "Внесок не записано. Дані змінилися, поки сервер не відповідав. Відкрийте борг у «Боргах» і спробуйте ще раз.",
+      kept: null,
+    },
+    {
+      what: "a write-off the server says it did not record, its request refused",
+      body: { kind: "write-off", reason: "виїхав" },
+      status: 422,
+      recorded: false,
+      said: "Списання не записано. Сервер не прийняв запит. Відкрийте борг у «Боргах» і спробуйте ще раз.",
+      kept: null,
+    },
+  ])
+    test(`«Борги»: ${refused.what}, in the debt's words, never an order's (credits task list, P2-2)`, async ({
+      page,
+    }) => {
+      // Every alert's words, as each is drawn: never, even for a moment,
+      // another's — a write-off called «Внесок» (review, 2026-10-18).
+      await page.addInitScript(() => {
+        const seen: string[] = [];
+        (window as unknown as { alerts: string[] }).alerts = seen;
+        new MutationObserver(() => {
+          for (const alert of document.querySelectorAll("[role=alert]")) {
+            const text = alert.textContent;
+            if (text && seen.at(-1) !== text) seen.push(text);
+          }
+        }).observe(document, {
+          subtree: true,
+          childList: true,
+          characterData: true,
+        });
+      });
+      await seed(page, {
+        [creditKey]: JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          body: {
+            store_id: ids.store,
+            credit_id: ids.credit,
+            command_id: randomUUID(),
+            ...refused.body,
+          },
+        }),
+      });
+      await serve(page);
+      await debts(page);
+      const answer = async (route: Route): Promise<void> => {
+        await route.fulfill({
+          status: refused.status,
+          json: {
+            code: refused.status === 409 ? "CONFLICT" : "VALIDATION_ERROR",
+            message: "Refused",
+            details: refused.recorded === false ? { recorded: false } : {},
+          },
+        });
+      };
+      await on(page, `/credits/${ids.credit}/payments`, answer);
+      await on(page, `/credits/${ids.credit}/write-off`, answer);
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      // Said once, in the debt's words alone.
+      await expect(page.getByRole("alert")).toHaveText([refused.said]);
+      expect(
+        await page.evaluate(
+          () => (window as unknown as { alerts: string[] }).alerts,
+        ),
+      ).toEqual([refused.said]);
+      if (refused.kept === null)
+        // Proven to have recorded nothing: settled, the app free again.
+        await expect(
+          page.getByRole("heading", { name: /ще не підтверджено$/ }),
+        ).toHaveCount(0);
+      else {
+        await expect(
+          page.getByRole("heading", { name: refused.kept }),
+        ).toBeVisible();
+        // Asked about by its own name.
+        await expect(
+          page.getByRole("button", {
+            name:
+              refused.body.kind === "payment"
+                ? "Перевірити результат внеску"
+                : "Перевірити результат списання",
+          }),
+        ).toBeVisible();
+      }
+    });
+
   test("«Борги»: a payment refused because the store that sold trades again says to pass the paper to a manager", async ({
     page,
   }) => {
