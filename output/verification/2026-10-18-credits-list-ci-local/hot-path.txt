@@ -1,0 +1,301 @@
+CI job `hot-path` — hot path budgets (PostgreSQL 17)
+Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
+
+commit:   e99771e (feat/credits-list) — dirty: ?? .ai/project-memory/credits-redesign-1-report.md; ?? output/verification/2026-10-18-credits-list/credits-customer-dark.png; ?? output/verification/2026-10-18-credits-list/credits-customer-light.png; ?? output/verification/2026-10-18-credits-list/credits-list-dark.png; ?? output/verification/2026-10-18-credits-list/credits-list-light.png; ?? output/verification/2026-10-18-credits-list/mutants.py; ?? output/verification/2026-10-18-credits-list/mutants.txt
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da
+date:     2026-10-18 16:41:37 EEST → 16:42:31 (0m53s)
+machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
+tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
+env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
+images:   postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
+network:  from Docker's VM during the job (Docker Desktop's log): none
+result:   passed
+counts:   12 cases, 5 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 97.5 ms of 300 (GET /catalog/stock-options · search (6 sellers)), POST /sales 72.7 ms of 500 (POST /sales · same coat, 6 sellers)
+
+DEVIATIONS from CI:
+  - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of GitHub's ubuntu-24.04 runner (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
+  - Every job runs with TZ=UTC, LANG=C.UTF-8 and LC_ALL=C.UTF-8, as on the ubuntu runner (this Mac's own zone is Europe/Kyiv); every tool the job starts inherits them, Playwright's Chromium included.
+  - The working tree as it is, not a fresh checkout (the header says clean or dirty).
+  - CI=true; GITHUB_ENV and GITHUB_STEP_SUMMARY point into the runner's work directory; upload-artifact copies into the evidence directory. uv's and npm's caches are in the runner's work directory.
+  - Nothing is installed and no image is pulled; builds use only the local build cache. The network is used only where CI's own steps use it: `npm audit` and pip-audit's queries.
+  - Nothing is re-run: a failing step or test fails the job, as in CI.
+  - PostgreSQL 17: postgres:17-alpine (same env, initdb args, health check) in Docker Desktop's Linux VM, published on 127.0.0.1:55417 instead of localhost:5432. The API (on the Mac) reaches it through Docker Desktop's port forwarding, which CI's service container does not have; and this Mac has 10 cores where CI's runner has 2-4 vCPUs. The figures compare with CI's only roughly.
+  - BIRKA_PERF_GATE=one-seller, as CI sets it (the release reading is BIRKA_PERF_GATE=all).
+  - /tmp paths moved: the figures are in the evidence directory (hot-path-figures.txt), the API log is copied there (CI uploads both as an artifact). The step summary CI writes is printed in this log.
+  - Run last, after every other job, with nothing else of the runner running.
+  - Load average at the start: { 3.78 3.47 3.23 }.
+  - `Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2. The lock's hashes are not checked here (nothing is downloaded); the images built in restore-drill and edge install it with --require-hashes.
+
+GAPS (declared; nothing else may be missing):
+  - none
+
+====================================================================================================
+===== [runner] job hot-path: hot path budgets (PostgreSQL 17)
+[runner] 4 step(s) the runner replaces or does not run match their sha256 in ci.yml
+[runner] alone: no other job's process or container; load average { 3.78 3.47 3.23 }
+[runner] service postgres: docker run -d --pull never --name birka-ci-local-pg --label com.birka.ci-local=1 -p 127.0.0.1:55417:5432 -e POSTGRES_USER=birka -e POSTGRES_PASSWORD=birka -e POSTGRES_DB=birka_perf -e 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8' --health-cmd 'pg_isready -U birka -d birka_perf' --health-interval 5s --health-timeout 5s --health-retries 20 postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+[runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55417->5432
+
+===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+[runner] the working tree at e99771e (dirty), not a fresh checkout
+===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
+
+===== actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+[runner] setup-python 3.12.14: the isolated venv /Users/nikitahlushak/.cache/birka-runtime/python/bin/python (Python 3.12.14)
+===== replaced: ok: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 (0.0s)
+
+===== Install
+[runner] no pip install (no downloads): checking /Users/nikitahlushak/.cache/birka-runtime/python/bin/python against requirements-dev.lock
+[runner] 71 pins installed at their locked versions; 1 pins not for this platform (markers)
+[runner] the venv also holds 3 package(s) requirements-dev.lock does not pin: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2
+$ uv pip check --python /Users/nikitahlushak/.cache/birka-runtime/python/bin/python
+Using Python 3.12.14 environment at: /Users/nikitahlushak/.cache/birka-runtime/python
+Checked 74 packages in 5ms
+All installed packages are compatible
+===== replaced: ok: Install (0.1s)
+
+===== Migrate, and start the API as the server runs it
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+INFO  [alembic.runtime.migration] Running upgrade 0038_customer_erasure -> 0039_outage_mark_debts_returns, The mark «під час збою» on returns and debt payments. Owner decision, 2026-10-10; ADR-0021.
+INFO  [alembic.runtime.migration] Running upgrade 0039_outage_mark_debts_returns -> 0040_warehouse_stocktake, A stocktake of a whole warehouse. Owner decisions, 2026-10-10; ADR-0022.
+INFO  [alembic.runtime.migration] Running upgrade 0040_warehouse_stocktake -> 0041_first_days_mark, «З паперу»: the first days' paper, a mark of its own. Owner decisions, 2026-10-15 and 2026-10-16.
+curl: (7) Failed to connect to 127.0.0.1 port 58043 after 0 ms: Couldn't connect to server
+curl: (7) Failed to connect to 127.0.0.1 port 58043 after 0 ms: Couldn't connect to server
+{"status":"ok","environment":"ci"}
+===== ok: Migrate, and start the API as the server runs it (3.6s)
+
+===== Measure, and fail on a budget breached
+gate: one-seller; 10 CPUs; harness, API and database on one machine
+python: 3.12.14 (CPython)
+postgresql: PostgreSQL 17.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync on, synchronous_commit on
+api: http://127.0.0.1:58043, environment ci
+seeding 400 variants × 6 sizes …
+2026-10-18 13:41:49 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:51 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:53 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:54 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=400 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:55 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:56 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+2026-10-18 13:41:57 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=200 organization_id=d3db159e-904b-45e0-97f2-8ebc054e4b9e types=['DELIVERY']
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=   15.9  p95=   19.5  p99=   21.1  max=   78.4  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   29.5  p95=   78.6  p99=   83.9  max=   85.6  pass  (not gated)
+POST /sales · 1 line                     n=200  p50=   19.2  p95=   23.9  p99=   24.7  max=   25.2  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   38.7  p95=   43.8  p99=  101.2  max=  106.0  pass  (not gated)
+POST /sales · 4 lines (6 sellers)        n=200  p50=   56.0  p95=   65.3  p99=  116.4  max=  122.7  pass  (not gated)
+POST /sales · same coat, 6 sellers       n=120  p50=   59.5  p95=   72.7  p99=   77.2  max=  108.8  pass  (not gated)
+POST /sales · paid in parts              n=200  p50=   22.7  p95=   28.0  p99=   30.6  max=   34.0  pass
+POST /sales · paid in parts (6 sellers)  n=300  p50=   45.8  p95=   52.8  p99=   96.6  max=  117.2  pass  (not gated)
+GET /catalog/stock-options · search      n=200  p50=   12.7  p95=   15.2  p99=   74.7  max=   84.9  pass
+GET /catalog/stock-options · search (6 sellers) n=300  p50=   31.1  p95=   97.5  p99=  109.4  max=  165.1  pass  (not gated)
+GET /catalog/stock-options · every warehouse n=200  p50=   12.1  p95=   14.4  p99=   16.6  max=   86.9  pass
+GET /catalog/stock-options · every warehouse (6 sellers) n=300  p50=   27.5  p95=   87.7  p99=   95.5  max=   99.7  pass  (not gated)
+
+[
+  {
+    "case": "GET /catalog/stock-options",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 15.879686994594522,
+    "p95": 19.487957993987948,
+    "p99": 21.085250002215616,
+    "max": 78.39845800481271,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 29.513020504964516,
+    "p95": 78.62395900883712,
+    "p99": 83.9045840111794,
+    "max": 85.62020899262279,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 1 line",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 19.20997900015209,
+    "p95": 23.94691700465046,
+    "p99": 24.73829199152533,
+    "max": 25.227916004951112,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 1 line (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 38.689354005327914,
+    "p95": 43.78437499690335,
+    "p99": 101.21154099761043,
+    "max": 105.9546250035055,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 4 lines (6 sellers)",
+    "concurrency": 6,
+    "n": 200,
+    "p50": 56.007354498433415,
+    "p95": 65.30062499223277,
+    "p99": 116.37291700753849,
+    "max": 122.67320799583104,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 same coat, 6 sellers",
+    "concurrency": 6,
+    "n": 120,
+    "p50": 59.45220899593551,
+    "p95": 72.70054199034348,
+    "p99": 77.19850000285078,
+    "max": 108.76774998905603,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 paid in parts",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 22.682459006318823,
+    "p95": 28.006041000480764,
+    "p99": 30.640083001344465,
+    "max": 33.98845800256822,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 paid in parts (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 45.764791502733715,
+    "p95": 52.764666004804894,
+    "p99": 96.57666699786205,
+    "max": 117.24133399548009,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 search",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 12.746354499540757,
+    "p95": 15.244166002958082,
+    "p99": 74.65454199700616,
+    "max": 84.93824998731725,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 search (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 31.09197899175342,
+    "p95": 97.46112499851733,
+    "p99": 109.37820898834616,
+    "max": 165.13704200042412,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 every warehouse",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 12.057166495651472,
+    "p95": 14.355166989844292,
+    "p99": 16.648791992338374,
+    "max": 86.85624999634456,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 every warehouse (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 27.539770999283064,
+    "p95": 87.65587500238325,
+    "p99": 95.51445799297653,
+    "max": 99.73204199923202,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": false
+  }
+]
+===== ok: Measure, and fail on a budget breached (43.2s)
+
+===== Breaches that do not fail the run, where they are seen
+0 case(s) over budget and not gated
+===== ok: Breaches that do not fail the run, where they are seen (0.0s)
+
+===== Preserve the figures
+[runner] artifact hot-path: /Users/nikitahlushak/birka/output/verification/2026-10-18-credits-list-ci-local/hot-path-figures.txt (already in the evidence directory)
+[runner] artifact hot-path: /Users/nikitahlushak/.cache/birka-runtime/ci/work/hot-path/birka-perf-api.log -> /Users/nikitahlushak/birka/output/verification/2026-10-18-credits-list-ci-local/artifacts/hot-path/hot-path/birka-perf-api.log
+===== replaced: ok: Preserve the figures (0.0s)
+[runner] stopping pid 67975 on port 58043: python -m uvicorn app.main:app --host 127.0.0.1 --port 58043 --no-access-log
+[runner] removed container birka-ci-local-pg and its anonymous volume
+
+===== [runner] steps
+  replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
+  replaced: ok                       actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  (0.0s)
+  replaced: ok                       Install  (0.1s)
+  ok                                 Migrate, and start the API as the server runs it  (3.6s)
+  ok                                 Measure, and fail on a budget breached  (43.2s)
+  ok                                 Breaches that do not fail the run, where they are seen  (0.0s)
+  replaced: ok                       Preserve the figures  (0.0s)
+===== [runner] hot-path: PASSED — 12 cases, 5 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 97.5 ms of 300 (GET /catalog/stock-options · search (6 sellers)), POST /sales 72.7 ms of 500 (POST /sales · same coat, 6 sellers)
