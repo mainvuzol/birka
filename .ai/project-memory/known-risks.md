@@ -927,7 +927,10 @@ the review of the built change raised.
   counter, is the likeliest to go out twice.
 - **A store blocked, or a warehouse closed, while a phone keeps an operation
   there holds that phone in that store** (owner, 2026-10-08: kept as a known
-  risk, with no button to discard the operation).
+  risk, with no button to discard the operation). A kept return to a
+  warehouse closed, or no longer reached, is answered to whoever recorded it
+  since 2026-10-18 ([report](credits-redesign-1-report.md)); a blocked
+  store's still waits.
   - Only a block or a closing that lands while the command runs reaches the
     refusal that says nothing was recorded. A resend after it is refused
     before the lookup, with no `recorded`: by the scope, rebuilt on every
@@ -949,15 +952,16 @@ the review of the built change raised.
   a person who may no longer do it is refused before its lookup, with no
   `recorded`, and waits until the right is back, as a blocked store's do. A
   kept return is answered to whoever took it what it recorded, or refused as
-  having recorded nothing, and the phone settles it
-  ([report](returns-redesign-7-report.md)). Whether the others should be
-  answered the same is the owner's to say.
+  having recorded nothing, and the phone settles it — the warehouse no
+  longer reached or closed alike
+  ([report](returns-redesign-7-report.md), [report](credits-redesign-1-report.md)).
+  The owner chose the same for the others, later (backlog).
   - A return's first sending still running when it is resent is waited for:
     the resend claims its key first. One stalled before it even claims the
     key — still reading, for longer than the phone waits for its answer and
     the right is taken away — is not: the resend is told nothing was
-    recorded, and the first may record it after. Narrow; kept as a known
-    risk, for the owner to accept.
+    recorded, and the first may record it after. Narrow; **accepted by the
+    owner** (2026-10-18).
 - **A kept sale resent days later still sells** what is on the shelf then,
   dated then, under the phone's person, **without a mark** (owner,
   2026-10-07). The phone checks it by itself when the server answers and

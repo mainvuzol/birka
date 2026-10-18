@@ -1873,7 +1873,7 @@ test.describe("9. what to do with money after the outage", () => {
       await openStore(page, /Подільський/);
       await page.getByRole("button", { name: "Борги", exact: true }).click();
       await page
-        .getByRole("button", { name: /^Відкрити борг Оксана Петренко/ })
+        .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
         .click();
       await page.getByLabel("Сума внеску, грн").fill("500");
       await page
@@ -1892,7 +1892,7 @@ test.describe("9. what to do with money after the outage", () => {
       await openStore(page, /Подільський/);
       await page.getByRole("button", { name: "Борги", exact: true }).click();
       await page
-        .getByRole("button", { name: /^Відкрити борг Оксана Петренко/ })
+        .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
         .click();
       await page.getByLabel("Сума внеску, грн").fill("2500");
       await page
@@ -2069,7 +2069,7 @@ test.describe("9. what to do with money after the outage", () => {
     await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Борги", exact: true }).click();
     await page
-      .getByRole("button", { name: /^Відкрити борг Оксана Петренко/ })
+      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
       .click();
     await page.getByLabel("Сума внеску, грн").fill("500");
     await page
@@ -3080,9 +3080,10 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
+    // What to do of money already handed back (owner decision, 2026-10-18).
     await expect(
       page.getByText(
-        "Повернення не записано. Немає доступу до цієї операції або складу. Зверніться до менеджера.",
+        "Повернення не записано. Немає доступу до цієї операції або складу. Зверніться до менеджера. Якщо гроші вже повернули — передайте папір менеджеру, щоб внести повернення з паперу.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -3102,6 +3103,75 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
     expect(sent).toHaveLength(1);
   });
+
+  const paper =
+    "Якщо гроші вже повернули — передайте папір менеджеру, щоб внести повернення з паперу.";
+  for (const refusal of [
+    {
+      status: 403,
+      code: "LOCATION_ACCESS_DENIED",
+      details: {},
+      why: "warehouse is no longer reached",
+      said: `Повернення не записано. Немає доступу до цієї операції або складу. Зверніться до менеджера. ${paper}`,
+    },
+    {
+      status: 404,
+      code: "NOT_FOUND",
+      details: { reason: "WAREHOUSE_UNAVAILABLE" },
+      why: "warehouse is closed",
+      said: `Повернення не записано. Склад, куди йшов цей товар, закрито. Зверніться до менеджера. ${paper}`,
+    },
+    {
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: { reason: "CHOOSE_A_WAREHOUSE" },
+      why: "sold-from warehouse is no longer reached",
+      said: `Повернення не записано. Цілий товар цього продажу йде на склад вашого магазину — оберіть його ще раз. ${paper}`,
+    },
+    {
+      status: 409,
+      code: "DAMAGED_RETURNS_UNAVAILABLE",
+      details: { reason: "NOT_SET_UP" },
+      why: "«Брак» is undone",
+      said: `Повернення не записано. У цього магазину ще немає складу «Брак» для пошкодженого товару. Зверніться до власника. ${paper}`,
+    },
+    {
+      // A 404 naming nothing is no warehouse of its: the shared words.
+      status: 404,
+      code: "NOT_FOUND",
+      details: {},
+      why: "sale is not found",
+      said: "Повернення не записано. Не вдалося виконати операцію. Спробуйте ще раз.",
+    },
+  ])
+    test(`a kept return whose ${refusal.why}, proven to have recorded nothing, says so, and frees the till`, async ({
+      page,
+    }) => {
+      await seed(page, { [returnKey]: keptReturn("CASH") });
+      await serve(page);
+      // Its person still takes returns; the store's reach is what went
+      // (owner decision, 2026-10-18).
+      const sent = await returns(page, async (route) => {
+        await route.fulfill({
+          status: refusal.status,
+          json: {
+            code: refusal.code,
+            message: "Refused",
+            details: { ...refusal.details, recorded: false },
+          },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(page.getByText(refusal.said, { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+      ).toHaveCount(0);
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), returnKey),
+      ).toBeNull();
+      expect(sent).toHaveLength(1);
+    });
 
   test("a kept return refused for the right, with nothing said of what was recorded, stays kept over the till, never «Немає права»", async ({
     page,

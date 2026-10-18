@@ -71,9 +71,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import idempotency
 from app.core.errors import (
     DamagedReturnsUnavailableError,
+    DomainError,
     IdempotencyConflictError,
     NotFoundError,
-    PermissionDeniedError,
     RefundExceedsSoldError,
     ValidationFailedError,
     nothing_recorded,
@@ -327,6 +327,19 @@ def _destination(
     return line.location_id
 
 
+def _as_recorded(
+    line: RefundLineInput, sale_item: SaleItem, binned: uuid.UUID | None
+) -> uuid.UUID | None:
+    """Where a part of a return already recorded went, as its request says:
+    nowhere, the «Брак» it was recorded in, or the warehouse chosen — else
+    the one it was sold from, which is what `_destination` gave then."""
+    if not line.restock:
+        return None
+    if line.condition is ReturnCondition.DAMAGED:
+        return binned
+    return line.location_id or sale_item.source_location_id
+
+
 def _check_choices(
     lines: list[RefundLineInput],
     sale_items: dict[uuid.UUID, SaleItem],
@@ -376,8 +389,12 @@ def _fingerprint(
     elsewhere: set[uuid.UUID] | None,
     payment_method: PaymentMethod | None,
     outage: PaperMark | None = None,
+    destinations: list[str] | None = None,
 ) -> str:
     """Everything that makes this refund *this* refund.
+
+    `destinations`, where a return already recorded went, in place of where
+    the store's setup would send it now (`own_refund`).
 
     `sale_id` is in here because it is a path parameter rather than a body
     field: without it, the same key and body aimed at a different sale would
@@ -402,7 +419,9 @@ def _fingerprint(
             # store's «Брак» — never sent by the client. It still belongs in
             # the permanent fingerprint, so a retry cannot silently restock a
             # different warehouse if either were ever to change.
-            "destinations": sorted(
+            "destinations": destinations
+            if destinations is not None
+            else sorted(
                 str(destination)
                 for line in lines
                 if line.sale_item_id in sale_items
@@ -581,22 +600,22 @@ async def own_refund(
     at_store_id: uuid.UUID | None = None,
     payment_method: PaymentMethod | None = None,
     outage: PaperMark | None = None,
+    refusal: DomainError,
 ) -> RefundResult:
-    """What a return resent by whoever took it recorded, once they may no
-    longer take returns where it was taken; never a new one (owner decision,
-    2026-10-18).
+    """What a return resent by whoever took it recorded, once it may not be
+    taken as it was — its person may no longer take returns there, or the
+    store no longer reaches the warehouse it went to; never a new one (owner
+    decisions, 2026-10-18).
 
     A phone keeps a return whose answer it never heard, and holds its till
-    until it learns the outcome (ADR-0013). Were the replay to need the right
-    as `_existing_command` does, a person whose right was taken away
+    until it learns the outcome (ADR-0013). Were the replay refused as a new
+    return is, a person whose right, or whose store's reach, was taken away
     meanwhile would never learn it, and the phone would stay held. So the
     one who recorded it is answered what it recorded, as any replay is, for
     the very request that recorded it; and when nothing was recorded under
-    it, refused as anyone without the right is, saying so
-    (`details.recorded = false`), so the phone settles it. Anyone else's
-    return is refused as before. Nothing is written either way.
-
-    For whoever may not take returns at `at_store_id`: it never takes one.
+    it, given `refusal`, saying so (`details.recorded = false`), so the phone
+    settles it. Anyone else's is given `refusal` as it came. Nothing is
+    written either way, and no goods move.
     """
     sale = await _load_sale(session, organization_id=scope.organization_id, sale_id=sale_id)
     taking = at_store_id or sale.store_id
@@ -605,15 +624,10 @@ async def own_refund(
     scope.require_store(taking)
     existing = await _command_refund(session, scope=scope, command_id=command_id)
     if existing is None or existing.actor_user_id != scope.user_id:
-        refusal = PermissionDeniedError(
-            f"Missing permission {Permission.SALE_REFUND.value}",
-            permission=Permission.SALE_REFUND.value,
-            store_id=str(taking),
-        )
         if existing is None:
             # Under the command's lock, and no refund under it: proven to
             # have recorded nothing (ADR-0008 §9, ADR-0013 §1).
-            refusal.details["recorded"] = False
+            refusal.details.setdefault("recorded", False)
         raise refusal
     lines, reason = _normalize(lines, reason)
     preview = {
@@ -622,13 +636,23 @@ async def own_refund(
             await session.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id))
         ).all()
     }
-    elsewhere = await _elsewhere(
-        session, organization_id=scope.organization_id, sale=sale, taking=taking
+    # Where it went is as it was recorded, never as the store is set up now:
+    # its reach of a warehouse, or its «Брак», may have changed since — the
+    # very change that brought the resend here — and the very request is
+    # still the very request (review, 2026-10-18).
+    binned = await session.scalar(
+        select(RefundItem.destination_location_id)
+        .where(
+            RefundItem.refund_id == existing.id,
+            RefundItem.condition == ReturnCondition.DAMAGED.value,
+        )
+        .limit(1)
     )
-    damaged = (
-        await damaged_destination(session, organization_id=scope.organization_id, store_id=taking)
-        if any(line.condition is ReturnCondition.DAMAGED for line in lines)
-        else None
+    went = sorted(
+        str(destination)
+        for line in lines
+        if line.sale_item_id in preview
+        and (destination := _as_recorded(line, preview[line.sale_item_id], binned)) is not None
     )
     _same_request(
         existing,
@@ -638,11 +662,12 @@ async def own_refund(
             lines=lines,
             reason=reason,
             sale_items=preview,
-            damaged=damaged,
+            damaged=None,
             taking=taking,
-            elsewhere=elsewhere,
+            elsewhere=None,
             payment_method=payment_method,
             outage=outage,
+            destinations=went,
         ),
         command_id=command_id,
         scope=scope,
@@ -1101,7 +1126,10 @@ async def refund_destinations(
     warehouses *before* it claims an idempotency key, which is what stops a
     revoked grant from replaying a cached success.
 
-    Unknown ids, and a choice that is missing or not allowed, are simply
+    A choice that is missing or not allowed is refused here, as the command
+    refuses it: a store that no longer reaches the warehouse a return of its
+    went to asks for a choice now, and its recorder is answered as for any
+    warehouse lost (owner decision, 2026-10-18). Unknown ids are simply
     absent: the authoritative validation happens in the command, under the
     sale's own row locks.
     """
@@ -1126,6 +1154,7 @@ async def refund_destinations(
         if intact
         else {}
     )
+    _check_choices(lines, sale_items, elsewhere)
     destinations = {
         destination
         for line in lines

@@ -124,7 +124,7 @@ each the recommended option:
 | a debt payment (`credit.pay`) | `STORE_NOT_TRADING`, `PAID_WHERE_SOLD`, `NOT_OWED`, `MORE_THAN_OWED` (the way's refusals already did) | `NOTHING_PAID`, an unknown debt, `sale:credit` |
 | a write-off (`credit.write_off`) | `NOT_OWED` | the reason, the permission |
 | an order (`create_order`, `transition_order`, `change_shipping`) | everything after the lookup: the reservation's `INSUFFICIENT_STOCK`, "Invalid order transition", `NO_DESTINATION`, the stock of a dispatch, a cancellation or a return, the collected sale and its debt | the action, the reason, the shapes of a credit, a way and a waybill; loading; authorization |
-| a return (`refunds.create_refund`) | `NOT_FOUND`, a total out of range, and everything after (`REFUND_EXCEEDS_SOLD` already did); to whoever may no longer take returns there, `PERMISSION_DENIED` (`refunds.own_refund`, owner, 2026-10-18) | `STORE_NOT_TRADING`, which stays before the lookup: a store blocked meanwhile refuses even the replay, through the scope |
+| a return (`refunds.create_refund`) | `NOT_FOUND`, a total out of range, and everything after (`REFUND_EXCEEDS_SOLD` already did); to whoever may no longer take returns there, `PERMISSION_DENIED`, and where the goods would go refused — `LOCATION_ACCESS_DENIED`, a private warehouse's `PERMISSION_DENIED`, a warehouse closed, a «Брак» gone (`refunds.own_refund`, owner, 2026-10-18) | `STORE_NOT_TRADING`, which stays before the lookup: a store blocked meanwhile refuses even the replay, through the scope |
 | a delivery (`POST /receipts`) and a stock correction (`POST /adjustments`) | everything after `_permanent_answer` found nothing: inside the stock lock, an inactive warehouse and `STORE_NOT_TRADING`; `OPENING_LIST_PENDING`, `INSUFFICIENT_STOCK` | the body, access (a store that does not trade, a closed warehouse), the 7-day claim |
 
 - **Deliveries and stock corrections are in the automatic check** (§4), and
@@ -132,7 +132,8 @@ each the recommended option:
   `_permanent_answer` answered nothing: a kept delivery refused there, for
   an opening list now waiting, say, settles the phone.
 - **A store blocked, or a warehouse closed, before the resend is not
-  settled** (owner, 2026-10-08: a known risk). Only a block or a closing
+  settled** (owner, 2026-10-08: a known risk) — but a return to a warehouse
+  closed is, since 2026-10-18 (below). Only a block or a closing
   that lands while the command runs reaches the wrap. A resend after it is
   refused before the lookup, for every command here: the scope, rebuilt on
   every request (invariant I13), answers `STORE_NOT_TRADING`, and a
@@ -144,18 +145,23 @@ each the recommended option:
   by itself when the app is next opened in that store, or at its button.
   Nothing is recorded twice or lost, and the phone works in other stores.
   There is no button to discard it (risk register).
-- **A return resent by a person who may no longer take returns there is
-  looked up** (owner, 2026-10-18). Refused before the lookup, it would
-  hold that phone for good. Its key is claimed first, so a first sending
+- **A return resent by a person who may no longer take returns there, or
+  whose store no longer reaches the warehouse it went to, or to a warehouse
+  closed, is looked up** (owner, 2026-10-18, twice). Refused before the
+  lookup, it would hold that phone for good. Its key is claimed first, so a first sending
   still running is waited for and its answer given; the claim is never
   committed, and nothing is written. Whoever recorded it is answered what it
-  recorded, for the very request that recorded it. With nothing under its
-  command, it is refused `PERMISSION_DENIED` with `recorded: false`, and the
-  phone settles. Anyone else's is refused, without `recorded`; a store the
+  recorded, for the very request that recorded it, judged by where it went
+  as recorded, not where the store's setup would send it now. With nothing
+  under its command, it is given the refusal as it came — `PERMISSION_DENIED`,
+  `LOCATION_ACCESS_DENIED`, a warehouse to choose, a «Брак» undone, a
+  warehouse closed (`NOT_FOUND`, named `WAREHOUSE_UNAVAILABLE`) — with
+  `recorded: false`, and the phone settles. Anyone else's is refused, without `recorded`; a store the
   person no longer belongs to, or one that does not trade, refuses before
-  the lookup, as above. Every other command keeps its right before the
-  lookup, and a phone keeping one for a person who lost that right waits
-  until it is back (risk register).
+  the lookup, as above. Every other command keeps its right and its
+  warehouses before the lookup, and a phone keeping one for a person who
+  lost that right waits until it is back (risk register); the owner chose
+  the return's answer for them too, later (backlog).
 - **`NOTHING_TO_SELL` stays before the lookup.** It is decided from the body
   alone, and the till never sends such a body: a basket with nothing on the
   shelf is sent as an empty shelf.

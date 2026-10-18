@@ -272,12 +272,15 @@ test("text from outside is shown with its hidden characters marked, on every scr
 
   // «Борги»: the customer, the goods, who sold, and the reason.
   await open(page, fixture.owner_telegram_user_id, "Оля", "Борги");
-  await page.getByRole("combobox", { name: "Показати" }).selectOption("ALL");
-  await page.getByLabel("Пошук за ім’ям або телефоном").fill(tag);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await page
+    .getByRole("button", { name: "Показати сплачені й списані" })
+    .click();
+  await page.getByLabel("Ім’я або телефон").fill(tag);
   await shownSafely(page, `Марта ${tag}${marks[LRI]}`);
   await page
-    .getByRole("button", { name: `Відкрити борг Марта ${tag}${marks[LRI]}` })
+    .getByRole("button", {
+      name: `Відкрити борг: Марта ${tag}${marks[LRI]},`,
+    })
     .click();
   await shownSafely(
     page,

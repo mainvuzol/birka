@@ -1,0 +1,25 @@
+- unchanged tree: passed 
+- a warehouse refused answers nothing of one's own: caught by test_revoking_receive_access_is_honoured_on_a_refund_replay; test_a_replay_needs_direct_private_rights_but_a_return_answers_its_recorder[refund]
+- nothing recorded under a warehouse refused, not said: caught by test_revoking_receive_access_is_honoured_on_a_refund_replay; test_a_replay_needs_direct_private_rights_but_a_return_answers_its_recorder[refund]
+- no word of the money handed back: caught by 10. a kept operation the phone settles says what became of it › a kept return on a phone w; 10. a kept operation the phone settles says what became of it › a kept return whose sold-f; 10. a kept operation the phone settles says what became of it › a kept return whose wareho; 10. a kept operation the phone settles says what became of it › a kept return whose wareho; 10. a kept operation the phone settles says what became of it › a kept return whose «Брак»
+- a closed warehouse not a place lost: caught by 10. a kept operation the phone settles says what became of it › a kept return whose wareho
+- a «Брак» undone without the money said: caught by 10. a kept operation the phone settles says what became of it › a kept return whose «Брак»
+- a lost choice without the money said: caught by 10. a kept operation the phone settles says what became of it › a kept return whose sold-f
+- a lost choice refused only in the command: caught by test_a_return_is_answered_to_its_recorder_once_where_it_went_is_lost[reach-422-VALIDATION_
+- judged by where it would go now: caught by test_a_return_is_answered_to_its_recorder_once_where_it_went_is_lost[bin-409-DAMAGED_RETUR; test_a_return_is_answered_to_its_recorder_once_where_it_went_is_lost[closed-404-NOT_FOUND-; test_a_return_is_answered_to_its_recorder_once_where_it_went_is_lost[reach-422-VALIDATION_; test_a_return_taken_elsewhere_replays_whole_to_whoever_took_it_without_the_right
+- a closed warehouse not named: caught by test_a_return_is_answered_to_its_recorder_once_where_it_went_is_lost[closed-404-NOT_FOUND-
+- the limit grows again: caught by a page that cannot be read leaves those read, and is asked again; «Показати ще» reads twenty more each time, never over fifty, and a customer read twice is 
+- a customer read twice shown twice: caught by «Показати ще» reads twenty more each time, never over fifty, and a customer read twice is 
+- searched at every letter, without the pause: caught by «Ім’я або телефон» is searched as it is typed from two letters, Enter at once, and one let
+- a sale's sum in the row: caught by what the store is owed comes first, large, and a row a customer: what they owe, never a sa
+- what is owed summed of one debt: caught by what the store is owed comes first, large, and a row a customer: what they owe, never a sa
+- the card shows the list's sums, not the phone's: caught by one debt opens at once; more, the customer's debts to choose from, read by their phone
+- a customer gone stays on the card: caught by a customer who no longer owes, read by their phone, leaves for the list, never sums kept
+- the card of a closed store's customer read here: caught by a closed store's customer of more debts is read among the closed stores
+- the paid shown as those who owe while read: caught by switching to the paid and written off never shows those who owe as them while it reads
+- how many owe said as one form: caught by how many owe is said as a person says it
+- a cleared search searched again: caught by a closed store's customer of more debts is read among the closed stores
+- a cleared search waited for: caught by «Ім’я або телефон» is searched as it is typed from two letters, Enter at once, and one let
+- the switch gone while the other reads: caught by switching to the paid and written off never shows those who owe as them while it reads
+- a closed store's debts said read-only again: caught by the owner blocks a store; its seller sees only that, and the owner reads it
+23 of 23 caught

@@ -2796,3 +2796,66 @@ How they are carried out, not decided by the owner:
   answer.
 
 Built on 2026-10-18; see the [report](returns-redesign-7-report.md).
+
+## Owner decision — 2026-10-18 («Повернення»: four readings after #105)
+
+Asked after #105, each answer the option recommended:
+- **A return is learned by whoever recorded it also when the store no
+  longer reaches the warehouse it went to,** or the warehouse is closed, as
+  when the right to take returns is gone: what it recorded, or that nothing
+  was. No goods move; a new return to that warehouse is refused, as before.
+- **«Повернення не записано …» said where the right or the warehouse is
+  gone adds:** «Якщо гроші вже повернули — передайте папір менеджеру, щоб
+  внести повернення з паперу.»
+- **A first sending stalled before it claims its key,** for longer than the
+  phone waits and the right taken away meanwhile, may record after the
+  resend was told nothing was: accepted as a known risk.
+- **The same rule for a kept sale, debt payment, delivery, stock correction
+  or order's step** whose person lost the right: yes, later — after
+  «Борги»'s list (backlog).
+
+How they are carried out, not decided by the owner:
+- **Every refusal of where the goods would go** — the store's reach of the
+  warehouse, the one sold from or the one chosen, a private warehouse's own
+  rule, a warehouse closed, a «Брак» undone — sends the resend to the same
+  answer as the right gone, and carries the owner's sentence.
+- **Whoever recorded it is judged by where it went,** as recorded, not where
+  the store's setup would send it now, so it is answered past the days its
+  key is kept too.
+- **A warehouse closed reads** «Повернення не записано. Склад, куди йшов цей
+  товар, закрито. Зверніться до менеджера.», with the owner's sentence; a
+  «Брак» undone, «… У цього магазину ще немає складу «Брак» …», with it too.
+
+Built on 2026-10-18; see the [report](credits-redesign-1-report.md).
+
+## Owner decision — 2026-10-18 («Борги» in the new design: its task list's questions)
+
+The task list: [2026-10-18-redesign-tz-credits.md](redesign/2026-10-18-redesign-tz-credits.md),
+for the owner [2026-10-18-redesign-tz-credits-owner.md](redesign/2026-10-18-redesign-tz-credits-owner.md).
+Each answer the option recommended:
+- **В1. A payment's result by card or transfer** says what to do, as the
+  till does: «Картка · Проведіть на терміналі 500,00 грн», «Переказ ·
+  Перевірте, що переказ надійшов».
+- **В2. A debt of a store that does not trade** is looked for by a quiet
+  button under the results once a whole number is typed, as «Шукати там» in
+  «Повернення».
+- **В3. Debts from the notebook, from before Бірка,** are typed one by one —
+  a new operation «Борг із зошита»: the customer's name and phone, what they
+  owe, what they bought; by a manager or the owner. A new rule, and a work
+  of its own (server and a migration).
+- **В4. Paying in parts at the till** shows, in one line, that this number
+  already owes, or had a debt written off; nothing is forbidden, the seller
+  decides.
+- **В5. No reminders of debts by the bot** now: with «Огляд», later.
+- **Next:** the list and «Показати ще» (P0-1, P0-2).
+
+How they are carried out, not decided by the owner:
+- **A customer of more than one debt** opens their debts to choose from —
+  P0-3's card, built with the list it is reached from: what they owe in all,
+  and a row a debt; read by their phone, whatever was searched.
+- **«Борг магазину, що зараз не працює?» stands under the results,** where
+  В2 puts it; the way it looks for those debts is as before until P1-1.
+- **A customer whose one debt is closed** says how it closed on the row,
+  «Сплачено» or «Списано»; of more, «Нічого не винні».
+
+Built on 2026-10-18; see the [report](credits-redesign-1-report.md).

@@ -48,6 +48,7 @@ from app.api.v1.sales import (
 )
 from app.core import idempotency
 from app.core.correlation import get_correlation_id
+from app.core.errors import DomainError, NotFoundError, PermissionDeniedError
 from app.core.text import CleanText
 from app.modules.authz.locations import require_stock_access
 from app.modules.authz.permissions import Permission
@@ -282,15 +283,50 @@ async def create(
         actor_user_id=scope.user_id,
         store_id=store_id,
     )
+    refusal: DomainError | None = None
     if not scope.can(Permission.SALE_REFUND, store_id):
-        # Whoever may no longer take returns here learns what their own
-        # return recorded, so the phone that kept it is not held for good,
-        # and takes no new one (owner decision, 2026-10-18). The key is
-        # claimed first, so a first sending still running is waited for and
-        # its answer given, never «nothing recorded» while it may still
-        # record (review, 2026-10-18); the fingerprint names its person, so
-        # the answer is always their own. Nothing is committed: the claim
-        # rolls back.
+        refusal = PermissionDeniedError(
+            f"Missing permission {Permission.SALE_REFUND.value}",
+            permission=Permission.SALE_REFUND.value,
+            store_id=str(store_id),
+        )
+    else:
+        # Where restocked goods would go is a property of the sale, so it can
+        # be resolved — and its access checked — before the key is claimed,
+        # keeping a revoked grant from replaying a cached success (invariants
+        # I13/I23).
+        try:
+            restock_destinations = await refund_destinations(
+                session,
+                organization_id=scope.organization_id,
+                sale_id=sale_id,
+                store_id=store_id,
+                lines=lines,
+            )
+            await require_stock_access(
+                session,
+                scope=scope,
+                permission=Permission.SALE_REFUND,
+                store_id=store_id,
+                location_ids=restock_destinations,
+                capability=LocationCapability.RECEIVE,
+            )
+        except DomainError as refused:
+            # A warehouse closed is refused as an unknown one, a 404 that
+            # tells nothing more; named, so the phone of whoever's return went
+            # there says what it is (review, 2026-10-18).
+            if isinstance(refused, NotFoundError):
+                refused.details.setdefault("reason", "WAREHOUSE_UNAVAILABLE")
+            refusal = refused
+    if refusal is not None:
+        # Whoever may no longer take returns here, or whose store no longer
+        # reaches the warehouse, learns what their own return recorded, so
+        # the phone that kept it is not held for good, and takes no new one
+        # (owner decisions, 2026-10-18). The key is claimed first, so a first
+        # sending still running is waited for and its answer given, never
+        # «nothing recorded» while it may still record (review, 2026-10-18);
+        # the fingerprint names its person, so the answer is always their
+        # own. Nothing is committed: the claim rolls back.
         outcome = await idempotency.claim(
             session,
             organization_id=scope.organization_id,
@@ -312,26 +348,9 @@ async def create(
                 at_store_id=store_id,
                 payment_method=method_of(payload.payment_method),
                 outage=payload.outage.mark() if payload.outage is not None else None,
+                refusal=refusal,
             )
         )
-    # Where restocked goods would go is a property of the sale, so it can be
-    # resolved — and its access checked — before the key is claimed, keeping a
-    # revoked grant from replaying a cached success (invariants I13/I23).
-    restock_destinations = await refund_destinations(
-        session,
-        organization_id=scope.organization_id,
-        sale_id=sale_id,
-        store_id=store_id,
-        lines=lines,
-    )
-    await require_stock_access(
-        session,
-        scope=scope,
-        permission=Permission.SALE_REFUND,
-        store_id=store_id,
-        location_ids=restock_destinations,
-        capability=LocationCapability.RECEIVE,
-    )
 
     outcome = await idempotency.claim(
         session,
