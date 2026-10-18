@@ -2929,6 +2929,46 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
     });
 
+  for (const refusal of [
+    {
+      status: 409,
+      code: "CONFLICT",
+      said: "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку й спробуйте ще раз.",
+    },
+    {
+      status: 422,
+      code: "VALIDATION_ERROR",
+      said: "Повернення не записано. Перевірте, що повертають, і спробуйте ще раз.",
+    },
+  ])
+    test(`a kept return refused on resend (${String(refusal.status)}) for a reason nothing more is known of says so in «Повернення»'s words, never an order's`, async ({
+      page,
+    }) => {
+      await seed(page, { [returnKey]: keptReturn("CASH") });
+      await serve(page);
+      const sent = await returns(page, async (route) => {
+        await route.fulfill({
+          status: refusal.status,
+          json: {
+            code: refusal.code,
+            message: "Refused",
+            details: { recorded: false },
+          },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(page.getByText(refusal.said, { exact: true })).toBeVisible();
+      // Not a word of an order in what is said (the sections' row names theirs).
+      await expect(
+        page.getByRole("alert").filter({ hasText: /замовлен/i }),
+      ).toHaveCount(0);
+      expect(sent).toHaveLength(1);
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), returnKey),
+      ).toBeNull();
+    });
+
   test("a kept return refused on resend, part of it returned meanwhile, says so in «Повернення»'s words", async ({
     page,
   }) => {

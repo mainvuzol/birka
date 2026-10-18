@@ -1,0 +1,11 @@
+- unchanged tree: passed 
+- the whole query one substring again: caught by test_the_list_is_searched_by_each_word_in_any_order
+- words of two lines add up: caught by test_words_of_two_lines_of_a_sale_do_not_add_up
+- one word of many is enough: caught by test_the_list_is_searched_by_each_word_in_any_order; test_words_of_two_lines_of_a_sale_do_not_add_up
+- the letter case matters: caught by test_the_list_is_searched_by_each_word_in_any_order; test_the_list_is_searched_by_name_in_any_letter_case; test_words_of_two_lines_of_a_sale_do_not_add_up
+- % matches everything: caught by test_the_list_is_searched_by_name_in_any_letter_case; test_words_of_two_lines_of_a_sale_do_not_add_up
+- a conflict says an order's words: caught by a refusal nothing more is known of says the return's own words, never an order's
+- a request not taken says an order's words: caught by a refusal nothing more is known of says the return's own words, never an order's
+- a kept conflict says it changed while the seller worked: caught by 10. a kept operation the phone settles says what became of it › a kept return refused on r
+8 of 8 caught
+exit 0

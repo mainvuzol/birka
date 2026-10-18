@@ -5,7 +5,13 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import {
+  ApiError,
+  CONFLICT_TEXT,
+  INVALID_TEXT,
+  api,
+  errorText,
+} from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -925,8 +931,18 @@ function ReturnForm({
 }
 
 /**
+ * A conflict, and a request the server could not take, that «Повернення»
+ * knows nothing more of: its own words, never an order's (returns task
+ * list, P2-2; as the till's, owner 2026-10-17).
+ */
+export const RETURN_CONFLICT_TEXT =
+  "Дані змінилися, поки ви працювали. Поверніться до списку й спробуйте ще раз.";
+const RETURN_INVALID_TEXT = "Перевірте, що повертають, і спробуйте ще раз.";
+
+/**
  * Why a return was refused. A kept return refused on resend says the same
- * (`@/cash/errors`, ADR-0013 §8).
+ * (`@/cash/errors`, ADR-0013 §8), but for a conflict and a way not stated,
+ * which it says in its own words.
  */
 export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
@@ -951,5 +967,8 @@ export function refusalText(error: unknown): string {
     if (error.details.reason === "PAYMENT_METHOD_REQUIRED")
       return "Покупцю повертаємо гроші — оберіть, як.";
   }
-  return errorText(error);
+  const said = errorText(error);
+  if (said === CONFLICT_TEXT) return RETURN_CONFLICT_TEXT;
+  if (said === INVALID_TEXT) return RETURN_INVALID_TEXT;
+  return said;
 }

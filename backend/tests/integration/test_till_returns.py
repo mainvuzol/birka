@@ -402,6 +402,70 @@ async def test_the_list_is_searched_by_name_in_any_letter_case(maker):
     assert wildcard.json()["sales"] == []
 
 
+async def test_the_list_is_searched_by_each_word_in_any_order(maker):
+    """As the till's search reads each word (returns task list, P1-3)."""
+    shops = await make_two_shops(maker)
+    sale, _, _ = await sold(maker, shops, qty=1)
+    concept, colour = sale["items"][0]["display_name"].split(" ", 1)
+    found: dict[str, list[str]] = {}
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        for q in (
+            f"{colour} {concept}",
+            f"  {concept.upper()}   {colour}  ",
+            f"{colour[:3]} {concept[-4:]}",
+            f"{concept} немає",
+        ):
+            response = await client.get(
+                "/api/v1/sales", params={"store_id": str(shops.primary_store), "q": q}
+            )
+            assert response.status_code == 200, response.text
+            found[q] = [s["id"] for s in response.json()["sales"]]
+    assert found[f"{colour} {concept}"] == [sale["id"]]
+    assert found[f"  {concept.upper()}   {colour}  "] == [sale["id"]]
+    assert found[f"{colour[:3]} {concept[-4:]}"] == [sale["id"]]
+    # Every word must be there, not one of them.
+    assert found[f"{concept} немає"] == []
+
+
+async def test_words_of_two_lines_of_a_sale_do_not_add_up(maker):
+    """Each word in the name of one line: a sale of two coats is not found by
+    a word of each."""
+    shops = await make_two_shops(maker)
+    async with api(maker, shops.scope(shops.primary_store)) as client:
+        lines = []
+        for _ in range(2):
+            variant, size = await stock_a_coat(
+                client, shops, store=shops.primary_store, warehouse=shops.shared_warehouse, qty=1
+            )
+            lines.append(
+                sale_body(shops.primary_store, shops.shared_warehouse, variant, size)["lines"][0]
+            )
+        made = await client.post(
+            "/api/v1/sales",
+            json=sale_body(shops.primary_store, shops.shared_warehouse, "", "") | {"lines": lines},
+            headers=key(),
+        )
+        assert made.status_code == 201, made.text
+        sale = made.json()
+        first, second = (item["display_name"].split(" ", 1)[0] for item in sale["items"])
+        apart = await client.get(
+            "/api/v1/sales",
+            params={"store_id": str(shops.primary_store), "q": f"{first} {second}"},
+        )
+        together = await client.get(
+            "/api/v1/sales",
+            params={"store_id": str(shops.primary_store), "q": f"{second} шоколад"},
+        )
+        literal = await client.get(
+            "/api/v1/sales",
+            params={"store_id": str(shops.primary_store), "q": f"{first} %"},
+        )
+    assert apart.json()["sales"] == []
+    assert [s["id"] for s in together.json()["sales"]] == [sale["id"]]
+    # `%` is still a letter to look for, word by word.
+    assert literal.json()["sales"] == []
+
+
 async def test_a_store_lists_only_its_own_sales_and_only_for_who_may_view_them(maker):
     shops = await make_two_shops(maker)
     await sold(maker, shops, qty=1)
