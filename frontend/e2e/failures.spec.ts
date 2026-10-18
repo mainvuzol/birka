@@ -966,7 +966,9 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     await refusedAsUnrecorded(response);
 
     await expect(
-      page.getByRole("heading", { name: "Незавершений внесок" }),
+      page.getByRole("heading", {
+        name: /^(Внесок|Списання) ще не підтверджено$|^Перевіряємо (внесок|списання)…$/,
+      }),
     ).toHaveCount(0);
     await expect(
       page.getByText(

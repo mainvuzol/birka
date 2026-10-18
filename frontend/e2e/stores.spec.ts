@@ -405,11 +405,18 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
       .getByRole("group", { name: "Внесок", exact: true })
       .getByRole("button", { name: "Картка" })
       .click();
+    const paid = page.locator(".paid-result");
+    await expect(paid.locator(".way-pill")).toHaveText(
+      "Картка · Проведіть на терміналі",
+    );
+    await expect(paid.locator(".paid-owed")).toHaveText(
+      "Залишок боргу 1 500,00 грн",
+    );
     await expect(
       page.getByText(
         "Внесок 500,00 грн прийнято карткою. Залишок боргу 1 500,00 грн.",
       ),
-    ).toBeVisible();
+    ).toBeAttached();
     expect(payments.bodies).toEqual([
       {
         command_id: expect.any(String) as string,
@@ -418,6 +425,9 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
         store_id: fixture.network_centre_store_id,
       },
     ]);
+    await page
+      .getByRole("button", { name: "Відкрити борг", exact: true })
+      .click();
     await expect(
       page.getByRole("list", { name: "Історія боргу" }),
     ).toContainText("прийняв магазин «Центр»");
