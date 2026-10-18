@@ -25,7 +25,7 @@ import os
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import httpx
@@ -786,12 +786,15 @@ async def test_one_refund_returns_each_line_to_the_warehouse_it_came_from(maker)
 
 
 async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
-    """Invariant I13 on the refund path, which has its own cached answer.
+    """Invariant I13 on the refund path, which has its own cached answer —
+    but for whoever recorded the return.
 
     The sale path is covered above; this is the same question asked of the
-    other endpoint, and it is a different piece of code. The refusal has to
-    happen before the idempotency key is claimed, or the stored success is
-    handed back to a store that may no longer receive goods here.
+    other endpoint, and it is a different piece of code. A store that may no
+    longer receive goods here takes no new return there, and nobody else is
+    handed the stored success; whoever recorded it is answered what it
+    recorded, which moves no goods, so the phone that kept it is not held
+    for good (owner decision, 2026-10-18).
     """
     shops = await make_two_shops(maker)
     async with api(maker, shops.scope(shops.primary_store)) as client:
@@ -838,8 +841,13 @@ async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
         cached = await client.post(
             f"/api/v1/sales/{sale['id']}/refunds", json=refund_body, headers=headers
         )
-        assert cached.status_code == 403, cached.text
-        assert cached.json()["code"] == "LOCATION_ACCESS_DENIED"
+        assert cached.status_code == 201, cached.text
+        assert cached.json() == first.json()
+        durable = await client.post(
+            f"/api/v1/sales/{sale['id']}/refunds", json=refund_body, headers=key()
+        )
+        assert durable.status_code == 201, durable.text
+        assert durable.json() == first.json()
         fresh = await client.post(
             f"/api/v1/sales/{sale['id']}/refunds",
             json={
@@ -857,6 +865,19 @@ async def test_revoking_receive_access_is_honoured_on_a_refund_replay(maker):
             headers=key(),
         )
         assert fresh.status_code == 403, fresh.text
+        assert fresh.json()["code"] == "LOCATION_ACCESS_DENIED"
+        # Nothing under that command, and said so.
+        assert fresh.json()["details"]["recorded"] is False
+
+    # Anyone else at that store is refused the stored success, as before.
+    someone = replace(shops.scope(shops.child_store), user_id=uuid.uuid4())
+    async with api(maker, someone) as client:
+        other = await client.post(
+            f"/api/v1/sales/{sale['id']}/refunds", json=refund_body, headers=key()
+        )
+        assert other.status_code == 403, other.text
+        assert other.json()["code"] == "LOCATION_ACCESS_DENIED"
+        assert "recorded" not in other.json()["details"]
 
     async with maker() as session:
         # The one refund that was allowed, and nothing the replay smuggled in.

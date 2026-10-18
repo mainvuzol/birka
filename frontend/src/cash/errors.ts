@@ -207,6 +207,21 @@ export function adjustmentErrorText(error: unknown): string {
   )}`;
 }
 
+/**
+ * A return refused, having recorded nothing, because where it was going is
+ * lost: the right to take returns, a warehouse no longer reached — the one
+ * it was sold from, or the one chosen — or closed, the «Брак» undone.
+ */
+function lostPlace(error: ApiError): boolean {
+  return (
+    error.status === 403 ||
+    error.code === "DAMAGED_RETURNS_UNAVAILABLE" ||
+    error.details.reason === "WAREHOUSE_UNAVAILABLE" ||
+    error.details.reason === "CHOOSE_A_WAREHOUSE" ||
+    error.details.reason === "NOT_A_WAREHOUSE_OF_THIS_STORE"
+  );
+}
+
 /** «Повернення»'s own words for why (ADR-0013 §8). */
 export function returnErrorText(error: unknown): string {
   // Not said to have recorded nothing: still unconfirmed, never «try again»,
@@ -229,6 +244,16 @@ export function returnErrorText(error: unknown): string {
   // show over the till (owner decision, 2026-10-18).
   if (returnRefusalText(error) === RETURN_CONFLICT_TEXT)
     return "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку в «Поверненні» й спробуйте ще раз.";
+  // Where it was going is lost while the phone kept it — the right to take
+  // returns, the warehouse no longer reached or closed, the «Брак» undone:
+  // the money may have been handed back meanwhile, and the paper says so
+  // (owner decisions, 2026-10-18).
+  if (error instanceof ApiError && lostPlace(error))
+    return `Повернення не записано. ${
+      error.details.reason === "WAREHOUSE_UNAVAILABLE"
+        ? "Склад, куди йшов цей товар, закрито. Зверніться до менеджера."
+        : returnRefusalText(error)
+    } Якщо гроші вже повернули — передайте папір менеджеру, щоб внести повернення з паперу.`;
   return `Повернення не записано. ${returnRefusalText(error)}`;
 }
 

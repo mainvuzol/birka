@@ -17,20 +17,25 @@ interface StockPage {
 
 /**
  * What the seller has typed, once they pause: two letters at least, else the
- * whole warehouse (redesign P0-2).
+ * whole warehouse (redesign P0-2). Fewer is everything at once, in the same
+ * render: what was searched before is never looked for again while the
+ * seller starts over (review, 2026-10-18).
  */
 export function useSettled(text: string): string {
   const typed = text.trim().length >= 2 ? text.trim() : "";
   const [settled, setSettled] = useState(typed);
   useEffect(() => {
-    const wait = setTimeout(() => {
-      setSettled(typed);
-    }, 300);
+    const wait = setTimeout(
+      () => {
+        setSettled(typed);
+      },
+      typed === "" ? 0 : 300,
+    );
     return () => {
       clearTimeout(wait);
     };
   }, [typed]);
-  return settled;
+  return typed === "" ? "" : settled;
 }
 
 /**

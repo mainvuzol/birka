@@ -258,10 +258,17 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     page.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Борги", exact: true }).click();
+  // The store's own notice says it does not trade; «Борги» says who takes
+  // the payments, once (credits task list, P0-1).
   await expect(
-    page.getByText(/його борги тут лише для перегляду/),
+    page.getByText("Внески приймає будь-який магазин мережі, що працює.", {
+      exact: true,
+    }),
   ).toBeVisible();
-  await expect(page.getByLabel("Де брали в борг")).toHaveCount(0);
+  await expect(page.getByText(/лише для перегляду/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Борг магазину, що зараз не працює?" }),
+  ).toHaveCount(0);
   // «Брак» is shown as it stands, with nothing to press.
   await section(page, "Брак");
   await expect(page.getByText(/тут лише перегляд/)).toBeVisible();
@@ -342,43 +349,50 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page.getByRole("button", { name: "Борги", exact: true }).click();
     // Everyone on the store's own list, paid too; not on another's.
     await page
-      .getByLabel("Показати")
-      .selectOption({ label: "Усі, разом зі сплаченими й списаними" });
+      .getByRole("button", { name: "Показати сплачені й списані" })
+      .click();
+    // Asked for under the results (credits task list, P0-1).
     await page
-      .getByLabel("Де брали в борг")
-      .selectOption({ label: "У магазині, що заблокований чи закритий" });
+      .getByRole("button", { name: "Борг магазину, що зараз не працює?" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Магазини, що не працюють" }),
+    ).toBeVisible();
     const askForPhone = page.getByText(
       /Введіть повний номер телефону покупця, наприклад 067 123 45 67/,
     );
     await expect(askForPhone).toBeVisible();
     // Only what is still owed, so nothing to choose (owner, 2026-10-10).
-    await expect(page.getByLabel("Показати")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Лише ті, хто винен" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Показати сплачені й списані" }),
+    ).toHaveCount(0);
     // Neither a name nor a part of the number finds another store's
-    // customers: the phone does not even ask (owner decision, 2026-10-10).
+    // customers, typed or entered: the phone does not even ask (owner
+    // decision, 2026-10-10).
     const search = page.getByLabel("Повний номер телефону покупця");
     for (const partial of [name, phone.slice(0, 6)]) {
       await search.fill(partial);
-      await page.getByRole("button", { name: "Знайти" }).click();
+      await search.press("Enter");
       await expect(askForPhone).toBeVisible();
     }
-    // Nor does «Оновити» ask for them.
-    await page.getByRole("button", { name: "Оновити" }).click();
-    await expect(askForPhone).toBeVisible();
+    // Past the pause a search waits for, still nothing asked.
+    await page.waitForTimeout(500);
     expect(searches.filter((url) => url.includes("elsewhere=true"))).toEqual(
       [],
     );
     // The whole number, pasted from the phone's contacts between the two
     // invisible direction marks they add.
     await search.fill(`\u202a+38 ${phone.slice(0, 3)} ${phone.slice(3)}\u202c`);
-    await page.getByRole("button", { name: "Знайти" }).click();
-    await expect(page.getByText("Продано в магазині «Ринок»")).toBeVisible();
+    const found = page.getByRole("button", { name: `Відкрити борг: ${name},` });
+    await expect(found).toContainText("Магазин «Ринок»");
     const asked = searches.filter((url) => url.includes("elsewhere=true"));
     expect(asked.length).toBeGreaterThan(0);
     for (const url of asked)
       expect(new URL(url).searchParams.get("status")).toBe("OPEN");
-    await page
-      .getByRole("button", { name: new RegExp(`Відкрити борг ${name}`) })
-      .click();
+    await found.click();
     await expect(
       page.getByText(/Продано в магазині «Ринок», який зараз заблоковано/),
     ).toBeVisible();
@@ -413,11 +427,8 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await openAs(page, owner);
     await openStore(page, /^Ринок MARKET/);
     await page.getByRole("button", { name: "Борги", exact: true }).click();
-    await page.getByLabel("Пошук за ім’ям або телефоном").fill(name);
-    await page.getByRole("button", { name: "Знайти" }).click();
-    await page
-      .getByRole("button", { name: new RegExp(`Відкрити борг ${name}`) })
-      .click();
+    await page.getByLabel("Ім’я або телефон").fill(name);
+    await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
     await expect(page.getByText("Залишок боргу")).toBeVisible();
     await expect(
       page.getByRole("group", { name: "Внесок", exact: true }),

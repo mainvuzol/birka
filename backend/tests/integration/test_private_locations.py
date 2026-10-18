@@ -307,7 +307,9 @@ async def test_private_manager_fk_cannot_cross_tenant(world):
 
 
 @pytest.mark.parametrize("operation", ["sale", "transfer", "refund"])
-async def test_permanent_and_cached_replay_require_direct_private_rights(world, operation):
+async def test_a_replay_needs_direct_private_rights_but_a_return_answers_its_recorder(
+    world, operation
+):
     w = world
     async with w["maker"].begin() as session:
         owner_role = await session.scalar(
@@ -382,7 +384,22 @@ async def test_permanent_and_cached_replay_require_direct_private_rights(world, 
             )
         for replay_headers in (headers, {"Idempotency-Key": str(uuid.uuid4())}):
             replay = await client.post(path, headers=replay_headers, json=payload)
-            assert replay.status_code == 403, replay.text
+            if operation == "refund":
+                # A return is answered to whoever recorded it, which moves no
+                # goods, so the phone that kept it is not held for good
+                # (owner decision, 2026-10-18); a new one is refused.
+                assert replay.status_code == 201, replay.text
+                assert replay.json() == original.json()
+            else:
+                assert replay.status_code == 403, replay.text
+        if operation == "refund":
+            fresh = await client.post(
+                path,
+                headers={"Idempotency-Key": str(uuid.uuid4())},
+                json=payload | {"command_id": str(uuid.uuid4())},
+            )
+            assert fresh.status_code == 403, fresh.text
+            assert fresh.json()["details"]["recorded"] is False
 
 
 @pytest.mark.parametrize(

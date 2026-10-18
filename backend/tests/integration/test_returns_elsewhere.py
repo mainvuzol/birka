@@ -19,9 +19,10 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import replace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 
@@ -293,6 +294,87 @@ async def test_a_return_taken_elsewhere_replays_whole_to_whoever_took_it_without
     )
     assert again.status_code == 201, again.text
     assert again.json() == first.json()
+
+
+@pytest.mark.parametrize(
+    "lost,status,code,reason",
+    [
+        # The store taking it back no longer reaches the warehouse it went to.
+        ("reach", 422, "VALIDATION_ERROR", "CHOOSE_A_WAREHOUSE"),
+        # Its «Брак» undone.
+        ("bin", 409, "DAMAGED_RETURNS_UNAVAILABLE", "NOT_SET_UP"),
+        # The warehouse closed: named, though refused as an unknown one.
+        ("closed", 404, "NOT_FOUND", "WAREHOUSE_UNAVAILABLE"),
+    ],
+)
+async def test_a_return_is_answered_to_its_recorder_once_where_it_went_is_lost(
+    maker, lost, status, code, reason
+):
+    """Taken back at another store, its intact part to the warehouse it was
+    sold from, its damaged part to that store's «Брак»: once where it went is
+    lost, whoever recorded it is answered what it recorded — past the days a
+    key is kept too, judged by where it went, not where it would go now — a
+    new return says it recorded nothing, and anyone else learns nothing
+    (owner decisions, 2026-10-18)."""
+    shops = await make_two_shops(maker)
+    bin_ = await give_bin(maker, shops.organization_id, shops.child_store)
+    sale, _, _ = await sold_at(maker, shops, shops.primary_store, shops.shared_warehouse)
+    command = str(uuid.uuid4())
+    parts = (part(sale, 1, "INTACT"), part(sale, 1, "DAMAGED"))
+    first = await take_back(maker, shops, sale, *parts, at=shops.child_store, command_id=command)
+    assert first.status_code == 201, first.text
+
+    async with maker() as session:
+        if lost == "reach":
+            await session.execute(
+                text(
+                    "UPDATE store_location_access SET can_receive = false "
+                    "WHERE store_id = :s AND location_id = :loc"
+                ),
+                {"s": shops.child_store, "loc": shops.shared_warehouse},
+            )
+        elif lost == "bin":
+            await session.execute(
+                text(
+                    "UPDATE store_location_access SET damaged_returns = false "
+                    "WHERE location_id = :b"
+                ),
+                {"b": bin_},
+            )
+        else:
+            await session.execute(
+                text("UPDATE stock_location SET is_active = false WHERE id = :loc"),
+                {"loc": shops.shared_warehouse},
+            )
+        # Past the days its key is kept: only the return itself answers.
+        await session.execute(
+            text("DELETE FROM idempotency_record WHERE organization_id = :o"),
+            {"o": shops.organization_id},
+        )
+        await session.commit()
+
+    again = await take_back(maker, shops, sale, *parts, at=shops.child_store, command_id=command)
+    assert again.status_code == 201, again.text
+    assert again.json() == first.json()
+    fresh = await take_back(maker, shops, sale, *parts, at=shops.child_store)
+    assert fresh.status_code == status, fresh.text
+    assert fresh.json()["code"] == code
+    assert fresh.json()["details"]["reason"] == reason
+    assert fresh.json()["details"]["recorded"] is False
+    someone = replace(shops.scope(shops.child_store), user_id=uuid.uuid4())
+    async with api(maker, someone) as client:
+        other = await client.post(
+            f"/api/v1/sales/{sale['id']}/refunds",
+            json={
+                "command_id": command,
+                "lines": list(parts),
+                "store_id": str(shops.child_store),
+                "payment_method": "CASH",
+            },
+            headers=key(),
+        )
+    assert other.status_code == status, other.text
+    assert "recorded" not in other.json()["details"]
 
 
 async def test_a_choice_is_only_for_intact_goods(maker):

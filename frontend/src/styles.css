@@ -841,6 +841,79 @@ html {
 .return-place .hint {
   margin: 8px 0 0;
 }
+/* «Борги»'s list (credits task list, P0-1): what the store is owed, large
+   in the debt's colour, and a row a customer — their initial, name, phone
+   and goods, what they owe on the right. Never a sale's sum or a way. */
+.credits .hint,
+.credits .sale-meta {
+  font-size: 14px;
+}
+.owed-card {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.owed-card p {
+  margin: 0;
+}
+.owed-what {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.owed-sum {
+  line-height: 1.15;
+  color: var(--debt);
+  overflow-wrap: anywhere;
+}
+.owed-sum .sum {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+}
+.owed-sum .sum-rest {
+  color: var(--debt);
+}
+.owed-count {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.debt-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--debt-bg);
+  color: var(--debt);
+  font-weight: 750;
+}
+.debt-name {
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.debt-phone {
+  white-space: nowrap;
+}
+.debt-owed {
+  flex-shrink: 0;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--debt);
+}
+.credits .back {
+  margin: 4px 0 0;
+}
+.elsewhere-ask,
+.owed-mode {
+  margin-top: 12px;
+}
 /* The other stores' sales, headed, and offered under this store's (P1-1). */
 .elsewhere-head {
   margin: 12px 0 0;
