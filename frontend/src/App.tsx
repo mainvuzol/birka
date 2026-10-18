@@ -606,22 +606,29 @@ function Workspace({
   const returnKey = `birka:return-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [returnStorageError, setReturnStorageError] = useState(false);
   const returnCommand = useReturnCommand();
+  // A return is looked up in the store's sales, so it needs both.
+  const canReturn =
+    store.permissions.includes("sale:refund") &&
+    store.permissions.includes("sale:view");
+  // Read, not watched: a right changed later (a store blocked and opened
+  // again) loads nothing again, nor wipes what is said (review, 2026-10-18).
+  const canReturnNow = useRef(canReturn);
+  canReturnNow.current = canReturn;
   useEffect(() => {
     try {
       const saved = loadReturn(returnKey);
       useReturnCommand.setState({ pending: saved, error: null });
       if (saved) {
-        setTab("returns");
+        // Its banner shows over any tab; «Повернення» is turned to only for
+        // whoever may take returns, never to say they may not (returns task
+        // list, P2-1).
+        if (canReturnNow.current) setTab("returns");
         loadedFromDisk("return");
       }
     } catch {
       setReturnStorageError(true);
     }
   }, [returnKey, loadedFromDisk]);
-  // A return is looked up in the store's sales, so it needs both.
-  const canReturn =
-    store.permissions.includes("sale:refund") &&
-    store.permissions.includes("sale:view");
   // A return whose outcome was unknown, settled: what to give back, unless
   // it was given back while the server did not answer; and the lines its
   // attempt sent, which say where the seller put intact goods.
@@ -1749,9 +1756,9 @@ function Workspace({
               cashUnsettled
             }
           />
-        ) : (
-          <p role="alert">Немає права приймати повернення.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // (returns task list, P2-1).
+        null
       ) : tab === "credits" ? (
         canSeeCredits ? (
           <Credits

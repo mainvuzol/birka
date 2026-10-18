@@ -219,6 +219,8 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
     done.getByRole("heading", { name: "Повернення записано" }),
   ).toBeVisible();
   await expect(done).toContainText(mark);
+  // The paper's mark as a warning (returns task list, P2-4).
+  await expect(done.locator(".badge").first()).toHaveClass(/\bwarn\b/);
   await expect(done.locator(".hand-back-what")).toHaveText(
     "Уже повернули під час збою",
   );

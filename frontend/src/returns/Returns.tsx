@@ -19,6 +19,7 @@ import type { Store } from "@/orders/types";
 import { isTillMethod, refundHow, tillMethods } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
+import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
 import { PaperFields, paperRefusal, usePaperMark } from "@/sales/paperMark";
 import type { PaperMarkState } from "@/sales/paperMark";
@@ -97,7 +98,9 @@ export function Returns({
   // 2026-10-17, В3 (а); returns task list, P1-1). Fewer letters, and it is
   // this store's list again.
   const [elsewhere, setElsewhere] = useState(false);
-  const words = query.trim().length >= 2;
+  // A word of two letters at least, as the server asks of the other stores'
+  // search (owner decision, 2026-10-18).
+  const words = hasWord(query);
   // Read in the same render it is typed, so not one more is drawn or asked
   // for the other stores (review, 2026-10-18); and left for good.
   const away = elsewhere && words;
@@ -110,10 +113,10 @@ export function Returns({
     refund: Refund;
     sent: ReturnPart[];
   } | null>(null);
-  const searching = !away || search.length >= 2;
+  const searching = !away || hasWord(search);
   // The other stores, offered once there is something to look for, and
   // what is looked for is what is typed.
-  const offerElsewhere = !away && search.length >= 2 && search === query.trim();
+  const offerElsewhere = !away && hasWord(search) && search === query.trim();
   // Twenty at a time, each page under those read (returns task list,
   // P0-2): the server takes fifty at most, and a growing `limit` broke the
   // list after forty.
@@ -220,7 +223,7 @@ export function Returns({
     );
 
   return (
-    <section>
+    <section className="returns">
       <h2>Повернення</h2>
       <form
         className="search"
@@ -263,10 +266,11 @@ export function Returns({
       )}
       {!searching ? null : sales.isPending ||
         (sales.isPlaceholderData && listed.length === 0) ? (
-        <p role="status">Завантажуємо продажі…</p>
+        // The rows' places while they are read (returns task list, P2-3).
+        <Placeholder said="Завантажуємо продажі…" rows={3} />
       ) : !sales.data ? (
         <div role="alert">
-          <p>{errorText(sales.error)}</p>
+          <p>{refusalText(sales.error)}</p>
           <button
             type="button"
             onClick={() => {
@@ -306,7 +310,7 @@ export function Returns({
             // Read again and refused: the rows below are as they were, and
             // that is said (ADR-0011; review, 2026-10-17).
             <div role="alert">
-              <p>{errorText(sales.error)}</p>
+              <p>{refusalText(sales.error)}</p>
               <button
                 type="button"
                 disabled={sales.isFetching}
@@ -338,7 +342,7 @@ export function Returns({
           {sales.isFetchNextPageError ? (
             // The next page could not be read: those read stay.
             <div role="alert">
-              <p>{errorText(sales.error)}</p>
+              <p>{refusalText(sales.error)}</p>
               <button
                 type="button"
                 disabled={sales.isFetching}
@@ -398,6 +402,21 @@ export function Returns({
         )}
     </section>
   );
+}
+
+/**
+ * A word of two letters at least in what is typed, counted and split as
+ * the server does (Python's `str.split()`, letters by code point), so the
+ * other stores are never offered a search the server refuses.
+ */
+function hasWord(text: string): boolean {
+  return text
+    .split(
+      // Python's whitespace, the separators \x1c-\x1f among it.
+      // eslint-disable-next-line no-control-regex
+      /[\t\n\v\f\r \x1c-\x1f\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/,
+    )
+    .some((word) => Array.from(word).length >= 2);
 }
 
 /**
@@ -602,7 +621,12 @@ function ReturnForm({
   const shown = units > 0;
   usePanelRoom(panelRef, shown);
   useEffect(() => {
-    touched.current?.scrollIntoView({ block: "nearest" });
+    // A tag that asks for a warehouse may be taller than the room above the
+    // panel on a small phone: then its chips are what is brought into view.
+    const tag = touched.current;
+    (tag?.querySelector(".return-place") ?? tag)?.scrollIntoView({
+      block: "nearest",
+    });
     // This store's warehouses are read as the form opens; read slowly, they
     // come after a count, and their chips grow the tag, brought above the
     // panel again once they do.
@@ -677,7 +701,7 @@ function ReturnForm({
   const sum = money(decimal(total));
   const one = picked.length === 1 ? picked[0] : undefined;
   return (
-    <section>
+    <section className="returns">
       <div className="toolbar">
         <h2>Повернення</h2>
         <button className="quiet" disabled={working} onClick={back}>
@@ -692,10 +716,10 @@ function ReturnForm({
       {(sale.paid_in_parts || sale.outage) && (
         <p className="sale-marks">
           {sale.paid_in_parts && (
-            <span className="badge">Оплата частинами</span>
+            <span className="badge debt">Оплата частинами</span>
           )}
           {sale.outage && (
-            <span className="badge">
+            <span className="badge warn">
               {sale.outage.first_days === true
                 ? "Продано з паперу"
                 : "Продано під час збою"}

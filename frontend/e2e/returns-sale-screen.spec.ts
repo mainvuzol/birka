@@ -557,6 +557,13 @@ for (const [name, theme, scheme] of [
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `test-results/returns-form-${name}.png` });
+    const metaSize = await page
+      .locator(".line-return .hint")
+      .evaluate((node) => getComputedStyle(node).fontSize);
+    // «Пошкоджені» keeps the colour of «Брак» on the result (P2-4).
+    const damagedColour = await page
+      .locator(".return-step.damaged .return-step-name")
+      .evaluate((node) => getComputedStyle(node).color);
     await panelOf(page)
       .getByRole("button", { name: "Повернути покупцю 6 000,00 грн готівкою" })
       .click();
@@ -565,8 +572,22 @@ for (const [name, theme, scheme] of [
       page.locator(".way-pill"),
       page.locator(".hand-back-sum .sum"),
       page.locator(".return-goods p").first(),
+      page.locator(".damaged-line"),
+      page.locator(".return-mistake"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page
+        .locator(".damaged-line")
+        .evaluate((node) => getComputedStyle(node).color),
+    ).toBe(damagedColour);
+    // The returns screens' meta at 14 px (P2-4), the result's as the form's.
+    expect(
+      await page
+        .locator(".return-mistake")
+        .evaluate((node) => getComputedStyle(node).fontSize),
+    ).toBe("14px");
+    expect(metaSize).toBe("14px");
     await noSideScroll(page);
     await page.screenshot({ path: `test-results/returns-result-${name}.png` });
   });
@@ -670,10 +691,15 @@ test("a warehouse to choose, for goods from another store's own, is brought abov
   const place = page.getByRole("group", { name: "Цілі — на який склад?" });
   await expect(place.locator(".chip").first()).toBeVisible();
   await expect(place).toBeInViewport({ ratio: 1 });
-  const tag = await page.locator(".line-return").boundingBox();
+  // The chips and the «Цілі» row just tapped, above the panel.
+  const chips = await place.boundingBox();
+  const counted = await page
+    .getByRole("button", { name: "Цілі: більше" })
+    .boundingBox();
   const under = await panelOf(page).boundingBox();
-  if (!tag || !under) throw new Error("not laid out");
-  expect(tag.y + tag.height).toBeLessThanOrEqual(under.y + 1);
+  if (!chips || !counted || !under) throw new Error("not laid out");
+  expect(chips.y + chips.height).toBeLessThanOrEqual(under.y + 1);
+  expect(counted.y).toBeGreaterThanOrEqual(0);
   await expect(
     panelOf(page).getByRole("button", {
       name: "Оберіть склад для цілого товару",
