@@ -2892,3 +2892,42 @@ How the debt and the payment are carried out, not decided by the owner:
   «Центр»»: the store took it, never a verb of the person before it.
 
 Built on 2026-10-18; see the [report](credits-redesign-2-report.md).
+
+## Owner decision — 2026-10-18 («Борги»: four readings after #107, and what next)
+
+Asked after #107, each answer the option recommended:
+- **The way back from a debt** stays «← До боргів»; from a debt opened in a
+  customer's card, the customer's name.
+- **The payment's sum is named in its field,** and the panel says the sum
+  typed.
+- **«Вношу внесок з паперу» stays under the sum.**
+- **A debt of more goods than one** names the first and «+ ще N»; a tap on
+  it shows them all.
+- **Next:** the payment's result (P0-5) and a payment kept unconfirmed
+  (P1-2), with every good of a debt on a tap.
+
+How the result and the kept payment are carried out, not decided by the
+owner:
+- **The result takes the place of the debt below its name and line,** its
+  history too, until «Відкрити борг»: nothing to pay again under it.
+- **Its main button is named as the debt's «←» is:** «До боргів» to the
+  list, or the customer's name, back to their card, for a debt opened from
+  it — two buttons of one name never lead to two places.
+- **A screen reader hears the sentence it heard before:** «Внесок 500,00 грн
+  прийнято карткою. Залишок боргу 1 500,00 грн.», with the heading as focus
+  comes; the eye reads the pill, the sum and what is owed. From paper the
+  sentence is seen, as it says not to charge the card again.
+- **From paper, the pill is the paper's mark as the history says it:**
+  «Внесок під час збою · хто прийняв: Ганна · за папером …»; confirmed
+  later, the phone knows who only by an id, so the mark and its time.
+- **Confirmed later, the way alone over the sum,** never «Проведіть» as a
+  pill: only «Якщо картку ще не провели — …» below (owner decision,
+  2026-10-07); the sum and way heard before it.
+- **The kept banner names the first good and «+ ще N»;** goods that are
+  not a list of names, or an empty first name, name none. «Перевіряємо
+  списання…» while a write-off is asked about, as «Перевіряємо внесок…».
+- **«+ ще N» opens the list once,** no «Сховати»; focus goes to the list.
+- **The customer's phone,** on a debt and on their card, in the theme's
+  accent, the same once called — asked for in the session.
+
+Built on 2026-10-18; see the [report](credits-redesign-3-report.md).

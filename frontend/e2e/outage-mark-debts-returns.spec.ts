@@ -288,6 +288,18 @@ test("a card payment typed from paper never says to charge the card, and the deb
       "Внесок 300,00 грн з паперу записано: карткою — оплату провели під час збою, на терміналі не проводьте ще раз. Залишок боргу 1 700,00 грн.",
     ),
   ).toBeVisible();
+  // From paper, the money was taken already: the mark, never «Проведіть»
+  // (credits task list, P0-5).
+  const paid = page.locator(".paid-result");
+  // The paper's mark as the history says it (review, 2026-10-18).
+  await expect(paid.locator(".badge.warn")).toHaveText(
+    "Внесок під час збою · хто прийняв: Ганна",
+  );
+  await expect(paid).toContainText("Уже взяли під час збою");
+  await expect(paid).not.toContainText("Проведіть");
+  await page
+    .getByRole("button", { name: "Відкрити борг", exact: true })
+    .click();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "Внесок під час збою · хто прийняв: Ганна · внесено: Ліда",
   );
@@ -460,6 +472,14 @@ test("the first days' paper: a return and a payment typed from it are «з па�
       "Внесок 300,00 грн з паперу записано: карткою — оплату вже провели, на терміналі не проводьте ще раз. Залишок боргу 1 700,00 грн.",
     ),
   ).toBeVisible();
+  await expect(page.locator(".paid-result .badge.warn")).toHaveText(
+    "Внесок з паперу",
+  );
+  await expect(page.locator(".paid-result")).toContainText("Уже взяли раніше");
+  await expect(page.locator(".paid-result")).not.toContainText("Проведіть");
+  await page
+    .getByRole("button", { name: "Відкрити борг", exact: true })
+    .click();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "Внесок з паперу · внесено: Ліда",
   );

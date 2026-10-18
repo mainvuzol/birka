@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ComponentProps, JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
-import { methodHow, methodLabels } from "@/shared/payment";
+import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
@@ -50,6 +50,7 @@ import {
 } from "@/sales/commands";
 import type { SaleAttempt } from "@/sales/commands";
 import { clearPaper } from "@/sales/paper";
+import type { PaperView } from "@/sales/paperMark";
 import { markText, paidDuringOutage } from "@/sales/types";
 import { Receive } from "@/inventory/Receive";
 import {
@@ -81,7 +82,8 @@ import {
   useCreditCommand,
 } from "@/credits/commands";
 import { erasedCustomer } from "@/credits/types";
-import type { Credit } from "@/credits/types";
+import type { Credit, CreditBody } from "@/credits/types";
+import { Paid } from "@/credits/Paid";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { Damaged } from "@/damaged/Damaged";
@@ -667,17 +669,22 @@ function Workspace({
   const [creditStorageError, setCreditStorageError] = useState(false);
   const creditCommand = useCreditCommand();
   // A payment or write-off whose outcome was unknown, settled; a payment
-  // with its sum and way, so a card is still charged on the terminal.
-  const [creditSettled, setCreditSettled] = useState<{
-    kind: "payment" | "write-off";
-    credit: Credit;
-    amount: string | null;
-    way: PaymentMethod | null;
-    // Typed from paper: the card was charged during the outage (ADR-0021),
-    // or before the app, from the first days' paper (owner, 2026-10-16).
-    fromPaper?: boolean;
-    firstDays?: boolean;
-  } | null>(null);
+  // with its sum and way as sent, so a card is still charged on the
+  // terminal — never the debt's paid in all in its place.
+  const [creditSettled, setCreditSettled] = useState<
+    | {
+        kind: "payment";
+        credit: Credit;
+        amount: string;
+        way: PaymentMethod | null;
+        // Typed from paper: the card was charged during the outage
+        // (ADR-0021), or before the app, from the first days' paper (owner,
+        // 2026-10-16); the mark as sent, its taker by id alone.
+        paper: PaperView | null;
+      }
+    | { kind: "write-off"; credit: Credit }
+    | null
+  >(null);
   // Which command a resent attempt refused as recording nothing was, and
   // how a payment was pressed: what to give back says it (ADR-0013 §8).
   const [creditRefused, setCreditRefused] = useState<{
@@ -905,18 +912,25 @@ function Workspace({
     if (!attempt) return;
     void resolveCreditCommand(creditKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
-        setCreditSettled({
-          kind: attempt.body.kind,
-          credit: outcome.result,
-          ...(attempt.body.kind === "payment"
+        const body = attempt.body;
+        setCreditSettled(
+          body.kind === "payment"
             ? {
-                amount: attempt.body.amount,
-                way: attempt.body.payment_method ?? null,
-                fromPaper: !!attempt.body.outage,
-                firstDays: attempt.body.outage?.first_days === true,
+                kind: "payment",
+                credit: outcome.result,
+                amount: body.amount,
+                way: body.payment_method ?? null,
+                paper: body.outage
+                  ? {
+                      by_user_id: body.outage.by_user_id,
+                      by: null,
+                      at: body.outage.at,
+                      first_days: body.outage.first_days === true,
+                    }
+                  : null,
               }
-            : { amount: null, way: null }),
-        });
+            : { kind: "write-off", credit: outcome.result },
+        );
         setCreditEpoch((epoch) => epoch + 1);
         void cache.invalidateQueries({
           queryKey: ["credits", store.id],
@@ -1481,13 +1495,17 @@ function Workspace({
       {creditCommand.pending && (
         <section className="notice">
           <h3>
-            {creditCommand.busy ? "Перевіряємо внесок…" : "Незавершений внесок"}
+            {creditCommand.pending.body.kind === "payment"
+              ? creditCommand.busy
+                ? "Перевіряємо внесок…"
+                : "Внесок ще не підтверджено"
+              : creditCommand.busy
+                ? "Перевіряємо списання…"
+                : "Списання ще не підтверджено"}
           </h3>
-          <p>
-            Невідомо, чи записано попередній внесок або списання боргу.
-            Перевірте результат — та сама операція не запишеться двічі. Поки
-            чекаємо, інші дії недоступні.
-          </p>
+          {/* Which payment: its sum, way and goods, as the attempt kept them
+              (credits task list, P1-2). */}
+          <p>{keptCreditText(creditCommand.pending.body)}</p>
           <p>{keptText(creditCommand.pending.since, me.display_name)}</p>
           <button disabled={creditCommand.busy} onClick={checkCredit}>
             Перевірити результат внеску
@@ -1496,24 +1514,39 @@ function Workspace({
       )}
       {creditSettled && (
         <section className="notice" role="status">
-          <h3>
-            {creditSettled.kind === "payment"
-              ? "Внесок підтверджено"
-              : "Списання підтверджено"}
-          </h3>
-          <p>
-            Його було записано один раз
-            {creditSettled.amount !== null && creditSettled.way !== null
-              ? `: ${money(creditSettled.amount)} ${methodHow[creditSettled.way]}`
-              : ""}
-            . {visible(creditSettled.credit.customer_name ?? erasedCustomer)}:
-            залишок боргу {money(creditSettled.credit.owed)}.
-            {creditSettled.fromPaper
-              ? paidOnPaper(creditSettled.way, creditSettled.firstDays === true)
-              : creditSettled.amount !== null &&
-                creditSettled.way === "CARD" &&
-                ` ${chargeOnce(creditSettled.amount)}`}
-          </p>
+          {/* The payment's result, compact (credits task list, P1-2): a card
+              is charged only if nobody did while the server did not answer
+              (owner decision, 2026-10-07). */}
+          {creditSettled.kind === "payment" ? (
+            <Paid
+              kind="payment"
+              amount={creditSettled.amount}
+              way={isTillMethod(creditSettled.way) ? creditSettled.way : null}
+              paper={creditSettled.paper}
+              credit={creditSettled.credit}
+              kept
+              said={`${visible(creditSettled.credit.customer_name ?? erasedCustomer)}: залишок боргу ${money(creditSettled.credit.owed)}.${
+                creditSettled.paper
+                  ? paidOnPaper(
+                      creditSettled.way,
+                      creditSettled.paper.first_days === true,
+                    )
+                  : creditSettled.way === "CARD"
+                    ? ` ${chargeOnce(creditSettled.amount)}`
+                    : ""
+              }`}
+            />
+          ) : (
+            <Paid
+              kind="write-off"
+              amount={creditSettled.credit.written_off}
+              way={null}
+              paper={null}
+              credit={creditSettled.credit}
+              kept
+              said={`${visible(creditSettled.credit.customer_name ?? erasedCustomer)}: залишок боргу ${money(creditSettled.credit.owed)}.`}
+            />
+          )}
           <button
             onClick={() => {
               setCreditSettled(null);
@@ -2109,6 +2142,31 @@ function keptSaleText(attempt: SaleAttempt): string {
   // A sum that does not read: the way alone, never a guess.
   if (sum === null) return `Продаж${how} — ${waits}`;
   return `Продаж ${inParts ? "частинами, зараз" : "на"} ${money(sum)}${how} — ${waits}`;
+}
+
+/**
+ * A kept payment's banner (credits task list, P1-2): which payment it was —
+ * its sum, way and goods, as the attempt kept them — and that it is not
+ * confirmed yet. The goods are read defensively: an attempt kept before they
+ * were, or with something else there, names the sum and way alone.
+ */
+function keptCreditText(body: CreditBody): string {
+  if (body.kind === "write-off")
+    return "Списання боргу — сервер не відповів. Двічі воно не запишеться. Поки чекаємо, інші дії недоступні.";
+  const goods: unknown[] = Array.isArray(body.goods) ? body.goods : [];
+  const [first] = goods;
+  // The first named, the rest counted; an empty name, none (review,
+  // 2026-10-18).
+  const named =
+    typeof first === "string" && goods.every((good) => typeof good === "string")
+      ? visible(first).trim()
+      : "";
+  const what =
+    named === ""
+      ? ""
+      : ` за «${named}${goods.length > 1 ? ` + ще ${String(goods.length - 1)}` : ""}»`;
+  const way = body.payment_method ? ` ${methodHow[body.payment_method]}` : "";
+  return `Внесок${body.outage ? " з паперу" : ""} ${money(body.amount)}${way}${what} — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.`;
 }
 
 /**

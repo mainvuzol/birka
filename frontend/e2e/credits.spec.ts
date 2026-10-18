@@ -307,19 +307,45 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(paying(page)).toContainText("Впишіть суму внеску");
   await page.getByLabel("Сума внеску, грн").fill("500");
   await paying(page).getByRole("button", { name: "Готівка" }).click();
+  // The result in place of the form (P0-5): what was done, the way, the sum
+  // large, what is owed after — heard as one sentence.
+  const paid = page.locator(".paid-result");
+  await expect(
+    paid.getByRole("heading", { name: "Внесок записано" }),
+  ).toBeVisible();
+  await expect(paid.locator(".way-pill")).toHaveText("Готівка");
+  await expect(paid.locator(".hand-back-sum")).toHaveText("500,00 грн");
+  await expect(paid.locator(".paid-owed")).toHaveText(
+    "Залишок боргу 1 500,00 грн",
+  );
   await expect(
     page.getByText(
       "Внесок 500,00 грн прийнято готівкою. Залишок боргу 1 500,00 грн.",
     ),
-  ).toBeVisible();
+  ).toBeAttached();
+  await expect(paying(page)).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Відкрити борг", exact: true })
+    .click();
   await page.getByRole("button", { name: "Увесь залишок" }).click();
   await expect(page.getByLabel("Сума внеску, грн")).toHaveValue("1500,00");
   await paying(page).getByRole("button", { name: "Картка" }).click();
+  // By card, what to do (owner decision, 2026-10-18, В1 (а)).
+  await expect(paid.locator(".way-pill")).toHaveText(
+    "Картка · Проведіть на терміналі",
+  );
+  await expect(paid.locator(".hand-back-sum")).toHaveText("1 500,00 грн");
+  await expect(paid.locator(".paid-owed")).toHaveText(
+    "Борг сплачено повністю.",
+  );
   await expect(
     page.getByText(
       "Внесок 1 500,00 грн прийнято карткою. Борг сплачено повністю.",
     ),
-  ).toBeVisible();
+  ).toBeAttached();
+  await page
+    .getByRole("button", { name: "Відкрити борг", exact: true })
+    .click();
   await expect(page.locator(".debt-closed .badge")).toHaveText("Сплачено");
   await expect(paying(page)).toHaveCount(0);
   const history = page
@@ -468,8 +494,16 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   await page.getByLabel("Сума внеску, грн").fill("700");
   await paying(page).getByRole("button", { name: "Переказ" }).click();
 
-  await expect(page.getByText("Незавершений внесок")).toBeVisible();
-  await waitsFor(page, /внесок/);
+  // Which payment: its sum, way and goods, as the attempt kept them (P1-2).
+  await expect(
+    page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /^Внесок 700,00 грн переказом за «.+» — сервер не відповів\. Двічі він не запишеться\. Поки чекаємо, інші дії недоступні\.$/,
+    ),
+  ).toBeVisible();
+  await waitsFor(page, /^Внесок ще не підтверджено$/);
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
@@ -477,7 +511,9 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   // about, and asks at once, with no tap (ADR-0013 §4.3).
   await page.reload();
   await openStore(page, "Основний MAIN");
-  await expect(page.getByText("Внесок підтверджено")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Внесок записано один раз" }),
+  ).toBeVisible();
   await expect(
     page.getByText(`${name}: залишок боргу 1 300,00 грн.`),
   ).toBeVisible();
@@ -487,6 +523,8 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   expect(payments.bodies).toHaveLength(2);
   expect(payments.bodies[1]).toEqual(payments.bodies[0]);
   expect(payments.keys[1]).toBe(payments.keys[0]);
+  // The goods are kept for the banner only, never sent.
+  expect(payments.bodies[0]).not.toHaveProperty("goods");
   expect(
     (payments.bodies[0] as { payment_method: unknown }).payment_method,
   ).toBe("TRANSFER");
@@ -526,7 +564,9 @@ test("more than is owed is refused, and the debt is shown as it is now", async (
   await expect(page.getByRole("alert")).toContainText(
     "Це більше, ніж винні: залишок боргу 500,00 грн.",
   );
-  await expect(page.getByText("Незавершений внесок")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+  ).toHaveCount(0);
   // Read again: what is owed now, large.
   await expect(
     page.getByRole("group", { name: "Скільки винні" }).locator(".owed-sum"),
@@ -560,7 +600,16 @@ test("the owner writes a debt off, saying why, and a seller is not offered it", 
   await expect(confirm).toBeDisabled();
   await page.getByLabel("Чому списуємо").fill("виїхав за кордон");
   await confirm.click();
-  await expect(page.getByText("Борг списано: 2 000,00 грн.")).toBeVisible();
+  await expect(
+    page.locator(".paid-result").getByRole("heading", { name: "Борг списано" }),
+  ).toBeVisible();
+  await expect(page.locator(".paid-result .hand-back-sum")).toHaveText(
+    "2 000,00 грн",
+  );
+  await expect(page.getByText("Борг списано: 2 000,00 грн.")).toBeAttached();
+  await page
+    .getByRole("button", { name: "Відкрити борг", exact: true })
+    .click();
   await expect(page.locator(".debt-closed .badge")).toHaveText("Списано");
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "виїхав за кордон",
@@ -749,11 +798,18 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   ).toBeVisible();
   await page.getByRole("button", { name: "Увесь залишок" }).click();
   await paying(page).getByRole("button", { name: "Переказ" }).click();
+  const paid = page.locator(".paid-result");
+  await expect(paid.locator(".way-pill")).toHaveText(
+    "Переказ · Перевірте, що переказ надійшов",
+  );
+  await expect(paid.locator(".paid-owed")).toHaveText(
+    "Борг сплачено повністю.",
+  );
   await expect(
     page.getByText(
       "Внесок 2 000,00 грн прийнято переказом. Борг сплачено повністю.",
     ),
-  ).toBeVisible();
+  ).toBeAttached();
   expect(await owed(page, first.token, first.sale.credit.credit_id)).toBe(
     "0.00",
   );
@@ -761,8 +817,9 @@ test("one phone is one customer, whatever the name, and the store sees what it i
     "2000.00",
   );
 
-  // Back to the customer's debts, by their name, read again: one is left.
-  await page.getByRole("button", { name, exact: true }).click();
+  // Back to the customer's debts, by their name, as «←» says, read again:
+  // one is left (review, 2026-10-18).
+  await paid.getByRole("button", { name, exact: true }).click();
   await expect(page.locator(".owed-sum")).toHaveText("2 000,00 грн");
   await expect(debts.getByRole("listitem")).toHaveCount(1);
   await page.getByRole("button", { name: "До боргів" }).click();

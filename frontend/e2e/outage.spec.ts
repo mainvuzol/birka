@@ -1983,11 +1983,19 @@ test.describe("9. what to do with money after the outage", () => {
     );
     await page.goto(launch());
     await openStore(page, /Подільський/);
+    // The payment's result, compact (credits task list, P1-2): the way alone
+    // over the sum; the card charged only if nobody did.
     const confirmed = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Внесок підтверджено" }),
+      has: page.getByRole("heading", { name: "Внесок записано один раз" }),
     });
+    await expect(confirmed.locator(".way-pill")).toHaveText("Картка");
+    await expect(confirmed.locator(".hand-back-sum")).toHaveText("500,00 грн");
+    // The pill and the sum, heard (review, 2026-10-18).
+    await expect(
+      confirmed.getByText("Внесок 500,00 грн карткою.", { exact: true }),
+    ).toBeAttached();
     await expect(confirmed).toContainText(
-      "Його було записано один раз: 500,00 грн карткою. Оксана Петренко: залишок боргу 1 500,00 грн. Якщо картку ще не провели — проведіть на терміналі 500,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+      "Оксана Петренко: залишок боргу 1 500,00 грн. Якщо картку ще не провели — проведіть на терміналі 500,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
     await expect(confirmed).not.toContainText(/Проведіть на терміналі/);
     expect(payments).toHaveLength(1);
@@ -2029,12 +2037,22 @@ test.describe("9. what to do with money after the outage", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     const confirmed = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Внесок підтверджено" }),
+      has: page.getByRole("heading", { name: "Внесок записано один раз" }),
     });
+    await expect(confirmed.locator(".badge.warn")).toHaveText(
+      "Внесок під час збою",
+    );
+    await expect(confirmed).toContainText("Уже взяли під час збою");
+    await expect(
+      confirmed.getByText("Внесок з паперу 500,00 грн карткою.", {
+        exact: true,
+      }),
+    ).toBeAttached();
     await expect(confirmed).toContainText(
       "Оплату провели під час збою, на терміналі не проводьте ще раз.",
     );
     await expect(confirmed).not.toContainText("Якщо картку ще не провели");
+    await expect(confirmed).not.toContainText("Проведіть");
     expect(payments).toEqual([
       {
         command_id: expect.any(String) as string,
@@ -2044,6 +2062,107 @@ test.describe("9. what to do with money after the outage", () => {
       },
     ]);
   });
+
+  for (const kept of [
+    {
+      what: "names its sum, way and goods",
+      body: {
+        kind: "payment",
+        amount: "500.00",
+        payment_method: "CARD",
+        goods: ["Лоран шоколад · M", "Альпака сіра · L"],
+      },
+      heading: "Внесок ще не підтверджено",
+      said: "Внесок 500,00 грн карткою за «Лоран шоколад · M + ще 1» — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      what: "from paper says so",
+      body: {
+        kind: "payment",
+        amount: "500.00",
+        payment_method: "CASH",
+        outage: { by_user_id: null, at: null },
+        goods: ["Лоран шоколад · M"],
+      },
+      heading: "Внесок ще не підтверджено",
+      said: "Внесок з паперу 500,00 грн готівкою за «Лоран шоколад · M» — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      what: "kept before its goods were names its sum and way",
+      body: { kind: "payment", amount: "500.00", payment_method: "TRANSFER" },
+      heading: "Внесок ще не підтверджено",
+      said: "Внесок 500,00 грн переказом — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      what: "kept before its way was names its sum, and goods it cannot read none",
+      body: { kind: "payment", amount: "500.00", goods: "Лоран шоколад" },
+      heading: "Внесок ще не підтверджено",
+      said: "Внесок 500,00 грн — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      what: "whose goods hold something not a name names its sum and way alone",
+      body: {
+        kind: "payment",
+        amount: "500.00",
+        payment_method: "CARD",
+        goods: ["Лоран шоколад · M", 7],
+      },
+      heading: "Внесок ще не підтверджено",
+      said: "Внесок 500,00 грн карткою — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      what: "whose first good is empty names its sum and way alone",
+      body: {
+        kind: "payment",
+        amount: "500.00",
+        payment_method: "CASH",
+        goods: ["", "Альпака сіра · L"],
+      },
+      heading: "Внесок ще не підтверджено",
+      said: "Внесок 500,00 грн готівкою — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+    {
+      what: "of a write-off says so",
+      body: { kind: "write-off", reason: "виїхав" },
+      heading: "Списання ще не підтверджено",
+      said: "Списання боргу — сервер не відповів. Двічі воно не запишеться. Поки чекаємо, інші дії недоступні.",
+    },
+  ])
+    test(`«Борги»: a kept payment's banner ${kept.what} (credits task list, P1-2)`, async ({
+      page,
+    }) => {
+      await seed(page, {
+        [creditKey]: JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          body: {
+            store_id: ids.store,
+            credit_id: ids.credit,
+            command_id: randomUUID(),
+            ...kept.body,
+          },
+        }),
+      });
+      await serve(page);
+      await debts(page);
+      const sent: unknown[] = [];
+      const answer = async (route: Route, request: Request): Promise<void> => {
+        sent.push(request.postDataJSON());
+        // Still no answer: kept.
+        await route.abort("connectionreset");
+      };
+      await on(page, `/credits/${ids.credit}/payments`, answer);
+      await on(page, `/credits/${ids.credit}/write-off`, answer);
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(
+        page.getByRole("heading", { name: kept.heading }),
+      ).toBeVisible();
+      await expect(page.getByText(kept.said, { exact: true })).toBeVisible();
+      // Resent as kept, the goods never sent.
+      await expect.poll(() => sent.length).toBeGreaterThan(0);
+      expect(sent[0]).not.toHaveProperty("goods");
+    });
 
   test("«Борги»: a payment refused because the store that sold trades again says to pass the paper to a manager", async ({
     page,
@@ -2117,7 +2236,9 @@ test.describe("9. what to do with money after the outage", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Незавершений внесок" }),
+      page.getByRole("heading", {
+        name: /^(Внесок|Списання) ще не підтверджено$|^Перевіряємо (внесок|списання)…$/,
+      }),
     ).toHaveCount(0);
     expect(writeOffs).toHaveLength(1);
   });
@@ -2170,7 +2291,9 @@ test.describe("9. what to do with money after the outage", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Незавершений внесок" }),
+      page.getByRole("heading", {
+        name: /^(Внесок|Списання) ще не підтверджено$|^Перевіряємо (внесок|списання)…$/,
+      }),
     ).toHaveCount(0);
     expect(payments).toHaveLength(1);
   });
@@ -2206,7 +2329,9 @@ test.describe("9. what to do with money after the outage", () => {
       page.getByText("Перевірте дані та поточний статус замовлення."),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("heading", { name: "Незавершений внесок" }),
+      page.getByRole("heading", {
+        name: /^(Внесок|Списання) ще не підтверджено$|^Перевіряємо (внесок|списання)…$/,
+      }),
     ).toHaveCount(0);
     expect(payments).toHaveLength(1);
     expect(

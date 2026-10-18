@@ -167,6 +167,12 @@ section {
 p {
   line-height: 1.55;
 }
+/* A link — a customer's phone, to call — in the theme's accent, the same
+   once called, underlined to read as one; never the browser's own blue. */
+a,
+a:visited {
+  color: var(--accent-text);
+}
 button,
 input,
 select,
@@ -187,6 +193,7 @@ button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -1015,6 +1022,41 @@ html {
   margin: 16px 0 0;
   padding: 0;
   border: 0;
+}
+/* A payment's result (credits task list, P0-5), and once confirmed later,
+   compact (P1-2): the return's result block, its sum large. */
+.paid-result:not(.kept) {
+  margin-top: 18px;
+}
+.paid-result h3:focus,
+.debt-detail h2:focus,
+.debt-goods:focus {
+  outline: none;
+}
+.paid-result.kept .hand-back {
+  margin: 10px 0;
+}
+.paid-result.kept .hand-back-sum .sum {
+  font-size: 28px;
+  letter-spacing: 0;
+}
+/* A debt's goods beyond the first, on a tap (owner, 2026-10-18). */
+.more-goods {
+  /* A finger's room, the line unmoved. */
+  min-height: 0;
+  padding: 12px 4px;
+  margin: -12px -4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+}
+.debt-goods {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--text-2);
 }
 /* The other stores' sales, headed, and offered under this store's (P1-1). */
 .elsewhere-head {

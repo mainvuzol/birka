@@ -35,6 +35,8 @@ const credits = journal<CreditBody, Credit>({
         }
       : { command_id: body.command_id, reason: body.reason },
   scope: "credit-pending",
+  // `goods` is not checked: shown only, read defensively, and absent from
+  // an attempt kept before it was added (credits task list, P1-2).
   isBody: (body) =>
     isId(body.credit_id) &&
     ((body.kind === "payment" &&

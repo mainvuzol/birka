@@ -627,11 +627,23 @@ async function contrast(element: Locator): Promise<number> {
   });
 }
 
+/** The theme's accent for text, as the page resolves its token. */
+async function accentText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent-text)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+}
+
 for (const [name, theme, scheme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
 ] as const)
-  test(`in the ${name} theme what is owed, the names and the meta read at 4.5:1`, async ({
+  test(`in the ${name} theme what is owed, the names, the meta and a customer's phone read at 4.5:1`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 740 });
@@ -654,6 +666,10 @@ for (const [name, theme, scheme] of [
     await page.screenshot({ path: `test-results/credits-list-${name}.png` });
     await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
     await expect(page.locator(".owed-sum")).toHaveText("4 000,00 грн");
+    // Their phone, to call, in the theme's accent, never the browser's blue.
+    const phone = page.locator("a[href^='tel:']");
+    await expect(phone).toHaveCSS("color", await accentText(page));
+    expect(await contrast(phone)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({
       path: `test-results/credits-customer-${name}.png`,
     });

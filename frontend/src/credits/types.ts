@@ -141,6 +141,14 @@ export type CreditBody =
       payment_method?: TillMethod;
       /** Typed from paper (ADR-0021). Absent from a payment typed live. */
       outage?: PaperBody;
+      /**
+       * The debt's goods, kept beside the attempt only for its banner, which
+       * names the payment while its answer is unknown (credits task list,
+       * P1-2): never sent, never trusted — read defensively, and absent from
+       * an attempt kept before it was added. No name or phone of the
+       * customer is kept on the phone (ADR-0015).
+       */
+      goods?: unknown;
     }
   | {
       kind: "write-off";
