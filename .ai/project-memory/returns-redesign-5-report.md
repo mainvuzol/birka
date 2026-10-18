@@ -2,7 +2,8 @@
 
 Baseline: `e07a01a` (the other stores offered, a mistake's mending, goods
 before Бірка, PR #102).
-Status: TODO
+Status: built, reviewed and proven: the whole CI run locally passed, and
+eight of eight ways of breaking it caught. Not yet tried on a real phone.
 Branch: `feat/returns-search-words-refusals`. Tasks: [the returns task list](redesign/2026-10-17-redesign-tz-returns.md),
 P1-3, P2-2. Owner: business-rules.md, "«Повернення»: three readings after
 #102, and what next" (2026-10-18).
@@ -110,7 +111,17 @@ these smaller things, addressed before the first commit:
 
 ## Evidence
 
-TODO
+- [`output/verification/2026-10-18-returns-search-words-refusals/`](../../output/verification/2026-10-18-returns-search-words-refusals/):
+  `mutants.py` and `mutants.txt`, eight ways of breaking it, all caught;
+  `explain_sales.py` and `explain-sales-search.txt`, the plans.
+- **CI, run locally at `31a709c`** ([summary](../../output/verification/2026-10-18-returns-search-words-refusals-ci-local/summary.md)),
+  on the host's Node 24.18: every job passed, the backend with its
+  declared gap.
+  - backend: 3 447 on PostgreSQL 17 (two new);
+  - e2e: 391 journeys;
+  - hot path: worst p95 91.3 ms (the search by six sellers) and 103.4 ms
+    (`POST /sales`), within 300 and 500;
+  - restore drill, frontend, python-audit and edge passed.
 
 ## Not covered here
 
