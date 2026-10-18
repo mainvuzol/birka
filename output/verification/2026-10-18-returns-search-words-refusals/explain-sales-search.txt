@@ -1,0 +1,113 @@
+sales: 5093 lines: 5093
+--- here ['лоран']
+Limit  (cost=296.08..296.08 rows=1 width=1162) (actual time=0.536..0.538 rows=15 loops=1)
+  Buffers: shared hit=1149
+  ->  Sort  (cost=296.08..296.08 rows=1 width=1162) (actual time=0.536..0.537 rows=15 loops=1)
+        Sort Key: sale.sold_at DESC, sale.id DESC
+        Sort Method: quicksort  Memory: 28kB
+        Buffers: shared hit=1149
+        ->  Nested Loop Semi Join  (cost=26.38..296.07 rows=1 width=1162) (actual time=0.059..0.526 rows=15 loops=1)
+              Buffers: shared hit=1143
+              ->  Bitmap Heap Scan on sale  (cost=26.09..113.70 rows=25 width=1162) (actual time=0.029..0.093 rows=351 loops=1)
+                    Recheck Cond: ((store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid) AND (organization_id = '92d4e101-4f4f-4062-ae4b-60399369225d'::uuid))
+                    Heap Blocks: exact=82
+                    Buffers: shared hit=90
+                    ->  BitmapAnd  (cost=26.09..26.09 rows=25 width=0) (actual time=0.023..0.023 rows=0 loops=1)
+                          Buffers: shared hit=8
+                          ->  Bitmap Index Scan on ix_sale_store_id_drawer_period  (cost=0.00..6.92 rows=351 width=0) (actual time=0.008..0.008 rows=351 loops=1)
+                                Index Cond: (store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid)
+                                Buffers: shared hit=2
+                          ->  Bitmap Index Scan on uq_sale_org_command  (cost=0.00..18.91 rows=351 width=0) (actual time=0.013..0.013 rows=351 loops=1)
+                                Index Cond: (organization_id = '92d4e101-4f4f-4062-ae4b-60399369225d'::uuid)
+                                Buffers: shared hit=6
+              ->  Index Scan using ix_sale_item_sale on sale_item  (cost=0.28..7.02 rows=1 width=16) (actual time=0.001..0.001 rows=0 loops=351)
+                    Index Cond: (sale_id = sale.id)
+                    Filter: (lower(display_name_snapshot) ~~ '%лоран%'::text)
+                    Rows Removed by Filter: 1
+                    Buffers: shared hit=1053
+Planning:
+  Buffers: shared hit=153
+Planning Time: 0.226 ms
+Execution Time: 0.556 ms
+--- here ['шоколад', 'лоран']
+Limit  (cost=296.21..296.21 rows=1 width=1162) (actual time=0.337..0.338 rows=15 loops=1)
+  Buffers: shared hit=1143
+  ->  Sort  (cost=296.21..296.21 rows=1 width=1162) (actual time=0.337..0.338 rows=15 loops=1)
+        Sort Key: sale.sold_at DESC, sale.id DESC
+        Sort Method: quicksort  Memory: 28kB
+        Buffers: shared hit=1143
+        ->  Nested Loop Semi Join  (cost=26.38..296.20 rows=1 width=1162) (actual time=0.028..0.333 rows=15 loops=1)
+              Buffers: shared hit=1143
+              ->  Bitmap Heap Scan on sale  (cost=26.09..113.70 rows=25 width=1162) (actual time=0.015..0.049 rows=351 loops=1)
+                    Recheck Cond: ((store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid) AND (organization_id = '92d4e101-4f4f-4062-ae4b-60399369225d'::uuid))
+                    Heap Blocks: exact=82
+                    Buffers: shared hit=90
+                    ->  BitmapAnd  (cost=26.09..26.09 rows=25 width=0) (actual time=0.012..0.012 rows=0 loops=1)
+                          Buffers: shared hit=8
+                          ->  Bitmap Index Scan on ix_sale_store_id_drawer_period  (cost=0.00..6.92 rows=351 width=0) (actual time=0.005..0.005 rows=351 loops=1)
+                                Index Cond: (store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid)
+                                Buffers: shared hit=2
+                          ->  Bitmap Index Scan on uq_sale_org_command  (cost=0.00..18.91 rows=351 width=0) (actual time=0.006..0.006 rows=351 loops=1)
+                                Index Cond: (organization_id = '92d4e101-4f4f-4062-ae4b-60399369225d'::uuid)
+                                Buffers: shared hit=6
+              ->  Index Scan using ix_sale_item_sale on sale_item  (cost=0.28..7.03 rows=1 width=16) (actual time=0.001..0.001 rows=0 loops=351)
+                    Index Cond: (sale_id = sale.id)
+                    Filter: ((lower(display_name_snapshot) ~~ '%шоколад%'::text) AND (lower(display_name_snapshot) ~~ '%лоран%'::text))
+                    Rows Removed by Filter: 1
+                    Buffers: shared hit=1053
+Planning:
+  Buffers: shared hit=24
+Planning Time: 0.062 ms
+Execution Time: 0.347 ms
+--- elsewhere ['лоран']
+Limit  (cost=729.98..729.99 rows=1 width=1162) (actual time=6.490..6.490 rows=0 loops=1)
+  Buffers: shared hit=2462 read=502 dirtied=2
+  ->  Sort  (cost=729.98..729.99 rows=1 width=1162) (actual time=6.490..6.490 rows=0 loops=1)
+        Sort Key: sale.sold_at DESC, sale.id DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2462 read=502 dirtied=2
+        ->  Nested Loop  (cost=721.89..729.97 rows=1 width=1162) (actual time=6.487..6.487 rows=0 loops=1)
+              Buffers: shared hit=2462 read=502 dirtied=2
+              ->  HashAggregate  (cost=721.61..721.62 rows=1 width=16) (actual time=5.509..5.535 rows=771 loops=1)
+                    Group Key: sale_item.sale_id
+                    Batches: 1  Memory Usage: 97kB
+                    Buffers: shared hit=146 read=499
+                    ->  Seq Scan on sale_item  (cost=0.00..721.61 rows=1 width=16) (actual time=0.261..5.431 rows=771 loops=1)
+                          Filter: (lower(display_name_snapshot) ~~ '%лоран%'::text)
+                          Rows Removed by Filter: 4322
+                          Buffers: shared hit=146 read=499
+              ->  Index Scan using pk_sale on sale  (cost=0.28..8.31 rows=1 width=1162) (actual time=0.001..0.001 rows=0 loops=771)
+                    Index Cond: (id = sale_item.sale_id)
+                    Filter: ((store_id <> '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid) AND (organization_id = '92d4e101-4f4f-4062-ae4b-60399369225d'::uuid))
+                    Rows Removed by Filter: 1
+                    Buffers: shared hit=2316 read=3 dirtied=2
+Planning:
+  Buffers: shared hit=26
+Planning Time: 0.048 ms
+Execution Time: 6.499 ms
+--- elsewhere ['шоколад', 'лоран']
+Limit  (cost=755.52..755.52 rows=1 width=1162) (actual time=3.060..3.060 rows=0 loops=1)
+  Buffers: shared hit=2958
+  ->  Sort  (cost=755.52..755.52 rows=1 width=1162) (actual time=3.060..3.060 rows=0 loops=1)
+        Sort Key: sale.sold_at DESC, sale.id DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2958
+        ->  Nested Loop  (cost=747.43..755.51 rows=1 width=1162) (actual time=3.059..3.059 rows=0 loops=1)
+              Buffers: shared hit=2958
+              ->  HashAggregate  (cost=747.14..747.15 rows=1 width=16) (actual time=2.720..2.741 rows=771 loops=1)
+                    Group Key: sale_item.sale_id
+                    Batches: 1  Memory Usage: 97kB
+                    Buffers: shared hit=645
+                    ->  Seq Scan on sale_item  (cost=0.00..747.14 rows=1 width=16) (actual time=0.015..2.656 rows=771 loops=1)
+                          Filter: ((lower(display_name_snapshot) ~~ '%шоколад%'::text) AND (lower(display_name_snapshot) ~~ '%лоран%'::text))
+                          Rows Removed by Filter: 4322
+                          Buffers: shared hit=645
+              ->  Index Scan using pk_sale on sale  (cost=0.28..8.31 rows=1 width=1162) (actual time=0.000..0.000 rows=0 loops=771)
+                    Index Cond: (id = sale_item.sale_id)
+                    Filter: ((store_id <> '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid) AND (organization_id = '92d4e101-4f4f-4062-ae4b-60399369225d'::uuid))
+                    Rows Removed by Filter: 1
+                    Buffers: shared hit=2313
+Planning:
+  Buffers: shared hit=24
+Planning Time: 0.072 ms
+Execution Time: 3.069 ms

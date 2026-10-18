@@ -4,7 +4,10 @@ import type { TillMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
 import { refusalText as debtRefusalText } from "@/credits/Credits";
 import { refusalText as correctionRefusalText } from "@/inventory/Correction";
-import { refusalText as returnRefusalText } from "@/returns/Returns";
+import {
+  refusalText as returnRefusalText,
+  RETURN_CONFLICT_TEXT,
+} from "@/returns/Returns";
 import {
   refusalText as tillRefusalText,
   TILL_CONFLICT_TEXT,
@@ -201,10 +204,17 @@ export function adjustmentErrorText(error: unknown): string {
 /** «Повернення»'s own words for why (ADR-0013 §8). */
 export function returnErrorText(error: unknown): string {
   if (!recordedNothing(error)) return errorText(error);
-  return error instanceof ApiError &&
+  if (
+    error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
-    ? "Повернення не записано — оформіть його ще раз і вкажіть, як повертаєте гроші."
-    : `Повернення не записано. ${returnRefusalText(error)}`;
+  )
+    return "Повернення не записано — оформіть його ще раз і вкажіть, як повертаєте гроші.";
+  // Resent after the server did not answer: it changed meanwhile, not while
+  // the seller worked, as a kept sale says (decided with the task list's
+  // P2-2, 2026-10-18; for the owner to confirm).
+  if (returnRefusalText(error) === RETURN_CONFLICT_TEXT)
+    return "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку й спробуйте ще раз.";
+  return `Повернення не записано. ${returnRefusalText(error)}`;
 }
 
 /**

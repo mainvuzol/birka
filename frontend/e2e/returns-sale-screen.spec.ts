@@ -861,3 +861,56 @@ for (const rights of [
       .click();
     await expect(page.locator(".return-mistake")).toHaveText(rights.said);
   });
+
+test("a refusal nothing more is known of says the return's own words, never an order's", async ({
+  page,
+}) => {
+  const coat = line("Лоран шоколад");
+  let answers = 0;
+  await oneSale(page, [coat], {
+    answer: () => {
+      answers += 1;
+      return answers !== 2
+        ? {
+            status: 409,
+            json: { code: "CONFLICT", message: "Conflict", details: {} },
+          }
+        : {
+            status: 422,
+            json: {
+              code: "VALIDATION_ERROR",
+              message: "Request failed validation",
+              details: {},
+            },
+          };
+    },
+  });
+  await opened(page);
+  await returnUnits(page, { intact: 1 });
+  const press = panelOf(page).getByRole("button", {
+    name: "Повернути покупцю 3 000,00 грн готівкою",
+  });
+  await press.click();
+  const refused = page.getByRole("alert");
+  await expect(refused).toHaveText(
+    "Дані змінилися, поки ви працювали. Поверніться до списку й спробуйте ще раз. Нічого не повернено.",
+  );
+  await press.click();
+  await expect(refused).toHaveText(
+    "Перевірте, що повертають, і спробуйте ще раз. Нічого не повернено.",
+  );
+  // From paper, nothing is recorded rather than handed back.
+  await fromPaper(page, "Вношу повернення з паперу");
+  await panelOf(page)
+    .getByRole("button", {
+      name: "З паперу · Повернути покупцю 3 000,00 грн готівкою",
+    })
+    .click();
+  await expect(refused).toHaveText(
+    "Дані змінилися, поки ви працювали. Поверніться до списку й спробуйте ще раз. Нічого не записано.",
+  );
+  // Not a word of an order in what is said (the sections' row names theirs).
+  await expect(
+    page.getByRole("alert").filter({ hasText: /замовлен/i }),
+  ).toHaveCount(0);
+});

@@ -41,18 +41,24 @@ async def list_sales(
     elsewhere: bool = False,
 ) -> SalePage:
     """One page of the store's sales, newest first; with `query`, only sales
-    with a line whose name contains it, in any letter case. `elsewhere` reads
-    every other store's of the organization instead."""
+    with a line whose name contains each of its words, in any order and
+    letter case. `elsewhere` reads every other store's of the organization
+    instead."""
     statement = select(Sale).where(
         Sale.organization_id == organization_id,
         Sale.store_id != store_id if elsewhere else Sale.store_id == store_id,
     )
-    wanted = (query or "").strip().lower()[:MAX_QUERY]
-    if wanted:
+    # Each word typed, literally, in the name of one line of the sale, as
+    # the till's search reads each word (returns task list, P1-3): «шоколад
+    # лоран» finds «Лоран шоколад»; words of two lines do not add up.
+    # A word typed twice is looked for once.
+    words = list(dict.fromkeys((query or "").strip().lower()[:MAX_QUERY].split()))
+    if words:
+        name = func.lower(SaleItem.display_name_snapshot)
         statement = statement.where(
             exists().where(
                 SaleItem.sale_id == Sale.id,
-                func.lower(SaleItem.display_name_snapshot).contains(wanted, autoescape=True),
+                *(name.contains(word, autoescape=True) for word in words),
             )
         )
     found = list(

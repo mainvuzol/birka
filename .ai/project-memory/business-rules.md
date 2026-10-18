@@ -2696,3 +2696,33 @@ not decided by the owner:
   not.
 
 Built on 2026-10-18; see the [report](returns-redesign-4-report.md).
+
+## Owner decision — 2026-10-18 («Повернення»: three readings after #102, and what next)
+
+Asked after #102, each answer the option recommended:
+- **The words of a mistake's mending to whoever may not sell or handle
+  «Брак» stay impersonal,** «Ці речі продають знову на касі…», with no
+  further step: the usual roles hold both rights.
+- **«Продали ще до Бірки? Покличте менеджера — таке повернення вирішує
+  він.» is the same for every role,** managers and the owner included.
+- **«Помилку з продажем частинами вирішує власник.» is the same for every
+  role,** the owner included.
+- **Next:** the task list's P1-3 (a sale searched by each word) and P2-2
+  (a return's refusals in its own words).
+
+How they are carried out, not decided by the owner:
+- **A sale is found by each word typed,** in any order and letter case,
+  literally, every word in the name of one line of the sale, as the till's
+  search reads each word: «шоколад лоран» finds «Лоран шоколад»; words of
+  two lines do not add up. The other stores' search still starts at two
+  letters for the whole query, and nothing else about who sees what
+  changes.
+- **A refusal «Повернення» knows nothing more of** says «Дані змінилися,
+  поки ви працювали. Поверніться до списку й спробуйте ще раз.» for a
+  conflict and «Перевірте, що повертають, і спробуйте ще раз.» for a
+  request the server could not take, with «Нічого не повернено.» as
+  before; a kept return refused so on resend, «Повернення не записано. Дані
+  змінилися, поки сервер не відповідав. …», as a kept sale says. Never a
+  word of an order.
+
+Built on 2026-10-18; see the [report](returns-redesign-5-report.md).
