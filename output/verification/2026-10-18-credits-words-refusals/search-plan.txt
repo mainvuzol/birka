@@ -1,0 +1,34 @@
+== query «оксана»
+SELECT customer_credit.id 
+FROM customer_credit 
+WHERE customer_credit.store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed' AND (lower(customer_credit.customer_name) LIKE '%' || 'оксана' || '%' ESCAPE '/')
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on customer_credit  (cost=10.96..120.21 rows=1 width=16) (actual time=0.094..0.096 rows=0 loops=1)
+   Recheck Cond: (store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid)
+   Filter: (lower((customer_name)::text) ~~ '%оксана%'::text)
+   Rows Removed by Filter: 312
+   Heap Blocks: exact=15
+   ->  Bitmap Index Scan on ix_customer_credit_store_id_status  (cost=0.00..10.96 rows=357 width=0) (actual time=0.005..0.005 rows=312 loops=1)
+         Index Cond: (store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid)
+ Planning Time: 0.580 ms
+ Execution Time: 0.105 ms
+(9 rows)
+
+== query «петренко  оксана»
+SELECT customer_credit.id 
+FROM customer_credit 
+WHERE customer_credit.store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed' AND (lower(customer_credit.customer_name) LIKE '%' || 'петренко' || '%' ESCAPE '/') AND (lower(customer_credit.customer_name) LIKE '%' || 'оксана' || '%' ESCAPE '/')
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on customer_credit  (cost=10.96..121.99 rows=1 width=16) (actual time=0.092..0.093 rows=0 loops=1)
+   Recheck Cond: (store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid)
+   Filter: ((lower((customer_name)::text) ~~ '%петренко%'::text) AND (lower((customer_name)::text) ~~ '%оксана%'::text))
+   Rows Removed by Filter: 312
+   Heap Blocks: exact=15
+   ->  Bitmap Index Scan on ix_customer_credit_store_id_status  (cost=0.00..10.96 rows=357 width=0) (actual time=0.005..0.005 rows=312 loops=1)
+         Index Cond: (store_id = '61e772b7-c78b-48e4-9510-07f30ada01ed'::uuid)
+ Planning Time: 0.550 ms
+ Execution Time: 0.103 ms
+(9 rows)
+
