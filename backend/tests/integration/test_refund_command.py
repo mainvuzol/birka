@@ -37,6 +37,7 @@ from app.core.errors import RefundExceedsSoldError
 from app.core.idempotency import IdempotencyRecord
 from app.modules.audit.models import AuditLog
 from app.modules.authz.permissions import Permission
+from app.modules.authz.scope import RequestScope
 from app.modules.catalog.models import CanonicalConcept
 from app.modules.inventory.models import Inventory, MovementType, StockMovement
 from app.modules.inventory.service import find_divergences
@@ -1312,17 +1313,23 @@ async def test_a_refunded_receipt_still_reads_the_same_after_a_replay(
         assert len(await movements_of(session, shop, MovementType.REFUND_RETURN)) == 1
 
 
-async def test_a_replay_is_refused_once_the_grant_is_gone(
+async def test_whoever_took_a_return_learns_its_outcome_once_the_grant_is_gone(
     maker: async_sessionmaker[AsyncSession],
 ):
-    """Invariant I13: a revoked seller does not keep receiving the success they
-    were once entitled to, cached or durable."""
+    """A phone keeps a return whose answer it never heard, and holds its till
+    until it learns the outcome: whoever took it is answered what it recorded,
+    cached or durable, once they may no longer take returns, and takes no new
+    one (owner decision, 2026-10-18; before, invariant I13 refused them
+    both)."""
     shop = await make_shop(maker)
     async with api(maker, shop.scope()) as client:
         sold = await sell(client, shop, stock=5, quantity=2)
-        body = refund_body((sold.line()["id"], 2, True))
+        # A reason as typed, trimmed when recorded: the replay is read as the
+        # first sending was.
+        body = refund_body((sold.line()["id"], 1, True), reason="  Не підійшов розмір ")
         headers = key()
-        assert (await refund(client, sold.sale_id, body, headers)).status_code == 201
+        original = await refund(client, sold.sale_id, body, headers)
+        assert original.status_code == 201, original.text
 
     # Only `sale:refund` goes. Revoking the whole membership would be caught
     # by `require_store` in several places at once, and the test would pass
@@ -1332,11 +1339,166 @@ async def test_a_replay_is_refused_once_the_grant_is_gone(
         shop.scope(),
         store_permissions={shop.store_id: SELLER - {Permission.SALE_REFUND}},
     )
+    async with maker() as session:
+        keys, audits = await kept_rows(session, shop)
     async with api(maker, revoked) as client:
         cached = await refund(client, sold.sale_id, body, headers)
-        assert cached.status_code == 403, cached.text
+        assert cached.status_code == 201, cached.text
+        assert cached.json() == original.json()
+        durable = await refund(client, sold.sale_id, body, key())
+        assert durable.status_code == 201, durable.text
+        assert durable.json() == original.json()
+        # The same command, another request: never answered as recorded.
+        changed = await refund(
+            client,
+            sold.sale_id,
+            refund_body((sold.line()["id"], 2, True), command_id=body["command_id"]),
+            key(),
+        )
+        assert changed.status_code == 409, changed.text
+        assert changed.json()["code"] == "IDEMPOTENCY_CONFLICT"
+        assert "recorded" not in changed.json()["details"]
+        assert "refund_id" not in changed.json()["details"]
+        # A new one is refused, as before, and says it recorded nothing, so
+        # the phone settles it.
+        fresh = await refund(client, sold.sale_id, refund_body((sold.line()["id"], 1, True)))
+        assert fresh.status_code == 403, fresh.text
+        assert fresh.json()["code"] == "PERMISSION_DENIED"
+        assert fresh.json()["details"]["recorded"] is False
+
+    async with maker() as session:
+        assert await refund_rows(session, shop) == 1
+        assert len(await movements_of(session, shop, MovementType.REFUND_RETURN)) == 1
+        # Nothing written for any of those answers: no key kept, no audit.
+        assert await kept_rows(session, shop) == (keys, audits)
+
+
+async def kept_rows(session: AsyncSession, shop: Shop) -> tuple[int, int]:
+    """The shop's idempotency keys and audit entries, counted."""
+    keys = await session.scalar(
+        select(func.count())
+        .select_from(IdempotencyRecord)
+        .where(IdempotencyRecord.organization_id == shop.organization_id)
+    )
+    audits = await session.scalar(
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.organization_id == shop.organization_id)
+    )
+    return keys or 0, audits or 0
+
+
+async def test_a_resend_without_the_grant_waits_for_a_first_sending_still_running(
+    maker: async_sessionmaker[AsyncSession], engine: AsyncEngine
+):
+    """The key is claimed before the lookup: a resend by whoever may no longer
+    take returns waits for its first sending, still running, and is given its
+    answer — never told that nothing was recorded while the first may still
+    record it (review, 2026-10-18)."""
+    shop = await make_shop(maker)
+    async with api(maker, shop.scope()) as client:
+        sold = await sell(client, shop, stock=5, quantity=2)
+    body = refund_body((sold.line()["id"], 1, True))
+    headers = key()
+    revoked = replace(
+        shop.scope(),
+        store_permissions={shop.store_id: SELLER - {Permission.SALE_REFUND}},
+    )
+
+    async def send(scope: RequestScope) -> httpx.Response:
+        async with api(maker, scope) as client:
+            return await refund(client, sold.sale_id, body, headers)
+
+    async def waiting(count: int) -> None:
+        async with engine.connect() as observer:
+            for _ in range(500):
+                blocked = await observer.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity WHERE datname = "
+                        "current_database() AND cardinality(pg_blocking_pids(pid)) > 0"
+                    )
+                )
+                if (blocked or 0) >= count:
+                    return
+                # The view is read once per transaction: a new one each time.
+                await observer.rollback()
+                await asyncio.sleep(0.01)
+        pytest.fail(f"{count} requests never waited")
+
+    async with maker() as blocker:
+        # The store held, so the first sending stops after claiming its key,
+        # before its command's lock (`hold_trading_stores`).
+        await blocker.execute(select(Store).where(Store.id == shop.store_id).with_for_update())
+        first = asyncio.create_task(send(shop.scope()))
+        await waiting(1)
+        second = asyncio.create_task(send(revoked))
+        try:
+            # The resend waits behind the first sending's key.
+            await waiting(2)
+            assert not second.done()
+        finally:
+            await blocker.rollback()
+        answered = await asyncio.wait_for(first, timeout=15)
+        resent = await asyncio.wait_for(second, timeout=15)
+    assert answered.status_code == 201, answered.text
+    assert resent.status_code == 201, resent.text
+    assert resent.json() == answered.json()
+
+
+async def test_a_replay_is_refused_to_anyone_else_once_the_grant_is_gone(
+    maker: async_sessionmaker[AsyncSession],
+):
+    """Invariant I13, but for whoever took the return: someone else who may
+    not take returns is not handed its success, cached or durable, nor told
+    that nothing was recorded. Its key, sent by another person, is another
+    request: a conflict, as it is to anyone."""
+    shop = await make_shop(maker)
+    async with api(maker, shop.scope()) as client:
+        sold = await sell(client, shop, stock=5, quantity=2)
+        body = refund_body((sold.line()["id"], 2, True))
+        headers = key()
+        assert (await refund(client, sold.sale_id, body, headers)).status_code == 201
+
+    someone = replace(
+        shop.scope(),
+        user_id=uuid.uuid4(),
+        store_permissions={shop.store_id: SELLER - {Permission.SALE_REFUND}},
+    )
+    async with api(maker, someone) as client:
+        cached = await refund(client, sold.sale_id, body, headers)
+        assert cached.status_code == 409, cached.text
+        assert cached.json()["code"] == "IDEMPOTENCY_CONFLICT"
+        assert "recorded" not in cached.json()["details"]
         durable = await refund(client, sold.sale_id, body, key())
         assert durable.status_code == 403, durable.text
+        assert "recorded" not in durable.json()["details"]
+
+
+async def test_a_return_waits_in_a_store_that_does_not_trade_or_is_not_theirs(
+    maker: async_sessionmaker[AsyncSession],
+):
+    """The owner's rule of 2026-10-18 learns nothing in a blocked store, whose
+    returns wait until it trades again (owner, 2026-10-08), nor in a store
+    whoever took it no longer belongs to."""
+    shop = await make_shop(maker)
+    async with api(maker, shop.scope()) as client:
+        sold = await sell(client, shop, stock=5, quantity=2)
+        body = refund_body((sold.line()["id"], 1, True))
+        assert (await refund(client, sold.sale_id, body)).status_code == 201
+
+    blocked = replace(shop.scope(), store_permissions={}, closed_stores={shop.store_id: "BLOCKED"})
+    async with api(maker, blocked) as client:
+        answer = await refund(client, sold.sale_id, body)
+        assert answer.status_code == 403, answer.text
+        assert answer.json()["code"] == "STORE_NOT_TRADING"
+        assert "recorded" not in answer.json()["details"]
+    # Nor in a store they no longer belong to.
+    removed = replace(shop.scope(), store_permissions={})
+    async with api(maker, removed) as client:
+        answer = await refund(client, sold.sale_id, body)
+        assert answer.status_code == 403, answer.text
+        assert answer.json()["code"] == "FORBIDDEN_STORE"
+        assert "recorded" not in answer.json()["details"]
 
 
 async def test_a_sale_item_is_never_touched_by_the_refund_query(

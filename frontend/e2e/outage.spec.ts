@@ -2969,43 +2969,148 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ).toBeNull();
     });
 
-  test("a kept return still unconfirmed, refused for a conflict, says so in its own words and stays kept", async ({
+  for (const refusal of [
+    {
+      status: 409,
+      code: "CONFLICT",
+      why: "a conflict",
+      said: "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.",
+    },
+    {
+      status: 422,
+      code: "VALIDATION_ERROR",
+      why: "a request not taken",
+      said: "Повернення ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.",
+    },
+  ])
+    test(`a kept return still unconfirmed, refused for ${refusal.why}, says so in its own words and stays kept`, async ({
+      page,
+    }) => {
+      await seed(page, { [returnKey]: keptReturn("CASH") });
+      await serve(page);
+      // Refused, but not said to have recorded nothing: an unknown outcome.
+      const sent = await returns(page, async (route) => {
+        await route.fulfill({
+          status: refusal.status,
+          json: { code: refusal.code, message: "Refused", details: {} },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(page.getByText(refusal.said, { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+      ).toBeVisible();
+      // Not a word of an order in what is said (owner decisions, 2026-10-18).
+      await expect(
+        page.getByRole("alert").filter({ hasText: /замовлен/i }),
+      ).toHaveCount(0);
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), returnKey),
+      ).not.toBeNull();
+      // Sent once, by the phone itself; nothing invites another.
+      expect(sent).toHaveLength(1);
+    });
+
+  // The server answers whoever took a return what it recorded, though they
+  // may no longer take returns, and says when nothing was (owner decision,
+  // 2026-10-18). This person holds neither `sale:refund` nor `sale:view`.
+  test("a kept return on a phone whose person may no longer take returns is answered as recorded: its result over the till, and the till free", async ({
     page,
   }) => {
     await seed(page, { [returnKey]: keptReturn("CASH") });
     await serve(page);
-    // Refused, but not said to have recorded nothing: an unknown outcome.
-    const sent = await returns(page, async (route) => {
+    const sent: string[] = [];
+    await on(page, `/sales/${ids.sale}/refunds`, async (route, request) => {
+      sent.push(request.postData() ?? "");
+      await recorded(route, "CASH");
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Повернення записано один раз" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Якщо гроші ще не повернули — поверніть покупцю 3 000,00 грн готівкою. Якщо вже повернули, поки сервер не відповідав, — не повертайте вдруге.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+    ).toHaveCount(0);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), returnKey),
+    ).toBeNull();
+    // Over the till, never «Повернення», which this person does not have;
+    // the till free.
+    await expect(
+      page.getByRole("heading", { name: "Продаж", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Повернення", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByText(/Немає права/)).toHaveCount(0);
+    expect(sent).toHaveLength(1);
+  });
+
+  test("a kept return on a phone whose person may no longer take returns, proven to have recorded nothing, says so and frees the till", async ({
+    page,
+  }) => {
+    await seed(page, { [returnKey]: keptReturn("CASH") });
+    await serve(page);
+    const sent: string[] = [];
+    await on(page, `/sales/${ids.sale}/refunds`, async (route, request) => {
+      sent.push(request.postData() ?? "");
       await route.fulfill({
-        status: 409,
-        json: { code: "CONFLICT", message: "Conflict", details: {} },
+        status: 403,
+        json: {
+          code: "PERMISSION_DENIED",
+          message: "Missing permission sale:refund",
+          details: {
+            permission: "sale:refund",
+            store_id: ids.store,
+            recorded: false,
+          },
+        },
       });
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
       page.getByText(
-        "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.",
+        "Повернення не записано. Немає доступу до цієї операції або складу. Зверніться до менеджера.",
         { exact: true },
       ),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     expect(
       await page.evaluate((key) => localStorage.getItem(key), returnKey),
-    ).not.toBeNull();
-    // Sent once, by the phone itself; nothing invites another.
+    ).toBeNull();
+    // The till free.
+    await expect(
+      page.getByRole("heading", { name: "Продаж", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+    ).toBeEnabled();
+    await expect(page.getByText(/Немає права/)).toHaveCount(0);
     expect(sent).toHaveLength(1);
   });
 
-  test("a kept return on a phone whose person may no longer take returns shows its banner over the till, never «Немає права»", async ({
+  test("a kept return refused for the right, with nothing said of what was recorded, stays kept over the till, never «Немає права»", async ({
     page,
   }) => {
     await seed(page, { [returnKey]: keptReturn("CASH") });
     await serve(page);
-    // The server refuses whoever may not take returns, before it looks the
-    // return up, and says nothing of what was recorded.
+    // A refusal that does not say nothing was recorded — a private
+    // warehouse's rule, say, or a server from before 2026-10-18 — leaves
+    // the outcome unknown.
     let asked = 0;
     await on(page, `/sales/${ids.sale}/refunds`, async (route) => {
       asked += 1;
@@ -3029,12 +3134,20 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(
       page.getByText(
         "Немає доступу до цієї операції або складу. Зверніться до менеджера.",
+        { exact: true },
       ),
     ).toBeVisible();
-    // The till beneath it, never «Повернення» (returns task list, P2-1).
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), returnKey),
+    ).not.toBeNull();
+    // The till beneath it, held, never «Повернення» (returns task list,
+    // P2-1).
     await expect(
       page.getByRole("heading", { name: "Продаж", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+    ).toBeDisabled();
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
   });
 

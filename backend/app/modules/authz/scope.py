@@ -86,10 +86,11 @@ class RequestScope:
         Called at the command boundary, which for every endpoint here is the
         router — before the idempotency key is claimed, and before a stored
         response is replayed, so that a revoked grant cannot keep returning a
-        success it was once entitled to. What matters is not which file holds
-        the call but that the decision is made from this scope, which is
-        rebuilt from the database on every request, and never from anything the
-        client sent (invariants I12 and I13).
+        success it was once entitled to — but for a return answered to whoever
+        recorded it (`refunds.own_refund`, owner decision, 2026-10-18). What
+        matters is not which file holds the call but that the decision is made
+        from this scope, which is rebuilt from the database on every request,
+        and never from anything the client sent (invariants I12 and I13).
         """
         if store_id is not None:
             self.require_store(store_id)

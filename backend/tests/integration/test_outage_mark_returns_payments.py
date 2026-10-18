@@ -30,7 +30,7 @@ from typing import Any
 import httpx
 import pytest
 from alembic.script import ScriptDirectory
-from sqlalchemy import select, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as new_engine
@@ -583,6 +583,39 @@ async def test_a_marked_return_and_payment_replay_after_their_person_left(maker)
         await take_back(maker, net, net.seller, other, a_return(other, mark=outage(taker))),
         "OUTAGE_SELLER_UNKNOWN",
     )
+
+
+async def test_a_marked_return_replays_to_whoever_took_it_once_they_may_not(maker):
+    """A return typed from paper, its answer lost, and its person's right to
+    take returns taken away meanwhile: answered as recorded, its mark and
+    all, and nothing new taken (owner decision, 2026-10-18)."""
+    net = await network(maker)
+    # Sells, and takes returns until that is taken away.
+    taker = await a_cashier(maker, net, name="Оксана")
+    async with maker() as session:
+        role = await session.scalar(select(Membership.role_id).where(Membership.user_id == taker))
+        session.add(RolePermission(role_id=role, permission_code=Permission.SALE_REFUND.value))
+        await session.commit()
+    sale = await sold(maker, net)
+    body = a_return(sale, mark=outage(taker))
+    taken = await take_back(maker, net, taker, sale, body)
+    assert taken.status_code == 201, taken.text
+
+    async with maker() as session:
+        await session.execute(
+            delete(RolePermission).where(
+                RolePermission.role_id == role,
+                RolePermission.permission_code == Permission.SALE_REFUND.value,
+            )
+        )
+        await session.commit()
+    again = await take_back(maker, net, taker, sale, body)
+    assert again.status_code == 201, again.text
+    assert again.json() == taken.json()
+    other = await sold(maker, net)
+    fresh = await take_back(maker, net, taker, other, a_return(other, mark=outage(taker)))
+    assert fresh.status_code == 403, fresh.text
+    assert fresh.json()["details"]["recorded"] is False
 
 
 # --- the store taking it ------------------------------------------------------------

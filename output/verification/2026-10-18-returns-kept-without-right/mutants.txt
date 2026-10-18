@@ -1,0 +1,12 @@
+- unchanged tree: passed 
+- the right asked before the lookup again: caught by test_a_replay_is_refused_to_anyone_else_once_the_grant_is_gone; test_a_resend_without_the_grant_waits_for_a_first_sending_still_running; test_whoever_took_a_return_learns_its_outcome_once_the_grant_is_gone; test_a_return_taken_elsewhere_replays_whole_to_whoever_took_it_without_the_right; test_the_store_taking_it_back_decides_by_its_own_authority; test_a_marked_return_replays_to_whoever_took_it_once_they_may_not
+- anyone's return answered without the right: caught by test_a_replay_is_refused_to_anyone_else_once_the_grant_is_gone
+- nothing recorded, not said: caught by test_whoever_took_a_return_learns_its_outcome_once_the_grant_is_gone; test_the_store_taking_it_back_decides_by_its_own_authority; test_a_marked_return_replays_to_whoever_took_it_once_they_may_not
+- someone else's said to have recorded nothing: caught by test_a_replay_is_refused_to_anyone_else_once_the_grant_is_gone
+- another request answered as recorded: caught by test_whoever_took_a_return_learns_its_outcome_once_the_grant_is_gone
+- the paper's mark left out of the identity: caught by test_a_marked_return_replays_to_whoever_took_it_once_they_may_not
+- the lines not normalized as a new return's are: caught by test_whoever_took_a_return_learns_its_outcome_once_the_grant_is_gone; test_a_return_taken_elsewhere_replays_whole_to_whoever_took_it_without_the_right
+- a first sending still running not waited for: caught by test_a_replay_is_refused_to_anyone_else_once_the_grant_is_gone; test_a_resend_without_the_grant_waits_for_a_first_sending_still_running
+- the key kept for an answer without the right: caught by test_a_seller_without_refund_rights_is_refused; test_whoever_took_a_return_learns_its_outcome_once_the_grant_is_gone
+- a request not taken in the shared words: caught by 10. a kept operation the phone settles says what became of it › a kept return still unconf
+10 of 10 caught

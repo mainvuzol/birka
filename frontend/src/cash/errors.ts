@@ -2,6 +2,7 @@ import {
   ApiError,
   CONFLICT_TEXT,
   errorText,
+  INVALID_TEXT,
   recordedNothing,
 } from "@/shared/api";
 import { methodLabels, notStated } from "@/shared/payment";
@@ -209,11 +210,15 @@ export function adjustmentErrorText(error: unknown): string {
 /** «Повернення»'s own words for why (ADR-0013 §8). */
 export function returnErrorText(error: unknown): string {
   // Not said to have recorded nothing: still unconfirmed, never «try again»,
-  // which could hand the money back twice (owner decision, 2026-10-18).
-  if (!recordedNothing(error))
-    return errorText(error) === CONFLICT_TEXT
-      ? "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться."
-      : errorText(error);
+  // which could hand the money back twice (owner decisions, 2026-10-18).
+  if (!recordedNothing(error)) {
+    const text = errorText(error);
+    if (text === CONFLICT_TEXT)
+      return "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.";
+    if (text === INVALID_TEXT)
+      return "Повернення ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.";
+    return text;
+  }
   if (
     error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"

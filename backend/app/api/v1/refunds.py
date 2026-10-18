@@ -56,6 +56,7 @@ from app.modules.refunds.service import (
     RefundLineInput,
     RefundResult,
     create_refund,
+    own_refund,
     refund_destinations,
     sale_store_id,
 )
@@ -229,6 +230,15 @@ def _to_response(result: RefundResult) -> RefundResponse:
     )
 
 
+def _answer(result: RefundResult) -> RefundResponse:
+    """The refund's answer as first given, or rebuilt from its rows."""
+    return (
+        RefundResponse.model_validate(result.refund.response_snapshot)
+        if result.refund.response_snapshot is not None
+        else _to_response(result)
+    )
+
+
 @router.post(
     "/sales/{sale_id}/refunds",
     response_model=RefundResponse,
@@ -248,15 +258,12 @@ async def create(
     # receipt belonging to another organization is a 404 before any authority
     # is consulted. The permission decision then happens before the idempotency
     # key is claimed, so a revoked grant cannot replay an earlier success
-    # (invariant I13).
+    # (invariant I13) — but for whoever recorded it (below).
     sold_at = await sale_store_id(session, organization_id=scope.organization_id, sale_id=sale_id)
     # The store taking the goods back decides: any store of the network may
     # (owner decisions, 2026-10-01).
     store_id = payload.store_id or sold_at
-    scope.require(Permission.SALE_REFUND, store_id)
-    # Where restocked goods would go is a property of the sale, so it can be
-    # resolved — and its access checked — before the key is claimed, keeping a
-    # revoked grant from replaying a cached success (invariants I13/I23).
+    scope.require_store(store_id)
     lines = [
         RefundLineInput(
             sale_item_id=line.sale_item_id,
@@ -267,6 +274,49 @@ async def create(
         )
         for line in payload.lines
     ]
+    # `sale_id` is a path parameter, so it has to be folded in by hand.
+    # Without it the same key and body aimed at a different receipt would
+    # replay this one's answer.
+    request_fingerprint = idempotency.fingerprint(
+        {"sale_id": str(sale_id), **payload.fingerprinted()},
+        actor_user_id=scope.user_id,
+        store_id=store_id,
+    )
+    if not scope.can(Permission.SALE_REFUND, store_id):
+        # Whoever may no longer take returns here learns what their own
+        # return recorded, so the phone that kept it is not held for good,
+        # and takes no new one (owner decision, 2026-10-18). The key is
+        # claimed first, so a first sending still running is waited for and
+        # its answer given, never «nothing recorded» while it may still
+        # record (review, 2026-10-18); the fingerprint names its person, so
+        # the answer is always their own. Nothing is committed: the claim
+        # rolls back.
+        outcome = await idempotency.claim(
+            session,
+            organization_id=scope.organization_id,
+            endpoint=REFUNDS_ENDPOINT,
+            key=idempotency_key,
+            request_fingerprint=request_fingerprint,
+        )
+        if isinstance(outcome, idempotency.Replay):
+            response.status_code = outcome.http_status
+            return RefundResponse.model_validate(outcome.response)
+        return _answer(
+            await own_refund(
+                session,
+                scope=scope,
+                sale_id=sale_id,
+                command_id=payload.command_id,
+                lines=lines,
+                reason=payload.reason,
+                at_store_id=store_id,
+                payment_method=method_of(payload.payment_method),
+                outage=payload.outage.mark() if payload.outage is not None else None,
+            )
+        )
+    # Where restocked goods would go is a property of the sale, so it can be
+    # resolved — and its access checked — before the key is claimed, keeping a
+    # revoked grant from replaying a cached success (invariants I13/I23).
     restock_destinations = await refund_destinations(
         session,
         organization_id=scope.organization_id,
@@ -288,20 +338,14 @@ async def create(
         organization_id=scope.organization_id,
         endpoint=REFUNDS_ENDPOINT,
         key=idempotency_key,
-        request_fingerprint=idempotency.fingerprint(
-            # `sale_id` is a path parameter, so it has to be folded in by hand.
-            # Without it the same key and body aimed at a different receipt
-            # would replay this one's answer.
-            {"sale_id": str(sale_id), **payload.fingerprinted()},
-            actor_user_id=scope.user_id,
-            store_id=store_id,
-        ),
+        request_fingerprint=request_fingerprint,
     )
     if isinstance(outcome, idempotency.Replay):
         # `SALE_REFUND` again, deliberately, not `SALE_VIEW`: requiring more to
         # retry than to issue would leave a client that timed out unable to
         # learn the outcome of its own successful refund, and the 403 would be
-        # indistinguishable from "you were never allowed".
+        # indistinguishable from "you were never allowed". Whoever lacks it
+        # never comes here (above).
         scope.require(Permission.SALE_REFUND, store_id)
         response.status_code = outcome.http_status
         return RefundResponse.model_validate(outcome.response)
@@ -319,11 +363,7 @@ async def create(
         outage=payload.outage.mark() if payload.outage is not None else None,
     )
 
-    body = (
-        RefundResponse.model_validate(result.refund.response_snapshot)
-        if result.refund.response_snapshot is not None
-        else _to_response(result)
-    )
+    body = _answer(result)
     result.refund.response_snapshot = body.model_dump(mode="json")
     await idempotency.complete(
         session,

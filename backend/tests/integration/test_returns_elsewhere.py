@@ -91,6 +91,7 @@ async def take_back(
     permissions=SELLER,
     command_id: str | None = None,
     store_id: uuid.UUID | None = None,
+    reason: str | None = None,
 ):
     async with api(maker, shops.scope(at, permissions)) as client:
         return await client.post(
@@ -100,7 +101,8 @@ async def take_back(
                 "lines": list(lines),
                 "store_id": str(store_id or at),
                 "payment_method": "CASH",
-            },
+            }
+            | ({"reason": reason} if reason is not None else {}),
             headers=key(),
         )
 
@@ -254,6 +256,45 @@ async def test_another_stores_own_warehouse_is_not_reached_so_the_seller_chooses
     assert plain.json()["items"][0]["destination_location_id"] == str(shops.child_warehouse)
 
 
+async def test_a_return_taken_elsewhere_replays_whole_to_whoever_took_it_without_the_right(
+    maker,
+):
+    """Taken at another store, its intact part to a warehouse chosen there,
+    its damaged part to that store's «Брак», a reason typed: once its person
+    may no longer take returns there, answered what it recorded, every part
+    of it (owner decision, 2026-10-18)."""
+    shops = await make_two_shops(maker)
+    await give_bin(maker, shops.organization_id, shops.primary_store)
+    sale, _, _ = await sold_at(maker, shops, shops.child_store, shops.child_warehouse)
+    command = str(uuid.uuid4())
+    parts = (
+        part(sale, 1, "INTACT", location_id=str(shops.shared_warehouse)),
+        part(sale, 1, "DAMAGED"),
+    )
+    first = await take_back(
+        maker,
+        shops,
+        sale,
+        *parts,
+        at=shops.primary_store,
+        command_id=command,
+        reason="  Шов розійшовся ",
+    )
+    assert first.status_code == 201, first.text
+    again = await take_back(
+        maker,
+        shops,
+        sale,
+        *parts,
+        at=shops.primary_store,
+        command_id=command,
+        reason="  Шов розійшовся ",
+        permissions=SELLER - {Permission.SALE_REFUND},
+    )
+    assert again.status_code == 201, again.text
+    assert again.json() == first.json()
+
+
 async def test_a_choice_is_only_for_intact_goods(maker):
     shops = await make_two_shops(maker)
     await give_bin(maker, shops.organization_id, shops.primary_store)
@@ -282,6 +323,8 @@ async def test_the_store_taking_it_back_decides_by_its_own_authority(maker):
         permissions=SELLER - {Permission.SALE_REFUND},
     )
     assert unpermitted.status_code == 403, unpermitted.text
+    # Nothing recorded under it, and said so (owner decision, 2026-10-18).
+    assert unpermitted.json()["details"]["recorded"] is False
     # The selling store's grant is not the taking store's.
     async with api(maker, shops.scope(shops.primary_store)) as client:
         borrowed = await client.post(
@@ -300,9 +343,9 @@ async def test_the_store_taking_it_back_decides_by_its_own_authority(maker):
     foreign = await take_back(maker, shops, sale, part(sale, 1, "INTACT"), at=other.child_store)
     assert foreign.status_code == 404, foreign.text
 
-    # A return taken elsewhere replays as itself, and is refused to a grant
-    # revoked since; the same command named at another store is another
-    # operation.
+    # A return taken elsewhere replays as itself, and to whoever took it once
+    # their grant is revoked (owner decision, 2026-10-18); the same command
+    # named at another store is another operation.
     command = str(uuid.uuid4())
     first = await take_back(
         maker, shops, sale, part(sale, 1, "INTACT"), at=shops.child_store, command_id=command
@@ -321,7 +364,8 @@ async def test_the_store_taking_it_back_decides_by_its_own_authority(maker):
         command_id=command,
         permissions=SELLER - {Permission.SALE_REFUND},
     )
-    assert revoked.status_code == 403, revoked.text
+    assert revoked.status_code == 201, revoked.text
+    assert revoked.json() == first.json()
     moved = await take_back(
         maker, shops, sale, part(sale, 1, "INTACT"), at=shops.primary_store, command_id=command
     )
