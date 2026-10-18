@@ -1,0 +1,18 @@
+- unchanged tree: passed 
+- a stored name's apostrophe read as written: caught by test_a_name_is_found_whatever_apostrophe_or_i_it_is_typed_with
+- a typed apostrophe read as typed: caught by test_a_name_is_found_whatever_apostrophe_or_i_it_is_typed_with
+- a Latin «i» not the Ukrainian «і»: caught by test_a_name_is_found_whatever_apostrophe_or_i_it_is_typed_with
+- a number pasted from contacts read here as a name: caught by test_a_debt_is_found_by_name_or_by_any_form_of_its_phone; test_one_phone_is_one_customer_whatever_the_name
+- the closed stores offered before this store answers: caught by a closed store's customer of more debts is read among the closed stores
+- the closed stores offered for a number typed before: caught by a closed store's customer of more debts is read among the closed stores
+- a store that does not trade offers the closed stores: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades
+- focus left behind at a switch: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades
+- a store that does not trade says where to pay: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades
+- the closed stores asked for before a whole number: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades; what the store is owed comes first, large, and a row a customer: what they owe, never a sa
+- the number cleared on the way there: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades; a closed store's customer of more debts is read among the closed stores
+- the number cleared on the way back: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades
+- the rule unsaid where a whole number owes nothing here: caught by a debt of a blocked store is found by the whole phone and paid at a store that trades; a closed store's customer of more debts is read among the closed stores
+- a kept payment's server error told to try again: caught by 9. what to do with money after the outage › «Борги»: a payment answered with a server's er; 9. what to do with money after the outage › «Борги»: a write-off answered that its request
+- a kept return's server error told to try again: caught by 10. a kept operation the phone settles says what became of it › a kept return still unconf
+- a server error's request number dropped: caught by 9. what to do with money after the outage › «Борги»: a payment answered with a server's er; 10. a kept operation the phone settles says what became of it › a kept return still unconf
+16 of 16 caught
