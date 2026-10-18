@@ -394,7 +394,10 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
       expect(new URL(url).searchParams.get("status")).toBe("OPEN");
     await found.click();
     await expect(
-      page.getByText(/Продано в магазині «Ринок», який зараз заблоковано/),
+      page.getByText(
+        "Продано в «Ринок» (заблоковано). Внесок приймаєте ви, борг — за «Ринок».",
+        { exact: true },
+      ),
     ).toBeVisible();
     await page.getByLabel("Сума внеску, грн").fill("500");
     // Paid by card at «Центр»: its terminal takes it (ADR-0012 §B7 G).
@@ -420,7 +423,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     ).toContainText("прийняв магазин «Центр»");
     await expect(
       page.getByRole("list", { name: "Історія боргу" }),
-    ).toContainText("Внесок 500,00 грн · картка ·");
+    ).toContainText("Внесок · картка");
 
     // In the blocked store itself the owner reads the debt: no payment is
     // taken there, and the network's owner may still write it off.
@@ -429,7 +432,9 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page.getByRole("button", { name: "Борги", exact: true }).click();
     await page.getByLabel("Ім’я або телефон").fill(name);
     await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
-    await expect(page.getByText("Залишок боргу")).toBeVisible();
+    await expect(
+      page.getByLabel("Скільки винні").locator(".owed-sum"),
+    ).toHaveText("1 500,00 грн");
     await expect(
       page.getByRole("group", { name: "Внесок", exact: true }),
     ).toHaveCount(0);

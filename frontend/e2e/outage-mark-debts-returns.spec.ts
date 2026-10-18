@@ -273,10 +273,15 @@ test("a card payment typed from paper never says to charge the card, and the deb
     .getByRole("combobox", { name: "Хто прийняв" })
     .selectOption({ label: "Ганна" });
   await page.getByLabel("Сума внеску, грн").fill("300");
-  await page
-    .getByRole("group", { name: "Внесок", exact: true })
-    .getByRole("button", { name: "З паперу · Картка" })
-    .click();
+  // Said once, in the band; under the ways, who took it, in one line
+  // (credits task list, P0-4).
+  await expect(page.getByText(/на терміналі нічого не проводьте/i)).toHaveCount(
+    1,
+  );
+  const panel = page.getByRole("group", { name: "Внесок", exact: true });
+  await expect(panel.locator(".pay-seller")).toHaveText("Хто прийняв: Ганна");
+  await expect(panel).toContainText("З паперу · Внесок 300,00 грн");
+  await panel.getByRole("button", { name: "З паперу · Картка" }).click();
 
   await expect(
     page.getByText(

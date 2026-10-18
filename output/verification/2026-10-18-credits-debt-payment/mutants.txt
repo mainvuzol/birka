@@ -1,0 +1,19 @@
+- unchanged tree: passed 
+- what is owed summed on the phone: caught by a debt says who and what in one line, what is owed first and large, how much is paid, and 
+- paid, not of what: caught by a closed debt says how it closed and when, and takes no payment; a debt says who and what in one line, what is owed first and large, how much is paid, and ; nothing written off or returned is said unless it is, and what is written off is
+- a return not said: caught by a debt says who and what in one line, what is owed first and large, how much is paid, and 
+- the ways pressable without a sum: caught by the payment's sum is typed under what is owed, and its three ways wait under the thumb for
+- the panel's sum not what is typed: caught by the payment's sum is typed under what is owed, and its three ways wait under the thumb for
+- the whole left something else: caught by the payment's sum is typed under what is owed, and its three ways wait under the thumb for
+- a history row without its sum: caught by a debt says who and what in one line, what is owed first and large, how much is paid, and ; in the dark theme a debt's sums, its history and the panel read at 4.5:1; in the light theme a debt's sums, its history and the panel read at 4.5:1
+- who took it elsewhere not said: caught by a debt says who and what in one line, what is owed first and large, how much is paid, and 
+- a refusal left out of view: caught by more than is owed is said above the panel, in view, and nothing is sent
+- a closed debt takes a payment: caught by a closed debt says how it closed and when, and takes no payment
+- who took it from paper not said: caught by a card payment typed from paper never says to charge the card, and the debt's history name
+- another store's debt not said: caught by another store's debt says once where it was sold and who takes the payment
+- what was done left out of view: caught by the owner's write-off, at the end of a long history, says what was done where it is seen
+- a sum not read left to dead buttons: caught by the payment's sum is typed under what is owed, and its three ways wait under the thumb for
+- a store's taking said as the person's: caught by a debt says who and what in one line, what is owed first and large, how much is paid, and 
+- back to the list from a customer's debt: caught by one debt opens at once; more, the customer's debts to choose from, read by their phone
+- a closed debt says not when: caught by a closed debt says how it closed and when, and takes no payment
+17 of 17 caught

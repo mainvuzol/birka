@@ -105,6 +105,10 @@ export interface Erasure {
   credit: Credit;
 }
 
+/** What a closed store's customer is found by: their whole phone. */
+export const askForPhone =
+  "Введіть повний номер телефону покупця, наприклад 067 123 45 67. За іменем чи частиною номера борги інших магазинів не шукають.";
+
 /** What an erased customer's debt reads instead of a name. */
 export const erasedCustomer = "Покупця стерто";
 

@@ -433,7 +433,7 @@ test("one debt opens at once; more, the customer's debts to choose from, read by
   await expect(
     page.getByRole("heading", { name: "Оксана Петренко" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "До списку боргів" }).click();
+  await page.getByRole("button", { name: "До боргів" }).click();
   await expect(rows(page)).toHaveCount(2);
 
   await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
@@ -458,12 +458,15 @@ test("one debt opens at once; more, the customer's debts to choose from, read by
   // None is chosen beforehand; the seller's choice opens.
   await older.click();
   await expect(
-    page.getByRole("heading", { name: "Ірина Коваль", level: 3 }),
+    page.locator(".debt-detail h2", { hasText: "Ірина Коваль" }),
   ).toBeVisible();
-  await expect(page.getByText("Лоран шоколад · M · продано")).toBeVisible();
-  await page.getByRole("button", { name: "До списку боргів" }).click();
+  await expect(page.locator(".debt-context")).toHaveText(
+    "050 765 43 21 · Лоран шоколад · M · з 01.10",
+  );
+  // Back to the card it was opened from, by the customer's name.
+  await page.getByRole("button", { name: "Ірина Коваль", exact: true }).click();
   await expect(debts).toHaveCount(2);
-  await page.getByRole("button", { name: "Борги", exact: true }).last().click();
+  await page.getByRole("button", { name: "До боргів" }).click();
   await expect(rows(page)).toHaveCount(2);
 });
 

@@ -712,7 +712,9 @@ async def open_from_a_legacy_list(
     variant_id: uuid.UUID,
     size_id: uuid.UUID,
 ) -> None:
-    """Three coats with their size not known, then one M delivered after them.
+    """Thirty coats with their size not known, then one M delivered after
+    them: enough for the journeys that sell them to run again and again
+    before a reseed, since nothing but a list brings such a coat in.
 
     Through the list's own commands — import, resolve, approve — rather than a
     ledger row written by hand, so the stock traces back to a list line as it
@@ -725,7 +727,7 @@ async def open_from_a_legacy_list(
             command_id=uuid.uuid4(),
             store_id=store_id,
             location_id=location_id,
-            lines=["Лоран шоколад 3 шт"],
+            lines=["Лоран шоколад 30 шт"],
         )
     snapshot_id = uuid.UUID(str(view["snapshot_id"]))
     async with maker.begin() as session:
@@ -735,7 +737,7 @@ async def open_from_a_legacy_list(
             snapshot_id=snapshot_id,
             line_no=1,
             allocations=[
-                AllocationInput(product_variant_id=variant_id, quantity=3, size_unknown=True)
+                AllocationInput(product_variant_id=variant_id, quantity=30, size_unknown=True)
             ],
             quantity_basis=SnapshotQuantityBasis.STATED,
         )

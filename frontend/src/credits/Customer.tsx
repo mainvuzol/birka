@@ -6,20 +6,10 @@ import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { Sum } from "@/shared/Sum";
-import { goodsOf } from "./CustomerRow";
-import { refusalText } from "./Credits";
+import { refusalText } from "./Debt";
+import { goodsOf, shortDay } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
 import type { Credit, Customer as CustomerDebts, CustomerPage } from "./types";
-
-/** «01.10», and the year when it is not this one. */
-export function shortDay(iso: string, now = new Date()): string {
-  const at = new Date(iso);
-  return at.toLocaleDateString("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "2-digit" }),
-  });
-}
 
 /** «з 01.10 · останній внесок 12.10». */
 function sinceText(credit: Credit): string {
@@ -84,7 +74,7 @@ export function Customer({
   return (
     <section className="credits">
       <button type="button" className="quiet back" onClick={back}>
-        <span aria-hidden="true">← </span>Борги
+        <span aria-hidden="true">← </span>До боргів
       </button>
       <h2>{name}</h2>
       {customer.customer_phone && (
