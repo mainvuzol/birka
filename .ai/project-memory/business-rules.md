@@ -2759,3 +2759,40 @@ How they are carried out, not decided by the owner:
   at 4.5:1 or more, light and dark.
 
 Built on 2026-10-18; see the [report](returns-redesign-6-report.md).
+
+## Owner decision — 2026-10-18 («Повернення»: two readings after #104, and what next)
+
+Asked after #104, each answer the option recommended:
+- **A return whose answer was lost, once its person may no longer take
+  returns where it was taken,** is still learned by that person: the
+  server answers what it recorded, and the phone shows it over the till;
+  if nothing was recorded, the server says so, and the phone says
+  «Повернення не записано. Немає доступу до цієї операції або складу.
+  Зверніться до менеджера.» and frees the till. A new return without the
+  right is refused, as before. Until now the phone stayed held for good:
+  the server refused a resend to whoever lost the right, before looking it
+  up (invariant I13).
+- **A kept return still unconfirmed, refused as a request the server could
+  not take** — not said to have recorded nothing — says «Повернення ще не
+  підтверджено: сервер не прийняв запит. Перевірте результат ще раз —
+  двічі воно не запишеться.», as its conflict does.
+- **Next:** the task list of «Борги».
+
+How they are carried out, not decided by the owner:
+- **Only whoever recorded the return,** for the very request that recorded
+  it, is answered without the right; anyone else's is refused, never
+  answered its success nor told that nothing was recorded. The same request
+  changed is refused as every replay's is.
+- **The right to take returns, and with it the warehouses' access, is
+  passed over** for such an answer, which moves no goods. A store the
+  person no longer belongs to, or one that does not trade, refuses as
+  before — its kept returns wait until it trades again (owner, 2026-10-08).
+  So a person who still may take returns, but whose store no longer reaches
+  the warehouse, stays held as before, while one without the right is
+  answered (a reading for the owner).
+- **A first sending still running is waited for:** the key is claimed
+  first, and its answer given, never «nothing recorded» while it may still
+  record. The claim is never committed: nothing is written for such an
+  answer.
+
+Built on 2026-10-18; see the [report](returns-redesign-7-report.md).

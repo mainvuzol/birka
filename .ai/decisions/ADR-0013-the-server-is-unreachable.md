@@ -124,7 +124,7 @@ each the recommended option:
 | a debt payment (`credit.pay`) | `STORE_NOT_TRADING`, `PAID_WHERE_SOLD`, `NOT_OWED`, `MORE_THAN_OWED` (the way's refusals already did) | `NOTHING_PAID`, an unknown debt, `sale:credit` |
 | a write-off (`credit.write_off`) | `NOT_OWED` | the reason, the permission |
 | an order (`create_order`, `transition_order`, `change_shipping`) | everything after the lookup: the reservation's `INSUFFICIENT_STOCK`, "Invalid order transition", `NO_DESTINATION`, the stock of a dispatch, a cancellation or a return, the collected sale and its debt | the action, the reason, the shapes of a credit, a way and a waybill; loading; authorization |
-| a return (`refunds.create_refund`) | `NOT_FOUND`, a total out of range, and everything after (`REFUND_EXCEEDS_SOLD` already did) | `STORE_NOT_TRADING`, which stays before the lookup: a store blocked meanwhile refuses even the replay, through the scope |
+| a return (`refunds.create_refund`) | `NOT_FOUND`, a total out of range, and everything after (`REFUND_EXCEEDS_SOLD` already did); to whoever may no longer take returns there, `PERMISSION_DENIED` (`refunds.own_refund`, owner, 2026-10-18) | `STORE_NOT_TRADING`, which stays before the lookup: a store blocked meanwhile refuses even the replay, through the scope |
 | a delivery (`POST /receipts`) and a stock correction (`POST /adjustments`) | everything after `_permanent_answer` found nothing: inside the stock lock, an inactive warehouse and `STORE_NOT_TRADING`; `OPENING_LIST_PENDING`, `INSUFFICIENT_STOCK` | the body, access (a store that does not trade, a closed warehouse), the 7-day claim |
 
 - **Deliveries and stock corrections are in the automatic check** (§4), and
@@ -144,6 +144,18 @@ each the recommended option:
   by itself when the app is next opened in that store, or at its button.
   Nothing is recorded twice or lost, and the phone works in other stores.
   There is no button to discard it (risk register).
+- **A return resent by a person who may no longer take returns there is
+  looked up** (owner, 2026-10-18). Refused before the lookup, it would
+  hold that phone for good. Its key is claimed first, so a first sending
+  still running is waited for and its answer given; the claim is never
+  committed, and nothing is written. Whoever recorded it is answered what it
+  recorded, for the very request that recorded it. With nothing under its
+  command, it is refused `PERMISSION_DENIED` with `recorded: false`, and the
+  phone settles. Anyone else's is refused, without `recorded`; a store the
+  person no longer belongs to, or one that does not trade, refuses before
+  the lookup, as above. Every other command keeps its right before the
+  lookup, and a phone keeping one for a person who lost that right waits
+  until it is back (risk register).
 - **`NOTHING_TO_SELL` stays before the lookup.** It is decided from the body
   alone, and the till never sends such a body: a basket with nothing on the
   shelf is sent as an empty shelf.

@@ -943,6 +943,21 @@ the review of the built change raised.
   - The tests of a store blocked meanwhile (`test_refusals_record_nothing.py`,
     `test_sale_refusals_record_nothing.py`) hold a scope built before the
     block, so they prove only a block that lands while the command runs.
+- **A right taken away while a phone keeps an operation that needs it holds
+  that phone in that store, but for a return** (owner, 2026-10-18). A kept
+  sale, debt payment, delivery, stock correction or order's step resent by
+  a person who may no longer do it is refused before its lookup, with no
+  `recorded`, and waits until the right is back, as a blocked store's do. A
+  kept return is answered to whoever took it what it recorded, or refused as
+  having recorded nothing, and the phone settles it
+  ([report](returns-redesign-7-report.md)). Whether the others should be
+  answered the same is the owner's to say.
+  - A return's first sending still running when it is resent is waited for:
+    the resend claims its key first. One stalled before it even claims the
+    key — still reading, for longer than the phone waits for its answer and
+    the right is taken away — is not: the resend is told nothing was
+    recorded, and the first may record it after. Narrow; kept as a known
+    risk, for the owner to accept.
 - **A kept sale resent days later still sells** what is on the shelf then,
   dated then, under the phone's person, **without a mark** (owner,
   2026-10-07). The phone checks it by itself when the server answers and

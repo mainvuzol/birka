@@ -73,6 +73,7 @@ from app.core.errors import (
     DamagedReturnsUnavailableError,
     IdempotencyConflictError,
     NotFoundError,
+    PermissionDeniedError,
     RefundExceedsSoldError,
     ValidationFailedError,
     nothing_recorded,
@@ -502,19 +503,15 @@ async def _read_refund(session: AsyncSession, refund: Refund) -> RefundResult:
     )
 
 
-async def _existing_command(
-    session: AsyncSession,
-    *,
-    scope: RequestScope,
-    command_id: uuid.UUID,
-    request_fingerprint: str,
-) -> RefundResult | None:
-    """Durable replay: has this permanent command already produced a refund?
+async def _command_refund(
+    session: AsyncSession, *, scope: RequestScope, command_id: uuid.UUID
+) -> Refund | None:
+    """The refund this permanent command recorded, if any, under its lock.
 
     Taken before any row lock, and only ever serializes two requests carrying
     the same `command_id` — which are by definition the same business
     operation. A hash collision costs two unrelated commands a short wait; the
-    identity decision below still uses the exact UUID pair.
+    identity decision still uses the exact UUID pair.
     """
     lock_key = int.from_bytes(
         hashlib.sha256(scope.organization_id.bytes + command_id.bytes).digest()[:8],
@@ -522,13 +519,18 @@ async def _existing_command(
         signed=True,
     )
     await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
-    existing = await session.scalar(
+    refund: Refund | None = await session.scalar(
         select(Refund).where(
             Refund.organization_id == scope.organization_id, Refund.command_id == command_id
         )
     )
-    if existing is None:
-        return None
+    return refund
+
+
+def _same_request(
+    existing: Refund, request_fingerprint: str, *, command_id: uuid.UUID, scope: RequestScope
+) -> None:
+    """A replay is of the very request that recorded the refund, or refused."""
     if existing.command_fingerprint != request_fingerprint:
         # Same permanent command, different request. Never execute: one of the
         # two payloads is a client bug, and guessing which would refund money
@@ -547,10 +549,104 @@ async def _existing_command(
             else "This command_id was already used with a different request",
             **details,
         )
+
+
+async def _existing_command(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    command_id: uuid.UUID,
+    request_fingerprint: str,
+) -> RefundResult | None:
+    """Durable replay: has this permanent command already produced a refund?"""
+    existing = await _command_refund(session, scope=scope, command_id=command_id)
+    if existing is None:
+        return None
+    _same_request(existing, request_fingerprint, command_id=command_id, scope=scope)
     # The right to replay is the right to have issued the command, not a
     # stricter one: a client that timed out must be able to learn the outcome
     # of its own authorized refund (independent review, 2026-09-15).
     scope.require(Permission.SALE_REFUND, existing.taken_at_store_id)
+    return await _read_refund(session, existing)
+
+
+async def own_refund(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    sale_id: uuid.UUID,
+    command_id: uuid.UUID,
+    lines: list[RefundLineInput],
+    reason: str | None = None,
+    at_store_id: uuid.UUID | None = None,
+    payment_method: PaymentMethod | None = None,
+    outage: PaperMark | None = None,
+) -> RefundResult:
+    """What a return resent by whoever took it recorded, once they may no
+    longer take returns where it was taken; never a new one (owner decision,
+    2026-10-18).
+
+    A phone keeps a return whose answer it never heard, and holds its till
+    until it learns the outcome (ADR-0013). Were the replay to need the right
+    as `_existing_command` does, a person whose right was taken away
+    meanwhile would never learn it, and the phone would stay held. So the
+    one who recorded it is answered what it recorded, as any replay is, for
+    the very request that recorded it; and when nothing was recorded under
+    it, refused as anyone without the right is, saying so
+    (`details.recorded = false`), so the phone settles it. Anyone else's
+    return is refused as before. Nothing is written either way.
+
+    For whoever may not take returns at `at_store_id`: it never takes one.
+    """
+    sale = await _load_sale(session, organization_id=scope.organization_id, sale_id=sale_id)
+    taking = at_store_id or sale.store_id
+    # A store this person still belongs to, and trading: a blocked one's
+    # returns wait until it trades again (owner, 2026-10-08).
+    scope.require_store(taking)
+    existing = await _command_refund(session, scope=scope, command_id=command_id)
+    if existing is None or existing.actor_user_id != scope.user_id:
+        refusal = PermissionDeniedError(
+            f"Missing permission {Permission.SALE_REFUND.value}",
+            permission=Permission.SALE_REFUND.value,
+            store_id=str(taking),
+        )
+        if existing is None:
+            # Under the command's lock, and no refund under it: proven to
+            # have recorded nothing (ADR-0008 §9, ADR-0013 §1).
+            refusal.details["recorded"] = False
+        raise refusal
+    lines, reason = _normalize(lines, reason)
+    preview = {
+        item.id: item
+        for item in (
+            await session.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id))
+        ).all()
+    }
+    elsewhere = await _elsewhere(
+        session, organization_id=scope.organization_id, sale=sale, taking=taking
+    )
+    damaged = (
+        await damaged_destination(session, organization_id=scope.organization_id, store_id=taking)
+        if any(line.condition is ReturnCondition.DAMAGED for line in lines)
+        else None
+    )
+    _same_request(
+        existing,
+        _fingerprint(
+            scope=scope,
+            sale=sale,
+            lines=lines,
+            reason=reason,
+            sale_items=preview,
+            damaged=damaged,
+            taking=taking,
+            elsewhere=elsewhere,
+            payment_method=payment_method,
+            outage=outage,
+        ),
+        command_id=command_id,
+        scope=scope,
+    )
     return await _read_refund(session, existing)
 
 
@@ -981,6 +1077,7 @@ __all__ = [
     "RefundedLine",
     "create_refund",
     "damaged_destination",
+    "own_refund",
     "refund_destinations",
     "refunded_quantities",
     "sale_store_id",
