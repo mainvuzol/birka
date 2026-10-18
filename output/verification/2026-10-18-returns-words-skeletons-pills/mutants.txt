@@ -1,0 +1,15 @@
+- unchanged tree: passed 
+- one-letter words pass the other stores' rule: caught by test_another_stores_sale_is_found_only_by_a_search
+- a kept return turns to «Повернення» without the right: caught by 10. a kept operation the phone settles says what became of it › a kept return on a phone w
+- an unconfirmed return's conflict in the shared words: caught by 10. a kept operation the phone settles says what became of it › a kept return still unconf
+- a kept conflict names no section: caught by 10. a kept operation the phone settles says what became of it › a kept return refused on r
+- one-letter words offer the other stores: caught by the other stores are offered from two letters under this store's results, headed, and left
+- the rows' places not kept while read: caught by while the list is read, its rows keep their places, and the field does not move
+- a debt's pill like any other: caught by in the dark theme a row's goods, meta and pills read at 4.5:1, each pill by what it means; in the light theme a row's goods, meta and pills read at 4.5:1, each pill by what it means
+- the paper's pill not a warning: caught by in the dark theme a row's goods, meta and pills read at 4.5:1, each pill by what it means; in the light theme a row's goods, meta and pills read at 4.5:1, each pill by what it means
+- all returned not neutral: caught by in the dark theme a row's goods, meta and pills read at 4.5:1, each pill by what it means; in the light theme a row's goods, meta and pills read at 4.5:1, each pill by what it means
+- the returns screens' meta at 13 px: caught by in the dark theme the tags, the panel and the result read at 4.5:1; in the light theme the tags, the panel and the result read at 4.5:1
+- «Пошкоджені» not in «Брак»'s colour: caught by in the dark theme the tags, the panel and the result read at 4.5:1; in the light theme the tags, the panel and the result read at 4.5:1
+- the chips not brought into view: caught by a warehouse to choose, for goods from another store's own, is brought above the panel with
+12 of 12 caught
+exit 0

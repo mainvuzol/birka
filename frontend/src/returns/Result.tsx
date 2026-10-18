@@ -255,7 +255,7 @@ export function Result({
           Повернення записано
         </h2>
       )}
-      {paper && <p className="badge">{paperText("return", paper)}</p>}
+      {paper && <p className="badge warn">{paperText("return", paper)}</p>}
       {elsewhere && (
         <p>
           {paper
@@ -335,7 +335,7 @@ export function Result({
         )}
         {damaged > 0 && (
           // «Брак» is opened by whoever handles damaged goods.
-          <p>
+          <p className="damaged-line">
             Пошкоджені: {damaged} шт. — у «Брак».
             {store.permissions.includes("damaged:handle") &&
               " Перевірити можна в розділі «Брак»."}

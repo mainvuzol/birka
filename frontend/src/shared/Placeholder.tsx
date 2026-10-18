@@ -10,12 +10,35 @@ export function Placeholder({
   said,
   field = false,
   tags = 3,
+  rows = 0,
 }: {
   said: string;
   /** The search field's place, above the tags. */
   field?: boolean;
   tags?: number;
+  /** «Повернення»'s rows of sales, under a day's heading, in place of the
+   * tags (returns task list, P2-3). */
+  rows?: number;
 }): JSX.Element {
+  if (rows > 0)
+    return (
+      <>
+        <p role="status" className="visually-hidden">
+          {said}
+        </p>
+        <div className="placeholder" aria-hidden="true">
+          <span className="skeleton skeleton-day" />
+          {Array.from({ length: rows }, (_, n) => (
+            <div className="sale-row" key={n}>
+              <span className="sale-main">
+                <span className="skeleton skeleton-name" />
+                <span className="skeleton skeleton-meta" />
+              </span>
+            </div>
+          ))}
+        </div>
+      </>
+    );
   return (
     <>
       <p role="status" className="visually-hidden">

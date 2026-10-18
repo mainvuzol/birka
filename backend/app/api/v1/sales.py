@@ -754,7 +754,9 @@ async def list_store_sales(
     scope.require(Permission.SALE_VIEW, store_id)
     if elsewhere:
         scope.require(Permission.SALE_REFUND, store_id)
-        if len((q or "").strip()) < 2:
+        # A word of two letters at least: «о о» browses as «о» would
+        # (owner decision, 2026-10-18).
+        if not any(len(word) >= 2 for word in (q or "").split()):
             raise ValidationFailedError(
                 "Another store's sale is found by searching for its goods",
                 reason="SEARCH_REQUIRED",

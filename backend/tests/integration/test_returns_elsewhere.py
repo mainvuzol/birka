@@ -118,10 +118,15 @@ async def test_another_stores_sale_is_found_only_by_a_search(maker):
     sale, _, _ = await sold_at(maker, shops, shops.primary_store, shops.shared_warehouse)
     name = sale["items"][0]["display_name"]
 
-    for q in (None, "", " Л "):
+    # A word of two letters at least: one-letter words, however many, browse
+    # as one letter would (owner decision, 2026-10-18).
+    for q in (None, "", " Л ", "о о", "л ш к"):
         refused = await elsewhere(maker, shops, shops.child_store, q)
         assert refused.status_code == 422, refused.text
         assert refused.json()["details"]["reason"] == "SEARCH_REQUIRED"
+    with_short = await elsewhere(maker, shops, shops.child_store, f"{name[:8]} ш")
+    assert with_short.status_code == 200, with_short.text
+    assert [s["id"] for s in with_short.json()["sales"]] == [sale["id"]]
 
     found = await elsewhere(maker, shops, shops.child_store, name[:8])
     assert found.status_code == 200, found.text

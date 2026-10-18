@@ -1,4 +1,9 @@
-import { ApiError, errorText, recordedNothing } from "@/shared/api";
+import {
+  ApiError,
+  CONFLICT_TEXT,
+  errorText,
+  recordedNothing,
+} from "@/shared/api";
 import { methodLabels, notStated } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
@@ -203,17 +208,22 @@ export function adjustmentErrorText(error: unknown): string {
 
 /** «Повернення»'s own words for why (ADR-0013 §8). */
 export function returnErrorText(error: unknown): string {
-  if (!recordedNothing(error)) return errorText(error);
+  // Not said to have recorded nothing: still unconfirmed, never «try again»,
+  // which could hand the money back twice (owner decision, 2026-10-18).
+  if (!recordedNothing(error))
+    return errorText(error) === CONFLICT_TEXT
+      ? "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться."
+      : errorText(error);
   if (
     error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
   )
     return "Повернення не записано — оформіть його ще раз і вкажіть, як повертаєте гроші.";
   // Resent after the server did not answer: it changed meanwhile, not while
-  // the seller worked, as a kept sale says (decided with the task list's
-  // P2-2, 2026-10-18; for the owner to confirm).
+  // the seller worked, as a kept sale says; the section named, since it may
+  // show over the till (owner decision, 2026-10-18).
   if (returnRefusalText(error) === RETURN_CONFLICT_TEXT)
-    return "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку й спробуйте ще раз.";
+    return "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку в «Поверненні» й спробуйте ще раз.";
   return `Повернення не записано. ${returnRefusalText(error)}`;
 }
 

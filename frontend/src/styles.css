@@ -505,6 +505,20 @@ nav:not(.sections) {
   background: var(--debt-bg);
   color: var(--debt);
 }
+/* Pills by what they mean (returns task list, P2-4): a debt's, a warning's,
+   «Брак»'s, or nothing to do. */
+.badge.debt {
+  background: var(--debt-bg);
+  color: var(--debt);
+}
+.badge.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.badge.neutral {
+  background: var(--field);
+  color: var(--text-2);
+}
 .nights,
 .troubles {
   list-style: none;
@@ -722,6 +736,7 @@ html {
 .sale-day {
   margin: 18px 0 2px;
   font-size: 14px;
+  line-height: 1.3;
   font-weight: 650;
   color: var(--text-2);
 }
@@ -844,11 +859,39 @@ html {
 .return-mistake {
   margin-top: 14px;
 }
+/* The returns screens' meta at 14 px (P2-4), and «Пошкоджені» in the colour
+   of «Брак». */
+.returns .hint,
+.return-result .hint {
+  font-size: 14px;
+}
+.damaged-line {
+  color: var(--damaged);
+}
+/* A sale row's place while the list is read (P2-3). */
+/* A day's heading's place, as `.sale-day` stands. */
+.skeleton-day {
+  width: 6em;
+  height: 1.3em;
+  margin: 18px 0 2px;
+  font-size: 14px;
+}
+/* A warning pill on a warning's notice keeps its edge. */
+.notice .badge.warn {
+  box-shadow: inset 0 0 0 1px var(--warn-line);
+}
+.skeleton-meta {
+  width: 40%;
+  height: 0.9em;
+}
+.placeholder .sale-row .sale-main {
+  gap: 8px;
+}
 /* The return's panel (P0-4): the till's, with the way as a switch over the
    one button. */
 .pay-note {
   margin: -6px 0 10px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-2);
 }
 .way-switch {

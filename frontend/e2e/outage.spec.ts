@@ -2933,7 +2933,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     {
       status: 409,
       code: "CONFLICT",
-      said: "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку й спробуйте ще раз.",
+      said: "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку в «Поверненні» й спробуйте ще раз.",
     },
     {
       status: 422,
@@ -2968,6 +2968,75 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         await page.evaluate((key) => localStorage.getItem(key), returnKey),
       ).toBeNull();
     });
+
+  test("a kept return still unconfirmed, refused for a conflict, says so in its own words and stays kept", async ({
+    page,
+  }) => {
+    await seed(page, { [returnKey]: keptReturn("CASH") });
+    await serve(page);
+    // Refused, but not said to have recorded nothing: an unknown outcome.
+    const sent = await returns(page, async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: { code: "CONFLICT", message: "Conflict", details: {} },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByText(
+        "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), returnKey),
+    ).not.toBeNull();
+    // Sent once, by the phone itself; nothing invites another.
+    expect(sent).toHaveLength(1);
+  });
+
+  test("a kept return on a phone whose person may no longer take returns shows its banner over the till, never «Немає права»", async ({
+    page,
+  }) => {
+    await seed(page, { [returnKey]: keptReturn("CASH") });
+    await serve(page);
+    // The server refuses whoever may not take returns, before it looks the
+    // return up, and says nothing of what was recorded.
+    let asked = 0;
+    await on(page, `/sales/${ids.sale}/refunds`, async (route) => {
+      asked += 1;
+      await route.fulfill({
+        status: 403,
+        json: {
+          code: "PERMISSION_DENIED",
+          message: "Permission denied",
+          details: {},
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+    ).toBeVisible();
+    await expect.poll(() => asked).toBeGreaterThan(0);
+    // Under the banner, what the server answered and whom to see; the
+    // return stays kept, and the till beneath it is held while it does.
+    await expect(
+      page.getByText(
+        "Немає доступу до цієї операції або складу. Зверніться до менеджера.",
+      ),
+    ).toBeVisible();
+    // The till beneath it, never «Повернення» (returns task list, P2-1).
+    await expect(
+      page.getByRole("heading", { name: "Продаж", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/Немає права/)).toHaveCount(0);
+  });
 
   test("a kept return refused on resend, part of it returned meanwhile, says so in «Повернення»'s words", async ({
     page,

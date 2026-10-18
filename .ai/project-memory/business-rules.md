@@ -2726,3 +2726,36 @@ How they are carried out, not decided by the owner:
   word of an order.
 
 Built on 2026-10-18; see the [report](returns-redesign-5-report.md).
+
+## Owner decision — 2026-10-18 («Повернення»: three readings after #103, and the task list closed)
+
+Asked after #103, each answer the option recommended:
+- **A kept return still unconfirmed, refused for a conflict** — the server
+  not saying it recorded nothing — says «Повернення ще не підтверджено:
+  сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі
+  воно не запишеться.»: its own words, never an order's, and never «try
+  again», which could hand the money back twice.
+- **The other stores' sales are found by a word of two letters at
+  least,** on the server and in the list: «о о» browses as «о» would, and
+  is refused; «ло ш» is a search.
+- **A kept return refused on resend, having recorded nothing, for a
+  conflict** says «Повернення не записано. Дані змінилися, поки сервер не
+  відповідав. Поверніться до списку в «Поверненні» й спробуйте ще раз.»:
+  the section named, since it may show over the till.
+- **Next:** the task list's P2-1, P2-3 and P2-4, which close it.
+
+How they are carried out, not decided by the owner:
+- **One set of words** (P2-1): what the task list's glossary cancelled is
+  gone from «Повернення»; a kept return on a phone whose person may no
+  longer take returns shows its banner over whatever is open, and the app
+  no longer turns to «Повернення» to say «Немає права приймати
+  повернення.», which is said nowhere now.
+- **While the list is read** (P2-3), three rows' places stand where the
+  sales will be, and a screen reader hears «Завантажуємо продажі…».
+- **Pills by what they mean** (P2-4): «Оплата частинами» in the debt's
+  colours, «Продано з паперу» / «Продано під час збою» and the result's
+  paper mark as a warning, «Усе вже повернено» neutral, «Пошкоджені» on the
+  result in the colour of «Брак»; the returns screens' meta at 14 px; each
+  at 4.5:1 or more, light and dark.
+
+Built on 2026-10-18; see the [report](returns-redesign-6-report.md).

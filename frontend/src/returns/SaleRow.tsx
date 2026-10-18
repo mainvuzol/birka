@@ -81,9 +81,13 @@ export function SaleRow({
       </span>
       <span className="sale-meta" id={meta}>
         {time} · {units} шт.
-        {sale.paid_in_parts && <span className="badge">Оплата частинами</span>}
+        {/* Pills by what they mean (returns task list, P2-4): a debt's,
+            a warning's, or nothing to do. */}
+        {sale.paid_in_parts && (
+          <span className="badge debt">Оплата частинами</span>
+        )}
         {sale.outage && (
-          <span className="badge">
+          <span className="badge warn">
             {sale.outage.first_days === true
               ? "Продано з паперу"
               : "Продано під час збою"}
@@ -92,7 +96,9 @@ export function SaleRow({
         {!here && (
           <span className="badge">Магазин «{visible(sale.store_name)}»</span>
         )}
-        {!returnable && <span className="badge">Усе вже повернено</span>}
+        {!returnable && (
+          <span className="badge neutral">Усе вже повернено</span>
+        )}
       </span>
     </span>
   );

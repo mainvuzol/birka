@@ -1,5 +1,5 @@
 import { test, expect, openStore } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -25,7 +25,7 @@ const fixture = JSON.parse(
   ),
 ) as Fixture;
 
-function launch(): string {
+function launch(theme?: Record<string, string>): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
@@ -38,7 +38,9 @@ function launch(): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
+  if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  return `/#${hash.toString()}`;
 }
 
 interface Summary {
@@ -129,8 +131,11 @@ async function sales(
   return asked;
 }
 
-async function returns(page: Page): Promise<void> {
-  await page.goto(launch());
+async function returns(
+  page: Page,
+  theme?: Record<string, string>,
+): Promise<void> {
+  await page.goto(launch(theme));
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
 }
@@ -494,6 +499,11 @@ test("the other stores are offered from two letters under this store's results, 
   await expect(offer).toHaveCount(0);
   await field.fill("л");
   await expect(offer).toHaveCount(0);
+  // One-letter words, however many: a word of two letters is asked of the
+  // other stores (owner decision, 2026-10-18).
+  await field.fill("о о");
+  await expect(page.getByText(/^За «о о» продажів не знайдено/)).toBeVisible();
+  await expect(offer).toHaveCount(0);
   await field.fill("лор");
   await expect(page.getByRole("article")).toHaveCount(1);
   // Under this store's results.
@@ -618,3 +628,111 @@ test("nothing found here says to call the manager for goods sold before Бірк
   ).toHaveCount(0);
   await expect(page.getByRole("article")).toHaveCount(1);
 });
+
+test("while the list is read, its rows keep their places, and the field does not move", async ({
+  page,
+}) => {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/sales?**", async (route) => {
+    await held;
+    await route.fulfill({
+      json: { sales: [sale("Лоран шоколад", ago(0))], has_more: false },
+    });
+  });
+  await returns(page);
+  // Being read (returns task list, P2-3): a day's heading's and three rows'
+  // places, said to a screen reader, no words where the rows will be.
+  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
+  await expect(page.locator(".placeholder .skeleton-day")).toHaveCount(1);
+  await expect(page.getByRole("status")).toHaveText("Завантажуємо продажі…");
+  const before = await page.getByLabel("Що повертають?").boundingBox();
+  const place = await page
+    .locator(".placeholder .sale-row")
+    .first()
+    .boundingBox();
+  release();
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(page.locator(".placeholder")).toHaveCount(0);
+  const after = await page.getByLabel("Що повертають?").boundingBox();
+  const first = await page.locator(".sale-row").first().boundingBox();
+  if (!before || !after || !place || !first) throw new Error("not laid out");
+  // Nothing moves: the field, nor where the first row comes.
+  expect(after.y).toBe(before.y);
+  expect(Math.abs(first.y - place.y)).toBeLessThanOrEqual(2);
+});
+
+/** The WCAG contrast of an element's text against what it is drawn on. */
+async function contrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    let ground: Element | null = node;
+    let background = "rgba(0, 0, 0, 0)";
+    while (ground) {
+      background = getComputedStyle(ground).backgroundColor;
+      const alpha = rgb(background)[3];
+      if (alpha === undefined || alpha > 0) break;
+      ground = ground.parentElement;
+    }
+    const fore = luminance(rgb(getComputedStyle(node).color));
+    const back = luminance(rgb(background));
+    return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+  });
+}
+
+for (const [name, theme, scheme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
+] as const)
+  test(`in the ${name} theme a row's goods, meta and pills read at 4.5:1, each pill by what it means`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await sales(page, [
+      sale("Лоран шоколад", ago(0), {
+        paid_in_parts: true,
+        outage: {
+          sold_by_user_id: null,
+          sold_by: null,
+          sold_at: null,
+          first_days: true,
+        },
+      }),
+      sale("Альпака сіра", ago(0, 1), { refunded: 1 }),
+    ]);
+    await returns(page, theme);
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.theme),
+    ).toBe(scheme);
+    const pills = {
+      debt: page.getByText("Оплата частинами", { exact: true }),
+      warn: page.getByText("Продано з паперу", { exact: true }),
+      neutral: page.getByText("Усе вже повернено", { exact: true }),
+    };
+    // By what it means (returns task list, P2-4).
+    for (const [kind, pill] of Object.entries(pills)) {
+      await expect(pill).toHaveClass(new RegExp(`\\b${kind}\\b`));
+      expect(await contrast(pill)).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const part of [
+      page.locator(".sale-goods").first(),
+      page.locator(".sale-meta").first(),
+      page.locator(".sale-day").first(),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `test-results/returns-list-${name}.png` });
+  });

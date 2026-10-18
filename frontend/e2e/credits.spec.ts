@@ -573,6 +573,8 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await expect(page.getByRole("article")).toContainText("Оплата частинами");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.locator(".sale-marks")).toHaveText("Оплата частинами");
+  // In the debt's colours (returns task list, P2-4).
+  await expect(page.locator(".sale-marks .badge")).toHaveClass(/\bdebt\b/);
   await returnUnits(page, { intact: 1 });
   // The till cannot say up front what goes back in cash (owner decision,
   // 2026-10-17, В6 (а)): the goods' worth, and what comes after.
