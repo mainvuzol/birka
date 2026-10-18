@@ -2985,3 +2985,56 @@ How they are carried out, not decided by the owner:
   owner's confirmation at hand-over, as «Повернення»'s did.
 
 Built on 2026-10-18; see the [report](credits-redesign-4-report.md).
+
+## Owner decision — 2026-10-18 («Борги»: four readings after #109, and what next)
+
+Asked after #109, each answer the option recommended:
+- **The words the task list did not give stay as built:** a write-off
+  refused for its request, «Перевірте причину й спробуйте ще раз.»; a kept
+  one's request refused, «… ще не підтверджено: сервер не прийняв запит …»,
+  and proven unrecorded «… Сервер не прийняв запит. Відкрийте борг у
+  «Боргах» і спробуйте ще раз.».
+- **Words of two debts of one customer do not add up:** a customer whose
+  debts are written «Ірина» and «Коваль» is found by either word, or by
+  the phone, never by «Ірина Коваль».
+- **A name is found whatever apostrophe it is typed with,** and a Latin
+  «i» is the Ukrainian «і»: «Мар'яна», «Мар’яна» and «Марʼяна» are one name,
+  as Android, an iPhone and a document write it; as the catalogue's check
+  of a similar name reads them.
+- **A kept payment, write-off or return asked about again and answered by
+  a server's error, or a request not found,** is not told to try again: it
+  could be paid or handed back twice. «Внесок ще не підтверджено: сервер не
+  зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.»,
+  and the request's number, as the shared words gave it.
+- **Next:** a closed store's debt asked for by the number already typed, by
+  a quiet button, never a choice made first (P1-1; В2 (а)).
+
+How they are carried out, not decided by the owner:
+- **One field, «Ім’я або телефон».** When it holds a whole number, however
+  written or pasted, a quiet button stands under this store's results for
+  it, and under none, once this store has answered for that very number:
+  «Борг магазину, що зараз не працює? Шукати за цим номером». It asks the stores that do not trade for the same number, under
+  «Магазини, що не працюють», and «← У цьому магазині» comes back, the
+  number kept both ways. Nothing is asked of them before the tap, nor for
+  a name or a part of a number; a number changed there into one asks for
+  the whole number again, as before.
+- **A whole number that owes nothing here** says the rule: «За цим номером
+  у цьому магазині боргів немає. Внесок приймає магазин, де продали.»; in a
+  store that does not trade, the fact alone, «За цим номером у цьому
+  магазині боргів немає.», with no button: it takes no payments.
+- **This store reads a number as the closed stores do:** pasted from
+  contacts between invisible marks, or written with dots or slashes, it is
+  a phone here too, never a name owing nothing.
+- **Each switch brings focus to what it opened:** «Магазини, що не
+  працюють», or «Борги» on the way back.
+- **The apostrophes read as one** are the catalogue's: ' ’ ʼ, and ` ´ ‘
+  typed in their place; of its letters, only the Latin «i», as the owner
+  answered — «a», «o» and the others are read as typed.
+- **A server's error** is any answer the shared words met with «Не вдалося
+  виконати операцію. Спробуйте ще раз.»: a 500, a request not found, any
+  other the app has no words for. A 502, 503 or 504 is the server out of
+  reach, with the outage's words; the app's own failure keeps its words;
+  and a kept sale, delivery, correction or drawer command keeps the shared
+  words, as the owner was asked of payments, write-offs and returns.
+
+Built on 2026-10-19; see the [report](credits-redesign-5-report.md).

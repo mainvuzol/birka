@@ -2,6 +2,7 @@ import {
   ApiError,
   CONFLICT_TEXT,
   errorText,
+  FAILED_TEXT,
   INVALID_TEXT,
   recordedNothing,
 } from "@/shared/api";
@@ -222,6 +223,25 @@ function lostPlace(error: ApiError): boolean {
   );
 }
 
+/**
+ * A kept command asked about again, and answered by a server's error or a
+ * request it could not find: no answer about the command. Still
+ * unconfirmed, never «спробуйте ще раз», which could take or hand back the
+ * money twice; the request's number kept, for whoever reads the log (owner
+ * decision, 2026-10-18). Null for any other answer.
+ */
+function serverFailed(
+  error: unknown,
+  text: string,
+  what: string,
+  twice: string,
+): string | null {
+  if (!(error instanceof ApiError) || !text.startsWith(FAILED_TEXT))
+    return null;
+  const number = text.slice(FAILED_TEXT.length).trim();
+  return `${what} ще не підтверджено: сервер не зміг відповісти. ${twice}${number ? ` ${number}` : ""}`;
+}
+
 /** «Повернення»'s own words for why (ADR-0013 §8). */
 export function returnErrorText(error: unknown): string {
   // Not said to have recorded nothing: still unconfirmed, never «try again»,
@@ -232,7 +252,14 @@ export function returnErrorText(error: unknown): string {
       return "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.";
     if (text === INVALID_TEXT)
       return "Повернення ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.";
-    return text;
+    return (
+      serverFailed(
+        error,
+        text,
+        "Повернення",
+        "Перевірте результат ще раз — двічі воно не запишеться.",
+      ) ?? text
+    );
   }
   if (
     error instanceof ApiError &&
@@ -279,7 +306,7 @@ export function creditErrorText(
       return `${what} ще не підтверджено: сервер відповів, що дані змінилися. ${twice}`;
     if (text === INVALID_TEXT)
       return `${what} ще не підтверджено: сервер не прийняв запит. ${twice}`;
-    return text;
+    return serverFailed(error, text, what, twice) ?? text;
   }
   if (
     error instanceof ApiError &&

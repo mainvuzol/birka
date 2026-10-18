@@ -910,28 +910,42 @@ def _in_store(
     return statement
 
 
-# What a phone is written with: «+38 (067) 123-45-67».
-_PHONE_LIKE = re.compile(r"[\d\s()+\-]+")
-
-
-# Besides its digits, what a whole phone may be written or pasted with:
-# spaces, «+», brackets, «-», «.», «/», and the invisible marks a phone's
-# contacts add to a number copied from them (Unicode's format characters).
+# Besides its digits, what a phone may be written or pasted with: spaces,
+# «+», brackets, «-», «.», «/», and the invisible marks a phone's contacts
+# add to a number copied from them (Unicode's format characters).
 _PHONE_MARKS = frozenset("+()-./")
+
+
+def _written_as_phone(wanted: str) -> bool:
+    """Digits, and nothing else but what a phone is written or pasted with:
+    «+38 (067) 123-45-67», «067.123.45.67», a number copied from contacts.
+    One reading for this store's search and the closed stores': a number
+    the one finds is never a name to the other (review, 2026-10-19)."""
+    return bool(digits(wanted)) and all(
+        char.isspace() or char in _PHONE_MARKS or unicodedata.category(char) == "Cf"
+        for char in re.sub(r"\d", "", wanted)
+    )
 
 
 def _whole_phone(wanted: str) -> str | None:
     """The customer a whole phone number names, however it is written
     («+38 (067) 123-45-67», «0671234567»); None for a name or a part of a
     number. The digits' count and the equality make it exact."""
-    if any(
-        not (char.isspace() or char in _PHONE_MARKS or unicodedata.category(char) == "Cf")
-        for char in re.sub(r"\d", "", wanted)
-    ):
+    if not _written_as_phone(wanted):
         return None
     if len(digits(wanted)) not in PHONE_DIGITS:
         return None
     return customer_key(digits(wanted))
+
+
+# A name read as it is typed on any phone (owner decision, 2026-10-18): the
+# apostrophes Android, iPhone and documents write, and those typed in their
+# place, are one sign, and a Latin «i» is the Ukrainian «і» — as the
+# catalogue reads a similar name (`app.modules.catalog.similar`). Applied
+# after the letter case is lowered, so «I» is «і» too.
+_SAME_FROM = "’ʼ`´‘i"
+_SAME_TO = "'''''" + chr(0x0456)  # five apostrophes, then the Ukrainian «і»
+_SAME = str.maketrans(_SAME_FROM, _SAME_TO)
 
 
 def _found_by(wanted: str) -> Any:
@@ -940,16 +954,17 @@ def _found_by(wanted: str) -> Any:
     Each word typed, literally and in any letter case, in the name of one
     debt, in any order, as the till and «Повернення» read each word (credits
     task list, P1-3): «петренко оксана» finds «Оксана Петренко», and two
-    spaces are one. Words of two debts do not add up; a word typed twice is
-    looked for once.
+    spaces are one; «Мар'яна» finds «Мар’яна», and «iрина» typed with a
+    Latin «i» finds «Ірина». Words of two debts do not add up; a word typed
+    twice is looked for once.
 
     Only a query written as a phone is looked for among phones: the digits of
     «Ірина 2» are part of a name, and would find whoever's number holds a 2.
     """
-    name = func.lower(CustomerCredit.customer_name)
-    words = dict.fromkeys(wanted.lower().split())
+    name = func.translate(func.lower(CustomerCredit.customer_name), _SAME_FROM, _SAME_TO)
+    words = dict.fromkeys(wanted.lower().translate(_SAME).split())
     conditions: list[Any] = [and_(*(name.contains(word, autoescape=True) for word in words))]
-    if _PHONE_LIKE.fullmatch(wanted) and digits(wanted):
+    if _written_as_phone(wanted):
         conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))
         conditions.append(CUSTOMER.contains(customer_key(digits(wanted)), autoescape=True))
     return or_(*conditions)

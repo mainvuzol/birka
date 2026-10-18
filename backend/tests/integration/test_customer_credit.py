@@ -467,6 +467,13 @@ async def test_a_debt_is_found_by_name_or_by_any_form_of_its_phone(maker):
         # A name's digits are part of the name, never a phone to look for.
         assert await found("Петренко 067") == []
         assert await found("+38 (067)") == [sale["credit"]["credit_id"]]
+        # Pasted from contacts between two invisible direction marks, or
+        # written with dots or slashes: still a phone here, as among the
+        # closed stores, never a name owing nothing (review, 2026-10-19).
+        assert await found("\u202a+38 067 123 45 67\u202c") == [sale["credit"]["credit_id"]]
+        assert await found("067.123.45.67") == [sale["credit"]["credit_id"]]
+        assert await found("067/123/45/67") == [sale["credit"]["credit_id"]]
+        assert await found("\u202a123-45\u202c") == [sale["credit"]["credit_id"]]
 
 
 async def test_a_store_lists_only_its_own_debts(maker):
@@ -532,6 +539,9 @@ async def test_one_phone_is_one_customer_whatever_the_name(maker):
     assert len(found["credits"]) == 2
     # Олег's number holds a 0 and a 1; a name with them is still a name.
     assert await customers(maker, shops, query="Ірина 01") == []
+    # A whole number pasted from contacts finds her here too.
+    [pasted] = await customers(maker, shops, query="\u202a+38 067 123 45 67\u202c")
+    assert len(pasted["credits"]) == 2
 
     # A payment is still taken on the debt the seller chooses.
     paid = await pay(maker, shops, second["credit"]["credit_id"], "1000.00")
@@ -589,6 +599,26 @@ async def test_a_customer_is_found_by_each_word_of_a_debts_name_in_any_order(mak
             params={"store_id": str(shops.primary_store), "query": "петренко  оксана"},
         )
     assert [item["id"] for item in listed.json()["items"]] == [oksana["credit"]["credit_id"]]
+
+
+async def test_a_name_is_found_whatever_apostrophe_or_i_it_is_typed_with(maker):
+    shops = await make_two_shops(maker)
+    # Written on an iPhone, and with a Latin «i» for the Ukrainian «і».
+    await sold_to(maker, shops, "Мар\u2019яна Коваль", "067 444 44 44")
+    await sold_to(maker, shops, "Васил\u0069на", "067 555 55 55")
+
+    async def names(query: str) -> list[str]:
+        return [found["customer_name"] for found in await customers(maker, shops, query=query)]
+
+    # Owner decision, 2026-10-18: the apostrophes Android, iPhone and
+    # documents write, and those typed in their place, are one sign; a
+    # Latin «i», in either case, is the Ukrainian «і».
+    for apostrophe in ("'", "\u2019", "\u02bc", "`", "\u00b4", "\u2018"):
+        assert await names(f"мар{apostrophe}яна") == ["Мар\u2019яна Коваль"], apostrophe
+    assert await names("василіна") == ["Васил\u0069на"]
+    assert await names("ВАСИЛ\u0049НА") == ["Васил\u0069на"]
+    # Other letters are as typed.
+    assert await names("марияна") == []
 
 
 async def test_customers_come_a_page_at_a_time(maker):

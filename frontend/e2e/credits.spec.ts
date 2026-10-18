@@ -282,6 +282,14 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(page.getByLabel("Оплата частинами")).not.toBeChecked();
 
   await page.getByRole("button", { name: "Борги", exact: true }).click();
+  // Pasted from the phone's contacts, between the two invisible direction
+  // marks they add: owed here, so its row, never the rule that nothing is
+  // owed here (review, 2026-10-19).
+  await searchField(page).fill(
+    `\u202a+38 ${tel.slice(0, 3)} ${tel.slice(3)}\u202c`,
+  );
+  await expect(customerRow(page, name)).toBeVisible();
+  await expect(page.getByText(/у цьому магазині боргів немає/)).toHaveCount(0);
   await searchField(page).fill(tel);
   // What is owed, never the sale's sum or a way (credits task list, P0-1).
   const row = customerRow(page, name);

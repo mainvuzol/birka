@@ -267,7 +267,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   ).toBeVisible();
   await expect(page.getByText(/лише для перегляду/)).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Борг магазину, що зараз не працює?" }),
+    page.getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ }),
   ).toHaveCount(0);
   // «Брак» is shown as it stands, with nothing to press.
   await section(page, "Брак");
@@ -351,47 +351,78 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page
       .getByRole("button", { name: "Показати сплачені й списані" })
       .click();
-    // Asked for under the results (credits task list, P0-1).
-    await page
-      .getByRole("button", { name: "Борг магазину, що зараз не працює?" })
-      .click();
-    await expect(
-      page.getByRole("heading", { name: "Магазини, що не працюють" }),
-    ).toBeVisible();
-    const askForPhone = page.getByText(
-      /Введіть повний номер телефону покупця, наприклад 067 123 45 67/,
-    );
-    await expect(askForPhone).toBeVisible();
-    // Only what is still owed, so nothing to choose (owner, 2026-10-10).
-    await expect(
-      page.getByRole("button", { name: "Лише ті, хто винен" }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Показати сплачені й списані" }),
-    ).toHaveCount(0);
-    // Neither a name nor a part of the number finds another store's
-    // customers, typed or entered: the phone does not even ask (owner
-    // decision, 2026-10-10).
-    const search = page.getByLabel("Повний номер телефону покупця");
-    for (const partial of [name, phone.slice(0, 6)]) {
+    // The closed stores are asked for only by a whole number, under this
+    // store's results for it: never a choice made first (owner decision,
+    // 2026-10-18, В2 (а); credits task list, P1-1).
+    const ask = page.getByRole("button", {
+      name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+    });
+    const search = page.getByLabel("Ім’я або телефон");
+    await expect(ask).toHaveCount(0);
+    // Neither a name nor a part of the number, typed or entered.
+    for (const partial of [name, phone.slice(0, 9)]) {
       await search.fill(partial);
       await search.press("Enter");
-      await expect(askForPhone).toBeVisible();
+      await expect(page.getByText(/боргів не знайдено/)).toBeVisible();
+      await expect(ask).toHaveCount(0);
     }
-    // Past the pause a search waits for, still nothing asked.
+    // Past the pause a search waits for, still nothing asked of them.
     await page.waitForTimeout(500);
     expect(searches.filter((url) => url.includes("elsewhere=true"))).toEqual(
       [],
     );
     // The whole number, pasted from the phone's contacts between the two
-    // invisible direction marks they add.
+    // invisible direction marks they add: owed nothing here, the rule said,
+    // and the closed stores asked for under it.
     await search.fill(`\u202a+38 ${phone.slice(0, 3)} ${phone.slice(3)}\u202c`);
+    await expect(
+      page.getByText(
+        "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    expect(searches.filter((url) => url.includes("elsewhere=true"))).toEqual(
+      [],
+    );
+    await ask.click();
+    // Brought to what it opened: the tapped button is gone (review,
+    // 2026-10-19).
+    await expect(
+      page.getByRole("heading", { name: "Магазини, що не працюють" }),
+    ).toBeFocused();
+    // Only what is still owed, so nothing to choose (owner, 2026-10-10).
+    for (const mode of ["Лише ті, хто винен", "Показати сплачені й списані"])
+      await expect(page.getByRole("button", { name: mode })).toHaveCount(0);
     const found = page.getByRole("button", { name: `Відкрити борг: ${name},` });
     await expect(found).toContainText("Магазин «Ринок»");
     const asked = searches.filter((url) => url.includes("elsewhere=true"));
     expect(asked.length).toBeGreaterThan(0);
     for (const url of asked)
       expect(new URL(url).searchParams.get("status")).toBe("OPEN");
+    // Changed there into a part of a number: asked for the whole one, and
+    // not asked of them.
+    await search.fill(phone.slice(0, 6));
+    await expect(
+      page.getByText(
+        /Введіть повний номер телефону покупця, наприклад 067 123 45 67/,
+      ),
+    ).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(
+      searches.filter((url) => url.includes("elsewhere=true")),
+    ).toHaveLength(asked.length);
+    // Back here, the number kept; and again among them.
+    await search.fill(phone);
+    await expect(found).toBeVisible();
+    await page.getByRole("button", { name: "У цьому магазині" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Борги", exact: true }),
+    ).toBeFocused();
+    await expect(search).toHaveValue(phone);
+    await expect(
+      page.getByText(/^За цим номером у цьому магазині боргів немає/),
+    ).toBeVisible();
+    await ask.click();
     await found.click();
     await expect(
       page.getByText(
@@ -440,6 +471,34 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await openAs(page, owner);
     await openStore(page, /^Ринок MARKET/);
     await page.getByRole("button", { name: "Борги", exact: true }).click();
+    // Its whole number: the debt here, and never the closed stores asked
+    // for — this store takes no payments (credits task list, P1-1).
+    // Once this store has answered for the number itself, not the list
+    // as it opened, which shows the debt too.
+    const answered = page.waitForResponse(
+      (response) =>
+        response.url().includes("/credits/customers?") &&
+        new URL(response.url()).searchParams.get("query") === phone,
+    );
+    await page.getByLabel("Ім’я або телефон").fill(phone);
+    await answered;
+    await expect(
+      page.getByRole("button", { name: `Відкрити борг: ${name},` }),
+    ).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(
+      await page
+        .getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ })
+        .count(),
+    ).toBe(0);
+    // A whole number owing nothing here: the fact alone, as anyone trading
+    // takes the payment (review, 2026-10-19).
+    await page.getByLabel("Ім’я або телефон").fill(`099${phone.slice(3)}`);
+    await expect(
+      page.getByText("За цим номером у цьому магазині боргів немає.", {
+        exact: true,
+      }),
+    ).toBeVisible();
     await page.getByLabel("Ім’я або телефон").fill(name);
     await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
     await expect(

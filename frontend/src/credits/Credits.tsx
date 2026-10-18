@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import {
   useInfiniteQuery,
@@ -96,10 +96,11 @@ export function Credits({
   // Whose debts: this store's, or those of the stores that do not trade.
   const [elsewhere, setElsewhere] = useState(false);
   // Other stores' customers are found by their whole phone, never browsed;
-  // only what they still owe (owner decisions, 2026-10-10).
-  // What is asked of them is what is in the field: cleared at the switch,
-  // the search is cleared in the same render (`useSettled`), never a number
-  // typed before it (review, 2026-10-18).
+  // only what they still owe (owner decisions, 2026-10-10). They are asked
+  // for by the number already searched here, by a quiet button under its
+  // results, never a choice made first (owner decision, 2026-10-18, В2 (а);
+  // credits task list, P1-1); a number changed there into anything else is
+  // not asked.
   const searched = !elsewhere || wholePhone(search);
   const openOnly = owedOnly || elsewhere;
   // Twenty at a time, each page under those read (credits task list, P0-2):
@@ -134,6 +135,26 @@ export function Credits({
   });
   // A debt opened meanwhile moves the pages' edge: a customer read twice is
   // shown once.
+  // Asked for once this store has answered for the number in the field —
+  // never under its loading, its refusal, the rows of a search before it,
+  // nor for a number typed before the one shown (review, 2026-10-19).
+  const askElsewhere =
+    !readOnly &&
+    !elsewhere &&
+    wholePhone(search) &&
+    search === query.trim() &&
+    customers.isSuccess &&
+    !customers.isPlaceholderData;
+  // Each switch brings the eye and a screen reader to what it opened: the
+  // button tapped is gone (review, 2026-10-19).
+  const switched = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const elsewhereHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!switched.current) return;
+    switched.current = false;
+    (elsewhere ? elsewhereHeading : heading).current?.focus();
+  }, [elsewhere]);
   const listed = [
     ...new Map(
       (customers.data?.pages ?? [])
@@ -193,7 +214,9 @@ export function Credits({
 
   return (
     <section className="credits">
-      <h2>Борги</h2>
+      <h2 ref={heading} tabIndex={-1}>
+        Борги
+      </h2>
       {readOnly && (
         // The store's own notice says it does not trade; this says who
         // takes the payments (credits task list, P0-1).
@@ -219,19 +242,21 @@ export function Credits({
         </div>
       )}
       {elsewhere && (
-        // Never mixed with this store's: headed, and left in one tap.
+        // Never mixed with this store's: headed, and left in one tap, the
+        // number kept, to read here again.
         <div className="toolbar elsewhere-head">
-          <h3>Магазини, що не працюють</h3>
+          <h3 ref={elsewhereHeading} tabIndex={-1}>
+            Магазини, що не працюють
+          </h3>
           <button
             type="button"
             className="quiet"
             onClick={() => {
+              switched.current = true;
               setElsewhere(false);
-              setQuery("");
-              setPressed("");
             }}
           >
-            <span aria-hidden="true">← </span>Борги цього магазину
+            <span aria-hidden="true">← </span>У цьому магазині
           </button>
         </div>
       )}
@@ -244,7 +269,7 @@ export function Credits({
         }}
       >
         <label className="till-search">
-          {elsewhere ? "Повний номер телефону покупця" : "Ім’я або телефон"}
+          Ім’я або телефон
           <input
             type="search"
             enterKeyHint="search"
@@ -285,8 +310,15 @@ export function Credits({
         ) : search ? (
           <div className="empty">
             <p>
-              За «{visible(search)}» боргів не знайдено. Перевірте ім’я або
-              введіть номер телефону.
+              {!wholePhone(search)
+                ? `За «${visible(search)}» боргів не знайдено. Перевірте ім’я або введіть номер телефону.`
+                : readOnly
+                  ? // Anyone trading takes it: the fact alone (review,
+                    // 2026-10-19).
+                    "За цим номером у цьому магазині боргів немає."
+                  : // A whole number owes nothing here: the rule, and the
+                    // closed stores asked for under it (P1-1).
+                    "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали."}
             </p>
             <button
               type="button"
@@ -376,6 +408,20 @@ export function Credits({
           )}
         </>
       )}
+      {askElsewhere && (
+        // Under this store's results for a whole number, and under none:
+        // the same number among the stores that do not trade (P1-1).
+        <button
+          type="button"
+          className="quiet elsewhere-ask"
+          onClick={() => {
+            switched.current = true;
+            setElsewhere(true);
+          }}
+        >
+          Борг магазину, що зараз не працює? Шукати за цим номером
+        </button>
+      )}
       {!elsewhere && (
         // Under the list, and under an empty one: the paid and written off
         // are asked for, never shown first (credits task list, P0-1).
@@ -387,22 +433,6 @@ export function Credits({
           }}
         >
           {owedOnly ? "Показати сплачені й списані" : "Лише ті, хто винен"}
-        </button>
-      )}
-      {!readOnly && !elsewhere && (
-        // Under the results, where the owner's В2 puts it; how a closed
-        // store's debts are looked for stays as it was until that is built
-        // (credits task list, P1-1).
-        <button
-          type="button"
-          className="quiet elsewhere-ask"
-          onClick={() => {
-            setElsewhere(true);
-            setQuery("");
-            setPressed("");
-          }}
-        >
-          Борг магазину, що зараз не працює?
         </button>
       )}
     </section>
