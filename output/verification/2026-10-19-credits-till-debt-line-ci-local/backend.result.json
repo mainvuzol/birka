@@ -4,12 +4,12 @@
   "result": "passed with declared gaps",
   "counts": "PG17 Tests: 3457 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1480 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age)",
   "reasons": [],
-  "commit": "018f282",
-  "tree": "dirty",
+  "commit": "a68d034",
+  "tree": "clean",
   "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-19T23:31:31+03:00",
-  "finished": "2026-10-19T23:48:51+03:00",
-  "duration": "17m19s",
+  "started": "2026-10-20T01:11:37+03:00",
+  "finished": "2026-10-20T01:28:05+03:00",
+  "duration": "16m28s",
   "brief": "PG17 in Docker on 127.0.0.1:55417; no install (venv checked against the lock); declared gap: no PG17 client or age here, so the backup tests skip on PG17 and run on PG16.2",
   "images": [
     "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
@@ -69,7 +69,7 @@
     {
       "name": "Install",
       "status": "replaced: ok",
-      "seconds": 0.4,
+      "seconds": 0.2,
       "code": 0
     },
     {
@@ -81,7 +81,7 @@
     {
       "name": "Type check",
       "status": "ok",
-      "seconds": 7.7,
+      "seconds": 8.0,
       "code": 0
     },
     {
@@ -99,13 +99,13 @@
     {
       "name": "Migration drift check",
       "status": "ok",
-      "seconds": 0.6,
+      "seconds": 0.5,
       "code": 0
     },
     {
       "name": "Migration downgrade is reversible",
       "status": "ok",
-      "seconds": 2.3,
+      "seconds": 2.1,
       "code": 0
     },
     {
@@ -129,19 +129,19 @@
     {
       "name": "Tests",
       "status": "ok",
-      "seconds": 466.2,
+      "seconds": 465.9,
       "code": 0
     },
     {
       "name": "Assert the database tests actually ran",
       "status": "FAILED (1)",
-      "seconds": 499.9,
+      "seconds": 446.1,
       "code": 1
     },
     {
       "name": "[runner] the skipped backup tests on PostgreSQL 16.2",
       "status": "ok",
-      "seconds": 50.2,
+      "seconds": 53.2,
       "code": 0
     }
   ],

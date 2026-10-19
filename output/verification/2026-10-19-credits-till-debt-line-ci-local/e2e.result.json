@@ -4,12 +4,12 @@
   "result": "passed",
   "counts": "452 passed",
   "reasons": [],
-  "commit": "018f282",
-  "tree": "dirty",
+  "commit": "a68d034",
+  "tree": "clean",
   "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-19T23:49:16+03:00",
-  "finished": "2026-10-19T23:55:21+03:00",
-  "duration": "6m05s",
+  "started": "2026-10-20T01:28:30+03:00",
+  "finished": "2026-10-20T01:34:20+03:00",
+  "duration": "5m49s",
   "brief": "PG17 in Docker on 127.0.0.1:55442 (the local PG16 E2E cluster paused); node v24.18.0 for 24; npm ci and playwright install replaced by checks of what is installed",
   "images": [
     "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
@@ -38,13 +38,13 @@
     {
       "name": "Install the API",
       "status": "replaced: ok",
-      "seconds": 0.1,
+      "seconds": 0.2,
       "code": 0
     },
     {
       "name": "Migrate and seed the synthetic shop",
       "status": "ok",
-      "seconds": 2.1,
+      "seconds": 2.0,
       "code": 0
     },
     {
@@ -68,7 +68,7 @@
     {
       "name": "Every journey, against the real API",
       "status": "ok",
-      "seconds": 353.7,
+      "seconds": 337.3,
       "code": 0
     },
     {

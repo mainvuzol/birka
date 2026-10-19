@@ -1,17 +1,16 @@
 CI job `python-audit` — backend (known vulnerabilities in the locked packages)
 Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
 
-commit:   018f282 (feat/credits-till-debt-line) — dirty: ?? .ai/project-memory/credits-redesign-6-report.md; ?? output/verification/2026-10-19-credits-till-debt-line/mutants.py; ?? output/verification/2026-10-19-credits-till-debt-line/mutants.txt
+commit:   a68d034 (feat/credits-till-debt-line) — clean
 runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da
-date:     2026-10-19 23:55:37 EEST → 23:55:41 (0m04s)
+date:     2026-10-20 01:34:36 EEST → 01:34:39 (0m03s)
 machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
 env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
 images:   none (this job starts no container)
 network:  from Docker's VM during the job (Docker Desktop's log): none
-result:   failed
-counts:   pip-audit audited 43 packages: 3 known vulnerabilities ("Found 3 known vulnerabilities in 1 package")
-why:      step(s) failed: Audit requirements.lock
+result:   passed
+counts:   pip-audit audited 43 packages: 0 known vulnerabilities ("No known vulnerabilities found")
 
 DEVIATIONS from CI:
   - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of GitHub's ubuntu-24.04 runner (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
@@ -32,7 +31,7 @@ GAPS (declared; nothing else may be missing):
 [runner] pip-audit 2.9.0 in /Users/nikitahlushak/.cache/birka-runtime/ci/pip-audit-venv
 
 ===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-[runner] the working tree at 018f282 (dirty), not a fresh checkout
+[runner] the working tree at a68d034 (clean), not a fresh checkout
 ===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
 
 ===== actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -43,16 +42,11 @@ GAPS (declared; nothing else may be missing):
 pip-audit 2.9.0
 WARNING:pip_audit._cli:--no-deps is supported, but users are encouraged to fully hash their pinned dependencies
 WARNING:pip_audit._cli:Consider using a tool like `pip-compile`: https://pip-tools.readthedocs.io/en/latest/#using-hashes
-Found 3 known vulnerabilities in 1 package
-===== FAILED (1): Audit requirements.lock (2.9s)
-  aiohttp 3.14.3: GHSA-5wr8-gcqf-gqf3 (fixed in 3.14.4)
-  aiohttp 3.14.3: GHSA-2g87-pp6c-29x5 (fixed in 3.14.4)
-  aiohttp 3.14.3: GHSA-494j-54xm-rwp3 (fixed in 3.14.4)
-::error::[runner] step(s) failed: Audit requirements.lock
+No known vulnerabilities found
+===== ok: Audit requirements.lock (2.6s)
 
 ===== [runner] steps
   replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
   replaced: ok                       actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  (0.0s)
-  FAILED (1)                         Audit requirements.lock  (2.9s)
-===== [runner] python-audit: FAILED — pip-audit audited 43 packages: 3 known vulnerabilities ("Found 3 known vulnerabilities in 1 package")
-  because: step(s) failed: Audit requirements.lock
+  ok                                 Audit requirements.lock  (2.6s)
+===== [runner] python-audit: PASSED — pip-audit audited 43 packages: 0 known vulnerabilities ("No known vulnerabilities found")

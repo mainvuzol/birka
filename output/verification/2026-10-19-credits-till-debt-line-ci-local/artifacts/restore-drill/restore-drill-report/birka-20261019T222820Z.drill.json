@@ -1,11 +1,11 @@
 {
-  "archive": "/backups/birka-20261019T204906Z.dump",
-  "manifest": "/backups/birka-20261019T204906Z.json",
-  "taken_at": "2026-10-19T20:49:06.563582+00:00",
-  "drilled_at": "2026-10-19T20:49:06.719350+00:00",
+  "archive": "/backups/birka-20261019T222820Z.dump",
+  "manifest": "/backups/birka-20261019T222820Z.json",
+  "taken_at": "2026-10-19T22:28:20.622951+00:00",
+  "drilled_at": "2026-10-19T22:28:20.767620+00:00",
   "code_head": "0041_first_days_mark",
   "backed_up_revision": "0041_first_days_mark",
-  "scratch_database": "birka_restore_drill_20261019204906_2f6290",
+  "scratch_database": "birka_restore_drill_20261019222820_bf205a",
   "kept": false,
   "checks": [
     {
@@ -16,7 +16,7 @@
     {
       "name": "restore",
       "ok": true,
-      "detail": "pg_restore took 0.188 s"
+      "detail": "pg_restore took 0.185 s"
     },
     {
       "name": "migration",
@@ -49,7 +49,7 @@
       "detail": "1 organizations reconcile"
     }
   ],
-  "restore_seconds": 0.188,
+  "restore_seconds": 0.185,
   "ok": true,
-  "total_seconds": 0.342
+  "total_seconds": 0.336
 }

@@ -2,13 +2,13 @@
   "job": "frontend",
   "name": "frontend (lint, types, build)",
   "result": "passed",
-  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 144 modules, built in 80ms",
+  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 144 modules, built in 84ms",
   "reasons": [],
-  "commit": "018f282",
-  "tree": "dirty",
+  "commit": "a68d034",
+  "tree": "clean",
   "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-19T23:55:22+03:00",
-  "finished": "2026-10-19T23:55:36+03:00",
+  "started": "2026-10-20T01:34:20+03:00",
+  "finished": "2026-10-20T01:34:35+03:00",
   "duration": "0m14s",
   "brief": "node v24.18.0 for 24; npm ci replaced by a check that node_modules is exactly the lock",
   "images": [
@@ -38,19 +38,19 @@
     {
       "name": "npm ci",
       "status": "replaced: ok",
-      "seconds": 0.2,
+      "seconds": 0.1,
       "code": 0
     },
     {
       "name": "npm audit --audit-level=high",
       "status": "ok",
-      "seconds": 1.8,
+      "seconds": 1.5,
       "code": 0
     },
     {
       "name": "npm run lint",
       "status": "ok",
-      "seconds": 8.2,
+      "seconds": 9.3,
       "code": 0
     },
     {
@@ -62,7 +62,7 @@
     {
       "name": "npm run build",
       "status": "ok",
-      "seconds": 2.2,
+      "seconds": 2.0,
       "code": 0
     }
   ],

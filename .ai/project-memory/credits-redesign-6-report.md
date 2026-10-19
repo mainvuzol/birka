@@ -2,11 +2,8 @@
 
 Baseline: `aba7e77` (PR #110, merged while this was built; its tree is
 `cee27af`'s, which this branch was begun on).
-Status: built, reviewed and proven — twelve of twelve ways of breaking it
-caught, every CI job passed but one: the audit of the server's Python
-packages, which this change does not touch, now finds three advisories in
-`aiohttp` 3.14.3 (below). Open until the lock is moved to 3.14.4. Not yet
-tried on a real phone.
+Status: built, reviewed and proven: the whole CI run locally passed, and
+twelve of twelve ways of breaking it caught. Not yet tried on a real phone.
 Branch: `feat/credits-till-debt-line`. Tasks: [the debts task list](redesign/2026-10-18-redesign-tz-credits.md),
 P1-5. Owner: business-rules.md, В4 (а) of 2026-10-18; rules as built, "«Борги»
 at the till: what a number already owes (P1-5)".
@@ -130,22 +127,20 @@ all addressed before the first commit:
 
 - [`output/verification/2026-10-19-credits-till-debt-line/`](../../output/verification/2026-10-19-credits-till-debt-line/):
   `mutants.py`, `mutants.txt`.
-- **CI, run locally at `018f282`** ([summary](../../output/verification/2026-10-19-credits-till-debt-line-ci-local/summary.md)),
-  on the host's Node 24.18:
-  - backend: 3 457 on PostgreSQL 17, passed with its declared gap;
-  - e2e: 452 journeys passed;
-  - hot path: worst p95 96.5 ms (the search by six sellers) and 124.0 ms
+- **CI, run locally at `a68d034`** ([summary](../../output/verification/2026-10-19-credits-till-debt-line-ci-local/summary.md)),
+  once rebased on #111, on the host's Node 24.18: every job passed, the
+  backend with its declared gap.
+  - backend: 3 457 on PostgreSQL 17;
+  - e2e: 452 journeys;
+  - hot path: worst p95 88.8 ms (the search by six sellers) and 70.0 ms
     (`POST /sales`), within 300 and 500;
-  - restore drill, frontend and edge passed;
-  - **python-audit failed:** `aiohttp` 3.14.3, a package the server's
-    dependencies bring in, has three advisories that were not there when
-    #110's CI ran — GHSA-5wr8-gcqf-gqf3 (CVE-2026-111064: the keep-alive
-    timeout not applied before a request's first data), GHSA-2g87-pp6c-29x5
-    (unbounded memory or CPU on crafted requests) and GHSA-494j-54xm-rwp3
-    (CVE-2026-111063: a Secure cookie sent unencrypted); each fixed in
-    3.14.4. This change touches no Python package; main fails the same.
-    Moving both locks to 3.14.4 needs the new version's hashes and files
-    from PyPI, which wait for permission to download on this Mac.
+  - python-audit: 43 packages, 0 known vulnerabilities;
+  - restore drill, frontend and edge passed.
+- **An earlier run, at `018f282`,** before the rebase, passed every job but
+  python-audit, which found three advisories published on 2026-10-19 for
+  `aiohttp` 3.14.3, a package this change does not touch; #111 moved both
+  locks to 3.14.4, and this branch was rebased on it. The rebased commit
+  differs from `018f282` by #111's files alone.
 
 ## Not covered here
 

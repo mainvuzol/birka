@@ -4,18 +4,18 @@
   "result": "passed",
   "counts": "7 of CI's 7 run steps passed; ops image tools: age 1.2.1-1+b5 / libpq5:arm64 18.6-1.pgdg13+2 / postgresql-client-17 17.11-1.pgdg13+2 / postgresql-common 278 / pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2) / age 1.2.1",
   "reasons": [],
-  "commit": "018f282",
-  "tree": "dirty",
+  "commit": "a68d034",
+  "tree": "clean",
   "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-19T23:48:51+03:00",
-  "finished": "2026-10-19T23:49:15+03:00",
+  "started": "2026-10-20T01:28:05+03:00",
+  "finished": "2026-10-20T01:28:30+03:00",
   "duration": "0m24s",
   "brief": "images built from the local cache only (pinned bases, dead proxy) as birka-ci-local-*; a user network instead of host networking; backups/keys outside the repo",
   "images": [
     "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled",
     "python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache",
-    "birka-ci-local-ops @ sha256:9794db52b92e15f559308168d22e271c7958af1e2464a6ab0c9cd74f02088c2c, built here from the cache",
-    "birka-ci-local-api @ sha256:9e902f27e0ba1a0aff3726288b0093195bbf02320c83bd2b2bb15b97d866f99a, built here from the cache"
+    "birka-ci-local-ops @ sha256:32714ce21ec9efaf5f93de8ae6dde95c016e6d6f54c936d7b79a6e5787f08909, built here from the cache",
+    "birka-ci-local-api @ sha256:5f4203638361e6dc01ef459d4f74a50106fb6695f0921627dbf1a042ee137441, built here from the cache"
   ],
   "deviations": [
     "Images are tagged birka-ci-local-ops / birka-ci-local-api (not birka-ops / birka-api) and built from the local build cache only: every base image pinned to the digest in the cache (no pull, no tag lookup), and a dead HTTP(S) proxy for every RUN, so any download fails (`--network=none` changes BuildKit's cache key). The ops image's package layer was fetched once, by the owner's decision (2026-10-08), with network: docker build --progress=plain --build-context python:3.12.14-slim=<the runner's cached pin> --target ops -t birka-ci-local-ops backend   (from the repository, network allowed); log in /Users/nikitahlushak/.cache/birka-runtime/ci/runs/2026-10-08-ops-image-fetch.txt. A build that fails here fails the job; only before that one fetch is a blocked download of the ops image \"incomplete\" (still exit 1).",
@@ -48,7 +48,7 @@
     {
       "name": "The API image is still the default target",
       "status": "ok",
-      "seconds": 2.6,
+      "seconds": 2.5,
       "code": 0
     },
     {

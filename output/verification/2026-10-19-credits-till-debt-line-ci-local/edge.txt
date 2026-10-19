@@ -1,9 +1,9 @@
 CI job `edge` — edge (Caddy, the published bundle, headers and limits)
 Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
 
-commit:   018f282 (feat/credits-till-debt-line) — dirty: ?? .ai/project-memory/credits-redesign-6-report.md; ?? output/verification/2026-10-19-credits-till-debt-line/mutants.py; ?? output/verification/2026-10-19-credits-till-debt-line/mutants.txt
+commit:   a68d034 (feat/credits-till-debt-line) — clean
 runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da
-date:     2026-10-19 23:55:41 EEST → 23:56:05 (0m23s)
+date:     2026-10-20 01:34:40 EEST → 01:35:03 (0m22s)
 machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
 env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
@@ -12,10 +12,10 @@ images:   postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec
           python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache
           node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1, named by digest in its Dockerfile, in the local build cache
           alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8, named by digest in its Dockerfile, in the local build cache
-          birka-edge-check-api @ sha256:9257036e2dfea1c79cb63349b6e7576ad0c210a35f9d2612f6bab6113a91a1be, built here from the cache
-          birka-edge-check-web @ sha256:8c72b304a7abde601c688f33b59676530792f385f67c871e28a65cad9b7b8ba4, built here from the cache
-          birka-edge-check-ops @ sha256:da5036e19e089f43b86bb1f4a187b41ba1819f8563cdaefe34c3c0808531fa2a, built here from the cache
-network:  from Docker's VM during the job (Docker Desktop's log): registry-1.docker.io:443 x2 (10988 bytes, 1 still open)
+          birka-edge-check-api @ sha256:5d4466968b44cccc4f3831364c276f19b93b785fc16e38fd2fc6ac7c93e46e8c, built here from the cache
+          birka-edge-check-web @ sha256:dcb6c23fa1e048477ed5540ebdf2bafd88d6b01afae0131460b2a9601d4fe591, built here from the cache
+          birka-edge-check-ops @ sha256:22129120d329671fd7b46e47b834f0f3c3bc5437f8fa13c17398f3d6619e35ad, built here from the cache
+network:  from Docker's VM during the job (Docker Desktop's log): registry-1.docker.io:443 x2 (21984 bytes)
 result:   passed
 counts:   9/9 steps passed
 
@@ -96,20 +96,20 @@ services:
 
 $ /Users/nikitahlushak/.docker/bin/docker image rm birka-edge-check-ops
 Untagged: birka-edge-check-ops:latest
-Deleted: sha256:d71d587c374a640438120a363026637a878a38675b6f2aff98906db45cd15c21
+Deleted: sha256:92a9956057b8370e5c8da0f306dbbf9c4ddb62407936617d9c045a86591bb257
 
 ===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-[runner] the working tree at 018f282 (dirty), not a fresh checkout
+[runner] the working tree at a68d034 (clean), not a fresh checkout
 ===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
 
 ===== Caddy accepts the Caddyfile, as a server with a real domain reads it
-{"level":"info","ts":1792443342.627043,"msg":"using config from file","file":"/etc/caddy/Caddyfile"}
-{"level":"info","ts":1792443342.6277874,"msg":"adapted config to JSON","adapter":"caddyfile"}
-{"level":"info","ts":1792443342.6280286,"logger":"http.auto_https","msg":"server is listening only on the HTTPS port but has no TLS connection policies; adding one to enable TLS","server_name":"srv0","https_port":443}
-{"level":"info","ts":1792443342.6280408,"logger":"http.auto_https","msg":"enabling automatic HTTP->HTTPS redirects","server_name":"srv0"}
-{"level":"info","ts":1792443342.6280708,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0x617c2cdc5780"}
-{"level":"info","ts":1792443342.6283011,"logger":"tls.cache.maintenance","msg":"stopped background certificate maintenance","cache":"0x617c2cdc5780"}
-{"level":"info","ts":1792443342.6283088,"logger":"http","msg":"servers shutting down with eternal grace period"}
+{"level":"info","ts":1792449280.9118533,"msg":"using config from file","file":"/etc/caddy/Caddyfile"}
+{"level":"info","ts":1792449280.9127798,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"info","ts":1792449280.9130445,"logger":"http.auto_https","msg":"server is listening only on the HTTPS port but has no TLS connection policies; adding one to enable TLS","server_name":"srv0","https_port":443}
+{"level":"info","ts":1792449280.9130557,"logger":"http.auto_https","msg":"enabling automatic HTTP->HTTPS redirects","server_name":"srv0"}
+{"level":"info","ts":1792449280.9131835,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0x7456e3059500"}
+{"level":"info","ts":1792449280.913295,"logger":"http","msg":"servers shutting down with eternal grace period"}
+{"level":"info","ts":1792449280.9133377,"logger":"tls.cache.maintenance","msg":"stopped background certificate maintenance","cache":"0x7456e3059500"}
 Valid configuration
 ===== ok: Caddy accepts the Caddyfile, as a server with a real domain reads it (0.2s)
 
@@ -118,8 +118,8 @@ services that publish ports: ["caddy"]
 ===== ok: Only Caddy publishes a port (0.1s)
 
 ===== Build the images and start the stack
- Image birka-edge-check-api Building 
  Image birka-edge-check-web Building 
+ Image birka-edge-check-api Building 
 #1 [internal] load local bake definitions
 #1 reading from stdin 1.78kB done
 #1 DONE 0.0s
@@ -144,28 +144,28 @@ services that publish ports: ["caddy"]
 #6 DONE 0.0s
 
 #7 [api internal] load build context
-#7 transferring context: 11.75kB done
+#7 transferring context: 11.75kB 0.0s done
 #7 DONE 0.0s
 
-#8 [api base 3/4] COPY requirements.lock ./
+#8 [api base 4/4] RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
 #8 CACHED
 
-#9 [api api 4/5] COPY alembic.ini ./
+#9 [api base 3/4] COPY requirements.lock ./
 #9 CACHED
 
-#10 [api api 1/5] COPY app ./app
+#10 [api api 3/5] COPY scripts ./scripts
 #10 CACHED
 
-#11 [api base 2/4] WORKDIR /app
+#11 [api api 1/5] COPY app ./app
 #11 CACHED
 
-#12 [api api 2/5] COPY migrations ./migrations
+#12 [api base 2/4] WORKDIR /app
 #12 CACHED
 
-#13 [api base 4/4] RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
+#13 [api api 2/5] COPY migrations ./migrations
 #13 CACHED
 
-#14 [api api 3/5] COPY scripts ./scripts
+#14 [api api 4/5] COPY alembic.ini ./
 #14 CACHED
 
 #15 [api api 5/5] RUN useradd --create-home --uid 10001 birka && chown -R birka:birka /app
@@ -173,10 +173,10 @@ services that publish ports: ["caddy"]
 
 #16 [api] exporting to image
 #16 exporting layers done
-#16 exporting manifest sha256:8b56a3440461373321bb5ec8184a138e973dba09eac0827602b0d2637c80744c done
-#16 exporting config sha256:7ebb5c95adbd50f10283e8d39d549b812f6b61c7b0ca6cad10b9d7f426c9f249 done
-#16 exporting attestation manifest sha256:4c86b55117449a63893e10386186d576e591ee47867ff6e148e147d1c854d398 done
-#16 exporting manifest list sha256:9257036e2dfea1c79cb63349b6e7576ad0c210a35f9d2612f6bab6113a91a1be done
+#16 exporting manifest sha256:5f461da3de35afbc4c8114a2b83bb3c0d0591379f9bdcc5ca86eb41c2de1c2ff done
+#16 exporting config sha256:356ad30b21b3ad06131092b21ae845954739ffd0394daef2140a10453c346a44 done
+#16 exporting attestation manifest sha256:fa4609dac3d9afc096c9ac3d70ac8e708ca914f90c0eec1f78ee0aa3e430b851 done
+#16 exporting manifest list sha256:5d4466968b44cccc4f3831364c276f19b93b785fc16e38fd2fc6ac7c93e46e8c done
 #16 naming to docker.io/library/birka-edge-check-api:latest done
 #16 unpacking to docker.io/library/birka-edge-check-api:latest done
 #16 DONE 0.0s
@@ -185,60 +185,60 @@ services that publish ports: ["caddy"]
 #17 DONE 0.0s
 
 #18 [web internal] load metadata for docker.io/library/node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
-#18 DONE 1.1s
+#18 DONE 1.0s
 
 #19 [web internal] load metadata for docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
-#19 DONE 1.1s
+#19 DONE 1.0s
 
 #20 [web internal] load .dockerignore
 #20 transferring context: 551B done
 #20 DONE 0.0s
 
-#21 [web stage-1 1/3] FROM docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
-#21 resolve docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 done
+#21 [web build 1/6] FROM docker.io/library/node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+#21 resolve docker.io/library/node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 done
 #21 DONE 0.0s
 
-#22 [web build 1/6] FROM docker.io/library/node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
-#22 resolve docker.io/library/node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 done
+#22 [web stage-1 1/3] FROM docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+#22 resolve docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 done
 #22 DONE 0.0s
 
 #23 [web internal] load build context
-#23 transferring context: 537.68kB 0.0s done
+#23 transferring context: 338.47kB done
 #23 DONE 0.0s
 
-#24 [web build 2/6] WORKDIR /app
+#24 [web build 3/6] COPY package.json package-lock.json ./
 #24 CACHED
 
-#25 [web build 3/6] COPY package.json package-lock.json ./
+#25 [web build 4/6] RUN npm ci --no-audit --no-fund
 #25 CACHED
 
-#26 [web build 4/6] RUN npm ci --no-audit --no-fund
+#26 [web build 2/6] WORKDIR /app
 #26 CACHED
 
 #27 [web build 5/6] COPY . .
-#27 DONE 0.0s
+#27 CACHED
 
 #28 [web build 6/6] RUN npm run build
-#28 0.315 
-#28 0.315 > birka-frontend@0.1.0 build
-#28 0.315 > tsc -b && vite build
-#28 0.315 
-#28 3.212 vite v8.3.0 building client environment for production...
-#28 3.216 transforming...
-#28 3.249 ✓ 144 modules transformed.
-#28 3.272 rendering chunks...
-#28 3.296 computing gzip size...
-#28 3.298 dist/index.html                             1.45 kB │ gzip:   0.84 kB
-#28 3.298 dist/assets/index-B5sS1GMn.css             16.20 kB │ gzip:   4.23 kB
-#28 3.298 dist/assets/rolldown-runtime-CbXtAM7H.js    0.58 kB │ gzip:   0.36 kB
-#28 3.298 dist/assets/vendor-CTXfEEWe.js            207.61 kB │ gzip:  66.60 kB
-#28 3.298 dist/assets/index-DXE-RsUQ.js             439.28 kB │ gzip: 111.16 kB
-#28 3.298 
-#28 3.299 ✓ built in 86ms
-#28 DONE 3.3s
+#28 0.286 
+#28 0.286 > birka-frontend@0.1.0 build
+#28 0.286 > tsc -b && vite build
+#28 0.286 
+#28 2.858 vite v8.3.0 building client environment for production...
+#28 2.862 transforming...
+#28 2.894 ✓ 144 modules transformed.
+#28 2.915 rendering chunks...
+#28 2.935 computing gzip size...
+#28 2.938 dist/index.html                             1.45 kB │ gzip:   0.84 kB
+#28 2.938 dist/assets/index-B5sS1GMn.css             16.20 kB │ gzip:   4.23 kB
+#28 2.938 dist/assets/rolldown-runtime-CbXtAM7H.js    0.58 kB │ gzip:   0.36 kB
+#28 2.938 dist/assets/vendor-CTXfEEWe.js            207.61 kB │ gzip:  66.60 kB
+#28 2.938 dist/assets/index-Bzdx6kek.js             439.28 kB │ gzip: 111.16 kB
+#28 2.938 
+#28 2.938 ✓ built in 80ms
+#28 DONE 3.0s
 
-#21 [web stage-1 1/3] FROM docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
-#21 CACHED
+#22 [web stage-1 1/3] FROM docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+#22 CACHED
 
 #29 [web stage-1 2/3] COPY --from=build /app/dist /dist
 #29 DONE 0.0s
@@ -248,10 +248,10 @@ services that publish ports: ["caddy"]
 
 #31 [web] exporting to image
 #31 exporting layers 0.0s done
-#31 exporting manifest sha256:1457c6ae2eaae0083140535981f8a74d6a7f6329e2f3477ffd8271cefa5eed2a done
-#31 exporting config sha256:03cf3f622813df549fa7dcf7c3176f858cc042e44a4f968fdb4f38700ef7c58c done
-#31 exporting attestation manifest sha256:8223c92067cafbadf8068fb4633ecc535d206f5e708dbaef493411b1a8a988c2 done
-#31 exporting manifest list sha256:8c72b304a7abde601c688f33b59676530792f385f67c871e28a65cad9b7b8ba4 done
+#31 exporting manifest sha256:3a7c716b66bb04981d4639c11d3bed2c8ee98616be90d5d88edb3060797ef3d2 done
+#31 exporting config sha256:74c49f40aae33115f6329db31be9f8bdb1dbbd780b51fe842c312cee3c31ff75 done
+#31 exporting attestation manifest sha256:c5d95839e75ab5acc430c5e7b03a14d65b8255502b39df716357746d9cd1bbf4 done
+#31 exporting manifest list sha256:dcb6c23fa1e048477ed5540ebdf2bafd88d6b01afae0131460b2a9601d4fe591 done
 #31 naming to docker.io/library/birka-edge-check-web:latest done
 #31 unpacking to docker.io/library/birka-edge-check-web:latest 0.0s done
 #31 DONE 0.1s
@@ -261,23 +261,23 @@ services that publish ports: ["caddy"]
  Image birka-edge-check-api Built 
  Image birka-edge-check-web Built 
  Volume birka-edge-check_caddy_config Creating 
- Volume birka-edge-check_db_data Creating 
+ Network birka-edge-check_default Creating 
+ Volume birka-edge-check_caddy_data Creating 
+ Volume birka-edge-check_web_dist Creating 
  Volume birka-edge-check_caddy_config Creating 
+ Volume birka-edge-check_web_dist Creating 
+ Volume birka-edge-check_caddy_data Creating 
+ Network birka-edge-check_default Creating 
  Volume birka-edge-check_db_data Creating 
- Volume birka-edge-check_web_dist Creating 
- Volume birka-edge-check_web_dist Creating 
- Network birka-edge-check_default Creating 
- Network birka-edge-check_default Creating 
- Volume birka-edge-check_caddy_data Creating 
- Volume birka-edge-check_caddy_data Creating 
+ Volume birka-edge-check_db_data Creating 
  Volume birka-edge-check_caddy_config Created 
  Volume birka-edge-check_caddy_config Created 
  Volume birka-edge-check_web_dist Created 
  Volume birka-edge-check_web_dist Created 
- Volume birka-edge-check_db_data Created 
- Volume birka-edge-check_db_data Created 
  Volume birka-edge-check_caddy_data Created 
  Volume birka-edge-check_caddy_data Created 
+ Volume birka-edge-check_db_data Created 
+ Volume birka-edge-check_db_data Created 
  Network birka-edge-check_default Created 
  Network birka-edge-check_default Created 
  Container birka-edge-check-db-1 Creating 
@@ -288,11 +288,11 @@ services that publish ports: ["caddy"]
  Container birka-edge-check-api-1 Created 
  Container birka-edge-check-caddy-1 Creating 
  Container birka-edge-check-caddy-1 Created 
- Container birka-edge-check-web-1 Starting 
  Container birka-edge-check-db-1 Starting 
- Container birka-edge-check-web-1 Started 
+ Container birka-edge-check-web-1 Starting 
  Container birka-edge-check-db-1 Started 
  Container birka-edge-check-db-1 Waiting 
+ Container birka-edge-check-web-1 Started 
  Container birka-edge-check-db-1 Healthy 
  Container birka-edge-check-api-1 Starting 
  Container birka-edge-check-api-1 Started 
@@ -302,7 +302,7 @@ services that publish ports: ["caddy"]
  Container birka-edge-check-caddy-1 Started 
 curl: (22) The requested URL returned error: 502
 {"status":"ok","environment":"production"}
-===== ok: Build the images and start the stack (13.8s)
+===== ok: Build the images and start the stack (13.1s)
 
 ===== The API is ready behind the edge, healthy to Docker, and keeps its internals in
  Image birka-edge-check-ops Building 
@@ -329,25 +329,25 @@ curl: (22) The requested URL returned error: 502
 #6 transferring context: 11.75kB done
 #6 DONE 0.0s
 
-#7 [ops 3/6] COPY migrations ./migrations
+#7 [base 4/4] RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
 #7 CACHED
 
 #8 [ops 2/6] COPY app ./app
 #8 CACHED
 
-#9 [base 4/4] RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
+#9 [ops 1/6] RUN apt-get update  && apt-get install -y --no-install-recommends ca-certificates postgresql-common  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y  && apt-get install -y --no-install-recommends postgresql-client-17 age  && rm -rf /var/lib/apt/lists/*
 #9 CACHED
 
-#10 [ops 5/6] COPY alembic.ini ./
+#10 [ops 3/6] COPY migrations ./migrations
 #10 CACHED
 
-#11 [base 2/4] WORKDIR /app
+#11 [base 3/4] COPY requirements.lock ./
 #11 CACHED
 
-#12 [base 3/4] COPY requirements.lock ./
+#12 [ops 5/6] COPY alembic.ini ./
 #12 CACHED
 
-#13 [ops 1/6] RUN apt-get update  && apt-get install -y --no-install-recommends ca-certificates postgresql-common  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y  && apt-get install -y --no-install-recommends postgresql-client-17 age  && rm -rf /var/lib/apt/lists/*
+#13 [base 2/4] WORKDIR /app
 #13 CACHED
 
 #14 [ops 4/6] COPY scripts ./scripts
@@ -358,10 +358,10 @@ curl: (22) The requested URL returned error: 502
 
 #16 exporting to image
 #16 exporting layers done
-#16 exporting manifest sha256:69bec097fec191d1354e3dd5df1369dd06efb4d7e6bfe6da697f2e05280fb08d done
-#16 exporting config sha256:68467d1dad36e5e331c866856727fe4eab61e0cc376d609a9510f2c89e27d35e done
-#16 exporting attestation manifest sha256:1fdd98f2442c37b7ce8e5f327c57b335bd9567f7772052b67e9d5eeb90ad207a done
-#16 exporting manifest list sha256:da5036e19e089f43b86bb1f4a187b41ba1819f8563cdaefe34c3c0808531fa2a done
+#16 exporting manifest sha256:1f89b121d9a6c186421898c1234266648bbb26927e414a7a998796916eb384e0 done
+#16 exporting config sha256:555706c23303d710f679bee48e8d34da493006f5edc06398b3a1eac15d94b84f done
+#16 exporting attestation manifest sha256:0a684764138165a2eafe4b4fbb8e0afc286956518f4ef02628a61d48b950ddac done
+#16 exporting manifest list sha256:22129120d329671fd7b46e47b834f0f3c3bc5437f8fa13c17398f3d6619e35ad done
 #16 naming to docker.io/library/birka-edge-check-ops:latest done
 #16 unpacking to docker.io/library/birka-edge-check-ops:latest done
 #16 DONE 0.0s
@@ -369,8 +369,8 @@ curl: (22) The requested URL returned error: 502
 #17 resolving provenance for metadata file
 #17 DONE 0.0s
  Image birka-edge-check-ops Built 
- Container birka-edge-check-ops-run-b35b2fd5ea38 Creating 
- Container birka-edge-check-ops-run-b35b2fd5ea38 Created 
+ Container birka-edge-check-ops-run-b4e21b068f60 Creating 
+ Container birka-edge-check-ops-run-b4e21b068f60 Created 
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
 INFO  [alembic.runtime.migration] Will assume transactional DDL.
 INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
@@ -414,18 +414,18 @@ INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_
 INFO  [alembic.runtime.migration] Running upgrade 0038_customer_erasure -> 0039_outage_mark_debts_returns, The mark «під час збою» on returns and debt payments. Owner decision, 2026-10-10; ADR-0021.
 INFO  [alembic.runtime.migration] Running upgrade 0039_outage_mark_debts_returns -> 0040_warehouse_stocktake, A stocktake of a whole warehouse. Owner decisions, 2026-10-10; ADR-0022.
 INFO  [alembic.runtime.migration] Running upgrade 0040_warehouse_stocktake -> 0041_first_days_mark, «З паперу»: the first days' paper, a mark of its own. Owner decisions, 2026-10-15 and 2026-10-16.
- Container birka-edge-check-ops-run-56eaf6898745 Creating 
- Container birka-edge-check-ops-run-56eaf6898745 Created 
+ Container birka-edge-check-ops-run-46bf5ab6ef2f Creating 
+ Container birka-edge-check-ops-run-46bf5ab6ef2f Created 
 birka_app: created
 75 tables: read and write
 alembic_version: read only
 the database: connect only, no temporary tables
-{"started_at":"2026-10-19T20:55:55+00:00","release":"018f2828dff343617166d5005abf472c62c196c9","database":"ok","sign_ins":{"last_success_at":null,"failing_since":null,"last_failure_at":null,"failures":0,"senders":0,"reasons":{"expired":0,"future":0,"signature":0,"malformed":0}}}
+{"started_at":"2026-10-19T22:34:53+00:00","release":"a68d03481c1aea2ca0f3219c6562d84eb6e549b2","database":"ok","sign_ins":{"last_success_at":null,"failing_since":null,"last_failure_at":null,"failures":0,"senders":0,"reasons":{"expired":0,"future":0,"signature":0,"malformed":0}}}
 NAME                       IMAGE                                                                                        COMMAND                  SERVICE   CREATED          STATUS                    PORTS
-birka-edge-check-api-1     birka-edge-check-api                                                                         "uvicorn app.main:ap…"   api       11 seconds ago   Up 5 seconds (healthy)    8000/tcp
-birka-edge-check-caddy-1   caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028       "caddy run --config …"   caddy     11 seconds ago   Up 5 seconds              127.0.0.1:58080->80/tcp, 127.0.0.1:58443->443/tcp, 127.0.0.1:58443->443/udp
-birka-edge-check-db-1      postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24   "docker-entrypoint.s…"   db        11 seconds ago   Up 11 seconds (healthy)   5432/tcp
-===== ok: The API is ready behind the edge, healthy to Docker, and keeps its internals in (3.0s)
+birka-edge-check-api-1     birka-edge-check-api                                                                         "uvicorn app.main:ap…"   api       12 seconds ago   Up 5 seconds (healthy)    8000/tcp
+birka-edge-check-caddy-1   caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028       "caddy run --config …"   caddy     12 seconds ago   Up 5 seconds              127.0.0.1:58080->80/tcp, 127.0.0.1:58443->443/tcp, 127.0.0.1:58443->443/udp
+birka-edge-check-db-1      postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24   "docker-entrypoint.s…"   db        12 seconds ago   Up 11 seconds (healthy)   5432/tcp
+===== ok: The API is ready behind the edge, healthy to Docker, and keeps its internals in (2.9s)
 
 ===== No container may change its image, gain a privilege, or grow past its memory
 db: false true [ALL] [CAP_CHOWN CAP_DAC_READ_SEARCH CAP_FOWNER CAP_SETGID CAP_SETUID] [no-new-privileges:true] 1073741824
@@ -442,42 +442,42 @@ Cache-Control: no-cache
 Content-Length: 1454
 Content-Security-Policy: frame-ancestors https://web.telegram.org https://telegram.org
 Content-Type: text/html; charset=utf-8
-Etag: "dm944yh0r1au-14e"
-Last-Modified: Mon, 19 Oct 2026 20:55:48 GMT
+Etag: "dm968q8y3dgy-14e"
+Last-Modified: Mon, 19 Oct 2026 22:34:45 GMT
 Referrer-Policy: strict-origin-when-cross-origin
 Strict-Transport-Security: max-age=31536000
 Vary: Accept-Encoding
 X-Content-Type-Options: nosniff
-Date: Mon, 19 Oct 2026 20:56:00 GMT
+Date: Mon, 19 Oct 2026 22:34:57 GMT
 HTTP/1.1 200 OK
 Accept-Ranges: bytes
 Cache-Control: public, max-age=31536000, immutable
 Content-Length: 439280
 Content-Security-Policy: frame-ancestors https://web.telegram.org https://telegram.org
 Content-Type: text/javascript; charset=utf-8
-Etag: "dm944yh05lp2-9ey8"
-Last-Modified: Mon, 19 Oct 2026 20:55:48 GMT
+Etag: "dm968q8v47g2-9ey8"
+Last-Modified: Mon, 19 Oct 2026 22:34:45 GMT
 Referrer-Policy: strict-origin-when-cross-origin
 Strict-Transport-Security: max-age=31536000
 Vary: Accept-Encoding
 X-Content-Type-Options: nosniff
-Date: Mon, 19 Oct 2026 20:56:00 GMT
+Date: Mon, 19 Oct 2026 22:34:57 GMT
 HTTP/1.1 200 OK
 Cache-Control: no-store
 Content-Length: 42
 Content-Security-Policy: frame-ancestors https://web.telegram.org https://telegram.org
 Content-Type: application/json
-Date: Mon, 19 Oct 2026 20:55:59 GMT
+Date: Mon, 19 Oct 2026 22:34:57 GMT
 Referrer-Policy: strict-origin-when-cross-origin
 Strict-Transport-Security: max-age=31536000
 Via: 1.1 Caddy
 X-Content-Type-Options: nosniff
-X-Request-Id: 9de97f46-a8ff-4240-9632-9b662a8538a7
+X-Request-Id: 659a9909-daa9-4346-9f79-b0547521fb6f
 the edge sends what the server must send
 ===== ok: What the edge sends (0.2s)
 
 ===== Sign-ins are counted per real address, whatever a client claims
-===== ok: Sign-ins are counted per real address, whatever a client claims (0.3s)
+===== ok: Sign-ins are counted per real address, whatever a client claims (0.2s)
 
 ===== The edge's own log keeps no query string
  Container birka-edge-check-api-1 Stopping 
@@ -487,15 +487,15 @@ the edge sends what the server must send
  Container birka-edge-check-api-1 Starting 
  Container birka-edge-check-api-1 Started 
 curl: (22) The requested URL returned error: 502
-===== ok: The edge's own log keeps no query string (3.6s)
+===== ok: The edge's own log keeps no query string (3.4s)
 
 ===== A new bundle keeps the previous one's files and drops month-old ones
- Container birka-edge-check-web-run-7270cd37d5d5 Creating 
- Container birka-edge-check-web-run-7270cd37d5d5 Created 
- Container birka-edge-check-web-run-11fab53e508f Creating 
- Container birka-edge-check-web-run-11fab53e508f Created 
+ Container birka-edge-check-web-run-e4d23ab12eb8 Creating 
+ Container birka-edge-check-web-run-e4d23ab12eb8 Created 
+ Container birka-edge-check-web-run-5c037b54c79a Creating 
+ Container birka-edge-check-web-run-5c037b54c79a Created 
 web bundle published
-===== ok: A new bundle keeps the previous one's files and drops month-old ones (0.5s)
+===== ok: A new bundle keeps the previous one's files and drops month-old ones (0.6s)
 $ /Users/nikitahlushak/.docker/bin/docker compose --profile ops down -v --remove-orphans
  Container birka-edge-check-caddy-1 Stopping 
  Container birka-edge-check-caddy-1 Stopped 
@@ -513,14 +513,14 @@ $ /Users/nikitahlushak/.docker/bin/docker compose --profile ops down -v --remove
  Container birka-edge-check-db-1 Stopped 
  Container birka-edge-check-db-1 Removing 
  Container birka-edge-check-db-1 Removed 
- Volume birka-edge-check_db_data Removing 
  Volume birka-edge-check_web_dist Removing 
  Volume birka-edge-check_caddy_config Removing 
+ Volume birka-edge-check_db_data Removing 
  Volume birka-edge-check_caddy_data Removing 
  Network birka-edge-check_default Removing 
  Volume birka-edge-check_db_data Removed 
- Volume birka-edge-check_caddy_data Removed 
  Volume birka-edge-check_caddy_config Removed 
+ Volume birka-edge-check_caddy_data Removed 
  Volume birka-edge-check_web_dist Removed 
  Network birka-edge-check_default Removed 
 
@@ -528,12 +528,12 @@ $ /Users/nikitahlushak/.docker/bin/docker compose --profile ops down -v --remove
   replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
   ok                                 Caddy accepts the Caddyfile, as a server with a real domain reads it  (0.2s)
   ok                                 Only Caddy publishes a port  (0.1s)
-  ok                                 Build the images and start the stack  (13.8s)
-  ok                                 The API is ready behind the edge, healthy to Docker, and keeps its internals in  (3.0s)
+  ok                                 Build the images and start the stack  (13.1s)
+  ok                                 The API is ready behind the edge, healthy to Docker, and keeps its internals in  (2.9s)
   ok                                 No container may change its image, gain a privilege, or grow past its memory  (0.5s)
   ok                                 What the edge sends  (0.2s)
-  ok                                 Sign-ins are counted per real address, whatever a client claims  (0.3s)
-  ok                                 The edge's own log keeps no query string  (3.6s)
-  ok                                 A new bundle keeps the previous one's files and drops month-old ones  (0.5s)
+  ok                                 Sign-ins are counted per real address, whatever a client claims  (0.2s)
+  ok                                 The edge's own log keeps no query string  (3.4s)
+  ok                                 A new bundle keeps the previous one's files and drops month-old ones  (0.6s)
   skipped (if: failure())            The stack, when something failed
 ===== [runner] edge: PASSED — 9/9 steps passed
