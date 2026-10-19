@@ -10,7 +10,7 @@ import {
   tapSize,
   waitsFor,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -252,9 +252,26 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   const sales = posts(page, "/api/v1/sales");
   await basket(page, coat);
 
+  await page.setViewportSize({ width: 360, height: 740 });
   await page.getByLabel("Оплата частинами").check();
+  // What paying in parts means, in one line at 360 px (credits task list,
+  // P1-5).
+  const means = page.getByText("Решту — у «Боргах» цього магазину.", {
+    exact: true,
+  });
+  await expect(means).toBeVisible();
+  expect(await lines(means)).toBe(1);
   await page.getByLabel("Ім’я покупця").fill(name);
+  // A new customer's number: «Борги» asked, and nothing said.
+  const asked = page.waitForResponse(
+    (response) =>
+      response.url().includes("/credits/customers?") &&
+      new URL(response.url()).searchParams.get("query") === written,
+  );
   await page.getByLabel("Телефон покупця").fill(written);
+  await asked;
+  await page.waitForTimeout(300);
+  await expect(page.locator(".number-debt")).toHaveText("");
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
   await expect(page.getByText("Лишиться винен 2 000,00 грн")).toBeVisible();
   // The way is for the part paid now.
@@ -755,6 +772,227 @@ async function storeOwed(page: Page, token: string): Promise<bigint> {
   return BigInt(whole) * 100n + BigInt(fraction);
 }
 
+/** How many lines a piece of text takes, by its height and line height. */
+async function lines(text: Locator): Promise<number> {
+  return text.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return Math.round(
+      node.getBoundingClientRect().height / parseFloat(style.lineHeight),
+    );
+  });
+}
+
+test("the till says what a number already owes, and still sells in parts as the seller decides", async ({
+  page,
+}) => {
+  const tel = newPhone();
+  // Written down as «+38 …»: a number that merely holds the digits typed is
+  // never taken for it (review, 2026-10-19).
+  const prior = await onCredit(page, customer(), `+38 ${tel}`);
+  const coat = await stocked(page);
+  // A second, for the same number's next sale, on the shelf the till reads.
+  const more = await stocked(page);
+  const name = customer();
+  const sales = posts(page, "/api/v1/sales");
+  await page.setViewportSize({ width: 360, height: 740 });
+  await basket(page, coat);
+  await page.getByLabel("Оплата частинами").check();
+  await page.getByLabel("Ім’я покупця").fill(name);
+  // Written another way than the debt's: the same number (owner decision,
+  // 2026-10-18, В4 (а); credits task list, P1-5).
+  const written = `+38 (${tel.slice(0, 3)}) ${tel.slice(3)}`;
+  const queries: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/credits/customers?"))
+      queries.push(new URL(request.url()).searchParams.get("query") ?? "");
+  });
+  // The line's room is kept once the number is whole: nothing under it
+  // moves when it comes (review, 2026-10-19).
+  const sum = page.getByLabel("Сплачує зараз, грн");
+  await page.getByLabel("Телефон покупця").fill(written);
+  const before = await sum.boundingBox();
+  const owes = page.locator(".number-debt");
+  await expect(owes).toHaveText("За номером уже винні 2 000,00 грн");
+  await expect(owes).toHaveClass(/\bowing\b/);
+  expect(await lines(owes)).toBe(1);
+  expect((await sum.boundingBox())?.y).toBe(before?.y);
+  // Another digit is another number: the line goes at once — never the
+  // number before it while the field settles.
+  const other = `${written.slice(0, -1)}${written.endsWith("9") ? "8" : "9"}`;
+  await page.getByLabel("Телефон покупця").fill(other);
+  expect(await owes.textContent()).toBe("");
+  // The start of the debt's «+38 …», ten digits: read, and another number.
+  const start = `+38 ${tel.slice(0, 8)}`;
+  const read = page.waitForResponse(
+    (response) =>
+      response.url().includes("/credits/customers?") &&
+      new URL(response.url()).searchParams.get("query") === start,
+  );
+  await page.getByLabel("Телефон покупця").fill(start);
+  await read;
+  await page.waitForTimeout(300);
+  await expect(owes).toHaveText("");
+  // Part of a number is no number: «Борги» not even asked.
+  const part = tel.slice(0, 8);
+  await page.getByLabel("Телефон покупця").fill(part);
+  await page.waitForTimeout(500);
+  await expect(owes).toHaveText("");
+  expect(queries).not.toContain(part);
+  await page.getByLabel("Телефон покупця").fill(written);
+  await expect(owes).toHaveText("За номером уже винні 2 000,00 грн");
+  // Nothing refused: sold in parts as any sale.
+  await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  expect((sales.bodies[0] as { credit: unknown }).credit).toEqual({
+    customer_name: name,
+    customer_phone: written,
+    paid_now: "1000.00",
+  });
+
+  // The older debt paid off elsewhere meanwhile; the same number again, in
+  // the same app: what it owes now, never a sum read before, not even for a
+  // moment (review, 2026-10-19).
+  await payOff(page, prior.token, prior.sale.credit.credit_id);
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+  await tapSize(page, more.variant, more.size);
+  await fillLine(page, { quantity: 2, price: "1500" });
+  await page.getByLabel("Оплата частинами").check();
+  await page.getByLabel("Ім’я покупця").fill(name);
+  // Every text the line takes, as it is drawn.
+  await owes.evaluate((node) => {
+    const seen: string[] = [];
+    (window as unknown as { said: string[] }).said = seen;
+    new MutationObserver(() => {
+      const text = node.textContent;
+      if (text) seen.push(text.replace(/\s/g, " "));
+    }).observe(node, { subtree: true, childList: true, characterData: true });
+  });
+  await page.getByLabel("Телефон покупця").fill(written);
+  await expect(owes).toHaveText("За номером уже винні 2 000,00 грн");
+  expect(
+    new Set(
+      await page.evaluate(() => (window as unknown as { said: string[] }).said),
+    ),
+  ).toEqual(new Set(["За номером уже винні 2 000,00 грн"]));
+});
+
+test("the till says a number's debt was written off, and says nothing when «Борги» cannot be read, the sale going on", async ({
+  page,
+}) => {
+  const coat = await stocked(page);
+  let answer: "owes a lot" | "written off" | "failed" = "owes a lot";
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    if (answer === "failed") {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
+    if (answer === "owes a lot") {
+      // Owed, and a debt written off before: what is owed is said.
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              phone_digits: "0671234567",
+              customer_name: "Оксана",
+              customer_phone: "067 123 45 67",
+              owed: "123456.00",
+              open_debts: 1,
+              credits: [
+                {
+                  id: randomUUID(),
+                  status: "WRITTEN_OFF",
+                  owed: "0.00",
+                  written_off: "800.00",
+                  closed_at: "2026-03-12T10:00:00Z",
+                },
+              ],
+            },
+          ],
+          has_more: false,
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            phone_digits: "0671234567",
+            customer_name: "Оксана",
+            customer_phone: "067 123 45 67",
+            owed: "0.00",
+            open_debts: 0,
+            credits: [
+              {
+                id: randomUUID(),
+                status: "WRITTEN_OFF",
+                owed: "0.00",
+                written_off: "800.00",
+                closed_at: "2026-03-12T10:00:00Z",
+              },
+              // An older write-off, listed after: the latest is said.
+              {
+                id: randomUUID(),
+                status: "WRITTEN_OFF",
+                owed: "0.00",
+                written_off: "300.00",
+                closed_at: "2025-11-05T10:00:00.123456Z",
+              },
+              {
+                id: randomUUID(),
+                status: "SETTLED",
+                owed: "0.00",
+                written_off: "0.00",
+                closed_at: "2026-05-02T10:00:00Z",
+              },
+            ],
+          },
+        ],
+        has_more: false,
+      },
+    });
+  });
+  const sales = posts(page, "/api/v1/sales");
+  await page.setViewportSize({ width: 360, height: 740 });
+  await basket(page, coat);
+  await page.getByLabel("Оплата частинами").check();
+  await page.getByLabel("Ім’я покупця").fill("Оксана");
+  await page.getByLabel("Телефон покупця").fill("067 123 45 67");
+  const said = page.locator(".number-debt");
+  // Six figures owed, still one line at 360 px.
+  await expect(said).toHaveText("За номером уже винні 123 456,00 грн");
+  expect(await lines(said)).toBe(1);
+  answer = "written off";
+  await page.getByLabel("Телефон покупця").fill("+38 067 123 45 67");
+  // Neutral: what was, not a debt owed (owner decision, 2026-10-18, В4 (а)).
+  await expect(said).toHaveText("За номером борг списано 12.03.2026");
+  await expect(said).not.toHaveClass(/\bowing\b/);
+
+  // «Борги» not read: nothing said, and the sale as any.
+  answer = "failed";
+  const failed = page.waitForResponse(
+    (response) =>
+      response.url().includes("/credits/customers?") &&
+      response.status() === 500,
+  );
+  await page.getByLabel("Телефон покупця").fill("067 765 43 21");
+  await failed;
+  await page.waitForTimeout(300);
+  await expect(said).toHaveText("");
+  await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  expect(sales.bodies).toHaveLength(1);
+});
+
 function hryvnias(kopecks: bigint): string {
   return grn(
     `${String(kopecks / 100n)}.${String(kopecks % 100n).padStart(2, "0")}`,
@@ -893,9 +1131,41 @@ test("an order collected may be paid in parts, by the till's rules", async ({
     .getByRole("group", { name: "Як оплачено замовлення" })
     .getByRole("radio", { name: "Готівкою — зараз, на касі", exact: true })
     .check();
+  await page.setViewportSize({ width: 360, height: 740 });
   await page.getByLabel("Оплата частинами").check();
+  // One line at 360 px (credits task list, P1-5).
+  const means = page.getByText("Решту — у «Боргах» цього магазину.", {
+    exact: true,
+  });
+  await expect(means).toBeVisible();
+  expect(await lines(means)).toBe(1);
   await page.getByLabel("Ім’я покупця").fill(name);
+  // What the number owes, asked of the order's store (review, 2026-10-19).
+  const askedOf: (string | null)[] = [];
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    askedOf.push(new URL(route.request().url()).searchParams.get("store_id"));
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            phone_digits: tel,
+            customer_name: name,
+            customer_phone: tel,
+            owed: "700.00",
+            open_debts: 1,
+            credits: [],
+          },
+        ],
+        has_more: false,
+      },
+    });
+  });
   await page.getByLabel("Телефон покупця").fill(tel);
+  await expect(page.locator(".number-debt")).toHaveText(
+    "За номером уже винні 700,00 грн",
+  );
+  expect(new Set(askedOf)).toEqual(new Set([fixture.store_id]));
+  await page.unroute("**/api/v1/credits/customers?**");
   await page.getByLabel("Сплачує зараз, грн").fill("3000");
   const collect = page.getByRole("button", {
     name: "Клієнт забрав",

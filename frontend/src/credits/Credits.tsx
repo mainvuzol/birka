@@ -16,18 +16,10 @@ import { number, plural } from "@/openings/types";
 import { CustomerRow, debtsCount } from "./CustomerRow";
 import { Customer as CustomerDebts } from "./Customer";
 import { Debt, refusalText } from "./Debt";
-import { askForPhone, erasedCustomer } from "./types";
+import { askForPhone, erasedCustomer, wholePhone } from "./types";
 import type { Credit, Customer, CustomerPage, StoreDebts } from "./types";
 
 const pageSize = 20;
-
-/** As the server: another store's customer is found by their whole phone,
- * however it is written or pasted, with the invisible marks a phone's
- * contacts add (owner decision, 2026-10-10). */
-function wholePhone(text: string): boolean {
-  const digits = text.replace(/\D/g, "").length;
-  return /^[\d\s()+./\p{Cf}-]+$/u.test(text) && digits >= 10 && digits <= 15;
-}
 
 /**
  * A store's debts: sales paid in parts (owner decisions, 2026-10-01).
