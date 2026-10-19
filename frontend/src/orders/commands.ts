@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { api, recordedNothing, refusedOutright } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  recordedNothing,
+  refusedOutright,
+  unreachable,
+} from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
 import type { Order } from "./types";
 export interface Pending {
@@ -21,14 +27,18 @@ interface CommandState {
   pending: Pending | null;
   busy: boolean;
   error: unknown;
+  /** The kept command's checks answered «not found» this many times in a
+   * row (owner decision, 2026-10-19; `@/shared/journal`). */
+  misses: number;
   set: (pending: Pending | null) => void;
 }
 export const useCommand = create<CommandState>((set) => ({
   pending: null,
   busy: false,
   error: null,
+  misses: 0,
   set: (pending) => {
-    set({ pending, error: null });
+    set({ pending, error: null, misses: 0 });
   },
 }));
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -122,21 +132,34 @@ export async function submitPending(
     const latest = await api<Order>(`/orders/${current.orderId ?? ""}`, token);
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
-    useCommand.setState({ pending: null });
+    useCommand.setState({ pending: null, misses: 0 });
     return latest;
   } catch (error) {
     // Later authorization/validation failures precede durable replay lookup;
     // unlike a first-attempt rejection, they cannot disprove an earlier commit.
-    if (
+    const definite =
       (!previouslyAmbiguous || recordedNothing(error)) &&
       !current.acknowledged &&
-      refusedOutright(error)
-    ) {
+      refusedOutright(error);
+    if (definite) {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);
       useCommand.setState({ pending: null });
     }
-    useCommand.setState({ error });
+    const misses = useCommand.getState().misses;
+    useCommand.setState({
+      error,
+      // Settled, nothing to count; no answer at all, or the app's own
+      // failure, says nothing of the command: the count stands (review,
+      // 2026-10-20).
+      misses: definite
+        ? 0
+        : !(error instanceof ApiError) || unreachable(error)
+          ? misses
+          : error.status === 404
+            ? misses + 1
+            : 0,
+    });
     return null;
   } finally {
     useCommand.setState({ busy: false });

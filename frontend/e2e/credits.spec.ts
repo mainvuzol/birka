@@ -1393,13 +1393,51 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   await paid
     .getByRole("radio", { name: "Накладеним платежем", exact: true })
     .check();
+  // Refused at its first press, «not found»: nothing kept, so the shared
+  // words — never «ще не підтверджено» (review, 2026-10-20).
+  const answers = [404, 500];
+  await page.route("**/api/v1/orders/*/collect", async (route) => {
+    const status = answers.shift();
+    if (status === undefined) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status,
+      json: {
+        code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+        message: "Refused",
+      },
+    });
+  });
   await collect.click();
+  await expect(
+    page.getByText("Не вдалося виконати операцію. Спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/ще не підтверджено/)).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Незавершена операція" }),
+  ).toHaveCount(0);
+  // A server's error at its first press: kept, unconfirmed, and named from
+  // the first, not only once resent (review, 2026-10-20).
+  await collect.click();
+  await expect(
+    page.getByText(
+      "Операцію «Клієнт забрав» ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Повторити ту саму команду" }).click();
   await expect(page.getByText("Продаж записано.")).toBeVisible();
   await expect(page.getByText(/Оплата частинами: сплачено/)).toHaveCount(0);
-  expect(collected.bodies).toHaveLength(1);
-  expect(collected.bodies[0]).not.toHaveProperty("credit");
+  expect(collected.bodies).toHaveLength(3);
+  // Resent as it was first sent.
+  expect(collected.bodies[2]).toEqual(collected.bodies[1]);
+  expect(collected.bodies[2]).not.toHaveProperty("credit");
   expect(
-    (collected.bodies[0] as { payment_method: unknown }).payment_method,
+    (collected.bodies[2] as { payment_method: unknown }).payment_method,
   ).toBe("CARRIER_COD");
 });
 

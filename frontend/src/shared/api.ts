@@ -235,8 +235,8 @@ export const CONFLICT_TEXT =
   "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
 export const INVALID_TEXT = "Перевірте дані та поточний статус замовлення.";
 /** What any screen says when the server failed, or the app did: the request
- * is safe to make again. A kept payment, write-off or return asked about
- * again says its own, as it may be recorded (`@/cash/errors`). */
+ * is safe to make again. A kept command whose outcome is unknown says its
+ * own, as it may be recorded (`keptUnconfirmed`, `@/cash/errors`). */
 export const FAILED_TEXT = "Не вдалося виконати операцію. Спробуйте ще раз.";
 
 export function errorText(error: unknown): string {

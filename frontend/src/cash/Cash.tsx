@@ -318,7 +318,7 @@ export function Cash({
   person: string;
 }): JSX.Element {
   const cache = useQueryClient();
-  const { busy, pending, error } = useCashCommand();
+  const { busy, pending, error, misses } = useCashCommand();
   // Kept when this screen opened: the App read it from the phone's storage
   // and opened «Каса» on it, since a kept drawer command holds every other
   // tab.
@@ -572,7 +572,16 @@ export function Cash({
         </section>
       )}
       {error !== null && (
-        <p role="alert">{cashJournalText(error, lastCommand)}</p>
+        <p role="alert">
+          {cashJournalText(
+            error,
+            lastCommand,
+            misses,
+            pending?.body.command === "movement"
+              ? directionOf(pending.body.movement_kind)
+              : undefined,
+          )}
+        </p>
       )}
       {done && <p role="status">{done}</p>}
       {problem && <p role="alert">{problem}</p>}

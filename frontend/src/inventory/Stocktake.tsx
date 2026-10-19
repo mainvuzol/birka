@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
 import { visible } from "@/shared/visible";
+import { keptUnconfirmed } from "@/cash/errors";
 import type { Location, Store } from "@/orders/types";
 import { CatalogPicker } from "./CatalogPicker";
 import { submitCount, useCountCommand } from "./stocktakeCommands";
@@ -88,9 +89,11 @@ export function countRefusalText(
 }
 
 /** What App says of a kept count once it is settled as refused. */
-export function countErrorText(error: unknown): string {
+export function countErrorText(error: unknown, misses = 0): string {
   if (!recordedNothing(error) || !(error instanceof ApiError))
-    return errorText(error);
+    return (
+      keptUnconfirmed(error, "Підрахунок", "він", misses) ?? errorText(error)
+    );
   return `Підрахунок не записано. ${countRefusalText(error, "")}`;
 }
 
