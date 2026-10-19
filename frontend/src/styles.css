@@ -1030,7 +1030,9 @@ html {
 }
 .paid-result h3:focus,
 .debt-detail h2:focus,
-.debt-goods:focus {
+.debt-goods:focus,
+.credits h2:focus,
+.elsewhere-head h3:focus {
   outline: none;
 }
 .paid-result.kept .hand-back {

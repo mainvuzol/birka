@@ -234,6 +234,10 @@ export function refusedOutright(error: unknown): error is ApiError {
 export const CONFLICT_TEXT =
   "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
 export const INVALID_TEXT = "Перевірте дані та поточний статус замовлення.";
+/** What any screen says when the server failed, or the app did: the request
+ * is safe to make again. A kept payment, write-off or return asked about
+ * again says its own, as it may be recorded (`@/cash/errors`). */
+export const FAILED_TEXT = "Не вдалося виконати операцію. Спробуйте ще раз.";
 
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
@@ -242,8 +246,7 @@ export function errorText(error: unknown): string {
   if (error instanceof SlowAnswer)
     return "Сервер ще не відповів. Оновіть список і перевірте, чи це збережено; повторити безпечно.";
   // The app's own failure, or a journal's: nothing to do with the connection.
-  if (!(error instanceof ApiError))
-    return "Не вдалося виконати операцію. Спробуйте ще раз.";
+  if (!(error instanceof ApiError)) return FAILED_TEXT;
   // Paying in parts, refused for what the seller stated.
   // A warehouse waits for its opening list (owner decision, 2026-10-02).
   if (error.code === "OPENING_LIST_PENDING")
@@ -329,6 +332,6 @@ export function errorText(error: unknown): string {
   // A server error is logged under the request's number: the seller can
   // quote its start to whoever reads the log.
   if (error.status >= 500 && error.requestId)
-    return `Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: ${visible(error.requestId.slice(0, 8))}.`;
-  return "Не вдалося виконати операцію. Спробуйте ще раз.";
+    return `${FAILED_TEXT} Номер запиту: ${visible(error.requestId.slice(0, 8))}.`;
+  return FAILED_TEXT;
 }

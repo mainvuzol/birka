@@ -2181,6 +2181,24 @@ test.describe("9. what to do with money after the outage", () => {
       said: "Списання ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.",
       kept: "Списання ще не підтверджено",
     },
+    // Not an answer about the command: never «спробуйте ще раз», the
+    // request's number kept (owner decision, 2026-10-18).
+    {
+      what: "a payment answered with a server's error is still unconfirmed",
+      body: { kind: "payment", amount: "500.00", payment_method: "CARD" },
+      status: 500,
+      recorded: undefined,
+      said: "Внесок ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться. Номер запиту: 5a6b7c8d.",
+      kept: "Внесок ще не підтверджено",
+    },
+    {
+      what: "a write-off answered that its request was not found is still unconfirmed",
+      body: { kind: "write-off", reason: "виїхав" },
+      status: 404,
+      recorded: undefined,
+      said: "Списання ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі воно не запишеться.",
+      kept: "Списання ще не підтверджено",
+    },
     {
       what: "a payment the server says it did not record after a conflict",
       body: { kind: "payment", amount: "500.00", payment_method: "CARD" },
@@ -2234,8 +2252,20 @@ test.describe("9. what to do with money after the outage", () => {
       const answer = async (route: Route): Promise<void> => {
         await route.fulfill({
           status: refused.status,
+          // A number only where a server's error gives one.
+          headers:
+            refused.status === 500
+              ? { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" }
+              : {},
           json: {
-            code: refused.status === 409 ? "CONFLICT" : "VALIDATION_ERROR",
+            code:
+              refused.status === 409
+                ? "CONFLICT"
+                : refused.status === 422
+                  ? "VALIDATION_ERROR"
+                  : refused.status === 404
+                    ? "NOT_FOUND"
+                    : "INTERNAL_ERROR",
             message: "Refused",
             details: refused.recorded === false ? { recorded: false } : {},
           },
@@ -3216,6 +3246,14 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       why: "a request not taken",
       said: "Повернення ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.",
     },
+    // Not an answer about the return: never «спробуйте ще раз», the
+    // request's number kept (owner decision, 2026-10-18).
+    {
+      status: 500,
+      code: "INTERNAL_ERROR",
+      why: "a server's error",
+      said: "Повернення ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі воно не запишеться. Номер запиту: 5a6b7c8d.",
+    },
   ])
     test(`a kept return still unconfirmed, refused for ${refusal.why}, says so in its own words and stays kept`, async ({
       page,
@@ -3226,6 +3264,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       const sent = await returns(page, async (route) => {
         await route.fulfill({
           status: refusal.status,
+          headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
           json: { code: refusal.code, message: "Refused", details: {} },
         });
       });

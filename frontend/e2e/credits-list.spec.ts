@@ -256,17 +256,29 @@ test("what the store is owed comes first, large, and a row a customer: what they
   if (!input || !first) throw new Error("not laid out");
   expect(first.y - (input.y + input.height)).toBeLessThanOrEqual(16);
   expect(first.height).toBeGreaterThanOrEqual(44);
-  // The rest is asked for under the results.
+  // The rest is asked for under the results; the closed stores only for a
+  // whole number (credits task list, P1-1).
   const paid = await page
     .getByRole("button", { name: "Показати сплачені й списані" })
     .boundingBox();
-  const closed = await page
-    .getByRole("button", { name: "Борг магазину, що зараз не працює?" })
-    .boundingBox();
   const last = await rows(page).last().boundingBox();
-  if (!paid || !closed || !last) throw new Error("not laid out");
+  if (!paid || !last) throw new Error("not laid out");
   expect(paid.y).toBeGreaterThan(last.y);
-  expect(closed.y).toBeGreaterThan(last.y);
+  await expect(
+    page.getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ }),
+  ).toHaveCount(0);
+  // A whole number owed here: its row, and under it the closed stores
+  // asked for, never instead of it.
+  await field(page).fill("050 765 43 21");
+  await expect(rows(page)).toHaveCount(1);
+  const closed = await page
+    .getByRole("button", {
+      name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+    })
+    .boundingBox();
+  const owing = await rows(page).first().boundingBox();
+  if (!closed || !owing) throw new Error("not laid out");
+  expect(closed.y).toBeGreaterThan(owing.y + owing.height - 1);
 });
 
 test("how many owe is said as a person says it", async ({ page }) => {
@@ -560,24 +572,58 @@ test("a closed store's customer of more debts is read among the closed stores", 
   const asked = await customers(page, [], (params) =>
     params.get("elsewhere") === "true" ? { items: [iryna()] } : null,
   );
+  // This store's answer for the number, slow: nothing offered before it
+  // (review, 2026-10-19).
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("elsewhere") !== "true" && params.get("query"))
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fallback();
+  });
   await credits(page);
-  // A whole number searched here first: the switch never asks the closed
-  // stores for it once the field is emptied (review, 2026-10-18).
+  const ask = page.getByRole("button", {
+    name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+  });
+  // A whole number searched here first, owing nothing here: the rule said,
+  // and the same number asked of the closed stores, by a tap, under it
+  // (owner decision, 2026-10-18, В2 (а); credits task list, P1-1).
+  // The list as it opened, read first: what loads next is the number's.
+  await expect(
+    page.getByText("Зараз ніхто не винен цьому магазину."),
+  ).toBeVisible();
+  const asking = page.waitForRequest(
+    (request) =>
+      request.url().includes("/credits/customers?") &&
+      request.url().includes("query=") &&
+      !request.url().includes("elsewhere=true"),
+  );
   await field(page).fill("050 765 43 21");
-  await expect(
-    page.getByText(/За «050 765 43 21» боргів не знайдено/),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Борг магазину, що зараз не працює?" })
-    .click();
-  await expect(
-    page.getByText(/Введіть повний номер телефону покупця/),
-  ).toBeVisible();
+  await asking;
+  await expect(page.getByText("Завантажуємо борги…")).toBeVisible();
+  expect(await ask.count()).toBe(0);
+  const none = page.getByText(
+    "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
+    { exact: true },
+  );
+  await expect(none).toBeVisible();
+  // A digit more is a number not yet searched: nothing offered for the one
+  // before it, at once.
+  await expect(ask).toBeVisible();
+  await field(page).fill("050 765 43 210");
+  expect(await ask.count()).toBe(0);
+  await field(page).fill("050 765 43 21");
+  await expect(ask).toBeVisible();
+  const said = await none.boundingBox();
+  const under = await ask.boundingBox();
+  if (!said || !under) throw new Error("not laid out");
+  expect(under.y).toBeGreaterThan(said.y);
   await page.waitForTimeout(500);
   expect(asked.filter((params) => params.get("elsewhere") === "true")).toEqual(
     [],
   );
-  await page.getByLabel("Повний номер телефону покупця").fill("050 765 43 21");
+  await ask.click();
+  // One field, as it was: the number typed is the one asked.
+  await expect(field(page)).toHaveValue("050 765 43 21");
   await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
   await expect(
     page.getByRole("heading", { name: "Ірина Коваль", level: 2 }),
