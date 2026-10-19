@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Select, String, and_, case, cast, func, or_, select
+from sqlalchemy import Select, String, and_, case, cast, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
@@ -954,15 +954,22 @@ def _found_by(wanted: str) -> Any:
     Each word typed, literally and in any letter case, in the name of one
     debt, in any order, as the till and «Повернення» read each word (credits
     task list, P1-3): «петренко оксана» finds «Оксана Петренко», and two
-    spaces are one; «Мар'яна» finds «Мар’яна», and «iрина» typed with a
-    Latin «i» finds «Ірина». Words of two debts do not add up; a word typed
-    twice is looked for once.
+    spaces are one; «Мар'яна» finds «Мар’яна», «iрина» typed with a Latin
+    «i» finds «Ірина», and an «ї» pasted in two parts is the letter. Words
+    of two debts do not add up; a word typed twice is looked for once.
 
     Only a query written as a phone is looked for among phones: the digits of
     «Ірина 2» are part of a name, and would find whoever's number holds a 2.
     """
-    name = func.translate(func.lower(CustomerCredit.customer_name), _SAME_FROM, _SAME_TO)
-    words = dict.fromkeys(wanted.lower().translate(_SAME).split())
+    # A letter pasted in two parts — «ї» as «і» and its dots — is the letter
+    # written as one (owner decision, 2026-10-19): compared as Unicode's NFC
+    # on both sides, after the fold, so a Latin «i» and its dots is «ї» too
+    # (review, 2026-10-20). Nothing stored changes.
+    name = func.normalize(
+        func.translate(func.lower(CustomerCredit.customer_name), _SAME_FROM, _SAME_TO),
+        literal_column("NFC"),
+    )
+    words = dict.fromkeys(unicodedata.normalize("NFC", wanted.lower().translate(_SAME)).split())
     conditions: list[Any] = [and_(*(name.contains(word, autoescape=True) for word in words))]
     if _written_as_phone(wanted):
         conditions.append(CustomerCredit.phone_digits.contains(digits(wanted), autoescape=True))

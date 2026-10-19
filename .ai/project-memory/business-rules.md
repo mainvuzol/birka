@@ -3075,3 +3075,49 @@ How it is carried out, not decided by the owner:
   appears.
 
 Built on 2026-10-19; see the [report](credits-redesign-6-report.md).
+
+## Owner decision — 2026-10-19 (seven readings after #110 and P1-5, and what next)
+
+Asked after #110 was merged, while P1-5's CI ran:
+- **A kept sale, delivery, stock correction, drawer command or order step
+  answered with a server's error** is not told to try again either, as a
+  kept payment, write-off or return is not: «… ще не підтверджено: сервер не
+  зміг відповісти. Перевірте результат ще раз — двічі … не запишеться.»,
+  with the request's number. *(To be built, next.)*
+- **A kept command answered «not found» three times** adds «Зверніться до
+  менеджера — він перевірить, чи записано.»; the app still never records it
+  twice. *(To be built, next.)*
+- **A letter pasted in two parts** — «ї» as «і» and its dots, «й» as «и»
+  and its breve — is the letter, in the debts' search.
+- **The till's words for paying in parts stay as built:** «Решту — у
+  «Боргах» цього магазину.», «За номером уже винні …», «За номером борг
+  списано …».
+- **A number that owes and had a debt written off** says what it owes
+  only, as built.
+- **A closed store's debt of the number is said at the till too,** on a
+  line of its own — the option not recommended.
+- **Next:** these, and the empty «Борги» that says where a debt begins
+  (P1-4), without the notebook's operation (В3 (а), in the backlog).
+
+How they are carried out, not decided by the owner:
+- **The closed stores are asked by the whole number, for what is still owed
+  there, as «Борги» asks them:** «Винні 1 500,00 грн магазину «Ринок»», in
+  the debt's colour; for more than one, «Винні … магазинам, що не
+  працюють». One line always, the sum first: a long name is cut, never the
+  sum. Stores are counted by who they are, and only where something is
+  owed. Both answers are waited for, so the lines come together — but this
+  store's line waits on the closed stores a moment and a half at most, and
+  not at all once they fail. Alone, the closed store's line stands in the
+  line's room; beside this store's — rare — it is a second line, and what
+  is below moves by it once.
+- **An empty «Борги»:** «Зараз ніхто не винен. Борг з’являється, коли
+  продають частинами.», and «Новий продаж» to the till's search for whoever
+  may sell there, held while a kept command waits, as the till's own button
+  is — not «До каси», which names the drawer here. A search that finds
+  nothing, the paid and written off asked for, and a store that does not
+  trade keep their words.
+- **A letter's one form:** names are compared as Unicode's NFC, after the
+  apostrophes and the Latin «i» are folded — so a Latin «i» and its dots is
+  «ї» too; nothing stored changes.
+
+Built on 2026-10-20; see the [report](credits-redesign-7-report.md).

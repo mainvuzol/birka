@@ -1052,9 +1052,17 @@ html {
   margin-top: 4px;
   min-height: 1.55em;
 }
-.number-debt.owing {
+.number-debt > span {
+  display: block;
+}
+.number-debt .owing {
   color: var(--debt);
   font-weight: 650;
+}
+.number-debt .away {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* A debt's goods beyond the first, on a tap (owner, 2026-10-18). */
 .more-goods {

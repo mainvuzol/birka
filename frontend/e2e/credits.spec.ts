@@ -263,11 +263,7 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   expect(await lines(means)).toBe(1);
   await page.getByLabel("Ім’я покупця").fill(name);
   // A new customer's number: «Борги» asked, and nothing said.
-  const asked = page.waitForResponse(
-    (response) =>
-      response.url().includes("/credits/customers?") &&
-      new URL(response.url()).searchParams.get("query") === written,
-  );
+  const asked = bothAnswered(page, written);
   await page.getByLabel("Телефон покупця").fill(written);
   await asked;
   await page.waitForTimeout(300);
@@ -772,6 +768,21 @@ async function storeOwed(page: Page, token: string): Promise<bigint> {
   return BigInt(whole) * 100n + BigInt(fraction);
 }
 
+/** Both of «Борги»'s answers for a number at the till read — this store's
+ * and the closed stores' — before anything is said of it. */
+function bothAnswered(page: Page, query: string): Promise<unknown> {
+  const of = (elsewhere: boolean) =>
+    page.waitForResponse((response) => {
+      if (!response.url().includes("/credits/customers?")) return false;
+      const params = new URL(response.url()).searchParams;
+      return (
+        params.get("query") === query &&
+        (params.get("elsewhere") === "true") === elsewhere
+      );
+    });
+  return Promise.all([of(false), of(true)]);
+}
+
 /** How many lines a piece of text takes, by its height and line height. */
 async function lines(text: Locator): Promise<number> {
   return text.evaluate((node) => {
@@ -813,7 +824,9 @@ test("the till says what a number already owes, and still sells in parts as the 
   const before = await sum.boundingBox();
   const owes = page.locator(".number-debt");
   await expect(owes).toHaveText("За номером уже винні 2 000,00 грн");
-  await expect(owes).toHaveClass(/\bowing\b/);
+  await expect(owes.locator(".owing")).toHaveText(
+    "За номером уже винні 2 000,00 грн",
+  );
   expect(await lines(owes)).toBe(1);
   expect((await sum.boundingBox())?.y).toBe(before?.y);
   // Another digit is another number: the line goes at once — never the
@@ -823,11 +836,7 @@ test("the till says what a number already owes, and still sells in parts as the 
   expect(await owes.textContent()).toBe("");
   // The start of the debt's «+38 …», ten digits: read, and another number.
   const start = `+38 ${tel.slice(0, 8)}`;
-  const read = page.waitForResponse(
-    (response) =>
-      response.url().includes("/credits/customers?") &&
-      new URL(response.url()).searchParams.get("query") === start,
-  );
+  const read = bothAnswered(page, start);
   await page.getByLabel("Телефон покупця").fill(start);
   await read;
   await page.waitForTimeout(300);
@@ -883,8 +892,32 @@ test("the till says a number's debt was written off, and says nothing when «Б�
   page,
 }) => {
   const coat = await stocked(page);
-  let answer: "owes a lot" | "written off" | "failed" = "owes a lot";
+  let answer: "owes a lot" | "written off" | "nothing here" | "failed" =
+    "owes a lot";
+  // The stores that do not trade, asked of the same number: nothing owed
+  // there, until said otherwise.
+  let away: unknown[] = [];
+  let awayFails = false;
+  // Slower than this store's: the lines still come together.
+  let awayDelay = 400;
+  const awayAsked: URLSearchParams[] = [];
   await page.route("**/api/v1/credits/customers?**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("elsewhere") === "true") {
+      awayAsked.push(params);
+      await new Promise((resolve) => setTimeout(resolve, awayDelay));
+      if (awayFails)
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Internal error" },
+        });
+      else await route.fulfill({ json: { items: away, has_more: false } });
+      return;
+    }
+    if (answer === "nothing here") {
+      await route.fulfill({ json: { items: [], has_more: false } });
+      return;
+    }
     if (answer === "failed") {
       await route.fulfill({
         status: 500,
@@ -972,15 +1005,134 @@ test("the till says a number's debt was written off, and says nothing when «Б�
   await page.getByLabel("Телефон покупця").fill("+38 067 123 45 67");
   // Neutral: what was, not a debt owed (owner decision, 2026-10-18, В4 (а)).
   await expect(said).toHaveText("За номером борг списано 12.03.2026");
-  await expect(said).not.toHaveClass(/\bowing\b/);
+  await expect(said.locator(".owing")).toHaveCount(0);
+
+  // A closed store's debt of the number, whose payments are taken here, on
+  // a line of its own (owner decision, 2026-10-19) — with this store's,
+  // both lines together, never one and then the other.
+  away = [
+    {
+      phone_digits: "0671234567",
+      customer_name: "Оксана",
+      customer_phone: "067 123 45 67",
+      owed: "1500.00",
+      open_debts: 1,
+      credits: [
+        {
+          id: randomUUID(),
+          status: "OPEN",
+          store_id: randomUUID(),
+          store_name: "Ринок",
+          owed: "1500.00",
+          written_off: "0.00",
+          closed_at: null,
+        },
+      ],
+    },
+  ];
+  answer = "owes a lot";
+  await said.evaluate((node) => {
+    const seen: string[] = [];
+    (window as unknown as { said: string[] }).said = seen;
+    new MutationObserver(() => {
+      const text = node.textContent;
+      if (text) seen.push(text.replace(/\s/g, " "));
+    }).observe(node, { subtree: true, childList: true, characterData: true });
+  });
+  await page.getByLabel("Телефон покупця").fill("067 123 45 67");
+  await expect(said.locator("span")).toHaveText([
+    "За номером уже винні 123 456,00 грн",
+    "Винні 1 500,00 грн магазину «Ринок»",
+  ]);
+  await expect(said.locator(".owing")).toHaveCount(2);
+  expect(
+    new Set(
+      await page.evaluate(() => (window as unknown as { said: string[] }).said),
+    ),
+  ).toEqual(
+    new Set([
+      "За номером уже винні 123 456,00 грнВинні 1 500,00 грн магазину «Ринок»",
+    ]),
+  );
+  // Asked of the closed stores by the whole number, for what is still owed.
+  const asked = awayAsked.at(-1);
+  expect(asked?.get("query")).toBe("067 123 45 67");
+  expect(asked?.get("status")).toBe("OPEN");
+  // Owed only there: its line alone, in the room kept.
+  answer = "nothing here";
+  await page.getByLabel("Телефон покупця").fill("+38 067 123 45 67");
+  await expect(said.locator("span")).toHaveText([
+    "Винні 1 500,00 грн магазину «Ринок»",
+  ]);
+  expect(await lines(said)).toBe(1);
+  // One line however long: the sum first, a long name cut, never the sum
+  // (review, 2026-10-20). Two stores; then one, its name long, six figures.
+  const owedAway = (
+    owed: string,
+    stores: { name: string; owed: string }[],
+  ): unknown[] => [
+    {
+      phone_digits: "0671234567",
+      customer_name: "Оксана",
+      customer_phone: "067 123 45 67",
+      owed,
+      open_debts: stores.length,
+      credits: stores.map((store) => ({
+        id: randomUUID(),
+        status: "OPEN",
+        store_id: randomUUID(),
+        store_name: store.name,
+        owed: store.owed,
+        written_off: "0.00",
+        closed_at: null,
+      })),
+    },
+  ];
+  away = owedAway("1500.00", [
+    { name: "Ринок", owed: "1000.00" },
+    { name: "Ринок", owed: "500.00" },
+  ]);
+  await page.getByLabel("Телефон покупця").fill("(067) 123-45-67");
+  await expect(said.locator(".away")).toHaveText(
+    "Винні 1 500,00 грн магазинам, що не працюють",
+  );
+  expect(await lines(said.locator(".away"))).toBe(1);
+  away = owedAway("123456.00", [
+    { name: "Барабашова Центральний Великий Ринок", owed: "123456.00" },
+  ]);
+  await page.getByLabel("Телефон покупця").fill("067-123-45-67");
+  await expect(said.locator(".away")).toHaveText(
+    "Винні 123 456,00 грн магазину «Барабашова Центральний Великий Ринок»",
+  );
+  expect(await lines(said.locator(".away"))).toBe(1);
+  expect(await lines(said)).toBe(1);
+  // The closed stores failing, or slow: this store's line all the same.
+  answer = "owes a lot";
+  awayFails = true;
+  awayDelay = 0;
+  // Not waited for once they fail: at once, well before the moment and a
+  // half a slow answer is given.
+  await page.getByLabel("Телефон покупця").fill("067.123.45.67");
+  await expect(said.locator("span")).toHaveText(
+    ["За номером уже винні 123 456,00 грн"],
+    { timeout: 1000 },
+  );
+  awayFails = false;
+  away = [];
+  awayDelay = 5000;
+  const slow = bothAnswered(page, "+380671234567");
+  await page.getByLabel("Телефон покупця").fill("+380671234567");
+  await expect(said.locator("span")).toHaveText(
+    ["За номером уже винні 123 456,00 грн"],
+    { timeout: 3000 },
+  );
+  // Its late answer let through before going on.
+  await slow;
+  awayDelay = 400;
 
   // «Борги» not read: nothing said, and the sale as any.
   answer = "failed";
-  const failed = page.waitForResponse(
-    (response) =>
-      response.url().includes("/credits/customers?") &&
-      response.status() === 500,
-  );
+  const failed = bothAnswered(page, "067 765 43 21");
   await page.getByLabel("Телефон покупця").fill("067 765 43 21");
   await failed;
   await page.waitForTimeout(300);
@@ -1143,7 +1295,12 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   // What the number owes, asked of the order's store (review, 2026-10-19).
   const askedOf: (string | null)[] = [];
   await page.route("**/api/v1/credits/customers?**", async (route) => {
-    askedOf.push(new URL(route.request().url()).searchParams.get("store_id"));
+    const params = new URL(route.request().url()).searchParams;
+    askedOf.push(params.get("store_id"));
+    if (params.get("elsewhere") === "true") {
+      await route.fulfill({ json: { items: [], has_more: false } });
+      return;
+    }
     await route.fulfill({
       json: {
         items: [

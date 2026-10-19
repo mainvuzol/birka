@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { decimal, kopecks, money } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
 import type { CreditTerms } from "@/sales/types";
 import { api } from "@/shared/api";
+import { visible } from "@/shared/visible";
 import { phoneDigits, wholePhone } from "./types";
 import type { CustomerPage } from "./types";
 
@@ -74,6 +75,15 @@ function numberKey(phone: string): string {
   return digits;
 }
 
+/** «12.03.2026». */
+function fullDay(at: number): string {
+  return new Date(at).toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 function NumberDebt({
   id,
   storeId,
@@ -87,11 +97,12 @@ function NumberDebt({
 }): JSX.Element {
   const settled = useSettled(phone);
   const asked = wholePhone(settled) ? settled : null;
+  const query = encodeURIComponent(asked ?? "");
   const read = useQuery({
     queryKey: ["credits", storeId, "number", asked],
     queryFn: () =>
       api<CustomerPage>(
-        `/credits/customers?store_id=${storeId}&limit=5&query=${encodeURIComponent(asked ?? "")}`,
+        `/credits/customers?store_id=${storeId}&limit=5&query=${query}`,
         token,
       ),
     enabled: asked !== null,
@@ -100,34 +111,88 @@ function NumberDebt({
     // changed it: dropped once the line is gone (review, 2026-10-19).
     gcTime: 0,
   });
+  // The same number among the stores that do not trade, whose payments
+  // this store takes (owner decision, 2026-10-19): what is still owed there.
+  const away = useQuery({
+    queryKey: ["credits", storeId, "number", "elsewhere", asked],
+    queryFn: () =>
+      api<CustomerPage>(
+        `/credits/customers?store_id=${storeId}&limit=5&status=OPEN&elsewhere=true&query=${query}`,
+        token,
+      ),
+    enabled: asked !== null,
+    retry: false,
+    gcTime: 0,
+  });
+  // Said once both have answered, or failed, so the lines come together —
+  // but this store's line never waits on the closed stores more than a
+  // moment (review, 2026-10-20).
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    setWaited(false);
+    if (asked === null) return;
+    const moment = setTimeout(() => {
+      setWaited(true);
+    }, 1500);
+    return () => {
+      clearTimeout(moment);
+    };
+  }, [asked]);
+  const current =
+    asked !== null &&
+    asked === phone.trim() &&
+    !read.isPending &&
+    (!away.isPending || waited);
   // That very number's customer, never one whose number merely holds the
   // digits typed, nor a name the words matched (review, 2026-10-19).
-  const found =
-    asked !== null && asked === phone.trim()
-      ? read.data?.items.find(
+  const whose = (page: CustomerPage | undefined) =>
+    current
+      ? page?.items.find(
           (customer) => customer.phone_digits === numberKey(asked),
         )
       : undefined;
+  const found = whose(read.data);
   const owed = found ? (kopecks(found.owed) ?? 0n) : 0n;
   const writtenOff = found?.credits
     .filter((credit) => credit.status === "WRITTEN_OFF" && credit.closed_at)
     .map((credit) => Date.parse(credit.closed_at ?? ""))
     .filter((at) => !Number.isNaN(at))
     .reduce<number | null>((latest, at) => Math.max(latest ?? at, at), null);
+  const closed = whose(away.data);
+  const owedAway = closed ? (kopecks(closed.owed) ?? 0n) : 0n;
+  // Stores by who they are, not by name, and only where something is owed.
+  const awayStores = [
+    ...new Map(
+      (closed?.credits ?? [])
+        .filter((credit) => (kopecks(credit.owed) ?? 0n) > 0n)
+        .map((credit) => [credit.store_id, visible(credit.store_name)]),
+    ).values(),
+  ];
   return (
     // Heard when it comes, and read with the phone. Its room is kept once
     // the number is whole, before the answer comes: nothing below it moves
-    // under the finger (review, 2026-10-19).
+    // under the finger (review, 2026-10-19) — but for a closed store's
+    // debt beside this one's, rare, which comes as a second line.
     <p
       id={id}
       role="status"
-      className={`hint number-debt${wholePhone(phone) ? " reserved" : ""}${owed > 0n ? " owing" : ""}`}
+      className={`hint number-debt${wholePhone(phone) ? " reserved" : ""}`}
     >
-      {found && owed > 0n
-        ? `За номером уже винні ${money(found.owed)}`
-        : writtenOff !== null && writtenOff !== undefined
-          ? `За номером борг списано ${new Date(writtenOff).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" })}`
-          : ""}
+      {found && owed > 0n ? (
+        <span className="owing">За номером уже винні {money(found.owed)}</span>
+      ) : writtenOff !== null && writtenOff !== undefined ? (
+        <span>За номером борг списано {fullDay(writtenOff)}</span>
+      ) : null}
+      {closed && owedAway > 0n && (
+        // One line, the sum first: a long name is cut, never the sum, and
+        // nothing below moves (review, 2026-10-20).
+        <span className="owing away">
+          Винні {money(closed.owed)}{" "}
+          {awayStores.length === 1
+            ? `магазину «${awayStores[0] ?? ""}»`
+            : "магазинам, що не працюють"}
+        </span>
+      )}
     </p>
   );
 }
