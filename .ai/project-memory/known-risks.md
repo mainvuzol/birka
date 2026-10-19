@@ -1519,3 +1519,28 @@ See the [report](till-redesign-6-report.md).
   kept after a 500, a 429 or a resend still in progress shows it too; the
   server answered, but not with the sale's outcome. The banner's point — not
   confirmed, never twice — holds.
+
+## aiohttp moved to 3.14.4 — 2026-10-20
+
+The audit of the server's Python packages (CI's `pip-audit`) began to fail on
+2026-10-19 — on main and on every branch — on three advisories published for
+`aiohttp` 3.14.3, a package the Telegram bot's library (aiogram) and Sentry
+bring in: GHSA-5wr8-gcqf-gqf3 (CVE-2026-111064, the keep-alive timeout not
+applied before a request's first data), GHSA-2g87-pp6c-29x5 (unbounded memory
+or CPU on crafted requests) and GHSA-494j-54xm-rwp3 (CVE-2026-111063, a
+Secure cookie of the shared jar sent unencrypted). Each is fixed in 3.14.4.
+
+- **What it reached:** the server uses `aiohttp` only as a client — to
+  Telegram, and in Sentry's integration; its own HTTP server is FastAPI on
+  uvicorn. The two server-side advisories had no way in; the cookie one
+  concerns a jar the bot's calls do not use. The pin moves anyway: the audit
+  is a gate, and a security release reaches the server only through a
+  change.
+- **What moved:** `aiohttp` 3.14.3 → 3.14.4 in both locks, with the hashes of
+  every file PyPI holds for it (161), nothing else: its one tightened
+  requirement, `yarl>=1.25.1`, is already the pinned 1.25.1. Downloaded with
+  the owner's permission (2026-10-20): the version's files and hashes, the
+  wheel into the isolated check environment, and the server images built
+  once with network so the local CI's offline builds find them.
+- **What remains:** the server takes it at its next image build, after the
+  merge — a deploy, which is the owner's.
