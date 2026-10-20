@@ -1,0 +1,26 @@
+- unchanged tree: passed 
+- a kept sale's server error told to try again: caught by 2. a kept sale is checked by the phone itself › once per return: a resend answered with an; a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row 
+- a kept delivery's server error told to try again: caught by 10. a kept operation the phone settles says what became of it › a kept delivery a server f
+- a kept correction's server error told to try again: caught by 10. a kept operation the phone settles says what became of it › a kept stock correction a 
+- a kept count's server error told to try again: caught by 10. a kept operation the phone settles says what became of it › a kept stocktake's count a
+- a kept drawer command's server error told to try again: caught by a kept count at the close a server fails to answer is still unconfirmed, by its own name (; a kept fix of a way a server fails to answer is still unconfirmed, by its own name (owner ; a kept money put in a server fails to answer is still unconfirmed, by its own name (owner ; a kept money taken out a server fails to answer is still unconfirmed, by its own name (own; a kept reason of a difference a server fails to answer is still unconfirmed, by its own na
+- a drawer command named as another: caught by a kept fix of a way a server fails to answer is still unconfirmed, by its own name (owner 
+- a drawer's movement not named by its way: caught by a kept money put in a server fails to answer is still unconfirmed, by its own name (owner ; a kept money taken out a server fails to answer is still unconfirmed, by its own name (own
+- a kept order step's server error told to try again: caught by 10. a kept operation the phone settles says what became of it › a kept order step answered; 10. a kept operation the phone settles says what became of it › a kept order step whose re
+- a step answered and only its reading failed called unconfirmed: caught by 10. a kept operation the phone settles says what became of it › a kept order step the serv
+- an order refused at its first press called unconfirmed: caught by an order collected without paying in parts stays an ordinary sale
+- a step kept at its first press not named: caught by an order collected without paying in parts stays an ordinary sale
+- a sale answered and only its reading failed called unconfirmed: caught by a kept sale the server answered, whose reading back failed, keeps the shared words: it is 
+- the request's number dropped: caught by a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row ; 10. a kept operation the phone settles says what became of it › a kept order step whose re
+- a manager never asked: caught by a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row 
+- a manager asked at the first: caught by a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row 
+- a manager asked at the second: caught by a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row 
+- a manager asked only at the fourth: caught by a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row 
+- the sale's count never begun again: caught by a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row 
+- the shared journal's count never kept: caught by 9. what to do with money after the outage › «Борги»: a kept payment answered «not found» t; 10. a kept operation the phone settles says what became of it › a kept return answered «no
+- the shared journal's count never begun again: caught by 9. what to do with money after the outage › «Борги»: a kept payment answered «not found» t
+- the orders' count never kept: caught by 10. a kept operation the phone settles says what became of it › a kept order step answered
+- the orders' count never begun again: caught by 10. a kept operation the phone settles says what became of it › a kept order step answered
+- a delivery's banner not counting: caught by 10. a kept operation the phone settles says what became of it › a kept delivery a server f
+- a return's banner not counting: caught by 10. a kept operation the phone settles says what became of it › a kept return answered «no
+24 of 24 caught

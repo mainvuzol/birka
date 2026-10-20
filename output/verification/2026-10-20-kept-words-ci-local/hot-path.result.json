@@ -1,0 +1,72 @@
+{
+  "job": "hot-path",
+  "name": "hot path budgets (PostgreSQL 17)",
+  "result": "passed",
+  "counts": "12 cases, 5 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 95.5 ms of 300 (GET /catalog/stock-options · search (6 sellers)), POST /sales 109.5 ms of 500 (POST /sales · same coat, 6 sellers)",
+  "reasons": [],
+  "commit": "56a40dc",
+  "tree": "dirty",
+  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
+  "started": "2026-10-20T03:12:08+03:00",
+  "finished": "2026-10-20T03:13:02+03:00",
+  "duration": "0m53s",
+  "brief": "PG17 in Docker on 127.0.0.1:55417, reached through Docker Desktop's port forwarding; a 10-core Mac, not a 2-vCPU runner; gate one-seller as CI; run last, alone",
+  "images": [
+    "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
+  ],
+  "deviations": [
+    "PostgreSQL 17: postgres:17-alpine (same env, initdb args, health check) in Docker Desktop's Linux VM, published on 127.0.0.1:55417 instead of localhost:5432. The API (on the Mac) reaches it through Docker Desktop's port forwarding, which CI's service container does not have; and this Mac has 10 cores where CI's runner has 2-4 vCPUs. The figures compare with CI's only roughly.",
+    "BIRKA_PERF_GATE=one-seller, as CI sets it (the release reading is BIRKA_PERF_GATE=all).",
+    "/tmp paths moved: the figures are in the evidence directory (hot-path-figures.txt), the API log is copied there (CI uploads both as an artifact). The step summary CI writes is printed in this log.",
+    "Run last, after every other job, with nothing else of the runner running.",
+    "Load average at the start: { 4.15 4.08 4.02 }.",
+    "`Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2. The lock's hashes are not checked here (nothing is downloaded); the images built in restore-drill and edge install it with --require-hashes."
+  ],
+  "gaps": [],
+  "coverage": null,
+  "steps": [
+    {
+      "name": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Install",
+      "status": "replaced: ok",
+      "seconds": 0.2,
+      "code": 0
+    },
+    {
+      "name": "Migrate, and start the API as the server runs it",
+      "status": "ok",
+      "seconds": 3.4,
+      "code": 0
+    },
+    {
+      "name": "Measure, and fail on a budget breached",
+      "status": "ok",
+      "seconds": 43.4,
+      "code": 0
+    },
+    {
+      "name": "Breaches that do not fail the run, where they are seen",
+      "status": "ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Preserve the figures",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-20-kept-words-ci-local/hot-path.txt"
+}

@@ -1,0 +1,149 @@
+{
+  "job": "backend",
+  "name": "backend (lint, types, contracts, tests)",
+  "result": "passed with declared gaps",
+  "counts": "PG17 Tests: 3458 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1481 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age)",
+  "reasons": [],
+  "commit": "56a40dc",
+  "tree": "dirty",
+  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
+  "started": "2026-10-20T02:48:00+03:00",
+  "finished": "2026-10-20T03:04:45+03:00",
+  "duration": "16m45s",
+  "brief": "PG17 in Docker on 127.0.0.1:55417; no install (venv checked against the lock); declared gap: no PG17 client or age here, so the backup tests skip on PG17 and run on PG16.2",
+  "images": [
+    "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
+  ],
+  "deviations": [
+    "PostgreSQL 17: postgres:17-alpine (same env, initdb args and health check) in Docker Desktop's Linux VM, published on 127.0.0.1:55417 instead of localhost:5432; the database URLs say so.",
+    "`PostgreSQL 17 client tools and age, for the backup tests` (apt in CI): NOT RUN, the declared gap (see GAPS).",
+    "Tests and the assertion run CI's commands unchanged; the runner adds, in their environment only, PYTEST_ADDOPTS='--junitxml=<work>/… -o cache_dir=<work>/pytest-cache' to list each skip (from the junit file, not from -rs, so the text CI's assertion greps is CI's own) and to start from an empty pytest cache, as CI does (the repository's .pytest_cache is left alone).",
+    "ruff and mypy start without a cache, as in CI (RUFF_CACHE_DIR/MYPY_CACHE_DIR in the work directory); `lint-imports` gets `--cache-dir <work>/import-linter-cache` so it too starts empty (the repository's backend/.import_linter_cache is left alone).",
+    "/tmp paths moved to the runner's work directory; the catalogue evaluation report is in the evidence directory (CI uploads it as an artifact).",
+    "`Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2. The lock's hashes are not checked here (nothing is downloaded); the images built in restore-drill and edge install it with --require-hashes.",
+    "The 19 backup tests that skip on PostgreSQL 17 run again on the project's PostgreSQL 16 cluster pg-unit (127.0.0.1:55446, /Users/nikitahlushak/.cache/birka-runtime/pg-unit): PostgreSQL 16.2, timezone Europe/Kiev (CI's server: UTC), template1 locale libc collate C.UTF-8 ctype C.UTF-8 (CI: ICU uk-UA, --locale=C.UTF-8). The runner's scratch database birka_ci_local_backup16 (dropped after) and the databases the tests create inherit that timezone and locale. BIRKA_PG_BIN=/Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/pgserver/pginstall/bin (pg_dump 16.2)."
+  ],
+  "gaps": [
+    "DECLARED (owner decision 2026-10-08): no PostgreSQL 17 client tools and no age on this Mac. The 19 backup tests of test_backup_restore_drill.py skip on PostgreSQL 17, so CI's assertion fails, on its skip check alone (verified). On PostgreSQL 16.2 with its 16.2 client: 18 passed (test_a_backup_is_never_overwritten, test_a_backup_restores_and_proves_it_is_the_same_data, test_a_copy_missing_rows_fails_and_names_the_table, test_a_damaged_archive_is_refused_before_anything_is_created, test_a_dump_that_hangs_is_stopped_and_the_night_says_so, test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps, test_a_ledger_left_unprotected_fails_the_drill, test_a_ledger_that_does_not_reconcile_fails_the_drill, test_a_night_finding_the_last_one_still_running_starts_nothing, test_a_night_first_drops_what_a_stopped_drill_left, test_a_night_that_cannot_back_up_says_so, test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing, test_a_night_without_the_owners_key_fails_and_deletes_nothing, test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy, test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive, test_kept_copies_stay_for_inspection_and_are_never_the_source, test_stock_left_under_a_merged_model_fails_the_drill, test_the_counts_are_the_snapshot_the_archive_holds); 1 skipped there too, needing age (test_an_encrypted_night_can_only_be_read_with_the_owners_key). Covered by restore-drill: pg_dump/pg_restore 17 and age in the ops image, against PostgreSQL 17 with CI's locale: the night's backup (scripts.nightly_backup), its restore drill, encryption to the owner's key, the watcher reading the night as OK, and decryption back to exactly the drilled archive (sha256). Not run anywhere here on PostgreSQL 17 with pg_dump 17: the failure paths of those tests (damaged archive, missing rows, a ledger that does not reconcile, hangs, locks, leftovers)."
+  ],
+  "coverage": {
+    "pg17_tests": "every backend test but these 19 ran on PostgreSQL 17.11 (Docker)",
+    "pg16_passed": [
+      "test_a_backup_is_never_overwritten",
+      "test_a_backup_restores_and_proves_it_is_the_same_data",
+      "test_a_copy_missing_rows_fails_and_names_the_table",
+      "test_a_damaged_archive_is_refused_before_anything_is_created",
+      "test_a_dump_that_hangs_is_stopped_and_the_night_says_so",
+      "test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps",
+      "test_a_ledger_left_unprotected_fails_the_drill",
+      "test_a_ledger_that_does_not_reconcile_fails_the_drill",
+      "test_a_night_finding_the_last_one_still_running_starts_nothing",
+      "test_a_night_first_drops_what_a_stopped_drill_left",
+      "test_a_night_that_cannot_back_up_says_so",
+      "test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing",
+      "test_a_night_without_the_owners_key_fails_and_deletes_nothing",
+      "test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy",
+      "test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive",
+      "test_kept_copies_stay_for_inspection_and_are_never_the_source",
+      "test_stock_left_under_a_merged_model_fails_the_drill",
+      "test_the_counts_are_the_snapshot_the_archive_holds"
+    ],
+    "skipped_everywhere_here": [
+      "test_an_encrypted_night_can_only_be_read_with_the_owners_key"
+    ],
+    "restore_drill": "pg_dump/pg_restore 17 and age in the ops image, against PostgreSQL 17 with CI's locale: the night's backup (scripts.nightly_backup), its restore drill, encryption to the owner's key, the watcher reading the night as OK, and decryption back to exactly the drilled archive (sha256)"
+  },
+  "steps": [
+    {
+      "name": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Install",
+      "status": "replaced: ok",
+      "seconds": 0.3,
+      "code": 0
+    },
+    {
+      "name": "Lint",
+      "status": "ok",
+      "seconds": 0.1,
+      "code": 0
+    },
+    {
+      "name": "Type check",
+      "status": "ok",
+      "seconds": 8.4,
+      "code": 0
+    },
+    {
+      "name": "Architecture contracts (ADR-0001)",
+      "status": "ok",
+      "seconds": 0.2,
+      "code": 0
+    },
+    {
+      "name": "Apply migrations",
+      "status": "ok",
+      "seconds": 1.3,
+      "code": 0
+    },
+    {
+      "name": "Migration drift check",
+      "status": "ok",
+      "seconds": 0.6,
+      "code": 0
+    },
+    {
+      "name": "Migration downgrade is reversible",
+      "status": "ok",
+      "seconds": 2.1,
+      "code": 0
+    },
+    {
+      "name": "Catalog evaluation regression gate",
+      "status": "ok",
+      "seconds": 0.4,
+      "code": 0
+    },
+    {
+      "name": "Preserve catalog evaluation report",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "PostgreSQL 17 client tools and age, for the backup tests",
+      "status": "NOT RUN (declared gap)",
+      "seconds": 0.0,
+      "code": null
+    },
+    {
+      "name": "Tests",
+      "status": "ok",
+      "seconds": 472.9,
+      "code": 0
+    },
+    {
+      "name": "Assert the database tests actually ran",
+      "status": "FAILED (1)",
+      "seconds": 454.2,
+      "code": 1
+    },
+    {
+      "name": "[runner] the skipped backup tests on PostgreSQL 16.2",
+      "status": "ok",
+      "seconds": 54.3,
+      "code": 0
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-20-kept-words-ci-local/backend.txt"
+}
