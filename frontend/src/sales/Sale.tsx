@@ -615,6 +615,10 @@ export function Sale({
       setPaperTime("");
       setYesterday(false);
       // The next customer is someone else, and looks for something else.
+      // Sold in parts, «Борги» — and what a number owes, said here — are
+      // read again (review, 2026-10-19).
+      if (outcome.kind === "sold" && credit.inParts)
+        void cache.invalidateQueries({ queryKey: ["credits", store.id] });
       setCredit(noTerms);
       // The shelf is read again: the whole list, once the search is cleared.
       if (query) {
@@ -1222,7 +1226,11 @@ export function Sale({
             value={credit}
             change={setCredit}
             total={total}
-            hint="Покупець забирає товар зараз, решту доплачує, коли зможе. Внески приймає лише цей магазин, у розділі «Борги»."
+            // One line at 360 px (credits task list, P1-5): the task list's
+            // «Решту покупець доплачує в «Боргах» цього магазину.» takes two.
+            hint="Решту — у «Боргах» цього магазину."
+            storeId={store.id}
+            token={token}
           />
         )}
         <p className="hint">

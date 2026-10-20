@@ -1042,6 +1042,20 @@ html {
   font-size: 28px;
   letter-spacing: 0;
 }
+/* What a number already owes, under the till's phone (credits task list,
+   P1-5): in the debt's colour when it is owed, neutral when written off;
+   its one line's room kept once the number is whole. */
+.number-debt {
+  margin: 0;
+}
+.number-debt.reserved {
+  margin-top: 4px;
+  min-height: 1.55em;
+}
+.number-debt.owing {
+  color: var(--debt);
+  font-weight: 650;
+}
 /* A debt's goods beyond the first, on a tap (owner, 2026-10-18). */
 .more-goods {
   /* A finger's room, the line unmoved. */

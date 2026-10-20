@@ -1,0 +1,14 @@
+- unchanged tree: passed 
+- the line read for a part of a number: caught by the till says what a number already owes, and still sells in parts as the seller decides
+- the line of a number typed before: caught by the till says what a number already owes, and still sells in parts as the seller decides
+- what is owed not in the debt's colour: caught by the till says what a number already owes, and still sells in parts as the seller decides
+- the line of a number that merely holds the digits: caught by the till says what a number already owes, and still sells in parts as the seller decides
+- the line's room not kept: caught by the till says what a number already owes, and still sells in parts as the seller decides
+- the earliest write-off said: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- a write-off said before what is owed: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- an answer kept from before shown: caught by the till says what a number already owes, and still sells in parts as the seller decides
+- the order's line asked of another store: caught by an order collected may be paid in parts, by the till's rules
+- a write-off not said: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- a debt paid off said as written off: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- the till's hint in two lines: caught by a sale paid in parts leaves the rest owed, and «Борги» takes it until nothing is
+12 of 12 caught

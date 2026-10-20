@@ -3038,3 +3038,40 @@ How they are carried out, not decided by the owner:
   words, as the owner was asked of payments, write-offs and returns.
 
 Built on 2026-10-19; see the [report](credits-redesign-5-report.md).
+
+## «Борги» at the till: what a number already owes (P1-5) — 2026-10-19
+
+After #110 was opened, asked to go on as recommended: P1-5, whose В4 the
+owner answered on 2026-10-18 ((а): one line, nothing forbidden, the seller
+decides). The three questions after #110 wait for its merge.
+
+How it is carried out, not decided by the owner:
+- **Under «Телефон покупця», once it holds a whole number,** however
+  written or pasted, one line from the same read as «Борги» — this store's
+  debts, the debt's store:
+  - owed: «За номером уже винні 2 000,00 грн», in the debt's colour, the
+    server's sum — said before any write-off;
+  - nothing owed, a debt written off: «За номером борг списано
+    12.03.2026», neutral, the latest write-off's date;
+  - only paid off, a new number, or «Борги» not read: nothing, and the sale
+    as any.
+  Only for the number in the field, and only that very number's customer —
+  never one whose number merely holds the digits typed. A digit changed,
+  the line goes at once; never an answer from before a sale in parts. Its
+  one line's room is kept once the number is whole, so nothing below moves
+  when it comes. The same at «Клієнт забрав», asked of the order's store.
+- **«За номером …», not the owner's example «За цим номером …»:** at 360 px
+  the till's column holds 262 px; «За цим номером уже винні 2 000,00 грн»
+  takes 268 in bold, a six-figure sum 285, the write-off 271 — two lines.
+  «За номером …» takes at most 255, right under the phone it speaks of.
+  For the owner to confirm.
+- **What paying in parts means, in one line at 360 px:** «Решту — у
+  «Боргах» цього магазину.», at the till and at «Клієнт забрав». The task
+  list's «Решту покупець доплачує в «Боргах» цього магазину.» takes two
+  lines in the till's column (346 px of 262), and «… магазину замовлення»
+  for an order the same; an order is this store's, as its words before
+  said. For the owner to confirm.
+- **Nothing is sent differently,** and no rule «не продавати частинами»
+  appears.
+
+Built on 2026-10-19; see the [report](credits-redesign-6-report.md).

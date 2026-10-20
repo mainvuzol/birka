@@ -1,0 +1,92 @@
+CI job `frontend` — frontend (lint, types, build)
+Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
+
+commit:   a68d034 (feat/credits-till-debt-line) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da
+date:     2026-10-20 01:34:20 EEST → 01:34:35 (0m14s)
+machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
+tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
+env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
+images:   none (this job starts no container)
+network:  from Docker's VM during the job (Docker Desktop's log): none
+result:   passed
+counts:   eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 144 modules, built in 84ms
+
+DEVIATIONS from CI:
+  - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of GitHub's ubuntu-24.04 runner (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
+  - Every job runs with TZ=UTC, LANG=C.UTF-8 and LC_ALL=C.UTF-8, as on the ubuntu runner (this Mac's own zone is Europe/Kyiv); every tool the job starts inherits them, Playwright's Chromium included.
+  - The working tree as it is, not a fresh checkout (the header says clean or dirty).
+  - CI=true; GITHUB_ENV and GITHUB_STEP_SUMMARY point into the runner's work directory; upload-artifact copies into the evidence directory. uv's and npm's caches are in the runner's work directory.
+  - Nothing is installed and no image is pulled; builds use only the local build cache. The network is used only where CI's own steps use it: `npm audit` and pip-audit's queries.
+  - Nothing is re-run: a failing step or test fails the job, as in CI.
+  - Node v24.18.0 (npm 11.16.0), the host's, instead of node 24.
+  - `npm ci` replaced by a check that the installed node_modules is exactly package-lock.json, and that package.json agrees with the lock as npm ci checks it; the step fails otherwise (nothing installed, no downloads).
+  - `npm audit --audit-level=high` runs as in CI: it sends package-lock.json's names and versions to registry.npmjs.org (owner decision 2026-10-08); npm's cache and logs go to the runner's work directory (npm_config_cache), its update check is off.
+  - `tsc -b` inside `npm run build` reuses the git-ignored frontend/tsconfig.tsbuildinfo where CI starts without one; the separate `npm run typecheck` (tsc --noEmit) still checks every file.
+
+GAPS (declared; nothing else may be missing):
+  - none
+
+====================================================================================================
+===== [runner] job frontend: frontend (lint, types, build)
+[runner] 3 step(s) the runner replaces or does not run match their sha256 in ci.yml
+
+===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+[runner] the working tree at a68d034 (clean), not a fresh checkout
+===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
+
+===== actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+[runner] setup-node 24.21.0: the host's node v24.18.0
+===== replaced: ok: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 (0.0s)
+
+===== npm ci
+[runner] no npm ci (no downloads): node v24.18.0, npm 11.16.0; checking node_modules against package-lock.json
+[runner] 147 packages at their locked versions; 24 optional packages for other platforms not installed (npm ci skips them too)
+===== replaced: ok: npm ci (0.1s)
+
+===== npm audit --audit-level=high
+found 0 vulnerabilities
+===== ok: npm audit --audit-level=high (1.5s)
+
+===== npm run lint
+
+> birka-frontend@0.1.0 lint
+> eslint .
+
+===== ok: npm run lint (9.3s)
+
+===== npm run typecheck
+
+> birka-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+===== ok: npm run typecheck (1.9s)
+
+===== npm run build
+
+> birka-frontend@0.1.0 build
+> tsc -b && vite build
+
+[36mvite v8.3.0 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 144 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                             1.45 kB │ gzip:   0.84 kB
+dist/assets/index-B5sS1GMn.css             16.20 kB │ gzip:   4.23 kB
+dist/assets/rolldown-runtime-CbXtAM7H.js    0.58 kB │ gzip:   0.36 kB
+dist/assets/vendor-CTXfEEWe.js            207.61 kB │ gzip:  66.60 kB
+dist/assets/index-DqE9LWJn.js             439.23 kB │ gzip: 111.13 kB
+
+[32m✓ built in 84ms[39m
+===== ok: npm run build (2.0s)
+
+===== [runner] steps
+  replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
+  replaced: ok                       actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  (0.0s)
+  replaced: ok                       npm ci  (0.1s)
+  ok                                 npm audit --audit-level=high  (1.5s)
+  ok                                 npm run lint  (9.3s)
+  ok                                 npm run typecheck  (1.9s)
+  ok                                 npm run build  (2.0s)
+===== [runner] frontend: PASSED — eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 144 modules, built in 84ms

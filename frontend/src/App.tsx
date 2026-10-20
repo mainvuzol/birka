@@ -834,6 +834,9 @@ function Workspace({
       await Promise.all([
         cache.invalidateQueries({ queryKey: ["orders", store.id] }),
         cache.invalidateQueries({ queryKey: ["stock", store.id] }),
+        // Collected in parts, a debt: «Борги» read again (review,
+        // 2026-10-19).
+        cache.invalidateQueries({ queryKey: ["credits", store.id] }),
       ]);
     }
   }
@@ -1997,6 +2000,7 @@ function Workspace({
               )}`}
               order={detail.data}
               store={store}
+              token={token}
               blocked={blocked}
               refresh={() => {
                 void detail.refetch();
@@ -2240,12 +2244,15 @@ const actionLabels: Record<string, string> = {
 function OrderDetail({
   order,
   store,
+  token,
   blocked,
   action,
   refresh,
 }: {
   order: Order;
   store: Store;
+  /** Who asks what a number already owes, paying in parts. */
+  token: string;
   blocked: boolean;
   action: (action: string, extra?: Record<string, unknown>) => void;
   refresh: () => void;
@@ -2355,7 +2362,12 @@ function OrderDetail({
                 setProblem("");
               }}
               total={kopecks(order.total) ?? 0n}
-              hint="Покупець забирає замовлення, сплачує частину зараз, решту винен цьому магазину. Наступні внески — у розділі «Борги»."
+              // One line at 360 px, as at the till (credits task list, P1-5):
+              // the order is this store's, as its words before said.
+              hint="Решту — у «Боргах» цього магазину."
+              // The debt's store, by construction.
+              storeId={order.store_id}
+              token={token}
             />
           </fieldset>
         )}
