@@ -159,7 +159,7 @@ function NumberDebt({
     .filter((at) => !Number.isNaN(at))
     .reduce<number | null>((latest, at) => Math.max(latest ?? at, at), null);
   const closed = whose(away.data);
-  const owedAway = closed ? (kopecks(closed.owed) ?? 0n) : 0n;
+  const owesAway = closed !== undefined && (kopecks(closed.owed) ?? 0n) > 0n;
   // Stores by who they are, not by name, and only where something is owed.
   const awayStores = [
     ...new Map(
@@ -180,10 +180,17 @@ function NumberDebt({
     >
       {found && owed > 0n ? (
         <span className="owing">За номером уже винні {money(found.owed)}</span>
-      ) : writtenOff !== null && writtenOff !== undefined ? (
+      ) : writtenOff !== null &&
+        writtenOff !== undefined &&
+        !away.isPending &&
+        !owesAway ? (
+        // What is owed, here or in a closed store, is said in place of a
+        // debt written off here (owner decisions, 2026-10-19 and 2026-10-21):
+        // so it waits for the closed stores' answer, or their failure, past
+        // the moment this store's debt waits (review, 2026-10-21).
         <span>За номером борг списано {fullDay(writtenOff)}</span>
       ) : null}
-      {closed && owedAway > 0n && (
+      {closed && owesAway && (
         // One line, the sum first: a long name is cut, never the sum, and
         // nothing below moves (review, 2026-10-20).
         <span className="owing away">

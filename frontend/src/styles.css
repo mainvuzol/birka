@@ -1013,6 +1013,11 @@ html {
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
+/* A payment from paper's mark in the history: a warning's (credits task
+   list, P2-4). */
+.paper-meta {
+  color: var(--warn);
+}
 .history-sum {
   flex-shrink: 0;
   font-weight: 650;
@@ -1127,6 +1132,30 @@ html {
 }
 .placeholder .sale-row .sale-main {
   gap: 8px;
+}
+/* «Борги»'s places while read (credits task list, P2-3): what is owed on a
+   row's right, and the store's card in its own lines' heights, grey lines
+   whose sizing text is hidden even where a theme forces colours. */
+.skeleton-owed {
+  flex-shrink: 0;
+  width: 5.5em;
+  height: 1.2em;
+}
+.debt-mark.skeleton {
+  border-radius: 999px;
+}
+.skeleton-line {
+  border-radius: 10px;
+  background: var(--line);
+  animation: skeleton-breathe 1.4s ease-in-out infinite;
+}
+.skeleton-line > span {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+  }
 }
 /* The return's panel (P0-4): the till's, with the way as a switch over the
    one button. */
