@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -73,27 +73,31 @@ function entryWhat(entry: CreditEntry): string {
 
 /**
  * When, and who: «01.10, 13:00 · Оля», then where another store took it, a
- * payment from paper's mark, and the money a return handed back.
+ * payment from paper's mark, and the money a return handed back. The mark
+ * is a warning's (credits task list, P2-4).
  */
-function entryMeta(entry: CreditEntry): string {
-  const parts = [
-    shortWhen(entry.at),
-    entry.outage
-      ? `${paperText("payment", entry.outage)} · внесено: ${visible(entry.by)}`
-      : visible(entry.by),
+function entryMeta(entry: CreditEntry): { text: string; paper?: true }[] {
+  const parts: { text: string; paper?: true }[] = [
+    { text: shortWhen(entry.at) },
   ];
+  if (entry.outage)
+    parts.push(
+      { text: paperText("payment", entry.outage), paper: true },
+      { text: `внесено: ${visible(entry.by)}` },
+    );
+  else parts.push({ text: visible(entry.by) });
   // The store took it: never a verb of the person before it.
   if (entry.taken_at)
-    parts.push(`прийняв магазин «${visible(entry.taken_at)}»`);
+    parts.push({ text: `прийняв магазин «${visible(entry.taken_at)}»` });
   if (entry.kind === "RETURN" && (kopecks(entry.cash_back) ?? 0n) > 0n)
-    parts.push(
-      `повернено ${money(entry.cash_back)}${
+    parts.push({
+      text: `повернено ${money(entry.cash_back)}${
         isTillMethod(entry.payment_method)
           ? ` ${refundHow[entry.payment_method]}`
           : ""
       }${entry.corrected ? ", виправлено" : ""}`,
-    );
-  return parts.join(" · ");
+    });
+  return parts;
 }
 
 /** A sum that is not one to the kopeck. */
@@ -556,7 +560,18 @@ export function Debt({
               <li className="history-row" key={`${entry.at}:${String(index)}`}>
                 <span className="history-main">
                   <span className="history-what">{entryWhat(entry)}</span>
-                  <span className="history-meta">{entryMeta(entry)}</span>
+                  <span className="history-meta">
+                    {entryMeta(entry).map((part, at) => (
+                      <Fragment key={at}>
+                        {at > 0 && " · "}
+                        {part.paper ? (
+                          <span className="paper-meta">{part.text}</span>
+                        ) : (
+                          part.text
+                        )}
+                      </Fragment>
+                    ))}
+                  </span>
                   {entry.note && (
                     <span className="history-meta">{visible(entry.note)}</span>
                   )}

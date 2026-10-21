@@ -3155,3 +3155,58 @@ How they are carried out, not decided by the owner:
   owner's answer did not name.
 
 Built on 2026-10-20; see the [report](kept-words-report.md).
+
+## Owner decision — 2026-10-21 («Борги»: three readings after #112, and what next)
+
+Asked after #112 was merged, with #113 open, each answer the option
+recommended:
+- **A closed store's line at the till stays as built:** «Винні 1 500,00 грн
+  магазину «Ринок»», one line, the sum first, a long name cut.
+- **A number whose debt here was written off and which owes a closed
+  store** says what it owes there, alone — as what is owed here is said
+  over a write-off (2026-10-19): what is owed comes before what was
+  written off, anywhere. *(Built 2026-10-21, below.)*
+- **A Latin «ï» typed as one sign** is «ї» in the debts' search, as a
+  Latin «i» is «і»; nothing stored changes. *(Built 2026-10-21, below.)*
+- **Next:** the task list's last three — one set of words, with «Немає
+  доступу до боргів» said nowhere (P2-1); the list's places while it is
+  read (P2-3); pills by what they mean, the meta at 14 px and both themes
+  (P2-4).
+
+## «Борги»'s task list closed, and the two answers after #112 — built 2026-10-21
+
+How they are carried out, not decided by the owner:
+- **The write-off here waits for the closed stores' answer, or their
+  failure,** however long: it is never said and then taken back. This
+  store's own debt still waits for them a moment and a half at most.
+- **«ï»** is folded with the apostrophes and the Latin «i», after the letter
+  case is lowered, so «Ï» is «ї» too, typed or stored.
+- **A kept payment or write-off on a phone whose person may no longer open
+  «Борги»** (`sale:credit`) shows its banner over whatever tab is open, as
+  a kept return's banner stands: «Борги» is turned to only for whoever may
+  open it, and «Немає доступу до боргів.» is said nowhere. Unlike a kept
+  return (owner decision, 2026-10-18), nothing more changes: the server
+  refuses such a person before it looks the command up, saying nothing of
+  what was recorded, so the command stays kept, and the till, «Повернення»
+  and «Каса» with it, until the right is given back — as before this
+  change. Under the banner, the app's words for any refused right, «Немає
+  доступу до цієї операції або складу. Зверніться до менеджера.». Whether
+  it should be answered and the till freed, as a return is, is the
+  owner's to say (asked after this change). The rest of the task list's
+  words were changed with the tasks before.
+- **While «Борги» is read,** the store's card «Магазину винні» stands in its
+  own lines' heights, its sum and count grey, and three rows of a mark, a
+  name and its meta, and a sum on the right; a screen reader hears
+  «Завантажуємо борги…». Neither the field nor the first row moves when
+  they come. A card that cannot be read leaves no place, so what is under
+  it moves up once — rare, as the list is read from the same server; a sum
+  of seven figures or more takes two lines at 360 px, and moves it down
+  once.
+- **Pills by what they mean:** «Сплачено» in the accent; «Списано», «Нічого
+  не винні» and another store's «Магазин «…»» neutral; a payment's result
+  from paper a warning, as before; and a payment from paper's mark in a
+  debt's history in the warning's colour, its words as they were. What is
+  owed stays in the debt's colour. Every one reads at 4.5:1 or more in the
+  light theme and the dark, and a debt's screens' meta is 14 px.
+
+Built on 2026-10-21; see the [report](credits-redesign-8-report.md).

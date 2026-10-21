@@ -941,10 +941,11 @@ def _whole_phone(wanted: str) -> str | None:
 # A name read as it is typed on any phone (owner decision, 2026-10-18): the
 # apostrophes Android, iPhone and documents write, and those typed in their
 # place, are one sign, and a Latin «i» is the Ukrainian «і» — as the
-# catalogue reads a similar name (`app.modules.catalog.similar`). Applied
-# after the letter case is lowered, so «I» is «і» too.
-_SAME_FROM = "’ʼ`´‘i"
-_SAME_TO = "'''''" + chr(0x0456)  # five apostrophes, then the Ukrainian «і»
+# catalogue reads a similar name (`app.modules.catalog.similar`); a Latin
+# «ï» typed as one sign is «ї» (owner decision, 2026-10-21). Applied after
+# the letter case is lowered, so «I» is «і» too, and «Ï» «ї».
+_SAME_FROM = "’ʼ`´‘i" + chr(0x00EF)  # and a Latin «ï» typed as one sign
+_SAME_TO = "'''''" + chr(0x0456) + chr(0x0457)  # five apostrophes, the Ukrainian «і» and «ї»
 _SAME = str.maketrans(_SAME_FROM, _SAME_TO)
 
 
@@ -955,8 +956,9 @@ def _found_by(wanted: str) -> Any:
     debt, in any order, as the till and «Повернення» read each word (credits
     task list, P1-3): «петренко оксана» finds «Оксана Петренко», and two
     spaces are one; «Мар'яна» finds «Мар’яна», «iрина» typed with a Latin
-    «i» finds «Ірина», and an «ї» pasted in two parts is the letter. Words
-    of two debts do not add up; a word typed twice is looked for once.
+    «i» finds «Ірина», and an «ї» pasted in two parts or typed as a Latin
+    «ï» is the letter. Words of two debts do not add up; a word typed twice
+    is looked for once.
 
     Only a query written as a phone is looked for among phones: the digits of
     «Ірина 2» are part of a name, and would find whoever's number holds a 2.

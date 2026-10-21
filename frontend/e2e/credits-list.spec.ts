@@ -281,6 +281,67 @@ test("what the store is owed comes first, large, and a row a customer: what they
   expect(closed.y).toBeGreaterThan(owing.y + owing.height - 1);
 });
 
+test("while «Борги» is read, the store's card and three rows keep their places, and the field does not move", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await summary(page);
+  await customers(page, [oksana(), iryna()]);
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  for (const read of [
+    "**/api/v1/credits/summary?**",
+    "**/api/v1/credits/customers?**",
+  ])
+    await page.route(read, async (route) => {
+      await held;
+      await route.fallback();
+    });
+  await credits(page);
+  // Being read (credits task list, P2-3): the store's card's and three
+  // rows' places, said to a screen reader, no words where the rows will be.
+  const list = page.locator("section.credits");
+  await expect(list.locator(".placeholder .debt-row")).toHaveCount(3);
+  await expect(list.locator(".placeholder .debt-mark")).toHaveCount(3);
+  // A row's mark, round, as the row's own.
+  await expect(list.locator(".placeholder .debt-mark").first()).toHaveCSS(
+    "border-radius",
+    "999px",
+  );
+  await expect(list.locator(".owed-place")).toBeVisible();
+  await expect(list.locator(".owed-place")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
+  // Grey lines, what sizes them never seen (review, 2026-10-21).
+  const sizing = list.locator(".owed-place .skeleton-line > span");
+  await expect(sizing).toHaveCount(2);
+  for (const each of await sizing.all()) await expect(each).toBeHidden();
+  await expect(list.getByRole("status")).toHaveText("Завантажуємо борги…");
+  await expect(page.getByLabel("Скільки винні магазину")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/credits-reading.png" });
+  const before = await field(page).boundingBox();
+  const place = await list
+    .locator(".placeholder .debt-row")
+    .first()
+    .boundingBox();
+  release();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(
+    page.getByLabel("Скільки винні магазину").locator(".owed-sum"),
+  ).toHaveText("12 400,00 грн");
+  await expect(list.locator(".placeholder")).toHaveCount(0);
+  await expect(list.locator(".owed-place")).toHaveCount(0);
+  const after = await field(page).boundingBox();
+  const first = await rows(page).first().boundingBox();
+  if (!before || !after || !place || !first) throw new Error("not laid out");
+  // Nothing moves: the field, nor where the first row comes.
+  expect(after.y).toBe(before.y);
+  expect(Math.abs(first.y - place.y)).toBeLessThanOrEqual(2);
+});
+
 /** What an empty «Борги» teaches (credits task list, P1-4). */
 const beginsAt =
   "Зараз ніхто не винен. Борг з’являється, коли продають частинами.";
@@ -637,6 +698,7 @@ test("switching to the paid and written off never shows those who owe as them wh
     .getByRole("button", { name: "Показати сплачені й списані" })
     .click();
   await expect(page.getByRole("status")).toHaveText("Завантажуємо борги…");
+  await expect(page.locator(".placeholder .debt-row")).toHaveCount(3);
   await expect(rows(page)).toHaveCount(0);
   // The switch stays where it was pressed.
   await expect(
@@ -679,7 +741,8 @@ test("a closed store's customer of more debts is read among the closed stores", 
   );
   await field(page).fill("050 765 43 21");
   await asking;
-  await expect(page.getByText("Завантажуємо борги…")).toBeVisible();
+  // Its rows' places while it reads (credits task list, P2-3).
+  await expect(page.locator(".placeholder .debt-row")).toHaveCount(3);
   expect(await ask.count()).toBe(0);
   const none = page.getByText(
     "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
@@ -799,4 +862,184 @@ for (const [name, theme, scheme] of [
     await page.screenshot({
       path: `test-results/credits-customer-${name}.png`,
     });
+  });
+
+/** A colour token as the page resolves it in the theme it is in. */
+async function token(page: Page, name: string): Promise<string> {
+  return page.evaluate((property) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${property})`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, name);
+}
+
+for (const [name, theme, scheme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
+] as const)
+  test(`in the ${name} theme each pill is by what it means, and a debt, its history, its panel and a payment's result read at 4.5:1`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await summary(page);
+    // Owed, with a payment typed from paper in its history.
+    const owing = customer("Оксана Петренко", "067 123 45 67", [
+      debt("Лоран шоколад · M", "2000.00", {
+        entries: [
+          {
+            kind: "PAYMENT",
+            amount: "1000.00",
+            cash_back: "0.00",
+            at: "2026-10-13T09:00:00Z",
+            by: "Оля",
+            note: null,
+            taken_at: null,
+            payment_method: "CASH",
+            corrected: false,
+            outage: {
+              by_user_id: null,
+              by: "Ганна",
+              at: "2026-10-12T16:40:00Z",
+              first_days: false,
+            },
+          },
+        ],
+      }),
+    ]);
+    // Owed to a closed store, its debt named by it, as the closed stores'
+    // view shows it; paid off; written off; and both, nothing owed.
+    const away = customer("Ірина Коваль", "050 765 43 21", [
+      debt("Альпака сіра · L", "1500.00", {
+        store_id: randomUUID(),
+        store_name: "Ринок",
+        store_state: "ARCHIVED",
+      }),
+    ]);
+    const paidOff = customer("Олена Шевчук", "067 222 33 44", [
+      debt("Лоран шоколад · L", "0.00", {
+        status: "SETTLED",
+        paid: "3000.00",
+        closed_at: "2026-10-10T10:00:00Z",
+      }),
+    ]);
+    const gone = customer("Марко Бондар", "063 111 22 33", [
+      debt("Пальто «Затишок» · M", "0.00", {
+        status: "WRITTEN_OFF",
+        written_off: "2000.00",
+        closed_at: "2026-10-11T10:00:00Z",
+      }),
+    ]);
+    const neither = customer("Галина Мельник", "093 444 55 66", [
+      debt("Лоран шоколад · S", "0.00", {
+        status: "SETTLED",
+        paid: "3000.00",
+        closed_at: "2026-10-09T10:00:00Z",
+      }),
+      debt("Альпака сіра · M", "0.00", {
+        status: "WRITTEN_OFF",
+        written_off: "1500.00",
+        closed_at: "2026-10-08T10:00:00Z",
+      }),
+    ]);
+    await customers(page, [owing, away, paidOff, gone, neither]);
+    // The whole of what is owed, paid: the debt paid off.
+    await page.route(`**/api/v1/credits/*/payments`, async (route) => {
+      await route.fulfill({
+        status: 201,
+        json: {
+          ...owing.credits[0],
+          status: "SETTLED",
+          paid: "3000.00",
+          owed: "0.00",
+          closed_at: "2026-10-21T10:00:00Z",
+        },
+      });
+    });
+    await credits(page, theme);
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.theme),
+    ).toBe(scheme);
+    await page
+      .getByRole("button", { name: "Показати сплачені й списані" })
+      .click();
+    await expect(rows(page)).toHaveCount(5);
+    // By what it means (credits task list, P2-4): paid off is the accent's;
+    // written off, nothing owed and another store say nothing to do.
+    const accent = page.getByText("Сплачено", { exact: true });
+    await expect(accent).toHaveClass("badge");
+    for (const pill of [
+      page.getByText("Списано", { exact: true }),
+      page.getByText("Нічого не винні", { exact: true }),
+      page.getByText("Магазин «Ринок»", { exact: true }),
+    ])
+      await expect(pill).toHaveClass("badge neutral");
+    for (const pill of [
+      accent,
+      page.getByText("Списано", { exact: true }),
+      page.getByText("Нічого не винні", { exact: true }),
+      page.getByText("Магазин «Ринок»", { exact: true }),
+    ])
+      expect(await contrast(pill)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `test-results/credits-pills-${name}.png` });
+
+    await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+    await expect(page.locator(".owed-sum")).toHaveText("2 000,00 грн");
+    // From paper, a warning's colour, its words as they were; the paper's
+    // time in the phone's own zone, as the app writes it.
+    const at = await page.evaluate(() =>
+      new Date("2026-10-12T16:40:00Z").toLocaleTimeString("uk-UA", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    );
+    const paper = page.locator(".history-meta .paper-meta");
+    await expect(paper).toHaveText(
+      `Внесок під час збою · хто прийняв: Ганна · за папером 12.10, ${at}`,
+    );
+    await expect(paper).toHaveCSS("color", await token(page, "--warn"));
+    await expect(page.locator(".history-meta").first()).toContainText(
+      `Внесок під час збою · хто прийняв: Ганна · за папером 12.10, ${at} · внесено: Оля`,
+    );
+    await page.getByRole("button", { name: "Увесь залишок" }).click();
+    const panel = page.locator(".pay-panel");
+    for (const part of [
+      page.locator(".owed-what"),
+      page.locator(".owed-sum"),
+      page.locator(".owed-count"),
+      page.locator(".history-what").first(),
+      page.locator(".history-meta").first(),
+      paper,
+      page.locator(".history-sum").first(),
+      panel.locator(".pay-total"),
+      panel.getByRole("button", { name: "Готівка", exact: true }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // The meta of a debt's screens at 14 px (P2-4).
+    for (const meta of [
+      page.locator(".owed-count"),
+      page.locator(".history-meta").first(),
+      page.locator(".debt-context"),
+    ])
+      await expect(meta).toHaveCSS("font-size", "14px");
+    // The history above the panel, as the seller scrolls to it.
+    await paper.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/credits-debt-${name}.png` });
+
+    await panel.getByRole("button", { name: "Готівка", exact: true }).click();
+    const result = page.locator(".paid-result");
+    await expect(result.locator(".hand-back-sum")).toHaveText("2 000,00 грн");
+    await expect(result.locator(".paid-owed")).toHaveText(
+      "Борг сплачено повністю.",
+    );
+    for (const part of [
+      result.getByRole("heading", { name: "Внесок записано" }),
+      result.locator(".way-pill"),
+      result.locator(".hand-back-sum"),
+      result.locator(".paid-owed"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `test-results/credits-paid-${name}.png` });
   });

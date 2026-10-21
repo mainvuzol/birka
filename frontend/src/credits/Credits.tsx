@@ -11,6 +11,7 @@ import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
+import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
 import { number, plural } from "@/openings/types";
 import { CustomerRow, debtsCount } from "./CustomerRow";
@@ -222,7 +223,7 @@ export function Credits({
           Внески приймає будь-який магазин мережі, що працює.
         </p>
       )}
-      {!elsewhere && summary.data && (
+      {!elsewhere && summary.data ? (
         <div
           className="owed-card"
           role="group"
@@ -238,6 +239,28 @@ export function Credits({
             · {debtsCount(summary.data.debts)}
           </p>
         </div>
+      ) : (
+        !elsewhere &&
+        summary.isPending && (
+          // Its place while it is read, in its own lines' heights, so the
+          // field under it does not move when it comes (credits task list,
+          // P2-3).
+          <div className="owed-card owed-place" aria-hidden="true">
+            <p className="owed-what">Магазину винні</p>
+            {/* Grey lines the size of the figures to come; what sizes
+                them is never seen, nor read (review, 2026-10-21). */}
+            <p className="owed-sum">
+              <strong className="sum skeleton-line">
+                <span>00 000</span>
+              </strong>
+            </p>
+            <p className="owed-count">
+              <span className="skeleton-line">
+                <span>00 000 · 00 000</span>
+              </span>
+            </p>
+          </div>
+        )
       )}
       {elsewhere && (
         // Never mixed with this store's: headed, and left in one tap, the
@@ -286,7 +309,8 @@ export function Credits({
         <p>{askForPhone}</p>
       ) : customers.isPending ||
         (customers.isPlaceholderData && listed.length === 0) ? (
-        <p role="status">Завантажуємо борги…</p>
+        // The rows' places while they are read (credits task list, P2-3).
+        <Placeholder said="Завантажуємо борги…" rows={3} debts />
       ) : !customers.data ? (
         <div role="alert">
           <p>{refusalText(customers.error)}</p>

@@ -1065,6 +1065,45 @@ test("the till says a number's debt was written off, and says nothing when «Б�
     "Винні 1 500,00 грн магазину «Ринок»",
   ]);
   expect(await lines(said)).toBe(1);
+  // Written off here and owed in a closed store: what is owed, alone, as
+  // what is owed here is said over a write-off (owner decision, 2026-10-21)
+  // — the write-off never said, even for a moment, though the closed stores
+  // answer later than this store's debt waits for them (review,
+  // 2026-10-21).
+  answer = "written off";
+  const owedAtRynok = away;
+  for (const [delay, typed] of [
+    [400, "067 123 45 67"],
+    [2500, "+38 (067) 123 45 67"],
+  ] as const) {
+    awayDelay = delay;
+    await page.evaluate(() => {
+      (window as unknown as { said: string[] }).said.length = 0;
+    });
+    const writtenOffHere = bothAnswered(page, typed);
+    await page.getByLabel("Телефон покупця").fill(typed);
+    await writtenOffHere;
+    await expect(said.locator("span")).toHaveText([
+      "Винні 1 500,00 грн магазину «Ринок»",
+    ]);
+    expect(await lines(said)).toBe(1);
+    expect(
+      (
+        await page.evaluate(
+          () => (window as unknown as { said: string[] }).said,
+        )
+      ).filter((text) => text.includes("списано")),
+    ).toEqual([]);
+  }
+  // Owing nowhere, the closed stores slow: the write-off, once they answer.
+  away = [];
+  const nowhere = bothAnswered(page, "0671234567");
+  await page.getByLabel("Телефон покупця").fill("0671234567");
+  await nowhere;
+  await expect(said).toHaveText("За номером борг списано 12.03.2026");
+  awayDelay = 400;
+  away = owedAtRynok;
+  answer = "nothing here";
   // One line however long: the sum first, a long name cut, never the sum
   // (review, 2026-10-20). Two stores; then one, its name long, six figures.
   const owedAway = (

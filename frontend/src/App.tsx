@@ -666,6 +666,9 @@ function Workspace({
   }, [tab]);
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
+  // Read, not watched, as `canReturnNow` (credits task list, P2-1).
+  const canSeeCreditsNow = useRef(canSeeCredits);
+  canSeeCreditsNow.current = canSeeCredits;
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [creditStorageError, setCreditStorageError] = useState(false);
   const creditCommand = useCreditCommand();
@@ -700,7 +703,10 @@ function Workspace({
       const saved = loadCreditCommand(creditKey);
       useCreditCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
-        setTab("credits");
+        // Its banner shows over any tab; «Борги» is turned to only for
+        // whoever may take payments, never to say they may not (credits
+        // task list, P2-1).
+        if (canSeeCreditsNow.current) setTab("credits");
         loadedFromDisk("credit");
       }
     } catch {
@@ -1871,9 +1877,9 @@ function Workspace({
               cashUnsettled
             }
           />
-        ) : (
-          <p role="alert">Немає доступу до боргів.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // (credits task list, P2-1).
+        null
       ) : tab === "damaged" ? (
         store.permissions.includes("damaged:handle") ? (
           <Damaged

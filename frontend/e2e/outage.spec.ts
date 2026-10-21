@@ -3913,6 +3913,122 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
   });
 
+  /** A payment or a write-off of «Борги», kept, its answer never heard. */
+  function keptDebt(kind: "payment" | "write-off"): string {
+    return JSON.stringify({
+      key: randomUUID(),
+      ambiguous: true,
+      body:
+        kind === "payment"
+          ? {
+              kind,
+              store_id: ids.store,
+              credit_id: ids.credit,
+              command_id: randomUUID(),
+              amount: "500.00",
+              payment_method: "CASH",
+            }
+          : {
+              kind,
+              store_id: ids.store,
+              credit_id: ids.credit,
+              command_id: randomUUID(),
+              reason: "Покупець виїхав",
+            },
+    });
+  }
+
+  for (const [kind, path, heading] of [
+    ["payment", "payments", "Внесок ще не підтверджено"],
+    ["write-off", "write-off", "Списання ще не підтверджено"],
+  ] as const)
+    test(`a kept ${kind} on a phone whose person may no longer open «Борги» stays kept over the till, as it is held now, never «Немає доступу до боргів»`, async ({
+      page,
+    }) => {
+      await seed(page, { [creditKey]: keptDebt(kind) });
+      await serve(page);
+      // This person no longer holds `sale:credit` here.
+      await on(page, "/me", async (route) => {
+        await route.fulfill({
+          json: {
+            ...me,
+            stores: me.stores.map((store) => ({
+              ...store,
+              permissions: store.permissions.filter(
+                (permission) => permission !== "sale:credit",
+              ),
+            })),
+          },
+        });
+      });
+      // The server refuses whoever may not take payments, or write off,
+      // before it looks the command up, and says nothing of what was
+      // recorded.
+      let asked = 0;
+      await on(page, `/credits/${ids.credit}/${path}`, async (route) => {
+        asked += 1;
+        await route.fulfill({
+          status: 403,
+          json: {
+            code: "PERMISSION_DENIED",
+            message: "Permission denied",
+            details: {},
+          },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect.poll(() => asked).toBeGreaterThan(0);
+      await expect(
+        page.getByText(
+          "Немає доступу до цієї операції або складу. Зверніться до менеджера.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      // Kept, and the till beneath it held, as before this change. Whether
+      // it should be answered as a kept return is, freeing the till, is
+      // the owner's to say (queued 2026-10-21).
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), creditKey),
+      ).not.toBeNull();
+      // The till beneath it, never «Борги» (credits task list, P2-1).
+      await expect(
+        page.getByRole("heading", { name: "Продаж", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      ).toBeDisabled();
+      await expect(
+        page.getByRole("button", { name: "Борги", exact: true }),
+      ).toHaveCount(0);
+      await expect(page.getByText(/Немає доступу до боргів/)).toHaveCount(0);
+    });
+
+  test("a kept payment on a phone whose person may take payments still turns to «Борги»", async ({
+    page,
+  }) => {
+    await seed(page, { [creditKey]: keptDebt("payment") });
+    await serve(page);
+    await on(page, `/credits/${ids.credit}/payments`, async (route) => {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Борги", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Борги", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
   test("a kept return refused on resend, part of it returned meanwhile, says so in «Повернення»'s words", async ({
     page,
   }) => {

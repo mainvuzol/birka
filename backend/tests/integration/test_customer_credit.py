@@ -626,6 +626,8 @@ async def test_a_letter_pasted_in_two_parts_is_the_letter(maker):
     # «й» pasted as «и» and its breve; «Ї» typed as one letter.
     await sold_to(maker, shops, "Ярослав Кра\u0438\u0306ній", "067 666 66 66")
     await sold_to(maker, shops, "Мирослава \u0407жакевич", "067 777 77 77")
+    # A name typed with a Latin «Ï», from a Latin keyboard.
+    await sold_to(maker, shops, "\u00cfвга Король", "067 888 88 88")
 
     async def names(query: str) -> list[str]:
         return [found["customer_name"] for found in await customers(maker, shops, query=query)]
@@ -636,6 +638,11 @@ async def test_a_letter_pasted_in_two_parts_is_the_letter(maker):
     assert await names("їжакевич") == ["Мирослава \u0407жакевич"]
     # A Latin «i» and its dots is the letter too: the fold, then one form.
     assert await names("\u0069\u0308жакевич") == ["Мирослава \u0407жакевич"]
+    # A Latin «ï» typed as one sign, in either case, is «ї» too, typed or
+    # stored (owner decision, 2026-10-21).
+    assert await names("\u00efжакевич") == ["Мирослава \u0407жакевич"]
+    assert await names("\u00cfЖАКЕВИЧ") == ["Мирослава \u0407жакевич"]
+    assert await names("ївга") == ["\u00cfвга Король"]
 
 
 async def test_customers_come_a_page_at_a_time(maker):

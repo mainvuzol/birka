@@ -1,0 +1,21 @@
+- unchanged tree: passed 
+- a write-off here said beside a closed store's debt: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- a write-off here never said: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- a write-off here said before slow closed stores answer: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- a Latin «ï» not folded: caught by test_a_letter_pasted_in_two_parts_is_the_letter
+- a kept payment turns to «Борги» without the right: caught by 10. a kept operation the phone settles says what became of it › a kept payment on a phone ; 10. a kept operation the phone settles says what became of it › a kept write-off on a phon
+- a kept payment never turns to «Борги»: caught by 10. a kept operation the phone settles says what became of it › a kept payment on a phone 
+- «Завантажуємо борги…» in words where the rows will be: caught by while «Борги» is read, the store's card and three rows keep their places, and the field do
+- the rows' places as a return's: caught by while «Борги» is read, the store's card and three rows keep their places, and the field do
+- no place for the store's card: caught by while «Борги» is read, the store's card and three rows keep their places, and the field do
+- the card's place read to a screen reader: caught by while «Борги» is read, the store's card and three rows keep their places, and the field do
+- a placeholder row's mark square: caught by while «Борги» is read, the store's card and three rows keep their places, and the field do
+- the card's sizing figures seen: caught by while «Борги» is read, the store's card and three rows keep their places, and the field do
+- a payment from paper's mark not a warning: caught by in the dark theme each pill is by what it means, and a debt, its history, its panel and a ; in the light theme each pill is by what it means, and a debt, its history, its panel and a
+- «Сплачено» neutral: caught by in the dark theme each pill is by what it means, and a debt, its history, its panel and a ; in the light theme each pill is by what it means, and a debt, its history, its panel and a
+- «Списано» and «Нічого не винні» in the accent: caught by in the dark theme each pill is by what it means, and a debt, its history, its panel and a ; in the light theme each pill is by what it means, and a debt, its history, its panel and a
+- another store's pill in the accent: caught by in the dark theme each pill is by what it means, and a debt, its history, its panel and a ; in the light theme each pill is by what it means, and a debt, its history, its panel and a
+- a neutral pill unreadable: caught by in the dark theme each pill is by what it means, and a debt, its history, its panel and a ; in the light theme each pill is by what it means, and a debt, its history, its panel and a
+- the meta at 13 px: caught by in the dark theme each pill is by what it means, and a debt, its history, its panel and a ; in the light theme each pill is by what it means, and a debt, its history, its panel and a
+18 of 18 caught
+exit 0
