@@ -342,6 +342,56 @@ test("while «Борги» is read, the store's card and three rows keep their p
   expect(Math.abs(first.y - place.y)).toBeLessThanOrEqual(2);
 });
 
+test("«Магазину винні» that cannot be read keeps its place, says so, and is read again — the field never moves (owner decision, 2026-10-21)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await customers(page, [oksana(), iryna()]);
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let fails = true;
+  // The read again, held: the card keeps saying so, its button waiting.
+  let again: () => void = () => undefined;
+  const heldAgain = new Promise<void>((resolve) => {
+    again = resolve;
+  });
+  await page.route("**/api/v1/credits/summary?**", async (route) => {
+    await held;
+    if (!fails) await heldAgain;
+    if (fails) {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: { owed: "12400.00", customers: 8, debts: 11 },
+    });
+  });
+  await credits(page);
+  await expect(page.locator("section.credits .owed-place")).toBeVisible();
+  const before = await field(page).boundingBox();
+  release();
+  const card = page.getByRole("group", { name: "Скільки винні магазину" });
+  await expect(card.getByRole("alert")).toHaveText("Не вдалося прочитати");
+  const failed = await field(page).boundingBox();
+  fails = false;
+  const retry = card.getByRole("button", { name: "Спробувати ще раз" });
+  expect((await retry.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await retry.click();
+  await expect(retry).toBeDisabled();
+  await expect(card.getByRole("alert")).toHaveText("Не вдалося прочитати");
+  again();
+  await expect(card.locator(".owed-sum")).toHaveText("12 400,00 грн");
+  const read = await field(page).boundingBox();
+  if (!before || !failed || !read) throw new Error("not laid out");
+  expect(failed.y).toBe(before.y);
+  expect(read.y).toBe(before.y);
+});
+
 /** What an empty «Борги» teaches (credits task list, P1-4). */
 const beginsAt =
   "Зараз ніхто не винен. Борг з’являється, коли продають частинами.";
@@ -842,6 +892,11 @@ for (const [name, theme, scheme] of [
     expect(
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
+    // Measured once read: the places while it is read are other elements.
+    await expect(
+      page.getByLabel("Скільки винні магазину").locator(".owed-sum"),
+    ).toHaveText("12 400,00 грн");
+    await expect(rows(page)).toHaveCount(2);
     for (const part of [
       page.locator(".owed-sum"),
       page.locator(".owed-what"),

@@ -4092,72 +4092,218 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     });
   }
 
-  for (const [kind, path, heading] of [
-    ["payment", "payments", "Внесок ще не підтверджено"],
-    ["write-off", "write-off", "Списання ще не підтверджено"],
+  /**
+   * The debt as the server answers a payment or a write-off recorded to
+   * whoever may no longer make it: their own entry alone, no phone.
+   */
+  function debtAnswered(kind: "payment" | "write-off"): object {
+    return {
+      id: ids.credit,
+      sale_id: ids.sale,
+      store_id: ids.store,
+      store_name: "Подільський",
+      store_state: "ACTIVE",
+      customer_name: "Оксана Петренко",
+      customer_phone: null,
+      amount: "3000.00",
+      currency_code: "UAH",
+      status: kind === "payment" ? "OPEN" : "WRITTEN_OFF",
+      paid: kind === "payment" ? "1500.00" : "1000.00",
+      returned: "0.00",
+      cash_back: "0.00",
+      written_off: kind === "payment" ? "0.00" : "2000.00",
+      owed: kind === "payment" ? "1500.00" : "0.00",
+      opened_at: "2026-10-01T10:00:00Z",
+      last_payment_at: kind === "payment" ? "2026-10-21T10:00:00Z" : null,
+      closed_at: kind === "payment" ? null : "2026-10-21T10:00:00Z",
+      goods: [coat],
+      entries: [
+        {
+          kind: kind === "payment" ? "PAYMENT" : "WRITE_OFF",
+          amount: kind === "payment" ? "500.00" : "2000.00",
+          cash_back: "0.00",
+          at: "2026-10-21T10:00:00Z",
+          by: "Оля",
+          note: kind === "payment" ? null : "Покупець виїхав",
+          taken_at: null,
+          payment_method: kind === "payment" ? "CASH" : null,
+          corrected: false,
+          outage: null,
+        },
+      ],
+      customer_erased_at: null,
+    };
+  }
+
+  // Whoever may no longer take payments, or write off, is answered what
+  // their own command recorded, or that nothing was, and the till is freed —
+  // as a kept return (owner decisions, 2026-10-18 and 2026-10-21). Their
+  // phone never turns to «Борги» (credits task list, P2-1).
+  for (const [kind, path, what, right] of [
+    [
+      "payment",
+      "payments",
+      "Внесок",
+      "приймати внески. Зверніться до менеджера.",
+    ],
+    [
+      "write-off",
+      "write-off",
+      "Списання",
+      "списувати борги. Зверніться до власника.",
+    ],
   ] as const)
-    test(`a kept ${kind} on a phone whose person may no longer open «Борги» stays kept over the till, as it is held now, never «Немає доступу до боргів»`, async ({
-      page,
-    }) => {
-      await seed(page, { [creditKey]: keptDebt(kind) });
-      await serve(page);
-      // This person no longer holds `sale:credit` here.
-      await on(page, "/me", async (route) => {
-        await route.fulfill({
-          json: {
-            ...me,
-            stores: me.stores.map((store) => ({
-              ...store,
-              permissions: store.permissions.filter(
-                (permission) => permission !== "sale:credit",
-              ),
-            })),
-          },
+    for (const answer of ["recorded", "nothing", "unproven"] as const)
+      test(`a kept ${kind} on a phone whose person may no longer open «Борги», answered ${answer}, says so over the till, never «Немає доступу до боргів» (owner decision, 2026-10-21)`, async ({
+        page,
+      }) => {
+        await seed(page, { [creditKey]: keptDebt(kind) });
+        await serve(page);
+        // This person no longer holds `sale:credit` here.
+        await on(page, "/me", async (route) => {
+          await route.fulfill({
+            json: {
+              ...me,
+              stores: me.stores.map((store) => ({
+                ...store,
+                permissions: store.permissions.filter(
+                  (permission) => permission !== "sale:credit",
+                ),
+              })),
+            },
+          });
         });
+        let asked = 0;
+        await on(page, `/credits/${ids.credit}/${path}`, async (route) => {
+          asked += 1;
+          if (answer === "recorded") {
+            // Its own, replayed.
+            await route.fulfill({
+              status: kind === "payment" ? 201 : 200,
+              json: debtAnswered(kind),
+            });
+            return;
+          }
+          // Refused for the right: proven to have recorded nothing, or — an
+          // older server, or someone else's command — saying nothing.
+          await route.fulfill({
+            status: 403,
+            json: {
+              code: "PERMISSION_DENIED",
+              message: "Permission denied",
+              details: {
+                permission:
+                  kind === "payment" ? "sale:credit" : "credit:write_off",
+                store_id: ids.store,
+                ...(answer === "nothing" ? { recorded: false } : {}),
+              },
+            },
+          });
+        });
+        await page.goto(launch());
+        await openStore(page, /Подільський/);
+        await expect.poll(() => asked).toBeGreaterThan(0);
+        const kept = () =>
+          page.evaluate((key) => localStorage.getItem(key), creditKey);
+        if (answer === "recorded") {
+          await expect(
+            page.getByRole("heading", { name: `${what} записано один раз` }),
+          ).toBeVisible();
+          expect(await kept()).toBeNull();
+        } else if (answer === "nothing") {
+          await expect(page.getByRole("alert")).toHaveText(
+            `${what} не записано: у вас більше немає права ${right}${
+              kind === "payment"
+                ? " Якщо гроші вже взяли — передайте папір менеджеру, щоб внести внесок з паперу."
+                : ""
+            }`,
+          );
+          expect(await kept()).toBeNull();
+        } else {
+          await expect(
+            page.getByRole("heading", { name: `${what} ще не підтверджено` }),
+          ).toBeVisible();
+          await expect(
+            page.getByText(
+              `${what} ще не підтверджено: у вас більше немає права ${right}`,
+              { exact: true },
+            ),
+          ).toBeVisible();
+          expect(await kept()).not.toBeNull();
+        }
+        // The till beneath it — free once settled, held while kept — never
+        // «Борги».
+        await expect(
+          page.getByRole("heading", { name: "Продаж", exact: true }),
+        ).toBeVisible();
+        const paper = page.getByRole("checkbox", {
+          name: "Вношу продаж з паперу",
+        });
+        if (answer === "unproven") await expect(paper).toBeDisabled();
+        else await expect(paper).toBeEnabled();
+        await expect(
+          page.getByRole("button", { name: "Борги", exact: true }),
+        ).toHaveCount(0);
+        await expect(page.getByText(/Немає доступу/)).toHaveCount(0);
       });
-      // The server refuses whoever may not take payments, or write off,
-      // before it looks the command up, and says nothing of what was
-      // recorded.
-      let asked = 0;
-      await on(page, `/credits/${ids.credit}/${path}`, async (route) => {
-        asked += 1;
+
+  test("a kept payment answered three times in a row that the server did not take the request asks for a manager (owner decision, 2026-10-21)", async ({
+    page,
+  }) => {
+    await seed(page, { [creditKey]: keptDebt("payment") });
+    await serve(page);
+    let status = 400;
+    const sent: string[] = [];
+    await on(
+      page,
+      `/credits/${ids.credit}/payments`,
+      async (route, request) => {
+        sent.push(request.postData() ?? "");
         await route.fulfill({
-          status: 403,
+          status,
           json: {
-            code: "PERMISSION_DENIED",
-            message: "Permission denied",
+            code:
+              status === 500
+                ? "INTERNAL_ERROR"
+                : status === 422
+                  ? "VALIDATION_ERROR"
+                  : "BAD_REQUEST",
+            message: "Refused",
             details: {},
           },
         });
-      });
-      await page.goto(launch());
-      await openStore(page, /Подільський/);
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-      await expect.poll(() => asked).toBeGreaterThan(0);
-      await expect(
-        page.getByText(
-          "Немає доступу до цієї операції або складу. Зверніться до менеджера.",
-          { exact: true },
-        ),
-      ).toBeVisible();
-      // Kept, and the till beneath it held, as before this change. Whether
-      // it should be answered as a kept return is, freeing the till, is
-      // the owner's to say (queued 2026-10-21).
-      expect(
-        await page.evaluate((key) => localStorage.getItem(key), creditKey),
-      ).not.toBeNull();
-      // The till beneath it, never «Борги» (credits task list, P2-1).
-      await expect(
-        page.getByRole("heading", { name: "Продаж", exact: true }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
-      ).toBeDisabled();
-      await expect(
-        page.getByRole("button", { name: "Борги", exact: true }),
-      ).toHaveCount(0);
-      await expect(page.getByText(/Немає доступу до боргів/)).toHaveCount(0);
+      },
+    );
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const notTaken =
+      "Внесок ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі він не запишеться.";
+    const said = page
+      .getByRole("alert")
+      .filter({ hasText: /^Внесок ще не підтверджено/ });
+    await expect(said).toHaveText(notTaken);
+    const check = page.getByRole("button", {
+      name: "Перевірити результат внеску",
     });
+    // A 400, then a 422: the second and the third in a row, whichever.
+    await check.click();
+    await expect.poll(() => sent.length).toBe(2);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(notTaken);
+    status = 422;
+    await check.click();
+    await expect.poll(() => sent.length).toBe(3);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(
+      `${notTaken} Зверніться до менеджера: нехай перевірить, чи записано.`,
+    );
+    // A server's failure begins the count again.
+    status = 500;
+    await check.click();
+    await expect.poll(() => sent.length).toBe(4);
+    await expect(check).toBeEnabled();
+    await expect(said).not.toContainText("Зверніться до менеджера");
+  });
 
   test("a kept payment's «not found» count is kept when Telegram reopens the app, and a count found on the phone is read, a malformed one as none (owner decision, 2026-10-21)", async ({
     page,

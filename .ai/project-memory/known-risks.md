@@ -947,10 +947,14 @@ the review of the built change raised.
     `test_sale_refusals_record_nothing.py`) hold a scope built before the
     block, so they prove only a block that lands while the command runs.
 - **A right taken away while a phone keeps an operation that needs it holds
-  that phone in that store, but for a return** (owner, 2026-10-18). A kept
-  sale, debt payment, delivery, stock correction or order's step resent by
-  a person who may no longer do it is refused before its lookup, with no
-  `recorded`, and waits until the right is back, as a blocked store's do. A
+  that phone in that store, but for a return, a debt payment and a
+  write-off** (owner, 2026-10-18 and 2026-10-21). A kept sale, delivery,
+  stock correction or order's step resent by a person who may no longer do
+  it is refused before its lookup, with no `recorded`, and waits until the
+  right is back, as a blocked store's do. A kept debt payment or write-off
+  is answered to whoever made it — their own entry alone, no phone — or
+  refused as having recorded nothing, looked up under the debt's lock
+  ([report](credits-kept-right-report.md)). A
   kept return is answered to whoever took it what it recorded, or refused as
   having recorded nothing, and the phone settles it — the warehouse no
   longer reached or closed alike
@@ -962,6 +966,12 @@ the review of the built change raised.
     the right is taken away — is not: the resend is told nothing was
     recorded, and the first may record it after. Narrow; **accepted by the
     owner** (2026-10-18).
+  - A debt payment's or write-off's first sending still running is waited
+    for: the resend takes the debt's lock, which the first holds. One
+    stalled before it takes it — reading its scope, for longer than the
+    phone waits, while the right is taken away — is not: the resend is told
+    nothing was recorded, and the first may record it after. The same narrow
+    window as a return's; not yet put to the owner.
 - **A kept sale resent days later still sells** what is on the shelf then,
   dated then, under the phone's person, **without a mark** (owner,
   2026-10-07). The phone checks it by itself when the server answers and

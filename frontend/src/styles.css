@@ -1152,6 +1152,33 @@ html {
 .skeleton-line > span {
   visibility: hidden;
 }
+/* «Магазину винні» that cannot be read keeps its place (owner decision,
+   2026-10-21): its lines unseen, what is said over them. */
+.owed-lines {
+  position: relative;
+}
+.owed-failed .skeleton-line {
+  background: transparent;
+  animation: none;
+}
+.owed-retry {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+}
+.owed-retry p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.owed-retry button {
+  min-height: 44px;
+  padding: 8px 14px;
+}
 @media (prefers-reduced-motion: reduce) {
   .skeleton-line {
     animation: none;

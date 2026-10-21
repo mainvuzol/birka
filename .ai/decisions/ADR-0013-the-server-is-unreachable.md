@@ -121,8 +121,8 @@ each the recommended option:
 | a sale (`sales.create_sale`) | a size to clarify; inside the stock lock, an inactive or unknown warehouse or size, a store no longer trading (`STORE_NOT_TRADING`), a merged or retired model; `RESERVED`; the shortage answers (`CORRECTION_EXCEEDS_SHORTFALL`, `SIZE_CLARIFIED`, `SIZE_NOT_KNOWN_SHORT`, `_AMBIGUOUS`, `_REPORTED`, `UNKNOWN_SIZE_STOCK`); `INSUFFICIENT_STOCK`; a sum out of range | no lines, permissions, currency, quantities, prices, the answers' shape, `NOTHING_TO_SELL`, stock access |
 | the till's `POST /sales` | `PAID_IN_FULL` from opening the debt: reached only for a sale new in this transaction, so marked where it is raised | — |
 | an empty shelf (`report_empty_shelf`) | the stock lock (`STORE_NOT_TRADING`, a merged model), `NOT_FOUND`, the ledger | the body's checks |
-| a debt payment (`credit.pay`) | `STORE_NOT_TRADING`, `PAID_WHERE_SOLD`, `NOT_OWED`, `MORE_THAN_OWED` (the way's refusals already did) | `NOTHING_PAID`, an unknown debt, `sale:credit` |
-| a write-off (`credit.write_off`) | `NOT_OWED` | the reason, the permission |
+| a debt payment (`credit.pay`) | `STORE_NOT_TRADING`, `PAID_WHERE_SOLD`, `NOT_OWED`, `MORE_THAN_OWED` (the way's refusals already did); to whoever may no longer take payments there, `PERMISSION_DENIED` (`credit._own`, owner, 2026-10-21) | `NOTHING_PAID`, an unknown debt, a store not trading or no longer this person's |
+| a write-off (`credit.write_off`) | `NOT_OWED`; in a trading store, to whoever may no longer write off there, `PERMISSION_DENIED` (`credit._own`, owner, 2026-10-21) | the reason; a store not trading or no longer this person's; a closed store's debt's network-wide permission |
 | an order (`create_order`, `transition_order`, `change_shipping`) | everything after the lookup: the reservation's `INSUFFICIENT_STOCK`, "Invalid order transition", `NO_DESTINATION`, the stock of a dispatch, a cancellation or a return, the collected sale and its debt | the action, the reason, the shapes of a credit, a way and a waybill; loading; authorization |
 | a return (`refunds.create_refund`) | `NOT_FOUND`, a total out of range, and everything after (`REFUND_EXCEEDS_SOLD` already did); to whoever may no longer take returns there, `PERMISSION_DENIED`, and where the goods would go refused — `LOCATION_ACCESS_DENIED`, a private warehouse's `PERMISSION_DENIED`, a warehouse closed, a «Брак» gone (`refunds.own_refund`, owner, 2026-10-18) | `STORE_NOT_TRADING`, which stays before the lookup: a store blocked meanwhile refuses even the replay, through the scope |
 | a delivery (`POST /receipts`) and a stock correction (`POST /adjustments`) | everything after `_permanent_answer` found nothing: inside the stock lock, an inactive warehouse and `STORE_NOT_TRADING`; `OPENING_LIST_PENDING`, `INSUFFICIENT_STOCK` | the body, access (a store that does not trade, a closed warehouse), the 7-day claim |
@@ -158,10 +158,12 @@ each the recommended option:
   warehouse closed (`NOT_FOUND`, named `WAREHOUSE_UNAVAILABLE`) — with
   `recorded: false`, and the phone settles. Anyone else's is refused, without `recorded`; a store the
   person no longer belongs to, or one that does not trade, refuses before
-  the lookup, as above. Every other command keeps its right and its
-  warehouses before the lookup, and a phone keeping one for a person who
-  lost that right waits until it is back (risk register); the owner chose
-  the return's answer for them too, later (backlog).
+  the lookup, as above. A debt payment and a write-off are answered so
+  too since 2026-10-21 (`credit._own`): their own entry alone, no phone, or
+  `PERMISSION_DENIED` with `recorded: false`. Every other command keeps its
+  right and its warehouses before the lookup, and a phone keeping one for a
+  person who lost that right waits until it is back (risk register); the
+  owner chose the return's answer for them too, later (backlog).
 - **`NOTHING_TO_SELL` stays before the lookup.** It is decided from the body
   alone, and the till never sends such a body: a basket with nothing on the
   shelf is sent as an empty shelf.

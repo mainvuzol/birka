@@ -50,9 +50,11 @@ answered to whoever recorded it once they may no longer take returns there,
 or their store no longer reaches the warehouse
 ([report](credits-redesign-1-report.md)). The owner chose the same for a
 kept sale, debt payment, delivery, stock correction and order's step,
-later — after «Борги»'s list (owner, 2026-10-18). Until then each holds that
-phone in that store until the right is back (risk register). Nothing is
-built for it.
+later — after «Борги»'s list (owner, 2026-10-18). A debt payment and a
+write-off are built (2026-10-21,
+[report](credits-kept-right-report.md)); the sale, delivery, stock
+correction and order's step still hold that phone in that store until the
+right is back (risk register).
 
 ## «Борг із зошита»: debts from before Бірка
 

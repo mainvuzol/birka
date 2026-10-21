@@ -167,6 +167,9 @@ export function Credits({
       api<StoreDebts>(`/credits/summary?store_id=${store.id}`, token),
     retry: false,
   });
+  // Refused, and not read since: said so, and held so while read again —
+  // its button stays, waiting (review, 2026-10-21).
+  const unread = summary.data === undefined && summary.errorUpdateCount > 0;
   const leave = useCallback(() => {
     setChosen(null);
   }, []);
@@ -241,24 +244,48 @@ export function Credits({
         </div>
       ) : (
         !elsewhere &&
-        summary.isPending && (
+        (summary.isPending || summary.isError) && (
           // Its place while it is read, in its own lines' heights, so the
           // field under it does not move when it comes (credits task list,
-          // P2-3).
-          <div className="owed-card owed-place" aria-hidden="true">
+          // P2-3); and kept when it cannot be read, saying so, with a way
+          // to read it again (owner decision, 2026-10-21).
+          <div
+            className={`owed-card owed-place${unread ? " owed-failed" : ""}`}
+            {...(unread
+              ? { role: "group", "aria-label": "Скільки винні магазину" }
+              : { "aria-hidden": true })}
+          >
             <p className="owed-what">Магазину винні</p>
-            {/* Grey lines the size of the figures to come; what sizes
-                them is never seen, nor read (review, 2026-10-21). */}
-            <p className="owed-sum">
-              <strong className="sum skeleton-line">
-                <span>00 000</span>
-              </strong>
-            </p>
-            <p className="owed-count">
-              <span className="skeleton-line">
-                <span>00 000 · 00 000</span>
-              </span>
-            </p>
+            <div className="owed-lines">
+              {/* Grey lines the size of the figures to come; what sizes
+                  them is never seen, nor read (review, 2026-10-21). */}
+              <p className="owed-sum" aria-hidden="true">
+                <strong className="sum skeleton-line">
+                  <span>00 000</span>
+                </strong>
+              </p>
+              <p className="owed-count" aria-hidden="true">
+                <span className="skeleton-line">
+                  <span>00 000 · 00 000</span>
+                </span>
+              </p>
+              {unread && (
+                // Over the lines, never below them: nothing moves.
+                <div className="owed-retry">
+                  <p role="alert">Не вдалося прочитати</p>
+                  <button
+                    type="button"
+                    className="quiet"
+                    disabled={summary.isFetching}
+                    onClick={() => {
+                      void summary.refetch();
+                    }}
+                  >
+                    Спробувати ще раз
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )
       )}

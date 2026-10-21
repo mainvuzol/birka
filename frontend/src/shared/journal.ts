@@ -36,12 +36,23 @@ export interface Attempt<Body> {
    */
   since?: string;
   /**
-   * Its checks answered «not found» this many times in a row, kept beside
+   * Its checks answered «not found», or that the request was not taken,
+   * this many times in a row (`counts`), kept beside
    * the body, never in it, so the count survives Telegram closing and
    * reopening the app (owner decision, 2026-10-21). Absent from an attempt
    * kept before it was written, or never missed.
    */
   misses?: number;
+}
+
+/**
+ * An answer that settles nothing about a kept command and counts towards a
+ * manager: «not found» (owner decision, 2026-10-19), and a request the
+ * server did not take, a 400 or a 422 (owner decision, 2026-10-21) — in one
+ * row, whichever comes. Any other answer begins the count again.
+ */
+export function counts(error: ApiError): boolean {
+  return error.status === 404 || error.status === 400 || error.status === 422;
 }
 
 /** A kept count, read as one: anything else on disk is no count at all;
@@ -76,7 +87,8 @@ export interface JournalState<Body> {
   busy: boolean;
   error: unknown;
   /**
-   * The kept attempt's checks answered «not found» this many times in a row:
+   * The kept attempt's checks answered «not found», or that the request was
+   * not taken, this many times in a row (`counts`):
    * from the third, its words send the seller to a manager (owner decision,
    * 2026-10-19).
    */
@@ -247,7 +259,7 @@ export function journal<
         // command: the count stands (review, 2026-10-20).
         !(error instanceof ApiError) || unreachable(error)
           ? use.getState().misses
-          : error.status === 404
+          : counts(error)
             ? use.getState().misses + 1
             : 0;
       if (written) {

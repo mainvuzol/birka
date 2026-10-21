@@ -1,0 +1,23 @@
+- unchanged tree: passed 
+- a payment of whoever lost the right taken as new: caught by test_a_payment_resent_by_whoever_may_no_longer_take_payments_is_answered_what_it_recorded
+- nothing recorded not said: caught by test_a_payment_resent_by_whoever_may_no_longer_take_payments_is_answered_what_it_recorded
+- another request under the same command answered: caught by test_a_payment_resent_by_whoever_may_no_longer_take_payments_is_answered_what_it_recorded
+- the customer's phone answered to whoever may no longer read debts: caught by test_a_payment_resent_by_whoever_may_no_longer_take_payments_is_answered_what_it_recorded
+- a colleague's entry answered with their own: caught by test_a_payment_resent_by_whoever_may_no_longer_take_payments_is_answered_what_it_recorded
+- the debt's row never locked, a resend not waiting: caught by test_a_payment_resent_without_the_right_waits_for_a_first_sending_still_running
+- a write-off of whoever lost the right taken as new: caught by test_a_write_off_resent_by_whoever_may_no_longer_write_off_is_answered_what_it_recorded
+- a closed store's write-off by its own people not refused first: caught by test_every_command_resent_after_its_store_was_blocked_claims_nothing
+- a store not trading looked up for its payment: caught by test_every_command_resent_after_its_store_was_blocked_claims_nothing
+- the right's words never said: caught by 10. a kept operation the phone settles says what became of it › a kept payment on a phone ; 10. a kept operation the phone settles says what became of it › a kept payment on a phone ; 10. a kept operation the phone settles says what became of it › a kept write-off on a phon; 10. a kept operation the phone settles says what became of it › a kept write-off on a phon
+- a write-off's right sent to a manager, not the owner: caught by 10. a kept operation the phone settles says what became of it › a kept write-off on a phon; 10. a kept operation the phone settles says what became of it › a kept write-off on a phon
+- the paper's line missing after a payment unrecorded: caught by 10. a kept operation the phone settles says what became of it › a kept payment on a phone 
+- a request not taken never counted: caught by 10. a kept operation the phone settles says what became of it › a kept payment answered th
+- a 422 never counted: caught by 10. a kept operation the phone settles says what became of it › a kept payment answered th
+- a payment's 422 in its old words, without a manager: caught by 10. a kept operation the phone settles says what became of it › a kept payment answered th
+- «Магазину винні» gone when it cannot be read: caught by «Магазину винні» that cannot be read keeps its place, says so, and is read again — the fie
+- what is said gone while it is read again: caught by «Магазину винні» that cannot be read keeps its place, says so, and is read again — the fie
+- «Спробувати ще раз» open while it reads: caught by «Магазину винні» that cannot be read keeps its place, says so, and is read again — the fie
+- «Спробувати ще раз» under the thumb's size: caught by «Магазину винні» that cannot be read keeps its place, says so, and is read again — the fie
+- «Магазину винні» never read again: caught by «Магазину винні» that cannot be read keeps its place, says so, and is read again — the fie
+- what is said over the lines moving the field: caught by «Магазину винні» that cannot be read keeps its place, says so, and is read again — the fie
+21 of 21 caught
