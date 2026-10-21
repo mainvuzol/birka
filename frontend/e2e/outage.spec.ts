@@ -1944,13 +1944,20 @@ test.describe("9. what to do with money after the outage", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
+    // On the count's screen, always (owner decision, 2026-10-21, В1 (а)).
+    await page
+      .getByRole("button", { name: "Закрити касу", exact: true })
+      .click();
     await expect(
       page.getByText(
-        "Якщо сервер не відповідав — спершу внесіть усе, що записали на папері, потім рахуйте касу.",
+        "Спершу внесіть усе з паперу й перевірте, чи нічого не чекає на інших телефонах.",
+        { exact: true },
       ),
     ).toBeVisible();
-    await page.getByLabel("Скільки готівки в касі зараз, грн").fill("850");
-    await page.getByRole("button", { name: "Закрити касу" }).click();
+    await page.getByLabel("Скільки готівки в касі зараз").fill("850");
+    await page
+      .getByRole("button", { name: "Закрити касу", exact: true })
+      .click();
     await page.getByRole("button", { name: "Так, закрити" }).click();
     const reason = page.getByLabel("Чому не збігається? (обов’язково)");
     await expect(reason).toBeVisible();
@@ -1975,8 +1982,13 @@ test.describe("9. what to do with money after the outage", () => {
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
-    await page.getByLabel("Скільки готівки в касі зараз, грн").fill("850");
-    await page.getByRole("button", { name: "Закрити касу" }).click();
+    await page
+      .getByRole("button", { name: "Закрити касу", exact: true })
+      .click();
+    await page.getByLabel("Скільки готівки в касі зараз").fill("850");
+    await page
+      .getByRole("button", { name: "Закрити касу", exact: true })
+      .click();
     await page.getByRole("button", { name: "Так, закрити" }).click();
     const banner = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Незавершена операція каси" }),

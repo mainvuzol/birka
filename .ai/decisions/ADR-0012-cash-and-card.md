@@ -382,6 +382,11 @@ append-only `cash_movement` row.
     and not to sell while counting, «Скільки готівки в касі зараз, грн»,
     «Закрити касу», «Так, закрити». **3 taps** and the sum. Then the
     result, and «Чому не збігається?» when a reason is due;
+    *(since 2026-10-21 — «Каса»'s task list, P0-1..P0-3: the count opens
+    from a card «Закрити касу» on a screen of its own, «Скільки готівки в
+    касі зараз», its button and «Так, закрити» under the thumb — four taps
+    and the sum; the result's figures large; «Змінити спосіб оплати» the
+    one word for the seller's and the manager's — business-rules.md)*
   - «Видати з каси», and for the owner and managers «Внести в касу»;
   - «Змінити спосіб оплати»: their own operations of the open period, then
     one of them with its sum and way;

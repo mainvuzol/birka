@@ -300,7 +300,7 @@ test("text from outside is shown with its hidden characters marked, on every scr
 
   // «Каса»: the seller's own sale, among what they may correct.
   await open(page, seller, sellerName, "Каса");
-  await page.getByRole("button", { name: "Виправити спосіб оплати" }).click();
+  await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
   // A cash day runs from 06:00 to 06:00, Kyiv time: a sale just after
   // midnight is the evening before's (owner, 2026-10-04).
   const cashDay = new Intl.DateTimeFormat("en-CA", {

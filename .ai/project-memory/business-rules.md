@@ -3257,3 +3257,82 @@ How they are carried out, not decided by the owner:
   keeps the shared words, as the owner was asked of an order's step only.
 
 Built on 2026-10-21; see the [report](kept-answers-report.md).
+
+## Owner decision — 2026-10-21 («Каса»'s task list: five questions, and what first)
+
+Asked when «Каса»'s task list was written
+([redesign/2026-10-21-redesign-tz-cash.md](redesign/2026-10-21-redesign-tz-cash.md)),
+each answer the option recommended:
+- **В1. The reminders before the count are on the count's screen:** «Спершу
+  запишіть видане з каси», «Поки рахуєте, не продавайте.» and one line,
+  «Спершу внесіть усе з паперу й перевірте, чи нічого не чекає на інших
+  телефонах.»; none on «Каса»'s main screen. *(Built 2026-10-21, below.)*
+- **В2. A kept drawer command's paper line is the drawer's own:** «Телефон
+  перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».»
+  *(For P1-1.)*
+- **В3. A count that reached the server more than ten minutes late,** the
+  same evening, the drawer still open: «Перерахуйте касу ще раз і
+  закрийте»; the next day, the words as before. *(For P1-1.)*
+- **В4. A shortage and a surplus are both a warning's colour** — neither a
+  debt nor anyone's fault; «Збіглося до копійки» the accent's. *(Built
+  2026-10-21, below.)*
+- **В5. The sellers' page says what to do with cash taken out during an
+  outage:** «Видали гроші з каси — запишіть суму, на що й хто взяв; коли
+  сервер відповість, внесіть через «Видати з каси» до підрахунку.» — the
+  page's words only; the rule was there. *(Written 2026-10-21.)*
+- **First:** the close — the main screen, the count and its result
+  (P0-1, P0-2, P0-3), together.
+
+## «Каса»: the close under the approved design — built 2026-10-21
+
+How it is carried out, not decided by the owner:
+- **«Каса»'s main screen:** its heading, one line where the drawer stands —
+  «Каса відкрита · останнє закриття 06.10, 20:14 · Олена», «Каса ще не
+  рахувалась», «Сьогодні закрито о 20:14 · Олена», or in a store that does
+  not trade «Останнє закриття …» — and the count as one large card, «Закрити
+  касу» / «Скільки мало бути — покажемо після підрахунку» («Перший
+  підрахунок» / «Запишемо, скільки в касі зараз» the first time), for
+  whoever may close and not yet today. Then the other tasks as rows, each
+  with what it is for, by the same rights as before: «Видати з каси»,
+  «Внести в касу», «Змінити спосіб оплати» (one word for the seller's and
+  the manager's), «Закриття». Cash moved since the close, a row each: what
+  for, when and who, the sum on the right, «−» out and «+» in. «Оновити» is
+  gone: the drawer is read when «Каса» opens, after every command, and when
+  the card is tapped — the count opens on that read alone, while it still
+  asks for the count, so never while the server does not answer, whose
+  words «Каса» says (G26). Nothing tells a sum before the count (G32). The dark
+  card is the text's colour in either theme, so it inverts in the dark one
+  — to be confirmed.
+- **The count, a screen of its own:** «← Каса», «Підрахунок каси», the
+  owner's reminders, one large field for «Скільки готівки в касі зараз»
+  with the cursor in it, and the panel under the thumb: «Впишіть суму» or
+  «У касі 2 000,00 грн», «Закрити касу» held until the sum reads (0 is a
+  sum; «2000,» is a sum still being typed), and its confirmation there —
+  «Закрити касу: у касі …?», the sum as large, «Змінити потім не можна.»,
+  «Так, закрити», «Скасувати», which keeps the sum. Still four taps and the
+  sum. What is sent is as before: the count, its moment, and the newest
+  close the card's read named; the panel waits while the drawer is read
+  again. «Спершу запишіть видане з каси» records cash taken out and comes
+  back to the count with its sum; left any other way, the sum is not kept —
+  a count is of its moment (G31). The count is left, too, when the drawer
+  can no longer be read or no longer asks for it. A refusal is said over
+  the panel, the sum kept; no answer — «Каса» and its banner.
+- **The result:** «Касу закрито» («Перший підрахунок записано» the first
+  time), the close's day — and its store, when another's, as a reason owed
+  is the closer's in any store — «Мало бути» and «Порахували» large, one
+  under the other, and the difference on its own line; «Картка» and «Переказ» as rows, the card's
+  parts and «звірте з чеком терміналу» under it. Every figure the server's.
+  The owner's and managers' period figures as before, on a class of their
+  own. A difference to explain owes its reason here: the field and the
+  quick reasons on the screen, the cursor not in the field, «Записати
+  причину» in the panel with «Поки причину не записано, інші розділи
+  недоступні.»; once written, the reason and «Готово». A reason owed holds
+  the other tabs, never «Каса»'s own tasks (G12): it opens by itself once,
+  «← Каса» leads back, and «Каса» shows the close waiting for its reason
+  with «Записати причину», its count and rows as ever. A close that cannot
+  be read says so, with «Спробувати ще раз». A buzz when the close
+  is recorded, another when it is refused; none for one kept and confirmed
+  later. Today's own close stands on «Каса» compact: «Мало бути … ·
+  Порахували … · Нестача …» and the reason.
+
+Built on 2026-10-21; see the [report](cash-redesign-1-report.md).

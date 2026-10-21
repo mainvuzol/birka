@@ -324,9 +324,16 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // A new attempt, not the refused one resent.
     expect(moves).toHaveLength(2);
     expect(moves[1]?.command_id).not.toBe(moves[0]?.command_id);
-    await expect(
-      page.getByRole("list", { name: "Видано й внесено" }),
-    ).toContainText("Витрати 150,00 грн · Оля · пакети");
+    // A row: what for, when and who, and the sum out (cash task list, P0-1).
+    const given = page
+      .getByRole("list", { name: "Видано й внесено" })
+      .getByRole("listitem");
+    await expect(given).toHaveCount(1);
+    await expect(given.locator(".history-what")).toHaveText("Витрати · пакети");
+    await expect(given.locator(".history-meta")).toHaveText(
+      /^\d{2}:\d{2} · Оля$/,
+    );
+    await expect(given.locator(".history-sum")).toHaveText("−150,00 грн");
 
     // Blind: nothing tells what the drawer should hold, and no list of their
     // sales with their sums (G32).
@@ -337,18 +344,37 @@ test.describe("«Оля»'s day at «Каса»", () => {
       0,
     );
 
-    // Three taps from anywhere: «Каса», «Закрити касу», «Так, закрити».
+    // Four taps from anywhere and the sum: «Каса», «Закрити касу», the
+    // sum, «Закрити касу», «Так, закрити» (cash task list, P0-2).
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
     await page.getByRole("button", { name: "Каса", exact: true }).click();
-    await page.getByLabel("Скільки готівки в касі зараз, грн").fill("2000");
+    // The card reads the drawer again: the newest close is the one the
+    // count names. Shown once «Каса»'s own read has come.
+    await expect(
+      page.getByRole("button", { name: "Закрити касу", exact: true }),
+    ).toBeVisible();
+    const reread = page.waitForResponse(
+      (answer) =>
+        answer.url().includes("/api/v1/cash/drawer") &&
+        answer.request().method() === "GET",
+    );
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
+    await reread;
     await expect(
-      page.getByText(
-        "Закрити касу: у касі 2 000,00 грн? Змінити потім не можна.",
-      ),
+      page.getByRole("heading", { name: "Підрахунок каси" }),
     ).toBeVisible();
+    await page.getByLabel("Скільки готівки в касі зараз").fill("2000");
+    await page
+      .getByRole("button", { name: "Закрити касу", exact: true })
+      .click();
+    await expect(page.locator(".pay-panel .pay-total")).toHaveText(
+      "Закрити касу: у касі 2 000,00 грн?",
+    );
+    await expect(page.locator(".pay-panel .pay-what")).toHaveText(
+      "Змінити потім не можна.",
+    );
     const closed = page.waitForResponse(isClose);
     await page.getByRole("button", { name: "Так, закрити" }).click();
     const response = await closed;
@@ -368,18 +394,39 @@ test.describe("«Оля»'s day at «Каса»", () => {
     });
     today = (await response.json()) as typeof today;
 
-    // 1000 counted yesterday + 500 cash + 700 fixed to cash − 150 for bags.
+    // 1000 counted yesterday + 500 cash + 700 fixed to cash − 150 for bags:
+    // «Мало бути» and «Порахували» large, the difference on its own line, a
+    // warning's (cash task list, P0-3; owner decision, 2026-10-21).
     await expect(
-      page.getByText(
-        "Касу закрито. Мало бути 2 050,00 грн, порахували 2 000,00 грн. Нестача 50,00 грн.",
-      ),
+      page.getByRole("heading", { name: "Касу закрито" }),
     ).toBeVisible();
-    await expect(
-      page.getByText(
-        "Картка: 0,00 грн (оплати 700,00 грн, повернення 0,00 грн, виправлено −700,00 грн). Звірте з чеком терміналу.",
-      ),
-    ).toBeVisible();
-    await expect(page.getByText("Переказ: 0,00 грн.")).toBeVisible();
+    const figures = page.getByRole("group", { name: "Закриття каси" });
+    await expect(figures.locator(".owed-what")).toHaveText([
+      "Мало бути",
+      "Порахували",
+    ]);
+    await expect(figures.locator(".cash-sum")).toHaveText([
+      "2 050,00 грн",
+      "2 000,00 грн",
+    ]);
+    await expect(figures.locator(".cash-difference")).toHaveText(
+      "Нестача 50,00 грн",
+    );
+    await expect(figures.locator(".cash-difference")).toHaveClass(/\bwarn\b/);
+    const slip = page
+      .getByRole("list", { name: "Картка й переказ" })
+      .getByRole("listitem");
+    await expect(slip.locator(".history-what")).toHaveText([
+      "Картка",
+      "Переказ",
+    ]);
+    await expect(slip.first().locator(".history-meta")).toHaveText(
+      "оплати 700,00 грн · повернення 0,00 грн · виправлено −700,00 грн · звірте з чеком терміналу",
+    );
+    await expect(slip.locator(".history-sum")).toHaveText([
+      "0,00 грн",
+      "0,00 грн",
+    ]);
 
     // The reason is required: until it is written, only «Каса» is open.
     const reason = page.getByLabel("Чому не збігається? (обов’язково)");
@@ -403,7 +450,9 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await openAs(page, olya, "Оля");
     await openStore(page, /^Каса CASH/);
     await expect(reason).toBeVisible();
-    await expect(page.getByText(/Нестача 50,00 грн\./)).toBeVisible();
+    await expect(figures.locator(".cash-difference")).toHaveText(
+      "Нестача 50,00 грн",
+    );
     await expect(
       page.getByRole("button", { name: "Продаж", exact: true }),
     ).toBeDisabled();
@@ -424,16 +473,25 @@ test.describe("«Оля»'s day at «Каса»", () => {
       page.getByRole("button", { name: "Записати причину" }),
     ).toHaveCount(0);
     await expect(page.getByText("Поки причину не записано")).toHaveCount(0);
-    await expect(
-      page.getByRole("status", { name: "Закриття каси" }),
-    ).toContainText("Причина: «помилилась зі здачею» · Оля");
-    // Closed today: the form is gone until tomorrow.
-    await expect(
-      page.getByText(/^Касу сьогодні закрито о \d{2}:\d{2} · Оля\.$/),
-    ).toBeVisible();
+    await expect(page.locator(".cash-reason")).toHaveText(
+      "Причина: «помилилась зі здачею» · Оля",
+    );
+    // «Готово»: closed today, the card is gone until tomorrow, and the day's
+    // close stands compact, with its reason (cash task list, P0-1).
+    await page.getByRole("button", { name: "Готово" }).click();
+    await expect(page.locator(".cash-context")).toHaveText(
+      /^Сьогодні закрито о \d{2}:\d{2} · Оля$/,
+    );
     await expect(
       page.getByRole("button", { name: "Закрити касу", exact: true }),
     ).toHaveCount(0);
+    const closedToday = page.getByRole("group", { name: "Закриття каси" });
+    await expect(closedToday).toContainText(
+      "Мало бути 2 050,00 грн · Порахували 2 000,00 грн · Нестача 50,00 грн",
+    );
+    await expect(closedToday).toContainText(
+      "Причина: «помилилась зі здачею» · Оля",
+    );
   });
 
   test("a second close the same day is refused, and a close kept on the phone settles on that refusal", async ({
@@ -851,28 +909,30 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
   await openStore(page, /^Зупинений PAUSED/);
   await expect(page.getByText(/Лише перегляд/)).toBeVisible();
   await page.getByRole("button", { name: "Каса", exact: true }).click();
-  await expect(
-    page.getByText(
-      "Каса ще не рахувалась — цей підрахунок запише, скільки в ній зараз",
-    ),
-  ).toBeVisible();
+  await expect(page.locator(".cash-context")).toHaveText(
+    "Каса ще не рахувалась",
+  );
   // Nothing else is recorded in a store that does not trade (G15).
   await expect(page.getByRole("button", { name: "Видати з каси" })).toHaveCount(
     0,
   );
   await expect(
-    page.getByRole("button", { name: "Виправити спосіб оплати" }),
+    page.getByRole("button", { name: "Змінити спосіб оплати" }),
   ).toHaveCount(0);
-  await page.getByLabel("Скільки готівки в касі зараз, грн").fill("320");
+  await page
+    .getByRole("button", { name: "Перший підрахунок", exact: true })
+    .click();
+  await page.getByLabel("Скільки готівки в касі зараз").fill("320");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
   const closed = page.waitForResponse(isClose);
   await page.getByRole("button", { name: "Так, закрити" }).click();
   expect((await closed).status()).toBe(201);
   await expect(
-    page.getByText(
-      "Перший підрахунок: 320,00 грн. З цієї суми почнемо наступного разу.",
-    ),
+    page.getByRole("heading", { name: "Перший підрахунок записано" }),
   ).toBeVisible();
+  const first = page.getByRole("group", { name: "Підрахунок" });
+  await expect(first.locator(".cash-sum")).toHaveText("320,00 грн");
+  await expect(first).toContainText("З цієї суми почнемо наступного разу.");
 
   // «Марко» manages it: a manager's rights give nothing while it is blocked.
   await openAs(page, marko);
