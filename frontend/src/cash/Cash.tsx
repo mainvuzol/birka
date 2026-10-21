@@ -8,7 +8,7 @@ import {
 import { api, errorText, unreachable } from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
-import { keptText, useAutoCheck } from "@/shared/reach";
+import { useAutoCheck } from "@/shared/reach";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { notStated, methodLabels } from "@/shared/payment";
@@ -17,6 +17,7 @@ import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Closed, CloseSummary, PeriodDetails, ReasonLine } from "./Closed";
 import { Count } from "./Count";
+import { Kept } from "./Kept";
 import { cardText, differenceText, signed, whenOf } from "./format";
 import {
   resolveCashCommand,
@@ -24,7 +25,13 @@ import {
   useCashCommand,
   useCashLastCommand,
 } from "./commands";
-import { cashErrorText, cashJournalText, dayOf, timeOf } from "./errors";
+import {
+  cashErrorText,
+  cashJournalText,
+  dayOf,
+  staleToday,
+  timeOf,
+} from "./errors";
 import { directionOf, movementLabels, waysFor } from "./types";
 import type {
   CashAnswer,
@@ -107,14 +114,6 @@ const targetLabels: Record<Target, string> = {
   REFUND: "Повернення",
 };
 
-/** What a pending command is, in «Невідомо, чи записано …». */
-const pendingLabels: Record<CashBody["command"], string> = {
-  close: "закриття каси",
-  reason: "причину різниці",
-  movement: "видачу чи внесення",
-  correction: "зміну способу оплати",
-};
-
 function wayName(method: PaymentMethod | null): string {
   return method ? methodLabels[method] : notStated;
 }
@@ -151,7 +150,6 @@ export function Cash({
   networkOwner,
   fix,
   fixSeen,
-  person,
 }: {
   store: Store;
   token: string;
@@ -163,8 +161,6 @@ export function Cash({
   /** The receipt's «Змінити спосіб оплати»: straight to that sale. */
   fix: FixTarget | null;
   fixSeen: () => void;
-  /** Whoever this phone belongs to: named on the kept operation's paper line. */
-  person: string;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error, misses } = useCashCommand();
@@ -219,32 +215,45 @@ export function Cash({
   async function send(body: CashBody): Promise<JournalOutcome<CashAnswer>> {
     setDone(null);
     setProblem(null);
-    useCashLastCommand.setState({ command: body.command });
-    const outcome = await submitCashCommand(journalKey, token, {
-      // A new transport key per attempt; the command's identity is
-      // `command_id`, which is what makes a late retry safe.
-      key: crypto.randomUUID(),
-      body,
-    });
-    changed();
-    return outcome;
+    useCashLastCommand.setState({ command: body.command, sending: true });
+    try {
+      return await submitCashCommand(journalKey, token, {
+        // A new transport key per attempt; the command's identity is
+        // `command_id`, which is what makes a late retry safe.
+        key: crypto.randomUUID(),
+        body,
+      });
+    } finally {
+      useCashLastCommand.setState({ sending: false });
+      changed();
+    }
   }
 
-  /** What an answer means, however late it came. */
-  function recorded(body: CashBody, answer: CashAnswer): void {
+  /** What an answer means, however late it came; `once`, a kept command
+   * confirmed: «… записано один раз» (cash task list, P1-1), `since` when
+   * it was first sent. */
+  function recorded(
+    body: CashBody,
+    answer: CashAnswer,
+    once = false,
+    since?: string,
+  ): void {
     switch (body.command) {
       case "close":
         setResult(answer as Close);
+        if (once) setDone("Підрахунок записано один раз.");
         return;
       case "reason":
         setResult(answer as Close);
-        setDone(reasonDone(answer as Close, networkOwner));
+        setDone(
+          reasonDone(answer as Close, networkOwner, once ? { since } : null),
+        );
         return;
       case "movement":
-        setDone(movementDone(answer as Movement));
+        setDone(movementDone(answer as Movement, once));
         return;
       case "correction":
-        setDone(correctionDone(answer as Correction));
+        setDone(correctionDone(answer as Correction, once));
         return;
     }
   }
@@ -306,19 +315,13 @@ export function Cash({
     useCashLastCommand.setState({ command: attempt.body.command });
     void resolveCashCommand(journalKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
-        recorded(attempt.body, outcome.result);
+        recorded(attempt.body, outcome.result, true, attempt.since);
         // A close or its reason confirmed: its result, as when answered.
         if (
           attempt.body.command === "close" ||
           attempt.body.command === "reason"
         )
           setStep({ name: "closed" });
-        if (attempt.body.command !== "reason")
-          setDone(
-            (text) =>
-              text ??
-              "Операцію було записано один раз — повторно вона не пройде.",
-          );
       } else if (outcome.kind === "refused")
         // Proven to have recorded nothing: the journal is settled, and the
         // refusal says what to do instead.
@@ -329,24 +332,36 @@ export function Cash({
   // «Каса»'s kept command is checked by itself too (ADR-0013 §4.3, §9).
   useAutoCheck([{ pending: pending !== null, busy, loaded, run: check }]);
 
+  // The drawer is still to be closed today, as its last read says; never
+  // while it cannot be read (G26; review, 2026-10-22).
+  const closeNow =
+    !drawer.error && drawer.data !== undefined && isDue(drawer.data);
+  // A kept count that came too late, the same evening, the drawer still to
+  // close: the count again, at once, once the drawer is read anew (owner
+  // decision, 2026-10-21, В3). Never while it is read, nor when it cannot
+  // be (G26); from «Каса»'s own screen only, and once for that refusal,
+  // however often «Каса» is opened again (review, 2026-10-22).
+  const recounted = useCashLastCommand((state) => state.recounted);
+  useEffect(() => {
+    if (error === null || recounted === error || !staleToday(error)) return;
+    if (drawer.isFetching || !closeNow || step.name !== "main") return;
+    useCashLastCommand.setState({ recounted: error });
+    setStep({ name: "count" });
+  }, [error, recounted, drawer.isFetching, closeNow, step.name]);
+  // A command on its first sending is not yet unknown: no banner saying the
+  // server did not answer (review, 2026-10-22).
+  const sending = useCashLastCommand((state) => state.sending);
+
   // The kept command's banner and words, on every screen of «Каса».
   const kept = (
     <>
-      {pending && (
-        <section className="notice">
-          <h3>
-            {busy ? "Перевіряємо операцію каси…" : "Незавершена операція каси"}
-          </h3>
-          <p>
-            Невідомо, чи записано {pendingLabels[pending.body.command]}.
-            Перевірте результат — та сама операція не запишеться двічі. Поки
-            чекаємо, інші дії недоступні.
-          </p>
-          <p>{keptText(pending.since, person)}</p>
-          <button disabled={busy} onClick={check}>
-            Перевірити результат
-          </button>
-        </section>
+      {pending && !sending && (
+        <Kept
+          body={pending.body}
+          since={pending.since}
+          busy={busy}
+          check={check}
+        />
       )}
       {error !== null && (
         <p role="alert">
@@ -357,6 +372,7 @@ export function Cash({
             pending?.body.command === "movement"
               ? directionOf(pending.body.movement_kind)
               : undefined,
+            closeNow,
           )}
         </p>
       )}
@@ -448,7 +464,7 @@ export function Cash({
       setStep({ name: "closed" });
     } else if (outcome.kind === "refused") {
       buzz("error");
-      setProblem(cashErrorText(outcome.error));
+      setProblem(cashErrorText(outcome.error, closeNow));
     } else {
       // Unknown: «Каса» holds it in its banner; a sum typed for a moment
       // gone is never confirmed later with a new one (G31).
@@ -812,23 +828,59 @@ function MovementRow({ movement }: { movement: Movement }): JSX.Element {
  * phone's own clock tells which, against the close's moment. The network's
  * owner who closed gets no message at all (G40).
  */
-function reasonDone(close: Close, networkOwner: boolean): string {
-  if (networkOwner) return "Причину записано.";
-  return Date.now() - Date.parse(close.closed_at) <= 15 * 60 * 1000
-    ? "Причину записано. Власник отримає повідомлення."
-    : "Причину записано. Власник уже отримав повідомлення без причини — побачить її в застосунку.";
+function reasonDone(
+  close: Close,
+  networkOwner: boolean,
+  /** A kept reason confirmed, and when it was first sent, if known. */
+  kept: { since: string | undefined } | null = null,
+): string {
+  const written = kept ? "Причину записано один раз." : "Причину записано.";
+  if (networkOwner) return written;
+  const closedAt = Date.parse(close.closed_at);
+  const window = 15 * 60 * 1000;
+  if (Date.now() - closedAt <= window)
+    return `${written} Власник отримає повідомлення.`;
+  // A kept reason was recorded when it first reached the server, sometime
+  // after it was first sent: past the bot's wait only if sent past it
+  // (review, 2026-10-22).
+  const since = kept?.since === undefined ? NaN : Date.parse(kept.since);
+  if (kept && !(since - closedAt > window))
+    return `${written} Власник побачить її в застосунку.`;
+  return `${written} Власник уже отримав повідомлення без причини — побачить її в застосунку.`;
 }
 
-function movementDone(movement: Movement): string {
+/** Cash moved, as recorded; `once`, a kept one confirmed: «Видачу записано
+ * один раз: Витрати, 150,00 грн.» (cash task list, P1-1). */
+function movementDone(movement: Movement, once = false): string {
+  if (once) {
+    const what =
+      movement.direction === "OUT"
+        ? `Видачу записано один раз: ${movementLabels[movement.kind]}, ${money(movement.amount)}`
+        : `Внесення записано один раз: ${money(movement.amount)}`;
+    if (!movement.for_day) return `${what}.`;
+    return `${what} — до закриття ${dayOf(movement.for_day)}${
+      movement.moved_to_close ? `, ${movedBefore(movement)}` : ""
+    }.`;
+  }
   if (movement.moved_to_close && movement.for_day)
-    return `Записано до закриття ${dayOf(movement.for_day)}: гроші взяли до нього.`;
+    return `Записано до закриття ${dayOf(movement.for_day)}: ${movedBefore(movement)}.`;
   if (movement.for_day)
     return `Записано до закриття ${dayOf(movement.for_day)}.`;
   return `Записано: ${movementLabels[movement.kind]}, ${money(movement.amount)}.`;
 }
 
-function correctionDone(correction: Correction): string {
-  return `Спосіб оплати змінено: ${wayName(correction.from_method)} → ${wayName(correction.to_method)}.${
+/** Why cash the server put on a colleague's close went there: it moved
+ * before that close — taken out, or put in (review, 2026-10-22). */
+function movedBefore(movement: Movement): string {
+  return movement.direction === "IN"
+    ? "гроші внесли до нього"
+    : "гроші взяли до нього";
+}
+
+/** A way changed, as recorded; `once`, a kept one confirmed (P1-1). */
+function correctionDone(correction: Correction, once = false): string {
+  const ways = `${wayName(correction.from_method)} → ${wayName(correction.to_method)}`;
+  return `${once ? `Зміну способу оплати записано один раз: ${ways}` : `Спосіб оплати змінено: ${ways}`}.${
     correction.explains_day
       ? ` Пояснює різницю закриття ${dayOf(correction.explains_day)}.`
       : ""

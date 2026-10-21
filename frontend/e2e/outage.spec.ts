@@ -1972,7 +1972,7 @@ test.describe("9. what to do with money after the outage", () => {
     await expect(reason).toHaveValue("Продаж під час збою, 6 жовтня");
   });
 
-  test("«Каса»: a close whose answer was lost is marked on paper as kept on this phone, by whose it is", async ({
+  test("«Каса»: a close whose answer was lost says which count waits, and that the phone checks it itself — nothing of the drawer goes on paper (owner decision, 2026-10-21, В2)", async ({
     page,
   }) => {
     await serve(page);
@@ -1991,12 +1991,17 @@ test.describe("9. what to do with money after the outage", () => {
       .click();
     await page.getByRole("button", { name: "Так, закрити" }).click();
     const banner = page.locator("section.notice", {
-      has: page.getByRole("heading", { name: "Незавершена операція каси" }),
+      has: page.getByRole("heading", { name: "Підрахунок ще не підтверджено" }),
     });
-    await waitsFor(page, /Незавершена операція каси/);
+    await waitsFor(page, /Підрахунок ще не підтверджено/);
     await expect(banner).toContainText(
-      `Запишіть цю операцію на папері з позначкою «у телефоні — ${person}» і не вносьте її з паперу: телефон перевірить її сам.`,
+      "Підрахунок 850,00 грн — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
     );
+    await expect(banner.locator("p").nth(1)).toHaveText(
+      /^Чекає відповіді сервера з \d{2}:\d{2}\. Телефон перевірить сам\. Нічого не повторюйте, поки він не скаже «не записано»\.$/,
+    );
+    await expect(banner).not.toContainText("у телефоні —");
+    await expect(banner).not.toContainText(person);
   });
 
   const credit = {

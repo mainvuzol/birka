@@ -7,7 +7,9 @@
    meaning colours, and the dark foregrounds of «в пути» and «брак», to keep
    4.5:1; and tokens the direction does not name — `--line-strong` (a field's
    and a quiet button's edge), `--warn-line`, `--focus`, `--accent-text` in
-   light (the accent itself), and the two shadows. */
+   light (the accent itself), the two shadows, and the dark card's three
+   (`--dark-card`, its text and its edge): dark in either theme, as the owner
+   chose (2026-10-21), an edge at 3:1 to stand out on the dark background. */
 :root {
   --bg: #f4f4f1;
   --surface: #ffffff;
@@ -32,6 +34,9 @@
   --focus: #9a5a10;
   --panel-shadow: rgb(0 0 0 / 8%);
   --active-shadow: rgb(15 110 88 / 10%);
+  --dark-card: #121715;
+  --on-dark-card: #f4f4f1;
+  --dark-card-line: #121715;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -58,6 +63,9 @@
   --focus: #e2b34a;
   --panel-shadow: rgb(0 0 0 / 45%);
   --active-shadow: rgb(0 0 0 / 30%);
+  --dark-card: #222c29;
+  --on-dark-card: #f1f4f2;
+  --dark-card-line: #66726d;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -85,6 +93,9 @@
     --focus: #e2b34a;
     --panel-shadow: rgb(0 0 0 / 45%);
     --active-shadow: rgb(0 0 0 / 30%);
+    --dark-card: #222c29;
+    --on-dark-card: #f1f4f2;
+    --dark-card-line: #66726d;
     color-scheme: dark;
   }
 }
@@ -1360,8 +1371,9 @@ html {
 /* «Каса» (cash task list, P0-1..P0-3): where the drawer stands in one line,
    the day's one task as a large dark card, the other tasks as rows; the
    count on a screen of its own, its sum as on a calculator, «Закрити касу»
-   under the thumb; the result's three figures large. The dark card is the
-   text's colour in either theme, so it inverts in the dark one. */
+   under the thumb; the result's three figures large. The card stays dark in
+   either theme (owner decision, 2026-10-21); in the dark one its edge, at
+   3:1 on the section and the page, sets it off. */
 .cash-context {
   margin: -4px 0 14px;
   font-size: 14px;
@@ -1376,9 +1388,10 @@ html {
   min-height: 72px;
   margin: 4px 0 14px;
   padding: 16px 18px;
+  border: 1px solid var(--dark-card-line);
   border-radius: 20px;
-  background: var(--text);
-  color: var(--bg);
+  background: var(--dark-card);
+  color: var(--on-dark-card);
   text-align: left;
 }
 .cash-card-title {

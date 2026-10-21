@@ -653,6 +653,16 @@ test("Telegram buzzes once when the close is recorded and once when it is refuse
   ]);
 });
 
+/** The WCAG relative luminance of a computed `rgb(…)` colour. */
+function luminance(color: string): number {
+  const [r = 0, g = 0, b = 0] = (color.match(/[\d.]+/g) ?? []).map(Number);
+  const channel = (c: number): number => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {
@@ -729,6 +739,31 @@ for (const [name, theme, scheme] of [
       page.locator(".history-sum").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // The card stays dark in either theme, its own edge setting it off the
+    // dark background (owner decision, 2026-10-21).
+    const look = await card(page).evaluate((node) => {
+      const style = getComputedStyle(node);
+      // What the edge's token paints, read as the card's edge is.
+      const probe = document.createElement("div");
+      probe.style.borderTop = "1px solid var(--dark-card-line)";
+      document.body.append(probe);
+      const own = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return {
+        card: style.backgroundColor,
+        edge: style.borderTopColor,
+        own,
+        width: style.borderTopWidth,
+        page: getComputedStyle(document.documentElement).backgroundColor,
+      };
+    });
+    expect(luminance(look.card)).toBeLessThan(0.05);
+    expect(look.width).toBe("1px");
+    expect(look.edge).toBe(look.own);
+    if (scheme === "dark") {
+      expect(look.edge).not.toBe(look.card);
+      expect(look.card).not.toBe(look.page);
+    }
     await page.screenshot({ path: `test-results/cash-main-${name}.png` });
     await card(page).click();
     await field(page).fill("2000");

@@ -522,7 +522,9 @@ type it in when the server answers
   the shops sell on paper as their page says:
   [paper-when-the-server-is-down.md](paper-when-the-server-is-down.md).
 - A phone whose operation got no answer keeps it, shows since when it waits,
-  and its paper line is marked «у телефоні — <ім’я>».
+  and its paper line is marked «у телефоні — <ім’я>» — but for «Каса»'s,
+  never typed from paper: its banner says the phone checks it itself
+  (owner, 2026-10-21, В2).
 - When the whole server is dead, the app does not open at all. Only the
   outside service tells ([step 8a](#8a-being-told-when-something-fails), 2),
   once it is set up.

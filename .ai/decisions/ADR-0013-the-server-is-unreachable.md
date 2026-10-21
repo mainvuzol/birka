@@ -334,7 +334,11 @@ No new tap anywhere.
 
    and the same without the first sentence when `since` is not known
    (owner, 2026-10-04: every sale of an outage stays on paper until the app
-   shows it recorded).
+   shows it recorded). «Каса»'s banner says instead «Чекає відповіді
+   сервера з 14:20. Телефон перевірить сам. Нічого не повторюйте, поки він
+   не скаже «не записано».» (owner, 2026-10-21, В2): nothing of the drawer
+   is typed from paper — a count not recorded is counted again, cash taken
+   out recorded again.
 
 **Why "do not type it"** (G18, owner 2026-10-07). A kept attempt and a paper
 line typed later for the same sale are two commands, with two

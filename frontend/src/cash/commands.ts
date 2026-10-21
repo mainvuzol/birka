@@ -142,8 +142,13 @@ export const resolveCashCommand = cash.resolve;
  * Which command the journal's error is about, so «Каса» says what was not
  * recorded. Kept beside the journal, not in the screen: the error outlives
  * «Каса» (a refusal read, another tab opened, «Каса» opened again), and so
- * must the name of what it refused.
+ * must the name of what it refused. `sending`: a command on its first
+ * sending, not yet unknown — its banner, which says the server did not
+ * answer, waits (review, 2026-10-22). `recounted`: the late count whose
+ * refusal has opened the count once (owner decision, 2026-10-21, В3).
  */
-export const useCashLastCommand = create<{ command: CashBody["command"] }>(
-  () => ({ command: "close" }),
-);
+export const useCashLastCommand = create<{
+  command: CashBody["command"];
+  sending: boolean;
+  recounted: unknown;
+}>(() => ({ command: "close", sending: false, recounted: null }));

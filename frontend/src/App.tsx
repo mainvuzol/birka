@@ -2013,7 +2013,6 @@ function Workspace({
             networkOwner={me.organization_permissions.includes("store:manage")}
             fix={cashFix}
             fixSeen={fixSeen}
-            person={me.display_name}
           />
         ) : (
           <p role="alert">Немає доступу до каси.</p>

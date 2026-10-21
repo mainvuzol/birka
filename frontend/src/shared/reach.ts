@@ -220,11 +220,25 @@ function clockOf(iso: string): string {
  * `since`, and the first sentence is left out.
  */
 export function keptText(since: string | undefined, person: string): string {
-  const waits =
-    since !== undefined && !Number.isNaN(Date.parse(since))
-      ? `Чекає відповіді сервера з ${clockOf(since)}. `
-      : "";
-  return `${waits}Запишіть цю операцію на папері з позначкою «у телефоні — ${visible(person)}» і не вносьте її з паперу: телефон перевірить її сам. Вносьте з паперу, лише якщо застосунок скаже «не записано».`;
+  return `${waitsSince(since)}Запишіть цю операцію на папері з позначкою «у телефоні — ${visible(person)}» і не вносьте її з паперу: телефон перевірить її сам. Вносьте з паперу, лише якщо застосунок скаже «не записано».`;
+}
+
+/**
+ * The drawer's own line under its kept command's banner (owner decision,
+ * 2026-10-21, В2): nothing of the drawer is typed from paper — a count not
+ * recorded is counted again, cash taken out recorded again — so there is no
+ * paper line to mark, only nothing to repeat.
+ */
+export function keptCashText(since: string | undefined): string {
+  return `${waitsSince(since)}Телефон перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».`;
+}
+
+/** «Чекає відповіді сервера з 14:20. », or nothing for an attempt kept
+ * before it said since when. */
+function waitsSince(since: string | undefined): string {
+  return since !== undefined && !Number.isNaN(Date.parse(since))
+    ? `Чекає відповіді сервера з ${clockOf(since)}. `
+    : "";
 }
 
 /** An optional `since` read back from storage: absent, or a moment. */

@@ -971,7 +971,19 @@ the review of the built change raised.
     stalled before it takes it — reading its scope, for longer than the
     phone waits, while the right is taken away — is not: the resend is told
     nothing was recorded, and the first may record it after. The same narrow
-    window as a return's; not yet put to the owner.
+    window as a return's; **accepted by the owner** (2026-10-22).
+- **Cash taken out during an outage, pressed and kept, may also go on
+  paper** (review, 2026-10-22; a reading for the owner). The sellers' page
+  says to write cash taken out during an outage on paper and record it
+  later with «Видати з каси» (В5); «Каса»'s banner no longer marks a kept
+  command's paper line, nothing of the drawer being typed from paper (В2).
+  A seller who pressed «Видати з каси», kept by the phone, and also wrote
+  it on paper may have it recorded twice — by the phone's own check and by
+  whoever types the paper — and the evening's close shows a surplus for its
+  reason to explain. The banner says «Нічого
+  не повторюйте, поки він не скаже «не записано».»; whether the sellers'
+  page should say not to write such a take-out on paper is the owner's
+  ([report](cash-redesign-2-report.md)).
 - **A kept sale resent days later still sells** what is on the shelf then,
   dated then, under the phone's person, **without a mark** (owner,
   2026-10-07). The phone checks it by itself when the server answers and

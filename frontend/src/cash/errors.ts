@@ -55,8 +55,33 @@ function closedBy(details: Record<string, unknown>): string {
   return `${timeOf(details.closed_at)} · ${by}`;
 }
 
-/** A refusal of any cash command, as «Каса» shows it. */
-export function cashErrorText(error: unknown): string {
+/** The drawer's day a moment belongs to, by the phone's clock: 06:00 to
+ * 06:00, as the server's (G8) — 00:10 and 05:59 are the evening before's. */
+function drawerDay(at: Date): string {
+  return new Date(at.getTime() - 6 * 60 * 60 * 1000).toDateString();
+}
+
+/**
+ * A count refused for reaching the server over ten minutes after it was
+ * taken (G31), taken in the drawer's day now: the same evening (owner
+ * decision, 2026-10-21, В3; review, 2026-10-22).
+ */
+export function staleToday(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.details.reason !== "COUNT_IS_STALE")
+    return false;
+  const at = error.details.counted_at;
+  return (
+    typeof at === "string" &&
+    !Number.isNaN(Date.parse(at)) &&
+    drawerDay(new Date(at)) === drawerDay(new Date())
+  );
+}
+
+/**
+ * A refusal of any cash command, as «Каса» shows it. `closeNow`: the drawer
+ * is still to be closed today, as its last read says.
+ */
+export function cashErrorText(error: unknown, closeNow = false): string {
   if (!(error instanceof ApiError)) return errorText(error);
   // A stale screen: the way changed since it was read (B6.1).
   if (error.code === "PAYMENT_METHOD_CHANGED") {
@@ -67,10 +92,14 @@ export function cashErrorText(error: unknown): string {
   }
   switch (error.details.reason) {
     // A count kept on the phone and sent over ten minutes after it was
-    // taken (G31): that day goes into the evening's close, so the screen
-    // does not invite a recount now, which would take that day's slot.
+    // taken (G31). The same evening, the drawer still to close, it is
+    // counted again now (owner decision, 2026-10-21, В3); a later day goes
+    // into the evening's close, and a recount now would take that day's
+    // slot.
     case "COUNT_IS_STALE":
-      return "Підрахунок не записано — він дійшов надто пізно. Закрийте касу, як завжди, увечері: цей день увійде в те закриття.";
+      return closeNow && staleToday(error)
+        ? "Підрахунок не записано — він дійшов надто пізно. Перерахуйте касу ще раз і закрийте."
+        : "Підрахунок не записано — він дійшов надто пізно. Закрийте касу, як завжди, увечері: цей день увійде в те закриття.";
     case "CLOSED_BY_ANOTHER":
       return `Касу вже закрито о ${closedBy(error.details)}. Ваш підрахунок не записано.`;
     case "ALREADY_CLOSED_TODAY":
@@ -448,6 +477,8 @@ export function cashJournalText(
   misses = 0,
   /** A movement's way, out of the drawer or in. */
   direction?: "OUT" | "IN",
+  /** The drawer is still to be closed today (`cashErrorText`). */
+  closeNow = false,
 ): string {
   if (!recordedNothing(error))
     return (
@@ -466,6 +497,6 @@ export function cashJournalText(
       String(error.details.reason),
     )
   )
-    return cashErrorText(error);
+    return cashErrorText(error, closeNow);
   return `${notRecorded[command]} ${cashErrorText(error)}`;
 }
