@@ -3336,3 +3336,59 @@ How it is carried out, not decided by the owner:
   Порахували … · Нестача …» and the reason.
 
 Built on 2026-10-21; see the [report](cash-redesign-1-report.md).
+
+## Owner decision — 2026-10-21 (six readings after #117 and #118)
+
+Asked after #119 was opened and merged, each answer the option
+recommended:
+- **A kept payment or write-off whose person may no longer make it** is
+  answered as a kept return is (2026-10-18): what it recorded, to whoever
+  made it, or that nothing was, and the till is freed. *(Built 2026-10-21,
+  below.)*
+- **«Магазину винні» that cannot be read keeps its place,** with «Не вдалося
+  прочитати» and a quiet «Спробувати ще раз»; nothing moves. *(Built
+  2026-10-21, below.)*
+- **A kept payment refused for the right says «Борги»'s own words,** never
+  the shared «Немає доступу до цієї операції або складу». *(Built
+  2026-10-21, below; the words to be confirmed.)*
+- **A confirmed order's step whose order cannot be read** keeps «… натисніть
+  «Оновити результат».», as built.
+- **«Не прийняв запит» for a 422 the shared words would call «перевірте
+  дані»** stays, as built.
+- **Three «не прийняв запит» in a row** ask for a manager too, as three «not
+  found» do. *(Built 2026-10-21, below.)*
+
+## A kept payment answered to whoever lost the right, «Магазину винні» kept, a manager after three requests not taken — built 2026-10-21
+
+How they are carried out, not decided by the owner:
+- **The server answers a payment or a write-off resent by whoever may no
+  longer make it** with their own command's entry — the request's
+  fingerprint names its person — and the debt's sums now, but no phone and
+  no one else's entry, as someone who may no longer read debts; or, when
+  nothing was recorded under it, refuses for the right saying so
+  (`recorded: false`), so the phone settles it and the till is freed.
+  Looked up under the debt's row lock, which a first sending still running
+  holds. Anyone else's command, or another request under the same command,
+  is refused as before, saying nothing of what was recorded. A store this
+  person no longer belongs to, a store that does not trade, and a write-off
+  of a debt of a store that does not trade (the network's owner's) are
+  refused as before, before any lookup, as a return's are: the phone keeps
+  the command, for a store that does not trade until it trades again
+  (owner, 2026-10-08).
+- **«Борги»'s words for the right:** kept, «Внесок ще не підтверджено: у вас
+  більше немає права приймати внески. Зверніться до менеджера.»
+  («Списання … списувати борги. Зверніться до власника.» — the right to
+  write off is the owner's to give); settled as recorded nothing, «Внесок не
+  записано: у вас більше немає права приймати внески. Зверніться до
+  менеджера. Якщо гроші вже взяли — передайте папір менеджеру, щоб внести
+  внесок з паперу.», as a return's words say for money handed back;
+  recorded, «Внесок записано один раз» over the till, as any.
+- **«Магазину винні» that cannot be read** keeps the place it had while read,
+  its lines unseen, «Не вдалося прочитати» and «Спробувати ще раз» over
+  them.
+- **The count towards a manager** takes «not found» and a request not taken
+  — a 400 or a 422 — in one row, whichever comes; any other answer begins
+  it again. A kept payment's and return's request not taken now say the
+  shared words, the same as before, with the manager from the third.
+
+Built on 2026-10-21; see the [report](credits-kept-right-report.md).

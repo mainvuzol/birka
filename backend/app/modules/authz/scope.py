@@ -86,8 +86,9 @@ class RequestScope:
         Called at the command boundary, which for every endpoint here is the
         router — before the idempotency key is claimed, and before a stored
         response is replayed, so that a revoked grant cannot keep returning a
-        success it was once entitled to — but for a return answered to whoever
-        recorded it (`refunds.own_refund`, owner decision, 2026-10-18). What
+        success it was once entitled to — but for a return, a debt payment
+        and a write-off answered to whoever made them (`refunds.own_refund`,
+        `credit.service._own`; owner decisions, 2026-10-18 and 2026-10-21). What
         matters is not which file holds the call but that the decision is made
         from this scope, which is rebuilt from the database on every request,
         and never from anything the client sent (invariants I12 and I13).

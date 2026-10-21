@@ -9,7 +9,7 @@ import {
 import { decimal, kopecks } from "@/orders/types";
 import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
-import { countOf, keepCount } from "@/shared/journal";
+import { countOf, counts, keepCount } from "@/shared/journal";
 import { isSince, sinceOf } from "@/shared/reach";
 import type {
   CreditTerms,
@@ -406,7 +406,7 @@ export async function submitSale(
       // command: the count stands (review, 2026-10-20).
       !(error instanceof ApiError) || unreachable(error)
         ? useSaleCommand.getState().misses
-        : error.status === 404
+        : counts(error)
           ? useSaleCommand.getState().misses + 1
           : 0;
     if (written) {

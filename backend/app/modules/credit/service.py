@@ -18,7 +18,7 @@ import re
 import unicodedata
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -28,9 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
 from app.core.errors import (
+    DomainError,
     ForbiddenStoreError,
     IdempotencyConflictError,
     NotFoundError,
+    PermissionDeniedError,
     StoreNotTradingError,
     ValidationFailedError,
     nothing_recorded,
@@ -349,6 +351,62 @@ async def open_credit(
     return await view(session, row)
 
 
+async def _own(
+    session: AsyncSession,
+    *,
+    scope: RequestScope,
+    command_id: uuid.UUID,
+    fingerprint: str,
+    credit_id: uuid.UUID,
+    refusal: DomainError,
+) -> CreditView:
+    """What a payment or a write-off resent by whoever made it recorded, once
+    they may no longer make it; never a new one (owner decision, 2026-10-21,
+    as a return's, 2026-10-18).
+
+    A phone keeps a command whose answer it never heard, and holds its till
+    until it learns the outcome (ADR-0013). Were the resend refused as a new
+    command is, a person whose right was taken away meanwhile would never
+    learn it, and the phone would stay held. So the one who made it is
+    answered what it recorded, for the very request that recorded it — the
+    fingerprint names its person — and when nothing was recorded under it,
+    given `refusal` saying so (`details.recorded = false`), so the phone
+    settles it. Anyone else's is given `refusal` as it came. Called under the
+    debt's row lock, which a first sending still running holds: the lookup
+    is conclusive. Nothing is written either way.
+
+    The answer is the debt as its person may still see it, who may no longer
+    read debts: their own entry alone, and no phone — never a colleague's
+    entry, a later write-off's reason, nor the customer's number (review,
+    2026-10-21). Its sums are the debt's now, which the phone says as what
+    is left.
+    """
+    entry = await session.scalar(
+        select(CreditEntry).where(
+            CreditEntry.organization_id == scope.organization_id,
+            CreditEntry.command_id == command_id,
+        )
+    )
+    if entry is None:
+        refusal.details.setdefault("recorded", False)
+        raise refusal
+    if (
+        entry.command_fingerprint != fingerprint
+        or entry.credit_id != credit_id
+        or entry.actor_user_id != scope.user_id
+    ):
+        raise refusal
+    credit = await session.get(CustomerCredit, entry.credit_id)
+    assert credit is not None
+    whole = await view(session, credit)
+    return replace(
+        whole,
+        customer_phone=None,
+        entries=[own for own in whole.entries if own.id == entry.id],
+        last_payment_at=(entry.created_at if entry.kind == EntryKind.PAYMENT.value else None),
+    )
+
+
 async def _replayed(
     session: AsyncSession,
     *,
@@ -407,8 +465,9 @@ async def pay(
     credit = await _locked(session, organization_id=scope.organization_id, credit_id=credit_id)
     taking = at_store_id or credit.store_id
     # The authority is the store taking the money. A blocked or archived one
-    # is refused here by name, before any answer is replayed.
-    scope.require(Permission.SALE_CREDIT, taking)
+    # is refused here by name, before any answer is replayed, and so is a
+    # store this person no longer belongs to.
+    scope.require_store(taking)
     fingerprint = idempotency.fingerprint(
         {
             "pay": str(credit_id),
@@ -425,6 +484,19 @@ async def pay(
         actor_user_id=scope.user_id,
         store_id=credit.store_id,
     )
+    if not scope.can(Permission.SALE_CREDIT, taking):
+        return await _own(
+            session,
+            scope=scope,
+            command_id=command_id,
+            fingerprint=fingerprint,
+            credit_id=credit.id,
+            refusal=PermissionDeniedError(
+                f"Missing permission {Permission.SALE_CREDIT.value}",
+                permission=Permission.SALE_CREDIT.value,
+                store_id=str(taking),
+            ),
+        )
     replay = await _replayed(
         session,
         scope=scope,
@@ -530,21 +602,39 @@ async def write_off(
     if not why or len(why) > MAX_REASON or not is_storable(why):
         raise ValidationFailedError(f"Say why, in 1 to {MAX_REASON} characters", reason="NO_REASON")
     credit = await _locked(session, organization_id=scope.organization_id, credit_id=credit_id)
-    if (
-        await store_state(session, organization_id=scope.organization_id, store_id=credit.store_id)
-        is StoreState.ACTIVE
-    ):
-        scope.require(Permission.CREDIT_WRITE_OFF, credit.store_id)
-    else:
-        # Nothing is done in a store that does not trade, but a debt it is
-        # owed is still the owner's to write off: the network's owner, whose
-        # role covers every store (owner decision, 2026-10-01).
-        scope.require(Permission.CREDIT_WRITE_OFF)
     fingerprint = idempotency.fingerprint(
         {"write_off": str(credit_id), "reason": why},
         actor_user_id=scope.user_id,
         store_id=credit.store_id,
     )
+    if (
+        await store_state(session, organization_id=scope.organization_id, store_id=credit.store_id)
+        is StoreState.ACTIVE
+    ):
+        scope.require_store(credit.store_id)
+        if not scope.can(Permission.CREDIT_WRITE_OFF, credit.store_id):
+            # Whoever may no longer write off here learns what their own
+            # write-off recorded (owner decision, 2026-10-21).
+            return await _own(
+                session,
+                scope=scope,
+                command_id=command_id,
+                fingerprint=fingerprint,
+                credit_id=credit.id,
+                refusal=PermissionDeniedError(
+                    f"Missing permission {Permission.CREDIT_WRITE_OFF.value}",
+                    permission=Permission.CREDIT_WRITE_OFF.value,
+                    store_id=str(credit.store_id),
+                ),
+            )
+    else:
+        # Nothing is done in a store that does not trade, but a debt it is
+        # owed is still the owner's to write off: the network's owner, whose
+        # role covers every store (owner decision, 2026-10-01). Anyone else
+        # is refused before the lookup, saying nothing of what was recorded:
+        # the phone keeps it until the store trades again (owner,
+        # 2026-10-08).
+        scope.require(Permission.CREDIT_WRITE_OFF)
     replay = await _replayed(
         session,
         scope=scope,

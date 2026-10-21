@@ -267,8 +267,9 @@ function lostPlace(error: ApiError): boolean {
   );
 }
 
-/** From a kept command's third «not found» in a row: someone to look
- * (owner decision, 2026-10-19). */
+/** From a kept command's third «not found» or request not taken in a row
+ * (`counts`, `@/shared/journal`): someone to look (owner decisions,
+ * 2026-10-19 and 2026-10-21). */
 export const ASK_A_MANAGER =
   "Зверніться до менеджера: нехай перевірить, чи записано.";
 
@@ -299,7 +300,8 @@ export function keptUnconfirmed(
   return [
     `${what} ще не підтверджено: сервер ${notTaken ? "не прийняв запит" : "не зміг відповісти"}. Перевірте результат ще раз — двічі ${it} не запишеться.`,
     failed ? text.slice(FAILED_TEXT.length).trim() : "",
-    // Only «not found» counts, and any other answer begins it again.
+    // Only «not found» and a request not taken count, in one row; any other
+    // answer begins it again (`@/shared/journal`).
     misses >= 3 ? ASK_A_MANAGER : "",
   ]
     .filter(Boolean)
@@ -314,8 +316,8 @@ export function returnErrorText(error: unknown, misses = 0): string {
     const text = errorText(error);
     if (text === CONFLICT_TEXT)
       return "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.";
-    if (text === INVALID_TEXT)
-      return "Повернення ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.";
+    // A request not taken, in the shared words, with a manager from the
+    // third in a row (owner decision, 2026-10-21).
     return keptUnconfirmed(error, "Повернення", "воно", misses) ?? text;
   }
   if (
@@ -354,16 +356,30 @@ export function creditErrorText(
   misses = 0,
 ): string {
   const what = kind === "payment" ? "Внесок" : "Списання";
+  // Refused for the right in a store: «Борги»'s own words, never a
+  // warehouse's (owner decision, 2026-10-21; words to be confirmed). A
+  // write-off's right is the owner's to give back. A closed store's debt,
+  // written off by the network's owner alone, names no store: not this.
+  const right =
+    error instanceof ApiError &&
+    error.status === 403 &&
+    error.code === "PERMISSION_DENIED" &&
+    typeof error.details.store_id === "string"
+      ? kind === "payment"
+        ? "у вас більше немає права приймати внески. Зверніться до менеджера."
+        : "у вас більше немає права списувати борги. Зверніться до власника."
+      : null;
   // Not said to have recorded nothing: still unconfirmed, never «спробуйте
   // ще раз», which could take the money twice, and never an order's words
   // (credits task list, P2-2; as «Повернення», owner decisions, 2026-10-18).
   if (!recordedNothing(error)) {
+    if (right !== null) return `${what} ще не підтверджено: ${right}`;
     const text = errorText(error);
     const twice = `Перевірте результат ще раз — двічі ${kind === "payment" ? "він" : "воно"} не запишеться.`;
     if (text === CONFLICT_TEXT)
       return `${what} ще не підтверджено: сервер відповів, що дані змінилися. ${twice}`;
-    if (text === INVALID_TEXT)
-      return `${what} ще не підтверджено: сервер не прийняв запит. ${twice}`;
+    // A request not taken, in the shared words, with a manager from the
+    // third in a row (owner decision, 2026-10-21).
     return (
       keptUnconfirmed(
         error,
@@ -378,6 +394,15 @@ export function creditErrorText(
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
   )
     return "Внесок не записано — прийміть його ще раз і вкажіть, як платить покупець.";
+  // Its own person, answered by the server that nothing was recorded: the
+  // till is free, and money already taken is entered from paper by a
+  // manager, as a return's (owner decisions, 2026-10-18 and 2026-10-21).
+  if (right !== null)
+    return `${what} не записано: ${right}${
+      kind === "payment"
+        ? " Якщо гроші вже взяли — передайте папір менеджеру, щоб внести внесок з паперу."
+        : ""
+    }`;
   const why = debtRefusalText(error, kind === "payment" ? way : undefined);
   // It says itself that the payment was not recorded.
   if (

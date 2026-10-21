@@ -6,7 +6,7 @@ import {
   refusedOutright,
   unreachable,
 } from "@/shared/api";
-import { countOf, keepCount } from "@/shared/journal";
+import { countOf, counts, keepCount } from "@/shared/journal";
 import { isSince, sinceOf } from "@/shared/reach";
 import type { Order } from "./types";
 export interface Pending {
@@ -166,7 +166,7 @@ export async function submitPending(
       ? 0
       : !(error instanceof ApiError) || unreachable(error)
         ? before
-        : error.status === 404
+        : counts(error)
           ? before + 1
           : 0;
     if (written && !definite) {

@@ -17,8 +17,10 @@ import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from decimal import Decimal
 
+import httpx
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -28,9 +30,11 @@ from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 from app.core.errors import ValidationFailedError
 from app.modules.audit.models import AuditLog
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
+from app.modules.authz.scope import RequestScope
 from app.modules.credit import service
 from app.modules.inventory.service import find_divergences
 from app.modules.sales.payment import PaymentMethod
+from app.modules.tenancy.models import Store
 from tests.conftest import requires_database
 from tests.integration.test_shared_warehouse import (
     TwoShops,
@@ -333,6 +337,141 @@ async def test_only_the_owner_writes_off_and_says_why_and_it_never_becomes_cash(
     # Only the 1000 actually paid can ever come back.
     assert first.json()["credit"]["cash_back"] == "0.00"
     assert second.json()["credit"]["cash_back"] == "1000.00"
+
+
+async def test_a_payment_resent_by_whoever_may_no_longer_take_payments_is_answered_what_it_recorded(
+    maker,
+):
+    # Owner decision, 2026-10-21, as a return's (2026-10-18): the phone that
+    # kept it learns its outcome and frees its till; nothing new is taken.
+    shops = await make_two_shops(maker)
+    sale, _, _ = await on_credit(maker, shops)
+    credit_id = sale["credit"]["credit_id"]
+    command = str(uuid.uuid4())
+    paid = await pay(maker, shops, credit_id, "300.00", command_id=command)
+    assert paid.status_code == 201, paid.text
+    (own,) = [entry for entry in paid.json()["entries"] if entry["amount"] == "300.00"]
+    # Another payment meanwhile: never shown to whoever lost the right.
+    assert (await pay(maker, shops, credit_id, "100.00")).status_code == 201
+    without = shops.scope(shops.primary_store, SELLER - {Permission.SALE_CREDIT})
+    body = {"command_id": command, "amount": "300.00", "payment_method": "CASH"}
+    url = f"/api/v1/credits/{credit_id}/payments"
+    async with api(maker, without) as client:
+        again = await client.post(url, json=body)
+        never = await client.post(url, json=body | {"command_id": str(uuid.uuid4())})
+        other = await client.post(url, json=body | {"amount": "200.00"})
+    async with api(maker, replace(without, user_id=uuid.uuid4())) as client:
+        someone_else = await client.post(url, json=body)
+
+    # Its own entry alone, and no phone: who may no longer read debts is
+    # told what their payment did and what is left (review, 2026-10-21).
+    assert again.status_code == 201, again.text
+    answered = again.json()
+    assert answered["entries"] == [own]
+    assert answered["customer_phone"] is None
+    assert answered["owed"] == "1600.00"
+    # Nothing recorded under it: said so, and the phone settles it.
+    assert never.status_code == 403
+    assert never.json()["details"] == {
+        "permission": "sale:credit",
+        "store_id": str(shops.primary_store),
+        "recorded": False,
+    }
+    # Another request under the same command, or another person's: refused
+    # as it came, saying nothing of what was recorded.
+    for refused in (other, someone_else):
+        assert refused.status_code == 403
+        assert "recorded" not in refused.json()["details"]
+    assert (await debt(maker, shops, credit_id))["owed"] == "1600.00"
+
+
+async def test_a_write_off_resent_by_whoever_may_no_longer_write_off_is_answered_what_it_recorded(
+    maker,
+):
+    shops = await make_two_shops(maker)
+    sale, _, _ = await on_credit(maker, shops)
+    credit_id = sale["credit"]["credit_id"]
+    command = str(uuid.uuid4())
+    url = f"/api/v1/credits/{credit_id}/write-off"
+    body = {"command_id": command, "reason": "поїхала за кордон"}
+    async with api(maker, shops.scope(shops.primary_store, OWNER)) as client:
+        written = await client.post(url, json=body)
+    assert written.status_code == 200, written.text
+    without = shops.scope(shops.primary_store, OWNER - {Permission.CREDIT_WRITE_OFF})
+    async with api(maker, without) as client:
+        again = await client.post(url, json=body)
+        never = await client.post(url, json=body | {"command_id": str(uuid.uuid4())})
+        other = await client.post(url, json=body | {"reason": "інша причина"})
+    async with api(maker, replace(without, user_id=uuid.uuid4())) as client:
+        someone_else = await client.post(url, json=body)
+
+    assert again.status_code == 200, again.text
+    assert [entry["kind"] for entry in again.json()["entries"]] == ["WRITE_OFF"]
+    assert again.json()["customer_phone"] is None
+    assert again.json()["status"] == written.json()["status"] == "WRITTEN_OFF"
+    assert never.status_code == 403
+    assert never.json()["details"]["recorded"] is False
+    assert never.json()["details"]["permission"] == "credit:write_off"
+    for refused in (other, someone_else):
+        assert refused.status_code == 403
+        assert "recorded" not in refused.json()["details"]
+
+
+async def test_a_payment_resent_without_the_right_waits_for_a_first_sending_still_running(
+    maker: async_sessionmaker[AsyncSession], engine: AsyncEngine
+):
+    """Looked up under the debt's lock: a resend by whoever may no longer
+    take payments waits for its first sending, still running, and is given
+    its answer — never told that nothing was recorded while the first may
+    still record it (review, 2026-10-21)."""
+    shops = await make_two_shops(maker)
+    sale, _, _ = await on_credit(maker, shops)
+    credit_id = sale["credit"]["credit_id"]
+    body = {"command_id": str(uuid.uuid4()), "amount": "300.00", "payment_method": "CASH"}
+    url = f"/api/v1/credits/{credit_id}/payments"
+    without = shops.scope(shops.primary_store, SELLER - {Permission.SALE_CREDIT})
+
+    async def send(scope: RequestScope) -> httpx.Response:
+        async with api(maker, scope) as client:
+            return await client.post(url, json=body)
+
+    async def waiting(count: int) -> None:
+        async with engine.connect() as observer:
+            for _ in range(500):
+                blocked = await observer.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity WHERE datname = "
+                        "current_database() AND cardinality(pg_blocking_pids(pid)) > 0"
+                    )
+                )
+                if (blocked or 0) >= count:
+                    return
+                # The view is read once per transaction: a new one each time.
+                await observer.rollback()
+                await asyncio.sleep(0.01)
+        pytest.fail(f"{count} requests never waited")
+
+    async with maker() as blocker:
+        # The store held, so the first sending stops after the debt's lock,
+        # at its stores' (`hold_stores`).
+        await blocker.execute(
+            select(Store).where(Store.id == shops.primary_store).with_for_update()
+        )
+        first = asyncio.create_task(send(shops.scope(shops.primary_store)))
+        await waiting(1)
+        second = asyncio.create_task(send(without))
+        try:
+            # The resend waits behind the first sending's lock on the debt.
+            await waiting(2)
+            assert not second.done()
+        finally:
+            await blocker.rollback()
+        answered = await asyncio.wait_for(first, timeout=15)
+        resent = await asyncio.wait_for(second, timeout=15)
+    assert answered.status_code == 201, answered.text
+    assert resent.status_code == 201, resent.text
+    (own,) = [entry for entry in answered.json()["entries"] if entry["amount"] == "300.00"]
+    assert resent.json()["entries"] == [own]
 
 
 async def test_only_the_store_that_sold_takes_payments_and_sees_the_debt(maker):
