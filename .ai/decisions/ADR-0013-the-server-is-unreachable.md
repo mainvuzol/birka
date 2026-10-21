@@ -670,6 +670,10 @@ No tap is added to a normal sale.
   рахуєте, не продавайте.»:
   > Якщо сервер не відповідав — спершу внесіть усе, що записали на папері,
   > потім рахуйте касу.
+  *(Since 2026-10-21 on the count's own screen, in one line with the other
+  phones' reminder, «Спершу внесіть усе з паперу й перевірте, чи нічого не
+  чекає на інших телефонах.» — owner decision, «Каса»'s task list, В1 (а);
+  business-rules.md.)*
 - **Two quick reasons** under «Чому не збігається?» (G8): «Продаж під час
   збою», the owner's words, and «Повернення чи внесок під час збою». Each
   fills the field, which can still be edited. The reason stays free text

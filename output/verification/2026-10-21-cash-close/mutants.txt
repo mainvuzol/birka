@@ -1,0 +1,25 @@
+- unchanged tree: passed 
+- the card not reading the drawer again: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- an empty sum may close: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- the cursor not in the count's field: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- «Скасувати» clearing the sum: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- the count not coming back after cash out: caught by cash taken out is recorded from the count, and the count comes back with its sum
+- «Мало бути» not the server's: caught by the close's figures are the server's: «Мало бути» and «Порахували» large, a shortage or a 
+- a difference in the debt's colour: caught by the close's figures are the server's: «Мало бути» and «Порахували» large, a shortage or a ; a difference owes its reason under the thumb, the figures read first, and «Готово» once it
+- to the kopeck a warning: caught by to the kopeck is the accent's, and the first count is one figure
+- the result's heading not taking the focus: caught by the close's figures are the server's: «Мало бути» and «Порахували» large, a shortage or a 
+- the reason sent empty: caught by a difference owes its reason under the thumb, the figures read first, and «Готово» once it
+- no buzz for a close recorded: caught by Telegram buzzes once when the close is recorded and once when it is refused, never for a c
+- no buzz for a refusal: caught by Telegram buzzes once when the close is recorded and once when it is refused, never for a c
+- the card shown once the day is closed: caught by the close's figures are the server's: «Мало бути» and «Порахували» large, a shortage or a 
+- the owner's take-out row said as a seller's: caught by the owner's «Каса»: every task as a row, «Закриття» among them
+- cash put in said as taken out: caught by the owner's «Каса»: every task as a row, «Закриття» among them
+- the card's hint unreadable in its card: caught by in the dark theme the card, the count and the close's figures read at 4.5:1; in the light theme the card, the count and the close's figures read at 4.5:1
+- «Каса» held while a reason is owed: caught by a difference owes its reason under the thumb, the figures read first, and «Готово» once it
+- the typed count kept after leaving it: caught by cash taken out is recorded from the count, and the count comes back with its sum
+- the focus left behind by the confirmation: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- a separator just typed said to be wrong: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- the confirmed sum small: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+- the panel's button under 54 px: caught by the count: the card reads the drawer again, the cursor is in the field, an empty or unread
+22 of 22 caught
+exit 0

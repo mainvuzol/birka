@@ -1330,3 +1330,197 @@ html {
   user-select: all;
   -webkit-user-select: all;
 }
+/* «Каса» (cash task list, P0-1..P0-3): where the drawer stands in one line,
+   the day's one task as a large dark card, the other tasks as rows; the
+   count on a screen of its own, its sum as on a calculator, «Закрити касу»
+   under the thumb; the result's three figures large. The dark card is the
+   text's colour in either theme, so it inverts in the dark one. */
+.cash-context {
+  margin: -4px 0 14px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.cash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 72px;
+  margin: 4px 0 14px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: var(--text);
+  color: var(--bg);
+  text-align: left;
+}
+.cash-card-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+.cash-card-hint {
+  font-size: 15px;
+  font-weight: 500;
+}
+.cash-row-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+.cash .sale-meta,
+.cash-closed .history-meta {
+  font-size: 14px;
+}
+.cash-subhead {
+  margin: 20px 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+/* Quiet lines, not buttons: «← Каса», and cash out first, so the field,
+   the reminders and the panel stand together on a small screen. */
+.cash-count .back,
+.cash-closed .back {
+  min-height: 44px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  font-weight: 650;
+}
+.cash-count .back + h2,
+.cash-closed .back + h2 {
+  margin-top: 4px;
+}
+.cash-first {
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--accent-text);
+  font-weight: 650;
+  text-align: left;
+}
+.count-label {
+  display: block;
+  margin: 8px 0 8px;
+}
+.count-field {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--field);
+}
+.count-field input {
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font-size: 48px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.count-field input:focus-visible {
+  outline: none;
+}
+.count-field:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.count-field span {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.cash-count .hint,
+.cash-closed .hint {
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+.cash-panel-button {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 15px;
+}
+.pay-confirm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+/* One under another, as in the notebook: a column of three figures. */
+.cash-figure + .cash-figure {
+  margin-top: 10px;
+}
+.cash-sum {
+  margin: 0;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.cash-sum .sum {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+.cash-difference {
+  font-weight: 750;
+}
+.cash-figures .cash-difference {
+  margin-top: 8px;
+  font-size: 20px;
+}
+/* A shortage or a surplus, a warning's colour; to the kopeck, the accent's
+   (owner decision, 2026-10-21, В4 (а)). */
+.cash-difference.warn {
+  color: var(--warn);
+}
+.cash-difference.match {
+  color: var(--accent-text);
+}
+.cash-slip {
+  margin: 4px 0 8px;
+}
+.cash-today p {
+  margin: 0;
+}
+.cash-today p + p {
+  margin-top: 6px;
+}
+.cash-period {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+.cash-period dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reason-chips button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+}
+.cash-closed h2:focus {
+  outline: none;
+}
+/* A reason owed, on «Каса»'s main screen: its close, and the way to it. */
+.cash-owed {
+  margin: 4px 0 14px;
+}
+.cash-owed .hint {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.cash-owed button {
+  width: 100%;
+  min-height: 54px;
+}

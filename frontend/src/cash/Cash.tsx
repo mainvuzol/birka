@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from "react";
-import type { JSX, ReactNode } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { JSX } from "react";
 import {
   useInfiniteQuery,
   useQuery,
@@ -11,9 +11,13 @@ import type { JournalOutcome } from "@/shared/journal";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { methodLabels, notStated } from "@/shared/payment";
+import { notStated, methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Closed, CloseSummary, PeriodDetails, ReasonLine } from "./Closed";
+import { Count } from "./Count";
+import { cardText, differenceText, signed, whenOf } from "./format";
 import {
   resolveCashCommand,
   submitCashCommand,
@@ -38,7 +42,6 @@ import type {
   Movement,
   MovementKind,
   Target,
-  WaySums,
 } from "./types";
 
 /**
@@ -89,7 +92,11 @@ export interface FixTarget {
 
 type Step =
   | { name: "main" }
-  | { name: "move"; direction: "OUT" | "IN" }
+  // The count (cash task list, P0-2), and the close's result (P0-3).
+  | { name: "count" }
+  | { name: "closed" }
+  // From the count, cash taken out is recorded and the count comes back.
+  | { name: "move"; direction: "OUT" | "IN"; then?: "count" }
   | { name: "fix"; chosen: FixTarget | null }
   | { name: "correct" }
   | { name: "history" };
@@ -108,30 +115,8 @@ const pendingLabels: Record<CashBody["command"], string> = {
   correction: "зміну способу оплати",
 };
 
-// A sum that may be below nothing: «−150,00 грн».
-function signed(value: string): string {
-  return value.startsWith("-") ? `−${money(value.slice(1))}` : money(value);
-}
-
-// What moved the drawer either way: «+350,00 грн», «−150,00 грн».
-function moved(value: string): string {
-  return value.startsWith("-") || nothing(value)
-    ? signed(value)
-    : `+${money(value)}`;
-}
-
-function nothing(value: string): boolean {
-  return kopecks(value.replace(/^-/, "")) === 0n;
-}
-
 function wayName(method: PaymentMethod | null): string {
   return method ? methodLabels[method] : notStated;
-}
-
-/** «06.10, 20:00» of a moment, the phone's own time. */
-function whenOf(iso: string): string {
-  const at = new Date(iso);
-  return `${at.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })}, ${timeOf(iso)}`;
 }
 
 /** The phone's own date, as the server's days are written. */
@@ -145,151 +130,15 @@ function daysAgo(days: number): string {
   return isoDay(at);
 }
 
-/** «Нестача 150,00 грн.», «Надлишок 350,00 грн.», «Збіглося до копійки.» */
-function differenceText(difference: string): string {
-  if (nothing(difference)) return "Збіглося до копійки.";
-  return difference.startsWith("-")
-    ? `Нестача ${money(difference.slice(1))}.`
-    : `Надлишок ${money(difference)}.`;
-}
-
-/** A day nobody closed went into this close (G9); the same words as the bot's. */
-function unclosedText(days: string[]): string {
-  const named = days.map(dayOf).join(", ");
-  return days.length === 1
-    ? `Не закрито: ${named} — цей день увійшов у це закриття.`
-    : `Не закрито: ${named} — ці дні увійшли в це закриття.`;
-}
-
-/**
- * The card's sum since the previous close, to compare with the terminal's
- * end-of-day slip (owner, answer 11): what came in and what went back, and
- * what corrections moved off or onto the card.
- */
-function cardText(card: WaySums): string {
-  const parts = [
-    `оплати ${money(card.came_in)}`,
-    `повернення ${money(card.went_out)}`,
-    ...(nothing(card.corrected) ? [] : [`виправлено ${moved(card.corrected)}`]),
-  ];
-  const detail =
-    nothing(card.went_out) && nothing(card.corrected)
-      ? ""
-      : ` (${parts.join(", ")})`;
-  return `Картка: ${signed(card.net)}${detail}. Звірте з чеком терміналу.`;
-}
-
-const explanationLabels: Record<Close["explanations"][number]["kind"], string> =
-  {
-    CORRECTION: "виправлення способу оплати",
-    TAKE_OUT: "видано з каси",
-    PUT_IN: "внесено в касу",
-  };
-
-/** The count's result, as its closer sees it (G27), and what explains it. */
-export function CloseResult({ close }: { close: Close }): JSX.Element {
-  return (
-    <div className="section-block" role="status" aria-label="Закриття каси">
-      <p>
-        {close.opening || close.expected === null || close.difference === null
-          ? `Перший підрахунок: ${money(close.counted)}. З цієї суми почнемо наступного разу.`
-          : `Касу закрито. Мало бути ${money(close.expected)}, порахували ${money(close.counted)}. ${differenceText(close.difference)}`}
-      </p>
-      <CloseDetails close={close} />
-      {close.unclosed_days.length > 0 && (
-        <p>{unclosedText(close.unclosed_days)}</p>
-      )}
-    </div>
-  );
-}
-
-/** What every view of a close shows under its count: the slip's sums, the
+/** What the history shows under a close's count: the slip's sums, the
  * reason, and for the owner and managers the cash itself. */
 function CloseDetails({ close }: { close: Close }): JSX.Element {
-  const explained =
-    close.explained !== null &&
-    close.unexplained !== null &&
-    close.difference !== null &&
-    !nothing(close.difference);
   return (
     <>
       <p>{cardText(close.card)}</p>
       <p>Переказ: {signed(close.transfer.net)}.</p>
-      {close.reason !== null ? (
-        <p>
-          Причина: «{visible(close.reason)}»
-          {close.reason_by && ` · ${visible(close.reason_by)}`}
-        </p>
-      ) : (
-        close.reason_required && <p>Причину не вказано.</p>
-      )}
-      {close.cash_in !== null && !close.opening && (
-        <dl className="debt" aria-label="Готівка за період">
-          {close.opening_float !== null && (
-            <>
-              <dt>На початку</dt>
-              <dd>{money(close.opening_float)}</dd>
-            </>
-          )}
-          <dt>Готівкою отримано</dt>
-          <dd>{money(close.cash_in)}</dd>
-          {close.cash_out !== null && (
-            <>
-              <dt>Готівкою повернено</dt>
-              <dd>{money(close.cash_out)}</dd>
-            </>
-          )}
-          {close.taken_out !== null && (
-            <>
-              <dt>Видано з каси</dt>
-              <dd>{money(close.taken_out)}</dd>
-            </>
-          )}
-          {close.put_in !== null && (
-            <>
-              <dt>Внесено в касу</dt>
-              <dd>{money(close.put_in)}</dd>
-            </>
-          )}
-          {close.cash_corrected !== null && !nothing(close.cash_corrected) && (
-            <>
-              <dt>Виправлення способу оплати</dt>
-              <dd>{moved(close.cash_corrected)}</dd>
-            </>
-          )}
-        </dl>
-      )}
-      {/* Order money that never went through the till (owner decision). */}
-      {close.prepaid_transfer !== null && !nothing(close.prepaid_transfer) && (
-        <p>
-          {methodLabels.PREPAID_TRANSFER}: {signed(close.prepaid_transfer)}.
-        </p>
-      )}
-      {close.carrier_cod !== null && !nothing(close.carrier_cod) && (
-        <p>
-          {methodLabels.CARRIER_COD}: {signed(close.carrier_cod)}.
-        </p>
-      )}
-      {close.not_stated !== null && !nothing(close.not_stated.net) && (
-        <p>Спосіб оплати не вказано: {signed(close.not_stated.net)}.</p>
-      )}
-      {explained && (
-        <p>
-          Пояснено: {moved(close.explained ?? "0.00")}. Не пояснено:{" "}
-          {signed(close.unexplained ?? "0.00")}.
-        </p>
-      )}
-      {close.explanations.length > 0 && (
-        <ul aria-label="Що пояснює різницю">
-          {close.explanations.map((item, index) => (
-            <li key={`${item.at}:${String(index)}`}>
-              {whenOf(item.at)} · {explanationLabels[item.kind]} ·{" "}
-              {moved(item.cash)} · {visible(item.by)}
-              {item.text && ` · ${visible(item.text)}`}
-            </li>
-          ))}
-        </ul>
-      )}
+      <ReasonLine close={close} />
+      <PeriodDetails close={close} />
     </>
   );
 }
@@ -334,9 +183,15 @@ export function Cash({
   const [result, setResult] = useState<Close | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // What the count's field holds: kept while cash taken out is recorded from
+  // it, and given back (cash task list, P0-2).
+  const [counting, setCounting] = useState("");
   // Which command the journal's error is about, to say what was not
   // recorded: beside the journal, since the error outlives this screen.
   const lastCommand = useCashLastCommand((state) => state.command);
+  const cardHint = useId();
+  // The card's read is in flight: the count opens on its answer.
+  const [reading, setReading] = useState(false);
   const working = blocked || busy || pending !== null;
   const financial = store.permissions.includes("report:view_financial");
   // Recent closes: the history's first page, and what a late movement may
@@ -399,9 +254,16 @@ export function Cash({
   // just written: its answer still says `reason_required` (that is the
   // difference's, not what remains to do), and the form would stay, saying
   // the other tabs wait while the App has opened them (G12).
+  const owedByDrawer = drawer.data?.reason_owed?.id ?? null;
   const owedId =
-    drawer.data?.reason_owed?.id ??
-    (result?.reason_required && result.reason === null ? result.id : null);
+    // Nor one whose reason was just written, while the drawer is read again
+    // (review, 2026-10-21).
+    owedByDrawer !== null &&
+    !(result?.id === owedByDrawer && result.reason !== null)
+      ? owedByDrawer
+      : result?.reason_required && result.reason === null
+        ? result.id
+        : null;
   // The close a reason is owed for, or the closer's own of today, read
   // again when this screen no longer holds it.
   const ownToday =
@@ -416,6 +278,24 @@ export function Cash({
     retry: false,
   });
   const close = result?.id === shownId ? result : (shown.data ?? result);
+  // A reason owed opens its result once, by itself: on a close just
+  // answered, and when «Каса» opens on one owed from before (G12).
+  const opened = useRef<string | null>(null);
+  useEffect(() => {
+    if (owedId === null || opened.current === owedId) return;
+    opened.current = owedId;
+    setStep((now) => (now.name === "main" ? { name: "closed" } : now));
+  }, [owedId]);
+  // The count is left when the drawer can no longer be read — the server
+  // out of reach, whose words «Каса» says (G26) — or it says the count is no
+  // longer due (review, 2026-10-21).
+  useEffect(() => {
+    if (step.name !== "count") return;
+    if (drawer.error || (drawer.data && !isDue(drawer.data))) {
+      setCounting("");
+      setStep({ name: "main" });
+    }
+  }, [step.name, drawer.error, drawer.data]);
 
   /** The kept command, resent as it is: by its button, or by itself. */
   function check(): void {
@@ -427,6 +307,12 @@ export function Cash({
     void resolveCashCommand(journalKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
         recorded(attempt.body, outcome.result);
+        // A close or its reason confirmed: its result, as when answered.
+        if (
+          attempt.body.command === "close" ||
+          attempt.body.command === "reason"
+        )
+          setStep({ name: "closed" });
         if (attempt.body.command !== "reason")
           setDone(
             (text) =>
@@ -443,6 +329,40 @@ export function Cash({
   // «Каса»'s kept command is checked by itself too (ADR-0013 §4.3, §9).
   useAutoCheck([{ pending: pending !== null, busy, loaded, run: check }]);
 
+  // The kept command's banner and words, on every screen of «Каса».
+  const kept = (
+    <>
+      {pending && (
+        <section className="notice">
+          <h3>
+            {busy ? "Перевіряємо операцію каси…" : "Незавершена операція каси"}
+          </h3>
+          <p>
+            Невідомо, чи записано {pendingLabels[pending.body.command]}.
+            Перевірте результат — та сама операція не запишеться двічі. Поки
+            чекаємо, інші дії недоступні.
+          </p>
+          <p>{keptText(pending.since, person)}</p>
+          <button disabled={busy} onClick={check}>
+            Перевірити результат
+          </button>
+        </section>
+      )}
+      {error !== null && (
+        <p role="alert">
+          {cashJournalText(
+            error,
+            lastCommand,
+            misses,
+            pending?.body.command === "movement"
+              ? directionOf(pending.body.movement_kind)
+              : undefined,
+          )}
+        </p>
+      )}
+    </>
+  );
+
   if (step.name === "move" && drawer.data)
     return (
       <MoveStep
@@ -456,7 +376,7 @@ export function Cash({
         disabled={working}
         send={send}
         back={(text) => {
-          setStep({ name: "main" });
+          setStep(step.then === "count" ? { name: "count" } : { name: "main" });
           setDone(text);
         }}
       />
@@ -502,87 +422,131 @@ export function Cash({
     );
 
   const data = drawer.data;
+
+  /** The count, sent: its result, a refusal over the panel, or the banner. */
+  async function closeWith(
+    counted: string,
+  ): Promise<"done" | "refused" | "unknown"> {
+    if (!data) return "unknown";
+    const body: CashBody = {
+      command: "close",
+      store_id: store.id,
+      command_id: crypto.randomUUID(),
+      counted,
+      // The moment of «Так, закрити»: the count describes the drawer then,
+      // and only for ten minutes (G31).
+      counted_at: new Date().toISOString(),
+      // The newest close read when the count opened (cash task list, P0-1).
+      after_close_id: data.last_close?.id ?? null,
+    };
+    const outcome = await send(body);
+    if (outcome.kind === "done") {
+      // A buzz in the hand once the server answers, as at the till (P0-3).
+      buzz("success");
+      recorded(body, outcome.result);
+      setCounting("");
+      setStep({ name: "closed" });
+    } else if (outcome.kind === "refused") {
+      buzz("error");
+      setProblem(cashErrorText(outcome.error));
+    } else {
+      // Unknown: «Каса» holds it in its banner; a sum typed for a moment
+      // gone is never confirmed later with a new one (G31).
+      setCounting("");
+      setStep({ name: "main" });
+    }
+    return outcome.kind;
+  }
+
+  if (step.name === "count" && data && !drawer.error && isDue(data))
+    return (
+      <Count
+        typed={counting}
+        setTyped={setCounting}
+        kept={kept}
+        done={done}
+        problem={problem}
+        disabled={working}
+        reading={drawer.isFetching}
+        takeOut={
+          data.movement_kinds.some((kind) => directionOf(kind) === "OUT")
+            ? () => {
+                setDone(null);
+                setProblem(null);
+                // The newest close is read again: what the movement names
+                // as the one it came after.
+                void drawer.refetch();
+                setStep({ name: "move", direction: "OUT", then: "count" });
+              }
+            : null
+        }
+        close={closeWith}
+        back={() => {
+          setProblem(null);
+          setDone(null);
+          // Kept only on the way to cash taken out and back.
+          setCounting("");
+          setStep({ name: "main" });
+        }}
+      />
+    );
+  // A close just answered, or one whose reason is owed: its result (cash
+  // task list, P0-3). A reason owed holds the other tabs, never «Каса»'s
+  // own tasks (G12).
+  if (step.name === "closed" && (close !== null || owedId !== null))
+    return (
+      <Closed
+        close={close && (owedId === null || close.id === owedId) ? close : null}
+        owedId={owedId}
+        storeId={store.id}
+        failed={shown.error}
+        kept={kept}
+        done={done}
+        problem={problem}
+        disabled={working}
+        sendReason={async (reason) => {
+          if (owedId === null) return;
+          const body: CashBody = {
+            command: "reason",
+            store_id: store.id,
+            command_id: crypto.randomUUID(),
+            close_id: owedId,
+            reason,
+          };
+          const outcome = await send(body);
+          if (outcome.kind === "done") {
+            recorded(body, outcome.result);
+            setStep({ name: "closed" });
+          } else if (outcome.kind === "refused")
+            setProblem(cashErrorText(outcome.error));
+        }}
+        retry={() => {
+          void shown.refetch();
+        }}
+        leave={() => {
+          setDone(null);
+          setProblem(null);
+          setStep({ name: "main" });
+        }}
+        finish={() => {
+          setDone(null);
+          setProblem(null);
+          setStep({ name: "main" });
+        }}
+      />
+    );
+
   const kinds = data?.movement_kinds ?? [];
   const takesOut = kinds.some((kind) => directionOf(kind) === "OUT");
   const putsIn = kinds.some((kind) => directionOf(kind) === "IN");
-  // The count's form is shown: the reminder to record cash moved comes
-  // first, with its buttons, then the count.
-  const formShown =
-    data !== undefined &&
-    data.may_close &&
-    !(data.closed_today && data.last_close !== null);
-  const moves = (takesOut || putsIn) && (
-    <div className="actions">
-      {takesOut && (
-        <button
-          className="quiet"
-          disabled={working}
-          onClick={() => {
-            // The newest close is read again when the form opens:
-            // what the movement names as the one it came after.
-            void drawer.refetch();
-            setStep({ name: "move", direction: "OUT" });
-          }}
-        >
-          Видати з каси
-        </button>
-      )}
-      {putsIn && (
-        <button
-          className="quiet"
-          disabled={working}
-          onClick={() => {
-            void drawer.refetch();
-            setStep({ name: "move", direction: "IN" });
-          }}
-        >
-          Внести в касу
-        </button>
-      )}
-    </div>
-  );
+  const due = data !== undefined && isDue(data);
+  const opening =
+    data !== undefined && (data.next_is_opening || data.last_close === null);
   return (
-    <section>
-      <div className="toolbar">
-        <h2>Каса</h2>
-        <button
-          className="quiet"
-          disabled={drawer.isFetching}
-          onClick={() => {
-            changed();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      {pending && (
-        <section className="notice">
-          <h3>
-            {busy ? "Перевіряємо операцію каси…" : "Незавершена операція каси"}
-          </h3>
-          <p>
-            Невідомо, чи записано {pendingLabels[pending.body.command]}.
-            Перевірте результат — та сама операція не запишеться двічі. Поки
-            чекаємо, інші дії недоступні.
-          </p>
-          <p>{keptText(pending.since, person)}</p>
-          <button disabled={busy} onClick={check}>
-            Перевірити результат
-          </button>
-        </section>
-      )}
-      {error !== null && (
-        <p role="alert">
-          {cashJournalText(
-            error,
-            lastCommand,
-            misses,
-            pending?.body.command === "movement"
-              ? directionOf(pending.body.movement_kind)
-              : undefined,
-          )}
-        </p>
-      )}
+    <section className="cash">
+      <h2>Каса</h2>
+      {data && <p className="cash-context">{contextOf(data)}</p>}
+      {kept}
       {done && <p role="status">{done}</p>}
       {problem && <p role="alert">{problem}</p>}
       {drawer.isPending ? (
@@ -605,115 +569,241 @@ export function Cash({
               void drawer.refetch();
             }}
           >
-            Повторити
+            Спробувати ще раз
           </button>
         </div>
       ) : data === undefined ? null : (
         <>
+          {due ? (
+            // The day's one task, large (cash task list, P0-1): what the
+            // drawer should hold is said only after the count (G32).
+            <button
+              type="button"
+              className="cash-card"
+              aria-label={opening ? "Перший підрахунок" : "Закрити касу"}
+              aria-describedby={cardHint}
+              disabled={working || reading}
+              onClick={() => {
+                setDone(null);
+                setProblem(null);
+                setReading(true);
+                // Read again: the newest close is the one the count names.
+                // Opened on that read alone, while the count is still due:
+                // never while the server does not answer (G26).
+                void drawer.refetch().then((read) => {
+                  setReading(false);
+                  if (read.isSuccess && isDue(read.data))
+                    setStep({ name: "count" });
+                });
+              }}
+            >
+              <span className="cash-card-title" aria-hidden="true">
+                {opening ? "Перший підрахунок" : "Закрити касу"}
+              </span>
+              <span className="cash-card-hint" id={cardHint}>
+                {opening
+                  ? "Запишемо, скільки в касі зараз"
+                  : "Скільки мало бути — покажемо після підрахунку"}
+              </span>
+            </button>
+          ) : (
+            owedId === null &&
+            data.closed_today &&
+            data.last_close?.mine &&
+            close &&
+            close.id === data.last_close.id && <CloseSummary close={close} />
+          )}
           {owedId !== null && (
-            <div className="notice">
-              {close && close.id === owedId && <CloseResult close={close} />}
-              <ReasonForm
-                key={owedId}
-                disabled={working}
-                send={async (reason) => {
-                  const body: CashBody = {
-                    command: "reason",
-                    store_id: store.id,
-                    command_id: crypto.randomUUID(),
-                    close_id: owedId,
-                    reason,
-                  };
-                  const outcome = await send(body);
-                  if (outcome.kind === "done") recorded(body, outcome.result);
-                  else if (outcome.kind === "refused")
-                    setProblem(cashErrorText(outcome.error));
-                }}
-              />
+            // A reason owed, from «Каса»'s main screen: its close, and the
+            // way back to it (G12).
+            <div className="cash-owed">
+              {close && close.id === owedId && <CloseSummary close={close} />}
               <p className="hint">
                 Поки причину не записано, інші розділи недоступні.
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDone(null);
+                  setProblem(null);
+                  setStep({ name: "closed" });
+                }}
+              >
+                Записати причину
+              </button>
             </div>
           )}
-          <Status
-            drawer={data}
-            moves={formShown ? moves : null}
-            disabled={working}
-            close={async (counted) => {
-              const body: CashBody = {
-                command: "close",
-                store_id: store.id,
-                command_id: crypto.randomUUID(),
-                counted,
-                // The moment of «Так, закрити»: the count describes the
-                // drawer then, and only for ten minutes (G31).
-                counted_at: new Date().toISOString(),
-                after_close_id: data.last_close?.id ?? null,
-              };
-              const outcome = await send(body);
-              if (outcome.kind === "done") recorded(body, outcome.result);
-              else if (outcome.kind === "refused")
-                setProblem(cashErrorText(outcome.error));
-              return outcome.kind !== "unknown";
-            }}
-          />
-          {owedId === null && close && <CloseResult close={close} />}
-          {!formShown && moves}
+          <div className="cash-rows">
+            {takesOut && (
+              <Row
+                title="Видати з каси"
+                hint={
+                  kinds.includes("OWNER")
+                    ? "Власнику, на витрати, кур’єру"
+                    : "Витрати, кур’єру постачальника"
+                }
+                disabled={working}
+                open={() => {
+                  setDone(null);
+                  void drawer.refetch();
+                  setStep({ name: "move", direction: "OUT" });
+                }}
+              />
+            )}
+            {putsIn && (
+              <Row
+                title="Внести в касу"
+                hint="Розмін"
+                disabled={working}
+                open={() => {
+                  setDone(null);
+                  void drawer.refetch();
+                  setStep({ name: "move", direction: "IN" });
+                }}
+              />
+            )}
+            {data.may_correct ? (
+              <Row
+                title="Змінити спосіб оплати"
+                hint="Будь-яка операція, будь-який день"
+                disabled={working}
+                open={() => {
+                  setDone(null);
+                  setStep({ name: "correct" });
+                }}
+              />
+            ) : (
+              store.permissions.includes("sale:create") && (
+                <Row
+                  title="Змінити спосіб оплати"
+                  hint="Ваші операції до закриття"
+                  disabled={working}
+                  open={() => {
+                    setDone(null);
+                    setStep({ name: "fix", chosen: null });
+                  }}
+                />
+              )
+            )}
+            {financial && (
+              <Row
+                title="Закриття"
+                hint="Усі закриття й різниці"
+                open={() => {
+                  setDone(null);
+                  setStep({ name: "history" });
+                }}
+              />
+            )}
+          </div>
           {data.movements.length > 0 && (
             <>
-              <h3>Видано й внесено після останнього закриття</h3>
-              <ul aria-label="Видано й внесено">
+              <h3 className="cash-subhead">Видано й внесено після закриття</h3>
+              <ul className="history" aria-label="Видано й внесено">
                 {data.movements.map((movement) => (
-                  <li key={movement.id}>{movementLine(movement)}</li>
+                  <MovementRow key={movement.id} movement={movement} />
                 ))}
               </ul>
             </>
           )}
-          <div className="actions">
-            {data.may_correct ? (
-              <button
-                className="quiet"
-                disabled={working}
-                onClick={() => {
-                  setStep({ name: "correct" });
-                }}
-              >
-                Виправити спосіб оплати
-              </button>
-            ) : (
-              store.permissions.includes("sale:create") && (
-                <button
-                  className="quiet"
-                  disabled={working}
-                  onClick={() => {
-                    setStep({ name: "fix", chosen: null });
-                  }}
-                >
-                  Змінити спосіб оплати
-                </button>
-              )
-            )}
-            {financial && (
-              <button
-                className="quiet"
-                onClick={() => {
-                  setStep({ name: "history" });
-                }}
-              >
-                Закриття
-              </button>
-            )}
-          </div>
         </>
       )}
     </section>
   );
 }
 
-function movementLine(movement: Movement): string {
-  return `${whenOf(movement.at)} · ${movementLabels[movement.kind]} ${money(movement.amount)} · ${visible(movement.by)}${
-    movement.note ? ` · ${visible(movement.note)}` : ""
-  }${movement.for_day ? ` · до закриття ${dayOf(movement.for_day)}` : ""}`;
+/** The count is due: whoever may close, and not yet today. */
+function isDue(drawer: Drawer): boolean {
+  return (
+    drawer.may_close && !(drawer.closed_today && drawer.last_close !== null)
+  );
+}
+
+/**
+ * Where the drawer stands, in one line under «Каса» (cash task list, P0-1):
+ * open since the last close, never counted, or closed today; in a store
+ * that does not trade, only when it was last closed.
+ */
+function contextOf(drawer: Drawer): string {
+  const last = drawer.last_close;
+  if (drawer.closed_today && last)
+    return `Сьогодні закрито о ${timeOf(last.closed_at)} · ${visible(last.closed_by)}`;
+  if (drawer.next_is_opening || !last) return "Каса ще не рахувалась";
+  const when = `${whenOf(last.closed_at)} · ${visible(last.closed_by)}`;
+  return drawer.store_state === "ACTIVE"
+    ? `Каса відкрита · останнє закриття ${when}`
+    : `Останнє закриття ${when}`;
+}
+
+/** One of «Каса»'s tasks, a row with what it is for (cash task list, P0-1). */
+function Row({
+  title,
+  hint,
+  disabled = false,
+  open,
+}: {
+  title: string;
+  hint: string;
+  disabled?: boolean;
+  open: () => void;
+}): JSX.Element {
+  const said = useId();
+  return (
+    <button
+      type="button"
+      className="sale-row cash-row"
+      aria-label={title}
+      aria-describedby={said}
+      disabled={disabled}
+      onClick={open}
+    >
+      <span className="sale-main">
+        <span className="cash-row-title">{title}</span>
+        <span className="sale-meta" id={said}>
+          {hint}
+        </span>
+      </span>
+      <span className="sale-open" aria-hidden="true">
+        ›
+      </span>
+    </button>
+  );
+}
+
+/** Cash taken out or put in since the close: what for, when and who, and the
+ * sum on the right, out as «−», in as «+» (cash task list, P0-1). */
+function MovementRow({ movement }: { movement: Movement }): JSX.Element {
+  const today =
+    new Date(movement.at).toDateString() === new Date().toDateString();
+  return (
+    <li className="history-row">
+      <span className="history-main">
+        <span className="history-what">
+          {[
+            movement.kind === "CHANGE"
+              ? "Внесено · розмін"
+              : movementLabels[movement.kind],
+            movement.note === null ? null : visible(movement.note),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+        <span className="history-meta">
+          {[
+            today ? timeOf(movement.at) : whenOf(movement.at),
+            visible(movement.by),
+            movement.for_day ? `до закриття ${dayOf(movement.for_day)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </span>
+      <span className="history-sum">
+        {movement.direction === "OUT" ? "−" : "+"}
+        {money(movement.amount)}
+      </span>
+    </li>
+  );
 }
 
 /**
@@ -743,203 +833,6 @@ function correctionDone(correction: Correction): string {
       ? ` Пояснює різницю закриття ${dayOf(correction.explains_day)}.`
       : ""
   }`;
-}
-
-/** Where the drawer stands, and the count when it is due. */
-function Status({
-  drawer,
-  moves,
-  disabled,
-  close,
-}: {
-  drawer: Drawer;
-  /** «Видати з каси», «Внести в касу»: right after the reminder. */
-  moves: ReactNode;
-  disabled: boolean;
-  close: (counted: string) => Promise<boolean>;
-}): JSX.Element {
-  const last = drawer.last_close;
-  if (drawer.closed_today && last)
-    return (
-      <p>
-        Касу сьогодні закрито о {timeOf(last.closed_at)} ·{" "}
-        {visible(last.closed_by)}.
-      </p>
-    );
-  if (!drawer.may_close)
-    return last ? (
-      <p>
-        Останнє закриття: {whenOf(last.closed_at)} · {visible(last.closed_by)}
-      </p>
-    ) : (
-      <></>
-    );
-  return (
-    <>
-      <p>
-        {drawer.next_is_opening || !last
-          ? "Каса ще не рахувалась — цей підрахунок запише, скільки в ній зараз"
-          : `Останнє закриття: ${whenOf(last.closed_at)} · ${visible(last.closed_by)}`}
-      </p>
-      <p className="hint">
-        Перед підрахунком запишіть гроші, взяті з каси чи внесені в неї.
-      </p>
-      {moves}
-      <p className="hint">Поки рахуєте, не продавайте.</p>
-      {/* Shown always: another phone may have seen the server down (owner
-          decision, 2026-10-04; ADR-0013 §9, G7). */}
-      <p className="hint">
-        Якщо сервер не відповідав — спершу внесіть усе, що записали на папері,
-        потім рахуйте касу.
-      </p>
-      <p className="hint">
-        Якщо на іншому телефоні операція чекає перевірки, спершу перевірте її:
-        інакше вона потрапить у наступне закриття.
-      </p>
-      <CloseForm disabled={disabled} close={close} />
-    </>
-  );
-}
-
-/**
- * The blind count: what is in the drawer, typed, then confirmed. Three taps
- * from anywhere — «Каса», «Закрити касу», «Так, закрити» — and the sum.
- */
-function CloseForm({
-  disabled,
-  close,
-}: {
-  disabled: boolean;
-  close: (counted: string) => Promise<boolean>;
-}): JSX.Element {
-  const [typed, setTyped] = useState("");
-  const [asking, setAsking] = useState<string | null>(null);
-  const [problem, setProblem] = useState("");
-  return (
-    <fieldset disabled={disabled}>
-      <label>
-        Скільки готівки в касі зараз, грн
-        <input
-          inputMode="decimal"
-          placeholder="0,00"
-          value={typed}
-          onChange={(event) => {
-            setTyped(event.target.value);
-            setAsking(null);
-          }}
-        />
-      </label>
-      {problem && <p role="alert">{problem}</p>}
-      {asking === null ? (
-        <button
-          type="button"
-          onClick={() => {
-            const cents = kopecks(typed);
-            if (cents === null) {
-              setProblem("Вкажіть суму з точністю до копійок.");
-              return;
-            }
-            setProblem("");
-            setAsking(decimal(cents));
-          }}
-        >
-          Закрити касу
-        </button>
-      ) : (
-        <div className="notice">
-          <p>Закрити касу: у касі {money(asking)}? Змінити потім не можна.</p>
-          <div className="actions">
-            <button
-              type="button"
-              onClick={() => {
-                void close(asking).then((settled) => {
-                  if (settled) {
-                    setAsking(null);
-                    setTyped("");
-                  }
-                });
-              }}
-            >
-              Так, закрити
-            </button>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setAsking(null);
-              }}
-            >
-              Ні
-            </button>
-          </div>
-        </div>
-      )}
-    </fieldset>
-  );
-}
-
-/**
- * One tap for the reasons an outage leaves (owner decision, 2026-10-04;
- * ADR-0013 §9, G8): a sale typed after the close it belonged to, and a
- * return or a debt payment typed so; and the first days' paper, whose money
- * comes into the drawer as any sale's (owner decision, 2026-10-16). Each
- * puts its words in the field, to be edited: the reason stays free text.
- */
-const outageReasons = [
-  "Продаж під час збою",
-  "Повернення чи внесок під час збою",
-  "Продажі з паперу перших днів",
-] as const;
-
-/** Why the count differs, written only by whoever counted (G12). */
-function ReasonForm({
-  disabled,
-  send,
-}: {
-  disabled: boolean;
-  send: (reason: string) => Promise<void>;
-}): JSX.Element {
-  const [reason, setReason] = useState("");
-  const hint = useId();
-  return (
-    <fieldset disabled={disabled}>
-      <label>
-        Чому не збігається? (обов’язково)
-        <textarea
-          value={reason}
-          maxLength={1000}
-          aria-describedby={hint}
-          onChange={(event) => {
-            setReason(event.target.value);
-          }}
-        />
-        <NoCustomerData id={hint} />
-      </label>
-      <div className="actions">
-        {outageReasons.map((text) => (
-          <button
-            key={text}
-            type="button"
-            className="quiet"
-            onClick={() => {
-              setReason(text);
-            }}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        disabled={reason.trim() === ""}
-        onClick={() => {
-          void send(reason.trim());
-        }}
-      >
-        Записати причину
-      </button>
-    </fieldset>
-  );
 }
 
 /**
@@ -1296,7 +1189,7 @@ function CorrectStep({
   return (
     <section>
       <div className="toolbar">
-        <h2>Виправити спосіб оплати</h2>
+        <h2>Змінити спосіб оплати</h2>
         <button
           className="quiet"
           onClick={() => {
