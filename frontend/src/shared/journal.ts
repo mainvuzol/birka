@@ -35,6 +35,35 @@ export interface Attempt<Body> {
    * from an attempt kept before it was written.
    */
   since?: string;
+  /**
+   * Its checks answered «not found» this many times in a row, kept beside
+   * the body, never in it, so the count survives Telegram closing and
+   * reopening the app (owner decision, 2026-10-21). Absent from an attempt
+   * kept before it was written, or never missed.
+   */
+  misses?: number;
+}
+
+/** A kept count, read as one: anything else on disk is no count at all;
+ * a count past 999 is 999, still past three (review, 2026-10-21). */
+export function countOf(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? Math.min(value, 999)
+    : 0;
+}
+
+/** Write the count beside a kept attempt; a phone that cannot write keeps
+ * it for the session, as before (the count only words a banner). */
+export function keepCount(
+  storageKey: string,
+  attempt: object,
+  misses: number,
+): void {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({ ...attempt, misses }));
+  } catch {
+    // Storage refused: the attempt itself was written before it was sent.
+  }
 }
 
 export type JournalOutcome<Result> =
@@ -129,8 +158,12 @@ export function journal<
     ) {
       throw new Error(corrupt);
     }
-    // Every field the type promises has been checked above.
-    return value as unknown as Attempt<Body>;
+    // Every field the type promises has been checked above; the count is
+    // only a count.
+    return {
+      ...(value as unknown as Attempt<Body>),
+      misses: countOf(value.misses),
+    };
   }
 
   function load(storageKey: string): Attempt<Body> | null {
@@ -164,6 +197,9 @@ export function journal<
     use.setState({ busy: true, error: null });
     let current = attempt;
     let previouslyAmbiguous = Boolean(current.ambiguous);
+    // Whether the attempt on disk is this one: only then is its count kept
+    // beside it, never over another command still unsettled.
+    let written = false;
     try {
       current = validate(storageKey, current);
       const saved = localStorage.getItem(storageKey);
@@ -182,9 +218,11 @@ export function journal<
         ...current,
         ambiguous: true,
         ...sinceOf(existing, current),
+        misses: use.getState().misses,
       };
       use.setState({ pending: current });
       localStorage.setItem(storageKey, JSON.stringify(current));
+      written = true;
       const result = await api<Result>(
         typeof path === "string" ? path : path(current.body),
         token,
@@ -204,17 +242,18 @@ export function journal<
         use.setState({ pending: null, error: null, misses: 0 });
         return { kind: "refused", error };
       }
-      use.setState({
-        error,
-        misses:
-          // No answer at all, or the app's own failure, says nothing of the
-          // command: the count stands (review, 2026-10-20).
-          !(error instanceof ApiError) || unreachable(error)
-            ? use.getState().misses
-            : error.status === 404
-              ? use.getState().misses + 1
-              : 0,
-      });
+      const misses =
+        // No answer at all, or the app's own failure, says nothing of the
+        // command: the count stands (review, 2026-10-20).
+        !(error instanceof ApiError) || unreachable(error)
+          ? use.getState().misses
+          : error.status === 404
+            ? use.getState().misses + 1
+            : 0;
+      if (written) {
+        keepCount(storageKey, current, misses);
+        use.setState({ error, misses, pending: { ...current, misses } });
+      } else use.setState({ error, misses });
       return { kind: "unknown" };
     } finally {
       use.setState({ busy: false });

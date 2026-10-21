@@ -6,6 +6,7 @@ import {
   refusedOutright,
   unreachable,
 } from "@/shared/api";
+import { countOf, keepCount } from "@/shared/journal";
 import { isSince, sinceOf } from "@/shared/reach";
 import type { Order } from "./types";
 export interface Pending {
@@ -22,6 +23,9 @@ export interface Pending {
    * written.
    */
   since?: string;
+  /** Its checks' «not found» in a row, kept beside it across reopening
+   * (owner decision, 2026-10-21; `@/shared/journal`). */
+  misses?: number;
 }
 interface CommandState {
   pending: Pending | null;
@@ -38,7 +42,7 @@ export const useCommand = create<CommandState>((set) => ({
   error: null,
   misses: 0,
   set: (pending) => {
-    set({ pending, error: null, misses: 0 });
+    set({ pending, error: null, misses: pending?.misses ?? 0 });
   },
 }));
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -77,7 +81,7 @@ function validatePending(key: string, value: unknown): Pending {
   ) {
     throw new Error("Некоректна збережена команда. Зверніться до менеджера.");
   }
-  return pending;
+  return { ...pending, misses: countOf(pending.misses) };
 }
 export function loadPending(key: string): Pending | null {
   // Upgrade the initial session-only journal without losing an uncertain command.
@@ -101,6 +105,8 @@ export async function submitPending(
   useCommand.setState({ busy: true, error: null });
   let current = pending;
   let previouslyAmbiguous = Boolean(current.ambiguous);
+  // Whether the command on disk is this one (`@/shared/journal`).
+  let written = false;
   try {
     current = validatePending(key, current);
     const saved = localStorage.getItem(key);
@@ -115,9 +121,15 @@ export async function submitPending(
     }
     // Persist uncertainty BEFORE sending, including page closure during fetch.
     // Since when is kept from the first time.
-    current = { ...current, ambiguous: true, ...sinceOf(existing, current) };
+    current = {
+      ...current,
+      ambiguous: true,
+      ...sinceOf(existing, current),
+      misses: useCommand.getState().misses,
+    };
     useCommand.setState({ pending: current });
     localStorage.setItem(key, JSON.stringify(current));
+    written = true;
     if (!current.acknowledged) {
       const response = await api<Order>(current.path, token, current.body);
       current = {
@@ -146,20 +158,21 @@ export async function submitPending(
       sessionStorage.removeItem(key);
       useCommand.setState({ pending: null });
     }
-    const misses = useCommand.getState().misses;
-    useCommand.setState({
-      error,
-      // Settled, nothing to count; no answer at all, or the app's own
-      // failure, says nothing of the command: the count stands (review,
-      // 2026-10-20).
-      misses: definite
-        ? 0
-        : !(error instanceof ApiError) || unreachable(error)
-          ? misses
-          : error.status === 404
-            ? misses + 1
-            : 0,
-    });
+    const before = useCommand.getState().misses;
+    // Settled, nothing to count; no answer at all, or the app's own
+    // failure, says nothing of the command: the count stands (review,
+    // 2026-10-20).
+    const misses = definite
+      ? 0
+      : !(error instanceof ApiError) || unreachable(error)
+        ? before
+        : error.status === 404
+          ? before + 1
+          : 0;
+    if (written && !definite) {
+      keepCount(key, current, misses);
+      useCommand.setState({ error, misses, pending: { ...current, misses } });
+    } else useCommand.setState({ error, misses });
     return null;
   } finally {
     useCommand.setState({ busy: false });

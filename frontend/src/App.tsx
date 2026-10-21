@@ -477,7 +477,12 @@ function Workspace({
     if (!canReturnToSupplier) return;
     try {
       const saved = loadReturnToSupplier(supplierKey);
-      useReturnToSupplier.setState({ pending: saved, error: null });
+      useReturnToSupplier.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) setTab("suppliers");
     } catch {
       setSupplierStorageError(true);
@@ -498,7 +503,12 @@ function Workspace({
     if (!canCorrect) return;
     try {
       const saved = loadCorrectionCommand(correctionKey);
-      useCorrectionCommand.setState({ pending: saved, error: null });
+      useCorrectionCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) setTab("models");
     } catch {
       setCorrectionStorageError(true);
@@ -514,7 +524,12 @@ function Workspace({
     if (!canSeeInvoices) return;
     try {
       const saved = loadInvoiceCommand(invoiceKey);
-      useInvoiceCommand.setState({ pending: saved, error: null });
+      useInvoiceCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) setTab("invoices");
     } catch {
       setInvoiceStorageError(true);
@@ -524,7 +539,12 @@ function Workspace({
     if (!canManageStores) return;
     try {
       const saved = loadStateCommand(storesKey);
-      useStateCommand.setState({ pending: saved, error: null });
+      useStateCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) setTab("stores");
     } catch {
       setStoresStorageError(true);
@@ -562,7 +582,12 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadReceipt(receiptKey);
-      useReceiptCommand.setState({ pending: saved, error: null, misses: 0 });
+      useReceiptCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) {
         setTab("receive");
         loadedFromDisk("receipt");
@@ -580,7 +605,12 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadAdjustment(adjustmentKey);
-      useAdjustmentCommand.setState({ pending: saved, error: null, misses: 0 });
+      useAdjustmentCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) {
         setTab("stock");
         loadedFromDisk("adjustment");
@@ -597,7 +627,12 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadCount(countKey);
-      useCountCommand.setState({ pending: saved, error: null, misses: 0 });
+      useCountCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) {
         setTab("stock");
         loadedFromDisk("count");
@@ -620,7 +655,12 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadReturn(returnKey);
-      useReturnCommand.setState({ pending: saved, error: null, misses: 0 });
+      useReturnCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) {
         // Its banner shows over any tab; «Повернення» is turned to only for
         // whoever may take returns, never to say they may not (returns task
@@ -701,7 +741,12 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadCreditCommand(creditKey);
-      useCreditCommand.setState({ pending: saved, error: null, misses: 0 });
+      useCreditCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) {
         // Its banner shows over any tab; «Борги» is turned to only for
         // whoever may take payments, never to say they may not (credits
@@ -731,7 +776,12 @@ function Workspace({
     if (!canSeeCash) return;
     try {
       const saved = loadCashCommand(cashKey);
-      useCashCommand.setState({ pending: saved, error: null, misses: 0 });
+      useCashCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) setTab("cash");
     } catch {
       // The journal outlives the store: another store's refusal must not
@@ -778,7 +828,12 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadSale(saleKey);
-      useSaleCommand.setState({ pending: saved, error: null, misses: 0 });
+      useSaleCommand.setState({
+        pending: saved,
+        error: null,
+        // Its own count, kept beside it (owner decision, 2026-10-21).
+        misses: saved?.misses ?? 0,
+      });
       if (saved) {
         setTab("sale");
         loadedFromDisk("sale");
@@ -1711,6 +1766,8 @@ function Workspace({
             pending !== null && !pending.acknowledged,
             orderMisses,
             pending?.label ?? null,
+            // Answered: the step is recorded (owner decision, 2026-10-21).
+            pending?.acknowledged === true,
           )}
         </p>
       )}

@@ -123,7 +123,24 @@ export function orderErrorText(
   misses = 0,
   /** The kept command's name, said even at its first press. */
   label: string | null = null,
+  /** The server answered the step: only reading its order failed. */
+  recorded = false,
 ): string {
+  // Recorded: never the shared «Спробуйте ще раз», which reads as a
+  // failure; the banner's own button reads the order again, and a server's
+  // own failure keeps its request's number (owner decision, 2026-10-21).
+  // Every answer with words of its own — the server out of reach, a session
+  // ended, too many requests — keeps them (review, 2026-10-21).
+  if (recorded) {
+    const text = errorText(error);
+    if (text.startsWith(FAILED_TEXT))
+      return [
+        `Операцію «${label ?? resent ?? ""}» записано. Замовлення не вдалося показати — натисніть «Оновити результат».`,
+        text.slice(FAILED_TEXT.length).trim(),
+      ]
+        .filter(Boolean)
+        .join(" ");
+  }
   if (
     error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
@@ -263,7 +280,10 @@ export const ASK_A_MANAGER =
  * every kept command (owner decisions, 2026-10-18 and 2026-10-19). From the
  * third «not found» in a row (`misses`), a manager is asked to look. `what`
  * is the sentence's subject («Продаж», «Операцію «Відправлено»»), `it`
- * stands for it after. Null for any other answer.
+ * stands for it after. A request the server did not take — a 400, or a 422
+ * the shared words would answer «Перевірте дані…» — is no proof either: «…
+ * сервер не прийняв запит …», as a kept payment's (owner decision,
+ * 2026-10-21). Null for any other answer.
  */
 export function keptUnconfirmed(
   error: unknown,
@@ -273,10 +293,12 @@ export function keptUnconfirmed(
 ): string | null {
   if (!(error instanceof ApiError)) return null;
   const text = errorText(error);
-  if (!text.startsWith(FAILED_TEXT)) return null;
+  const failed = text.startsWith(FAILED_TEXT);
+  const notTaken = (failed && error.status === 400) || text === INVALID_TEXT;
+  if (!failed && !notTaken) return null;
   return [
-    `${what} ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі ${it} не запишеться.`,
-    text.slice(FAILED_TEXT.length).trim(),
+    `${what} ще не підтверджено: сервер ${notTaken ? "не прийняв запит" : "не зміг відповісти"}. Перевірте результат ще раз — двічі ${it} не запишеться.`,
+    failed ? text.slice(FAILED_TEXT.length).trim() : "",
     // Only «not found» counts, and any other answer begins it again.
     misses >= 3 ? ASK_A_MANAGER : "",
   ]
