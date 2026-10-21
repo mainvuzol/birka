@@ -1544,3 +1544,39 @@ Secure cookie of the shared jar sent unencrypted). Each is fixed in 3.14.4.
   once with network so the local CI's offline builds find them.
 - **What remains:** the server takes it at its next image build, after the
   merge — a deploy, which is the owner's.
+
+## certifi moved to 2026.10.19, and vite to 8.3.3 — 2026-10-21
+
+Both audits in CI were found failing on 2026-10-21, on main and on every
+branch, on advisories published after the last run that passed them:
+- **`certifi` 2026.7.22** (PYSEC-2026-4320, GHSA-6q48-6c7w-9gw2): its CA
+  bundle holds the `emSign ECC Root CA - G3` root, eight of whose eMudhra
+  intermediates had their private keys compromised and were revoked.
+  Whoever holds one of those keys, and is on the path, can pass for any
+  host to a client that trusts the bundle. Fixed in 2026.10.19, which keeps
+  only the unaffected emSign roots.
+- **`vite` 8.3.0–8.3.2** (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw,
+  GHSA-587h-7wmj-h5pm, high): the `launch-editor` it bundles, which opens a
+  file in an editor from the dev server, could run a command or skip an
+  existence check. Fixed in 8.3.3.
+
+- **What it reached:** the bot's calls to Telegram (aiogram's `aiohttp`
+  session) and Sentry's transport build their TLS trust from `certifi`'s
+  bundle: until the server runs 2026.10.19, someone on the path with a
+  compromised key could pass for `api.telegram.org` to the bot and read
+  what it sends, its token among them. Nothing else among the installed
+  packages was found trusting the bundle. `vite` only builds the Mini App and serves it to a developer:
+  it never runs on the server, and the bundle it builds holds none of
+  `launch-editor`.
+- **What moved:** `certifi` 2026.7.22 → 2026.10.19 in both Python locks,
+  with the hashes of both files PyPI holds for it; `vite` ^8.3.0 → ^8.3.3 in
+  `package.json`, and in the npm lock `vite` 8.3.3, the `rolldown` it needs
+  1.2.8 → 1.2.14 (8.3.3 asks for ~1.2.11; npm takes the newest 1.2) with
+  its platform bindings, and `@oxc-project/types` 0.149.0 → 0.154.0, nothing
+  else. 8.3.3 is the first release with the fix, not the newest (8.3.4).
+  Downloaded with the owner's permission (2026-10-21): the packages, the
+  hashes, and the server's and the Mini App's images built once with
+  network so the local CI's offline builds find them.
+- **What remains:** the server takes the new bundle only at its next image
+  build, after the merge — a deploy, which is the owner's; for `certifi`,
+  sooner is better.
