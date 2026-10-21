@@ -3083,10 +3083,10 @@ Asked after #110 was merged, while P1-5's CI ran:
   answered with a server's error** is not told to try again either, as a
   kept payment, write-off or return is not: «… ще не підтверджено: сервер не
   зміг відповісти. Перевірте результат ще раз — двічі … не запишеться.»,
-  with the request's number. *(To be built, next.)*
+  with the request's number. *(Built 2026-10-20, below.)*
 - **A kept command answered «not found» three times** adds «Зверніться до
   менеджера — він перевірить, чи записано.»; the app still never records it
-  twice. *(To be built, next.)*
+  twice. *(Built 2026-10-20, below.)*
 - **A letter pasted in two parts** — «ї» as «і» and its dots, «й» as «и»
   and its breve — is the letter, in the debts' search.
 - **The till's words for paying in parts stay as built:** «Решту — у
@@ -3121,3 +3121,37 @@ How they are carried out, not decided by the owner:
   «ї» too; nothing stored changes.
 
 Built on 2026-10-20; see the [report](credits-redesign-7-report.md).
+
+## A kept command's words for a server's error, and a manager after three «not found» — built 2026-10-20
+
+The owner's two answers of 2026-10-19 above, marked «to be built, next»,
+are built.
+
+How they are carried out, not decided by the owner:
+- **The kept commands the owner named, and the stocktake's count** — a
+  sale, a delivery, a stock correction, the drawer's commands and an
+  order's step, beside the payment, write-off and return built before —
+  answered by a server's error, a request not found, or any answer the app
+  has no words for, while their outcome is unknown (at their first press,
+  or asked about again), say «{what} ще не підтверджено: сервер не зміг
+  відповісти. Перевірте результат ще раз — двічі {it} не запишеться.», and
+  the request's number where the server gave one: «Продаж … він»,
+  «Приймання … воно», «Коригування … воно», «Підрахунок … він», «Зміну
+  способу оплати … вона», «Причину … вона», «Видачу … вона», «Внесення …
+  воно», «Операцію «Відправлено» … вона» — named from its first press.
+- **An order's step or a sale the server answered, whose reading alone
+  failed,** keeps the shared words: it is recorded. A step refused at its
+  first press keeps them too: it never was.
+- **From the third «not found» in a row** for one kept command, its words
+  add «Зверніться до менеджера: нехай перевірить, чи записано.» — the
+  owner's «він перевірить» put without a gender, as the app's words are.
+  Any other answer begins the count again; no answer at all, or the app's
+  own failure, leaves it as it is. The count is the phone's own for the
+  session, and begins again when an attempt is read from the phone's
+  storage — reopened, or another store's.
+- **Not changed:** a refusal that proves nothing was recorded, a phone that
+  cannot reach the server (502–504 too), the app's own failure, and the
+  suppliers', invoices', stores' and catalogue's kept commands, which the
+  owner's answer did not name.
+
+Built on 2026-10-20; see the [report](kept-words-report.md).

@@ -562,7 +562,7 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadReceipt(receiptKey);
-      useReceiptCommand.setState({ pending: saved, error: null });
+      useReceiptCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
         setTab("receive");
         loadedFromDisk("receipt");
@@ -580,7 +580,7 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadAdjustment(adjustmentKey);
-      useAdjustmentCommand.setState({ pending: saved, error: null });
+      useAdjustmentCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
         setTab("stock");
         loadedFromDisk("adjustment");
@@ -597,7 +597,7 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadCount(countKey);
-      useCountCommand.setState({ pending: saved, error: null });
+      useCountCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
         setTab("stock");
         loadedFromDisk("count");
@@ -620,7 +620,7 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadReturn(returnKey);
-      useReturnCommand.setState({ pending: saved, error: null });
+      useReturnCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
         // Its banner shows over any tab; «Повернення» is turned to only for
         // whoever may take returns, never to say they may not (returns task
@@ -698,7 +698,7 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadCreditCommand(creditKey);
-      useCreditCommand.setState({ pending: saved, error: null });
+      useCreditCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
         setTab("credits");
         loadedFromDisk("credit");
@@ -725,7 +725,7 @@ function Workspace({
     if (!canSeeCash) return;
     try {
       const saved = loadCashCommand(cashKey);
-      useCashCommand.setState({ pending: saved, error: null });
+      useCashCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) setTab("cash");
     } catch {
       // The journal outlives the store: another store's refusal must not
@@ -772,7 +772,7 @@ function Workspace({
   useEffect(() => {
     try {
       const saved = loadSale(saleKey);
-      useSaleCommand.setState({ pending: saved, error: null });
+      useSaleCommand.setState({ pending: saved, error: null, misses: 0 });
       if (saved) {
         setTab("sale");
         loadedFromDisk("sale");
@@ -790,7 +790,7 @@ function Workspace({
       setCatalogStorageError(true);
     }
   }, [catalogKey]);
-  const { pending, busy, error } = useCommand();
+  const { pending, busy, error, misses: orderMisses } = useCommand();
   useEffect(() => {
     try {
       const saved = loadPending(key);
@@ -1422,7 +1422,13 @@ function Workspace({
         </section>
       )}
       {saleCommand.error !== null && (
-        <p role="alert">{saleErrorText(saleCommand.error)}</p>
+        <p role="alert">
+          {saleErrorText(
+            saleCommand.error,
+            saleCommand.misses,
+            saleCommand.pending?.acknowledged === true,
+          )}
+        </p>
       )}
       {receiptStorageError && (
         <p role="alert">
@@ -1449,7 +1455,9 @@ function Workspace({
         </section>
       )}
       {receiptCommand.error !== null && (
-        <p role="alert">{receiptErrorText(receiptCommand.error)}</p>
+        <p role="alert">
+          {receiptErrorText(receiptCommand.error, receiptCommand.misses)}
+        </p>
       )}
       {returnStorageError && (
         <p role="alert">
@@ -1492,7 +1500,9 @@ function Workspace({
         </section>
       )}
       {returnCommand.error !== null && (
-        <p role="alert">{returnErrorText(returnCommand.error)}</p>
+        <p role="alert">
+          {returnErrorText(returnCommand.error, returnCommand.misses)}
+        </p>
       )}
       {creditStorageError && (
         <p role="alert">
@@ -1573,6 +1583,7 @@ function Workspace({
             // Still kept: its own kind; settled as refused: the one it was.
             creditCommand.pending?.body.kind ?? creditRefused.kind,
             creditRefused.way,
+            creditCommand.misses,
           )}
         </p>
       )}
@@ -1618,7 +1629,12 @@ function Workspace({
         </section>
       )}
       {adjustmentCommand.error !== null && (
-        <p role="alert">{adjustmentErrorText(adjustmentCommand.error)}</p>
+        <p role="alert">
+          {adjustmentErrorText(
+            adjustmentCommand.error,
+            adjustmentCommand.misses,
+          )}
+        </p>
       )}
       {countStorageError && (
         <p role="alert">
@@ -1663,7 +1679,9 @@ function Workspace({
         </section>
       )}
       {countCommand.error !== null && (
-        <p role="alert">{countErrorText(countCommand.error)}</p>
+        <p role="alert">
+          {countErrorText(countCommand.error, countCommand.misses)}
+        </p>
       )}
       {pending && (
         <section className="notice">
@@ -1678,7 +1696,17 @@ function Workspace({
         </section>
       )}
       {error !== null && (
-        <p role="alert">{orderErrorText(error, orderResent)}</p>
+        <p role="alert">
+          {orderErrorText(
+            error,
+            orderResent,
+            // Unconfirmed only while its outcome is unknown: answered, the
+            // step is recorded, and only reading the order failed.
+            pending !== null && !pending.acknowledged,
+            orderMisses,
+            pending?.label ?? null,
+          )}
+        </p>
       )}
       {tab === "sale" ? (
         store.permissions.includes("sale:create") ? (

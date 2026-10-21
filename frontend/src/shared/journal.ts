@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
-import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  recordedNothing,
+  refusedOutright,
+  unreachable,
+} from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
 
 /**
@@ -40,6 +46,12 @@ export interface JournalState<Body> {
   pending: Attempt<Body> | null;
   busy: boolean;
   error: unknown;
+  /**
+   * The kept attempt's checks answered «not found» this many times in a row:
+   * from the third, its words send the seller to a manager (owner decision,
+   * 2026-10-19).
+   */
+  misses: number;
 }
 
 export interface Journal<Body, Result> {
@@ -96,6 +108,7 @@ export function journal<
     pending: null,
     busy: false,
     error: null,
+    misses: 0,
   }));
   const scopeKey = new RegExp(`^birka:${scope}:(${uuid}):(${uuid}):(${uuid})$`);
 
@@ -179,7 +192,7 @@ export function journal<
         current.key,
       );
       localStorage.removeItem(storageKey);
-      use.setState({ pending: null });
+      use.setState({ pending: null, misses: 0 });
       return { kind: "done", result };
     } catch (error) {
       const definite =
@@ -188,10 +201,20 @@ export function journal<
         error.code !== "IDEMPOTENCY_IN_PROGRESS";
       if (definite) {
         localStorage.removeItem(storageKey);
-        use.setState({ pending: null, error: null });
+        use.setState({ pending: null, error: null, misses: 0 });
         return { kind: "refused", error };
       }
-      use.setState({ error });
+      use.setState({
+        error,
+        misses:
+          // No answer at all, or the app's own failure, says nothing of the
+          // command: the count stands (review, 2026-10-20).
+          !(error instanceof ApiError) || unreachable(error)
+            ? use.getState().misses
+            : error.status === 404
+              ? use.getState().misses + 1
+              : 0,
+      });
       return { kind: "unknown" };
     } finally {
       use.setState({ busy: false });

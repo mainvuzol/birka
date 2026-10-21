@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  recordedNothing,
+  refusedOutright,
+  unreachable,
+} from "@/shared/api";
 import { decimal, kopecks } from "@/orders/types";
 import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
@@ -93,6 +99,9 @@ interface SaleCommandState {
   pending: SaleAttempt | null;
   busy: boolean;
   error: unknown;
+  /** The kept sale's checks answered «not found» this many times in a row
+   * (owner decision, 2026-10-19; `@/shared/journal`). */
+  misses: number;
   set: (pending: SaleAttempt | null) => void;
 }
 
@@ -100,8 +109,9 @@ export const useSaleCommand = create<SaleCommandState>((set) => ({
   pending: null,
   busy: false,
   error: null,
+  misses: 0,
   set: (pending) => {
-    set({ pending, error: null });
+    set({ pending, error: null, misses: 0 });
   },
 }));
 
@@ -341,7 +351,7 @@ export async function submitSale(
         localStorage.setItem(storageKey, JSON.stringify(current));
       }
       localStorage.removeItem(storageKey);
-      useSaleCommand.setState({ pending: null });
+      useSaleCommand.setState({ pending: null, misses: 0 });
       return { kind: "nothing-sold", shelf };
     }
     let sale: Sale;
@@ -355,7 +365,7 @@ export async function submitSale(
       localStorage.setItem(storageKey, JSON.stringify(current));
     }
     localStorage.removeItem(storageKey);
-    useSaleCommand.setState({ pending: null });
+    useSaleCommand.setState({ pending: null, misses: 0 });
     return { kind: "sold", sale };
   } catch (error) {
     const definite =
@@ -369,7 +379,7 @@ export async function submitSale(
       // precise answer for a shortfall, and a vague banner above it only
       // makes the screen harder to read. The store's `error` stays for the
       // failures nobody can act on locally.
-      useSaleCommand.setState({ pending: null, error: null });
+      useSaleCommand.setState({ pending: null, error: null, misses: 0 });
       return {
         kind: "refused",
         error,
@@ -379,7 +389,17 @@ export async function submitSale(
             : null,
       };
     }
-    useSaleCommand.setState({ error });
+    useSaleCommand.setState({
+      error,
+      misses:
+        // No answer at all, or the app's own failure, says nothing of the
+        // command: the count stands (review, 2026-10-20).
+        !(error instanceof ApiError) || unreachable(error)
+          ? useSaleCommand.getState().misses
+          : error.status === 404
+            ? useSaleCommand.getState().misses + 1
+            : 0,
+    });
     return { kind: "unknown" };
   } finally {
     useSaleCommand.setState({ busy: false });

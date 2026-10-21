@@ -115,7 +115,15 @@ export const collectNeedsMethod = "Вкажіть, як оплачено зам�
  * label of a saved command resent — by its button or by the phone itself —
  * and null for one sent from its screen.
  */
-export function orderErrorText(error: unknown, resent: string | null): string {
+export function orderErrorText(
+  error: unknown,
+  resent: string | null,
+  /** A command still kept, unconfirmed: never said to have failed. */
+  kept = false,
+  misses = 0,
+  /** The kept command's name, said even at its first press. */
+  label: string | null = null,
+): string {
   if (
     error instanceof ApiError &&
     error.details.reason === "PAYMENT_METHOD_REQUIRED"
@@ -139,6 +147,17 @@ export function orderErrorText(error: unknown, resent: string | null): string {
   // says what was not recorded before why (ADR-0013 §1).
   if (resent !== null && recordedNothing(error))
     return `Операцію «${resent}» не записано. ${errorText(error)}`;
+  if (kept && !recordedNothing(error))
+    return (
+      keptUnconfirmed(
+        error,
+        (label ?? resent) !== null
+          ? `Операцію «${label ?? resent ?? ""}»`
+          : "Операцію",
+        "вона",
+        misses,
+      ) ?? errorText(error)
+    );
   return errorText(error);
 }
 
@@ -175,20 +194,26 @@ function saleReason(error: unknown): string {
  * usually left with the goods, so whatever the reason, the sale is typed
  * from paper, marked (ADR-0013 §8; G15).
  */
-export function saleErrorText(error: unknown): string {
-  return recordedNothing(error)
-    ? `Продаж не записано (${saleReason(error)}). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.`
-    : errorText(error);
+export function saleErrorText(
+  error: unknown,
+  misses = 0,
+  /** The server answered the sale: only its reading failed. */
+  recorded = false,
+): string {
+  if (recordedNothing(error))
+    return `Продаж не записано (${saleReason(error)}). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.`;
+  if (recorded) return errorText(error);
+  return keptUnconfirmed(error, "Продаж", "він", misses) ?? errorText(error);
 }
 
 /**
  * A kept delivery: the shared words for why, as «Приймання» shows a
  * refusal of its own (ADR-0013 §1).
  */
-export function receiptErrorText(error: unknown): string {
+export function receiptErrorText(error: unknown, misses = 0): string {
   return recordedNothing(error)
     ? `Приймання не записано. ${errorText(error)}`
-    : errorText(error);
+    : (keptUnconfirmed(error, "Приймання", "воно", misses) ?? errorText(error));
 }
 
 /**
@@ -197,9 +222,11 @@ export function receiptErrorText(error: unknown): string {
  * (ADR-0013 §1). The balance it was made against is the one the refusal
  * names: the server compares the count with nothing else.
  */
-export function adjustmentErrorText(error: unknown): string {
+export function adjustmentErrorText(error: unknown, misses = 0): string {
   if (!recordedNothing(error) || !(error instanceof ApiError))
-    return errorText(error);
+    return (
+      keptUnconfirmed(error, "Коригування", "воно", misses) ?? errorText(error)
+    );
   const counted = error.details.expected;
   return `Коригування не записано. ${correctionRefusalText(
     error,
@@ -223,27 +250,42 @@ function lostPlace(error: ApiError): boolean {
   );
 }
 
+/** From a kept command's third «not found» in a row: someone to look
+ * (owner decision, 2026-10-19). */
+export const ASK_A_MANAGER =
+  "Зверніться до менеджера: нехай перевірить, чи записано.";
+
 /**
  * A kept command asked about again, and answered by a server's error or a
  * request it could not find: no answer about the command. Still
  * unconfirmed, never «спробуйте ще раз», which could take or hand back the
- * money twice; the request's number kept, for whoever reads the log (owner
- * decision, 2026-10-18). Null for any other answer.
+ * money twice; the request's number kept, for whoever reads the log — for
+ * every kept command (owner decisions, 2026-10-18 and 2026-10-19). From the
+ * third «not found» in a row (`misses`), a manager is asked to look. `what`
+ * is the sentence's subject («Продаж», «Операцію «Відправлено»»), `it`
+ * stands for it after. Null for any other answer.
  */
-function serverFailed(
+export function keptUnconfirmed(
   error: unknown,
-  text: string,
   what: string,
-  twice: string,
+  it: string,
+  misses = 0,
 ): string | null {
-  if (!(error instanceof ApiError) || !text.startsWith(FAILED_TEXT))
-    return null;
-  const number = text.slice(FAILED_TEXT.length).trim();
-  return `${what} ще не підтверджено: сервер не зміг відповісти. ${twice}${number ? ` ${number}` : ""}`;
+  if (!(error instanceof ApiError)) return null;
+  const text = errorText(error);
+  if (!text.startsWith(FAILED_TEXT)) return null;
+  return [
+    `${what} ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі ${it} не запишеться.`,
+    text.slice(FAILED_TEXT.length).trim(),
+    // Only «not found» counts, and any other answer begins it again.
+    misses >= 3 ? ASK_A_MANAGER : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** «Повернення»'s own words for why (ADR-0013 §8). */
-export function returnErrorText(error: unknown): string {
+export function returnErrorText(error: unknown, misses = 0): string {
   // Not said to have recorded nothing: still unconfirmed, never «try again»,
   // which could hand the money back twice (owner decisions, 2026-10-18).
   if (!recordedNothing(error)) {
@@ -252,14 +294,7 @@ export function returnErrorText(error: unknown): string {
       return "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.";
     if (text === INVALID_TEXT)
       return "Повернення ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі воно не запишеться.";
-    return (
-      serverFailed(
-        error,
-        text,
-        "Повернення",
-        "Перевірте результат ще раз — двічі воно не запишеться.",
-      ) ?? text
-    );
+    return keptUnconfirmed(error, "Повернення", "воно", misses) ?? text;
   }
   if (
     error instanceof ApiError &&
@@ -294,6 +329,7 @@ export function creditErrorText(
   error: unknown,
   kind: "payment" | "write-off",
   way: TillMethod | null = null,
+  misses = 0,
 ): string {
   const what = kind === "payment" ? "Внесок" : "Списання";
   // Not said to have recorded nothing: still unconfirmed, never «спробуйте
@@ -306,7 +342,14 @@ export function creditErrorText(
       return `${what} ще не підтверджено: сервер відповів, що дані змінилися. ${twice}`;
     if (text === INVALID_TEXT)
       return `${what} ще не підтверджено: сервер не прийняв запит. ${twice}`;
-    return serverFailed(error, text, what, twice) ?? text;
+    return (
+      keptUnconfirmed(
+        error,
+        what,
+        kind === "payment" ? "він" : "воно",
+        misses,
+      ) ?? text
+    );
   }
   if (
     error instanceof ApiError &&
@@ -338,12 +381,37 @@ const notRecorded: Record<CashBody["command"], string> = {
   correction: "Зміну способу оплати не записано.",
 };
 
+/** What each of the drawer's commands is called, and stood for after; a
+ * movement by its way, when known (review, 2026-10-20). */
+const keptNames: Record<CashBody["command"], [string, string]> = {
+  close: ["Підрахунок", "він"],
+  reason: ["Причину", "вона"],
+  movement: ["Видачу чи внесення", "це"],
+  correction: ["Зміну способу оплати", "вона"],
+};
+const movementNames: Record<"OUT" | "IN", [string, string]> = {
+  OUT: ["Видачу", "вона"],
+  IN: ["Внесення", "воно"],
+};
+
 /** The drawer's own journal: what was not recorded, then why. */
 export function cashJournalText(
   error: unknown,
   command: CashBody["command"],
+  misses = 0,
+  /** A movement's way, out of the drawer or in. */
+  direction?: "OUT" | "IN",
 ): string {
-  if (!recordedNothing(error)) return errorText(error);
+  if (!recordedNothing(error))
+    return (
+      keptUnconfirmed(
+        error,
+        ...(command === "movement" && direction
+          ? movementNames[direction]
+          : keptNames[command]),
+        misses,
+      ) ?? errorText(error)
+    );
   // These say themselves what was not recorded.
   if (
     error instanceof ApiError &&

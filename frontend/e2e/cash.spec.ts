@@ -1,11 +1,4 @@
-import {
-  test,
-  expect,
-  fillLine,
-  more,
-  openStore,
-  tapSize,
-} from "./fixtures";
+import { test, expect, fillLine, more, openStore, tapSize } from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -680,6 +673,122 @@ test("a kept fix of a way refused on its resend still says what was not recorded
   await page.getByRole("button", { name: "Каса", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText(said);
 });
+
+for (const kept of [
+  {
+    name: "fix of a way",
+    path: "corrections",
+    body: {
+      command: "correction",
+      target: "SALE",
+      target_id: randomUUID(),
+      from_method: "CASH",
+      to_method: "CARD",
+      note: null,
+    },
+    what: "Зміну способу оплати ще не підтверджено",
+    it: "вона",
+  },
+  {
+    name: "count at the close",
+    path: "closes?**",
+    body: {
+      command: "close",
+      counted: "1500.00",
+      counted_at: new Date().toISOString(),
+      after_close_id: null,
+    },
+    what: "Підрахунок ще не підтверджено",
+    it: "він",
+  },
+  {
+    name: "reason of a difference",
+    path: "closes/*/reason",
+    body: { command: "reason", close_id: randomUUID(), reason: "Решта" },
+    what: "Причину ще не підтверджено",
+    it: "вона",
+  },
+  {
+    name: "money taken out",
+    path: "movements",
+    body: {
+      command: "movement",
+      movement_kind: "EXPENSES",
+      amount: "100.00",
+      note: null,
+      after_close_id: null,
+    },
+    what: "Видачу ще не підтверджено",
+    it: "вона",
+  },
+  {
+    name: "money put in",
+    path: "movements",
+    body: {
+      command: "movement",
+      movement_kind: "CHANGE",
+      amount: "100.00",
+      note: null,
+      after_close_id: null,
+    },
+    what: "Внесення ще не підтверджено",
+    it: "воно",
+  },
+])
+  test(`a kept ${kept.name} a server fails to answer is still unconfirmed, by its own name (owner decision, 2026-10-19)`, async ({
+    page,
+  }) => {
+    const key = await journalKey(page, olya);
+    await seed(
+      page,
+      key,
+      JSON.stringify({
+        key: randomUUID(),
+        body: { store_id: store, command_id: randomUUID(), ...kept.body },
+        ambiguous: true,
+      }),
+    );
+    let status = 500;
+    let sent = 0;
+    await page.route(`**/api/v1/cash/${kept.path}`, async (route) => {
+      sent += 1;
+      await route.fulfill({
+        status,
+        headers:
+          status === 500
+            ? { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" }
+            : {},
+        json: {
+          code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+          message: "Refused",
+        },
+      });
+    });
+    await openAs(page, olya, "Оля");
+    await openStore(page, /^Каса CASH/);
+    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    // Never «спробуйте ще раз»: it may be recorded already.
+    const unconfirmed = `${kept.what}: сервер не зміг відповісти. Перевірте результат ще раз — двічі ${kept.it} не запишеться.`;
+    const said = page.getByRole("alert");
+    await expect(said).toHaveText(`${unconfirmed} Номер запиту: 5a6b7c8d.`);
+    expect(
+      await page.evaluate((stored) => localStorage.getItem(stored), key),
+    ).not.toBeNull();
+    if (kept.name !== "fix of a way") return;
+    // Its banner counts its «not found»: a manager at the third.
+    status = 404;
+    const check = page.getByRole("button", { name: "Перевірити результат" });
+    for (const more of [1, 2, 3]) {
+      await check.click();
+      await expect.poll(() => sent).toBe(1 + more);
+      await expect(check).toBeEnabled();
+      await expect(said).toHaveText(
+        more === 3
+          ? `${unconfirmed} Зверніться до менеджера: нехай перевірить, чи записано.`
+          : unconfirmed,
+      );
+    }
+  });
 
 test("a refusal read in one store's «Каса» does not follow into another store whose kept command cannot be read", async ({
   page,

@@ -8,7 +8,7 @@ import {
   tapSize,
   waitsFor,
 } from "./fixtures";
-import type { Page, Request, Route } from "@playwright/test";
+import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -392,6 +392,32 @@ async function seed(
   await page.goto("about:blank");
 }
 
+/**
+ * A kept command's check pressed while the server answers «not found»,
+ * `before` of them already in a row — once, by the phone itself on opening,
+ * by default: its words ask for a manager only at the third (owner
+ * decision, 2026-10-19). `sent` counts what reached the server.
+ */
+async function thriceNotFound(
+  check: Locator,
+  sent: () => number,
+  said: Locator,
+  unconfirmed: string,
+  before = 1,
+): Promise<void> {
+  const first = sent();
+  for (let more = 1; more <= 3 - before; more += 1) {
+    await check.click();
+    await expect.poll(sent).toBe(first + more);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(
+      before + more === 3
+        ? `${unconfirmed} Зверніться до менеджера: нехай перевірить, чи записано.`
+        : unconfirmed,
+    );
+  }
+}
+
 /** A sale kept on the phone by an earlier visit, its answer never heard. */
 function keptSale(way: string): string {
   return JSON.stringify({
@@ -418,6 +444,94 @@ function keptSale(way: string): string {
     },
   });
 }
+
+test("a kept sale the server answered, whose reading back failed, keeps the shared words: it is recorded (review, 2026-10-20)", async ({
+  page,
+}) => {
+  const sale = randomUUID();
+  const kept = JSON.parse(keptSale("CARD")) as Record<string, unknown>;
+  await seed(page, {
+    [saleKey]: JSON.stringify({ ...kept, acknowledged: true, saleId: sale }),
+  });
+  await serve(page);
+  await on(page, `/sales/${sale}`, async (route) => {
+    await route.fulfill({
+      status: 500,
+      headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
+      json: { code: "INTERNAL_ERROR", message: "Internal error" },
+    });
+  });
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  await expect(
+    page.getByText(
+      "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 5a6b7c8d.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // The alert's words, not the banner's heading, which names it as before.
+  await expect(
+    page.getByRole("alert").filter({ hasText: /ще не підтверджено/ }),
+  ).toHaveCount(0);
+});
+
+test("a kept sale a server fails to answer is still unconfirmed, and three «not found» in a row ask for a manager (owner decisions, 2026-10-19)", async ({
+  page,
+}) => {
+  await seed(page, { [saleKey]: keptSale("CARD") });
+  const server = await serve(page);
+  let status = 500;
+  server.sale = async (route) => {
+    await route.fulfill({
+      status,
+      headers:
+        status === 500
+          ? { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" }
+          : {},
+      json: {
+        code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+        message: "Refused",
+      },
+    });
+  };
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  const said = page.getByRole("alert");
+  const unconfirmed =
+    "Продаж ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.";
+  // Asked by itself on opening: a server's error, its number kept.
+  await expect(said).toHaveText(`${unconfirmed} Номер запиту: 5a6b7c8d.`);
+  const check = page.getByRole("button", {
+    name: "Перевірити результат продажу",
+  });
+  status = 404;
+  for (const asked of [2, 3]) {
+    await check.click();
+    await expect.poll(() => server.sales.length).toBe(asked);
+    // Answered: the check is free again, and only then is it read.
+    await expect(check).toBeEnabled();
+    // Once and twice «not found»: still only unconfirmed.
+    await expect(said).toHaveText(unconfirmed);
+  }
+  await check.click();
+  await expect.poll(() => server.sales.length).toBe(4);
+  await expect(check).toBeEnabled();
+  // The third in a row: someone to look.
+  await expect(said).toHaveText(
+    `${unconfirmed} Зверніться до менеджера: нехай перевірить, чи записано.`,
+  );
+  // Any other answer begins the count again.
+  status = 500;
+  await check.click();
+  await expect.poll(() => server.sales.length).toBe(5);
+  await expect(check).toBeEnabled();
+  await expect(said).toHaveText(`${unconfirmed} Номер запиту: 5a6b7c8d.`);
+  status = 404;
+  await check.click();
+  await expect.poll(() => server.sales.length).toBe(6);
+  await expect(check).toBeEnabled();
+  await expect(said).toHaveText(unconfirmed);
+});
 
 test("a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way for an attempt kept from before", async ({
   page,
@@ -716,8 +830,13 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     server.ready = "ok";
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect.poll(() => server.sales.length).toBe(2);
+    // Still unconfirmed, never «спробуйте ще раз» (owner decision,
+    // 2026-10-19).
     await expect(
-      page.getByText("Не вдалося виконати операцію. Спробуйте ще раз."),
+      page.getByText(
+        "Продаж ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.",
+        { exact: true },
+      ),
     ).toBeVisible();
     // More answers come: the app shown again reads the till anew, and the
     // phone says it is online. None of them is a return.
@@ -2303,6 +2422,64 @@ test.describe("9. what to do with money after the outage", () => {
       }
     });
 
+  test("«Борги»: a kept payment answered «not found» three times in a row asks for a manager (owner decision, 2026-10-19)", async ({
+    page,
+  }) => {
+    await seed(page, {
+      [creditKey]: JSON.stringify({
+        key: randomUUID(),
+        ambiguous: true,
+        body: {
+          kind: "payment",
+          store_id: ids.store,
+          credit_id: ids.credit,
+          command_id: randomUUID(),
+          amount: "500.00",
+          payment_method: "CASH",
+        },
+      }),
+    });
+    await serve(page);
+    await debts(page);
+    const sent: unknown[] = [];
+    let status = 404;
+    await on(
+      page,
+      `/credits/${ids.credit}/payments`,
+      async (route, request) => {
+        sent.push(request.postDataJSON());
+        await route.fulfill({
+          status,
+          json: {
+            code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+            message: "Refused",
+          },
+        });
+      },
+    );
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const unconfirmed =
+      "Внесок ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.";
+    const said = page.getByRole("alert");
+    await expect(said).toHaveText(unconfirmed);
+    const check = page.getByRole("button", {
+      name: "Перевірити результат внеску",
+    });
+    await thriceNotFound(check, () => sent.length, said, unconfirmed);
+    // Any other answer begins the count again.
+    status = 500;
+    await check.click();
+    await expect.poll(() => sent.length).toBe(4);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(unconfirmed);
+    status = 404;
+    await check.click();
+    await expect.poll(() => sent.length).toBe(5);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(unconfirmed);
+  });
+
   test("«Борги»: a payment refused because the store that sold trades again says to pass the paper to a manager", async ({
     page,
   }) => {
@@ -2517,6 +2694,141 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     });
   }
 
+  test("a kept stock correction a server fails to answer is still unconfirmed, its request's number kept (owner decision, 2026-10-19)", async ({
+    page,
+  }) => {
+    await seed(page, {
+      [adjustmentKey]: keptAdjustment({
+        quantity_delta: -2,
+        reason_code: "LOST",
+        expected_quantity: null,
+      }),
+    });
+    await serve(page);
+    await holding(page, ["inventory:view", "inventory:adjust"]);
+    let status = 500;
+    let sent = 0;
+    await on(page, "/inventory/adjustments", async (route) => {
+      sent += 1;
+      await route.fulfill({
+        status,
+        headers:
+          status === 500
+            ? { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" }
+            : {},
+        json: {
+          code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+          message: "Refused",
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const unconfirmed =
+      "Коригування ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі воно не запишеться.";
+    await expect(page.getByRole("alert")).toHaveText(
+      `${unconfirmed} Номер запиту: 5a6b7c8d.`,
+    );
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), adjustmentKey),
+    ).not.toBeNull();
+    status = 404;
+    await thriceNotFound(
+      page.getByRole("button", { name: "Перевірити результат коригування" }),
+      () => sent,
+      page.getByRole("alert"),
+      unconfirmed,
+      0,
+    );
+  });
+
+  const stocktake = randomUUID();
+  for (const kept of [
+    {
+      name: "delivery",
+      scope: "receipt-pending",
+      path: "/inventory/receipts",
+      body: {
+        location_id: ids.shared,
+        notes: null,
+        lines: [
+          {
+            product_variant_id: ids.variant,
+            size_id: ids.size,
+            quantity: 1,
+            acquisition_type: "PURCHASE",
+            unit_cost: "1000.00",
+          },
+        ],
+      },
+      said: "Приймання ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі воно не запишеться. Номер запиту: 5a6b7c8d.",
+      check: "Перевірити результат приймання",
+    },
+    {
+      name: "stocktake's count",
+      scope: "stocktake-count-pending",
+      path: `/stocktakes/${stocktake}/counts`,
+      body: {
+        stocktake_id: stocktake,
+        product_variant_id: ids.variant,
+        size_id: ids.size,
+        counted_quantity: 3,
+        expected_quantity: 5,
+      },
+      said: "Підрахунок ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться. Номер запиту: 5a6b7c8d.",
+      check: "Перевірити результат підрахунку",
+    },
+  ])
+    test(`a kept ${kept.name} a server fails to answer is still unconfirmed, by its own name (owner decision, 2026-10-19)`, async ({
+      page,
+    }) => {
+      const key = `birka:${kept.scope}:${ids.organization}:${ids.user}:${ids.store}`;
+      await seed(page, {
+        [key]: JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          since: new Date(Date.now() - 30 * 60_000).toISOString(),
+          body: { store_id: ids.store, command_id: randomUUID(), ...kept.body },
+        }),
+      });
+      await serve(page);
+      let status = 500;
+      let sent = 0;
+      await on(page, kept.path, async (route) => {
+        sent += 1;
+        await route.fulfill({
+          status,
+          headers:
+            status === 500
+              ? { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" }
+              : {},
+          json: {
+            code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+            message: "Refused",
+          },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      // Its own alert, whatever else the stub's rights make the screen say.
+      await expect(
+        page.getByRole("alert").filter({ hasText: kept.said }),
+      ).toHaveText(kept.said);
+      expect(
+        await page.evaluate((stored) => localStorage.getItem(stored), key),
+      ).not.toBeNull();
+      // Its own banner counts its «not found».
+      status = 404;
+      const unconfirmed = kept.said.replace(" Номер запиту: 5a6b7c8d.", "");
+      await thriceNotFound(
+        page.getByRole("button", { name: kept.check }),
+        () => sent,
+        page.getByRole("alert").filter({ hasText: unconfirmed }),
+        unconfirmed,
+        0,
+      );
+    });
+
   for (const refusal of [
     {
       name: "a count made against a balance that moved",
@@ -2675,7 +2987,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await openStore(page, /Подільський/);
     await expect(
       page.getByText(
-        "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 5a6b7c8d.",
+        "Операцію «Відправлено» ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться. Номер запиту: 5a6b7c8d.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -2687,6 +2999,88 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     expect(
       await page.evaluate((key) => localStorage.getItem(key), orderKey),
     ).not.toBeNull();
+  });
+
+  test("a kept order step the server answered, whose order could not be read, keeps the shared words: it is recorded (review, 2026-10-20)", async ({
+    page,
+  }) => {
+    const order = randomUUID();
+    await seed(page, {
+      [orderKey]: JSON.stringify({
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: randomUUID() },
+        label: "Відправлено",
+        orderId: order,
+        acknowledged: true,
+        ambiguous: false,
+      }),
+    });
+    await serve(page);
+    await on(page, `/orders/${order}`, async (route) => {
+      await route.fulfill({
+        status: 500,
+        headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByText(
+        "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 5a6b7c8d.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/ще не підтверджено/)).toHaveCount(0);
+  });
+
+  test("a kept order step answered «not found» three times in a row asks for a manager (owner decision, 2026-10-19)", async ({
+    page,
+  }) => {
+    const order = randomUUID();
+    await seed(page, {
+      [orderKey]: JSON.stringify({
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: randomUUID() },
+        label: "Відправлено",
+        orderId: order,
+        ambiguous: true,
+      }),
+    });
+    await serve(page);
+    const dispatches: string[] = [];
+    let status = 404;
+    await on(page, `/orders/${order}/dispatch`, async (route, request) => {
+      dispatches.push(request.postData() ?? "");
+      await route.fulfill({
+        status,
+        json: {
+          code: status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR",
+          message: "Refused",
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const unconfirmed =
+      "Операцію «Відправлено» ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться.";
+    const said = page.getByText(/^Операцію «Відправлено» ще не підтверджено/);
+    await expect(said).toHaveText(unconfirmed);
+    const again = page.getByRole("button", {
+      name: "Повторити ту саму команду",
+    });
+    await thriceNotFound(again, () => dispatches.length, said, unconfirmed);
+    // Any other answer begins the count again.
+    status = 500;
+    await again.click();
+    await expect.poll(() => dispatches.length).toBe(4);
+    await expect(again).toBeEnabled();
+    await expect(said).toHaveText(unconfirmed);
+    status = 404;
+    await again.click();
+    await expect.poll(() => dispatches.length).toBe(5);
+    await expect(again).toBeEnabled();
+    await expect(said).toHaveText(unconfirmed);
   });
 
   /** A return kept on the phone, its money going back `way`. */
@@ -3284,6 +3678,31 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       // Sent once, by the phone itself; nothing invites another.
       expect(sent).toHaveLength(1);
     });
+
+  test("a kept return answered «not found» three times in a row asks for a manager (owner decision, 2026-10-19)", async ({
+    page,
+  }) => {
+    await seed(page, { [returnKey]: keptReturn("CASH") });
+    await serve(page);
+    const sent = await returns(page, async (route) => {
+      await route.fulfill({
+        status: 404,
+        json: { code: "NOT_FOUND", message: "Not found" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const unconfirmed =
+      "Повернення ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі воно не запишеться.";
+    const said = page.getByRole("alert");
+    await expect(said).toHaveText(unconfirmed);
+    await thriceNotFound(
+      page.getByRole("button", { name: "Перевірити результат повернення" }),
+      () => sent.length,
+      said,
+      unconfirmed,
+    );
+  });
 
   // The server answers whoever took a return what it recorded, though they
   // may no longer take returns, and says when nothing was (owner decision,
