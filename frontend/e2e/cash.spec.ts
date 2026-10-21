@@ -835,7 +835,9 @@ for (const kept of [
     if (kept.name !== "fix of a way") return;
     // Its banner counts its «not found»: a manager at the third.
     status = 404;
-    const check = page.getByRole("button", { name: "Перевірити результат" });
+    const check = page.getByRole("button", {
+      name: "Перевірити зміну способу оплати",
+    });
     for (const more of [1, 2, 3]) {
       await check.click();
       await expect.poll(() => sent).toBe(1 + more);

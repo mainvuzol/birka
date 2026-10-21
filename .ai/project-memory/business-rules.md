@@ -1056,7 +1056,9 @@ above did not settle:
   operations:** sales, debt payments and returns.
 - **A count that reaches the server more than 10 minutes late** is not
   recorded. The phone says to close the drawer as usual in the evening, and
-  that day goes into that close.
+  that day goes into that close. *(The same evening, while the drawer is
+  still to close, it says to count again and close, and opens the count:
+  owner decision, 2026-10-21, В3.)*
 
 **Carried out, 2026-10-04.** How it is carried out is technical, not
 decided by the owner:
@@ -3302,7 +3304,8 @@ How it is carried out, not decided by the owner:
   asks for the count, so never while the server does not answer, whose
   words «Каса» says (G26). Nothing tells a sum before the count (G32). The dark
   card is the text's colour in either theme, so it inverts in the dark one
-  — to be confirmed.
+  — *superseded: the owner chose it dark in either theme (2026-10-21), built
+  2026-10-22, below.*
 - **The count, a screen of its own:** «← Каса», «Підрахунок каси», the
   owner's reminders, one large field for «Скільки готівки в касі зараз»
   with the cursor in it, and the panel under the thumb: «Впишіть суму» or
@@ -3350,7 +3353,7 @@ recommended:
   2026-10-21, below.)*
 - **A kept payment refused for the right says «Борги»'s own words,** never
   the shared «Немає доступу до цієї операції або складу». *(Built
-  2026-10-21, below; the words to be confirmed.)*
+  2026-10-21, below; the words confirmed by the owner on 2026-10-22.)*
 - **A confirmed order's step whose order cannot be read** keeps «… натисніть
   «Оновити результат».», as built.
 - **«Не прийняв запит» for a 422 the shared words would call «перевірте
@@ -3392,3 +3395,68 @@ How they are carried out, not decided by the owner:
   shared words, the same as before, with the manager from the third.
 
 Built on 2026-10-21; see the [report](credits-kept-right-report.md).
+
+## Owner decision — 2026-10-22 (four readings after #120)
+
+Asked after #120 was merged, each answer the option recommended:
+- **A kept payment answered to whoever lost the right** shows their own
+  payment and what the debt still owes, as built — never the customer's
+  phone nor anyone else's payments.
+- **The words for the right stay as built:** «… у вас більше немає права
+  приймати внески. Зверніться до менеджера.», «… списувати борги.
+  Зверніться до власника.», and after a payment proven unrecorded «Якщо
+  гроші вже взяли — передайте папір менеджеру, щоб внести внесок з
+  паперу.»
+- **A payment proven unrecorded on a debt paid off meanwhile** keeps that
+  paper line: the manager typing it sees the debt paid and gives the money
+  back, as the sellers' page says.
+- **A first sending stalled before the debt's lock** while the right is
+  taken away, which may record after the phone was told «не записано», is
+  **accepted**, as a return's was (2026-10-18).
+
+## «Каса»'s kept command named by what and how much, a late count of the same evening counted again, the dark card dark in either theme — built 2026-10-22
+
+The owner's answers of 2026-10-21 (В2, В3, and the dark card) carried out;
+how, not decided by the owner:
+- **A kept drawer command's banner is headed by what it is** — «Підрахунок
+  ще не підтверджено», «Причину …», «Видачу …», «Внесення …», «Зміну
+  способу оплати …»; «Перевіряємо підрахунок…» while it is checked — and
+  says it from the attempt alone, once its first sending is unknown — never
+  while that sending is under way: «Підрахунок 2 000,00 грн — сервер не
+  відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.»,
+  «Видача 150,00 грн · Витрати — …», «Внесення 100,00 грн — …», «Зміна
+  способу оплати: Картка → Готівка — …», «Причина різниці — …». What does
+  not read is left out. The sum is the count's own, never what the drawer
+  should hold (G32). Its button: «Перевірити підрахунок», «… видачу», «…
+  внесення», «… зміну способу оплати», «… причину».
+- **Under it, the drawer's own line (В2):** «Чекає відповіді сервера з
+  14:20. Телефон перевірить сам. Нічого не повторюйте, поки він не скаже
+  «не записано».» — no paper mark and no name, since nothing of the drawer
+  is typed from paper.
+- **Confirmed:** «Підрахунок записано один раз.» under the close's figures;
+  «Видачу записано один раз: Витрати, 150,00 грн.»; «Внесення записано
+  один раз: 100,00 грн.»; «Зміну способу оплати записано один раз: Картка
+  → Готівка.», and «Пояснює різницю закриття 07.10.» when it does;
+  «Причину записано один раз.», then «Власник отримає повідомлення.» within
+  the bot's 15 minutes of the close, «Власник уже отримав повідомлення без
+  причини — побачить її в застосунку.» when first sent after them, and
+  otherwise — recorded sometime between, unknown which side — «Власник
+  побачить її в застосунку.» Cash the server put on a colleague's close:
+  «… — до закриття 07.10, гроші взяли до нього.», or «… внесли …» for cash
+  put in — as the words of one answered at once now say too.
+- **A count refused for coming over ten minutes late (В3),** taken in the
+  drawer's day now — 06:00 to 06:00 (G8), by the phone's clock, so 23:50
+  and 00:15 are one evening's, 05:50 and 06:10 two days' — while the
+  drawer's read says it is still to be closed today: «Підрахунок не
+  записано — він дійшов надто пізно. Перерахуйте касу ще раз і закрийте.»,
+  and the count opens by itself, from «Каса»'s own screen, once the drawer
+  is read anew — never while it is read or cannot be (G26), and once for
+  that refusal, however often «Каса» is opened again. Taken on an earlier
+  day, the drawer closed meanwhile, or the drawer not read: the words as
+  before, and nothing opens. The new count is a command of its own, with
+  its own sum and moment.
+- **The dark card in the dark theme:** a dark surface (`#222C29`), light
+  text (`#F1F4F2`) and a 1 px edge (`#66726D`, 3:1 on the section and the
+  page); in the light theme as before.
+
+Built on 2026-10-22; see the [report](cash-redesign-2-report.md).
