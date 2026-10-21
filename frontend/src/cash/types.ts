@@ -15,6 +15,21 @@ export type Target = "SALE" | "PAYMENT" | "REFUND";
 
 export const targets: readonly Target[] = ["SALE", "PAYMENT", "REFUND"];
 
+/** What each kind of operation is called. */
+export const targetLabels: Record<Target, string> = {
+  SALE: "Продаж",
+  PAYMENT: "Внесок",
+  REFUND: "Повернення",
+};
+
+/** One operation whose way is to be changed: the receipt's sale, or one
+ * chosen from a list, with its moment when the list said it. */
+export interface FixTarget {
+  target: Target;
+  id: string;
+  at?: string;
+}
+
 /** Why cash left the drawer, or came into it (owner decisions, 2026-10-04).
  * There is no «Інше» (G17). */
 export type MovementKind = "OWNER" | "EXPENSES" | "SUPPLIER_COURIER" | "CHANGE";

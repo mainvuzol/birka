@@ -1419,7 +1419,9 @@ html {
 /* Quiet lines, not buttons: «← Каса», and cash out first, so the field,
    the reminders and the panel stand together on a small screen. */
 .cash-count .back,
-.cash-closed .back {
+.cash-closed .back,
+.cash-move .back,
+.cash-fix .back {
   min-height: 44px;
   margin: 0;
   padding: 0 4px;
@@ -1427,7 +1429,9 @@ html {
   font-weight: 650;
 }
 .cash-count .back + h2,
-.cash-closed .back + h2 {
+.cash-closed .back + h2,
+.cash-move .back + h2,
+.cash-fix .back + h2 {
   margin-top: 4px;
 }
 .cash-first {
@@ -1474,7 +1478,8 @@ html {
   color: var(--text-2);
 }
 .cash-count .hint,
-.cash-closed .hint {
+.cash-closed .hint,
+.cash-move .hint {
   margin: 10px 0 0;
   font-size: 14px;
 }
@@ -1563,4 +1568,71 @@ html {
 .cash-owed button {
   width: 100%;
   min-height: 54px;
+}
+/* Cash taken out or put in (cash task list, P1-2): what for as chips, the
+   sum large, the button in the panel under the thumb. */
+.cash-move .chips {
+  margin: 12px 0 4px;
+}
+/* A seller's two kinds in one row at 360 px; the owner's three wrap. */
+.cash-move .chip {
+  padding: 8px 10px;
+  font-size: 15px;
+}
+.move-field input {
+  font-size: 34px;
+}
+/* A way changed (cash task list, P1-3): the operations as rows by time,
+   never a sum (G32); one operation's sum large, its way a pill, the ways as
+   the till's buttons, the one it has now not to be chosen. */
+.fix-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fix-time {
+  flex: 0 0 auto;
+  min-width: 48px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.fix-card {
+  margin: 8px 0 14px;
+}
+.fix-what {
+  margin: 0 0 2px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.fix-sum {
+  margin: 0 0 8px;
+  line-height: 1.15;
+}
+.fix-sum .sum {
+  font-size: 34px;
+  font-weight: 800;
+}
+.fix-ways {
+  margin: 0 0 14px;
+}
+.fix-ways button {
+  border-color: var(--line-strong);
+  background: var(--field);
+  color: var(--text);
+}
+.fix-ways button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+/* An order's five ways, a row each: a third of 360 px is too narrow for
+   «Накладений платіж». */
+.fix-ways-rows {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fix-now {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
 }

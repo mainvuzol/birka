@@ -1,6 +1,9 @@
 import { kopecks, money } from "@/orders/types";
+import { methodLabels, notStated } from "@/shared/payment";
+import type { PaymentMethod } from "@/shared/payment";
 import { dayOf, timeOf } from "./errors";
-import type { WaySums } from "./types";
+import { movementLabels } from "./types";
+import type { Correction, Movement, WaySums } from "./types";
 
 /** Nothing either way: «0,00» or «−0,00». */
 export function nothing(value: string): boolean {
@@ -62,4 +65,47 @@ export function cardParts(card: WaySums): string[] | null {
 export function cardText(card: WaySums): string {
   const parts = cardParts(card);
   return `Картка: ${signed(card.net)}${parts ? ` (${parts.join(", ")})` : ""}. Звірте з чеком терміналу.`;
+}
+
+/** A way by name, or «не вказано» for none. */
+export function wayName(method: PaymentMethod | null): string {
+  return method ? methodLabels[method] : notStated;
+}
+
+/** Cash moved, as recorded; `once`, a kept one confirmed: «Видачу записано
+ * один раз: Витрати, 150,00 грн.» (cash task list, P1-1). */
+export function movementDone(movement: Movement, once = false): string {
+  if (once) {
+    const what =
+      movement.direction === "OUT"
+        ? `Видачу записано один раз: ${movementLabels[movement.kind]}, ${money(movement.amount)}`
+        : `Внесення записано один раз: ${money(movement.amount)}`;
+    if (!movement.for_day) return `${what}.`;
+    return `${what} — до закриття ${dayOf(movement.for_day)}${
+      movement.moved_to_close ? `, ${movedBefore(movement)}` : ""
+    }.`;
+  }
+  if (movement.moved_to_close && movement.for_day)
+    return `Записано до закриття ${dayOf(movement.for_day)}: ${movedBefore(movement)}.`;
+  if (movement.for_day)
+    return `Записано до закриття ${dayOf(movement.for_day)}.`;
+  return `Записано: ${movementLabels[movement.kind]}, ${money(movement.amount)}.`;
+}
+
+/** Why cash the server put on a colleague's close went there: it moved
+ * before that close — taken out, or put in (review, 2026-10-22). */
+function movedBefore(movement: Movement): string {
+  return movement.direction === "IN"
+    ? "гроші внесли до нього"
+    : "гроші взяли до нього";
+}
+
+/** A way changed, as recorded; `once`, a kept one confirmed (P1-1). */
+export function correctionDone(correction: Correction, once = false): string {
+  const ways = `${wayName(correction.from_method)} → ${wayName(correction.to_method)}`;
+  return `${once ? `Зміну способу оплати записано один раз: ${ways}` : `Спосіб оплати змінено: ${ways}`}.${
+    correction.explains_day
+      ? ` Пояснює різницю закриття ${dayOf(correction.explains_day)}.`
+      : ""
+  }`;
 }

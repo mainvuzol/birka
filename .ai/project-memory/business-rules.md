@@ -3460,3 +3460,65 @@ how, not decided by the owner:
   page); in the light theme as before.
 
 Built on 2026-10-22; see the [report](cash-redesign-2-report.md).
+
+## Owner decision — 2026-10-22 (three readings after #121)
+
+Asked after #121 was merged, each answer the option recommended:
+- **A take-out the phone keeps is not written on paper.** The sellers' page
+  says, under cash taken out during an outage: «Натиснули «Видати з каси», а
+  телефон пише «Видачу ще не підтверджено» — на папір не пишіть: телефон
+  перевірить сам.» *(Written 2026-10-22,
+  [the sellers' page](paper-when-the-server-is-down.md).)*
+- **«Власник побачить її в застосунку.»** after a kept reason whose message
+  timing is unknown stays, as built.
+- **«Перевірте результат ще раз — двічі … не запишеться.»** beside «Каса»'s
+  banner stays, as built: it means the button, never repeating the
+  operation.
+- **Next:** «Каса»'s P1-2 and P1-3 together. *(Built 2026-10-22, below.)*
+
+## «Видати з каси» and «Внести в касу» with chips and the sum under the thumb, «Змінити спосіб оплати» by rows and one operation's card — built 2026-10-22
+
+«Каса»'s task list, P1-2 and P1-3, whose screens the direction did not
+draw — to be approved from the screenshots. How they are carried out, not
+decided by the owner:
+- **Cash taken out:** «← Каса» and «Видати з каси»; what for as chips, 48 px
+  or more — «Витрати», «Кур’єру постачальника», and «Власнику» for whoever
+  takes it out for the owner — nothing chosen until the person chooses; the
+  chip puts the cursor in «Сума», its figures large; the note and the
+  courier's hint as before; «Коли?» for whoever corrects, as before; and
+  «Видати 150,00 грн» in the panel under the thumb, not to be pressed
+  without a kind and a sum above nothing. «Каса», «Видати з каси», a chip,
+  the sum, the button: four taps and the sum. **Cash put in** has one kind:
+  the cursor in «Сума» at once, «Внести 100,00 грн» — three taps and the
+  sum. What is sent is as before.
+- **Recorded:** a buzz, and back where it came from — «Каса», or the count,
+  whose «← Підрахунок» this screen then shows — with the words as before
+  («Записано: Витрати, 150,00 грн.»). **Refused:** a buzz, why over the
+  panel, what was typed kept and the cursor in the sum; pressed again it is
+  a new command. **Unanswered:** the form stays, held under «Каса»'s banner
+  with what was typed; refused on the phone's own check, it is there to
+  record again; confirmed, back where it came from with «Видачу записано
+  один раз: …», nothing left on the form to press again — for a way changed
+  too.
+- **A way changed:** «← Каса», «Змінити спосіб оплати», «Ваші операції після
+  останнього закриття», and the seller's operations a row each — the time
+  on the left, «Продаж» / «Внесок» / «Повернення», the goods under it —
+  never a sum nor a way (G32); an operation of a day nobody closed by its
+  date too, «21.10, 18:40». One operation: «Продаж · 20:05» (the moment
+  only when the list said it; from the receipt «Продаж»), its sum large,
+  «Зараз: Картка» as a pill («· виправлено» when it was), the ways as the
+  till's buttons — an order's sale's five a row each — the one it has now
+  marked «зараз» and not to be chosen; «Пояснення (необов’язково)» as before; and
+  «Змінити на «Готівка»» in the panel, «Оберіть новий спосіб» until one is.
+  «Каса», the row, the operation, the way, the button: five taps; from the
+  receipt three. A buzz when it is recorded or refused; a way changed
+  meanwhile is read again, the way it now has no longer to be chosen, and
+  the cursor on a way to choose. What is sent is as before.
+- **The owner's and managers' correction** takes the same card for the
+  operation they chose — «Продаж · 20:05 · the goods · who», «Інша
+  операція» under the ways; refused, why is said over the day's list read
+  again, where it was lost before. Its day and its list stay as they are
+  until P2-4.
+
+Built on 2026-10-22; see the [report](cash-redesign-3-report.md).
+

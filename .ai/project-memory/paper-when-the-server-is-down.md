@@ -16,6 +16,10 @@
 > paper says once which paper it is («Сервер не відповідав» here; «Перші
 > дні, до затвердження залишків» is the first days', in the server guide);
 > the owner confirmed the new wording on 2026-10-16.
+> Step 2 updated on 2026-10-22 for the owner's decision that a take-out the
+> phone keeps is not written on paper: the phone checks it itself, and a
+> paper line typed later would record it twice (business-rules.md,
+> 2026-10-22); the owner chose the wording on 2026-10-22.
 > Print from the line below.
 
 ---
@@ -40,7 +44,9 @@
      прийняв.
    - Забране замовлення: яке замовлення і як оплачено.
    - Видали гроші з каси — запишіть суму, на що й хто взяв; коли сервер
-     відповість, внесіть через «Видати з каси» до підрахунку.
+     відповість, внесіть через «Видати з каси» до підрахунку. Натиснули
+     «Видати з каси», а телефон пише «Видачу ще не підтверджено» — на папір
+     не пишіть: телефон перевірить сам.
 3. **Картку проводьте на терміналі одразу, як завжди.** Коли потім вносите
    з паперу, на терміналі нічого не проводьте вдруге, і гроші за повернення
    вдруге не повертайте.

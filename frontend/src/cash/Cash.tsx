@@ -1,24 +1,31 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, errorText, unreachable } from "@/shared/api";
-import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
 import { useAutoCheck } from "@/shared/reach";
-import { decimal, kopecks, money } from "@/orders/types";
+import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { notStated, methodLabels } from "@/shared/payment";
-import type { PaymentMethod } from "@/shared/payment";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Closed, CloseSummary, PeriodDetails, ReasonLine } from "./Closed";
 import { Count } from "./Count";
+import { FixStep, WayCard } from "./Fix";
 import { Kept } from "./Kept";
-import { cardText, differenceText, signed, whenOf } from "./format";
+import { Move } from "./Move";
+import {
+  cardText,
+  correctionDone,
+  differenceText,
+  movementDone,
+  signed,
+  wayName,
+  whenOf,
+} from "./format";
 import {
   resolveCashCommand,
   submitCashCommand,
@@ -32,23 +39,18 @@ import {
   staleToday,
   timeOf,
 } from "./errors";
-import { directionOf, movementLabels, waysFor } from "./types";
+import { directionOf, movementLabels, targetLabels, waysFor } from "./types";
 import type {
   CashAnswer,
   CashBody,
   Close,
   ClosePage,
-  CloseBrief,
   Correction,
   DayEvent,
   Drawer,
-  EventMethod,
   EventPage,
-  MineEvent,
-  MinePage,
+  FixTarget,
   Movement,
-  MovementKind,
-  Target,
 } from "./types";
 
 /**
@@ -90,12 +92,7 @@ export function useDrawer(storeId: string, token: string, enabled: boolean) {
   });
 }
 
-/** One operation whose way is to be changed: the receipt's sale, or one
- * chosen from a list. */
-export interface FixTarget {
-  target: Target;
-  id: string;
-}
+export type { FixTarget } from "./types";
 
 type Step =
   | { name: "main" }
@@ -107,16 +104,6 @@ type Step =
   | { name: "fix"; chosen: FixTarget | null }
   | { name: "correct" }
   | { name: "history" };
-
-const targetLabels: Record<Target, string> = {
-  SALE: "Продаж",
-  PAYMENT: "Внесок",
-  REFUND: "Повернення",
-};
-
-function wayName(method: PaymentMethod | null): string {
-  return method ? methodLabels[method] : notStated;
-}
 
 /** The phone's own date, as the server's days are written. */
 function isoDay(at: Date): string {
@@ -322,6 +309,19 @@ export function Cash({
           attempt.body.command === "reason"
         )
           setStep({ name: "closed" });
+        // Confirmed under a form still open: back where the form came from,
+        // its words shown and nothing left there to press again (review,
+        // 2026-10-22).
+        else
+          setStep((now) =>
+            now.name === "move"
+              ? now.then === "count"
+                ? { name: "count" }
+                : { name: "main" }
+              : now.name === "fix" || now.name === "correct"
+                ? { name: "main" }
+                : now,
+          );
       } else if (outcome.kind === "refused")
         // Proven to have recorded nothing: the journal is settled, and the
         // refusal says what to do instead.
@@ -381,7 +381,7 @@ export function Cash({
 
   if (step.name === "move" && drawer.data)
     return (
-      <MoveStep
+      <Move
         store={store}
         drawer={drawer.data}
         direction={step.direction}
@@ -389,6 +389,8 @@ export function Cash({
           recent.data?.items ??
           (drawer.data.last_close ? [drawer.data.last_close] : [])
         }
+        from={step.then === "count" ? "count" : "main"}
+        kept={kept}
         disabled={working}
         send={send}
         back={(text) => {
@@ -403,7 +405,7 @@ export function Cash({
         store={store}
         token={token}
         initial={step.chosen}
-        manager={drawer.data?.may_correct ?? false}
+        kept={kept}
         disabled={working}
         send={send}
         back={(text) => {
@@ -418,6 +420,7 @@ export function Cash({
         store={store}
         token={token}
         closes={recent.data?.items ?? []}
+        kept={kept}
         disabled={working}
         send={send}
         back={(text) => {
@@ -849,358 +852,6 @@ function reasonDone(
   return `${written} Власник уже отримав повідомлення без причини — побачить її в застосунку.`;
 }
 
-/** Cash moved, as recorded; `once`, a kept one confirmed: «Видачу записано
- * один раз: Витрати, 150,00 грн.» (cash task list, P1-1). */
-function movementDone(movement: Movement, once = false): string {
-  if (once) {
-    const what =
-      movement.direction === "OUT"
-        ? `Видачу записано один раз: ${movementLabels[movement.kind]}, ${money(movement.amount)}`
-        : `Внесення записано один раз: ${money(movement.amount)}`;
-    if (!movement.for_day) return `${what}.`;
-    return `${what} — до закриття ${dayOf(movement.for_day)}${
-      movement.moved_to_close ? `, ${movedBefore(movement)}` : ""
-    }.`;
-  }
-  if (movement.moved_to_close && movement.for_day)
-    return `Записано до закриття ${dayOf(movement.for_day)}: ${movedBefore(movement)}.`;
-  if (movement.for_day)
-    return `Записано до закриття ${dayOf(movement.for_day)}.`;
-  return `Записано: ${movementLabels[movement.kind]}, ${money(movement.amount)}.`;
-}
-
-/** Why cash the server put on a colleague's close went there: it moved
- * before that close — taken out, or put in (review, 2026-10-22). */
-function movedBefore(movement: Movement): string {
-  return movement.direction === "IN"
-    ? "гроші внесли до нього"
-    : "гроші взяли до нього";
-}
-
-/** A way changed, as recorded; `once`, a kept one confirmed (P1-1). */
-function correctionDone(correction: Correction, once = false): string {
-  const ways = `${wayName(correction.from_method)} → ${wayName(correction.to_method)}`;
-  return `${once ? `Зміну способу оплати записано один раз: ${ways}` : `Спосіб оплати змінено: ${ways}`}.${
-    correction.explains_day
-      ? ` Пояснює різницю закриття ${dayOf(correction.explains_day)}.`
-      : ""
-  }`;
-}
-
-/**
- * Cash taken out, or put in for change (B5). Recorded when it moves: the
- * newest close the form read is sent with it, so a record that reaches the
- * server after a colleague's close is put on that close, where the cash
- * left. Whoever holds `cash:correct` may name an earlier close for cash
- * moved and forgotten: it explains that close and changes no expected sum
- * now (G7).
- */
-function MoveStep({
-  store,
-  drawer,
-  direction,
-  closes,
-  disabled,
-  send,
-  back,
-}: {
-  store: Store;
-  drawer: Drawer;
-  direction: "OUT" | "IN";
-  closes: CloseBrief[];
-  disabled: boolean;
-  send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
-  back: (done: string | null) => void;
-}): JSX.Element {
-  const hint = useId();
-  const kinds = drawer.movement_kinds.filter(
-    (kind) => directionOf(kind) === direction,
-  );
-  const [kind, setKind] = useState<MovementKind | null>(
-    kinds.length === 1 ? (kinds[0] ?? null) : null,
-  );
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  // Empty: the open period, after the last close.
-  const [forClose, setForClose] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-
-  async function record(): Promise<void> {
-    const cents = kopecks(amount);
-    if (kind === null) {
-      setProblem("Оберіть, кому чи на що видаєте.");
-      return;
-    }
-    if (cents === null || cents <= 0n) {
-      setProblem("Вкажіть суму з точністю до копійок.");
-      return;
-    }
-    setProblem(null);
-    const outcome = await send({
-      command: "movement",
-      store_id: store.id,
-      command_id: crypto.randomUUID(),
-      movement_kind: kind,
-      amount: decimal(cents),
-      note: note.trim() === "" ? null : note.trim(),
-      after_close_id: drawer.last_close?.id ?? null,
-      ...(forClose === "" ? {} : { for_close_id: forClose }),
-    });
-    if (outcome.kind === "done") back(movementDone(outcome.result as Movement));
-    else if (outcome.kind === "refused")
-      setProblem(cashErrorText(outcome.error));
-  }
-
-  return (
-    <section>
-      <div className="toolbar">
-        <h2>{direction === "OUT" ? "Видати з каси" : "Внести в касу"}</h2>
-        <button
-          className="quiet"
-          onClick={() => {
-            back(null);
-          }}
-        >
-          До каси
-        </button>
-      </div>
-      <fieldset disabled={disabled}>
-        {direction === "OUT" && (
-          <fieldset>
-            <legend>Кому чи на що</legend>
-            {kinds.map((each) => (
-              <label className="check" key={each}>
-                <input
-                  type="radio"
-                  name="movement-kind"
-                  checked={kind === each}
-                  onChange={() => {
-                    setKind(each);
-                    setProblem(null);
-                  }}
-                />
-                {movementLabels[each]}
-              </label>
-            ))}
-          </fieldset>
-        )}
-        {kind === "SUPPLIER_COURIER" && (
-          // The invoice and its payment stay in «Накладні», which a seller
-          // does not see (G20).
-          <p className="hint">
-            {store.permissions.includes("supplier:debt")
-              ? "Оплату накладної запишіть у «Накладних»."
-              : "Накладну й оплату за нею запише менеджер."}
-          </p>
-        )}
-        <label>
-          Сума, грн
-          <input
-            inputMode="decimal"
-            placeholder="0,00"
-            value={amount}
-            onChange={(event) => {
-              setAmount(event.target.value);
-            }}
-          />
-        </label>
-        <label>
-          {direction === "OUT"
-            ? "На що (необов’язково)"
-            : "Примітка (необов’язково)"}
-          <input
-            value={note}
-            maxLength={200}
-            aria-describedby={hint}
-            onChange={(event) => {
-              setNote(event.target.value);
-            }}
-          />
-          <NoCustomerData id={hint} />
-        </label>
-        {drawer.may_correct && closes.length > 0 && (
-          <label>
-            Коли?
-            <select
-              value={forClose}
-              onChange={(event) => {
-                setForClose(event.target.value);
-              }}
-            >
-              <option value="">Після останнього закриття</option>
-              {closes.map((each) => (
-                <option key={each.id} value={each.id}>
-                  До закриття {dayOf(each.business_day)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {problem && <p role="alert">{problem}</p>}
-        <button
-          type="button"
-          onClick={() => {
-            void record();
-          }}
-        >
-          Записати
-        </button>
-      </fieldset>
-    </section>
-  );
-}
-
-/** Where one operation's sum and way are read. A sale is the server's
- * `GET /cash/sales/{id}/method`; a payment and a return the same, by kind. */
-function methodPath(chosen: FixTarget, storeId: string): string {
-  const kind = { SALE: "sales", PAYMENT: "payments", REFUND: "refunds" }[
-    chosen.target
-  ];
-  return `/cash/${kind}/${chosen.id}/method?store_id=${storeId}`;
-}
-
-/**
- * A seller's own operations of the open period, by time and goods only
- * (G16, G32), and the way of the one they choose. The receipt's «Змінити
- * спосіб оплати» opens its sale straight away.
- */
-function FixStep({
-  store,
-  token,
-  initial,
-  manager,
-  disabled,
-  send,
-  back,
-}: {
-  store: Store;
-  token: string;
-  initial: FixTarget | null;
-  /** The owner or a manager, from a receipt: any sale, any time. */
-  manager: boolean;
-  disabled: boolean;
-  send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
-  back: (done: string | null) => void;
-}): JSX.Element {
-  const [chosen, setChosen] = useState<FixTarget | null>(initial);
-  const mine = useQuery({
-    queryKey: ["cash-mine", store.id],
-    queryFn: () =>
-      api<MinePage>(`/cash/events?store_id=${store.id}&mine=true`, token),
-    enabled: chosen === null,
-    retry: false,
-  });
-  const method = useQuery({
-    queryKey: ["cash-method", chosen?.target, chosen?.id],
-    queryFn: () =>
-      api<EventMethod>(
-        methodPath(chosen ?? { target: "SALE", id: "" }, store.id),
-        token,
-      ),
-    enabled: chosen !== null,
-    retry: false,
-  });
-  const leave = (
-    <button
-      className="quiet"
-      onClick={() => {
-        back(null);
-      }}
-    >
-      До каси
-    </button>
-  );
-  const answer = method.data;
-  if (chosen)
-    return (
-      <section>
-        <div className="toolbar">
-          <h2>Змінити спосіб оплати</h2>
-          {leave}
-        </div>
-        {method.error ? (
-          <p role="alert">{cashErrorText(method.error)}</p>
-        ) : answer === undefined ? (
-          <p role="status">Завантажуємо операцію…</p>
-        ) : answer.may_change ? (
-          <WayChoice
-            title={targetLabels[answer.target]}
-            amount={answer.amount_taken}
-            current={answer.method}
-            corrected={answer.corrected}
-            ways={waysFor(answer.is_order)}
-            closedNote={null}
-            confirm={manager ? "Так, виправити" : "Так, змінити"}
-            disabled={disabled}
-            send={async (to, note) => {
-              const outcome = await send({
-                command: "correction",
-                store_id: store.id,
-                command_id: crypto.randomUUID(),
-                target: answer.target,
-                target_id: answer.target_id,
-                from_method: answer.method,
-                to_method: to,
-                note,
-              });
-              if (outcome.kind === "done")
-                back(correctionDone(outcome.result as Correction));
-              else if (outcome.kind === "refused") {
-                void method.refetch();
-                return cashErrorText(outcome.error);
-              }
-              return null;
-            }}
-          />
-        ) : (
-          <p>
-            {targetLabels[answer.target]}: {money(answer.amount_taken)} ·{" "}
-            {wayName(answer.method)}. Змінити спосіб оплати тепер може лише
-            менеджер або власник.
-          </p>
-        )}
-      </section>
-    );
-  return (
-    <section>
-      <div className="toolbar">
-        <h2>Змінити спосіб оплати</h2>
-        {leave}
-      </div>
-      <p className="hint">
-        Ваші продажі, внески й повернення після останнього закриття. Спосіб
-        оплати змінюють, доки касу не закрито.
-      </p>
-      {mine.isPending ? (
-        <p role="status">Завантажуємо…</p>
-      ) : mine.error ? (
-        <p role="alert">{errorText(mine.error)}</p>
-      ) : mine.data.items.length === 0 ? (
-        <p>Після останнього закриття ви ще нічого не провели.</p>
-      ) : (
-        <ul aria-label="Ваші операції">
-          {mine.data.items.map((event: MineEvent) => (
-            <li key={event.target_id}>
-              <button
-                className="quiet"
-                onClick={() => {
-                  setChosen({
-                    target: event.target,
-                    id: event.target_id,
-                  });
-                }}
-              >
-                {timeOf(event.at)} · {targetLabels[event.target]}:{" "}
-                {visible(event.label)}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 /**
  * The owner's and managers' correction (B6): a day, its money events with
  * their sums and ways, one of them, a new way. A closed day's event explains
@@ -1210,6 +861,7 @@ function CorrectStep({
   store,
   token,
   closes,
+  kept,
   disabled,
   send,
   back,
@@ -1217,12 +869,17 @@ function CorrectStep({
   store: Store;
   token: string;
   closes: Close[];
+  /** «Каса»'s kept command's banner and words. */
+  kept: ReactNode;
   disabled: boolean;
   send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
   back: (done: string | null) => void;
 }): JSX.Element {
   const [day, setDay] = useState(() => isoDay(new Date()));
   const [chosen, setChosen] = useState<DayEvent | null>(null);
+  // Why a correction was refused: said over the day's list read again,
+  // where the operation is chosen anew (review, 2026-10-22).
+  const [problem, setProblem] = useState<string | null>(null);
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(day);
   const events = useQuery({
     queryKey: ["cash-events", store.id, day],
@@ -1251,13 +908,11 @@ function CorrectStep({
           До каси
         </button>
       </div>
+      {kept}
       {chosen ? (
         <>
-          <p>
-            {timeOf(chosen.at)} · {visible(chosen.label)} · {visible(chosen.by)}
-          </p>
-          <WayChoice
-            title={targetLabels[chosen.target]}
+          <WayCard
+            what={`${targetLabels[chosen.target]} · ${timeOf(chosen.at)} · ${visible(chosen.label)} · ${visible(chosen.by)}`}
             amount={chosen.amount}
             current={chosen.method}
             corrected={chosen.corrected}
@@ -1272,7 +927,17 @@ function CorrectStep({
                   })()
                 : null
             }
-            confirm="Так, виправити"
+            aside={
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setChosen(null);
+                }}
+              >
+                Інша операція
+              </button>
+            }
             disabled={disabled}
             send={async (to, note) => {
               const outcome = await send({
@@ -1285,24 +950,19 @@ function CorrectStep({
                 to_method: to,
                 note,
               });
-              if (outcome.kind === "done")
+              if (outcome.kind === "done") {
+                buzz("success");
                 back(correctionDone(outcome.result as Correction));
-              else if (outcome.kind === "refused") {
+              } else if (outcome.kind === "refused") {
+                buzz("error");
                 setChosen(null);
+                setProblem(cashErrorText(outcome.error));
                 void events.refetch();
-                return cashErrorText(outcome.error);
               }
+              // Unknown: held here under «Каса»'s banner until it is known.
               return null;
             }}
           />
-          <button
-            className="quiet"
-            onClick={() => {
-              setChosen(null);
-            }}
-          >
-            Інша операція
-          </button>
         </>
       ) : (
         <>
@@ -1317,6 +977,7 @@ function CorrectStep({
               }}
             />
           </label>
+          {problem && <p role="alert">{problem}</p>}
           {!valid ? (
             <p>Оберіть день.</p>
           ) : events.isPending ? (
@@ -1333,6 +994,7 @@ function CorrectStep({
                     className="quiet"
                     disabled={!event.may_change}
                     onClick={() => {
+                      setProblem(null);
                       setChosen(event);
                     }}
                   >
@@ -1349,88 +1011,6 @@ function CorrectStep({
         </>
       )}
     </section>
-  );
-}
-
-/** One operation's sum and way, and the other ways to choose from. */
-function WayChoice({
-  title,
-  amount,
-  current,
-  corrected,
-  ways,
-  closedNote,
-  confirm,
-  disabled,
-  send,
-}: {
-  title: string;
-  amount: string;
-  current: PaymentMethod | null;
-  corrected: boolean;
-  ways: readonly PaymentMethod[];
-  closedNote: string | null;
-  confirm: string;
-  disabled: boolean;
-  /** The refusal's text, or null. */
-  send: (to: PaymentMethod, note: string | null) => Promise<string | null>;
-}): JSX.Element {
-  const [to, setTo] = useState<PaymentMethod | null>(null);
-  const [note, setNote] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const hint = useId();
-  return (
-    <fieldset disabled={disabled}>
-      <p>
-        {title}: <strong>{money(amount)}</strong> · зараз {wayName(current)}
-        {corrected ? " (виправлено)" : ""}
-      </p>
-      {closedNote && <p className="notice">{closedNote}</p>}
-      <fieldset>
-        <legend>Новий спосіб оплати</legend>
-        {ways
-          .filter((way) => way !== current)
-          .map((way) => (
-            <label className="check" key={way}>
-              <input
-                type="radio"
-                name="new-way"
-                checked={to === way}
-                onChange={() => {
-                  setTo(way);
-                  setProblem(null);
-                }}
-              />
-              {methodLabels[way]}
-            </label>
-          ))}
-      </fieldset>
-      <label>
-        Пояснення (необов’язково)
-        <input
-          value={note}
-          maxLength={200}
-          aria-describedby={hint}
-          onChange={(event) => {
-            setNote(event.target.value);
-          }}
-        />
-        <NoCustomerData id={hint} />
-      </label>
-      {problem && <p role="alert">{problem}</p>}
-      <button
-        type="button"
-        disabled={to === null}
-        onClick={() => {
-          if (to === null) return;
-          void send(to, note.trim() === "" ? null : note.trim()).then(
-            setProblem,
-          );
-        }}
-      >
-        {confirm}
-      </button>
-    </fieldset>
   );
 }
 
