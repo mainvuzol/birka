@@ -1,16 +1,16 @@
 {
-  "started_at": "2026-10-20T00:05:01.668815+00:00",
+  "started_at": "2026-10-21T06:59:59.487571+00:00",
   "ok": true,
   "problems": [],
-  "archive": "birka-20261020T000501Z.dump.age",
-  "bytes": 360534,
+  "archive": "birka-20261021T065959Z.dump.age",
+  "bytes": 360541,
   "rows": 87,
   "drill": {
     "ok": true,
-    "restore_seconds": 0.195,
+    "restore_seconds": 0.202,
     "failed": [],
     "dropped_leftovers": []
   },
   "pruned": [],
-  "finished_at": "2026-10-20T00:05:02.186957+00:00"
+  "finished_at": "2026-10-21T07:00:00.020081+00:00"
 }

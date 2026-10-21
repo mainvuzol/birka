@@ -4,11 +4,11 @@
   "result": "passed",
   "counts": "9/9 steps passed",
   "reasons": [],
-  "commit": "56a40dc",
-  "tree": "dirty",
+  "commit": "e6dbb6e",
+  "tree": "clean",
   "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-20T03:11:43+03:00",
-  "finished": "2026-10-20T03:12:07+03:00",
+  "started": "2026-10-21T10:06:53+03:00",
+  "finished": "2026-10-21T10:07:17+03:00",
   "duration": "0m23s",
   "brief": "run_edge.py's way: project birka-edge-check, Caddy on :58080; images never pulled, builds from the local cache only (pinned bases, dead proxy); stack removed after",
   "images": [
@@ -17,9 +17,9 @@
     "python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache",
     "node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1, named by digest in its Dockerfile, in the local build cache",
     "alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8, named by digest in its Dockerfile, in the local build cache",
-    "birka-edge-check-api @ sha256:cc99ff78319798a2e6e41cd1cefb561446e127ea1b22827d876877c7f65b72e3, built here from the cache",
-    "birka-edge-check-web @ sha256:6a683b8226cada31fa4926284a2d18b2eaa0b18565b54ccf58119abe7b60aced, built here from the cache",
-    "birka-edge-check-ops @ sha256:3b21ecff0ca11644acca1f2babbba265c7c4b247e90f46d60960ca5968044179, built here from the cache"
+    "birka-edge-check-api @ sha256:bcefdaa80c265e89e35693fb955cfcc1fd101fa1618889c18370164ccfad785d, built here from the cache",
+    "birka-edge-check-web @ sha256:d27520588867a7f3741f550c14646f62f08315eb99c97452294e3d5f6948fedc, built here from the cache",
+    "birka-edge-check-ops @ sha256:47e6d08995449cf36e0a18c02cdea1f3ce469cac19b90ab6dbce62fa52ede56b, built here from the cache"
   ],
   "deviations": [
     "As edge/run_edge.py runs it: the isolated compose project birka-edge-check (CI: the file's own `birka`), Caddy published on 58080/58443 instead of 80/443 (edge/override.yml), every http://localhost in the steps becomes http://localhost:58080; BIRKA_DOMAIN stays http://localhost; BIRKA_BACKUP_DIR is edge/backups. The port check reads the config merged with the runner's two files, which touch only caddy's ports and the builds.",
@@ -52,7 +52,7 @@
     {
       "name": "Build the images and start the stack",
       "status": "ok",
-      "seconds": 13.8,
+      "seconds": 13.4,
       "code": 0
     },
     {
@@ -70,19 +70,19 @@
     {
       "name": "What the edge sends",
       "status": "ok",
-      "seconds": 0.2,
+      "seconds": 0.3,
       "code": 0
     },
     {
       "name": "Sign-ins are counted per real address, whatever a client claims",
       "status": "ok",
-      "seconds": 0.2,
+      "seconds": 0.3,
       "code": 0
     },
     {
       "name": "The edge's own log keeps no query string",
       "status": "ok",
-      "seconds": 3.5,
+      "seconds": 3.6,
       "code": 0
     },
     {

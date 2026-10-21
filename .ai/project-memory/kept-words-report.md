@@ -1,8 +1,8 @@
 # A kept command's words for a server's error, and a manager after three «not found» — 2026-10-20
 
 Baseline: `0914d5d` (a closed store's debt at the till, a letter in two
-parts and an empty «Борги»; on P1-5, PR #112). This branch goes to main
-after them.
+parts and an empty «Борги»; on P1-5, PR #112); rebased on main once #113
+and #114 (`vite` 8.3.3, `certifi` 2026.10.19) were merged.
 Status: built, reviewed and proven: the whole CI run locally passed, and
 twenty-four of twenty-four ways of breaking it caught. Not yet tried on a
 real phone.
@@ -126,15 +126,19 @@ before the first commit:
 
 - [`output/verification/2026-10-20-kept-words/`](../../output/verification/2026-10-20-kept-words/):
   `mutants.py`, `mutants.txt`.
-- **CI, run locally at `56a40dc`** ([summary](../../output/verification/2026-10-20-kept-words-ci-local/summary.md)),
+- **CI, run locally again at `e6dbb6e`,** rebased on #113 and #114
+  ([summary](../../output/verification/2026-10-20-kept-words-ci-local/summary.md)),
   on the host's Node 24.18: every job passed, the backend with its
   declared gap.
   - backend: 3 458 on PostgreSQL 17;
   - e2e: 469 journeys;
-  - hot path: worst p95 95.5 ms (the search by six sellers) and 109.5 ms
+  - hot path: worst p95 93.5 ms (the search by six sellers) and 107.4 ms
     (`POST /sales`), within 300 and 500;
-  - python-audit: 43 packages, 0 known vulnerabilities;
+  - python-audit: 43 packages, 0 known vulnerabilities; `npm audit` 0;
   - restore drill, frontend and edge passed.
+  - An earlier run, at `56a40dc` before the rebase, passed every job too;
+    since then two advisories made both audits fail on main, which #114
+    fixed.
 
 ## Not covered here
 

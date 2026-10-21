@@ -4,22 +4,22 @@
 
 GitHub Actions cannot run this repository's jobs (the account's minutes are used up), so `/Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh` runs `/Users/nikitahlushak/birka/.github/workflows/ci.yml` on this Mac. This file and every log beside it come from one run (the directory is emptied when a run starts).
 
-- Commit: 56a40dc (feat/kept-words), dirty: ?? .ai/project-memory/kept-words-report.md; ?? output/verification/2026-10-20-kept-words/mutants.py; ?? output/verification/2026-10-20-kept-words/mutants.txt
+- Commit: e6dbb6e (feat/kept-words), clean
 - Runner: `/Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py` sha256 `3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da`
-- Run: 2026-10-20 02:47:59 EEST → 03:13:16; jobs asked: backend restore-drill e2e frontend python-audit edge hot-path
+- Run: 2026-10-21 09:43:03 EEST → 10:08:26; jobs asked: backend restore-drill e2e frontend python-audit edge hot-path
 - Environment of every job: TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8, as the ubuntu runner
 - Docker Desktop: not running when the run started: this run started it (open -a Docker) and stopped it at the end (docker desktop stop); engine and background services down, verified
 - Machine: macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 
 | job | result | counts | duration | deviations (short; all in the log) |
 |---|---|---|---|---|
-| [backend](backend.txt) | **passed with declared gaps** | PG17 Tests: 3458 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1481 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age) | 16m45s | PG17 in Docker on 127.0.0.1:55417; no install (venv checked against the lock); declared gap: no PG17 client or age here, so the backup tests skip on PG17 and run on PG16.2 |
-| [restore-drill](restore-drill.txt) | **passed** | 7 of CI's 7 run steps passed; ops image tools: age 1.2.1-1+b5 / libpq5:arm64 18.6-1.pgdg13+2 / postgresql-client-17 17.11-1.pgdg13+2 / postgresql-common 278 / pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2) / age 1.2.1 | 0m24s | images built from the local cache only (pinned bases, dead proxy) as birka-ci-local-*; a user network instead of host networking; backups/keys outside the repo |
-| [e2e](e2e.txt) | **passed** | 469 passed | 6m10s | PG17 in Docker on 127.0.0.1:55442 (the local PG16 E2E cluster paused); node v24.18.0 for 24; npm ci and playwright install replaced by checks of what is installed |
-| [frontend](frontend.txt) | **passed** | eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 144 modules, built in 76ms | 0m15s | node v24.18.0 for 24; npm ci replaced by a check that node_modules is exactly the lock |
-| [python-audit](python-audit.txt) | **passed** | pip-audit audited 43 packages: 0 known vulnerabilities ("No known vulnerabilities found") | 0m04s | pip-audit 2.9.0 from its own venv (Python 3.12.14); its report as JSON, counted from pip-audit's own output |
+| [backend](backend.txt) | **passed with declared gaps** | PG17 Tests: 3458 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1481 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age) | 16m38s | PG17 in Docker on 127.0.0.1:55417; no install (venv checked against the lock); declared gap: no PG17 client or age here, so the backup tests skip on PG17 and run on PG16.2 |
+| [restore-drill](restore-drill.txt) | **passed** | 7 of CI's 7 run steps passed; ops image tools: age 1.2.1-1+b5 / libpq5:arm64 18.6-1.pgdg13+2 / postgresql-client-17 17.11-1.pgdg13+2 / postgresql-common 278 / pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2) / age 1.2.1 | 0m25s | images built from the local cache only (pinned bases, dead proxy) as birka-ci-local-*; a user network instead of host networking; backups/keys outside the repo |
+| [e2e](e2e.txt) | **passed** | 469 passed | 6m22s | PG17 in Docker on 127.0.0.1:55442 (the local PG16 E2E cluster paused); node v24.18.0 for 24; npm ci and playwright install replaced by checks of what is installed |
+| [frontend](frontend.txt) | **passed** | eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 144 modules, built in 81ms | 0m16s | node v24.18.0 for 24; npm ci replaced by a check that node_modules is exactly the lock |
+| [python-audit](python-audit.txt) | **passed** | pip-audit audited 43 packages: 0 known vulnerabilities ("No known vulnerabilities found") | 0m03s | pip-audit 2.9.0 from its own venv (Python 3.12.14); its report as JSON, counted from pip-audit's own output |
 | [edge](edge.txt) | **passed** | 9/9 steps passed | 0m23s | run_edge.py's way: project birka-edge-check, Caddy on :58080; images never pulled, builds from the local cache only (pinned bases, dead proxy); stack removed after |
-| [hot-path](hot-path.txt) | **passed** | 12 cases, 5 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 95.5 ms of 300 (GET /catalog/stock-options · search (6 sellers)), POST /sales 109.5 ms of 500 (POST /sales · same coat, 6 sellers) | 0m53s | PG17 in Docker on 127.0.0.1:55417, reached through Docker Desktop's port forwarding; a 10-core Mac, not a 2-vCPU runner; gate one-seller as CI; run last, alone |
+| [hot-path](hot-path.txt) | **passed** | 12 cases, 5 gated; 0 gated over budget, 0 not gated over budget; worst p95 catalogue read 93.5 ms of 300 (GET /catalog/stock-options · search (6 sellers)), POST /sales 107.4 ms of 500 (POST /sales · same coat, 6 sellers) | 0m54s | PG17 in Docker on 127.0.0.1:55417, reached through Docker Desktop's port forwarding; a 10-core Mac, not a 2-vCPU runner; gate one-seller as CI; run last, alone |
 
 ## Network used from Docker's VM (BuildKit, containers), per job
 
@@ -62,8 +62,8 @@ All jobs:
 ### restore-drill
 - images: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
 - images: python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache
-- images: birka-ci-local-ops @ sha256:c5c4786ff80744a42a8b4f4779f5582988736bdac93254b728061684a3ad1e50, built here from the cache
-- images: birka-ci-local-api @ sha256:e8500acd2efffdfde59f03911be0b496d65f31c4443e2c8651236526299e0d38, built here from the cache
+- images: birka-ci-local-ops @ sha256:fc468317086db9974bdb1d2af1c71b432692c023fc04100884a040b0c1ced8f2, built here from the cache
+- images: birka-ci-local-api @ sha256:64a41c25d379f69500d18c3d204401b538976a6e4809c1ba30a5dada31d72d84, built here from the cache
 - Images are tagged birka-ci-local-ops / birka-ci-local-api (not birka-ops / birka-api) and built from the local build cache only: every base image pinned to the digest in the cache (no pull, no tag lookup), and a dead HTTP(S) proxy for every RUN, so any download fails (`--network=none` changes BuildKit's cache key). The ops image's package layer was fetched once, by the owner's decision (2026-10-08), with network: docker build --progress=plain --build-context python:3.12.14-slim=<the runner's cached pin> --target ops -t birka-ci-local-ops backend   (from the repository, network allowed); log in /Users/nikitahlushak/.cache/birka-runtime/ci/runs/2026-10-08-ops-image-fetch.txt. A build that fails here fails the job; only before that one fetch is a blocked download of the ops image "incomplete" (still exit 1).
 - `docker run --pull never` everywhere.
 - `--network host` with localhost:5432 becomes the user network birka-ci-local with birka-ci-local-pg:5432 (Docker Desktop on macOS has no host networking unless it is switched on in its settings).
@@ -95,9 +95,9 @@ All jobs:
 - images: python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache
 - images: node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1, named by digest in its Dockerfile, in the local build cache
 - images: alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8, named by digest in its Dockerfile, in the local build cache
-- images: birka-edge-check-api @ sha256:cc99ff78319798a2e6e41cd1cefb561446e127ea1b22827d876877c7f65b72e3, built here from the cache
-- images: birka-edge-check-web @ sha256:6a683b8226cada31fa4926284a2d18b2eaa0b18565b54ccf58119abe7b60aced, built here from the cache
-- images: birka-edge-check-ops @ sha256:3b21ecff0ca11644acca1f2babbba265c7c4b247e90f46d60960ca5968044179, built here from the cache
+- images: birka-edge-check-api @ sha256:bcefdaa80c265e89e35693fb955cfcc1fd101fa1618889c18370164ccfad785d, built here from the cache
+- images: birka-edge-check-web @ sha256:d27520588867a7f3741f550c14646f62f08315eb99c97452294e3d5f6948fedc, built here from the cache
+- images: birka-edge-check-ops @ sha256:47e6d08995449cf36e0a18c02cdea1f3ce469cac19b90ab6dbce62fa52ede56b, built here from the cache
 - As edge/run_edge.py runs it: the isolated compose project birka-edge-check (CI: the file's own `birka`), Caddy published on 58080/58443 instead of 80/443 (edge/override.yml), every http://localhost in the steps becomes http://localhost:58080; BIRKA_DOMAIN stays http://localhost; BIRKA_BACKUP_DIR is edge/backups. The port check reads the config merged with the runner's two files, which touch only caddy's ports and the builds.
 - Images: a third compose file (work/edge/edge-offline.yml) sets `pull_policy: never` on every service with an image (postgres:17-alpine, caddy:2-alpine come from the local image store, never pulled; CI pulls them fresh), pins every build's base image to the digest in the local build cache and passes a dead HTTP(S) proxy as build args, so a step that would download fails; `docker run --pull never`.
 - BIRKA_RELEASE is the full HEAD commit, as github.sha is in CI.
@@ -110,5 +110,5 @@ All jobs:
 - BIRKA_PERF_GATE=one-seller, as CI sets it (the release reading is BIRKA_PERF_GATE=all).
 - /tmp paths moved: the figures are in the evidence directory (hot-path-figures.txt), the API log is copied there (CI uploads both as an artifact). The step summary CI writes is printed in this log.
 - Run last, after every other job, with nothing else of the runner running.
-- Load average at the start: { 4.15 4.08 4.02 }.
+- Load average at the start: { 4.82 4.93 3.81 }.
 - `Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2. The lock's hashes are not checked here (nothing is downloaded); the images built in restore-drill and edge install it with --require-hashes.

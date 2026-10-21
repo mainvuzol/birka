@@ -4,12 +4,12 @@
   "result": "passed with declared gaps",
   "counts": "PG17 Tests: 3458 passed, 0 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 1481 passed, 0 failed, 19 skipped; PG16.2 run of those 19: 18 passed, 1 skipped (age)",
   "reasons": [],
-  "commit": "56a40dc",
-  "tree": "dirty",
+  "commit": "e6dbb6e",
+  "tree": "clean",
   "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-20T02:48:00+03:00",
-  "finished": "2026-10-20T03:04:45+03:00",
-  "duration": "16m45s",
+  "started": "2026-10-21T09:43:04+03:00",
+  "finished": "2026-10-21T09:59:42+03:00",
+  "duration": "16m38s",
   "brief": "PG17 in Docker on 127.0.0.1:55417; no install (venv checked against the lock); declared gap: no PG17 client or age here, so the backup tests skip on PG17 and run on PG16.2",
   "images": [
     "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
@@ -69,43 +69,43 @@
     {
       "name": "Install",
       "status": "replaced: ok",
-      "seconds": 0.3,
+      "seconds": 0.5,
       "code": 0
     },
     {
       "name": "Lint",
       "status": "ok",
-      "seconds": 0.1,
+      "seconds": 0.2,
       "code": 0
     },
     {
       "name": "Type check",
       "status": "ok",
-      "seconds": 8.4,
+      "seconds": 7.9,
       "code": 0
     },
     {
       "name": "Architecture contracts (ADR-0001)",
       "status": "ok",
-      "seconds": 0.2,
+      "seconds": 0.6,
       "code": 0
     },
     {
       "name": "Apply migrations",
       "status": "ok",
-      "seconds": 1.3,
+      "seconds": 2.5,
       "code": 0
     },
     {
       "name": "Migration drift check",
       "status": "ok",
-      "seconds": 0.6,
+      "seconds": 0.5,
       "code": 0
     },
     {
       "name": "Migration downgrade is reversible",
       "status": "ok",
-      "seconds": 2.1,
+      "seconds": 2.2,
       "code": 0
     },
     {
@@ -129,19 +129,19 @@
     {
       "name": "Tests",
       "status": "ok",
-      "seconds": 472.9,
+      "seconds": 470.2,
       "code": 0
     },
     {
       "name": "Assert the database tests actually ran",
       "status": "FAILED (1)",
-      "seconds": 454.2,
+      "seconds": 452.3,
       "code": 1
     },
     {
       "name": "[runner] the skipped backup tests on PostgreSQL 16.2",
       "status": "ok",
-      "seconds": 54.3,
+      "seconds": 50.3,
       "code": 0
     }
   ],
