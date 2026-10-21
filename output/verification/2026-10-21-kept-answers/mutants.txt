@@ -1,0 +1,19 @@
+- unchanged tree: passed 
+- the shared journal's count never written: caught by 10. a kept operation the phone settles says what became of it › a kept payment's «not foun
+- a payment's count never read back: caught by 10. a kept operation the phone settles says what became of it › a kept payment's «not foun
+- a count that is not one taken as one: caught by 10. a kept operation the phone settles says what became of it › a kept payment's «not foun
+- the sale's count never written: caught by a kept sale's «not found» count is kept when Telegram reopens the app: the third, across r
+- a sale's count never read back: caught by a kept sale's «not found» count is kept when Telegram reopens the app: the third, across r
+- the sale's count sent with it: caught by a kept sale's «not found» count is kept when Telegram reopens the app: the third, across r
+- an order step's count never read back: caught by 10. a kept operation the phone settles says what became of it › a kept order step's «not f
+- an order step's count never written: caught by 10. a kept operation the phone settles says what became of it › a kept order step's «not f
+- a request not taken said as a server's failure: caught by 10. a kept operation the phone settles says what became of it › a kept payment answered th; a kept sale answered that the server did not take the request — a 400, or a 422 the shared
+- a 400 not a request not taken: caught by 10. a kept operation the phone settles says what became of it › a kept payment answered th; a kept sale answered that the server did not take the request — a 400, or a 422 the shared
+- a 422 left in an order's words: caught by a kept sale answered that the server did not take the request — a 400, or a 422 the shared
+- a confirmed step told to try again: caught by 10. a kept operation the phone settles says what became of it › a kept order step the serv
+- a confirmed step's words over an answer with words of its own: caught by 10. a kept operation the phone settles says what became of it › a kept order step the serv
+- a confirmed step's request number dropped: caught by 10. a kept operation the phone settles says what became of it › a kept order step the serv
+- a 422 of its own words said as a request not taken: caught by a kept sale answered that the server did not take the request — a 400, or a 422 the shared
+- the step's being answered not passed: caught by 10. a kept operation the phone settles says what became of it › a kept order step the serv
+16 of 16 caught
+exit 0

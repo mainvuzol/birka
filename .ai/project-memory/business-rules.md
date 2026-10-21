@@ -3148,7 +3148,8 @@ How they are carried out, not decided by the owner:
   Any other answer begins the count again; no answer at all, or the app's
   own failure, leaves it as it is. The count is the phone's own for the
   session, and begins again when an attempt is read from the phone's
-  storage — reopened, or another store's.
+  storage — reopened, or another store's. *(Superseded 2026-10-21: kept
+  beside the attempt across reopening, below.)*
 - **Not changed:** a refusal that proves nothing was recorded, a phone that
   cannot reach the server (502–504 too), the app's own failure, and the
   suppliers', invoices', stores' and catalogue's kept commands, which the
@@ -3210,3 +3211,49 @@ How they are carried out, not decided by the owner:
   light theme and the dark, and a debt's screens' meta is 14 px.
 
 Built on 2026-10-21; see the [report](credits-redesign-8-report.md).
+
+## Owner decision — 2026-10-21 (kept commands: four readings after #113)
+
+Asked after #113 and #114 were merged, each answer the option recommended:
+- **«Зверніться до менеджера: нехай перевірить, чи записано.»** stays as
+  built, without a gender.
+- **The three «not found» are remembered across Telegram closing and
+  reopening the app:** each opening checks a kept command once, so a count
+  begun afresh would rarely reach three. *(Built 2026-10-21, below.)*
+- **An order's step the server confirmed, whose order cannot be read
+  after,** says its own words, never the shared «Не вдалося виконати
+  операцію. Спробуйте ще раз.». *(Built 2026-10-21, below; its words to be
+  confirmed.)*
+- **A kept command answered that the server did not take its request** (a
+  400) says «… ще не підтверджено: сервер не прийняв запит …», as a kept
+  payment's 422 does — for every kept command. *(Built 2026-10-21, below.)*
+
+## Kept commands: the count across reopening, a confirmed step, a request not taken — built 2026-10-21
+
+How they are carried out, not decided by the owner:
+- **The count is kept beside the attempt on the phone,** never in what is
+  sent — a sale's, an order's step's, and every command of the shared
+  journal (deliveries, corrections, counts, the drawer's, returns, payments
+  and write-offs; the suppliers', invoices', stores' and models' too,
+  though their words do not use it). An attempt read from the phone begins
+  from its own count; one whose count is not a whole number from 0 begins
+  from none, and is read as ever; past 999 it is 999. A count is written
+  only beside the very attempt it counts, never over another command still
+  unsettled.
+- **A confirmed order's step whose order cannot be read:** «Операцію
+  «Відправлено» записано. Замовлення не вдалося показати — натисніть
+  «Оновити результат».» — the banner's own button, where the owner's
+  option read «оновіть список замовлень»: the step's banner holds the
+  screen until that button reads the order. They replace the shared «Не
+  вдалося виконати операцію. Спробуйте ще раз.» alone, a server's own
+  failure keeping its request's number; every answer with words of its own
+  — the server out of reach, a session ended, too many requests — keeps
+  them.
+- **«Не прийняв запит»** also answers a 422 the shared words would call
+  «Перевірте дані та поточний статус замовлення.» — an order's words on a
+  sale's banner; a 422 with words of its own keeps them. A request's
+  number is said for a server's own failure only, as before.
+- **Not changed:** a sale the server answered whose reading alone failed
+  keeps the shared words, as the owner was asked of an order's step only.
+
+Built on 2026-10-21; see the [report](kept-answers-report.md).

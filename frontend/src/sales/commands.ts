@@ -9,6 +9,7 @@ import {
 import { decimal, kopecks } from "@/orders/types";
 import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
+import { countOf, keepCount } from "@/shared/journal";
 import { isSince, sinceOf } from "@/shared/reach";
 import type {
   CreditTerms,
@@ -87,6 +88,9 @@ export interface SaleAttempt {
    * Absent from an attempt kept before it was written.
    */
   since?: string;
+  /** Its checks' «not found» in a row, kept beside it across reopening
+   * (owner decision, 2026-10-21; `@/shared/journal`). */
+  misses?: number;
 }
 
 export type Outcome =
@@ -111,7 +115,7 @@ export const useSaleCommand = create<SaleCommandState>((set) => ({
   error: null,
   misses: 0,
   set: (pending) => {
-    set({ pending, error: null, misses: 0 });
+    set({ pending, error: null, misses: pending?.misses ?? 0 });
   },
 }));
 
@@ -226,7 +230,7 @@ function validateAttempt(key: string, value: unknown): SaleAttempt {
   ) {
     throw new Error("Некоректний збережений продаж. Зверніться до менеджера.");
   }
-  return attempt;
+  return { ...attempt, misses: countOf(attempt.misses) };
 }
 
 /**
@@ -309,6 +313,8 @@ export async function submitSale(
   useSaleCommand.setState({ busy: true, error: null });
   let current = attempt;
   let previouslyAmbiguous = Boolean(current.ambiguous);
+  // Whether the attempt on disk is this one (`@/shared/journal`).
+  let written = false;
   try {
     current = validateAttempt(storageKey, current);
     const saved = localStorage.getItem(storageKey);
@@ -323,9 +329,15 @@ export async function submitSale(
     }
     // Written down BEFORE the request, so a page that dies mid-flight still
     // knows which key to ask about. Since when is kept from the first time.
-    current = { ...current, ambiguous: true, ...sinceOf(existing, current) };
+    current = {
+      ...current,
+      ambiguous: true,
+      ...sinceOf(existing, current),
+      misses: useSaleCommand.getState().misses,
+    };
     useSaleCommand.setState({ pending: current });
     localStorage.setItem(storageKey, JSON.stringify(current));
+    written = true;
 
     if (current.emptyShelf) {
       let shelf: EmptyShelf;
@@ -389,17 +401,22 @@ export async function submitSale(
             : null,
       };
     }
-    useSaleCommand.setState({
-      error,
-      misses:
-        // No answer at all, or the app's own failure, says nothing of the
-        // command: the count stands (review, 2026-10-20).
-        !(error instanceof ApiError) || unreachable(error)
-          ? useSaleCommand.getState().misses
-          : error.status === 404
-            ? useSaleCommand.getState().misses + 1
-            : 0,
-    });
+    const misses =
+      // No answer at all, or the app's own failure, says nothing of the
+      // command: the count stands (review, 2026-10-20).
+      !(error instanceof ApiError) || unreachable(error)
+        ? useSaleCommand.getState().misses
+        : error.status === 404
+          ? useSaleCommand.getState().misses + 1
+          : 0;
+    if (written) {
+      keepCount(storageKey, current, misses);
+      useSaleCommand.setState({
+        error,
+        misses,
+        pending: { ...current, misses },
+      });
+    } else useSaleCommand.setState({ error, misses });
     return { kind: "unknown" };
   } finally {
     useSaleCommand.setState({ busy: false });

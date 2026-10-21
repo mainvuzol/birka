@@ -533,6 +533,100 @@ test("a kept sale a server fails to answer is still unconfirmed, and three «not
   await expect(said).toHaveText(unconfirmed);
 });
 
+test("a kept sale's «not found» count is kept when Telegram reopens the app: the third, across reopening, asks for a manager (owner decision, 2026-10-21)", async ({
+  page,
+}) => {
+  await seed(page, { [saleKey]: keptSale("CARD") });
+  const server = await serve(page);
+  server.sale = async (route) => {
+    await route.fulfill({
+      status: 404,
+      json: { code: "NOT_FOUND", message: "Refused" },
+    });
+  };
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  const said = page.getByRole("alert");
+  const unconfirmed =
+    "Продаж ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.";
+  // Asked by itself on opening, then by its button: twice «not found».
+  await expect(said).toHaveText(unconfirmed);
+  const check = page.getByRole("button", {
+    name: "Перевірити результат продажу",
+  });
+  await check.click();
+  await expect.poll(() => server.sales.length).toBe(2);
+  await expect(check).toBeEnabled();
+  await expect(said).toHaveText(unconfirmed);
+  // Kept beside the sale, never in what is sent.
+  const kept = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) ?? "{}") as unknown,
+    saleKey,
+  );
+  expect(kept).toMatchObject({ misses: 2 });
+  for (const sent of server.sales) expect(sent.body).not.toContain("misses");
+  // Telegram closes the app and opens it again: the check it makes by
+  // itself is the third in a row.
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  await expect.poll(() => server.sales.length).toBe(3);
+  await expect(said).toHaveText(
+    `${unconfirmed} Зверніться до менеджера: нехай перевірить, чи записано.`,
+  );
+  // Each resend the same, byte for byte, under the same key.
+  expect(
+    new Set(server.sales.map((sent) => `${sent.key ?? ""}|${sent.body}`)).size,
+  ).toBe(1);
+});
+
+test("a kept sale answered that the server did not take the request — a 400, or a 422 the shared words call «перевірте дані» — is still unconfirmed, in those words (owner decision, 2026-10-21)", async ({
+  page,
+}) => {
+  await seed(page, { [saleKey]: keptSale("CARD") });
+  const server = await serve(page);
+  let status = 400;
+  let reason: string | null = null;
+  server.sale = async (route) => {
+    await route.fulfill({
+      status,
+      headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
+      json: {
+        code: status === 400 ? "BAD_REQUEST" : "VALIDATION_ERROR",
+        message: "Refused",
+        details: reason ? { reason } : {},
+      },
+    });
+  };
+  await page.goto(launch());
+  await openStore(page, /Подільський/);
+  const said = page.getByRole("alert");
+  const notTaken =
+    "Продаж ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі він не запишеться.";
+  // A request's number is said for a server's own failure only.
+  await expect(said).toHaveText(notTaken);
+  const check = page.getByRole("button", {
+    name: "Перевірити результат продажу",
+  });
+  status = 422;
+  await check.click();
+  await expect.poll(() => server.sales.length).toBe(2);
+  await expect(check).toBeEnabled();
+  await expect(said).toHaveText(notTaken);
+  // A 422 with words of its own keeps them.
+  reason = "CUSTOMER_PHONE";
+  await check.click();
+  await expect.poll(() => server.sales.length).toBe(3);
+  await expect(check).toBeEnabled();
+  await expect(said).toHaveText(
+    "Телефон покупця має містити від 10 до 15 цифр.",
+  );
+  // Still kept: nothing proves it was not recorded.
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), saleKey),
+  ).not.toBeNull();
+});
+
 test("a kept sale's banner says which sale it was: its sum and way, the part paid now, or no way for an attempt kept from before", async ({
   page,
 }) => {
@@ -3001,7 +3095,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).not.toBeNull();
   });
 
-  test("a kept order step the server answered, whose order could not be read, keeps the shared words: it is recorded (review, 2026-10-20)", async ({
+  test("a kept order step the server answered, whose order could not be read, says it is recorded and how to read it again, never «спробуйте ще раз» (owner decision, 2026-10-21)", async ({
     page,
   }) => {
     const order = randomUUID();
@@ -3016,22 +3110,70 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       }),
     });
     await serve(page);
+    let answer: "failed" | "busy" | "lost" = "failed";
+    let reads = 0;
     await on(page, `/orders/${order}`, async (route) => {
-      await route.fulfill({
-        status: 500,
-        headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
-        json: { code: "INTERNAL_ERROR", message: "Internal error" },
-      });
+      reads += 1;
+      if (answer === "lost") {
+        await route.abort("connectionreset");
+        return;
+      }
+      await route.fulfill(
+        answer === "busy"
+          ? {
+              status: 429,
+              json: {
+                code: "TOO_MANY_REQUESTS",
+                message: "Too many requests",
+                details: { retry_after: 30 },
+              },
+            }
+          : {
+              status: 500,
+              headers: {
+                "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+              },
+              json: { code: "INTERNAL_ERROR", message: "Internal error" },
+            },
+      );
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
+    const recorded =
+      "Операцію «Відправлено» записано. Замовлення не вдалося показати — натисніть «Оновити результат».";
+    // A server's own failure keeps its request's number.
+    await expect(
+      page.getByText(`${recorded} Номер запиту: 5a6b7c8d.`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/ще не підтверджено|Спробуйте ще раз/),
+    ).toHaveCount(0);
+    // The banner's own button reads the order again.
+    const again = page.getByRole("button", { name: "Оновити результат" });
+    await expect(again).toBeEnabled();
+    // An answer with words of its own keeps them (review, 2026-10-21).
+    answer = "busy";
+    let before = reads;
+    await again.click();
+    await expect.poll(() => reads).toBeGreaterThan(before);
     await expect(
       page.getByText(
-        "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 5a6b7c8d.",
-        { exact: true },
+        "Забагато дій за короткий час. Зачекайте 30 с і повторіть.",
+        {
+          exact: true,
+        },
       ),
     ).toBeVisible();
-    await expect(page.getByText(/ще не підтверджено/)).toHaveCount(0);
+    await expect(page.getByText(/записано\. Замовлення/)).toHaveCount(0);
+    // Out of reach: told so, as anywhere.
+    answer = "lost";
+    before = reads;
+    await again.click();
+    await expect.poll(() => reads).toBeGreaterThan(before);
+    await expect(
+      page.getByRole("alert").filter({ hasText: /^Сервер не відповідає/ }),
+    ).toBeVisible();
+    await expect(page.getByText(recorded, { exact: true })).toHaveCount(0);
   });
 
   test("a kept order step answered «not found» three times in a row asks for a manager (owner decision, 2026-10-19)", async ({
@@ -4004,6 +4146,129 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ).toHaveCount(0);
       await expect(page.getByText(/Немає доступу до боргів/)).toHaveCount(0);
     });
+
+  test("a kept payment's «not found» count is kept when Telegram reopens the app, and a count found on the phone is read, a malformed one as none (owner decision, 2026-10-21)", async ({
+    page,
+  }) => {
+    await seed(page, { [creditKey]: keptDebt("payment") });
+    await serve(page);
+    const sent: string[] = [];
+    await on(
+      page,
+      `/credits/${ids.credit}/payments`,
+      async (route, request) => {
+        sent.push(request.postData() ?? "");
+        await route.fulfill({
+          status: 404,
+          json: { code: "NOT_FOUND", message: "Refused" },
+        });
+      },
+    );
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const unconfirmed =
+      "Внесок ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.";
+    const said = page
+      .getByRole("alert")
+      .filter({ hasText: /^Внесок ще не підтверджено/ });
+    await expect(said).toHaveText(unconfirmed);
+    const check = page.getByRole("button", {
+      name: "Перевірити результат внеску",
+    });
+    await check.click();
+    await expect.poll(() => sent.length).toBe(2);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(unconfirmed);
+    for (const body of sent) expect(body).not.toContain("misses");
+    // Reopened: its own check is the third in a row.
+    await page.goto("about:blank");
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect.poll(() => sent.length).toBe(3);
+    await expect(said).toHaveText(
+      `${unconfirmed} Зверніться до менеджера: нехай перевірить, чи записано.`,
+    );
+    // A count that is not one, on the phone — written as text, though it
+    // reads as three: none, and the payment read as ever, never «cannot be
+    // read».
+    await page.evaluate((key) => {
+      const kept = JSON.parse(localStorage.getItem(key) ?? "{}") as object;
+      localStorage.setItem(key, JSON.stringify({ ...kept, misses: "3" }));
+    }, creditKey);
+    await page.goto("about:blank");
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect.poll(() => sent.length).toBe(4);
+    await expect(check).toBeEnabled();
+    await expect(said).toHaveText(unconfirmed);
+    await expect(
+      page.getByText("Не вдалося прочитати збережений внесок", {
+        exact: false,
+      }),
+    ).toHaveCount(0);
+  });
+
+  test("a kept order step's «not found» count is kept when Telegram reopens the app (owner decision, 2026-10-21)", async ({
+    page,
+  }) => {
+    const order = randomUUID();
+    // Two «not found» already counted on an earlier visit.
+    await seed(page, {
+      [orderKey]: JSON.stringify({
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: randomUUID() },
+        label: "Відправлено",
+        orderId: order,
+        ambiguous: true,
+        misses: 2,
+      }),
+    });
+    await serve(page);
+    const dispatches: string[] = [];
+    await on(page, `/orders/${order}/dispatch`, async (route, request) => {
+      dispatches.push(request.postData() ?? "");
+      await route.fulfill({
+        status: 404,
+        json: { code: "NOT_FOUND", message: "Refused" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect.poll(() => dispatches.length).toBe(1);
+    // Its own check on opening is the third in a row.
+    await expect(
+      page.getByText(/^Операцію «Відправлено» ще не підтверджено/),
+    ).toHaveText(
+      "Операцію «Відправлено» ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться. Зверніться до менеджера: нехай перевірить, чи записано.",
+    );
+    expect(dispatches[0]).not.toContain("misses");
+    expect(
+      await page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) ?? "{}") as unknown,
+        orderKey,
+      ),
+    ).toMatchObject({ misses: 3 });
+  });
+
+  test("a kept payment answered that the server did not take the request (a 400) says so, as one answered with a 422 (owner decision, 2026-10-21)", async ({
+    page,
+  }) => {
+    await seed(page, { [creditKey]: keptDebt("payment") });
+    await serve(page);
+    await on(page, `/credits/${ids.credit}/payments`, async (route) => {
+      await route.fulfill({
+        status: 400,
+        json: { code: "BAD_REQUEST", message: "Refused", details: {} },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("alert").filter({ hasText: /^Внесок ще не підтверджено/ }),
+    ).toHaveText(
+      "Внесок ще не підтверджено: сервер не прийняв запит. Перевірте результат ще раз — двічі він не запишеться.",
+    );
+  });
 
   test("a kept payment on a phone whose person may take payments still turns to «Борги»", async ({
     page,
