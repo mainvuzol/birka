@@ -1,0 +1,31 @@
+- unchanged tree: passed 
+- a kind chosen for the person: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- the chip leaving the cursor on itself: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- cash put in without the cursor in the sum: caught by «Внести в касу»: one kind, nothing to choose, the cursor in «Сума» at once — three taps an
+- a sum of nothing to be sent: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- a sum still being typed said to be wrong: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- the button pressed without a kind: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- the button not naming the sum: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- no buzz for cash recorded: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- no buzz for cash refused: caught by cash taken out and refused is said over the panel, the sum kept and the cursor in it; pres
+- cash unanswered taken off its form: caught by cash taken out and unanswered: the form held under «Каса»'s banner with what was typed; re
+- the cursor not back in the sum after a refusal: caught by cash taken out and refused is said over the panel, the sum kept and the cursor in it; pres
+- the way back from the count called «Каса»: caught by cash taken out is recorded from the count, and the count comes back with its sum
+- confirmed under its form, the form left open: caught by cash taken out and unanswered: the form held under «Каса»'s banner with what was typed; re
+- the operation's time not said: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- the way it has now to be chosen: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- «зараз» not said: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- the pill without the way: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- the panel not saying what to choose: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- a way read again still chosen: caught by an order's sale offers its five ways, a row each; a way changed meanwhile is read again, a
+- an order's ways cut to the till's: caught by an order's sale offers its five ways, a row each; a way changed meanwhile is read again, a
+- no buzz for a way changed: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- no buzz for a way refused: caught by an order's sale offers its five ways, a row each; a way changed meanwhile is read again, a
+- the manager's refusal lost with its card: caught by the owner's and managers' correction takes the same card: the operation's sum and way, the
+- a way refused, the cursor nowhere: caught by an order's sale offers its five ways, a row each; a way changed meanwhile is read again, a
+- an earlier day by its time alone: caught by «Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a 
+- the manager's card without its way changed: caught by the owner's and managers' correction takes the same card: the operation's sum and way, the
+- the seller's two kinds in two rows: caught by «Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «В
+- an order's five ways in three columns: caught by an order's sale offers its five ways, a row each; a way changed meanwhile is read again, a
+- the chosen way not marked: caught by in the dark theme cash taken out and a way changed read at 4.5:1; in the light theme cash taken out and a way changed read at 4.5:1
+29 of 29 caught
