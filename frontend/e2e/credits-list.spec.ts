@@ -281,6 +281,88 @@ test("what the store is owed comes first, large, and a row a customer: what they
   expect(closed.y).toBeGreaterThan(owing.y + owing.height - 1);
 });
 
+/** What an empty «Борги» teaches (credits task list, P1-4). */
+const beginsAt =
+  "Зараз ніхто не винен. Борг з’являється, коли продають частинами.";
+
+test("an empty «Борги» says where a debt begins, and «Новий продаж» leads to the till", async ({
+  page,
+}) => {
+  await summary(page, "0.00", 0, 0);
+  await customers(page, []);
+  await credits(page);
+  const empty = page.getByText(beginsAt, { exact: true });
+  await expect(empty).toBeVisible();
+  // A search that finds nothing says so, never where debts begin.
+  await field(page).fill("Оксана");
+  await expect(page.getByText(/За «Оксана» боргів не знайдено/)).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  await field(page).fill("");
+  await expect(empty).toBeVisible();
+  // The paid and written off asked for: their own words.
+  await page
+    .getByRole("button", { name: "Показати сплачені й списані" })
+    .click();
+  await expect(
+    page.getByText("У цьому магазині ще не продавали частинами.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  await page.getByRole("button", { name: "Лише ті, хто винен" }).click();
+  await expect(empty).toBeVisible();
+  // «Продаж» is the till; «Каса» is the drawer.
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+  await expect(page.getByLabel("Знайти модель")).toBeFocused();
+});
+
+test("a store that does not trade keeps its words for an empty «Борги»: no debt begins there", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { code: string; state: string }[];
+    };
+    for (const store of body.stores)
+      if (store.code === "MAIN") store.state = "BLOCKED";
+    await route.fulfill({ response, json: body });
+  });
+  await summary(page, "0.00", 0, 0);
+  await customers(page, []);
+  await credits(page);
+  await expect(
+    page.getByText("Зараз ніхто не винен цьому магазину.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(beginsAt, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Новий продаж" })).toHaveCount(
+    0,
+  );
+});
+
+test("for whoever may not sell, an empty «Борги» says where a debt begins and leads nowhere", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (right) => right !== "sale:create",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await summary(page, "0.00", 0, 0);
+  await customers(page, []);
+  await credits(page);
+  await expect(page.getByText(beginsAt, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Новий продаж" })).toHaveCount(
+    0,
+  );
+});
+
 test("how many owe is said as a person says it", async ({ page }) => {
   await customers(page, [oksana()]);
   for (const [people, debts, said] of [
@@ -588,9 +670,7 @@ test("a closed store's customer of more debts is read among the closed stores", 
   // and the same number asked of the closed stores, by a tap, under it
   // (owner decision, 2026-10-18, В2 (а); credits task list, P1-1).
   // The list as it opened, read first: what loads next is the number's.
-  await expect(
-    page.getByText("Зараз ніхто не винен цьому магазину."),
-  ).toBeVisible();
+  await expect(page.getByText(beginsAt, { exact: true })).toBeVisible();
   const asking = page.waitForRequest(
     (request) =>
       request.url().includes("/credits/customers?") &&

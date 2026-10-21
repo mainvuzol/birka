@@ -1,0 +1,17 @@
+- unchanged tree: passed 
+- a stored letter in two parts not the letter: caught by test_a_letter_pasted_in_two_parts_is_the_letter
+- a typed letter in two parts not the letter: caught by test_a_letter_pasted_in_two_parts_is_the_letter
+- one form before the fold, a Latin «i» and its dots not «ї»: caught by test_a_letter_pasted_in_two_parts_is_the_letter
+- the closed stores not asked: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- a closed store's line after this store's: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- this store's line held while the closed stores are slow: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- this store's line held when the closed stores fail: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- the closed store not named: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- closed stores counted by name: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- the closed store's line on two lines: caught by the till says a number's debt was written off, and says nothing when «Борги» cannot be rea
+- an empty list that does not teach: caught by an empty «Борги» says where a debt begins, and «Новий продаж» leads to the till; for whoever may not sell, an empty «Борги» says where a debt begins and leads nowhere
+- a store that does not trade taught to sell: caught by a store that does not trade keeps its words for an empty «Борги»: no debt begins there
+- the paid and written off taught where a debt begins: caught by an empty «Борги» says where a debt begins, and «Новий продаж» leads to the till
+- «Новий продаж» for whoever may not sell: caught by for whoever may not sell, an empty «Борги» says where a debt begins and leads nowhere
+- «Новий продаж» not at the till's search: caught by an empty «Борги» says where a debt begins, and «Новий продаж» leads to the till
+15 of 15 caught

@@ -55,6 +55,7 @@ export function Credits({
   readOnly = false,
   networkOwner = false,
   mayErase = false,
+  sell,
 }: {
   store: Store;
   token: string;
@@ -69,6 +70,11 @@ export function Credits({
    * every store; a store's owner does it in that store alone.
    */
   mayErase?: boolean;
+  /**
+   * «Новий продаж», where a debt begins, from an empty list; only for whoever
+   * may sell here (credits task list, P1-4).
+   */
+  sell?: (() => void) | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   // What the seller types, searched once they pause, from two letters, as
@@ -323,6 +329,20 @@ export function Credits({
             >
               Очистити
             </button>
+          </div>
+        ) : owedOnly && !readOnly ? (
+          // The first weeks: where a debt begins, and a way there (credits
+          // task list, P1-4). «Продаж» is the till; «Каса» is the drawer.
+          <div className="empty">
+            <p>
+              Зараз ніхто не винен. Борг з’являється, коли продають частинами.
+            </p>
+            {sell && (
+              // Held as the till's own button is, while a kept command waits.
+              <button type="button" disabled={blocked} onClick={sell}>
+                Новий продаж
+              </button>
+            )}
           </div>
         ) : (
           <p>

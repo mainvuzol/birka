@@ -1817,6 +1817,14 @@ function Workspace({
             mayErase={me.organization_permissions.includes(
               "credit:erase_customer",
             )}
+            sell={
+              trading && store.permissions.includes("sale:create")
+                ? () => {
+                    setSearchFirst(true);
+                    setTab("sale");
+                  }
+                : undefined
+            }
             blocked={
               storageError ||
               catalogStorageError ||

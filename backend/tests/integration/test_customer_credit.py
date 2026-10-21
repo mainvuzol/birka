@@ -621,6 +621,23 @@ async def test_a_name_is_found_whatever_apostrophe_or_i_it_is_typed_with(maker):
     assert await names("марияна") == []
 
 
+async def test_a_letter_pasted_in_two_parts_is_the_letter(maker):
+    shops = await make_two_shops(maker)
+    # «й» pasted as «и» and its breve; «Ї» typed as one letter.
+    await sold_to(maker, shops, "Ярослав Кра\u0438\u0306ній", "067 666 66 66")
+    await sold_to(maker, shops, "Мирослава \u0407жакевич", "067 777 77 77")
+
+    async def names(query: str) -> list[str]:
+        return [found["customer_name"] for found in await customers(maker, shops, query=query)]
+
+    # Owner decision, 2026-10-19: one letter however it was put together.
+    assert await names("крайній") == ["Ярослав Кра\u0438\u0306ній"]
+    assert await names("\u0456\u0308жакевич") == ["Мирослава \u0407жакевич"]
+    assert await names("їжакевич") == ["Мирослава \u0407жакевич"]
+    # A Latin «i» and its dots is the letter too: the fold, then one form.
+    assert await names("\u0069\u0308жакевич") == ["Мирослава \u0407жакевич"]
+
+
 async def test_customers_come_a_page_at_a_time(maker):
     shops = await make_two_shops(maker)
     for index in range(3):
