@@ -1,0 +1,20 @@
+- unchanged tree: passed 
+- a live conflict in an order's words: caught by a way changed, refused for what «Каса»'s words do not name, says the drawer's words — neve; cash taken out, refused for what «Каса»'s words do not name, says the drawer's words — nev
+- a live request not taken in an order's words: caught by a way changed, refused for what «Каса»'s words do not name, says the drawer's words — neve; cash taken out, refused for what «Каса»'s words do not name, says the drawer's words — nev
+- «Перевірте суму» for a way changed: caught by a way changed, refused for what «Каса»'s words do not name, says the drawer's words — neve
+- a note the server cannot keep in an order's words: caught by a note the server cannot keep says so in «Каса»'s words, what was typed kept (cash task li
+- a kept command the server says changed in an order's words: caught by a kept take-out the server says changed is still unconfirmed, by its own name; proven unre
+- proven unrecorded, an order's words: caught by a kept take-out the server says changed is still unconfirmed, by its own name; proven unre
+- a take-out named «видачу чи внесення»: caught by a kept take-out the server says changed is still unconfirmed, by its own name; proven unre
+- a named refusal said in the generic words: caught by a kept fix of a way refused on its resend still says what was not recorded once another ta; a refusal read in one store's «Каса» does not follow into another store whose kept command; «Оля»'s day at «Каса» › a second close the same day is refused, and a close kept on the ph
+- cash put in of the old kind: caught by «Внести в касу»: one kind, nothing to choose, the cursor in «Сума» at once — three taps an
+- «Каса» read as words in its place: caught by «Каса» read keeps the card where it will stand, and still says «Завантажуємо касу…» (cash 
+- the card's place of another size: caught by «Каса» read keeps the card where it will stand, and still says «Завантажуємо касу…» (cash 
+- the card's place for everyone: caught by whoever may not close never sees the card's place while «Каса» is read (cash task list, P2
+- the drawer's line drawn below what is kept: caught by «Каса» opened on a kept command keeps its banner where it stands while the drawer is read 
+- the operations read as words: caught by the seller's operations, one of them, and the closes read keep their places, and say what 
+- an operation read as words: caught by the seller's operations, one of them, and the closes read keep their places, and say what 
+- a day's heading over «Каса»'s lists: caught by the seller's operations, one of them, and the closes read keep their places, and say what 
+- «Закриття» read as words: caught by «Закриття» read keeps four rows' places, and says «Завантажуємо закриття…» (cash task list
+- a drawer that cannot be read in a debt's red: caught by in the dark theme a server that does not answer is a warning's plate on «Каса», read at 4.; in the light theme a server that does not answer is a warning's plate on «Каса», read at 4
+18 of 18 caught
