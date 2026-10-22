@@ -1,0 +1,86 @@
+{
+  "job": "restore-drill",
+  "name": "backup and restore drill (ops image, PostgreSQL 17)",
+  "result": "passed",
+  "counts": "7 of CI's 7 run steps passed; ops image tools: age 1.2.1-1+b5 / libpq5:arm64 18.6-1.pgdg13+2 / postgresql-client-17 17.11-1.pgdg13+2 / postgresql-common 278 / pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2) / age 1.2.1",
+  "reasons": [],
+  "commit": "8150841",
+  "tree": "clean",
+  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
+  "started": "2026-10-22T20:57:35+03:00",
+  "finished": "2026-10-22T20:57:59+03:00",
+  "duration": "0m24s",
+  "brief": "images built from the local cache only (pinned bases, dead proxy) as birka-ci-local-*; a user network instead of host networking; backups/keys outside the repo",
+  "images": [
+    "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled",
+    "python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache",
+    "birka-ci-local-ops @ sha256:d1477340d04996bac20df058013c6cd40c9cb4d3483247bf09ac071f230923a9, built here from the cache",
+    "birka-ci-local-api @ sha256:9ca407274e721c49afd012f074c6ff929e58592093f983187a07e44909ccd20a, built here from the cache"
+  ],
+  "deviations": [
+    "Images are tagged birka-ci-local-ops / birka-ci-local-api (not birka-ops / birka-api) and built from the local build cache only: every base image pinned to the digest in the cache (no pull, no tag lookup), and a dead HTTP(S) proxy for every RUN, so any download fails (`--network=none` changes BuildKit's cache key). The ops image's package layer was fetched once, by the owner's decision (2026-10-08), with network: docker build --progress=plain --build-context python:3.12.14-slim=<the runner's cached pin> --target ops -t birka-ci-local-ops backend   (from the repository, network allowed); log in /Users/nikitahlushak/.cache/birka-runtime/ci/runs/2026-10-08-ops-image-fetch.txt. A build that fails here fails the job; only before that one fetch is a blocked download of the ops image \"incomplete\" (still exit 1).",
+    "`docker run --pull never` everywhere.",
+    "`--network host` with localhost:5432 becomes the user network birka-ci-local with birka-ci-local-pg:5432 (Docker Desktop on macOS has no host networking unless it is switched on in its settings).",
+    "PostgreSQL 17: postgres:17-alpine (same env, initdb args, health check), container birka-ci-local-pg, published on 127.0.0.1:55417.",
+    "The watcher container is birka-ci-local-watch (not `watch`); backups/ and keys/ live in the runner's work directory, not in the repository; the drill report is copied to the evidence directory."
+  ],
+  "gaps": [],
+  "coverage": null,
+  "steps": [
+    {
+      "name": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "The server's compose file is valid, every service and profile",
+      "status": "ok",
+      "seconds": 0.1,
+      "code": 0
+    },
+    {
+      "name": "Build the ops image, and the API image beside it",
+      "status": "replaced: ok",
+      "seconds": 2.3,
+      "code": 0
+    },
+    {
+      "name": "The API image is still the default target",
+      "status": "ok",
+      "seconds": 2.5,
+      "code": 0
+    },
+    {
+      "name": "The API image holds exactly the locked packages",
+      "status": "ok",
+      "seconds": 0.3,
+      "code": 0
+    },
+    {
+      "name": "Migrate, seed, and run the nightly backup as the schedule would",
+      "status": "ok",
+      "seconds": 4.5,
+      "code": 0
+    },
+    {
+      "name": "The owner's section sees the night, and the watcher starts and stops cleanly",
+      "status": "ok",
+      "seconds": 8.1,
+      "code": 0
+    },
+    {
+      "name": "Only the owner's key opens the copy, and it is the archive that was drilled",
+      "status": "ok",
+      "seconds": 0.2,
+      "code": 0
+    },
+    {
+      "name": "Preserve the drill report",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-22-otel-advisory-ci-local/restore-drill.txt"
+}
