@@ -239,20 +239,42 @@ test.describe("«Оля»'s day at «Каса»", () => {
       )
         corrections.push(request.postDataJSON());
     });
+    // Three taps from the receipt: «Змінити спосіб оплати», the way,
+    // «Змінити на «Готівка»» (cash task list, P1-3).
+    await page.evaluate(() => {
+      const host = window as unknown as { taps: number };
+      host.taps = 0;
+      document.addEventListener(
+        "click",
+        (event) => {
+          if ((event.target as Element).closest("button")) host.taps += 1;
+        },
+        true,
+      );
+    });
     await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
+    // The sale: its sum large, its way now a pill.
+    await expect(page.locator(".fix-what")).toHaveText("Продаж");
+    await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
     await expect(
-      page.getByText("Продаж: 700,00 грн · зараз Картка"),
+      page.getByText("Зараз: Картка", { exact: true }),
     ).toBeVisible();
     const ways = page.getByRole("group", { name: "Новий спосіб оплати" });
-    await expect(ways.getByRole("radio")).toHaveCount(2);
+    await expect(ways.getByRole("button")).toHaveCount(3);
+    await expect(
+      ways.getByRole("button", { name: "Картка зараз", exact: true }),
+    ).toBeDisabled();
     await expect(
       page.getByLabel("Пояснення (необов’язково)"),
     ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
-    await ways.getByRole("radio", { name: "Готівка", exact: true }).check();
-    await page.getByRole("button", { name: "Так, змінити" }).click();
+    await ways.getByRole("button", { name: "Готівка", exact: true }).click();
+    await page.getByRole("button", { name: "Змінити на «Готівка»" }).click();
     await expect(
       page.getByText("Спосіб оплати змінено: Картка → Готівка."),
     ).toBeVisible();
+    expect(
+      await page.evaluate(() => (window as unknown as { taps: number }).taps),
+    ).toBe(3);
     expect(corrections).toEqual([
       {
         command_id: expect.any(String) as string,
@@ -267,15 +289,15 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // and a supplier's courier, nothing else (G34).
     await page.getByRole("button", { name: "Видати з каси" }).click();
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
-    await expect(kinds.getByRole("radio")).toHaveCount(2);
+    await expect(kinds.getByRole("button")).toHaveCount(2);
     await kinds
-      .getByRole("radio", { name: "Кур’єру постачальника", exact: true })
-      .check();
+      .getByRole("button", { name: "Кур’єру постачальника", exact: true })
+      .click();
     await expect(
       page.getByText("Накладну й оплату за нею запише менеджер."),
     ).toBeVisible();
-    await kinds.getByRole("radio", { name: "Витрати", exact: true }).check();
-    await page.getByLabel("Сума, грн").fill("150");
+    await kinds.getByRole("button", { name: "Витрати", exact: true }).click();
+    await page.getByLabel("Сума", { exact: true }).fill("150");
     await expect(
       page.getByLabel("На що (необов’язково)"),
     ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
@@ -310,14 +332,14 @@ test.describe("«Оля»'s day at «Каса»", () => {
         }),
       { times: 1 },
     );
-    await page.getByRole("button", { name: "Записати", exact: true }).click();
+    await page.getByRole("button", { name: "Видати 150,00 грн" }).click();
     await expect(
       page.getByRole("alert").filter({ hasText: "Не записано:" }),
     ).toHaveText(
       /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\. Якщо гроші взяли чи внесли вже після закриття — запишіть ще раз\. Якщо до нього — це запише менеджер до того закриття\.$/,
     );
-    await expect(page.getByLabel("Сума, грн")).toHaveValue("150");
-    await page.getByRole("button", { name: "Записати", exact: true }).click();
+    await expect(page.getByLabel("Сума", { exact: true })).toHaveValue("150");
+    await page.getByRole("button", { name: "Видати 150,00 грн" }).click();
     await expect(
       page.getByText("Записано: Витрати, 150,00 грн."),
     ).toBeVisible();
@@ -613,13 +635,13 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await page.getByRole("button", { name: "До каси" }).click();
     await page.getByRole("button", { name: "Видати з каси" }).click();
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
-    await expect(kinds.getByRole("radio")).toHaveCount(3);
-    await kinds.getByRole("radio", { name: "Власнику", exact: true }).check();
-    await page.getByLabel("Сума, грн").fill("50");
+    await expect(kinds.getByRole("button")).toHaveCount(3);
+    await kinds.getByRole("button", { name: "Власнику", exact: true }).click();
+    await page.getByLabel("Сума", { exact: true }).fill("50");
     await page
       .getByLabel("Коли?")
       .selectOption({ label: `До закриття ${dayOf(today.business_day)}` });
-    await page.getByRole("button", { name: "Записати", exact: true }).click();
+    await page.getByRole("button", { name: "Видати 50,00 грн" }).click();
     await expect(
       page.getByText(`Записано до закриття ${dayOf(today.business_day)}.`),
     ).toBeVisible();

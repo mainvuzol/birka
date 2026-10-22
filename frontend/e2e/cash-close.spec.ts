@@ -405,12 +405,16 @@ test("cash taken out is recorded from the count, and the count comes back with i
   await page
     .getByRole("button", { name: "Спершу запишіть видане з каси", exact: true })
     .click();
+  // Back from here is back to the count.
+  await expect(
+    page.getByRole("button", { name: "Назад до підрахунку" }),
+  ).toHaveText("← Підрахунок");
   await page
     .getByRole("group", { name: "Кому чи на що" })
-    .getByRole("radio", { name: "Витрати", exact: true })
-    .check();
-  await page.getByLabel("Сума, грн").fill("150");
-  await page.getByRole("button", { name: "Записати", exact: true }).click();
+    .getByRole("button", { name: "Витрати", exact: true })
+    .click();
+  await page.getByLabel("Сума", { exact: true }).fill("150");
+  await page.getByRole("button", { name: "Видати 150,00 грн" }).click();
   await expect(
     page.getByRole("heading", { name: "Підрахунок каси" }),
   ).toBeVisible();

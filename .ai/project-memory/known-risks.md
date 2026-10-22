@@ -980,10 +980,11 @@ the review of the built change raised.
   A seller who pressed «Видати з каси», kept by the phone, and also wrote
   it on paper may have it recorded twice — by the phone's own check and by
   whoever types the paper — and the evening's close shows a surplus for its
-  reason to explain. The banner says «Нічого
-  не повторюйте, поки він не скаже «не записано».»; whether the sellers'
-  page should say not to write such a take-out on paper is the owner's
-  ([report](cash-redesign-2-report.md)).
+  reason to explain. **Answered by the owner (2026-10-22):** the sellers'
+  page now says «Натиснули «Видати з каси», а телефон пише «Видачу ще не
+  підтверджено» — на папір не пишіть: телефон перевірить сам.» A seller who
+  writes it on paper anyway is the risk that remains, the close's reason to
+  explain it ([report](cash-redesign-3-report.md)).
 - **A kept sale resent days later still sells** what is on the shelf then,
   dated then, under the phone's person, **without a mark** (owner,
   2026-10-07). The phone checks it by itself when the server answers and
