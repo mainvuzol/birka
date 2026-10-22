@@ -3,6 +3,7 @@ import type { JSX, ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, unreachable } from "@/shared/api";
 import type { JournalOutcome } from "@/shared/journal";
+import { Placeholder } from "@/shared/Placeholder";
 import { useAutoCheck } from "@/shared/reach";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -14,6 +15,7 @@ import { FixStep, WayCard } from "./Fix";
 import { History } from "./History";
 import { Kept } from "./Kept";
 import { Move } from "./Move";
+import { ContextPlaceholder, DrawerPlaceholder } from "./Placeholders";
 import {
   correctionDone,
   daysAgo,
@@ -144,6 +146,7 @@ export function Cash({
   // Which command the journal's error is about, to say what was not
   // recorded: beside the journal, since the error outlives this screen.
   const lastCommand = useCashLastCommand((state) => state.command);
+  const lastDirection = useCashLastCommand((state) => state.direction);
   const cardHint = useId();
   // The card's read is in flight: the count opens on its answer.
   const [reading, setReading] = useState(false);
@@ -174,7 +177,12 @@ export function Cash({
   async function send(body: CashBody): Promise<JournalOutcome<CashAnswer>> {
     setDone(null);
     setProblem(null);
-    useCashLastCommand.setState({ command: body.command, sending: true });
+    useCashLastCommand.setState({
+      command: body.command,
+      direction:
+        body.command === "movement" ? directionOf(body.movement_kind) : null,
+      sending: true,
+    });
     try {
       return await submitCashCommand(journalKey, token, {
         // A new transport key per attempt; the command's identity is
@@ -271,7 +279,13 @@ export function Cash({
     if (!attempt) return;
     setDone(null);
     setProblem(null);
-    useCashLastCommand.setState({ command: attempt.body.command });
+    useCashLastCommand.setState({
+      command: attempt.body.command,
+      direction:
+        attempt.body.command === "movement"
+          ? directionOf(attempt.body.movement_kind)
+          : null,
+    });
     void resolveCashCommand(journalKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
         recorded(attempt.body, outcome.result, true, attempt.since);
@@ -341,9 +355,7 @@ export function Cash({
             error,
             lastCommand,
             misses,
-            pending?.body.command === "movement"
-              ? directionOf(pending.body.movement_kind)
-              : undefined,
+            lastDirection ?? undefined,
             closeNow,
           )}
         </p>
@@ -439,7 +451,7 @@ export function Cash({
       setStep({ name: "closed" });
     } else if (outcome.kind === "refused") {
       buzz("error");
-      setProblem(cashErrorText(outcome.error, closeNow));
+      setProblem(cashErrorText(outcome.error, closeNow, "close"));
     } else {
       // Unknown: «Каса» holds it in its banner; a sum typed for a moment
       // gone is never confirmed later with a new one (G31).
@@ -509,7 +521,7 @@ export function Cash({
             recorded(body, outcome.result);
             setStep({ name: "closed" });
           } else if (outcome.kind === "refused")
-            setProblem(cashErrorText(outcome.error));
+            setProblem(cashErrorText(outcome.error, false, "reason"));
         }}
         retry={() => {
           void shown.refetch();
@@ -536,14 +548,28 @@ export function Cash({
   return (
     <section className="cash">
       <h2>Каса</h2>
-      {data && <p className="cash-context">{contextOf(data)}</p>}
+      {data ? (
+        <p className="cash-context">{contextOf(data)}</p>
+      ) : (
+        // Its place while read, in its own slot: what stands under it never
+        // moves (review, 2026-10-22).
+        drawer.isPending && (
+          <ContextPlaceholder size="Каса відкрита · останнє закриття 00.00, 00:00 · Олена" />
+        )
+      )}
       {kept}
       {done && <p role="status">{done}</p>}
       {problem && <p role="alert">{problem}</p>}
       {drawer.isPending ? (
-        <p role="status">Завантажуємо касу…</p>
+        // The card's place only for whoever may close: no one else's
+        // screen has it (review, 2026-10-22).
+        <DrawerPlaceholder
+          card={store.permissions.includes("cash:close") || networkOwner}
+        />
       ) : drawer.error ? (
-        <div role="alert">
+        // A warning's plate, as the direction draws a server that does not
+        // answer — still said at once (cash task list, P2-3).
+        <div className="notice" role="alert">
           <p>{errorText(drawer.error)}</p>
           {unreachable(drawer.error) && (
             // No close while the server does not answer (owner decisions,
@@ -868,18 +894,18 @@ function CorrectStep({
     return after ? after.business_day : null;
   }
   return (
-    <section>
-      <div className="toolbar">
-        <h2>Змінити спосіб оплати</h2>
-        <button
-          className="quiet"
-          onClick={() => {
-            back(null);
-          }}
-        >
-          До каси
-        </button>
-      </div>
+    <section className="cash-fix">
+      <button
+        type="button"
+        className="quiet back"
+        aria-label="Назад до каси"
+        onClick={() => {
+          back(null);
+        }}
+      >
+        <span aria-hidden="true">← </span>Каса
+      </button>
+      <h2>Змінити спосіб оплати</h2>
       {kept}
       {chosen ? (
         <>
@@ -928,7 +954,7 @@ function CorrectStep({
               } else if (outcome.kind === "refused") {
                 buzz("error");
                 setChosen(null);
-                setProblem(cashErrorText(outcome.error));
+                setProblem(cashErrorText(outcome.error, false, "correction"));
                 void events.refetch();
               }
               // Unknown: held here under «Каса»'s banner until it is known.
@@ -953,7 +979,7 @@ function CorrectStep({
           {!valid ? (
             <p>Оберіть день.</p>
           ) : events.isPending ? (
-            <p role="status">Завантажуємо операції…</p>
+            <Placeholder said="Завантажуємо операції…" rows={3} day={false} />
           ) : events.error ? (
             <p role="alert">{errorText(events.error)}</p>
           ) : events.data.items.length === 0 ? (

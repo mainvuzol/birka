@@ -5,6 +5,7 @@ import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { api, errorText } from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
+import { Placeholder } from "@/shared/Placeholder";
 import type { JournalOutcome } from "@/shared/journal";
 import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
@@ -14,6 +15,7 @@ import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { cashErrorText, timeOf } from "./errors";
 import { correctionDone, wayName, whenOf } from "./format";
+import { OperationPlaceholder } from "./Placeholders";
 import { targetLabels, waysFor } from "./types";
 import type {
   CashAnswer,
@@ -114,9 +116,10 @@ export function FixStep({
         <h2>Змінити спосіб оплати</h2>
         {kept}
         {method.error ? (
-          <p role="alert">{cashErrorText(method.error)}</p>
+          // A read, never a command: no «Не записано» (review, 2026-10-22).
+          <p role="alert">{errorText(method.error)}</p>
         ) : answer === undefined ? (
-          <p role="status">Завантажуємо операцію…</p>
+          <OperationPlaceholder />
         ) : answer.may_change ? (
           <WayCard
             what={`${targetLabels[answer.target]}${
@@ -146,7 +149,7 @@ export function FixStep({
                 buzz("error");
                 // A way changed meanwhile is read again (B6.1).
                 void method.refetch();
-                return cashErrorText(outcome.error);
+                return cashErrorText(outcome.error, false, "correction");
               }
               // Unknown: held here under «Каса»'s banner until it is known;
               // confirmed, «Каса» leaves it (review, 2026-10-22).
@@ -169,7 +172,7 @@ export function FixStep({
       {kept}
       <p className="cash-context">Ваші операції після останнього закриття</p>
       {mine.isPending ? (
-        <p role="status">Завантажуємо…</p>
+        <Placeholder said="Завантажуємо…" rows={3} day={false} />
       ) : mine.error ? (
         <p role="alert">{errorText(mine.error)}</p>
       ) : mine.data.items.length === 0 ? (

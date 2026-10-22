@@ -3558,3 +3558,51 @@ by the owner:
 
 Built on 2026-10-22; see the [report](cash-redesign-4-report.md).
 
+## Owner decision — 2026-10-22 (after #124 was opened)
+
+Asked when #124 was opened, each answer the option recommended:
+- **«Закриття» is approved as built** (2026-10-22,
+  [screenshots](../../output/verification/2026-10-22-cash-history/screens/)).
+- **Next:** «Каса»'s P2-1, P2-2 and P2-3 together. *(Built 2026-10-22,
+  below.)*
+
+## «Каса»'s own words for a refusal it did not name, its places while read, a server that does not answer as a warning — built 2026-10-22
+
+«Каса»'s task list, P2-1, P2-2 and P2-3. How they are carried out, not
+decided by the owner — the words to be confirmed at delivery, as the task
+list says:
+- **A refusal «Каса»'s words do not name** says the drawer's own, never an
+  order's: refused at the press, «Не записано: дані каси змінилися, поки ви
+  працювали. Спробуйте ще раз.» for a conflict, and for a request not taken
+  what it holds to check — «Не записано. Перевірте суму й спробуйте ще
+  раз.» for a count, «… суму та примітку …» for cash moved, «… причину …»
+  for a reason, «… пояснення …» for a way changed. A note the server cannot
+  keep: «Не записано: у примітці є знаки, яких не зберегти. Приберіть їх і
+  спробуйте ще раз.» A kept command the server says changed, with nothing
+  proven, «{Що} ще не підтверджено: сервер відповів, що дані змінилися.
+  Перевірте результат ще раз — двічі {воно} не запишеться.», as a return's
+  and a payment's; proven unrecorded, «Видачу не записано. Дані каси
+  змінилися, поки сервер не відповідав. Спробуйте ще раз.» (or «Сервер не
+  прийняв запит. Спробуйте ще раз.»), cash moved named by its way. A
+  refusal «Каса» names says why, as before; an operation that cannot be
+  read is a read's words, never «Не записано».
+- **«Немає доступу до каси.» is never said:** the right gone while «Каса» was
+  open, it shows nothing, as «Борги».
+- **Cash put in is of the kind «Розмін»:** «Записано: Розмін, 100,00 грн.»;
+  its row «Внесено · розмін», as before. **The owner's and managers'
+  correction** has «← Каса», as every screen of «Каса».
+- **While «Каса» is read,** grey places: where the drawer stands, in its
+  own slot over what is kept, the card «Закрити касу» in its own size where
+  it will stand — for whoever may close — and two rows; an operation's, its
+  sum, its way and the ways' row; a close's day and three figures; the
+  lists' rows. Still under reduced motion. A screen reader still hears
+  «Завантажуємо касу…» and the rest, as before.
+- **The drawer that cannot be read** is a warning's plate on «Каса», never a
+  debt's red, its words as before; other reads that fail, and a kept
+  command's error, keep their alert. What is said under a field or a task
+  is 14 px on every screen of «Каса».
+- **Left as it is:** the server's own words for cash put in that explains a
+  close, «Внесено в касу (розмін)», under «Що пояснює різницю».
+
+Built on 2026-10-22; see the [report](cash-redesign-5-report.md).
+

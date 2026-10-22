@@ -78,11 +78,11 @@ export function staleToday(error: unknown): boolean {
 }
 
 /**
- * A refusal of any cash command, as «Каса» shows it. `closeNow`: the drawer
- * is still to be closed today, as its last read says.
+ * «Каса»'s words for a refusal it names; null for one it does not.
+ * `closeNow`: the drawer is still to be closed today, as its last read
+ * says.
  */
-export function cashErrorText(error: unknown, closeNow = false): string {
-  if (!(error instanceof ApiError)) return errorText(error);
+function namedText(error: ApiError, closeNow: boolean): string | null {
   // A stale screen: the way changed since it was read (B6.1).
   if (error.code === "PAYMENT_METHOD_CHANGED") {
     const current = error.details.current;
@@ -129,9 +129,45 @@ export function cashErrorText(error: unknown, closeNow = false): string {
       return "Такий спосіб оплати для цієї операції не підходить.";
     case "BEFORE_DRAWER":
       return "Цю операцію записано до того, як застосунок почав рахувати касу: її спосіб оплати не змінюють.";
+    // A note the server cannot keep: the field holds no more than it takes,
+    // so only a sign it cannot store (review, 2026-10-22).
+    case "NOTE":
+      return "Не записано: у примітці є знаки, яких не зберегти. Приберіть їх і спробуйте ще раз.";
   }
-  return errorText(error);
+  return null;
 }
+
+/**
+ * A refusal of any cash command, as «Каса» shows it; one it does not name
+ * in its own words, by what was sent — never an order's (cash task list,
+ * P2-1).
+ */
+export function cashErrorText(
+  error: unknown,
+  closeNow = false,
+  command?: CashBody["command"],
+): string {
+  if (!(error instanceof ApiError)) return errorText(error);
+  const named = namedText(error, closeNow);
+  if (named !== null) return named;
+  const text = errorText(error);
+  if (text === CONFLICT_TEXT)
+    return "Не записано: дані каси змінилися, поки ви працювали. Спробуйте ще раз.";
+  if (text === INVALID_TEXT)
+    return command === undefined
+      ? "Не записано. Перевірте дані й спробуйте ще раз."
+      : notTakenTexts[command];
+  return text;
+}
+
+/** A request «Каса» sent and the server did not take, by what it holds:
+ * a sum, a note, a reason, an explanation (review, 2026-10-22). */
+const notTakenTexts: Record<CashBody["command"], string> = {
+  close: "Не записано. Перевірте суму й спробуйте ще раз.",
+  movement: "Не записано. Перевірте суму та примітку й спробуйте ще раз.",
+  reason: "Не записано. Перевірте причину й спробуйте ще раз.",
+  correction: "Не записано. Перевірте пояснення й спробуйте ще раз.",
+};
 
 /**
  * «Клієнт забрав» refused for want of a way (ADR-0012, B12): a collect
@@ -480,16 +516,17 @@ export function cashJournalText(
   /** The drawer is still to be closed today (`cashErrorText`). */
   closeNow = false,
 ): string {
-  if (!recordedNothing(error))
-    return (
-      keptUnconfirmed(
-        error,
-        ...(command === "movement" && direction
-          ? movementNames[direction]
-          : keptNames[command]),
-        misses,
-      ) ?? errorText(error)
-    );
+  const [what, it] =
+    command === "movement" && direction
+      ? movementNames[direction]
+      : keptNames[command];
+  if (!recordedNothing(error)) {
+    // Changed, said the server, of a command it may have recorded: still
+    // unconfirmed, as a return's and a payment's (cash task list, P2-1).
+    if (errorText(error) === CONFLICT_TEXT)
+      return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі ${it} не запишеться.`;
+    return keptUnconfirmed(error, what, it, misses) ?? errorText(error);
+  }
   // These say themselves what was not recorded.
   if (
     error instanceof ApiError &&
@@ -498,5 +535,20 @@ export function cashJournalText(
     )
   )
     return cashErrorText(error, closeNow);
-  return `${notRecorded[command]} ${cashErrorText(error)}`;
+  // What was not recorded: a movement by its way, when known.
+  const not =
+    command === "movement" && direction
+      ? `${what} не записано.`
+      : notRecorded[command];
+  // Proven to have recorded nothing, refused for what the drawer's words do
+  // not name: what was not, and to send it again — never an order's words
+  // (cash task list, P2-1). A refusal they name says why, as before.
+  if (error instanceof ApiError && namedText(error, closeNow) === null) {
+    const text = errorText(error);
+    if (text === CONFLICT_TEXT)
+      return `${not} Дані каси змінилися, поки сервер не відповідав. Спробуйте ще раз.`;
+    if (text === INVALID_TEXT)
+      return `${not} Сервер не прийняв запит. Спробуйте ще раз.`;
+  }
+  return `${not} ${cashErrorText(error, false, command)}`;
 }

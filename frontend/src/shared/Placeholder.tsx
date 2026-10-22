@@ -12,6 +12,7 @@ export function Placeholder({
   tags = 3,
   rows = 0,
   debts = false,
+  day = true,
 }: {
   said: string;
   /** The search field's place, above the tags. */
@@ -23,6 +24,9 @@ export function Placeholder({
   /** The rows are «Борги»'s customers: a mark, a name and its meta, what is
    * owed on the right, and no day (credits task list, P2-3). */
   debts?: boolean;
+  /** A day's heading over the rows; «Каса»'s lists have none (cash task
+   * list, P2-2). */
+  day?: boolean;
 }): JSX.Element {
   if (rows > 0)
     return (
@@ -31,7 +35,7 @@ export function Placeholder({
           {said}
         </p>
         <div className="placeholder" aria-hidden="true">
-          {!debts && <span className="skeleton skeleton-day" />}
+          {!debts && day && <span className="skeleton skeleton-day" />}
           {Array.from({ length: rows }, (_, n) => (
             <div className={debts ? "sale-row debt-row" : "sale-row"} key={n}>
               {debts && <span className="debt-mark skeleton" />}

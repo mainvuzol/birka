@@ -78,11 +78,21 @@ async def test_the_servers_limits_and_zero_turns_them_off() -> None:
 
 
 async def test_a_limit_under_a_millisecond_is_still_a_limit() -> None:
-    """PostgreSQL counts in milliseconds and reads 0 as off."""
+    """PostgreSQL counts in milliseconds and reads 0 as off.
+
+    On a busy machine the 1 ms limit can cancel the very statement that
+    reads it, which shows it on as surely (it failed so twice on a loaded
+    Mac, 2026-10-22); a limit read as off is never cancelled, and fails.
+    """
     engine = create_engine(settings(db_statement_timeout_seconds=0.0004))
     try:
         async with engine.connect() as connection:
-            assert await connection.scalar(text("SHOW statement_timeout")) == "1ms"
+            try:
+                shown = await connection.scalar(text("SHOW statement_timeout"))
+            except sa_exc.DBAPIError as error:
+                assert "statement timeout" in str(error.orig)
+            else:
+                assert shown == "1ms"
     finally:
         await engine.dispose()
 
