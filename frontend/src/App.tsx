@@ -2014,9 +2014,9 @@ function Workspace({
             fix={cashFix}
             fixSeen={fixSeen}
           />
-        ) : (
-          <p role="alert">Немає доступу до каси.</p>
-        )
+        ) : // The right gone while «Каса» was open: nothing is said of the
+        // rule, as «Борги» (cash task list, P2-1).
+        null
       ) : tab === "report" ? (
         canSeeReport ? (
           <SalesReport token={token} scopeKey={reportKey} />

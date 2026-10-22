@@ -1351,7 +1351,8 @@ html {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton,
+  .cash-card-skeleton {
     animation: none;
   }
 }
@@ -1654,4 +1655,42 @@ html {
 .close-unclosed {
   padding: 12px 4px;
   border-bottom: 1px solid var(--line);
+}
+/* «Каса»'s places while read (cash task list, P2-2): the card's own size,
+   its words unseen; an operation's pill and ways. */
+.cash-card-skeleton {
+  border-color: transparent;
+  background: var(--line);
+  animation: skeleton-breathe 1.4s ease-in-out infinite;
+}
+.cash-card-skeleton > span {
+  visibility: hidden;
+}
+.skeleton-pill {
+  width: 8em;
+  height: 28px;
+  border-radius: 20px;
+}
+.skeleton-way {
+  height: 54px;
+  border-radius: 15px;
+}
+/* A server that does not answer, on «Каса»'s screens: a warning's plate,
+   as the direction draws it, never a debt's red (cash task list, P2-3). */
+.cash .notice[role="alert"] {
+  padding: 15px;
+  border: 1px solid var(--warn-line);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--text);
+}
+.cash .notice[role="alert"] p:first-child {
+  margin-top: 0;
+}
+/* What is said under a field or a task, 14 px on every screen of «Каса»
+   (cash task list, P2-3). */
+.cash .hint,
+.cash-fix .hint,
+.cash-history .hint {
+  font-size: 14px;
 }

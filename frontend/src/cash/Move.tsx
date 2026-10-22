@@ -103,7 +103,7 @@ export function Move({
     } else if (outcome.kind === "refused") {
       // Said over the panel, what was typed kept, the cursor back in it.
       buzz("error");
-      setProblem(cashErrorText(outcome.error));
+      setProblem(cashErrorText(outcome.error, false, "movement"));
       requestAnimationFrame(() => field.current?.focus());
     }
     // Unknown: the form stays, held under «Каса»'s banner, what was typed

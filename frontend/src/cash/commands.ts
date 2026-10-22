@@ -149,6 +149,14 @@ export const resolveCashCommand = cash.resolve;
  */
 export const useCashLastCommand = create<{
   command: CashBody["command"];
+  /** A movement's way, out of the drawer or in: its refusal names it after
+   * the journal let it go (review, 2026-10-22). */
+  direction: "OUT" | "IN" | null;
   sending: boolean;
   recounted: unknown;
-}>(() => ({ command: "close", sending: false, recounted: null }));
+}>(() => ({
+  command: "close",
+  direction: null,
+  sending: false,
+  recounted: null,
+}));

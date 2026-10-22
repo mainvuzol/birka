@@ -440,7 +440,7 @@ test("«Внести в касу»: one kind, nothing to choose, the cursor in �
   await sum(page).fill("100");
   await page.getByRole("button", { name: "Внести 100,00 грн" }).click();
   await expect(
-    page.getByText("Записано: Внесено в касу (розмін), 100,00 грн.", {
+    page.getByText("Записано: Розмін, 100,00 грн.", {
       exact: true,
     }),
   ).toBeVisible();

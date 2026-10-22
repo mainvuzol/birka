@@ -16,6 +16,7 @@ import {
   unclosedText,
   whenOf,
 } from "./format";
+import { ClosePlaceholder, ContextPlaceholder } from "./Placeholders";
 import type { Close } from "./types";
 
 /** Nothing to compare with: the first count, or the first after the store
@@ -428,7 +429,7 @@ export function Closed({
           ? "Перший підрахунок записано"
           : "Касу закрито"}
       </h2>
-      {close && (
+      {close ? (
         // Which close: its day, and its store when it is another's — a
         // reason owed is the closer's in any store (review, 2026-10-21).
         <p className="cash-context">
@@ -436,6 +437,9 @@ export function Closed({
           {close.store_id !== storeId &&
             ` · магазин «${visible(close.store_name)}»`}
         </p>
+      ) : (
+        // Its place while read, in its own slot (review, 2026-10-22).
+        !failed && <ContextPlaceholder size="Закриття 00.00" />
       )}
       {kept}
       {close === null ? (
@@ -447,7 +451,7 @@ export function Closed({
             </button>
           </div>
         ) : (
-          <p role="status">Завантажуємо закриття…</p>
+          <ClosePlaceholder />
         )
       ) : (
         <CloseBody close={close} reason={owedId === null} />

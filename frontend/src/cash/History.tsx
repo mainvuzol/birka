@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { api, errorText } from "@/shared/api";
+import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
 import { CloseBody, differenceOf, isOpening } from "./Closed";
 import { dayOf, timeOf } from "./errors";
@@ -165,7 +166,7 @@ export function History({
       </button>
       <h2>Закриття</h2>
       {closes.isPending ? (
-        <p role="status">Завантажуємо закриття…</p>
+        <Placeholder said="Завантажуємо закриття…" rows={4} day={false} />
       ) : closes.data === undefined ? (
         <p role="alert">{errorText(closes.error)}</p>
       ) : items.length === 0 ? (

@@ -45,7 +45,9 @@ export const movementLabels: Record<MovementKind, string> = {
   OWNER: "Власнику",
   EXPENSES: "Витрати",
   SUPPLIER_COURIER: "Кур’єру постачальника",
-  CHANGE: "Внесено в касу (розмін)",
+  // A kind, as «Витрати» is; its row says «Внесено · розмін» (cash task
+  // list, §9).
+  CHANGE: "Розмін",
 };
 
 /** Only change brought in puts cash into the drawer. */
