@@ -61,6 +61,14 @@ export function daysAgo(days: number): string {
   return isoDay(at);
 }
 
+/** The drawer's day `days` before today's, by the phone's clock: 06:00 to
+ * 06:00, as the server's (G8) — at 00:30 today's is the evening before's. */
+export function cashDay(days: number): string {
+  const at = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  at.setDate(at.getDate() - days);
+  return isoDay(at);
+}
+
 /** A way by name, or «не вказано» for none. */
 export function wayName(method: PaymentMethod | null): string {
   return method ? methodLabels[method] : notStated;

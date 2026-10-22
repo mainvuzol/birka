@@ -545,6 +545,30 @@ async def test_the_days_money_is_listed_with_sums_and_ways_for_whoever_reads_it(
     assert refused.status_code == 403
 
 
+async def test_a_closed_operation_names_the_close_it_fell_in(maker, till):
+    """The business day of the close that ended its period — what a
+    correction of it explains (G7) — named by the server, as no phone can
+    from the closes it has read; an open one names none (cash task list,
+    P2-4)."""
+    net, variant, size = till
+    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    closed = await sell(maker, net, variant, size, "CARD")
+    ended = await close(maker, net, "0.00", now=None)
+    still_open = await sell(maker, net, variant, size, "CARD")
+
+    async with as_(maker, net, net.manager) as client:
+        day = await client.get(
+            f"/api/v1/cash/events?store_id={net.store}&day={ended.business_day.isoformat()}"
+        )
+    assert day.status_code == 200, day.text
+    items = {item["target_id"]: item for item in day.json()["items"]}
+    assert figures(items[closed["id"]], "closed", "close_day") == (
+        True,
+        ended.business_day.isoformat(),
+    )
+    assert figures(items[still_open["id"]], "closed", "close_day") == (False, None)
+
+
 async def test_the_money_of_one_operation_is_for_its_own_screen(maker, till):
     """G32: the seller who made it, to fix it; whoever may take its return;
     whoever reads the money. A debt payment's and a return's: their own

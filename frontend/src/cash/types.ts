@@ -201,6 +201,10 @@ export interface DayEvent {
   method: PaymentMethod | null;
   corrected: boolean;
   closed: boolean;
+  /** The business day of the close it fell in, once closed: the server's,
+   * as no phone can tell it from the closes it has read (review,
+   * 2026-10-23). */
+  close_day: string | null;
   label: string;
   is_order: boolean;
   may_change: boolean;

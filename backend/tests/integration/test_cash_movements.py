@@ -163,6 +163,34 @@ async def test_one_command_is_one_movement_however_often_it_is_sent(maker):
     assert other.status_code == 409 and other.json()["code"] == "IDEMPOTENCY_CONFLICT"
 
 
+async def test_change_put_in_and_recorded_after_a_close_it_came_before_explains_it_as_change(
+    maker,
+):
+    """Cash put in for change, recorded after another phone's close it came
+    before, explains that close as «Розмін» — the kind's own word, as «Каса»
+    says it on every screen (owner decision, 2026-10-22)."""
+    net = await network(maker)
+    first = await close(maker, net, "2000.00", now=datetime.now(UTC) - timedelta(days=2))
+    tuesday = await close(maker, net, "2100.00", now=datetime.now(UTC) - timedelta(minutes=5))
+    assert tuesday.difference == d("100.00")
+
+    put = await record(
+        maker, net, net.owner, body(net, "CHANGE", "100.00", after=first.id, note="з банку")
+    )
+    assert put.status_code == 201, put.text
+    assert figures(put.json(), "direction", "for_close_id", "moved_to_close") == (
+        "IN",
+        str(tuesday.id),
+        True,
+    )
+    view = await seen(maker, net, tuesday.id, net.owner)
+    assert figures(view["explanations"][0], "kind", "cash", "text") == (
+        "PUT_IN",
+        "100.00",
+        "Розмін: з банку",
+    )
+
+
 async def test_j_a_take_out_resent_after_another_phones_close_explains_that_close(maker):
     """Example J: Olena records «Витрати 150» at 19:40 with close #1 on the
     screen, and nothing arrives; Marina closes at 20:00, 150 short; at 20:05

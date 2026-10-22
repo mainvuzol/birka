@@ -1694,3 +1694,39 @@ html {
 .cash-history .hint {
   font-size: 14px;
 }
+/* The owner's and managers' correction (cash task list, P2-4): the day as
+   a switch, its operations a row each — the sum beside what, when and who,
+   the goods and the way under them the row's whole width, as «Закриття»'s,
+   long words broken where they must (review, 2026-10-23); one that may not
+   be changed read as clearly as any; a closed day's note a line under the
+   card. */
+.correct-days {
+  margin: 8px 0 12px;
+}
+.correct-row {
+  overflow-wrap: anywhere;
+}
+.correct-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.correct-row .history-sum {
+  white-space: nowrap;
+}
+.correct-row .badge {
+  font-size: 13px;
+}
+.correct-row:disabled {
+  opacity: 1;
+}
+.correct-row:disabled .cash-row-title,
+.correct-row:disabled .history-sum {
+  color: var(--text-2);
+}
+.fix-note {
+  margin: -6px 0 12px;
+  font-size: 14px;
+  color: var(--text-2);
+}

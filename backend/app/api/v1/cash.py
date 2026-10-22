@@ -233,6 +233,8 @@ class EventResponse(BaseModel):
     method: str | None
     corrected: bool
     closed: bool
+    # The business day of the close it fell in, once closed.
+    close_day: date | None
     # The goods, never a customer's name.
     label: str
     is_order: bool

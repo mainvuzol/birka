@@ -83,7 +83,7 @@ class MovementKind(StrEnum):
     OWNER = "OWNER"  # «Власнику»
     EXPENSES = "EXPENSES"  # «Витрати»
     SUPPLIER_COURIER = "SUPPLIER_COURIER"  # «Кур’єру постачальника»
-    # «Внесено в касу (розмін)»: the one kind that puts cash in.
+    # «Розмін»: the one kind that puts cash in («Внесено · розмін» in its row).
     CHANGE = "CHANGE"
 
 

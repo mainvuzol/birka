@@ -309,7 +309,10 @@ test("text from outside is shown with its hidden characters marked, on every scr
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(Date.now() - 6 * 3600 * 1000));
-  await page.getByLabel("День").fill(cashDay);
+  // By Kyiv's clock, which the phone's may not be: on the calendar (cash
+  // task list, P2-4).
+  await page.getByRole("radio", { name: "Інший день" }).check();
+  await page.getByLabel("День", { exact: true }).fill(cashDay);
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`);
 
   // «Накладні»: the supplier and the note.

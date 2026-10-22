@@ -18,6 +18,7 @@ import { Move } from "./Move";
 import { ContextPlaceholder, DrawerPlaceholder } from "./Placeholders";
 import {
   correctionDone,
+  cashDay,
   daysAgo,
   isoDay,
   movementDone,
@@ -403,7 +404,6 @@ export function Cash({
       <CorrectStep
         store={store}
         token={token}
-        closes={recent.data?.items ?? []}
         kept={kept}
         disabled={working}
         send={send}
@@ -850,15 +850,24 @@ function reasonDone(
   return `${written} Власник уже отримав повідомлення без причини — побачить її в застосунку.`;
 }
 
+/** The days a correction is looked for on: one tap each but the rest
+ * (cash task list, P2-4). */
+const dayChoices = {
+  today: "Сьогодні",
+  yesterday: "Вчора",
+  other: "Інший день",
+} as const;
+
 /**
- * The owner's and managers' correction (B6): a day, its money events with
- * their sums and ways, one of them, a new way. A closed day's event explains
- * that close's difference and changes no expected sum now (G7).
+ * The owner's and managers' correction (B6): a day — today, yesterday, or
+ * another chosen on a calendar, each the drawer's day from 06:00 (G8) — its
+ * money events a row each with their sums and ways, one of them, a new way
+ * (cash task list, P2-4). A closed day's event explains that close's
+ * difference and changes no expected sum now (G7).
  */
 function CorrectStep({
   store,
   token,
-  closes,
   kept,
   disabled,
   send,
@@ -866,14 +875,17 @@ function CorrectStep({
 }: {
   store: Store;
   token: string;
-  closes: Close[];
   /** «Каса»'s kept command's banner and words. */
   kept: ReactNode;
   disabled: boolean;
   send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
   back: (done: string | null) => void;
 }): JSX.Element {
-  const [day, setDay] = useState(() => isoDay(new Date()));
+  const [which, setWhich] = useState<keyof typeof dayChoices>("today");
+  // Another day: none until one is chosen.
+  const [other, setOther] = useState("");
+  const day =
+    which === "today" ? cashDay(0) : which === "yesterday" ? cashDay(1) : other;
   const [chosen, setChosen] = useState<DayEvent | null>(null);
   // Why a correction was refused: said over the day's list read again,
   // where the operation is chosen anew (review, 2026-10-22).
@@ -886,13 +898,6 @@ function CorrectStep({
     enabled: valid,
     retry: false,
   });
-  // The close an event's period ended with: the first one after it.
-  function closedBy(event: DayEvent): string | null {
-    const after = closes
-      .filter((each) => Date.parse(each.closed_at) > Date.parse(event.at))
-      .sort((a, b) => Date.parse(a.closed_at) - Date.parse(b.closed_at))[0];
-    return after ? after.business_day : null;
-  }
   return (
     <section className="cash-fix">
       <button
@@ -917,12 +922,9 @@ function CorrectStep({
             ways={waysFor(chosen.is_order)}
             closedNote={
               chosen.closed
-                ? (() => {
-                    const closedDay = closedBy(chosen);
-                    return closedDay
-                      ? `Пояснить різницю закриття ${dayOf(closedDay)}`
-                      : "Пояснить різницю закриття, у яке потрапила";
-                  })()
+                ? chosen.close_day
+                  ? `Пояснить різницю закриття ${dayOf(chosen.close_day)}`
+                  : "Пояснить різницю закриття, у яке потрапила"
                 : null
             }
             aside={
@@ -964,17 +966,39 @@ function CorrectStep({
         </>
       ) : (
         <>
-          <label>
-            День
-            <input
-              type="date"
-              value={day}
-              max={isoDay(new Date())}
-              onChange={(event) => {
-                setDay(event.target.value);
-              }}
-            />
-          </label>
+          <fieldset className="way-switch correct-days">
+            <legend className="visually-hidden">Який день</legend>
+            {(Object.keys(dayChoices) as (keyof typeof dayChoices)[]).map(
+              (option) => (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="correct-day"
+                    checked={which === option}
+                    onChange={() => {
+                      setWhich(option);
+                      setProblem(null);
+                    }}
+                  />
+                  <span>{dayChoices[option]}</span>
+                </label>
+              ),
+            )}
+          </fieldset>
+          {which === "other" && (
+            <label>
+              День
+              <input
+                type="date"
+                value={other}
+                max={cashDay(0)}
+                onChange={(event) => {
+                  setOther(event.target.value);
+                  setProblem(null);
+                }}
+              />
+            </label>
+          )}
           {problem && <p role="alert">{problem}</p>}
           {!valid ? (
             <p>Оберіть день.</p>
@@ -985,22 +1009,48 @@ function CorrectStep({
           ) : events.data.items.length === 0 ? (
             <p>Цього дня грошових операцій не було.</p>
           ) : (
-            <ul aria-label="Операції дня">
+            <ul className="fix-list" aria-label="Операції дня">
               {events.data.items.map((event) => (
                 <li key={`${event.target}:${event.target_id}`}>
+                  {/* What, when and who, its sum beside them; the goods,
+                      the close it fell in and why it may not be changed,
+                      its way under them, the row's whole width (cash task
+                      list, P2-4; review, 2026-10-23). */}
                   <button
-                    className="quiet"
+                    type="button"
+                    className="sale-row correct-row"
                     disabled={!event.may_change}
                     onClick={() => {
                       setProblem(null);
                       setChosen(event);
                     }}
                   >
-                    {timeOf(event.at)} · {targetLabels[event.target]}:{" "}
-                    {visible(event.label)} · {money(event.amount)} ·{" "}
-                    {wayName(event.method)}
-                    {event.corrected ? " (виправлено)" : ""} ·{" "}
-                    {visible(event.by)}
+                    <span className="sale-main">
+                      <span className="correct-head">
+                        <span className="cash-row-title">
+                          {targetLabels[event.target]} · {timeOf(event.at)} ·{" "}
+                          {visible(event.by)}
+                        </span>
+                        <span className="history-sum">
+                          {money(event.amount)}
+                        </span>
+                      </span>
+                      <span className="sale-meta">
+                        {[
+                          visible(event.label),
+                          event.close_day
+                            ? `закриття ${dayOf(event.close_day)}`
+                            : null,
+                          event.may_change ? null : "змінити не можна",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                      <span className="badge neutral">
+                        {wayName(event.method)}
+                        {event.corrected ? " · виправлено" : ""}
+                      </span>
+                    </span>
                   </button>
                 </li>
               ))}
