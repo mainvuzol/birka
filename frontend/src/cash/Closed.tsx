@@ -29,7 +29,10 @@ export function isOpening(close: Close): boolean {
  * warning — neither a debt nor anyone's fault — and to the kopeck the
  * accent's (owner decision, 2026-10-21, В4 (а); cash task list, P0-3).
  */
-function differenceOf(difference: string): { text: string; match: boolean } {
+export function differenceOf(difference: string): {
+  text: string;
+  match: boolean;
+} {
   if (nothing(difference)) return { text: "Збіглося до копійки", match: true };
   return difference.startsWith("-")
     ? { text: `Нестача ${money(difference.slice(1))}`, match: false }
@@ -41,7 +44,14 @@ function differenceOf(difference: string): { text: string; match: boolean } {
  * task list, P0-3): the notebook's column of three figures. Every figure is
  * the server's; nothing is summed here.
  */
-function Figures({ close }: { close: Close }): JSX.Element {
+function Figures({
+  close,
+  now,
+}: {
+  close: Close;
+  /** Just counted: what comes next is said; read later, it is not. */
+  now: boolean;
+}): JSX.Element {
   if (isOpening(close))
     return (
       <div
@@ -53,7 +63,9 @@ function Figures({ close }: { close: Close }): JSX.Element {
         <p className="cash-sum">
           <Sum value={money(close.counted)} />
         </p>
-        <p className="owed-count">З цієї суми почнемо наступного разу.</p>
+        {now && (
+          <p className="owed-count">З цієї суми почнемо наступного разу.</p>
+        )}
       </div>
     );
   const difference = differenceOf(close.difference ?? "0.00");
@@ -208,6 +220,36 @@ export function PeriodDetails({ close }: { close: Close }): JSX.Element {
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+/**
+ * A close's figures, the slip, the days nobody closed before it, the reason
+ * and, for the owner and managers, its period: the close's result and the
+ * history's close alike (cash task list, P0-3, P1-4). `reason`: false while
+ * a reason is owed, its form standing below.
+ */
+export function CloseBody({
+  close,
+  reason = true,
+  now = true,
+}: {
+  close: Close;
+  reason?: boolean;
+  /** The close's result, just made; false for one read back later, whose
+   * «наступного разу» has long come (review, 2026-10-22). */
+  now?: boolean;
+}): JSX.Element {
+  return (
+    <>
+      <Figures close={close} now={now} />
+      <Slip close={close} />
+      {close.unclosed_days.length > 0 && (
+        <p>{unclosedText(close.unclosed_days)}</p>
+      )}
+      {reason && <ReasonLine close={close} />}
+      <PeriodDetails close={close} />
     </>
   );
 }
@@ -408,15 +450,7 @@ export function Closed({
           <p role="status">Завантажуємо закриття…</p>
         )
       ) : (
-        <>
-          <Figures close={close} />
-          <Slip close={close} />
-          {close.unclosed_days.length > 0 && (
-            <p>{unclosedText(close.unclosed_days)}</p>
-          )}
-          {owedId === null && <ReasonLine close={close} />}
-          <PeriodDetails close={close} />
-        </>
+        <CloseBody close={close} reason={owedId === null} />
       )}
       {done && <p role="status">{done}</p>}
       {problem && <p role="alert">{problem}</p>}

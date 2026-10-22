@@ -3522,3 +3522,39 @@ decided by the owner:
 
 Built on 2026-10-22; see the [report](cash-redesign-3-report.md).
 
+## Owner decision — 2026-10-22 (after #122)
+
+Asked after #122 was merged, each answer the option recommended:
+- **«Видати з каси» and «Змінити спосіб оплати» are approved as built**
+  (2026-10-22, [screenshots](../../output/verification/2026-10-22-cash-move-fix/screens/)).
+- **The seller's two chips stay as they are:** on a phone whose font is
+  wider, the second goes to the next row, as the owner's three do.
+- **Next:** «Каса»'s P1-4, «Закриття». *(Built 2026-10-22, below.)*
+
+## «Закриття» a row a close, what it came to as a pill, a close tapped as its result — built 2026-10-22
+
+«Каса»'s task list, P1-4, whose screen the direction left for a second
+stage — to be approved from the screenshots. For the owner and managers
+(`report:view_financial`), as before. How it is carried out, not decided
+by the owner:
+- **A row a close:** «20.10 · Оля», what it came to as a pill under it, one
+  column down the list — «Нестача 50,00 грн» and «Надлишок 350,00 грн» a
+  warning's, «Збіглося» the accent's (В4), «Перший підрахунок» plain — and
+  under them «20:14 · порахували 2 000,00 · мало бути 2 050,00», with «·
+  причину не вказано» when a reason was owed and not given, and «·
+  пояснено +50,00» when there is a difference and something explains it,
+  as the close itself says. Every figure is the server's.
+- **A day nobody closed** is a row of its own, «19.10» and a plain pill «Не
+  закрито», under the close it went into, newest first.
+- **A close tapped** is all of it, as its result showed it, read again by
+  its id: «Закриття 20.10» — a first count «Перший підрахунок 11.09», and
+  without «З цієї суми почнемо наступного разу», long come — when and who,
+  «Мало бути» and «Порахували» large and what it came to, the card and the
+  transfer, the days nobody closed, the reason, the period's cash and what
+  explains the difference; «← Закриття» back to the list where it was left,
+  the row tapped in hand.
+- **«← Каса»** where «До каси» was, as on «Каса»'s other screens; twenty
+  closes a page and «Показати ще», a year back, as before.
+
+Built on 2026-10-22; see the [report](cash-redesign-4-report.md).
+
