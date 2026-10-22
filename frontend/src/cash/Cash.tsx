@@ -1,10 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, unreachable } from "@/shared/api";
 import type { JournalOutcome } from "@/shared/journal";
 import { useAutoCheck } from "@/shared/reach";
@@ -12,17 +8,17 @@ import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
-import { Closed, CloseSummary, PeriodDetails, ReasonLine } from "./Closed";
+import { Closed, CloseSummary } from "./Closed";
 import { Count } from "./Count";
 import { FixStep, WayCard } from "./Fix";
+import { History } from "./History";
 import { Kept } from "./Kept";
 import { Move } from "./Move";
 import {
-  cardText,
   correctionDone,
-  differenceText,
+  daysAgo,
+  isoDay,
   movementDone,
-  signed,
   wayName,
   whenOf,
 } from "./format";
@@ -104,30 +100,6 @@ type Step =
   | { name: "fix"; chosen: FixTarget | null }
   | { name: "correct" }
   | { name: "history" };
-
-/** The phone's own date, as the server's days are written. */
-function isoDay(at: Date): string {
-  return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
-}
-
-function daysAgo(days: number): string {
-  const at = new Date();
-  at.setDate(at.getDate() - days);
-  return isoDay(at);
-}
-
-/** What the history shows under a close's count: the slip's sums, the
- * reason, and for the owner and managers the cash itself. */
-function CloseDetails({ close }: { close: Close }): JSX.Element {
-  return (
-    <>
-      <p>{cardText(close.card)}</p>
-      <p>Переказ: {signed(close.transfer.net)}.</p>
-      <ReasonLine close={close} />
-      <PeriodDetails close={close} />
-    </>
-  );
-}
 
 export function Cash({
   store,
@@ -1011,116 +983,5 @@ function CorrectStep({
         </>
       )}
     </section>
-  );
-}
-
-/** Closes per page of the history: the server gives at most 100 at once
- * (`GET /cash/closes`), so the history pages by offset, never by a larger
- * limit. */
-const pageSize = 20;
-
-/**
- * The closes, newest first, for the owner and managers (owner decision:
- * the split and the closes are theirs, as the sales report is): what was
- * counted and expected, the difference and its reason, what explains it,
- * the slip's sums, and each day nobody closed.
- */
-function History({
-  store,
-  token,
-  back,
-}: {
-  store: Store;
-  token: string;
-  back: () => void;
-}): JSX.Element {
-  // One year, fixed while the screen is open: every page is of the same list.
-  const [period] = useState(() => ({
-    from: daysAgo(365),
-    to: isoDay(new Date()),
-  }));
-  const closes = useInfiniteQuery({
-    queryKey: ["cash-closes", store.id, "history", period.from, period.to],
-    queryFn: ({ pageParam }) =>
-      api<ClosePage>(
-        `/cash/closes?store_id=${store.id}&date_from=${period.from}&date_to=${period.to}&limit=${String(pageSize)}&offset=${String(pageParam)}`,
-        token,
-      ),
-    initialPageParam: 0,
-    // The next page starts after the closes read; the server says whether
-    // there is one.
-    getNextPageParam: (last: ClosePage, pages: ClosePage[]) =>
-      last.has_more ? pages.length * pageSize : undefined,
-    retry: false,
-  });
-  // A close made between two pages moves the older ones down by one: each
-  // close is shown once.
-  const items = [
-    ...new Map(
-      (closes.data?.pages ?? [])
-        .flatMap((page) => page.items)
-        .map((close) => [close.id, close]),
-    ).values(),
-  ];
-  return (
-    <section>
-      <div className="toolbar">
-        <h2>Закриття</h2>
-        <button className="quiet" onClick={back}>
-          До каси
-        </button>
-      </div>
-      {closes.isPending ? (
-        <p role="status">Завантажуємо закриття…</p>
-      ) : closes.data === undefined ? (
-        <p role="alert">{errorText(closes.error)}</p>
-      ) : items.length === 0 ? (
-        <p>Касу цього магазину ще не закривали.</p>
-      ) : (
-        <>
-          <ul className="nights" aria-label="Закриття каси">
-            {items.map((close) => (
-              <HistoryRow key={close.id} close={close} />
-            ))}
-          </ul>
-          {/* A page that failed keeps the closes already read. */}
-          {closes.error && <p role="alert">{errorText(closes.error)}</p>}
-          {closes.hasNextPage && (
-            <button
-              className="quiet"
-              disabled={closes.isFetching}
-              onClick={() => {
-                void closes.fetchNextPage();
-              }}
-            >
-              Показати ще
-            </button>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function HistoryRow({ close }: { close: Close }): JSX.Element {
-  return (
-    <>
-      <li aria-label={`Закриття ${dayOf(close.business_day)}`}>
-        <strong>
-          {dayOf(close.business_day)} · {visible(close.closed_by)}
-        </strong>{" "}
-        <small>о {timeOf(close.closed_at)}</small>
-        <p>
-          {close.opening || close.expected === null || close.difference === null
-            ? `Перший підрахунок: ${money(close.counted)}.`
-            : `Порахували ${money(close.counted)}, мало бути ${money(close.expected)}. ${differenceText(close.difference)}`}
-        </p>
-        <CloseDetails close={close} />
-      </li>
-      {/* Newest first: the days nobody closed came before this close. */}
-      {[...close.unclosed_days].reverse().map((day) => (
-        <li key={`${close.id}:${day}`}>{dayOf(day)} — не закрито</li>
-      ))}
-    </>
   );
 }

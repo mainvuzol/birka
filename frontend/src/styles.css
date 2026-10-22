@@ -1421,7 +1421,8 @@ html {
 .cash-count .back,
 .cash-closed .back,
 .cash-move .back,
-.cash-fix .back {
+.cash-fix .back,
+.cash-history .back {
   min-height: 44px;
   margin: 0;
   padding: 0 4px;
@@ -1431,7 +1432,8 @@ html {
 .cash-count .back + h2,
 .cash-closed .back + h2,
 .cash-move .back + h2,
-.cash-fix .back + h2 {
+.cash-fix .back + h2,
+.cash-history .back + h2 {
   margin-top: 4px;
 }
 .cash-first {
@@ -1635,4 +1637,21 @@ html {
   display: block;
   font-size: 12px;
   font-weight: 500;
+}
+/* The closes (cash task list, P1-4): a row each, what it came to as a pill
+   under its day — one column down the list, whatever the names — and the
+   figures the row's whole width; a day nobody closed, its own row. */
+.close-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.close-row .badge,
+.close-unclosed .badge {
+  font-size: 13px;
+}
+.close-unclosed {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
 }

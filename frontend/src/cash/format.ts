@@ -28,14 +28,6 @@ export function whenOf(iso: string): string {
   return `${at.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })}, ${timeOf(iso)}`;
 }
 
-/** «Нестача 150,00 грн.», «Надлишок 350,00 грн.», «Збіглося до копійки.» */
-export function differenceText(difference: string): string {
-  if (nothing(difference)) return "Збіглося до копійки.";
-  return difference.startsWith("-")
-    ? `Нестача ${money(difference.slice(1))}.`
-    : `Надлишок ${money(difference)}.`;
-}
-
 /** A day nobody closed went into this close (G9); the same words as the bot's. */
 export function unclosedText(days: string[]): string {
   const named = days.map(dayOf).join(", ");
@@ -58,13 +50,15 @@ export function cardParts(card: WaySums): string[] | null {
   ];
 }
 
-/**
- * The card's sum since the previous close, to compare with the terminal's
- * end-of-day slip (owner, answer 11).
- */
-export function cardText(card: WaySums): string {
-  const parts = cardParts(card);
-  return `Картка: ${signed(card.net)}${parts ? ` (${parts.join(", ")})` : ""}. Звірте з чеком терміналу.`;
+/** The phone's own date, as the server's days are written. */
+export function isoDay(at: Date): string {
+  return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
+
+export function daysAgo(days: number): string {
+  const at = new Date();
+  at.setDate(at.getDate() - days);
+  return isoDay(at);
 }
 
 /** A way by name, or «не вказано» for none. */

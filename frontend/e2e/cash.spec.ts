@@ -618,21 +618,31 @@ test.describe("«Оля»'s day at «Каса»", () => {
       page.getByRole("button", { name: "Внести в касу" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Закриття", exact: true }).click();
+    // A row each: what was counted and expected, what it came to as a pill
+    // (cash task list, P1-4).
     const closes = page.getByRole("list", { name: "Закриття каси" });
     const row = closes.getByRole("listitem", {
       name: `Закриття ${dayOf(today.business_day)}`,
     });
-    await expect(row).toContainText(
-      "Порахували 2 000,00 грн, мало бути 2 050,00 грн. Нестача 50,00 грн.",
+    await expect(row.locator(".sale-meta")).toHaveText(
+      /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s050,00$/,
     );
-    await expect(row).toContainText("Причина: «помилилась зі здачею» · Оля");
+    await expect(row.locator(".badge")).toHaveText("Нестача 50,00 грн");
     await expect(
       closes.getByRole("listitem").filter({ hasText: "Перший підрахунок" }),
-    ).toContainText("Перший підрахунок: 1 000,00 грн.");
+    ).toContainText("порахували 1 000,00");
+    // Tapped: all of it, as its result showed it.
+    await row.getByRole("button").click();
+    const figures = page.getByRole("group", { name: "Закриття каси" });
+    await expect(figures).toContainText("Нестача 50,00 грн");
+    await expect(
+      page.getByText("Причина: «помилилась зі здачею» · Оля"),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Назад до закриттів" }).click();
 
     // The owner took 50 for themselves before that count, and recorded it
     // only now: against that close, which it explains (G7).
-    await page.getByRole("button", { name: "До каси" }).click();
+    await page.getByRole("button", { name: "Назад до каси" }).click();
     await page.getByRole("button", { name: "Видати з каси" }).click();
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
     await expect(kinds.getByRole("button")).toHaveCount(3);
@@ -646,9 +656,13 @@ test.describe("«Оля»'s day at «Каса»", () => {
       page.getByText(`Записано до закриття ${dayOf(today.business_day)}.`),
     ).toBeVisible();
     await page.getByRole("button", { name: "Закриття", exact: true }).click();
-    await expect(row).toContainText(
-      "Пояснено: −50,00 грн. Не пояснено: 0,00 грн.",
+    await expect(row.locator(".sale-meta")).toHaveText(
+      /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s050,00 · пояснено −50,00$/,
     );
+    await row.getByRole("button").click();
+    await expect(
+      page.getByText("Пояснено: −50,00 грн. Не пояснено: 0,00 грн."),
+    ).toBeVisible();
   });
 });
 
