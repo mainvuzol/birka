@@ -669,8 +669,11 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await page.getByRole("button", { name: "Повернення", exact: true }).click();
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
-  await expect(page.getByRole("article")).toContainText("Оплата частинами");
-  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  // Its own sale, never the recent ones still shown while the search is
+  // read (it raced them on a loaded machine, 2026-10-22).
+  const sold = page.getByRole("article").filter({ hasText: model });
+  await expect(sold).toContainText("Оплата частинами");
+  await sold.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.locator(".sale-marks")).toHaveText("Оплата частинами");
   // In the debt's colours (returns task list, P2-4).
   await expect(page.locator(".sale-marks .badge")).toHaveClass(/\bdebt\b/);

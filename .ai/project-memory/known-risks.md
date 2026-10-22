@@ -1603,3 +1603,27 @@ branch, on advisories published after the last run that passed them:
 - **What remains:** the server takes the new bundle only at its next image
   build, after the merge — a deploy, which is the owner's; for `certifi`,
   sooner is better.
+
+## opentelemetry-api moved to 1.45.1 — 2026-10-22
+
+The Python audit in CI was found failing on 2026-10-22, on main and on
+every branch, on an advisory published after the last run that passed it:
+- **`opentelemetry-api` 1.45.0** (GHSA-xcq7-p3pf-p88h, medium): parsing a
+  W3C `tracestate` header costs time growing with the square of a run of
+  spaces or tabs in it, with no length limit first; one request with a
+  large header can hold an asyncio worker for seconds. Fixed in 1.45.1.
+
+- **What it reached:** nothing on the server today. FastAPI requires the
+  package and parses the header only when a tracer provider is set up;
+  the server installs no OpenTelemetry SDK and sets none up, so the
+  header is never parsed. The audit fails all the same, and an SDK added
+  later would reach it.
+- **What moved:** `opentelemetry-api` 1.45.0 → 1.45.1 in both Python locks,
+  with the hashes of both files PyPI holds for it, nothing else: its one
+  requirement, `typing-extensions>=4.5.0`, is unchanged and met by the
+  pinned 4.16.0. Downloaded with the owner's permission (2026-10-22): the
+  version's files and hashes, the wheel into the isolated check
+  environment, and the server's images built once with network so the
+  local CI's offline builds find them.
+- **What remains:** the server takes it at its next image build, after the
+  merge — a deploy, which is the owner's.
