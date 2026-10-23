@@ -48,6 +48,18 @@ function goes(how: string): RegExp {
   return new RegExp(`^${escaped} · з\\s\\d{2}\\.\\d{2}$`);
 }
 
+/** What a step did is read before the next is pressed: a tap within 0.7 s
+ * of its answer is taken as meant for the step before (review,
+ * 2026-10-24). */
+async function readTheAnswer(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 800);
+      }),
+  );
+}
+
 async function enter(page: Page): Promise<void> {
   await page.goto("about:blank");
   await page.goto(
@@ -268,14 +280,17 @@ test("where an order goes is corrected while it is open, and every version stays
   await page
     .getByRole("button", { name: "Прибув на пошту", exact: true })
     .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Прибув на пошту$/ }),
+  ).toBeVisible();
+  await readTheAnswer(page);
   await page
-    .getByRole("group", { name: "Як оплачено замовлення" })
-    .getByRole("radio", { name: "Накладеним платежем", exact: true })
-    .check();
-  await page
-    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .getByRole("group", { name: "Клієнт забрав — як оплачено?" })
+    .getByRole("button", { name: "Накладений платіж", exact: true })
     .click();
-  await expect(page.getByText("Продаж записано.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Змінити доставку" }),
   ).toHaveCount(0);

@@ -3800,3 +3800,59 @@ P0-2. How it is carried out, not decided by the owner:
 
 Built on 2026-10-23; see the [report](orders-redesign-2-report.md).
 
+## Owner decision — 2026-10-24 (after #128 was merged)
+
+Asked when #128 was merged, each answer the option recommended:
+- **The order's card is approved as built,** the number small beside the
+  pill.
+- **An order's conflict says the task list's words,** «Не записано: дані
+  замовлення змінилися, поки ви працювали. Перевірте замовлення й
+  спробуйте ще раз.», with the rest of an order's refusals (P1-2) — not
+  built yet.
+- **A line's discount says it is for every unit:** «… за 1 шт. · знижка
+  20,00 грн за 1 шт.». *(Built with P0-3, below.)*
+- **Next: «Клієнт забрав», P0-3.**
+
+## «Клієнт забрав» by its ways, and a discount for every unit — built 2026-10-24
+
+«Замовлення»'s task list, P0-3, and the owner's answers after #128. How it
+is carried out, not decided by the owner:
+- **The five ways are the step,** in the panel under the thumb, nothing
+  chosen first (В2 (а)): «Зараз, у магазині» — «Готівка», «Картка»,
+  «Переказ»; «Наперед чи перевізнику» — «Переказ наперед», «Накладений
+  платіж». Over them what it is and how it went, and «Разом» large — in
+  parts «Зараз … · винен …», as the till's panel says it. What is sent is
+  as before, `{command_id, payment_method}`, in parts with its `credit`.
+- **Over the panel one line,** «Продаж записуємо, коли покупець забрав
+  товар.», the rest said by the rows' captions; «Оплата частинами» as
+  before, for whoever pays in parts (`sale:credit`): its terms checked
+  before anything is sent, why brought to the finger over the panel.
+- **Recorded, the sale said as the till says one:** «Продаж записано», the
+  way with what to do — «Картка · Проведіть на терміналі», «Переказ ·
+  Перевірте, що переказ надійшов» — the sum taken large, the server's (in
+  parts the part paid now), «Покупець винен … Наступні внески — у
+  «Боргах».» from its answer; a buzz; «До замовлень», and the receipt's two
+  quiet ways on: «Змінити спосіб оплати» for whoever opens «Каса» and is
+  given the way, «Помилилися з товаром чи ціною? Оформити повернення» for
+  whoever takes returns. «Разом» not over it: the sum taken alone. Seen
+  again later: «Продаж записано · Картка» in a line — the way only to
+  whoever the server gives it (G32) — and the same two.
+- **A «Клієнт забрав» whose answer was lost, confirmed later,** says
+  «Продаж записано один раз» and the way alone, never «Проведіть»; by card,
+  to charge it only if nobody did meanwhile — never twice (ADR-0013 §5.6,
+  owner decision 2026-10-07), as the till and a debt's payment say it.
+- **A tap meant for the step just taken is let go** when it lands on the
+  next step's buttons drawn in its place, within 0.7 s of its answer:
+  never a sale by a double tap on «Прибув на пошту», nor an arrival by one
+  on «Відправлено» (review, 2026-10-24).
+- **The ways' groups are named by their captions** for whoever listens,
+  each way by its own word — not «Клієнт забрав: готівкою — зараз, на
+  касі», whose name would not hold the word seen.
+- **«Повернення» opens on the order's sale** while it is among the store's
+  newest sales, as from the receipt; past them, «Повернення»'s list, where
+  it is found by its goods.
+- **A line's discount for every unit:** «600,00 грн за 1 шт. · знижка
+  20,00 грн за 1 шт.».
+
+Built on 2026-10-24; see the [report](orders-redesign-3-report.md).
+
