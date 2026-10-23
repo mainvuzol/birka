@@ -1,0 +1,27 @@
+- unchanged tree: passed 
+- sent said without its waybill: caught by sent with its waybill, then arrived: what is sent is as before, each a buzz and what it di
+- arrived said nothing: caught by sent with its waybill, then arrived: what is sent is as before, each a buzz and what it di
+- abroad sent said as within Ukraine: caught by an order abroad says where and how it went, in one line
+- a line's sum without its discount: caught by lines with their sums: two of a coat less its discount, «за 1 шт.» for more than one; the 
+- a line's sum for one unit: caught by lines with their sums: two of a coat less its discount, «за 1 шт.» for more than one; the 
+- «за 1 шт.» for one: caught by lines with their sums: two of a coat less its discount, «за 1 шт.» for more than one; the 
+- the reserve's line on every status: caught by sent with its waybill, then arrived: what is sent is as before, each a buzz and what it di
+- the money's words gone from «Клієнт забрав»: caught by sent with its waybill, then arrived: what is sent is as before, each a buzz and what it di
+- the panel over the shipping form: caught by an order to send fits the phone: its goods as its title, how it goes, its sum, the waybill
+- the panel for whoever may not step: caught by a closed order, and an order seen by whoever may not step it, have no panel (orders task l
+- a panel on an arrived order: caught by sent with its waybill, then arrived: what is sent is as before, each a buzz and what it di
+- the panel naming the first coat only: caught by lines with their sums: two of a coat less its discount, «за 1 шт.» for more than one; the 
+- no room kept for the panel: SURVIVED
+- no number beside the pill: caught by an order to send fits the phone: its goods as its title, how it goes, its sum, the waybill
+- a kept step buzzing: caught by a step whose answer never came is kept, with no buzz; checked again and recorded, a buzz a
+- a refused step silent: caught by sent without a waybill says it may come later; refused, a buzz of its own and why brought 
+- a refused step's order not read again: caught by sent without a waybill says it may come later; refused, a buzz of its own and why brought 
+- a step done silently: caught by sent with its waybill, then arrived: what is sent is as before, each a buzz and what it di
+- a step done unsaid: caught by a step whose answer never came is kept, with no buzz; checked again and recorded, a buzz a
+- the server's lists oldest first: caught by test_order_pages_filter_whole_inaccessible_orders_before_pagination; test_the_open_orders_come_apart_from_the_closed_newest_first
+19 of 20 caught
+
+Then, the card's first journey asking that the panel's height is kept clear while it shows, and none while it is gone — the browser here centres a focused button, so the room never showed in what is seen (the survivor above):
+- unchanged tree: passed 
+- no room kept for the panel: caught by an order to send fits the phone: its goods as its title, how it goes, its sum, the waybill
+1 of 1 caught — 20 of 20 in all
