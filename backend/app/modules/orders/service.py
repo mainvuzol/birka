@@ -608,8 +608,8 @@ async def list_orders(
 
     `waybill` finds the orders whose waybill holds it, however either is
     spaced (owner decision, 2026-10-01). `status` reads the open ones —
-    still to send or on their way — oldest first, the next to send on top,
-    or the closed ones newest first (orders task list, P0-1)."""
+    still to send or on their way — or the closed ones (orders task list,
+    P0-1); newest first, as every order is (owner decision, 2026-10-23)."""
     scope.require(Permission.SALE_VIEW, store_id)
     private_store = (
         store_id
@@ -650,13 +650,7 @@ async def list_orders(
                     *([CustomerOrder.waybill_key.contains(wanted)] if wanted else []),
                     *([open_] if status == "open" else [~open_] if status == "closed" else []),
                 )
-                .order_by(
-                    *(
-                        (CustomerOrder.created_at.asc(), CustomerOrder.id.asc())
-                        if status == "open"
-                        else (CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
-                    )
-                )
+                .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
                 .limit(limit + 1)
                 .offset(offset)
             )

@@ -17,20 +17,15 @@ import {
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
+import {
+  DestinationFields,
+  OrderDetail,
+  actionLabels,
+  stepDone,
+} from "@/orders/Order";
 import { Orders, freshOrdersView } from "@/orders/Orders";
 import type { OrdersView } from "@/orders/Orders";
-import {
-  asShown,
-  carrierLabels,
-  collectHint,
-  collectMethods,
-  decimal,
-  kopecks,
-  money,
-  shippingText,
-  stateText,
-  statusLabels,
-} from "@/orders/types";
+import { asShown, decimal, kopecks, money, stateText } from "@/orders/types";
 import type {
   Me,
   Store,
@@ -40,7 +35,6 @@ import type {
   Order,
   Carrier,
   Destination,
-  ShippingChange,
 } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { Catalog } from "@/catalog/Catalog";
@@ -88,8 +82,6 @@ import {
 import { erasedCustomer } from "@/credits/types";
 import type { Credit, CreditBody } from "@/credits/types";
 import { Paid } from "@/credits/Paid";
-import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
-import type { TermsInput } from "@/credits/Terms";
 import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import { Stores } from "@/stores/Stores";
@@ -121,14 +113,12 @@ import type { FixTarget } from "@/cash/Cash";
 import { loadCashCommand, useCashCommand } from "@/cash/commands";
 import {
   adjustmentErrorText,
-  collectNeedsMethod,
   creditErrorText,
   orderErrorText,
   receiptErrorText,
   returnErrorText,
   saleErrorText,
 } from "@/cash/errors";
-import { NoCustomerData } from "@/shared/NoCustomerData";
 import "./styles.css";
 
 type Tab =
@@ -877,44 +867,46 @@ function Workspace({
   // refused as having recorded nothing, it says which (ADR-0013 §1).
   const [orderResent, setOrderResent] = useState<string | null>(null);
   // What a step did, said on the order it was taken on (orders task list,
-  // P0-4): a cancel, so far.
+  // P0-2, P0-4): sent, arrived, cancelled.
   const [orderDone, setOrderDone] = useState<{
     id: string;
     text: string;
   } | null>(null);
-  // A cancel refused: why, at the screen's top, brought to the finger from
-  // the card's foot where it was asked (review, 2026-10-23).
+  // An order's step refused: why, at the screen's top, brought to the
+  // finger from where it was pressed (review, 2026-10-23; orders task
+  // list, P0-2).
   const orderAlert = useRef<HTMLParagraphElement>(null);
-  const [cancelRefused, setCancelRefused] = useState(0);
+  const [stepRefused, setStepRefused] = useState(0);
   useEffect(() => {
-    if (cancelRefused > 0) orderAlert.current?.focus();
-  }, [cancelRefused]);
+    if (stepRefused > 0) orderAlert.current?.focus();
+  }, [stepRefused]);
   async function run(command: Pending, resent = false): Promise<void> {
     setOrderResent(resent ? command.label : null);
     setOrderDone(null);
     const order = await submitPending(key, token, command);
     const settled = useCommand.getState();
+    // A step on an order, by its path's last word: «dispatch», «cancel».
+    const step = command.orderId ? (command.path.split("/").at(-1) ?? "") : "";
     if (
       !order &&
-      command.path.endsWith("/cancel") &&
+      step !== "" &&
       settled.pending === null &&
       settled.error !== null
     ) {
       // Refused, recorded nowhere: the order as it is now.
       buzz("error");
-      setCancelRefused((count) => count + 1);
-      if (command.orderId)
-        void cache.invalidateQueries({
-          queryKey: ["order", store.id, command.orderId],
-        });
+      setStepRefused((count) => count + 1);
+      void cache.invalidateQueries({
+        queryKey: ["order", store.id, command.orderId],
+      });
     }
     if (order) {
-      if (command.path.endsWith("/cancel")) {
+      // Sent, arrived or cancelled: a buzz, and what it did on the order
+      // (orders task list, P0-2, P0-4).
+      const text = step === "" ? null : stepDone(step, order);
+      if (text !== null) {
         buzz("success");
-        setOrderDone({
-          id: order.id,
-          text: "Замовлення скасовано, резерв звільнено.",
-        });
+        setOrderDone({ id: order.id, text });
       }
       cache.setQueryData(["order", store.id, order.id], order);
       setSelectedId(order.id);
@@ -2114,7 +2106,7 @@ function Workspace({
               setOrderDone(null);
             }}
           >
-            ← До списку
+            ← До замовлень
           </button>
           {detail.isPending ? (
             <p role="status">Завантажуємо замовлення…</p>
@@ -2137,9 +2129,6 @@ function Workspace({
               store={store}
               token={token}
               blocked={blocked}
-              refresh={() => {
-                void detail.refetch();
-              }}
               action={(action, extra) => {
                 void run({
                   path: `/orders/${detail.data.id}/${action}`,
@@ -2276,379 +2265,6 @@ function Failure({
       <p>{errorText(error)}</p>
       <button onClick={retry}>Спробувати ще раз</button>
     </div>
-  );
-}
-const actionLabels: Record<string, string> = {
-  shipping: "Зміна доставки",
-  dispatch: "Відправлено",
-  arrive: "Прибув на пошту",
-  collect: "Клієнт забрав",
-  cancel: "Скасувати замовлення",
-  return: "Прийняти повернення",
-};
-function OrderDetail({
-  order,
-  done,
-  store,
-  token,
-  blocked,
-  action,
-  refresh,
-}: {
-  order: Order;
-  /** What the step just taken on it did. */
-  done: string | null;
-  store: Store;
-  /** Who asks what a number already owes, paying in parts. */
-  token: string;
-  blocked: boolean;
-  action: (action: string, extra?: Record<string, unknown>) => void;
-  refresh: () => void;
-}): JSX.Element {
-  const hint = useId();
-  const [reason, setReason] = useState("");
-  const [received, setReceived] = useState(false);
-  const [returning, setReturning] = useState(false);
-  // Collected and paid in parts, as at the till (owner decision, 2026-10-01).
-  const [credit, setCredit] = useState<TermsInput>(noTerms);
-  // How it was paid, said at «Клієнт забрав»; nothing chosen for the seller
-  // (owner decisions, 2026-10-04). In parts, the way of the part paid now.
-  const [way, setWay] = useState<PaymentMethod | null>(null);
-  const [problem, setProblem] = useState("");
-  // The waybill, or abroad where and how it went, written as it is sent.
-  const [sentWith, setSentWith] = useState("");
-  const [changingShipping, setChangingShipping] = useState(false);
-  const mayCredit = store.permissions.includes("sale:credit");
-  const open = ["READY_TO_DISPATCH", "DISPATCHED", "ARRIVED"].includes(
-    order.status,
-  );
-  const next = {
-    READY_TO_DISPATCH: "dispatch",
-    DISPATCHED: "arrive",
-    ARRIVED: "collect",
-  }[order.status as "READY_TO_DISPATCH" | "DISPATCHED" | "ARRIVED"];
-  return (
-    <section>
-      <div className="toolbar">
-        <h2>Замовлення № {order.id.slice(0, 8)}</h2>
-        <button className="quiet" onClick={refresh}>
-          Оновити
-        </button>
-      </div>
-      <span className="badge">{statusLabels[order.status]}</span>
-      {done && <p role="status">{done}</p>}
-      <p>Доставка: {shippingText(order)}</p>
-      {order.same_waybill && order.same_waybill.length > 0 && (
-        <p className="notice">
-          Ця накладна є також у замовленні №{" "}
-          {order.same_waybill.map((other) => other.id.slice(0, 8)).join(", № ")}
-          . Збережено — перевірте, чи це один пакунок.
-        </p>
-      )}
-      {order.items.map((item) => (
-        <div className="line" key={item.id}>
-          <strong>{visible(item.display_name)}</strong>
-          <span>
-            {item.size_label === null || item.size_label === "UNKNOWN"
-              ? "Розмір невідомий"
-              : `Розмір: ${visible(item.size_label)}`}{" "}
-            · {item.quantity} шт.
-          </span>
-          <span>
-            {money(item.unit_price)} за 1 шт.
-            {kopecks(item.discount_amount) !== 0n
-              ? ` · знижка ${money(item.discount_amount)}`
-              : ""}
-          </span>
-        </div>
-      ))}
-      <p className="total">
-        Разом <strong>{money(order.total)}</strong>
-      </p>
-      <p className="hint">{collectHint}</p>
-      {order.sale_id && (
-        <p role="status">
-          Продаж записано.
-          {order.payment_method
-            ? ` Оплачено ${methodHow[order.payment_method]}.`
-            : ""}
-        </p>
-      )}
-      {order.credit && (
-        <p>
-          Оплата частинами: сплачено {money(order.credit.paid)}, покупець винен{" "}
-          {money(order.credit.owed)}. Наступні внески — у розділі «Борги».
-        </p>
-      )}
-      {next === "collect" && store.permissions.includes("sale:create") && (
-        <fieldset disabled={blocked}>
-          <legend>Як оплачено замовлення</legend>
-          {collectMethods.map((choice) => (
-            <label className="check" key={choice.method}>
-              <input
-                type="radio"
-                name="collect-way"
-                checked={way === choice.method}
-                onChange={() => {
-                  setWay(choice.method);
-                  setProblem("");
-                }}
-              />
-              {choice.label}
-            </label>
-          ))}
-        </fieldset>
-      )}
-      {next === "collect" &&
-        mayCredit &&
-        store.permissions.includes("sale:create") && (
-          <fieldset disabled={blocked}>
-            <legend>Оплата</legend>
-            <TermsFields
-              value={credit}
-              change={(value) => {
-                setCredit(value);
-                setProblem("");
-              }}
-              total={kopecks(order.total) ?? 0n}
-              // One line at 360 px, as at the till (credits task list, P1-5):
-              // the order is this store's, as its words before said.
-              hint="Решту — у «Боргах» цього магазину."
-              // The debt's store, by construction.
-              storeId={order.store_id}
-              token={token}
-            />
-          </fieldset>
-        )}
-      {next === "dispatch" &&
-        order.destination &&
-        store.permissions.includes("sale:create") && (
-          <label>
-            {order.destination === "ABROAD"
-              ? "Куди і як відправили: місто, країна, спосіб"
-              : "Номер накладної"}{" "}
-            (можна дописати пізніше)
-            <input
-              value={sentWith}
-              maxLength={order.destination === "ABROAD" ? 1000 : 64}
-              disabled={blocked}
-              aria-describedby={
-                order.destination === "ABROAD" ? `${hint}-sent` : undefined
-              }
-              onChange={(event) => {
-                setSentWith(event.target.value);
-              }}
-            />
-            {order.destination === "ABROAD" && (
-              <NoCustomerData id={`${hint}-sent`} />
-            )}
-          </label>
-        )}
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        {next && store.permissions.includes("sale:create") && (
-          <button
-            disabled={blocked}
-            onClick={() => {
-              if (next === "dispatch") {
-                const written = sentWith.trim();
-                action(
-                  "dispatch",
-                  written
-                    ? order.destination === "ABROAD"
-                      ? { abroad_note: written }
-                      : { waybill: written }
-                    : undefined,
-                );
-                return;
-              }
-              if (next !== "collect") {
-                action(next);
-                return;
-              }
-              if (way === null) {
-                setProblem(collectNeedsMethod);
-                return;
-              }
-              if (!credit.inParts) {
-                action(next, { payment_method: way });
-                return;
-              }
-              const terms = checkTerms(credit, kopecks(order.total) ?? 0n);
-              if (typeof terms === "string") setProblem(terms);
-              else action(next, { payment_method: way, credit: terms });
-            }}
-          >
-            {actionLabels[next]}
-          </button>
-        )}
-        {["DISPATCHED", "ARRIVED"].includes(order.status) &&
-          store.permissions.includes("sale:refund") &&
-          store.permissions.includes("inventory:receive") && (
-            <button
-              className="quiet"
-              disabled={blocked}
-              onClick={() => {
-                setReturning(!returning);
-              }}
-            >
-              Товар повернувся на склад
-            </button>
-          )}
-      </div>
-      {open &&
-        store.permissions.includes("sale:create") &&
-        (changingShipping ? (
-          <ShippingForm
-            order={order}
-            blocked={blocked}
-            cancel={() => {
-              setChangingShipping(false);
-            }}
-            save={(shipping) => {
-              action("shipping", shipping);
-            }}
-          />
-        ) : (
-          <button
-            className="quiet"
-            disabled={blocked}
-            onClick={() => {
-              setChangingShipping(true);
-            }}
-          >
-            Змінити доставку
-          </button>
-        ))}
-      {order.shipping_history && order.shipping_history.length > 0 && (
-        <>
-          <h3>Історія доставки</h3>
-          <ul aria-label="Історія доставки">
-            {order.shipping_history.map((change, index) => (
-              <li key={`${change.at}:${String(index)}`}>
-                {new Date(change.at).toLocaleString("uk-UA", {
-                  dateStyle: "short",
-                  timeStyle: "short",
-                })}{" "}
-                · {shippingKinds[change.kind]} · {shippingText(change)} ·{" "}
-                {visible(change.by)}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {/* At the card's foot, asked first: a cancel is for good, and the
-          reserve is sold at once (orders task list, P0-4). */}
-      {order.status === "READY_TO_DISPATCH" &&
-        store.permissions.includes("sale:create") && (
-          <CancelOrder
-            blocked={blocked}
-            cancel={() => {
-              action("cancel");
-            }}
-          />
-        )}
-      {returning && ["DISPATCHED", "ARRIVED"].includes(order.status) && (
-        <fieldset disabled={blocked}>
-          <legend>Фізичне повернення всього замовлення</legend>
-          <p>Товар повернеться на ті склади, звідки його відправили.</p>
-          <label>
-            Причина повернення
-            <textarea
-              maxLength={1000}
-              value={reason}
-              aria-describedby={`${hint}-return`}
-              onChange={(e) => {
-                setReason(e.target.value);
-              }}
-            />
-            <NoCustomerData id={`${hint}-return`} />
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={received}
-              onChange={(e) => {
-                setReceived(e.target.checked);
-              }}
-            />
-            Усі товари фізично отримані на складах відправлення
-          </label>
-          <button
-            disabled={!received || !reason.trim()}
-            onClick={() => {
-              action("return", {
-                reason: reason.trim(),
-                physically_received: true,
-              });
-            }}
-          >
-            Прийняти повернення
-          </button>
-        </fieldset>
-      )}
-    </section>
-  );
-}
-/**
- * «Скасувати замовлення», asked first where it stands: what it does, and
- * that it is for good (orders task list, P0-4). The focus on «Ні,
- * залишити», the safe one.
- */
-function CancelOrder({
-  blocked,
-  cancel,
-}: {
-  blocked: boolean;
-  cancel: () => void;
-}): JSX.Element {
-  const [asking, setAsking] = useState(false);
-  const question = useId();
-  const keep = useRef<HTMLButtonElement>(null);
-  const ask = useRef<HTMLButtonElement>(null);
-  const [asked, setAsked] = useState(false);
-  useEffect(() => {
-    if (asking) keep.current?.focus();
-    else if (asked) ask.current?.focus();
-  }, [asking, asked]);
-  return asking ? (
-    <div className="cancel-ask" role="group" aria-labelledby={question}>
-      <p id={question}>
-        Скасувати замовлення? Резерв звільниться — товар знову можна продати.
-        Відновити замовлення не можна.
-      </p>
-      <div className="actions">
-        <button type="button" disabled={blocked} onClick={cancel}>
-          Так, скасувати
-        </button>
-        <button
-          type="button"
-          className="quiet"
-          ref={keep}
-          // Held with «Так» while the cancel is on its way or kept: it may
-          // still be recorded (review, 2026-10-23).
-          disabled={blocked}
-          onClick={() => {
-            setAsking(false);
-          }}
-        >
-          Ні, залишити
-        </button>
-      </div>
-    </div>
-  ) : (
-    <button
-      type="button"
-      className="quiet cancel-order"
-      ref={ask}
-      disabled={blocked}
-      onClick={() => {
-        setAsking(true);
-        setAsked(true);
-      }}
-    >
-      Скасувати замовлення
-    </button>
   );
 }
 interface DraftLine {
@@ -2969,149 +2585,5 @@ function NewOrder({
         </button>
       </fieldset>
     </section>
-  );
-}
-
-/** Within Ukraine by one of three carriers, or abroad. */
-function DestinationFields({
-  destination,
-  carrier,
-  change,
-}: {
-  destination: Destination;
-  carrier: Carrier | "";
-  change: (destination: Destination, carrier: Carrier | "") => void;
-}): JSX.Element {
-  return (
-    <div className="fields">
-      <label>
-        Куди
-        <select
-          value={destination}
-          onChange={(event) => {
-            const next = event.target.value as Destination;
-            change(next, next === "UKRAINE" ? carrier : "");
-          }}
-        >
-          <option value="UKRAINE">По Україні</option>
-          <option value="ABROAD">За кордон</option>
-        </select>
-      </label>
-      {destination === "UKRAINE" && (
-        <label>
-          Перевізник
-          <select
-            value={carrier}
-            onChange={(event) => {
-              change("UKRAINE", event.target.value as Carrier | "");
-            }}
-          >
-            <option value="">Оберіть перевізника</option>
-            {(Object.keys(carrierLabels) as Carrier[]).map((key) => (
-              <option key={key} value={key}>
-                {carrierLabels[key]}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    </div>
-  );
-}
-
-const shippingKinds: Record<ShippingChange["kind"], string> = {
-  CREATED: "Вказано при створенні",
-  DISPATCHED: "Вписано при відправленні",
-  CORRECTED: "Змінено",
-};
-
-/** Where an open order goes, as it should stand: corrected or written later.
- * Every earlier version stays in its history (owner decision, 2026-10-01). */
-function ShippingForm({
-  order,
-  blocked,
-  cancel,
-  save,
-}: {
-  order: Order;
-  blocked: boolean;
-  cancel: () => void;
-  save: (shipping: Record<string, unknown>) => void;
-}): JSX.Element {
-  const hint = useId();
-  const [destination, setDestination] = useState<Destination>(
-    order.destination ?? "UKRAINE",
-  );
-  const [carrier, setCarrier] = useState<Carrier | "">(order.carrier ?? "");
-  const [waybill, setWaybill] = useState(order.waybill ?? "");
-  const [note, setNote] = useState(order.abroad_note ?? "");
-  const [problem, setProblem] = useState("");
-  return (
-    <fieldset disabled={blocked}>
-      <legend>Доставка</legend>
-      <DestinationFields
-        destination={destination}
-        carrier={carrier}
-        change={(nextDestination, nextCarrier) => {
-          setDestination(nextDestination);
-          setCarrier(nextCarrier);
-          setProblem("");
-        }}
-      />
-      {destination === "UKRAINE" ? (
-        <label>
-          Номер накладної
-          <input
-            value={waybill}
-            maxLength={64}
-            onChange={(event) => {
-              setWaybill(event.target.value);
-            }}
-          />
-        </label>
-      ) : (
-        <label>
-          Куди і як відправили: місто, країна, спосіб
-          <textarea
-            value={note}
-            maxLength={1000}
-            aria-describedby={hint}
-            onChange={(event) => {
-              setNote(event.target.value);
-            }}
-          />
-          <NoCustomerData id={hint} />
-        </label>
-      )}
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        <button
-          type="button"
-          onClick={() => {
-            if (destination === "UKRAINE" && carrier === "") {
-              setProblem("Оберіть перевізника.");
-              return;
-            }
-            save(
-              destination === "UKRAINE"
-                ? {
-                    destination,
-                    carrier,
-                    ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
-                  }
-                : {
-                    destination,
-                    ...(note.trim() ? { abroad_note: note.trim() } : {}),
-                  },
-            );
-          }}
-        >
-          Зберегти доставку
-        </button>
-        <button type="button" className="quiet" onClick={cancel}>
-          Скасувати
-        </button>
-      </div>
-    </fieldset>
   );
 }

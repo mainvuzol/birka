@@ -3750,3 +3750,53 @@ How it is carried out, not decided by the owner:
 
 Built on 2026-10-23; see the [report](orders-redesign-1-report.md).
 
+## Owner decision — 2026-10-23 (after #127 was opened)
+
+Asked when #127 was opened:
+- **«Замовлення»'s groups newest first,** not oldest first as built: the
+  order made last on top of «Потрібно відправити» and «В дорозі», the one
+  waiting longest at the foot. The rest of the list is approved as built —
+  the groups, the closed under «Показати завершені», the pill under the
+  goods. *(Built 2026-10-23, below.)*
+- **The cancel's question is approved as built:** its words, «Так,
+  скасувати» and «Ні, залишити», and «Замовлення скасовано, резерв
+  звільнено.» (the option recommended).
+- **Next: the order's card, P0-2** (the option recommended).
+
+## «Замовлення»: newest first, and the order's card — built 2026-10-23
+
+The owner's answer after #127 (newest first) and «Замовлення»'s task list,
+P0-2. How it is carried out, not decided by the owner:
+- **Newest first** in «Потрібно відправити» and «В дорозі», as in
+  «Завершені» and a search: the server reads every list so.
+- **The card's top:** «← До замовлень»; the goods as its title, «Лоран
+  шоколад · M», the first named and «+ ще N»; how it goes and since when,
+  «Нова пошта · ТТН ще немає · з 21.10», in one line — abroad, its note in
+  full, as only the card says it; the status's pill and
+  beside it the number small, «№ 3f2a9c1b» (В1) — the task list put the
+  number at the context's end, where at 360 px it took a second line.
+- **Its lines with their sums:** «Лоран шоколад · M × 2» and on the right
+  its sum, the price less the discount for every unit; «600,00 грн за 1
+  шт. · знижка 20,00 грн» under it for more than one, or a discount;
+  «Разом» large. To send, one line: «Товар у резерві — на касі його не
+  продадуть.» The money's words only on «Клієнт забрав»'s step. A
+  discount's words as before, for every unit.
+- **The next step one button in the panel under the thumb,** what it is
+  — as its title, «+ ще N» too — and how it goes over it, «Лоран шоколад ·
+  M · Нова пошта»: «Відправлено», then «Прибув на пошту». No panel while
+  where it goes is changed or it comes back: one form at a time. To send, «Номер ТТН (можна дописати пізніше)»
+  under the sum, never under the panel — abroad, where and how it went.
+  No panel on a closed order, nor for whoever may not step it. What is
+  sent is as before.
+- **After a step:** a buzz, and what it did over the pill — «Відправлено ·
+  ТТН 0500012345678», «Відправлено. ТТН можна вписати пізніше.», abroad
+  «Відправлено.», «Прибув на пошту». Any step refused: a buzz of its own,
+  why at the screen's top brought to the finger, the order read again
+  (its words are P1-2's).
+- **The rare at the foot, quiet:** «Змінити доставку», the history,
+  «Скасувати замовлення», «Товар повернувся на склад». «Оновити» is gone:
+  the order is read again after every step and as the app comes back.
+- **«Клієнт забрав» as before** until P0-3, its money's words over it.
+
+Built on 2026-10-23; see the [report](orders-redesign-2-report.md).
+

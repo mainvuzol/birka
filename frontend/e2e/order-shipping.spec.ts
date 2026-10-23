@@ -41,6 +41,13 @@ function initData(): string {
   return fields.toString();
 }
 
+/** An order's line of context (orders task list, P0-2): how it goes, and
+ * since when. */
+function goes(how: string): RegExp {
+  const escaped = how.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped} · з\\s\\d{2}\\.\\d{2}$`);
+}
+
 async function enter(page: Page): Promise<void> {
   await page.goto("about:blank");
   await page.goto(
@@ -134,19 +141,23 @@ test("an order within Ukraine names its carrier, and its waybill when it is sent
     .getByRole("combobox", { name: "Перевізник", exact: true })
     .selectOption("UKRPOSHTA");
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
-  await expect(
-    page.getByText("Доставка: Укрпошта · ТТН ще немає"),
-  ).toBeVisible();
+  await expect(page.locator(".order-context")).toHaveText(
+    goes("Укрпошта · ТТН ще немає"),
+  );
   expect(made.bodies).toEqual([
     expect.objectContaining({ destination: "UKRAINE", carrier: "UKRPOSHTA" }),
   ]);
 
   await page
-    .getByLabel("Номер накладної (можна дописати пізніше)")
+    .getByLabel("Номер ТТН (можна дописати пізніше)")
     .fill(" 0500012345678 ");
   await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await expect(page.locator(".order-context")).toHaveText(
+    goes("Укрпошта · ТТН 0500012345678"),
+  );
+  // What the step did, with a buzz (orders task list, P0-2).
   await expect(
-    page.getByText("Доставка: Укрпошта · ТТН 0500012345678"),
+    page.getByText("Відправлено · ТТН 0500012345678", { exact: true }),
   ).toBeVisible();
   expect(sent.bodies).toEqual([
     { command_id: expect.any(String) as string, waybill: "0500012345678" },
@@ -173,9 +184,7 @@ test("an order abroad says where and how it went, in one line", async ({
     page.getByRole("combobox", { name: "Перевізник", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
-  await expect(
-    page.getByText("Доставка: За кордон", { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".order-context")).toHaveText(goes("За кордон"));
   const [body] = made.bodies as Record<string, unknown>[];
   expect(body?.destination).toBe("ABROAD");
   expect(body).not.toHaveProperty("carrier");
@@ -191,9 +200,10 @@ test("an order abroad says where and how it went, in one line", async ({
     )
     .fill("Варшава, Польща, Нова пошта Глобал");
   await page.getByRole("button", { name: "Відправлено", exact: true }).click();
-  await expect(
-    page.getByText("Доставка: За кордон · Варшава, Польща, Нова пошта Глобал"),
-  ).toBeVisible();
+  await expect(page.locator(".order-context")).toHaveText(
+    goes("За кордон · Варшава, Польща, Нова пошта Глобал"),
+  );
+  await expect(page.getByText("Відправлено.", { exact: true })).toBeVisible();
   expect(sent.bodies).toEqual([
     {
       command_id: expect.any(String) as string,
@@ -231,7 +241,9 @@ test("where an order goes is corrected while it is open, and every version stays
     .selectOption("MEEST");
   await page.getByLabel("Номер накладної", { exact: true }).fill("MEEST-777");
   await page.getByRole("button", { name: "Зберегти доставку" }).click();
-  await expect(page.getByText("Доставка: Міст · ТТН MEEST-777")).toBeVisible();
+  await expect(page.locator(".order-context")).toHaveText(
+    goes("Міст · ТТН MEEST-777"),
+  );
   // Saved, the form closes on the order as it now stands.
   await expect(
     page.getByRole("button", { name: "Змінити доставку" }),
@@ -287,9 +299,9 @@ test("one waybill on two orders is saved and named, and orders are found by it",
   await expect(found.first()).toContainText(`Нова пошта · ТТН ${waybill}`);
   // Newest first: the second.
   await found.first().click();
-  await expect(
-    page.getByRole("heading", { name: `Замовлення № ${second.slice(0, 8)}` }),
-  ).toBeVisible();
+  await expect(page.locator(".order-number")).toHaveText(
+    `№ ${second.slice(0, 8)}`,
+  );
   await expect(
     page.getByText(
       `Ця накладна є також у замовленні № ${first.slice(0, 8)}. Збережено — перевірте, чи це один пакунок.`,
@@ -327,9 +339,9 @@ test("a correction whose answer is lost is resent unchanged", async ({
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
   await reopen(reopened);
-  await expect(
-    reopened.getByText("Доставка: Нова пошта · ТТН 20451111"),
-  ).toBeVisible();
+  await expect(reopened.locator(".order-context")).toHaveText(
+    goes("Нова пошта · ТТН 20451111"),
+  );
   expect(commands).toHaveLength(2);
   expect(commands[1]).toEqual(commands[0]);
   await expect(
