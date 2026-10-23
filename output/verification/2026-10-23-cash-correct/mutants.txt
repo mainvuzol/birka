@@ -1,0 +1,24 @@
+- unchanged tree: passed 
+- «Вчора» reads today: caught by yesterday's operation is changed in six taps, without a calendar; its row says its close, 
+- «Сьогодні» by the calendar, not the drawer's day: caught by at 00:30 «Сьогодні» is the evening before's, as the drawer's day is (G8; cash task list, P
+- the drawer's day from midnight: caught by at 00:30 «Сьогодні» is the evening before's, as the drawer's day is (G8; cash task list, P
+- «Інший день» opens on today: caught by another day is chosen on the calendar: nothing is read until one is, and a day long ago na
+- «Інший день» reads with no day: caught by another day is chosen on the calendar: nothing is read until one is, and a day long ago na
+- the calendar for every day: caught by yesterday's operation is changed in six taps, without a calendar; its row says its close, 
+- a refusal kept over another day: caught by a refusal is said over the day it was about, and goes with another day (cash task list, P2
+- a row's title out of order: caught by yesterday's operation is changed in six taps, without a calendar; its row says its close, 
+- a row's goods with their hidden characters: caught by text from outside is shown with its hidden characters marked, on every screen it reaches
+- a row without the close it fell in: caught by another day is chosen on the calendar: nothing is read until one is, and a day long ago na
+- the card without the close it explains: caught by another day is chosen on the calendar: nothing is read until one is, and a day long ago na
+- a row that may not be changed silent why: caught by an operation from before the drawer was first counted says it may not be changed, as reada
+- a row that may not be changed pressed: caught by an operation from before the drawer was first counted says it may not be changed, as reada
+- a row that may not be changed faded: caught by an operation from before the drawer was first counted says it may not be changed, as reada
+- a corrected way without «виправлено»: caught by yesterday's operation is changed in six taps, without a calendar; its row says its close, 
+- the sum before what it is: caught by in the dark theme the days and the day's operations read at 4.5:1; in the light theme the days and the day's operations read at 4.5:1
+- the goods beside the sum, not under: caught by in the dark theme the days and the day's operations read at 4.5:1; in the light theme the days and the day's operations read at 4.5:1
+- a long name under the sum: caught by in the dark theme the days and the day's operations read at 4.5:1; in the light theme the days and the day's operations read at 4.5:1
+- a closed day's note back on a plate: caught by yesterday's operation is changed in six taps, without a calendar; its row says its close, 
+- the server naming no close: caught by test_a_closed_operation_names_the_close_it_fell_in
+- the server naming the close before: caught by test_a_closed_operation_names_the_close_it_fell_in
+- cash put in explained in the old words: caught by test_change_put_in_and_recorded_after_a_close_it_came_before_explains_it_as_change
+22 of 22 caught

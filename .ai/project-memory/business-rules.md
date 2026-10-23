@@ -3606,3 +3606,51 @@ list says:
 
 Built on 2026-10-22; see the [report](cash-redesign-5-report.md).
 
+## Owner decision — 2026-10-22 (after #125 was opened)
+
+Asked when #125 was opened, each answer the option recommended:
+- **«Каса»'s new words are approved as built:** a conflict, a request not
+  taken by what it holds, a note the server cannot keep, a kept command
+  proven unrecorded, cash put in of the kind «Розмін».
+- **The server says «Розмін» too,** where cash put in explains a close
+  («Що пояснює різницю»). *(Built 2026-10-23, below.)*
+- **Next:** «Каса»'s P2-4, the owner's and managers' correction. *(Built
+  2026-10-23, below.)*
+
+## The owner's and managers' correction by a day's switch and rows, and «Розмін» from the server — built 2026-10-23
+
+«Каса»'s task list, P2-4, whose screen the direction left for a second
+stage — to be approved from the screenshots. For whoever corrects
+(`cash:correct`), as before. How it is carried out, not decided by the
+owner:
+- **The day as a switch:** «Сьогодні», «Вчора», «Інший день» — the last
+  opening the calendar's «День», nothing read until a day is chosen.
+  «Сьогодні» and «Вчора» are the drawer's days by the phone's clock, 06:00
+  to 06:00 (G8), as the server reads them: at 00:30 «Сьогодні» is the
+  evening just worked, the calendar's latest day the same. The date field
+  before opened on the calendar's day, which before 06:00 read a day not
+  yet begun (review, 2026-10-23).
+- **A row an operation:** «Продаж · 20:05 · Оля» and its sum beside it;
+  under them, the row's whole width, the goods, the close it fell in
+  («закриття 22.10») and, for one that may not be changed, «змінити не
+  можна» — not to be pressed, read as clearly as any other; its way as a
+  pill under the goods, «· виправлено» when it was. The task list put the
+  pill beside the sum; at 360 px a collected order's «Накладений платіж ·
+  виправлено» left the goods a word a line, so it stands under them, as
+  «Закриття»'s pill does (review, 2026-10-23).
+- **The close an operation fell in is the server's to name** (`close_day`
+  of the day's events, read-only: the close that ended its period). The
+  phone named it from the closes it had read — the last ten in thirty days
+  — and for a day further back named the wrong one, on the card before
+  this change too (review, 2026-10-23).
+- **One chosen** is the card of P1-3, «Пояснить різницю закриття 22.10» a
+  line under it, never a plate; «Інша операція» back to the day. A
+  refusal is said over that day's list and goes with another day. Today's
+  operation in five taps — «Каса», «Змінити спосіб оплати», the row, the
+  way, «Змінити на «…»»; yesterday's in six, with «Вчора». What is sent is
+  as before.
+- **The server's word for cash put in is «Розмін»,** as everywhere in
+  «Каса»: «Розмін: з банку» where it explains a close. Made when read;
+  nothing stored changes.
+
+Built on 2026-10-23; see the [report](cash-redesign-6-report.md).

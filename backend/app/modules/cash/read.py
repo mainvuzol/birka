@@ -95,7 +95,9 @@ KIND_LABELS: dict[str, str] = {
     MovementKind.OWNER.value: "Власнику",
     MovementKind.EXPENSES.value: "Витрати",
     MovementKind.SUPPLIER_COURIER.value: "Кур’єру постачальника",
-    MovementKind.CHANGE.value: "Внесено в касу (розмін)",
+    # The kind, as «Витрати» is: «Каса» says it so on every screen (owner
+    # decision, 2026-10-22).
+    MovementKind.CHANGE.value: "Розмін",
 }
 # The kinds in the order the screen offers them.
 KIND_ORDER: tuple[MovementKind, ...] = (
@@ -243,6 +245,9 @@ class EventView:
     method: str | None
     corrected: bool
     closed: bool
+    # The business day of the close it fell in, once closed: what a
+    # correction of it explains (G7).
+    close_day: date | None
     # The goods, never a customer's name.
     label: str
     is_order: bool
@@ -1071,6 +1076,15 @@ async def day_events(
     names = await _names(session, {event.row.owner for event in events})
     labels = await _labels(session, events)
     ways = await _ways(session, events)
+    days = await _close_days(
+        session,
+        store.id,
+        {
+            event.row.period
+            for event in events
+            if event.row.period is not None and is_closed(event.row.period, last)
+        },
+    )
     return [
         EventView(
             target=event.shown_as.value,
@@ -1083,12 +1097,28 @@ async def day_events(
             method=ways[event.row.row_id][0],
             corrected=ways[event.row.row_id][1],
             closed=is_closed(event.row.period, last),
+            close_day=None if event.row.period is None else days.get(event.row.period),
             label=labels[event.shown_id],
             is_order=event.row.for_order,
             may_change=may_correct(scope, event.row, last=last, state=state),
         )
         for event in events
     ]
+
+
+async def _close_days(
+    session: AsyncSession, store_id: uuid.UUID, periods: set[int]
+) -> dict[int, date]:
+    """The business day of the close that ended each of these periods:
+    close k ends period k."""
+    if not periods:
+        return {}
+    rows = await session.execute(
+        select(CashClose.number, CashClose.business_day).where(
+            CashClose.store_id == store_id, CashClose.number.in_(periods)
+        )
+    )
+    return {row.number: row.business_day for row in rows}
 
 
 async def _ways(

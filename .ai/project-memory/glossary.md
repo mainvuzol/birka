@@ -18,7 +18,7 @@
 - **Робочий день каси (business day)**: 06:00 to 06:00 in the store's time zone. A close before 06:00 belongs to the evening before.
 - **Період каси (drawer period)**: everything recorded at a drawer after one close and up to the next, stamped by the database in commit order, never by time.
 - **Видача з каси (cash taken out)**: «Власнику», «Витрати» or «Кур’єру постачальника», recorded with who and why. A seller records only the last two.
-- **Внесено в касу (cash put in)**: change brought into the drawer, recorded by the owner or a manager, so the close does not show it as a surplus.
+- **Внесено в касу (cash put in)**: change brought into the drawer, recorded by the owner or a manager, so the close does not show it as a surplus. Its kind is «Розмін».
 - **Виправлення способу оплати (a fix of the way of paying)**: a new record, never a rewrite. A fix of the open period changes what the drawer should hold; a fix of a closed day explains that close's difference instead.
 - **«Продано під час збою» (sold during an outage)**: the mark on a sale made on paper while the server did not answer, and typed in later with «Вношу продаж з паперу». The sale is dated when it is typed, and goes into the drawer period open then; the mark may name who sold and the time on the paper, and never moves the sale's day. Whoever typed it is the sale's seller. The mark is never changed (ADR-0013).
 - **`birka.stock-list` (a parser's file)**: the JSON file a parser writes from photos of the shops' notebooks, in the format Birka defines ([`formats/birka-stock-list/`](../../formats/birka-stock-list/README.md)). Each line keeps the text as written, the photo's name and its line number on it, and the parser's reading as a hint. It never becomes stock by itself (ADR-0014).

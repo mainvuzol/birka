@@ -253,8 +253,8 @@ a day (owner decisions, 2026-10-04; see
   - A blocked store is closed by the network's owner only.
 - **Cash taken out and put in:** `POST /cash/movements`. A seller
   (`cash:expense`) records «Витрати» and «Кур’єру постачальника»; the owner
-  and managers (`cash:take_out`) also «Власнику» and «Внесено в касу
-  (розмін)».
+  and managers (`cash:take_out`) also «Власнику» and «Розмін» (cash put
+  in).
 - **A wrong way** is fixed by a new record, `POST /cash/corrections`: a
   seller their own sale, payment or return before the close; the owner and
   managers (`cash:correct`) any, any day. A fix of a closed day explains that

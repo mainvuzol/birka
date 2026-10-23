@@ -192,8 +192,9 @@ business days in between on which money moved; never the counted day.
 200 characters), `after_close_id` and an optional `for_close_id`. One
 append-only `cash_movement` row.
 - **Kinds.** Out: `OWNER` «Власнику», `EXPENSES` «Витрати»,
-  `SUPPLIER_COURIER` «Кур’єру постачальника». In: `CHANGE` «Внесено в касу
-  (розмін)». No «Інше». The amount is above nothing; the kind gives the
+  `SUPPLIER_COURIER` «Кур’єру постачальника». In: `CHANGE` «Розмін»
+  («Внесено в касу (розмін)» until 2026-10-23, owner decision of
+  2026-10-22). No «Інше». The amount is above nothing; the kind gives the
   direction.
 - **Who.** A seller (`cash:expense`) records expenses and a supplier's
   courier; the owner and managers (`cash:take_out`) any kind.
@@ -326,7 +327,7 @@ append-only `cash_movement` row.
 | `GET /cash/closes` (`store_id`, `date_from`, `date_to`, `limit` up to 100, `offset`) | `report:view_financial` |
 | `POST /cash/movements`; `GET /cash/movements` | §6; `report:view_financial` |
 | `POST /cash/corrections` | §7 |
-| `GET /cash/events?store_id=&day=` | `report:view_financial`: a day's money, with sums and ways |
+| `GET /cash/events?store_id=&day=` | `report:view_financial`: a day's money, with sums and ways, and the business day of the close each closed one fell in (`close_day`, 2026-10-23) |
 | `GET /cash/events?store_id=&mine=true` | `sale:create`: their own sales, payments and returns of the open period, by time and goods only |
 | `GET /cash/sales/{id}/method` | the drawer's `report:view_financial`, the sale's own seller, or `sale:refund` where it may be returned |
 | `GET /cash/payments/{id}/method`, `GET /cash/refunds/{id}/method` | the operation's own actor, or the drawer's `report:view_financial` |

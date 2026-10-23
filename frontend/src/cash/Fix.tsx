@@ -263,7 +263,8 @@ export function WayCard({
           {corrected ? " · виправлено" : ""}
         </span>
       </div>
-      {closedNote && <p className="notice">{closedNote}</p>}
+      {/* A line under the card, never a plate (cash task list, P2-4). */}
+      {closedNote && <p className="fix-note">{closedNote}</p>}
       <div
         ref={group}
         // An order's five ways a row each (cash task list, P1-3).
