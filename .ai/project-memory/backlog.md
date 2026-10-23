@@ -66,3 +66,15 @@ server and with a migration; «Магазину винні» shows every debt on
 it is built. Its questions — whether it enters the drawer's count, how it
 is marked in the history, who may correct it — go to the owner before it is
 built ([the task list](redesign/2026-10-18-redesign-tz-credits.md), P1-4).
+
+## «Оплачено наперед»: an order's prepayment marked when it is made
+
+Whether the customer paid ahead is today remembered by whoever takes the
+order, until «Клієнт забрав» names the way. The owner chose an optional
+mark «Оплачено наперед» when an order is made, seen in its row and on its
+card (owner, 2026-10-23, «Замовлення» В6 (а)). It is new data, on the
+server and with a migration; whether it names a sum, whether «Клієнт
+забрав» then offers «Переказ наперед» first, and whether it enters the
+report before the order is collected go to the owner before it is built
+([the task list](redesign/2026-10-23-redesign-tz-orders.md)).
+

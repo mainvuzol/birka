@@ -1,6 +1,6 @@
 import { test, expect, more, openStore, section, waitsFor } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 interface Fixture {
@@ -136,7 +136,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   // «Замовлення» pressed again leaves the order for the store's list.
   await section(page, "Замовлення");
   await expect(
-    page.getByRole("heading", { name: "Замовлення магазину" }),
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: /Замовлення №/ })).toHaveCount(
     0,
@@ -176,9 +176,11 @@ test("lost committed response survives reopening and reuses the same command", a
   ).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toBe(commands[0]);
+  // Asked first (orders task list, P0-4).
   await reopened
-    .getByRole("button", { name: "Скасувати та звільнити резерв" })
+    .getByRole("button", { name: "Скасувати замовлення", exact: true })
     .click();
+  await reopened.getByRole("button", { name: "Так, скасувати" }).click();
   await expect(reopened.getByText("Скасовано", { exact: true })).toBeVisible();
 });
 test("a kept order its check cannot settle opens on «Замовлення», not on the till", async ({
@@ -230,9 +232,11 @@ test("a kept order its check cannot settle opens on «Замовлення», no
     reopened.getByRole("heading", { name: /Замовлення №/ }),
   ).toBeVisible();
   expect(new Set(commands).size).toBe(1);
+  // Asked first (orders task list, P0-4).
   await reopened
-    .getByRole("button", { name: "Скасувати та звільнити резерв" })
+    .getByRole("button", { name: "Скасувати замовлення", exact: true })
     .click();
+  await reopened.getByRole("button", { name: "Так, скасувати" }).click();
   await expect(reopened.getByText("Скасовано", { exact: true })).toBeVisible();
 });
 test("return requires physical confirmation", async ({ page }) => {
@@ -381,7 +385,7 @@ test("Telegram bridge signals readiness and takes light or dark from the launch 
 });
 
 /** An order of one coat, sent and arrived — through the API. */
-async function arrived(page: Page): Promise<string> {
+async function arrived(page: Page, waybill?: string): Promise<string> {
   const auth = await page.request.post("/api/v1/auth/telegram", {
     data: { init_data: initData() },
   });
@@ -409,7 +413,10 @@ async function arrived(page: Page): Promise<string> {
   for (const action of ["dispatch", "arrive"]) {
     const moved = await page.request.post(`/api/v1/orders/${id}/${action}`, {
       headers,
-      data: { command_id: randomUUID() },
+      data: {
+        command_id: randomUUID(),
+        ...(action === "dispatch" && waybill ? { waybill } : {}),
+      },
     });
     expect(moved.status()).toBe(200);
   }
@@ -419,11 +426,16 @@ async function arrived(page: Page): Promise<string> {
 test("an order paid by cash on delivery is collected outside the till", async ({
   page,
 }) => {
-  const order = await arrived(page);
+  // Found by its own waybill: a row names no id (owner decision,
+  // 2026-10-23, В1).
+  const waybill = `20${String(randomInt(100_000_000_000, 999_999_999_999))}`;
+  await arrived(page, waybill);
   const sent = collects(page);
   await enter(page);
+  await page.getByLabel("Номер ТТН").fill(waybill);
   await page
-    .getByRole("button", { name: new RegExp(`№ ${order.slice(0, 8)}`) })
+    .getByRole("list", { name: "Знайдені замовлення" })
+    .getByRole("button")
     .click();
   await page
     .getByRole("group", { name: "Як оплачено замовлення" })

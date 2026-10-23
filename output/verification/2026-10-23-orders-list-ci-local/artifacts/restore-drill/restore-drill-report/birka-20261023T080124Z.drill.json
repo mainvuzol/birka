@@ -1,0 +1,55 @@
+{
+  "archive": "/backups/birka-20261023T080124Z.dump",
+  "manifest": "/backups/birka-20261023T080124Z.json",
+  "taken_at": "2026-10-23T08:01:24.469946+00:00",
+  "drilled_at": "2026-10-23T08:01:24.638562+00:00",
+  "code_head": "0041_first_days_mark",
+  "backed_up_revision": "0041_first_days_mark",
+  "scratch_database": "birka_restore_drill_20261023080124_d9555d",
+  "kept": false,
+  "checks": [
+    {
+      "name": "archive",
+      "ok": true,
+      "detail": "SHA-256 matches the manifest"
+    },
+    {
+      "name": "restore",
+      "ok": true,
+      "detail": "pg_restore took 0.213 s"
+    },
+    {
+      "name": "migration",
+      "ok": true,
+      "detail": "restored 0041_first_days_mark, backed up 0041_first_days_mark"
+    },
+    {
+      "name": "rows",
+      "ok": true,
+      "detail": "76 tables, 87 rows, all equal"
+    },
+    {
+      "name": "triggers",
+      "ok": true,
+      "detail": "58 restored, 58 backed up"
+    },
+    {
+      "name": "locale",
+      "ok": true,
+      "detail": "restored {'provider': 'i', 'collate': 'C', 'ctype': 'C.UTF-8', 'locale': 'uk-UA', 'encoding': 'UTF8'}, lower() gives 'оля'"
+    },
+    {
+      "name": "cyrillic",
+      "ok": true,
+      "detail": "lower() gives 'оля'; the catalog needs 'оля'"
+    },
+    {
+      "name": "ledger",
+      "ok": true,
+      "detail": "1 organizations reconcile"
+    }
+  ],
+  "restore_seconds": 0.213,
+  "ok": true,
+  "total_seconds": 0.391
+}

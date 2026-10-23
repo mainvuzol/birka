@@ -17,7 +17,7 @@ from app.modules.orders.models import Carrier
 from app.modules.orders.service import OrderLineInput, create_order
 from app.modules.tenancy.models import StockLocation, StoreLocationAccess
 from tests.conftest import provision_location, requires_database
-from tests.integration.test_customer_orders import setup
+from tests.integration.test_customer_orders import act, setup
 from tests.integration.test_sale_command import give_stock, make_shop
 from tests.integration.test_transfer_command import api
 
@@ -92,6 +92,52 @@ async def test_order_pages_filter_whole_inaccessible_orders_before_pagination(ma
                 "/api/v1/orders", params={"store_id": str(shop.store_id), "limit": 101}
             )
         ).status_code == 422
+
+
+async def test_the_open_orders_come_oldest_first_and_the_closed_apart(maker):
+    """The list's two reads (orders task list, P0-1): the orders still to
+    send or on their way, oldest first — the next to send on top — and the
+    collected, cancelled and come back, newest first; every order without
+    either, as before."""
+    shop, first = await setup(maker)
+    async with maker() as session:
+        await give_stock(session, shop, 1)
+        await session.commit()
+    made = []
+    # Each in its own transaction: its own moment.
+    for _ in range(4):
+        async with maker() as session:
+            made.append(await new_order(session, shop, [shop.location_id]))
+            await session.commit()
+    second, sent, cancelled, collected = made
+    await act(maker, shop, uuid.UUID(sent["id"]), "dispatch")
+    await act(maker, shop, uuid.UUID(cancelled["id"]), "cancel")
+    for step in ("dispatch", "arrive", "collect"):
+        await act(maker, shop, uuid.UUID(collected["id"]), step)
+
+    async def ids(**params):
+        async with api(maker, shop.scope()) as client:
+            answer = await client.get(
+                "/api/v1/orders", params={"store_id": str(shop.store_id), **params}
+            )
+        assert answer.status_code == 200, answer.text
+        body = answer.json()
+        return [order["id"] for order in body["orders"]], body["has_more"]
+
+    assert await ids(status="open") == ([str(first), second["id"], sent["id"]], False)
+    assert await ids(status="open", limit=1) == ([str(first)], True)
+    assert await ids(status="open", limit=1, offset=1) == ([second["id"]], True)
+    # Collected and cancelled alike, newest first.
+    assert await ids(status="closed") == ([collected["id"], cancelled["id"]], False)
+    assert await ids() == (
+        [collected["id"], cancelled["id"], sent["id"], second["id"], str(first)],
+        False,
+    )
+    async with api(maker, shop.scope()) as client:
+        wrong = await client.get(
+            "/api/v1/orders", params={"store_id": str(shop.store_id), "status": "sent"}
+        )
+    assert wrong.status_code == 422
 
 
 async def test_order_private_permissions_and_tenant_store_boundaries(maker):

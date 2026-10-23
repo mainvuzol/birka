@@ -276,14 +276,20 @@ test("one waybill on two orders is saved and named, and orders are found by it",
   const first = await sentWith(page, waybill);
   const second = await sentWith(page, waybill);
   await enter(page);
+  // Found as it is typed, with no «Знайти» (orders task list, P0-1).
   await page
-    .getByLabel("Пошук за номером накладної")
+    .getByLabel("Номер ТТН")
     .fill(`${waybill.slice(0, 4)} ${waybill.slice(4)}`);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  const found = page.locator("button.order-card");
+  const found = page
+    .getByRole("list", { name: "Знайдені замовлення" })
+    .getByRole("button");
   await expect(found).toHaveCount(2);
   await expect(found.first()).toContainText(`Нова пошта · ТТН ${waybill}`);
-  await found.filter({ hasText: `№ ${second.slice(0, 8)}` }).click();
+  // Newest first: the second.
+  await found.first().click();
+  await expect(
+    page.getByRole("heading", { name: `Замовлення № ${second.slice(0, 8)}` }),
+  ).toBeVisible();
   await expect(
     page.getByText(
       `Ця накладна є також у замовленні № ${first.slice(0, 8)}. Збережено — перевірте, чи це один пакунок.`,

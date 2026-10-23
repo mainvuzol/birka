@@ -213,7 +213,7 @@ test("whoever does none of the counter's work has «Ще» alone, holding only w
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
   await expect(
-    page.getByRole("heading", { name: "Замовлення магазину" }),
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
   await expect(row(page)).toHaveText(["Ще"]);
   await expect(moreButton(page)).toHaveClass(/active/);

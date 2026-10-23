@@ -3654,3 +3654,99 @@ owner:
   nothing stored changes.
 
 Built on 2026-10-23; see the [report](cash-redesign-6-report.md).
+
+## Owner decision — 2026-10-23 (after #126 was opened)
+
+Asked when #126 was opened, each answer the option recommended:
+- **«Змінити спосіб оплати» (P2-4) is approved as built,** the way under
+  the goods as «Закриття»'s pill, not beside the sum as the task list had
+  it.
+- **Next: the task list for «Замовлення»,** the next section by how often
+  it is used, with «Борги» the future tab «Клієнти». «Каса»'s P2-5 waits,
+  with «Повернення»'s P2-6 and «Борги»'s P2-5, for the bottom menu, not
+  chosen yet (2026-10-14).
+
+## Owner decision — 2026-10-23 («Замовлення»'s task list)
+
+Asked when «Замовлення»'s task list was written
+([redesign/2026-10-23-redesign-tz-orders.md](redesign/2026-10-23-redesign-tz-orders.md)),
+each answer option (а), the one recommended:
+- **В1. An order is known by its goods and its waybill,** never by the
+  eight characters of its id: no «№ 3f2a9c1b» in a row or a title; the
+  number stays small on the order's card only.
+- **В2. «Клієнт забрав»: the five ways are the buttons** that record it,
+  as at the till and in «Борги»; after it, «Продаж записано» with the way
+  and the sum large («Картка · Проведіть на терміналі»).
+- **В3. A new order's price is the sale price filled in,** as at the till,
+  and may be changed.
+- **В4. An order's step the server has not confirmed says «Каса»'s line**
+  — the phone checks it itself, nothing is to be repeated — never the
+  shared line about paper: an order's steps are never typed from paper.
+- **В5. The statuses' colours by what they mean:** «До відправлення» the
+  warning's yellow; «Відправлено» and «Прибув на пошту» the blue «в
+  дорозі»; «Клієнт забрав» the accent's green; «Скасовано» and «Повернено
+  на склад» grey.
+- **В6. An optional mark «Оплачено наперед» when an order is made:** new
+  data, a separate task in the backlog, its own questions to the owner
+  before it is built.
+- **В7. Orders sent before Бірка are finished in the notebook;** Бірка
+  holds only the new ones.
+- **First: P0-1 and P0-4 together** — the list with «Потрібно
+  відправити» and «В дорозі» on top, a row without a sum, the waybill
+  found as it is typed; a question before an order is cancelled.
+
+## «Замовлення»: the list by what is to be done, and a cancel asked first — built 2026-10-23
+
+«Замовлення»'s task list, P0-1 and P0-4, chosen by the owner the same day.
+How it is carried out, not decided by the owner:
+- **What is to be done on top:** «Потрібно відправити · N» (to be sent)
+  and «В дорозі · N» (sent, or arrived at the post office), oldest first —
+  the next to send on top; a group with none is not shown. Counted once
+  every open order is read: past a hundred, «Показати ще» reads the rest
+  into their groups, and the groups say no number until it has.
+- **A row a parcel's tag:** its goods, «Лоран шоколад · M × 2», two named
+  and «+ ще N»; how it goes, «Нова пошта · ТТН 2045…», and since when, «з
+  21.10», an abroad note by its first sixty characters, a long one broken
+  where it must; its status as a pill under them, as «Закриття»'s and the
+  correction's are — the task list put it on the right, where at 360 px it
+  left the goods a word a line. No sum, no way, no id's characters (G32;
+  В1). The whole row opens the order.
+- **The closed under «Показати завершені»:** «Завершені», newest made
+  first, fifty at a time, «Завершених замовлень немає.» when none;
+  «Сховати завершені» puts them away, the focus on what took the button's
+  place. Nothing open: «Зараз
+  нічого не треба відправляти.» — and never an order at all: «Замовлень ще
+  немає. Замовлення тримає товар у резерві, поки його не відправили.» with
+  «Нове замовлення» for whoever may make one.
+- **«Номер ТТН» found as it is typed,** from two characters after a pause,
+  Enter at once, as the till's search; every status, newest first, with its
+  pill; the rows found before stand until the new ones come. Nothing
+  found: «За «…» замовлень не знайдено. Перевірте номер ТТН.» and
+  «Очистити» — never said before the search's own answer. What was typed,
+  and the closed shown, stay while an order is opened and left; afresh
+  when «Замовлення» is chosen again.
+- **«+» beside «Замовлення»** opens «Нове замовлення», for whoever may make
+  one in a store that trades; «+ Нове замовлення» stays under «Ще» until
+  the bottom menu. «Оновити», «Знайти», «Попередні» and «Наступні» are
+  gone: the list is read on entering, as the app comes back, and after
+  every step; a list that cannot be read says so over the rows read, with
+  «Спробувати ще раз».
+- **The server reads the open or the closed** (`status=open|closed` on
+  `GET /orders`): read-only, the stores' access filtered before the page as
+  before, no migration.
+- **«Скасувати замовлення» asked first,** at the card's foot after the
+  history: «Скасувати замовлення? Резерв звільниться — товар знову можна
+  продати. Відновити замовлення не можна.», «Так, скасувати» and «Ні,
+  залишити», the focus on «Ні, залишити»; both held while the cancel is on
+  its way or kept, as it may still be recorded. Cancelled, a buzz and
+  «Замовлення скасовано, резерв звільнено.» under its pill «Скасовано».
+  Refused, a buzz of its own, why at the screen's top brought to the
+  finger, and the order read again. Only before it is sent, as before;
+  what is sent is as before.
+- **Not yet, by the task list's order:** the order's card (P0-2) — its
+  title still «Замовлення № …»; «Клієнт забрав» (P0-3); «Нове замовлення»
+  as a sale (P0-5); the statuses' colours (P2-3, В5); places while read
+  (P2-2); the words of a refusal (P1-2).
+
+Built on 2026-10-23; see the [report](orders-redesign-1-report.md).
+

@@ -201,8 +201,12 @@ test("whoever does not sell opens on the orders, as before", async ({
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await expect(
-    page.getByRole("heading", { name: "Замовлення магазину" }),
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
+  // Nothing to make an order with (orders task list, P0-1).
+  await expect(
+    page.getByRole("button", { name: "Нове замовлення" }),
+  ).toHaveCount(0);
 });
 
 test("a single store that does not trade shows its state, with nothing to change to", async ({
