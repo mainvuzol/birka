@@ -1,0 +1,35 @@
+- unchanged tree: passed 
+- the sent among the ones to send: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+- the groups counted with more to read: caught by more than a hundred open: «Показати ще» reads the rest, the groups counted once all are re
+- a group never counted: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+- «× N» never said: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+- every line named: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+- «з 21.10» never said: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+- the sum back on a row: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+- the closed read with the open: SURVIVED
+- the closed never read when nothing is open: caught by no order yet says what an order does, with «Нове замовлення»; none open, but closed ones, 
+- a row read twice shown twice: caught by more than a hundred open: «Показати ще» reads the rest, the groups counted once all are re
+- one character searched: caught by a waybill is found as it is typed, from two characters, Enter at once; kept while an order
+- Enter waits for the pause: caught by a waybill is found as it is typed, from two characters, Enter at once; kept while an order
+- «not found» before its answer: caught by a waybill is found as it is typed, from two characters, Enter at once; kept while an order
+- the search forgotten when an order is opened: caught by a waybill is found as it is typed, from two characters, Enter at once; kept while an order
+- the focus left where the closed button was: caught by more than a hundred open: «Показати ще» reads the rest, the groups counted once all are re
+- «+» for whoever may not make an order: caught by a store that does not trade lists its orders with no «+» (orders task list, P0-1)
+- a cancel in one tap: caught by «Скасувати замовлення» asks first, «Ні, залишити» keeps it, and «Так, скасувати» cancels o
+- «Ні, залишити» open while the cancel is on its way: caught by a cancel on its way holds «Ні, залишити» too; refused, it buzzes and brings why to the fin
+- a cancel recorded without a word: caught by «Скасувати замовлення» asks first, «Ні, залишити» keeps it, and «Так, скасувати» cancels o
+- a cancel recorded without a buzz: caught by «Скасувати замовлення» asks first, «Ні, залишити» keeps it, and «Так, скасувати» cancels o
+- a refused cancel silent: caught by a cancel on its way holds «Ні, залишити» too; refused, it buzzes and brings why to the fin
+- a refused cancel's why left out of reach: caught by a cancel on its way holds «Ні, залишити» too; refused, it buzzes and brings why to the fin
+- an abroad note shown whole: caught by in the dark theme the list reads at 4.5:1, nothing wider than the phone; in the light theme the list reads at 4.5:1, nothing wider than the phone
+- a long waybill under the row's edge: caught by in the dark theme the list reads at 4.5:1, nothing wider than the phone; in the light theme the list reads at 4.5:1, nothing wider than the phone
+- the real list's row unfound by its waybill: caught by an order paid by cash on delivery is collected outside the till
+- the server's open read newest first: caught by test_the_open_orders_come_oldest_first_and_the_closed_apart
+- the server's closed read holding the open: caught by test_the_open_orders_come_oldest_first_and_the_closed_apart
+- the server's open read holding a collected order: caught by test_the_open_orders_come_oldest_first_and_the_closed_apart
+27 of 28 caught
+
+Then, the list's first journey asking that nothing closed is read before «Показати завершені» (the survivor above):
+- unchanged tree: passed 
+- the closed read with the open: caught by what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the cl
+1 of 1 caught — 28 of 28 in all
