@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 
 /**
  * «Замовлення» (orders task list, P0-1): what is to be sent and what is on
- * its way on top, oldest first, a row a parcel's tag with no sum; the
+ * its way on top, newest first (owner decision, 2026-10-23), a row a parcel's tag with no sum; the
  * closed under «Показати завершені»; a waybill found as it is typed; «+»
  * for a new one. And a cancel asked first (P0-4). The orders are stubbed.
  */
@@ -127,7 +127,7 @@ async function stub(page: Page, server: Server): Promise<void> {
               : [...server.open, ...server.closed];
       // Newest first, a page may hold the last row of the one before: an
       // order made meanwhile moves the pages' edge.
-      const start = offset > 0 && status !== "open" ? offset - 1 : offset;
+      const start = offset > 0 ? offset - 1 : offset;
       await route.fulfill({
         json: {
           orders: all.slice(start, offset + limit),
@@ -211,12 +211,12 @@ const collected = order({
   waybill: "20450087654321",
 });
 
-test("what is to be sent and what is on its way on top, a row a parcel's tag with no sum; the closed under «Показати завершені» (orders task list, P0-1)", async ({
+test("what is to be sent and what is on its way on top, newest first, a row a parcel's tag with no sum; the closed under «Показати завершені» (orders task list, P0-1; owner decision, 2026-10-23)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   const orders = server({
-    open: [sent, arrived, toSend],
+    open: [toSend, arrived, sent],
     closed: [collected],
   });
   await stub(page, orders);
@@ -244,15 +244,15 @@ test("what is to be sent and what is on its way on top, a row a parcel's tag wit
     `Нова пошта · ТТН ще немає · з\u00a0${short(toSend.created_at as string)}`,
   );
   await expect(ready.locator(".badge")).toHaveText("До відправлення");
-  // On its way: oldest first, as the server reads them.
+  // On its way: newest first, as the server reads them.
   const onWay = page
     .getByRole("list", { name: "В дорозі" })
     .getByRole("button");
   await expect(onWay.locator(".badge")).toHaveText([
-    "Відправлено",
     "Прибув на пошту",
+    "Відправлено",
   ]);
-  await expect(onWay.nth(1).locator(".sale-meta")).toHaveText(
+  await expect(onWay.nth(0).locator(".sale-meta")).toHaveText(
     `Укрпошта · ТТН 0505012345678 · з\u00a0${short(arrived.created_at as string)}`,
   );
   // No sum, no way, no id's characters on any row (G32; В1).
@@ -298,7 +298,7 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   page,
 }) => {
   const orders = server({
-    open: [sent, toSend],
+    open: [toSend, sent],
     closed: [collected],
     found: { "2045": [sent, collected], "2046": [toSend] },
   });
@@ -349,7 +349,7 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   await expect(page.getByRole("heading", { name: /Потрібно/ })).toHaveCount(0);
   // An order opened and left: the search as it was.
   await found.first().click();
-  await page.getByRole("button", { name: "← До списку" }).click();
+  await page.getByRole("button", { name: "← До замовлень" }).click();
   await expect(field).toHaveValue("2045");
   await expect(found).toHaveCount(2);
   const none = page.getByText(
@@ -390,11 +390,11 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   ).toBeVisible();
 });
 
-test("more than a hundred open: «Показати ще» reads the rest, the groups counted once all are read; the closed fifty at a time, a row read twice shown once (orders task list, P0-1)", async ({
+test("more than a hundred open: «Показати ще» reads the rest, a row read twice shown once, the groups counted once all are read; the closed fifty at a time (orders task list, P0-1)", async ({
   page,
 }) => {
   const many = Array.from({ length: 105 }, (_, index) =>
-    order({ created_at: ago(30 - index / 10) }),
+    order({ created_at: ago(index / 10) }),
   );
   const done = Array.from({ length: 55 }, (_, index) =>
     order({ status: "COLLECTED", created_at: ago(40 + index / 10) }),
@@ -647,7 +647,7 @@ for (const [name, theme] of [
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
-    await stub(page, server({ open: [abroad, sent, arrived, toSend] }));
+    await stub(page, server({ open: [toSend, arrived, sent, abroad] }));
     await enter(page, { theme });
     const first = page.locator(".order-row").first();
     await expect(first).toBeVisible();
@@ -656,7 +656,7 @@ for (const [name, theme] of [
     const far = page
       .getByRole("list", { name: "В дорозі" })
       .getByRole("button")
-      .first();
+      .last();
     await expect(far.locator(".sale-meta")).toHaveText(
       `За кордон · ${note.slice(0, 60)}… · з\u00a0${short(abroad.created_at as string)}`,
     );

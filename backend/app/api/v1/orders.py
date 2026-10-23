@@ -214,8 +214,8 @@ async def list_page(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     waybill: Annotated[CleanText | None, Query(max_length=64)] = None,
-    # The open ones, oldest first, or the closed, newest first (orders task
-    # list, P0-1); every order, newest first, without it.
+    # The open ones or the closed (orders task list, P0-1), newest first as
+    # every order is (owner decision, 2026-10-23); every order without it.
     status: Literal["open", "closed"] | None = None,
 ) -> dict[str, Any]:
     page = await list_orders(

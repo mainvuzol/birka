@@ -94,11 +94,11 @@ async def test_order_pages_filter_whole_inaccessible_orders_before_pagination(ma
         ).status_code == 422
 
 
-async def test_the_open_orders_come_oldest_first_and_the_closed_apart(maker):
+async def test_the_open_orders_come_apart_from_the_closed_newest_first(maker):
     """The list's two reads (orders task list, P0-1): the orders still to
-    send or on their way, oldest first — the next to send on top — and the
-    collected, cancelled and come back, newest first; every order without
-    either, as before."""
+    send or on their way, and the collected, cancelled and come back — each
+    newest first (owner decision, 2026-10-23); every order without either,
+    as before."""
     shop, first = await setup(maker)
     async with maker() as session:
         await give_stock(session, shop, 1)
@@ -124,8 +124,8 @@ async def test_the_open_orders_come_oldest_first_and_the_closed_apart(maker):
         body = answer.json()
         return [order["id"] for order in body["orders"]], body["has_more"]
 
-    assert await ids(status="open") == ([str(first), second["id"], sent["id"]], False)
-    assert await ids(status="open", limit=1) == ([str(first)], True)
+    assert await ids(status="open") == ([sent["id"], second["id"], str(first)], False)
+    assert await ids(status="open", limit=1) == ([sent["id"]], True)
     assert await ids(status="open", limit=1, offset=1) == ([second["id"]], True)
     # Collected and cancelled alike, newest first.
     assert await ids(status="closed") == ([collected["id"], cancelled["id"]], False)

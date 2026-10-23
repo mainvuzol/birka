@@ -74,9 +74,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await enter(page);
   await draft(page);
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
-  await expect(
-    page.getByRole("heading", { name: /Замовлення №/ }),
-  ).toBeVisible();
+  await expect(page.locator(".order-context")).toBeVisible();
   await expect(
     page.getByText("До відправлення", { exact: true }),
   ).toBeVisible();
@@ -122,9 +120,12 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   expect(sent).toEqual([
     { command_id: expect.any(String) as string, payment_method: "CASH" },
   ]);
-  await expect(page.getByText("1 200,15 грн", { exact: true })).toBeVisible();
-  // A line's price is «за 1 шт.», as at the till (sale-slice TZ, P2-2).
-  await expect(page.getByText("1 200,15 грн за 1 шт.")).toBeVisible();
+  // A line's sum on its right; «за 1 шт.» only for more than one, as at
+  // the till (orders task list, P0-2).
+  await expect(page.locator(".order-line .history-sum")).toHaveText(
+    "1 200,15 грн",
+  );
+  await expect(page.getByText(/за 1 шт\./)).toHaveCount(0);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
@@ -138,9 +139,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Замовлення №/ })).toHaveCount(
-    0,
-  );
+  await expect(page.locator(".order-context")).toHaveCount(0);
 });
 test("lost committed response survives reopening and reuses the same command", async ({
   page,
@@ -171,9 +170,7 @@ test("lost committed response survives reopening and reuses the same command", a
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
   await reopen(reopened);
-  await expect(
-    reopened.getByRole("heading", { name: /Замовлення №/ }),
-  ).toBeVisible();
+  await expect(reopened.locator(".order-context")).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toBe(commands[0]);
   // Asked first (orders task list, P0-4).
@@ -228,9 +225,7 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   );
   answered = true;
   await retry.click();
-  await expect(
-    reopened.getByRole("heading", { name: /Замовлення №/ }),
-  ).toBeVisible();
+  await expect(reopened.locator(".order-context")).toBeVisible();
   expect(new Set(commands).size).toBe(1);
   // Asked first (orders task list, P0-4).
   await reopened
@@ -317,9 +312,7 @@ test("uncertain command stays blocked after access denial, then reconciles", asy
   ).toBeDisabled();
   await expect(retry).toBeEnabled();
   await retry.click();
-  await expect(
-    page.getByRole("heading", { name: /Замовлення №/ }),
-  ).toBeVisible();
+  await expect(page.locator(".order-context")).toBeVisible();
   expect(new Set(commands).size).toBe(1);
   expect(commands).toHaveLength(3);
 });
