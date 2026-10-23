@@ -1,0 +1,21 @@
+- unchanged tree: passed 
+- the way pressed not the way sent: caught by «Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, 
+- in parts, sent as whole: caught by «Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid
+- terms not taken unsaid: caught by «Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid
+- why not brought to the finger: caught by «Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid
+- in parts, the panel says the whole: caught by «Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid
+- no ways on an arrived order: caught by «Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, 
+- a carried tap taken: caught by a tap meant for the step just taken, landing on the next step's button drawn in its place,
+- «Разом» over the result: caught by «Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid
+- a discount for the whole line: caught by lines with their sums: two of a coat less its discount, «за 1 шт.» for more than one; the 
+- in parts, the result says the whole: caught by «Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid
+- a card's result without «Проведіть»: caught by «Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, 
+- a kept card told «Проведіть»: caught by a card's «Клієнт забрав» whose answer never came, confirmed later, says it was recorded on
+- a kept card not told to charge it once: caught by a card's «Клієнт забрав» whose answer never came, confirmed later, says it was recorded on
+- kept said as at its press: caught by a card's «Клієнт забрав» whose answer never came, confirmed later, says it was recorded on
+- the result not brought to the finger: caught by «Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, 
+- a collect recorded without a buzz: caught by «Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, 
+- a kept collect said as fresh: caught by a card's «Клієнт забрав» whose answer never came, confirmed later, says it was recorded on
+- «Змінити спосіб оплати» without the way: caught by a collected order whose way is not given to this person offers no «Змінити спосіб оплати» 
+- «Повернення» on another sale: caught by reserve, dispatch, arrive, collect through real API
+19 of 19 caught
