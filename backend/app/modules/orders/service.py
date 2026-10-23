@@ -22,7 +22,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -602,11 +602,14 @@ async def list_orders(
     limit: int = 50,
     offset: int = 0,
     waybill: str | None = None,
+    status: Literal["open", "closed"] | None = None,
 ) -> dict[str, Any]:
     """Filter every source's current permission before ordering and pagination.
 
     `waybill` finds the orders whose waybill holds it, however either is
-    spaced (owner decision, 2026-10-01)."""
+    spaced (owner decision, 2026-10-01). `status` reads the open ones —
+    still to send or on their way — oldest first, the next to send on top,
+    or the closed ones newest first (orders task list, P0-1)."""
     scope.require(Permission.SALE_VIEW, store_id)
     private_store = (
         store_id
@@ -635,6 +638,7 @@ async def list_orders(
         .exists()
     )
     wanted = waybill_key(waybill or "")
+    open_ = CustomerOrder.status.in_([each.value for each in OPEN_STATUSES])
     orders = list(
         (
             await session.scalars(
@@ -644,8 +648,15 @@ async def list_orders(
                     CustomerOrder.store_id == store_id,
                     ~inaccessible_item,
                     *([CustomerOrder.waybill_key.contains(wanted)] if wanted else []),
+                    *([open_] if status == "open" else [~open_] if status == "closed" else []),
                 )
-                .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
+                .order_by(
+                    *(
+                        (CustomerOrder.created_at.asc(), CustomerOrder.id.asc())
+                        if status == "open"
+                        else (CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
+                    )
+                )
                 .limit(limit + 1)
                 .offset(offset)
             )

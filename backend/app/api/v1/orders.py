@@ -214,9 +214,18 @@ async def list_page(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     waybill: Annotated[CleanText | None, Query(max_length=64)] = None,
+    # The open ones, oldest first, or the closed, newest first (orders task
+    # list, P0-1); every order, newest first, without it.
+    status: Literal["open", "closed"] | None = None,
 ) -> dict[str, Any]:
     page = await list_orders(
-        session, scope=scope, store_id=store_id, limit=limit, offset=offset, waybill=waybill
+        session,
+        scope=scope,
+        store_id=store_id,
+        limit=limit,
+        offset=offset,
+        waybill=waybill,
+        status=status,
     )
     return page | {"orders": await _with_ways(session, scope, page["orders"])}
 

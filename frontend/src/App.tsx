@@ -10,12 +10,15 @@ import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import {
+  buzz,
   connectTelegram,
   telegramInitData,
   telegramUserId,
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
+import { Orders, freshOrdersView } from "@/orders/Orders";
+import type { OrdersView } from "@/orders/Orders";
 import {
   asShown,
   carrierLabels,
@@ -566,10 +569,9 @@ function Workspace({
     (backups.data.state !== "OK" ||
       (backups.data.server?.open.length ?? 0) > 0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
-  // Orders found by their waybill (owner decision, 2026-10-01).
-  const [waybillQuery, setWaybillQuery] = useState("");
-  const [waybillSearch, setWaybillSearch] = useState("");
+  // «Замовлення» as it was left: what was typed, the closed shown (review,
+  // 2026-10-23); afresh when «Замовлення» is chosen again.
+  const [ordersView, setOrdersView] = useState<OrdersView>(freshOrdersView);
   const [storageError, setStorageError] = useState(false);
   const key = `birka:pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const catalogKey = `birka:catalog-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -865,17 +867,6 @@ function Workspace({
       setStorageError(true);
     }
   }, [key, loadedFromDisk]);
-  const list = useQuery({
-    queryKey: ["orders", store.id, offset, waybillSearch],
-    queryFn: () =>
-      api<{ orders: Order[]; has_more: boolean }>(
-        `/orders?store_id=${store.id}&limit=50&offset=${String(offset)}${
-          waybillSearch ? `&waybill=${encodeURIComponent(waybillSearch)}` : ""
-        }`,
-        token,
-      ),
-    enabled: store.permissions.includes("sale:view"),
-  });
   const detail = useQuery({
     queryKey: ["order", store.id, selectedId],
     queryFn: () => api<Order>(`/orders/${selectedId ?? ""}`, token),
@@ -885,15 +876,56 @@ function Workspace({
   // for want of a way, it was an old «Клієнт забрав» (ADR-0012, B12), and
   // refused as having recorded nothing, it says which (ADR-0013 §1).
   const [orderResent, setOrderResent] = useState<string | null>(null);
+  // What a step did, said on the order it was taken on (orders task list,
+  // P0-4): a cancel, so far.
+  const [orderDone, setOrderDone] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
+  // A cancel refused: why, at the screen's top, brought to the finger from
+  // the card's foot where it was asked (review, 2026-10-23).
+  const orderAlert = useRef<HTMLParagraphElement>(null);
+  const [cancelRefused, setCancelRefused] = useState(0);
+  useEffect(() => {
+    if (cancelRefused > 0) orderAlert.current?.focus();
+  }, [cancelRefused]);
   async function run(command: Pending, resent = false): Promise<void> {
     setOrderResent(resent ? command.label : null);
+    setOrderDone(null);
     const order = await submitPending(key, token, command);
+    const settled = useCommand.getState();
+    if (
+      !order &&
+      command.path.endsWith("/cancel") &&
+      settled.pending === null &&
+      settled.error !== null
+    ) {
+      // Refused, recorded nowhere: the order as it is now.
+      buzz("error");
+      setCancelRefused((count) => count + 1);
+      if (command.orderId)
+        void cache.invalidateQueries({
+          queryKey: ["order", store.id, command.orderId],
+        });
+    }
     if (order) {
+      if (command.path.endsWith("/cancel")) {
+        buzz("success");
+        setOrderDone({
+          id: order.id,
+          text: "Замовлення скасовано, резерв звільнено.",
+        });
+      }
       cache.setQueryData(["order", store.id, order.id], order);
       setSelectedId(order.id);
       setTab("list");
       await Promise.all([
-        cache.invalidateQueries({ queryKey: ["orders", store.id] }),
+        // Read now, though the list is not shown: back on it, the order is
+        // where it is now (review, 2026-10-23).
+        cache.invalidateQueries({
+          queryKey: ["orders", store.id],
+          refetchType: "all",
+        }),
         cache.invalidateQueries({ queryKey: ["stock", store.id] }),
         // Collected in parts, a debt: «Борги» read again (review,
         // 2026-10-19).
@@ -1325,7 +1357,10 @@ function Workspace({
       disabled={section.disabled}
       onClick={() => {
         setTab(section.tab);
-        if (section.forgetsOrder) setSelectedId(null);
+        if (section.forgetsOrder) {
+          setSelectedId(null);
+          setOrdersView(freshOrdersView);
+        }
         // Chosen under «Ще», the button goes as «Ще» closes: the focus
         // stays on «Ще», not lost to the page (review, 2026-10-16).
         if (moreOpen && !counter.has(section.tab)) moreButton.current?.focus();
@@ -1757,7 +1792,7 @@ function Workspace({
         </section>
       )}
       {error !== null && (
-        <p role="alert">
+        <p role="alert" ref={orderAlert} tabIndex={-1}>
           {orderErrorText(
             error,
             orderResent,
@@ -2076,6 +2111,7 @@ function Workspace({
             className="quiet"
             onClick={() => {
               setSelectedId(null);
+              setOrderDone(null);
             }}
           >
             ← До списку
@@ -2097,6 +2133,7 @@ function Workspace({
                 detail.data.shipping_history?.length ?? 0,
               )}`}
               order={detail.data}
+              done={orderDone?.id === detail.data.id ? orderDone.text : null}
               store={store}
               token={token}
               blocked={blocked}
@@ -2115,111 +2152,21 @@ function Workspace({
           )}
         </>
       ) : (
-        <section>
-          <div className="toolbar">
-            <h2>Замовлення магазину</h2>
-            <button
-              className="quiet"
-              onClick={() => {
-                void list.refetch();
-              }}
-            >
-              Оновити
-            </button>
-          </div>
-          {store.permissions.includes("sale:view") && (
-            <form
-              className="search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setWaybillSearch(waybillQuery.trim());
-                setOffset(0);
-              }}
-            >
-              <label>
-                Пошук за номером накладної
-                <input
-                  type="search"
-                  value={waybillQuery}
-                  maxLength={64}
-                  onChange={(event) => {
-                    setWaybillQuery(event.target.value);
-                  }}
-                />
-              </label>
-              <button type="submit">Знайти</button>
-            </form>
-          )}
-          {!store.permissions.includes("sale:view") ? (
-            <p>Немає права переглядати замовлення.</p>
-          ) : list.isPending ? (
-            <p role="status">Завантажуємо…</p>
-          ) : list.error ? (
-            <Failure
-              error={list.error}
-              retry={() => {
-                void list.refetch();
-              }}
-            />
-          ) : (
-            <>
-              {list.data.orders.length === 0 && (
-                <p>
-                  {waybillSearch
-                    ? "Замовлень із такою накладною не знайдено."
-                    : "Поки немає замовлень. Створіть перше, щоб зарезервувати товар."}
-                </p>
-              )}
-              {list.data.orders.map((order) => (
-                <button
-                  className="order-card"
-                  key={order.id}
-                  onClick={() => {
-                    setSelectedId(order.id);
-                  }}
-                >
-                  <span className="badge">{statusLabels[order.status]}</span>
-                  <strong>
-                    {order.items
-                      .map((item) => visible(item.display_name))
-                      .join(", ")}
-                  </strong>
-                  <span>
-                    {order.items.reduce((n, item) => n + item.quantity, 0)} шт.
-                    · {money(order.total)}
-                  </span>
-                  <span>{shippingText(order)}</span>
-                  <small>
-                    № {order.id.slice(0, 8)} ·{" "}
-                    {order.created_at
-                      ? new Date(order.created_at).toLocaleDateString("uk-UA")
-                      : ""}
-                  </small>
-                </button>
-              ))}
-              <div className="toolbar">
-                <button
-                  className="quiet"
-                  disabled={offset === 0}
-                  onClick={() => {
-                    setOffset(Math.max(0, offset - 50));
-                  }}
-                >
-                  Попередні
-                </button>
-                <button
-                  className="quiet"
-                  disabled={!list.data.has_more}
-                  onClick={() => {
-                    setOffset(offset + 50);
-                  }}
-                >
-                  Наступні
-                </button>
-              </div>
-            </>
-          )}
-        </section>
+        <Orders
+          store={store}
+          token={token}
+          blocked={blocked}
+          view={ordersView}
+          change={setOrdersView}
+          open={(order) => {
+            setSelectedId(order.id);
+            setOrderDone(null);
+          }}
+          create={() => {
+            setTab("new");
+            setSelectedId(null);
+          }}
+        />
       )}
     </>
   );
@@ -2341,6 +2288,7 @@ const actionLabels: Record<string, string> = {
 };
 function OrderDetail({
   order,
+  done,
   store,
   token,
   blocked,
@@ -2348,6 +2296,8 @@ function OrderDetail({
   refresh,
 }: {
   order: Order;
+  /** What the step just taken on it did. */
+  done: string | null;
   store: Store;
   /** Who asks what a number already owes, paying in parts. */
   token: string;
@@ -2386,6 +2336,7 @@ function OrderDetail({
         </button>
       </div>
       <span className="badge">{statusLabels[order.status]}</span>
+      {done && <p role="status">{done}</p>}
       <p>Доставка: {shippingText(order)}</p>
       {order.same_waybill && order.same_waybill.length > 0 && (
         <p className="notice">
@@ -2531,18 +2482,6 @@ function OrderDetail({
             {actionLabels[next]}
           </button>
         )}
-        {order.status === "READY_TO_DISPATCH" &&
-          store.permissions.includes("sale:create") && (
-            <button
-              className="quiet"
-              disabled={blocked}
-              onClick={() => {
-                action("cancel");
-              }}
-            >
-              Скасувати та звільнити резерв
-            </button>
-          )}
         {["DISPATCHED", "ARRIVED"].includes(order.status) &&
           store.permissions.includes("sale:refund") &&
           store.permissions.includes("inventory:receive") && (
@@ -2598,6 +2537,17 @@ function OrderDetail({
           </ul>
         </>
       )}
+      {/* At the card's foot, asked first: a cancel is for good, and the
+          reserve is sold at once (orders task list, P0-4). */}
+      {order.status === "READY_TO_DISPATCH" &&
+        store.permissions.includes("sale:create") && (
+          <CancelOrder
+            blocked={blocked}
+            cancel={() => {
+              action("cancel");
+            }}
+          />
+        )}
       {returning && ["DISPATCHED", "ARRIVED"].includes(order.status) && (
         <fieldset disabled={blocked}>
           <legend>Фізичне повернення всього замовлення</legend>
@@ -2638,6 +2588,67 @@ function OrderDetail({
         </fieldset>
       )}
     </section>
+  );
+}
+/**
+ * «Скасувати замовлення», asked first where it stands: what it does, and
+ * that it is for good (orders task list, P0-4). The focus on «Ні,
+ * залишити», the safe one.
+ */
+function CancelOrder({
+  blocked,
+  cancel,
+}: {
+  blocked: boolean;
+  cancel: () => void;
+}): JSX.Element {
+  const [asking, setAsking] = useState(false);
+  const question = useId();
+  const keep = useRef<HTMLButtonElement>(null);
+  const ask = useRef<HTMLButtonElement>(null);
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (asking) keep.current?.focus();
+    else if (asked) ask.current?.focus();
+  }, [asking, asked]);
+  return asking ? (
+    <div className="cancel-ask" role="group" aria-labelledby={question}>
+      <p id={question}>
+        Скасувати замовлення? Резерв звільниться — товар знову можна продати.
+        Відновити замовлення не можна.
+      </p>
+      <div className="actions">
+        <button type="button" disabled={blocked} onClick={cancel}>
+          Так, скасувати
+        </button>
+        <button
+          type="button"
+          className="quiet"
+          ref={keep}
+          // Held with «Так» while the cancel is on its way or kept: it may
+          // still be recorded (review, 2026-10-23).
+          disabled={blocked}
+          onClick={() => {
+            setAsking(false);
+          }}
+        >
+          Ні, залишити
+        </button>
+      </div>
+    </div>
+  ) : (
+    <button
+      type="button"
+      className="quiet cancel-order"
+      ref={ask}
+      disabled={blocked}
+      onClick={() => {
+        setAsking(true);
+        setAsked(true);
+      }}
+    >
+      Скасувати замовлення
+    </button>
   );
 }
 interface DraftLine {
