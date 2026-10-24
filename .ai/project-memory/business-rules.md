@@ -3915,3 +3915,50 @@ Asked when #129 was merged, each answer the option recommended:
   bottom menu (P2-5); the shipping form keeps its lists until P1-3.
 
 Built on 2026-10-24; see the [report](orders-redesign-4-report.md).
+
+## «Початкові залишки»'s refusals in its own words — built 2026-10-24
+
+Asked on 2026-10-24, after a refusal of a list was seen saying «Перевірте
+дані та поточний статус замовлення.» — the app's shared words, which speak
+of an order. How it is carried out, not decided by the owner (the words
+wait for the owner's approval):
+- **A refusal the list's screens do not name says what was not done and
+  what to check,** by the command:
+  - a new list, by what was sent: «Список не збережено. Перевірте рядки
+    та спробуйте ще раз.», or «… Перевірте файл …»; a conflict «Список не
+    збережено. Поки ви працювали, дані змінилися — спробуйте ще раз.», the
+    warehouse read again;
+  - a new list sent again while the send before it never answered — it may
+    have made the list: «Сервер не прийняв цей запит, а чи збережено список
+    попередньою спробою — ще невідомо. Перевірте рядки й натисніть ще раз —
+    двічі список не збережеться.» (a file «… Перевірте файл і …»);
+  - a line's answer: «Відповідь не збережено. Перевірте її та спробуйте ще
+    раз.»;
+  - typed lines or a file added: «Рядки не додано. Перевірте їх та
+    спробуйте ще раз.», «Файл не додано. Перевірте його та спробуйте ще
+    раз.»;
+  - removed: «Рядки не прибрано. Спробуйте ще раз.» or «Файл не прибрано.
+    …» — the list read again by itself;
+  - approved or rejected: «Список не затверджено. Спробуйте ще раз.»,
+    «Список не відхилено. Перевірте причину та спробуйте ще раз.».
+- **A conflict it does not name:** the same first words, then «Поки ви
+  працювали, список змінився — перегляньте його й спробуйте ще раз.», and
+  the list read again by the screen.
+- **A reject that lost a race** — rejected meanwhile by someone else for
+  another reason, which the server answers as a conflict of its command —
+  says «Цей список уже затвердили або відхилили.», as one already decided.
+- **Nothing in a list is stock** (`NOTHING_TO_APPLY`): «Список не
+  затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть
+  його.».
+- **Lines typed by hand past what the server takes at once** — 1 000
+  lines, 100 000 characters — are said before sending, the press held: «Рядків:
+  1 200, а за раз їх беруть не більше 1 000. …» with what to do with the
+  rest — in a new list, add it through «Додати рядки вручну»; added, in
+  several goes.
+- **The catalogue's search** in a line's answer, a delivery, a count and
+  the till's catalogue takes at most 200 characters, as the server reads.
+- **Every answer the screens already name keeps its words,** and so does
+  every shared one that is not about an order: the server out of reach, a
+  session ended, no access, the slow answer.
+
+Built on 2026-10-24; see the [report](openings-refusals-report.md).

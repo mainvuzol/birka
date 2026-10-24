@@ -1,0 +1,21 @@
+- unchanged tree: passed 
+- a list's unnamed form in an order's words: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- a list's conflict in an order's words: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- too many typed lines unsaid: caught by a new list refused for a reason the screen does not name says so by what was sent; lines p
+- too many characters unsaid: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- a new list said by its warehouse: caught by a new list refused for a reason the screen does not name says so by what was sent; lines p
+- unsure said as not saved: caught by an answer too slow to wait for, its list made only after: no new list is offered meanwhile
+- a new list's conflict said as a list's: caught by a new list refused for a reason the screen does not name says so by what was sent; lines p
+- a new list's conflict not read again: caught by a new list refused for a reason the screen does not name says so by what was sent; lines p
+- too many typed lines sent in a new list: caught by a new list refused for a reason the screen does not name says so by what was sent; lines p
+- a line's conflict not read again: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- a reject that lost a race said not rejected: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- nothing to approve said as a change: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- an approval told to refresh: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- a removal told to refresh: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- a file's removal said as lines': caught by a file added by mistake is removed with its answers, the last file is not, and a removed f
+- a file refused said as lines: caught by a file added by mistake is removed with its answers, the last file is not, and a removed f
+- added lines' conflict not read again: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- too many typed lines added: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+- the catalogue's search unbounded: caught by a list's refusals the server does not name are said in the list's words, never an order's:
+19 of 19 caught

@@ -233,6 +233,35 @@ async function choose(
 }
 
 /** «Новий список» for this warehouse, from a file. */
+/** The next command sent to `pattern` (never a read of it) refused once,
+ * for a reason the screens do not name: its form (422) or a conflict
+ * (409). */
+async function refuseOnce(
+  page: Page,
+  pattern: string,
+  status: 422 | 409,
+): Promise<void> {
+  let used = false;
+  await page.route(pattern, async (route) => {
+    if (used || route.request().method() === "GET") {
+      await route.fallback();
+      return;
+    }
+    used = true;
+    await route.fulfill({
+      status,
+      json:
+        status === 422
+          ? {
+              code: "VALIDATION_ERROR",
+              message: "Request failed validation",
+              details: {},
+            }
+          : { code: "CONFLICT", message: "Conflict", details: {} },
+    });
+  });
+}
+
 async function newFromFile(page: Page, location: string): Promise<Locator> {
   await page.getByRole("button", { name: "Новий список" }).click();
   const form = page.getByRole("form", { name: "Новий список" });
@@ -571,6 +600,13 @@ test("a file added by mistake is removed with its answers, the last file is not,
     "b.json",
     wrong,
   );
+  // Refused for a reason the screen does not name: a file's words, never
+  // an order's (review, 2026-10-24).
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", 422);
+  await page.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(
+    page.getByRole("form", { name: "Додати файл" }).getByRole("alert"),
+  ).toHaveText("Файл не додано. Перевірте його та спробуйте ще раз.");
   await page.getByRole("button", { name: "Додати до списку" }).click();
   const two = page.getByRole("article", { name: "Файл 2" });
   await expect(two).toContainText("Рядки 2–3 · розібрано 0 з 2");
@@ -593,6 +629,15 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await expect(two.getByLabel("Прибрати файл?", { exact: true })).toContainText(
     "Прибрати файл «b.json»? Рядки цього файлу (2) не увійдуть до затвердження, а відповіді на них (1) зникнуть; рядки буде видно як прибрані. Інші файли лишаться.",
   );
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", 409);
+  await two.getByRole("button", { name: "Так, прибрати" }).click();
+  await expect(
+    page.getByText(
+      "Файл не прибрано. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await two.getByRole("button", { name: "Прибрати файл" }).click();
   await two.getByRole("button", { name: "Так, прибрати" }).click();
   await expect(two).toContainText(/Прибрано: Оля, /);
   await expect(two).toHaveClass(/part-removed/);
@@ -2056,8 +2101,11 @@ test("an answer too slow to wait for, its list made only after: no new list is o
     // no new list is offered (review, third round, 2026-10-09).
     await form.getByRole("button", { name: "Зберегти список" }).click();
     await expect.poll(() => sent.length).toBe(2);
+    // In the list's words, never an order's; and never «не збережено»,
+    // since the send before it may still have made the list (review,
+    // 2026-10-24).
     await expect(form.getByRole("alert")).toHaveText(
-      "Перевірте дані та поточний статус замовлення.",
+      "Сервер не прийняв цей запит, а чи збережено список попередньою спробою — ще невідомо. Перевірте файл і натисніть ще раз — двічі список не збережеться.",
     );
     await expect(
       form.getByRole("button", { name: "Зберегти список" }),

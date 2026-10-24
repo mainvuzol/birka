@@ -237,6 +237,302 @@ test("a list is typed, each line answered, and approved into opening stock", asy
   ]);
 });
 
+/** The next command sent to `pattern` (never a read of it) answered as
+ * `answer` says, once: a form the server does not name (422), a conflict
+ * (409), or any answer of its own. */
+async function refuseOnce(
+  page: Page,
+  pattern: string,
+  answer: "form" | "conflict" | { status: number; json: object },
+): Promise<void> {
+  let used = false;
+  await page.route(pattern, async (route) => {
+    if (used || route.request().method() === "GET") {
+      await route.fallback();
+      return;
+    }
+    used = true;
+    await route.fulfill(
+      answer === "form"
+        ? {
+            status: 422,
+            json: {
+              code: "VALIDATION_ERROR",
+              message: "Request failed validation",
+              details: {},
+            },
+          }
+        : answer === "conflict"
+          ? {
+              status: 409,
+              json: { code: "CONFLICT", message: "Conflict", details: {} },
+            }
+          : answer,
+    );
+  });
+}
+
+/** How many times the list's `what` («lines», «parts») was read. */
+function reads(page: Page, what: string): () => number {
+  let count = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "GET" &&
+      new URL(request.url()).pathname.endsWith(`/${what}`)
+    )
+      count += 1;
+  });
+  return () => count;
+}
+
+test("a new list refused for a reason the screen does not name says so by what was sent; lines past what the server takes at once are said before sending", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page);
+  await typeList(page, fixture.opening_location_id, "Зошит нового списку", [
+    `${coat} сірий 3 шт`,
+  ]);
+  const save = page.getByRole("button", { name: "Зберегти список" });
+  const listReads = reads(page, "snapshots");
+  await refuseOnce(page, "**/api/v1/snapshots", "form");
+  await save.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Список не збережено. Перевірте рядки та спробуйте ще раз.",
+  );
+  await refuseOnce(page, "**/api/v1/snapshots", "conflict");
+  await save.click();
+  const before = listReads();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Список не збережено. Поки ви працювали, дані змінилися — спробуйте ще раз.",
+  );
+  // The warehouse read again: a list made meanwhile is found.
+  await expect.poll(listReads).toBeGreaterThan(before);
+  // A notebook pasted whole: more lines than one part takes.
+  const text = page.getByLabel(
+    "Рядки списку — кожен товар з нового рядка, як написано",
+  );
+  await text.fill(
+    Array.from({ length: 1001 }, (_, i) => `${coat} сірий ${String(i)}`).join(
+      "\n",
+    ),
+  );
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: /^Рядків: 1\s001, а за раз їх беруть/ }),
+  ).toHaveText(
+    /^Рядків: 1\s001, а за раз їх беруть не більше 1\s000\. Розділіть: решту додайте до списку через «Додати рядки вручну»\.$/,
+  );
+  await expect(save).toBeDisabled();
+  await text.fill(`${coat} сірий 3 шт`);
+  await save.click();
+  await expect(
+    page.getByRole("heading", { name: "Зошит нового списку" }),
+  ).toBeVisible();
+  // Rejected: the warehouse free for the journeys after.
+  const approval = page.getByLabel("Затвердження списку");
+  await approval.getByRole("button", { name: "Відхилити список" }).click();
+  await approval.getByLabel("Чому відхиляємо").fill("перевірка нового списку");
+  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await expect(
+    page.getByText(/^Відхилено: перевірка нового списку/),
+  ).toBeVisible();
+});
+
+test("a list's refusals the server does not name are said in the list's words, never an order's: what was not done, and what to check; a conflict read again", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page);
+  await typeList(page, fixture.opening_location_id, "Зошит відмов", [
+    `${coat} сірий 3 шт`,
+  ]);
+  await page.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Зошит відмов" }),
+  ).toBeVisible();
+  const lineReads = reads(page, "lines");
+  const partReads = reads(page, "parts");
+
+  // A line's answer.
+  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await page
+    .getByRole("article", { name: "Рядок 1" })
+    .getByRole("button", { name: "Розібрати рядок" })
+    .click();
+  const line = page.getByRole("form", { name: "Розбір рядка 1" });
+  // A search no longer than the server reads (review, 2026-10-24).
+  await expect(line.getByLabel("Пошук у каталозі")).toHaveAttribute(
+    "maxlength",
+    "200",
+  );
+  await pick(page, "Розбір рядка 1", coat);
+  await line.getByLabel("Розмір").selectOption({ label: "M" });
+  const answer = line.getByRole("button", { name: "Зберегти відповідь" });
+  await refuseOnce(page, "**/api/v1/snapshots/*/lines/*", "form");
+  await answer.click();
+  await expect(line.getByRole("alert")).toHaveText(
+    "Відповідь не збережено. Перевірте її та спробуйте ще раз.",
+  );
+  const before = lineReads();
+  await refuseOnce(page, "**/api/v1/snapshots/*/lines/*", "conflict");
+  await answer.click();
+  await expect(line.getByRole("alert")).toHaveText(
+    "Відповідь не збережено. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+  );
+  // Read again, as it says.
+  await expect.poll(lineReads).toBeGreaterThan(before);
+  // An answer the shared words name keeps them: no access.
+  await refuseOnce(page, "**/api/v1/snapshots/*/lines/*", {
+    status: 403,
+    json: { code: "PERMISSION_DENIED", message: "Forbidden", details: {} },
+  });
+  await answer.click();
+  await expect(line.getByRole("alert")).toHaveText(
+    "Немає доступу до цієї операції або складу. Зверніться до менеджера.",
+  );
+  await answer.click();
+  await expect(
+    page.getByRole("article", { name: "Рядок 1" }).getByText("Розібрано"),
+  ).toBeVisible();
+
+  // Lines typed by hand: too many said first; refused; added, then removed.
+  await page.getByRole("button", { name: "Додати рядки вручну" }).click();
+  const typing = page.getByRole("form", { name: "Додати рядки вручну" });
+  const pasted = typing.getByLabel(/Рядки — кожен товар/);
+  const add = typing.getByRole("button", { name: "Додати рядки" });
+  await pasted.fill(
+    Array.from({ length: 1001 }, (_, i) => `${coat} сірий ${String(i)}`).join(
+      "\n",
+    ),
+  );
+  await expect(
+    typing.getByRole("alert").filter({ hasText: /^Рядків: 1\s001/ }),
+  ).toHaveText(
+    /^Рядків: 1\s001, а за раз їх беруть не більше 1\s000\. Розділіть їх на кілька разів\.$/,
+  );
+  await expect(add).toBeDisabled();
+  // Fewer lines, but more characters in all than one part takes.
+  await pasted.fill(
+    Array.from({ length: 900 }, () => `${coat} сірий ${"x".repeat(120)}`).join(
+      "\n",
+    ),
+  );
+  await expect(
+    typing.getByRole("alert").filter({ hasText: /^Рядки разом задовгі/ }),
+  ).toHaveText(
+    /^Рядки разом задовгі: за раз беруть не більше 100\s000 знаків\. Розділіть їх на кілька разів\.$/,
+  );
+  await expect(add).toBeDisabled();
+  await pasted.fill(`${coat} сірий L 1 шт`);
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", "form");
+  await add.click();
+  await expect(typing.getByRole("alert")).toHaveText(
+    "Рядки не додано. Перевірте їх та спробуйте ще раз.",
+  );
+  const partsBefore = partReads();
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", "conflict");
+  await add.click();
+  await expect(typing.getByRole("alert")).toHaveText(
+    "Рядки не додано. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+  );
+  await expect.poll(partReads).toBeGreaterThan(partsBefore);
+  await add.click();
+  const typed = page.getByRole("article", { name: "Файл 2" });
+  await expect(typed).toContainText("Рядки, внесені вручну");
+  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", "form");
+  await typed.getByRole("button", { name: "Так, прибрати" }).click();
+  await expect(
+    page.getByText("Рядки не прибрано. Спробуйте ще раз.", { exact: true }),
+  ).toBeVisible();
+  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", "conflict");
+  await typed.getByRole("button", { name: "Так, прибрати" }).click();
+  await expect(
+    page.getByText(
+      "Рядки не прибрано. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
+  await typed.getByRole("button", { name: "Так, прибрати" }).click();
+  await expect(typed).toContainText(/Прибрано: Оля, /);
+
+  // The decision: approved, rejected.
+  const approval = page.getByLabel("Затвердження списку");
+  const approve = async (): Promise<void> => {
+    await approval.getByRole("button", { name: "Затвердити список" }).click();
+    await approval.getByRole("button", { name: "Так, затвердити" }).click();
+  };
+  const reject = async (): Promise<void> => {
+    await approval.getByRole("button", { name: "Відхилити список" }).click();
+    await approval.getByLabel("Чому відхиляємо").fill("перевірка відмов");
+    await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  };
+  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", "form");
+  await approve();
+  await expect(
+    approval.getByText("Список не затверджено. Спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", "conflict");
+  await approve();
+  await expect(
+    approval.getByText(
+      "Список не затверджено. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // Nothing in it is stock: the server's own answer, said.
+  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", {
+    status: 409,
+    json: {
+      code: "SNAPSHOT_CONFLICT",
+      message: "Nothing in this stock list is stock",
+      details: { reason: "NOTHING_TO_APPLY" },
+    },
+  });
+  await approve();
+  await expect(
+    approval.getByText(
+      "Список не затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть його.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/snapshots/*/reject?**", "form");
+  await reject();
+  await expect(
+    approval.getByText(
+      "Список не відхилено. Перевірте причину та спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // Rejected meanwhile by someone else for another reason: the server's
+  // conflict for it.
+  await refuseOnce(page, "**/api/v1/snapshots/*/reject?**", {
+    status: 409,
+    json: {
+      code: "IDEMPOTENCY_CONFLICT",
+      message: "This stock list was already rejected for another reason",
+      details: {},
+    },
+  });
+  await reject();
+  await expect(
+    approval.getByText("Цей список уже затвердили або відхилили.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  // And rejected for real: the warehouse free for the journeys after.
+  await reject();
+  await expect(page.getByText(/^Відхилено: перевірка відмов/)).toBeVisible();
+});
+
 test("a split the list does not state asks who counted, and a warehouse with history refuses it", async ({
   page,
 }) => {

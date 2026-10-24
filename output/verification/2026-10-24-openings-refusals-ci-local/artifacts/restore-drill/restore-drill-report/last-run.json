@@ -1,0 +1,16 @@
+{
+  "started_at": "2026-10-24T13:45:41.298573+00:00",
+  "ok": true,
+  "problems": [],
+  "archive": "birka-20261024T134541Z.dump.age",
+  "bytes": 360516,
+  "rows": 87,
+  "drill": {
+    "ok": true,
+    "restore_seconds": 0.208,
+    "failed": [],
+    "dropped_leftovers": []
+  },
+  "pruned": [],
+  "finished_at": "2026-10-24T13:45:41.864437+00:00"
+}

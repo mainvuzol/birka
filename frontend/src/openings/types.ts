@@ -1,5 +1,7 @@
+import { CONFLICT_TEXT, INVALID_TEXT, errorText } from "@/shared/api";
 import type { StoreState } from "@/orders/types";
 import { visible } from "@/shared/visible";
+import { MAX_PART_LINES, MAX_PART_TEXT_CHARS } from "./stockFile";
 
 /** `/snapshots`: a legacy stock list, reviewed line by line (ADR-0005). */
 export type ListStatus = "IN_REVIEW" | "APPLIED" | "REJECTED";
@@ -255,4 +257,47 @@ export function times(count: number): string {
  */
 export function cannotReceiveText(list: StockList): string {
   return `Магазин «${visible(list.store_name ?? "—")}», що почав цей список, більше не може приймати товар на цей склад: список можна лише відхилити.`;
+}
+
+/** A conflict a list's screen does not name, the list read again by its
+ * caller (review, 2026-10-24). */
+export const LIST_CHANGED =
+  "Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.";
+
+/**
+ * A refusal a list's screen does not name, in the list's words — never the
+ * shared ones, which speak of an order: what was not done, and what to
+ * check, or after a conflict `changed`. Every other shared answer — the
+ * server out of reach, a session ended, no access — keeps its own words.
+ */
+export function listRefusal(
+  error: unknown,
+  notDone: string,
+  check: string,
+  changed: string = LIST_CHANGED,
+): string {
+  const text = errorText(error);
+  if (text === INVALID_TEXT) return `${notDone} ${check}`;
+  if (text === CONFLICT_TEXT) return `${notDone} ${changed}`;
+  return text;
+}
+
+/** A conflict a list's screen does not name: its caller reads the list
+ * again. */
+export function listConflict(error: unknown): boolean {
+  return errorText(error) === CONFLICT_TEXT;
+}
+
+/**
+ * Lines typed by hand more than the server takes at once (ADR-0014: a
+ * part of at most 1 000 lines and 100 000 characters), said before sending
+ * rather than refused after it (review, 2026-10-24); null when they fit.
+ * `rest`: what to do with the rest.
+ */
+export function typedTooMuch(lines: string[], rest: string): string | null {
+  if (lines.length > MAX_PART_LINES)
+    return `Рядків: ${number(lines.length)}, а за раз їх беруть не більше ${number(MAX_PART_LINES)}. ${rest}`;
+  if (lines.reduce((sum, line) => sum + line.length, 0) > MAX_PART_TEXT_CHARS)
+    return `Рядки разом задовгі: за раз беруть не більше ${number(MAX_PART_TEXT_CHARS)} знаків. ${rest}`;
+  return null;
 }

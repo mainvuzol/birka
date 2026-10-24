@@ -7,7 +7,13 @@ import { FileChooser } from "./FileChooser";
 import { fileProblemTexts } from "./fileErrors";
 import { MAX_BODY_BYTES, TOO_LARGE, bodyBytes } from "./stockFile";
 import type { StockFileRead } from "./stockFile";
-import { cannotReceiveText, number } from "./types";
+import {
+  cannotReceiveText,
+  listConflict,
+  listRefusal,
+  number,
+  typedTooMuch,
+} from "./types";
 import type { StockList, StockPart } from "./types";
 
 /**
@@ -92,6 +98,8 @@ function refusal(
   list: StockList,
   unknownOutcome: string,
   resent: string,
+  /** Not named: what was not added, and what to check. */
+  notAdded: [string, string],
 ): string[] {
   if (error instanceof SlowAnswer) return [errorText(error)];
   if (!(error instanceof ApiError)) return [unknownOutcome];
@@ -106,7 +114,7 @@ function refusal(
   if (reason === "LIST_STORE_CANNOT_RECEIVE") return [cannotReceiveText(list)];
   if (error.code === "IDEMPOTENCY_CONFLICT") return [resent];
   const problems = fileProblemTexts(error.validation, error.validationMore);
-  return problems.length > 0 ? problems : [errorText(error)];
+  return problems.length > 0 ? problems : [listRefusal(error, ...notAdded)];
 }
 
 function Problems({ problems }: { problems: string[] }): JSX.Element | null {
@@ -174,7 +182,14 @@ export function PartsSection({
               ? "Цей список уже затвердили або відхилили."
               : reason === "LIST_STORE_CANNOT_RECEIVE"
                 ? cannotReceiveText(list)
-                : errorText(error),
+                : // The list is read again just below.
+                  listRefusal(
+                    error,
+                    part.kind === "FILE"
+                      ? "Файл не прибрано."
+                      : "Рядки не прибрано.",
+                    "Спробуйте ще раз.",
+                  ),
       );
     } finally {
       setAsking(null);
@@ -400,9 +415,11 @@ export function AddFile({
           list,
           "Невідомо, чи додано файл. Натисніть ще раз — той самий файл не додасться двічі.",
           "Цей файл уже надсилали, але в іншому вигляді. Натисніть «Додати до списку» ще раз — його буде надіслано як новий.",
+          ["Файл не додано.", "Перевірте його та спробуйте ще раз."],
         ),
       );
-      if (error instanceof SlowAnswer) await refresh();
+      // Changed in a way it does not name: read again (review, 2026-10-24).
+      if (error instanceof SlowAnswer || listConflict(error)) await refresh();
     } finally {
       setBusy(false);
     }
@@ -510,6 +527,7 @@ export function AddLines({
   const [problems, setProblems] = useState<string[]>([]);
   const lines = draft.text.split("\n").filter((line) => line.trim() !== "");
   const tooLong = lines.find((line) => line.length > 500);
+  const tooMuch = typedTooMuch(lines, "Розділіть їх на кілька разів.");
 
   function setDraft(change: Partial<LinesDraft>): void {
     // From the draft as it is now: typing may go on while an answer is
@@ -551,9 +569,11 @@ export function AddLines({
           list,
           "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
           "Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них. Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.",
+          ["Рядки не додано.", "Перевірте їх та спробуйте ще раз."],
         ),
       );
-      if (error instanceof SlowAnswer) await refresh();
+      // Changed in a way it does not name: read again (review, 2026-10-24).
+      if (error instanceof SlowAnswer || listConflict(error)) await refresh();
     } finally {
       setBusy(false);
     }
@@ -599,11 +619,14 @@ export function AddLines({
       {tooLong && (
         <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
       )}
+      {tooMuch && <p role="alert">{tooMuch}</p>}
       <Problems problems={problems} />
       <div className="actions">
         <button
           type="button"
-          disabled={lines.length === 0 || !!tooLong || busy || blocked}
+          disabled={
+            lines.length === 0 || !!tooLong || !!tooMuch || busy || blocked
+          }
           onClick={() => {
             void send();
           }}
