@@ -22,6 +22,8 @@ import {
   cannotReceiveText,
   fileReasonLabels,
   lineStatusLabels,
+  listConflict,
+  listRefusal,
   listStatusLabels,
   number,
   plural,
@@ -29,6 +31,7 @@ import {
   sizesWithCounts,
   sourceQuantity,
   times,
+  typedTooMuch,
 } from "./types";
 import type {
   Basis,
@@ -323,6 +326,34 @@ function listLines(text: string): string[] {
   return text.split("\n").filter((line) => line.trim() !== "");
 }
 
+/**
+ * A new list refused for a reason the screen does not name, by what was
+ * sent: its lines or its file — never the warehouse, chosen from the list.
+ * `unsure`: a send before this one never answered, so whether that one made
+ * the list is not known yet; the refusal is of this request alone
+ * (review, 2026-10-24).
+ */
+function newListRefusal(
+  error: unknown,
+  mode: "text" | "file",
+  unsure: boolean,
+): string {
+  const what = mode === "file" ? "файл" : "рядки";
+  return unsure
+    ? listRefusal(
+        error,
+        "Сервер не прийняв цей запит, а чи збережено список попередньою спробою — ще невідомо.",
+        `Перевірте ${what}${mode === "file" ? " і" : " й"} натисніть ще раз — двічі список не збережеться.`,
+        "Дані змінилися — натисніть ще раз: двічі список не збережеться.",
+      )
+    : listRefusal(
+        error,
+        "Список не збережено.",
+        `Перевірте ${what} та спробуйте ще раз.`,
+        "Поки ви працювали, дані змінилися — спробуйте ще раз.",
+      );
+}
+
 /** A file's own name for itself, taken as the list's if it fits. */
 function fits(value: string | null, limit: number): value is string {
   return value !== null && value.trim() !== "" && value.length <= limit;
@@ -354,6 +385,13 @@ function NewList({
   const [problems, setProblems] = useState<string[]>([]);
   const lines = listLines(draft.text);
   const tooLong = lines.find((line) => line.length > 500);
+  const tooMuch =
+    draft.mode === "text"
+      ? typedTooMuch(
+          lines,
+          "Розділіть: решту додайте до списку через «Додати рядки вручну».",
+        )
+      : null;
   const chosen = locations.find((l) => l.id === draft.location_id);
   const warehouse = chosen ? visible(chosen.name) : null;
   // The owner's rule (2026-10-08): a warehouse whose list waits gets no
@@ -385,7 +423,9 @@ function NewList({
     other === undefined &&
     mine === undefined;
   const content =
-    draft.mode === "text" ? lines.length > 0 && !tooLong : read?.ok === true;
+    draft.mode === "text"
+      ? lines.length > 0 && !tooLong && !tooMuch
+      : read?.ok === true;
   const ready = draft.location_id !== "" && checked && content && !busy;
 
   /**
@@ -438,6 +478,8 @@ function NewList({
   }
 
   async function send(): Promise<void> {
+    // A send before this one never answered: it may have made the list.
+    const unsure = draft.unsettled;
     const envelope = {
       command_id: draft.command_id,
       store_id: store.id,
@@ -482,7 +524,8 @@ function NewList({
       const unanswered = !(error instanceof ApiError) || unreachable(error);
       if (unanswered) setDraft({ unsettled: true });
       if (conflict) setDraft({ unsettled: false });
-      if (error instanceof SlowAnswer || conflict) void waiting.refetch();
+      if (error instanceof SlowAnswer || conflict || listConflict(error))
+        void waiting.refetch();
       const refused =
         error instanceof ApiError
           ? fileProblemTexts(error.validation, error.validationMore)
@@ -500,7 +543,7 @@ function NewList({
                 ]
               : refused.length > 0
                 ? refused
-                : [errorText(error)],
+                : [newListRefusal(error, draft.mode, unsure)],
       );
     } finally {
       setBusy(false);
@@ -666,6 +709,7 @@ function NewList({
           {tooLong && (
             <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
           )}
+          {tooMuch && <p role="alert">{tooMuch}</p>}
         </>
       )}
       {problems.length === 1 ? (
@@ -1468,7 +1512,9 @@ function LineEditor({
         error instanceof ApiError ? error.details.reason : undefined;
       // A record made a possible range since the line was read: read it
       // again, so the record named is asked about here.
-      if (reason === "SPLIT_MAY_BE_RANGE") reread();
+      // So is a list changed in a way it does not name (review,
+      // 2026-10-24).
+      if (reason === "SPLIT_MAY_BE_RANGE" || listConflict(error)) reread();
       setProblem(
         !(error instanceof ApiError)
           ? "Немає відповіді сервера. Натисніть ще раз — повторна відповідь безпечна."
@@ -1487,7 +1533,11 @@ function LineEditor({
                       ? "Список уже затвердили або відхилили — відповідь не збережено."
                       : error.code === "NOT_FOUND"
                         ? "Товар або розмір більше недоступний. Оберіть інший."
-                        : errorText(error),
+                        : listRefusal(
+                            error,
+                            "Відповідь не збережено.",
+                            "Перевірте її та спробуйте ще раз.",
+                          ),
       );
     } finally {
       setBusy(false);
@@ -1856,13 +1906,28 @@ function Approval({
                 ? "Поки ви дивились, хтось змінив відповідь у списку. Перегляньте підсумок ще раз."
                 : reasonCode === "ROWS_NEED_REVIEW"
                   ? "Ще не всі рядки розібрано."
-                  : reasonCode === "ALREADY_DECIDED"
+                  : // Rejected meanwhile for another reason: its
+                    // conflict (review, 2026-10-24).
+                    reasonCode === "ALREADY_DECIDED" ||
+                      error.code === "IDEMPOTENCY_CONFLICT"
                     ? "Цей список уже затвердили або відхилили."
-                    : reasonCode === "SPLIT_MAY_BE_RANGE"
-                      ? rangeAgainText(error.details)
-                      : reasonCode === "LIST_STORE_CANNOT_RECEIVE"
-                        ? cannotReceiveText(list)
-                        : errorText(error),
+                    : reasonCode === "NOTHING_TO_APPLY"
+                      ? "Список не затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть його."
+                      : reasonCode === "SPLIT_MAY_BE_RANGE"
+                        ? rangeAgainText(error.details)
+                        : reasonCode === "LIST_STORE_CANNOT_RECEIVE"
+                          ? cannotReceiveText(list)
+                          : action === "approve"
+                            ? listRefusal(
+                                error,
+                                "Список не затверджено.",
+                                "Спробуйте ще раз.",
+                              )
+                            : listRefusal(
+                                error,
+                                "Список не відхилено.",
+                                "Перевірте причину та спробуйте ще раз.",
+                              ),
       );
     } finally {
       setAsking(null);

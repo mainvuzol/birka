@@ -35,6 +35,8 @@ export const MAX_PART_BYTES = 950_000;
 /** The largest request the phone sends; the edge refuses over 1 000 000. */
 export const MAX_BODY_BYTES = 990_000;
 export const MAX_PART_LINES = 1000;
+/** A part's lines typed by hand, at most, in all (ADR-0014). */
+export const MAX_PART_TEXT_CHARS = 100_000;
 export const FORMAT = "birka.stock-list";
 export const VERSION = 1;
 
