@@ -3856,3 +3856,62 @@ is carried out, not decided by the owner:
 
 Built on 2026-10-24; see the [report](orders-redesign-3-report.md).
 
+
+## Owner decision — 2026-10-24 (after #129 was merged)
+
+Asked when #129 was merged, each answer the option recommended:
+- **«Клієнт забрав» is approved as built:** the five ways' panel, and the
+  sale's result — by card, and in parts.
+- **After «Прибув на пошту» its line stays,** though the pill under it says
+  the same words: every step is confirmed alike, a line and a buzz on its
+  first showing.
+- **Next: «Нове замовлення» as a sale, P0-5.**
+
+## «Нове замовлення» as a sale — built 2026-10-24
+
+«Замовлення»'s task list, P0-5, and the owner's answers after #129 (and В3
+(а) of 2026-10-23). How it is carried out, not decided by the owner:
+- **The till's search:** «Знайти модель» with the cursor in it; every
+  warehouse the store sells from at once, a chip per size and warehouse —
+  «M · Свій 1» when there are two or more — one warehouse named, «Склад:
+  Свій», never chosen. Only what the ledger holds is reserved: no coat from
+  the catalogue.
+- **A tap on a size puts a line in the order** from that chip's warehouse,
+  never another, at the store's price for it, the field filled and
+  editable (В3 (а)), with the till's words under it: «Ціна продажу …
+  Домовилися про іншу — змініть.», «Ціни продажу ще немає — …», 0,00 asked
+  about, never refused. A model with no price: its field takes the cursor.
+  «−»/«+» from 1 to what is free, at most 1000; its chip tapped again is one
+  more; a chip all held or at nothing takes none, «Ще N шт. у резерві
+  замовлення» under its tag; «Прибрати Лоран шоколад · M», its size named.
+- **Where it goes:** «По Україні / За кордон» a switch, within Ukraine
+  first; its carrier one of three chips in one row, none chosen; abroad
+  none, and a carrier chosen before is forgotten. One line under them:
+  «ТТН впишете, коли відправите.», abroad «Куди і як відправили — впишете,
+  коли відправите.».
+- **Under the thumb, once a line is in it** (as the till's, direction §5):
+  what is ordered — «Лоран шоколад · M», «… × 2» for more than one of one
+  line, or «У замовленні: 3 шт.» — «Разом» large, a dash while a line has
+  no price; «Замовити та зарезервувати», held while a line has no price,
+  and «Оберіть перевізника» while within Ukraine none is chosen, as
+  «Каса»'s «Оберіть новий спосіб». What is sent is as before.
+- **Refused for want of stock:** the line the server names marked with
+  «Доступно лише 1 шт.» (and «— решта в резерві інших замовлень» when other
+  orders hold some), brought to the finger, its «+» held to what is free,
+  the goods read again, everything else as typed; none free, «Доступних уже
+  немає — усі в резерві інших замовлень. Приберіть рядок.» or «Доступних уже
+  немає. Приберіть рядок.». The mark stays until that line's count changes
+  or it is taken out. Said on its line only, never over the page, and
+  forgotten with the screen: never over the list, nor on the next new
+  order. Any other refusal is said over the page, brought to the finger,
+  with its buzz, the lines and the carrier kept.
+- **Reserved:** a buzz, and the new order's card, from its top, says
+  «Зарезервовано: 1 шт. Чекає відправлення.» — also when confirmed later,
+  by «Повторити ту саму команду» or «Оновити результат», while it waits to
+  be sent; one moved on meanwhile says nothing of it. A tap meant for
+  «Замовити та зарезервувати», landing on the card's «Відправлено» within
+  0.7 s, is let go.
+- **«+ Нове замовлення» stays in «Ще»** beside the list's «+» until the
+  bottom menu (P2-5); the shipping form keeps its lists until P1-3.
+
+Built on 2026-10-24; see the [report](orders-redesign-4-report.md).

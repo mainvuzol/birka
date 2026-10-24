@@ -20,6 +20,7 @@ import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
+import { PriceHint, priceText } from "./PriceHint";
 import { setPaper, setSoldBy, usePaper } from "./paper";
 import {
   PaperKind,
@@ -46,8 +47,6 @@ import { markText, paidDuringOutage, stockKey } from "./types";
  */
 const paperGone =
   "Цього товару вже немає в обліку — продаж з паперу не записано. Попросіть менеджера спершу виправити залишок, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
-/** A line's price that does not read as money (redesign P0-3). */
-const priceText = "Впишіть ціну: гривні й копійки, напр. 1850 або 1850,50.";
 const paperReserved =
   "Частина цих одиниць у резерві замовлення — продаж з паперу не записано. Менеджер має вирішити із замовленням, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
 
@@ -1129,25 +1128,11 @@ export function Sale({
                     />
                   </label>
                 </div>
-                {d.line.unit_price === "" && (d.price.trim() || d.suggested) ? (
-                  <span className="hint price-error">{priceText}</span>
-                ) : d.suggested ? (
-                  <span className="hint">
-                    Ціна продажу {money(d.suggested)}. Домовилися про іншу —
-                    змініть.
-                  </span>
-                ) : (
-                  <span className="hint">
-                    Ціни продажу ще немає — впишіть домовлену. Ціну для всіх
-                    задає менеджер у «Залишках».
-                  </span>
-                )}
-                {d.line.unit_price === "0.00" && (
-                  // A gift is allowed, a slip is not caught (owner, В3 (а)).
-                  <span className="hint price-warn">
-                    Ціна 0,00 грн. Це справді подарунок? Перевірте ціну.
-                  </span>
-                )}
+                <PriceHint
+                  typed={d.price}
+                  price={d.line.unit_price}
+                  suggested={d.suggested}
+                />
                 {found[index] !== undefined && (
                   <span>Підтверджено на місці: +{found[index]}</span>
                 )}

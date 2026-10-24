@@ -1,4 +1,11 @@
-import { test, expect, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  openStore,
+  section,
+  tapSize,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -79,17 +86,33 @@ async function reopen(page: Page): Promise<void> {
   await openStore(page, "Основний MAIN");
 }
 
-/** A new order of one coat, its goods picked, nothing said yet of where it goes. */
+/** A new order of one coat, its goods picked, nothing said yet of where it
+ * goes (orders task list, P0-5): found by name, its size tapped from the
+ * fixture's warehouse, its price typed. */
 async function draft(page: Page): Promise<void> {
   await section(page, "+ Нове замовлення");
+  await page.getByRole("searchbox", { name: "Знайти модель" }).fill("Лоран");
+  await tapSize(page, fixture.variant_id, fixture.size_id, fixture.location_id);
+  await fillLine(page, { price: "900" });
+}
+
+/** A carrier's chip (P0-5). */
+async function carrier(page: Page, name: string): Promise<void> {
   await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.location_id);
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
-  await page.getByLabel("Ціна, грн").fill("900");
-  await page.getByRole("button", { name: "Додати товар", exact: true }).click();
+    .getByRole("group", { name: "Перевізник" })
+    .getByRole("button", { name, exact: true })
+    .click();
+}
+
+/** «Замовити та зарезервувати», what it did read before the next step. */
+async function reserve(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Зарезервовано: 1 шт\. Чекає відправлення\.$/ }),
+  ).toBeVisible();
+  await readTheAnswer(page);
 }
 
 function posts(page: Page, ending: RegExp): { bodies: unknown[] } {
@@ -146,13 +169,14 @@ test("an order within Ukraine names its carrier, and its waybill when it is sent
   const sent = posts(page, /\/dispatch$/);
   await enter(page);
   await draft(page);
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
-  await expect(page.getByText("Оберіть перевізника.")).toBeVisible();
+  // No carrier yet: the press asks for one and sends nothing (orders task
+  // list, P0-5).
+  const press = page.locator(".pay-panel").getByRole("button");
+  await expect(press).toHaveText("Оберіть перевізника");
+  await expect(press).toBeDisabled();
   expect(made.bodies).toHaveLength(0);
-  await page
-    .getByRole("combobox", { name: "Перевізник", exact: true })
-    .selectOption("UKRPOSHTA");
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await carrier(page, "Укрпошта");
+  await reserve(page);
   await expect(page.locator(".order-context")).toHaveText(
     goes("Укрпошта · ТТН ще немає"),
   );
@@ -189,13 +213,14 @@ test("an order abroad says where and how it went, in one line", async ({
   const sent = posts(page, /\/dispatch$/);
   await enter(page);
   await draft(page);
-  await page
-    .getByRole("combobox", { name: "Куди", exact: true })
-    .selectOption("ABROAD");
+  await page.getByRole("radio", { name: "За кордон", exact: true }).check();
+  await expect(page.getByRole("group", { name: "Перевізник" })).toHaveCount(0);
   await expect(
-    page.getByRole("combobox", { name: "Перевізник", exact: true }),
-  ).toHaveCount(0);
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+    page.getByText("Куди і як відправили — впишете, коли відправите.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await reserve(page);
   await expect(page.locator(".order-context")).toHaveText(goes("За кордон"));
   const [body] = made.bodies as Record<string, unknown>[];
   expect(body?.destination).toBe("ABROAD");
@@ -230,10 +255,8 @@ test("where an order goes is corrected while it is open, and every version stays
   const changed = posts(page, /\/shipping$/);
   await enter(page);
   await draft(page);
-  await page
-    .getByRole("combobox", { name: "Перевізник", exact: true })
-    .selectOption("NOVA_POSHTA");
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await carrier(page, "Нова пошта");
+  await reserve(page);
   await page.getByRole("button", { name: "Відправлено", exact: true }).click();
   await expect(page.getByText("Відправлено", { exact: true })).toBeVisible();
 
@@ -339,10 +362,8 @@ test("a correction whose answer is lost is resent unchanged", async ({
   });
   await enter(page);
   await draft(page);
-  await page
-    .getByRole("combobox", { name: "Перевізник", exact: true })
-    .selectOption("NOVA_POSHTA");
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await carrier(page, "Нова пошта");
+  await reserve(page);
   await page.getByRole("button", { name: "Змінити доставку" }).click();
   await page.getByLabel("Номер накладної", { exact: true }).fill("20451111");
   await page.getByRole("button", { name: "Зберегти доставку" }).click();

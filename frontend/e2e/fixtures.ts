@@ -115,15 +115,20 @@ export async function section(page: Page, name: string): Promise<void> {
 
 /**
  * A coat into the till's basket as a seller puts it (redesign P0-3): a tap
- * on its size chip, under its model's tag. «Ще товари» is read until the
- * chip is listed: a warehouse the specs share holds more than a page.
+ * on its size chip, under its model's tag — of `locationId`'s, when every
+ * warehouse is listed (a new order's, orders task list, P0-5). «Ще товари»
+ * is read until the chip is listed: a warehouse the specs share holds more
+ * than a page.
  */
 export async function tapSize(
   page: Page,
   variantId: string,
   sizeId: string,
+  locationId?: string,
 ): Promise<void> {
-  const chip = page.locator(`button.chip[data-stock="${variantId}:${sizeId}"]`);
+  const chip = page.locator(
+    `button.chip[data-stock="${variantId}:${sizeId}"]${locationId ? `[data-location="${locationId}"]` : ""}`,
+  );
   const more = page.getByRole("button", { name: "Ще товари" });
   for (;;) {
     await expect(page.getByText("Завантажуємо товари…")).toHaveCount(0);

@@ -39,8 +39,14 @@ export const actionLabels: Record<string, string> = {
 };
 
 /** What a step just recorded says on its order (orders task list, P0-2):
- * the step, and for a parcel sent its waybill, or that it may come later. */
+ * the step, and for a parcel sent its waybill, or that it may come later;
+ * a new order, how many units it holds now (P0-5). */
 export function stepDone(action: string, order: Order): string | null {
+  // Confirmed late, it may have moved on meanwhile: then nothing said.
+  if (action === "reserve")
+    return order.status === "READY_TO_DISPATCH"
+      ? `Зарезервовано: ${String(order.items.reduce((n, item) => n + item.quantity, 0))} шт. Чекає відправлення.`
+      : null;
   if (action === "cancel") return "Замовлення скасовано, резерв звільнено.";
   if (action === "arrive") return "Прибув на пошту";
   if (action !== "dispatch") return null;
@@ -139,6 +145,12 @@ export function OrderDetail({
   function late(event: { timeStamp: number }): boolean {
     return done !== null && event.timeStamp - shownAt < CARRIED_TAP;
   }
+  // What a step did is seen with what it was done to: a new order opens
+  // here from the foot of its long form (orders task list, P0-5).
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (done !== null) heading.current?.scrollIntoView({ block: "nearest" });
+  }, [done]);
   // The waybill, or abroad where and how it went, written as it is sent.
   const [sentWith, setSentWith] = useState("");
   const [changingShipping, setChangingShipping] = useState(false);
@@ -191,7 +203,9 @@ export function OrderDetail({
         : null;
   return (
     <section className="order">
-      <h2 className="order-title">{title}</h2>
+      <h2 className="order-title" ref={heading}>
+        {title}
+      </h2>
       <p className="order-context">
         {shippingText(order)}
         {since(order.created_at)}

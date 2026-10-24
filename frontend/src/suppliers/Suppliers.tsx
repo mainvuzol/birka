@@ -72,7 +72,7 @@ export function Suppliers({
     );
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
-      cache.invalidateQueries({ queryKey: ["stock", store.id] }),
+      cache.invalidateQueries({ queryKey: ["sale-stock"] }),
     ]);
   }
 
@@ -191,7 +191,7 @@ export function Suppliers({
                   cache.invalidateQueries({
                     queryKey: ["supplier-returns", store.id],
                   }),
-                  cache.invalidateQueries({ queryKey: ["stock", store.id] }),
+                  cache.invalidateQueries({ queryKey: ["sale-stock"] }),
                   cache.invalidateQueries({
                     queryKey: ["damaged-units", store.id],
                   }),

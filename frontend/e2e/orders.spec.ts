@@ -1,4 +1,13 @@
-import { test, expect, more, openStore, section, waitsFor } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  more,
+  openStore,
+  section,
+  tapSize,
+  waitsFor,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -54,19 +63,18 @@ async function reopen(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
 }
+/** A new order of one coat as a seller makes it (orders task list, P0-5):
+ * its model found by name, its size tapped from the fixture's warehouse,
+ * its price typed over the store's, and its carrier a chip. */
 async function draft(page: Page): Promise<void> {
   await section(page, "+ Нове замовлення");
+  await page.getByRole("searchbox", { name: "Знайти модель" }).fill("Лоран");
+  await tapSize(page, fixture.variant_id, fixture.size_id, fixture.location_id);
+  await fillLine(page, { price: "1200,15" });
   await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.location_id);
-  await page
-    .getByRole("combobox", { name: "Товар і розмір", exact: true })
-    .selectOption(`${fixture.variant_id}:${fixture.size_id}`);
-  await page.getByLabel("Ціна, грн").fill("1200,15");
-  await page.getByRole("button", { name: "Додати товар", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Перевізник", exact: true })
-    .selectOption("NOVA_POSHTA");
+    .getByRole("group", { name: "Перевізник" })
+    .getByRole("button", { name: "Нова пошта", exact: true })
+    .click();
 }
 /** What a step did is read before the next is pressed: a tap within 0.7 s
  * of its answer is taken as meant for the step before (review,
@@ -79,13 +87,24 @@ async function readTheAnswer(page: Page): Promise<void> {
       }),
   );
 }
+/** «Замовити та зарезервувати», what it did read before the next step
+ * (orders task list, P0-5). */
+async function reserve(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Зарезервовано: 1 шт\. Чекає відправлення\.$/ }),
+  ).toBeVisible();
+  await readTheAnswer(page);
+}
 
 test("reserve, dispatch, arrive, collect through real API", async ({
   page,
 }) => {
   await enter(page);
   await draft(page);
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await reserve(page);
   await expect(page.locator(".order-context")).toBeVisible();
   await expect(
     page.getByText("До відправлення", { exact: true }),
@@ -274,7 +293,7 @@ test("a kept order its check cannot settle opens on «Замовлення», no
 test("return requires physical confirmation", async ({ page }) => {
   await enter(page);
   await draft(page);
-  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await reserve(page);
   await page.getByRole("button", { name: "Відправлено", exact: true }).click();
   await page.getByRole("button", { name: "Товар повернувся на склад" }).click();
   const confirm = page.getByRole("button", {

@@ -1863,3 +1863,31 @@ html {
 .pay-ways.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+/* «Нове замовлення» (orders task list, P0-5): the till's search and lines,
+   then where it goes — a switch of two, the carriers as chips — over one
+   press under the thumb. */
+.order-lines h3 {
+  margin: 22px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.order-new .way-switch {
+  margin-top: 22px;
+}
+.way-switch.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.carriers {
+  margin: 4px 0 0;
+}
+/* Each its word on one line, the row filled. */
+.carriers .chip {
+  flex: 1 1 auto;
+  padding: 8px;
+  white-space: nowrap;
+}
+.line .line-short {
+  margin: 0;
+  font-weight: 650;
+}

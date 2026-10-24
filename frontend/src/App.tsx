@@ -17,26 +17,13 @@ import {
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
-import {
-  DestinationFields,
-  OrderDetail,
-  actionLabels,
-  stepDone,
-} from "@/orders/Order";
+import { OrderDetail, actionLabels, stepDone } from "@/orders/Order";
 import { chargeOnce } from "@/orders/Collected";
+import { NewOrder, shortOf } from "@/orders/NewOrder";
 import { Orders, freshOrdersView } from "@/orders/Orders";
 import type { OrdersView } from "@/orders/Orders";
-import { asShown, decimal, kopecks, money, stateText } from "@/orders/types";
-import type {
-  Me,
-  Store,
-  Location,
-  StockOption,
-  Line,
-  Order,
-  Carrier,
-  Destination,
-} from "@/orders/types";
+import { asShown, money, stateText } from "@/orders/types";
+import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
@@ -884,6 +871,17 @@ function Workspace({
   // list, P0-2).
   const orderAlert = useRef<HTMLParagraphElement>(null);
   const [stepRefused, setStepRefused] = useState(0);
+  // A new order's refusal belongs to its screen: a shortfall said on its
+  // line, and forgotten with the screen, never said again over the list or
+  // the next new order (orders task list, P0-5; review, 2026-10-24).
+  const [newRefused, setNewRefused] = useState<unknown>(null);
+  useEffect(() => {
+    if (tab === "new" || newRefused === null) return;
+    const settled = useCommand.getState();
+    if (settled.error === newRefused && settled.pending === null)
+      useCommand.setState({ error: null });
+    setNewRefused(null);
+  }, [tab, newRefused]);
   useEffect(() => {
     if (stepRefused > 0) orderAlert.current?.focus();
   }, [stepRefused]);
@@ -891,26 +889,38 @@ function Workspace({
     setOrderResent(resent ? command.label : null);
     setOrderDone(null);
     setCollected(null);
+    setNewRefused(null);
     const order = await submitPending(key, token, command);
     const settled = useCommand.getState();
-    // A step on an order, by its path's last word: «dispatch», «cancel».
-    const step = command.orderId ? (command.path.split("/").at(-1) ?? "") : "";
+    // A step on an order, by its path's last word: «dispatch», «cancel»;
+    // a new one, «reserve» — by its path first, since one answered is kept
+    // with its order's id (review, 2026-10-24).
+    const step =
+      command.path === "/orders"
+        ? "reserve"
+        : command.orderId
+          ? (command.path.split("/").at(-1) ?? "")
+          : "";
     if (
       !order &&
       step !== "" &&
       settled.pending === null &&
       settled.error !== null
     ) {
-      // Refused, recorded nowhere: the order as it is now.
+      // Refused, recorded nowhere: the order as it is now — or, a new one
+      // short of stock, its line marked on its screen (orders task list,
+      // P0-5).
       buzz("error");
       setStepRefused((count) => count + 1);
-      void cache.invalidateQueries({
-        queryKey: ["order", store.id, command.orderId],
-      });
+      if (step === "reserve" && tab === "new") setNewRefused(settled.error);
+      if (command.orderId)
+        void cache.invalidateQueries({
+          queryKey: ["order", store.id, command.orderId],
+        });
     }
     if (order) {
-      // Sent, arrived or cancelled: a buzz, and what it did on the order
-      // (orders task list, P0-2, P0-4).
+      // Reserved, sent, arrived or cancelled: a buzz, and what it did on
+      // the order (orders task list, P0-2, P0-4, P0-5).
       const text = step === "" ? null : stepDone(step, order);
       if (text !== null) {
         buzz("success");
@@ -932,7 +942,9 @@ function Workspace({
           queryKey: ["orders", store.id],
           refetchType: "all",
         }),
-        cache.invalidateQueries({ queryKey: ["stock", store.id] }),
+        // What the till and a new order list: reserved, freed or sold
+        // (orders task list, P0-5).
+        cache.invalidateQueries({ queryKey: ["sale-stock"] }),
         // Collected in parts, a debt: «Борги» read again (review,
         // 2026-10-19).
         cache.invalidateQueries({ queryKey: ["credits", store.id] }),
@@ -1797,21 +1809,23 @@ function Workspace({
           </button>
         </section>
       )}
-      {error !== null && (
-        <p role="alert" ref={orderAlert} tabIndex={-1}>
-          {orderErrorText(
-            error,
-            orderResent,
-            // Unconfirmed only while its outcome is unknown: answered, the
-            // step is recorded, and only reading the order failed.
-            pending !== null && !pending.acknowledged,
-            orderMisses,
-            pending?.label ?? null,
-            // Answered: the step is recorded (owner decision, 2026-10-21).
-            pending?.acknowledged === true,
-          )}
-        </p>
-      )}
+      {error !== null &&
+        // A new order short of stock: said on its line (P0-5).
+        !(error === newRefused && shortOf(error) !== null) && (
+          <p role="alert" ref={orderAlert} tabIndex={-1}>
+            {orderErrorText(
+              error,
+              orderResent,
+              // Unconfirmed only while its outcome is unknown: answered, the
+              // step is recorded, and only reading the order failed.
+              pending !== null && !pending.acknowledged,
+              orderMisses,
+              pending?.label ?? null,
+              // Answered: the step is recorded (owner decision, 2026-10-21).
+              pending?.acknowledged === true,
+            )}
+          </p>
+        )}
       {tab === "sale" ? (
         store.permissions.includes("sale:create") ? (
           <Sale
@@ -2096,7 +2110,12 @@ function Workspace({
         <NewOrder
           store={store}
           token={token}
+          journalKey={saleKey}
           blocked={blocked}
+          refused={newRefused}
+          back={() => {
+            setTab("list");
+          }}
           submit={(lines, destination, carrier) => {
             void run({
               path: "/orders",
@@ -2308,325 +2327,5 @@ function Failure({
       <p>{errorText(error)}</p>
       <button onClick={retry}>Спробувати ще раз</button>
     </div>
-  );
-}
-interface DraftLine {
-  line: Line;
-  name: string;
-  size: string;
-  warehouse: string;
-}
-function NewOrder({
-  store,
-  token,
-  blocked,
-  submit,
-}: {
-  store: Store;
-  token: string;
-  blocked: boolean;
-  submit: (
-    lines: Line[],
-    destination: Destination,
-    carrier: Carrier | null,
-  ) => void;
-}): JSX.Element {
-  const [locationId, setLocationId] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [option, setOption] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [price, setPrice] = useState("");
-  const [draft, setDraft] = useState<DraftLine[]>([]);
-  const [validation, setValidation] = useState("");
-  // Within Ukraine unless said otherwise, and then by a carrier, picked
-  // now; the waybill comes when it is sent (owner decisions, 2026-10-01).
-  const [destination, setDestination] = useState<Destination>("UKRAINE");
-  const [carrier, setCarrier] = useState<Carrier | "">("");
-  const locations = useQuery({
-    queryKey: ["locations", store.id],
-    queryFn: () =>
-      api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
-  });
-  const stock = useQuery({
-    queryKey: ["stock", store.id, locationId, offset],
-    queryFn: () =>
-      api<{ items: StockOption[]; has_more: boolean }>(
-        `/catalog/stock-options?store_id=${store.id}&location_id=${locationId}&limit=100&offset=${String(offset)}`,
-        token,
-      ),
-    enabled: !!locationId,
-  });
-  const selected = stock.data?.items.find(
-    (item) => `${item.product_variant_id}:${item.size_id}` === option,
-  );
-  function add(): void {
-    const cents = kopecks(price);
-    const count = Number(quantity);
-    if (
-      !selected ||
-      cents === null ||
-      !/^\d+$/.test(quantity) ||
-      count < 1 ||
-      count > 1000
-    ) {
-      setValidation(
-        "Оберіть товар, кількість від 1 до 1000 та ціну з точністю до копійок.",
-      );
-      return;
-    }
-    if (
-      draft.some(
-        (d) =>
-          d.line.source_location_id === locationId &&
-          d.line.product_variant_id === selected.product_variant_id &&
-          d.line.size_id === selected.size_id,
-      )
-    ) {
-      setValidation(
-        "Цей товар уже додано з цього складу. Видаліть рядок, щоб змінити його кількість.",
-      );
-      return;
-    }
-    if (count > selected.available_quantity) {
-      setValidation("Кількість перевищує доступний залишок.");
-      return;
-    }
-    setDraft([
-      ...draft,
-      {
-        line: {
-          product_variant_id: selected.product_variant_id,
-          size_id: selected.size_id,
-          source_location_id: locationId,
-          quantity: count,
-          unit_price: decimal(cents),
-          discount_amount: "0.00",
-        },
-        name: selected.display_name,
-        size: selected.size_label,
-        warehouse: locations.data?.find((l) => l.id === locationId)?.name ?? "",
-      },
-    ]);
-    setPrice("");
-    setQuantity("1");
-    setOption("");
-    setValidation("");
-  }
-  const total = draft.reduce(
-    (sum, d) =>
-      sum + (kopecks(d.line.unit_price) ?? 0n) * BigInt(d.line.quantity),
-    0n,
-  );
-  return (
-    <section>
-      <h2>Нове замовлення</h2>
-      <p>
-        Оберіть склад і товар. Замовлення зарезервує залишок до відправлення.
-      </p>
-      <fieldset disabled={blocked}>
-        <legend>Товари</legend>
-        {locations.isPending ? (
-          <p role="status">Завантажуємо склади…</p>
-        ) : locations.error ? (
-          <Failure
-            error={locations.error}
-            retry={() => {
-              void locations.refetch();
-            }}
-          />
-        ) : (
-          <label>
-            Склад
-            <select
-              value={locationId}
-              onChange={(e) => {
-                setLocationId(e.target.value);
-                setOffset(0);
-                setOption("");
-              }}
-            >
-              <option value="">З якого складу віддаєте?</option>
-              {locations.data.map((l) => (
-                <option
-                  key={l.id}
-                  value={l.id}
-                  disabled={!l.is_active || !l.can_sell}
-                >
-                  {visible(l.name)}
-                  {!l.is_active
-                    ? " — на паузі"
-                    : !l.can_sell
-                      ? " — без права продажу"
-                      : ""}
-                </option>
-              ))}
-            </select>
-            {locations.data.length === 0 && (
-              <span>Доступних складів немає.</span>
-            )}
-          </label>
-        )}
-        {locationId &&
-          (stock.isPending ? (
-            <p role="status">Завантажуємо товари…</p>
-          ) : stock.error ? (
-            <Failure
-              error={stock.error}
-              retry={() => {
-                void stock.refetch();
-              }}
-            />
-          ) : (
-            <>
-              <label>
-                Товар і розмір
-                <select
-                  value={option}
-                  onChange={(e) => {
-                    setOption(e.target.value);
-                  }}
-                >
-                  <option value="">Оберіть товар</option>
-                  {stock.data.items.map((item) => (
-                    <option
-                      key={`${item.product_variant_id}:${item.size_id}`}
-                      value={`${item.product_variant_id}:${item.size_id}`}
-                      disabled={item.available_quantity <= 0}
-                    >
-                      {visible(item.display_name)} ·{" "}
-                      {item.size_is_unknown
-                        ? "розмір невідомий"
-                        : visible(item.size_label)}{" "}
-                      · доступно {item.available_quantity}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {stock.data.items.length === 0 && (
-                <p>На цьому складі немає товарів.</p>
-              )}
-              {selected && (
-                <p className="hint">
-                  На складі {selected.quantity} · у резерві{" "}
-                  {selected.reserved_quantity} · доступно{" "}
-                  {selected.available_quantity}
-                </p>
-              )}
-              <div className="toolbar">
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={offset === 0}
-                  onClick={() => {
-                    setOffset(Math.max(0, offset - 100));
-                    setOption("");
-                  }}
-                >
-                  Попередні товари
-                </button>
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={!stock.data.has_more}
-                  onClick={() => {
-                    setOffset(offset + 100);
-                    setOption("");
-                  }}
-                >
-                  Наступні товари
-                </button>
-              </div>
-            </>
-          ))}
-        <div className="fields">
-          <label>
-            Кількість
-            <input
-              inputMode="numeric"
-              value={quantity}
-              onChange={(e) => {
-                setQuantity(e.target.value);
-              }}
-            />
-          </label>
-          <label>
-            Ціна, грн
-            <input
-              inputMode="decimal"
-              placeholder="0,00"
-              value={price}
-              onChange={(e) => {
-                setPrice(e.target.value);
-              }}
-            />
-          </label>
-        </div>
-        <p className="hint">
-          Вкажіть остаточну ціну після торгу. Це вартість товару, а не отримана
-          оплата.
-        </p>
-        <button
-          className="quiet"
-          disabled={!selected || draft.length >= 100}
-          onClick={add}
-        >
-          Додати товар
-        </button>
-        {validation && <p role="alert">{validation}</p>}
-        {draft.map((d, index) => (
-          <div
-            className="line"
-            key={`${d.line.source_location_id}:${d.line.product_variant_id}:${d.line.size_id}`}
-          >
-            <strong>
-              {visible(d.name)} · {visible(d.size)}
-            </strong>
-            <span>
-              {visible(d.warehouse)} · {d.line.quantity} ×{" "}
-              {money(d.line.unit_price)}
-            </span>
-            <button
-              className="quiet"
-              onClick={() => {
-                setDraft(draft.filter((_, i) => i !== index));
-              }}
-            >
-              Прибрати {visible(d.name)}
-            </button>
-          </div>
-        ))}
-        <p className="total">
-          Разом <strong>{money(decimal(total))}</strong>
-        </p>
-        <DestinationFields
-          destination={destination}
-          carrier={carrier}
-          change={(nextDestination, nextCarrier) => {
-            setDestination(nextDestination);
-            setCarrier(nextCarrier);
-            setValidation("");
-          }}
-        />
-        <p className="hint">
-          Номер накладної вписують, коли замовлення відправляють, або пізніше.
-        </p>
-        <button
-          disabled={draft.length === 0}
-          onClick={() => {
-            if (destination === "UKRAINE" && carrier === "") {
-              setValidation("Оберіть перевізника.");
-              return;
-            }
-            submit(
-              draft.map((d) => d.line),
-              destination,
-              destination === "UKRAINE" && carrier !== "" ? carrier : null,
-            );
-          }}
-        >
-          Замовити та зарезервувати
-        </button>
-      </fieldset>
-    </section>
   );
 }
