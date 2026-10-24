@@ -1,0 +1,284 @@
+CI job `restore-drill` — backup and restore drill (ops image, PostgreSQL 17)
+Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
+
+commit:   5039e90 (feat/orders-new) — dirty: ?? .ai/project-memory/orders-redesign-4-report.md; ?? output/verification/2026-10-24-orders-new/mutants.py; ?? output/verification/2026-10-24-orders-new/mutants.txt
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da
+date:     2026-10-24 14:48:54 EEST → 14:49:20 (0m25s)
+machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
+tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
+env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
+images:   postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
+          python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache
+          birka-ci-local-ops @ sha256:0dc1e69d85b73e94238db9cdda4410c68d8d9c7883286e0920e1d49165541cd3, built here from the cache
+          birka-ci-local-api @ sha256:02923dab052b8a25749e1cd55095f19f444858af40ea844eb5f8f7fb8e79feef, built here from the cache
+network:  from Docker's VM during the job (Docker Desktop's log): registry-1.docker.io:443 x1 (13600 bytes)
+result:   passed
+counts:   7 of CI's 7 run steps passed; ops image tools: age 1.2.1-1+b5 / libpq5:arm64 18.6-1.pgdg13+2 / postgresql-client-17 17.11-1.pgdg13+2 / postgresql-common 278 / pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2) / age 1.2.1
+
+DEVIATIONS from CI:
+  - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of GitHub's ubuntu-24.04 runner (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
+  - Every job runs with TZ=UTC, LANG=C.UTF-8 and LC_ALL=C.UTF-8, as on the ubuntu runner (this Mac's own zone is Europe/Kyiv); every tool the job starts inherits them, Playwright's Chromium included.
+  - The working tree as it is, not a fresh checkout (the header says clean or dirty).
+  - CI=true; GITHUB_ENV and GITHUB_STEP_SUMMARY point into the runner's work directory; upload-artifact copies into the evidence directory. uv's and npm's caches are in the runner's work directory.
+  - Nothing is installed and no image is pulled; builds use only the local build cache. The network is used only where CI's own steps use it: `npm audit` and pip-audit's queries.
+  - Nothing is re-run: a failing step or test fails the job, as in CI.
+  - Images are tagged birka-ci-local-ops / birka-ci-local-api (not birka-ops / birka-api) and built from the local build cache only: every base image pinned to the digest in the cache (no pull, no tag lookup), and a dead HTTP(S) proxy for every RUN, so any download fails (`--network=none` changes BuildKit's cache key). The ops image's package layer was fetched once, by the owner's decision (2026-10-08), with network: docker build --progress=plain --build-context python:3.12.14-slim=<the runner's cached pin> --target ops -t birka-ci-local-ops backend   (from the repository, network allowed); log in /Users/nikitahlushak/.cache/birka-runtime/ci/runs/2026-10-08-ops-image-fetch.txt. A build that fails here fails the job; only before that one fetch is a blocked download of the ops image "incomplete" (still exit 1).
+  - `docker run --pull never` everywhere.
+  - `--network host` with localhost:5432 becomes the user network birka-ci-local with birka-ci-local-pg:5432 (Docker Desktop on macOS has no host networking unless it is switched on in its settings).
+  - PostgreSQL 17: postgres:17-alpine (same env, initdb args, health check), container birka-ci-local-pg, published on 127.0.0.1:55417.
+  - The watcher container is birka-ci-local-watch (not `watch`); backups/ and keys/ live in the runner's work directory, not in the repository; the drill report is copied to the evidence directory.
+
+GAPS (declared; nothing else may be missing):
+  - none
+
+====================================================================================================
+===== [runner] job restore-drill: backup and restore drill (ops image, PostgreSQL 17)
+[runner] 3 step(s) the runner replaces or does not run match their sha256 in ci.yml
+[runner] docker network create birka-ci-local
+[runner] service postgres: docker run -d --pull never --name birka-ci-local-pg --label com.birka.ci-local=1 --network birka-ci-local -p 127.0.0.1:55417:5432 -e POSTGRES_USER=birka -e POSTGRES_PASSWORD=birka -e POSTGRES_DB=birka -e 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8' --health-cmd 'pg_isready -U birka -d birka' --health-interval 5s --health-timeout 5s --health-retries 20 postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+[runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55417->5432
+
+===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+[runner] the working tree at 5039e90 (dirty), not a fresh checkout
+===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
+
+===== The server's compose file is valid, every service and profile
+===== ok: The server's compose file is valid, every service and profile (0.1s)
+
+===== Build the ops image, and the API image beside it
+$ /Users/nikitahlushak/.docker/bin/docker build --progress=plain --build-arg HTTP_PROXY=http://127.0.0.1:9 --build-arg HTTPS_PROXY=http://127.0.0.1:9 --build-arg http_proxy=http://127.0.0.1:9 --build-arg https_proxy=http://127.0.0.1:9 --build-arg ALL_PROXY=http://127.0.0.1:9 --build-arg all_proxy=http://127.0.0.1:9 --build-arg NO_PROXY= --build-arg no_proxy= --target ops -t birka-ci-local-ops backend
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 4.46kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+#2 DONE 1.6s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 892B done
+#3 DONE 0.0s
+
+#4 [base 1/4] FROM docker.io/library/python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+#4 resolve docker.io/library/python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 11.75kB 0.0s done
+#5 DONE 0.0s
+
+#6 [base 2/4] WORKDIR /app
+#6 CACHED
+
+#7 [ops 2/6] COPY app ./app
+#7 CACHED
+
+#8 [ops 5/6] COPY alembic.ini ./
+#8 CACHED
+
+#9 [base 3/4] COPY requirements.lock ./
+#9 CACHED
+
+#10 [ops 3/6] COPY migrations ./migrations
+#10 CACHED
+
+#11 [ops 4/6] COPY scripts ./scripts
+#11 CACHED
+
+#12 [base 4/4] RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
+#12 CACHED
+
+#13 [ops 1/6] RUN apt-get update  && apt-get install -y --no-install-recommends ca-certificates postgresql-common  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y  && apt-get install -y --no-install-recommends postgresql-client-17 age  && rm -rf /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [ops 6/6] RUN useradd --create-home --uid 10001 birka && chown -R birka:birka /app
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 exporting manifest sha256:4ed0b0c3c9af5482e1a1e45fb34c9ec51e4e9587f774f4fb061656f2d53b2e9b done
+#15 exporting config sha256:9dff5af32412bb10614d1e1c4844edf34afadac87184ff186eb848f9dd2b8bec done
+#15 exporting attestation manifest sha256:32c680f662001a1043ac845c92615d40442ee45fe3cb90da849119f137b975a6 done
+#15 exporting manifest list sha256:0dc1e69d85b73e94238db9cdda4410c68d8d9c7883286e0920e1d49165541cd3
+#15 exporting manifest list sha256:0dc1e69d85b73e94238db9cdda4410c68d8d9c7883286e0920e1d49165541cd3 done
+#15 naming to docker.io/library/birka-ci-local-ops:latest done
+#15 unpacking to docker.io/library/birka-ci-local-ops:latest done
+#15 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/huuggjr4pzfz8hcgqlhqr0ybz
+$ /Users/nikitahlushak/.docker/bin/docker build --progress=plain --build-arg HTTP_PROXY=http://127.0.0.1:9 --build-arg HTTPS_PROXY=http://127.0.0.1:9 --build-arg http_proxy=http://127.0.0.1:9 --build-arg https_proxy=http://127.0.0.1:9 --build-arg ALL_PROXY=http://127.0.0.1:9 --build-arg all_proxy=http://127.0.0.1:9 --build-arg NO_PROXY= --build-arg no_proxy= -t birka-ci-local-api backend
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 4.46kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 892B done
+#3 DONE 0.0s
+
+#4 [base 1/4] FROM docker.io/library/python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+#4 resolve docker.io/library/python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 11.75kB done
+#5 DONE 0.0s
+
+#6 [base 3/4] COPY requirements.lock ./
+#6 CACHED
+
+#7 [api 4/5] COPY alembic.ini ./
+#7 CACHED
+
+#8 [base 2/4] WORKDIR /app
+#8 CACHED
+
+#9 [api 2/5] COPY migrations ./migrations
+#9 CACHED
+
+#10 [base 4/4] RUN pip install --no-deps --require-hashes -r requirements.lock && pip check
+#10 CACHED
+
+#11 [api 3/5] COPY scripts ./scripts
+#11 CACHED
+
+#12 [api 1/5] COPY app ./app
+#12 CACHED
+
+#13 [api 5/5] RUN useradd --create-home --uid 10001 birka && chown -R birka:birka /app
+#13 CACHED
+
+#14 exporting to image
+#14 exporting layers done
+#14 exporting manifest sha256:1614c686d83100a83b3c57f58b1f397c22b26ac3540af3cfa285475bbd6b0c2b done
+#14 exporting config sha256:cc4bb70d6245f0d640ddc37f5d7f0920aca71de777515168f6eb5a43bf65fa9c done
+#14 exporting attestation manifest sha256:e39cf96443616925aff14d5ce43115f2d4a9f130c017dcfbdfeac3fe48c8a8b3 done
+#14 exporting manifest list sha256:02923dab052b8a25749e1cd55095f19f444858af40ea844eb5f8f7fb8e79feef done
+#14 naming to docker.io/library/birka-ci-local-api:latest done
+#14 unpacking to docker.io/library/birka-ci-local-api:latest done
+#14 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yeet4eq3drnpg6sjmzozctg7o
+[runner] the ops image's tools:
+age	1.2.1-1+b5
+libpq5:arm64	18.6-1.pgdg13+2
+postgresql-client-17	17.11-1.pgdg13+2
+postgresql-common	278
+pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2)
+age 1.2.1
+===== replaced: ok: Build the ops image, and the API image beside it (2.6s)
+
+===== The API image is still the default target
+===== ok: The API image is still the default target (3.0s)
+
+===== The API image holds exactly the locked packages
+43 packages, exactly as locked
+===== ok: The API image holds exactly the locked packages (0.3s)
+
+===== Migrate, seed, and run the nightly backup as the schedule would
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+INFO  [alembic.runtime.migration] Running upgrade 0038_customer_erasure -> 0039_outage_mark_debts_returns, The mark «під час збою» on returns and debt payments. Owner decision, 2026-10-10; ADR-0021.
+INFO  [alembic.runtime.migration] Running upgrade 0039_outage_mark_debts_returns -> 0040_warehouse_stocktake, A stocktake of a whole warehouse. Owner decisions, 2026-10-10; ADR-0022.
+INFO  [alembic.runtime.migration] Running upgrade 0040_warehouse_stocktake -> 0041_first_days_mark, «З паперу»: the first days' paper, a mark of its own. Owner decisions, 2026-10-15 and 2026-10-16.
+birka_app: created
+75 tables: read and write
+alembic_version: read only
+the database: connect only, no temporary tables
+seed complete for organization d409e2b9-331b-4eca-abfe-48165a25c057
+{"started_at": "2026-10-24T11:49:10.546130+00:00", "ok": true, "problems": [], "archive": "birka-20261024T114910Z.dump.age", "bytes": 360529, "rows": 87, "drill": {"ok": true, "restore_seconds": 0.214, "failed": [], "dropped_leftovers": []}, "pruned": [], "finished_at": "2026-10-24T11:49:11.088404+00:00"}
+{
+  "started_at": "2026-10-24T11:49:10.546130+00:00",
+  "ok": true,
+  "problems": [],
+  "archive": "birka-20261024T114910Z.dump.age",
+  "bytes": 360529,
+  "rows": 87,
+  "drill": {
+    "ok": true,
+    "restore_seconds": 0.214,
+    "failed": [],
+    "dropped_leftovers": []
+  },
+  "pruned": [],
+  "finished_at": "2026-10-24T11:49:11.088404+00:00"
+}
+===== ok: Migrate, seed, and run the nightly backup as the schedule would (4.7s)
+
+===== The owner's section sees the night, and the watcher starts and stops cleanly
+{"state": "OK", "checked_at": "2026-10-24T11:49:13.084411+00:00", "latest": {"finished_at": "2026-10-24T11:49:11.088404+00:00", "ok": true, "archive": "birka-20261024T114910Z.dump.age", "problems": []}}
+312638b51261bb4610dbd9a5ba898d706bee2620d0f1fbae4041eaa57d9b6fa4
+Flag --time has been deprecated, use --timeout instead
+birka-ci-local-watch
+{"logger": "__main__", "every_seconds": 2.0, "certificate": null, "administrators": 0, "check_in": false, "event": "backup_watch.started", "level": "info", "timestamp": "2026-10-24T11:49:14.747936Z"}
+{"logger": "__main__", "error": "ClientConnectorDNSError: Cannot connect to host api:8000 ssl:default [Name or service not known]", "event": "backup_watch.api_unanswered", "level": "warning", "timestamp": "2026-10-24T11:49:14.808516Z"}
+{"logger": "__main__", "deleted": 0, "event": "backup_watch.idempotency_purged", "level": "info", "timestamp": "2026-10-24T11:49:14.811700Z"}
+{"logger": "__main__", "event": "backup_watch.stopped", "level": "info", "timestamp": "2026-10-24T11:49:19.512196Z"}
+===== ok: The owner's section sees the night, and the watcher starts and stops cleanly (8.5s)
+
+===== Only the owner's key opens the copy, and it is the archive that was drilled
+decrypted archive matches the drilled one: 8c221e9a4713727c6977f149a913b1144f716c5e1ec05c24b340b6fc1d80ae61
+===== ok: Only the owner's key opens the copy, and it is the archive that was drilled (0.2s)
+
+===== Preserve the drill report
+[runner] artifact restore-drill-report: /Users/nikitahlushak/.cache/birka-runtime/ci/work/restore-drill/backups/last-run.json -> /Users/nikitahlushak/birka/output/verification/2026-10-24-orders-new-ci-local/artifacts/restore-drill/restore-drill-report/last-run.json
+[runner] artifact restore-drill-report: /Users/nikitahlushak/.cache/birka-runtime/ci/work/restore-drill/backups/birka-20261024T114910Z.drill.json -> /Users/nikitahlushak/birka/output/verification/2026-10-24-orders-new-ci-local/artifacts/restore-drill/restore-drill-report/birka-20261024T114910Z.drill.json
+===== replaced: ok: Preserve the drill report (0.0s)
+[runner] removed container birka-ci-local-watch and its anonymous volume
+[runner] removed container birka-ci-local-pg and its anonymous volume
+[runner] removed network birka-ci-local
+
+===== [runner] steps
+  replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
+  ok                                 The server's compose file is valid, every service and profile  (0.1s)
+  replaced: ok                       Build the ops image, and the API image beside it  (2.6s)
+  ok                                 The API image is still the default target  (3.0s)
+  ok                                 The API image holds exactly the locked packages  (0.3s)
+  ok                                 Migrate, seed, and run the nightly backup as the schedule would  (4.7s)
+  ok                                 The owner's section sees the night, and the watcher starts and stops cleanly  (8.5s)
+  ok                                 Only the owner's key opens the copy, and it is the archive that was drilled  (0.2s)
+  replaced: ok                       Preserve the drill report  (0.0s)
+===== [runner] restore-drill: PASSED — 7 of CI's 7 run steps passed; ops image tools: age 1.2.1-1+b5 / libpq5:arm64 18.6-1.pgdg13+2 / postgresql-client-17 17.11-1.pgdg13+2 / postgresql-common 278 / pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg13+2) / age 1.2.1

@@ -1,0 +1,39 @@
+- unchanged tree: passed 
+- the cursor not in the search: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- a line from another warehouse: caught by a store with two warehouses: each chip says its own, the line leaves from the chip's (orde
+- a line sent at no price: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- the field empty of the store's price: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- a price-less line's field not focused: caught by a model with no price: its field empty and focused, the panel's sum a dash and its press h
+- more than is free: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- a chip tapped again adds nothing: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- the price typed not the price sent: caught by a model with no price: its field empty and focused, the panel's sum a dash and its press h
+- a sum with a line unpriced: caught by a model with no price: its field empty and focused, the panel's sum a dash and its press h
+- no carrier asked: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- a short line unmarked: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- short said without the reserve: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- none free said as some: caught by short of stock with none free: said so, and to take the line out (orders task list, P0-5)
+- the short line not brought to the finger: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- the goods not read again after a shortfall: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- what is free not kept from the refusal: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- the mark kept after its line changed: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- the mark cleared by another line: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- the panel's room not kept: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- abroad keeps the carrier: caught by abroad: no carrier, how it went said when it is sent, the press at once; the body without 
+- carriers abroad: caught by abroad: no carrier, how it went said when it is sent, the press at once; the body without 
+- a carrier chip not said pressed: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- a new order reserved in silence: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- an answered kept order not said: caught by a new order answered whose reading failed: «Оновити результат» says what it reserved (revi
+- a refused new order without a buzz: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- a shortfall said over the page too: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- a shortfall said again once the screen is left: caught by a shortfall's screen left: never said over the list, nor on the next new order (review, 20
+- reserved said without its units: caught by short of stock: the line the server names marked with what is free, focused, the rest as t
+- 0,00 not asked about: caught by a model with no price: its field empty and focused, the panel's sum a dash and its press h
+- what is no price unsaid: caught by a model with no price: its field empty and focused, the panel's sum a dash and its press h
+- the carriers in two rows: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+- a chip tapped again adds two: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+32 of 32 caught
+
+After the screenshots (the card was shown from the form's foot), one more:
+- unchanged tree: passed 
+- the card left at the form's foot: caught by a new order as a sale: the cursor in the search, two letters find the model, its size a li
+1 of 1 caught
