@@ -1,7 +1,14 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  errorText,
+  inOwnWords,
+  isConflict,
+  recordedNothing,
+} from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { keptUnconfirmed } from "@/cash/errors";
 import type { Location, Store } from "@/orders/types";
@@ -85,7 +92,11 @@ export function countRefusalText(
     return `На цей товар є резерв замовлення (${String(details.reserved)} од.). Якщо кількість не збігається, виправити облік можна після видачі або скасування замовлення.${after}`;
   if (error.status === 422 && typeof details.size_id === "string")
     return `Облік товару з невідомим розміром можна лише зменшити.${after}`;
-  return `${errorText(error)}${after}`;
+  return `${inOwnWords(
+    errorText(error),
+    "Перевірте кількість та спробуйте ще раз.",
+    "Облік змінився — перерахуйте товар і спробуйте ще раз.",
+  )}${after}`;
 }
 
 /** What App says of a kept count once it is settled as refused. */
@@ -146,6 +157,7 @@ export function Stocktakes({
       void list.refetch();
       onCount(record);
     } catch (error) {
+      if (isConflict(error)) void list.refetch();
       setFailure(error);
     } finally {
       setStarting(false);
@@ -228,7 +240,15 @@ export function Stocktakes({
               </button>
             ))
           )}
-          {failure !== null && <p role="alert">{errorText(failure)}</p>}
+          {failure !== null && (
+            <p role="alert">
+              {inOwnWords(
+                errorText(failure),
+                "Інвентаризацію не почато. Спробуйте ще раз.",
+                "Інвентаризацію не почато: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+              )}
+            </p>
+          )}
           {finished.length > 0 && (
             <details>
               <summary>Попередні інвентаризації</summary>
@@ -409,6 +429,7 @@ export function Stocktake({
       setDone(finished);
       setConfirming(false);
     } catch (error) {
+      if (isConflict(error)) void current.refetch();
       setFailure(error);
     } finally {
       setFinishing(false);
@@ -597,7 +618,15 @@ export function Stocktake({
           Завершити інвентаризацію
         </button>
       )}
-      {failure !== null && <p role="alert">{errorText(failure)}</p>}
+      {failure !== null && (
+        <p role="alert">
+          {inOwnWords(
+            errorText(failure),
+            "Інвентаризацію не завершено. Спробуйте ще раз.",
+            "Інвентаризацію не завершено: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+          )}
+        </p>
+      )}
     </section>
   );
 }

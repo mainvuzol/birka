@@ -4024,3 +4024,81 @@ texts wait for the owner's approval at delivery):
   recorded whose order could not be read never says «Не записано».
 
 Built on 2026-10-24; see the [report](orders-redesign-5-report.md).
+
+## Owner decision — 2026-10-25 (after #132 was merged)
+
+Asked when #132 was merged, each answer the option recommended:
+- **An order's refusals are approved as built,** with the three changed
+  from the task list: a waybill «… цифри або латинські літери», a resend's
+  «… поки сервер не відповідав …», and a saved step met by a conflict
+  without proof «… ще не підтверджено …», never «спробуйте ще раз».
+- **Now the other screens' refusals in their own words** (the decision
+  after #131); **then «Замовлення»'s P1-1,** a saved step's words.
+
+## The other screens' refusals in their own words — built 2026-10-25
+
+The owner's decisions after #131 and #132. How it is carried out, not
+decided by the owner (the words wait for the owner's approval):
+- **A refusal a screen does not name says what was not done and what to
+  check, and a conflict that the data changed — never the shared words,
+  which speak of an order** (`inOwnWords`):
+  - models: «Назву не змінено. Перевірте поля та спробуйте ще раз.»,
+    «Моделі не об’єднано. Спробуйте ще раз.», «Модель не повернуто. …»,
+    «Модель не прибрано. …»; a conflict «… модель щойно змінили —
+    перегляньте її й спробуйте ще раз.»; a kept change refused on its check,
+    recorded nowhere: «Зміну каталогу не записано. Внесіть її ще раз.», a
+    conflict «… Каталог змінився, поки сервер не відповідав: перегляньте
+    модель і внесіть зміну ще раз.»;
+  - «Брак»: «Не записано. Перевірте дані та спробуйте ще раз.», a conflict
+    «Не записано: цю одиницю щойно змінили — список оновлено, подивіться
+    ще раз.»;
+  - a delivery: «Нічого не прийнято. Перевірте рядки та спробуйте ще раз —
+    список збережено.»; a conflict «Нічого не прийнято: поки ви працювали,
+    дані змінилися. …»; a kept one recorded nowhere: «Приймання не
+    записано. Перевірте список і внесіть його ще раз.», a conflict «… Дані
+    змінилися, поки сервер не відповідав: …»;
+  - a stock correction and a stocktake's count: «Перевірте кількість та
+    спробуйте ще раз.», a conflict «Облік змінився — перерахуйте товар і
+    спробуйте ще раз.», each with «Нічого не записано.», or after «…не
+    записано.» for a kept one;
+  - a stocktake: «Інвентаризацію не почато. Спробуйте ще раз.»,
+    «Інвентаризацію не завершено. Спробуйте ще раз.»; a conflict «… дані
+    складу змінилися — перегляньте їх і спробуйте ще раз.»;
+  - the price: «Ціну не збережено. Перевірте суму та спробуйте ще раз.», a
+    conflict «Ціну не збережено: її щойно змінили — перевірте й збережіть
+    ще раз.»;
+  - a store's state: «Стан магазину не змінено. Перевірте причину та
+    спробуйте ще раз.», a conflict «… його змінили — перегляньте його й
+    спробуйте ще раз.»;
+  - a supplier edited or added: «Постачальника не збережено.» or «… не
+    додано. Перевірте назву й телефон та спробуйте ще раз.»; a supplier
+    return, made or cancelled: «Не записано. Перевірте повернення та
+    спробуйте ще раз.», a conflict «Не записано: дані повернення змінилися
+    — перегляньте їх і спробуйте ще раз.»;
+  - invoices and borrowed goods, each command alike: «Не записано.
+    Перевірте дані та спробуйте ще раз.» (borrowed: «… кількість …»), a
+    conflict «Не записано: дані змінилися — перегляньте їх і спробуйте ще
+    раз.»;
+  - a customer's data erased: «Дані покупця не стерто. Спробуйте ще раз.»,
+    a conflict «… борг щойно змінився — перегляньте його й спробуйте ще
+    раз.»;
+  - the sign-in: «Не вдалося увійти. Відкрийте застосунок знову кнопкою в
+    боті вашого магазину.».
+- **Where a conflict's words say to look again, the screen reads again
+  what it shows:** the models and the card, the prices, the suppliers and
+  their returns, the borrowed goods, a stocktake's list and record, the
+  debts.
+- **«Брак» refused by its own rule** (`DAMAGED_STOCK_CLOSED`: what is in
+  «Брак» changes only through returns and its own section, owner decision
+  2026-10-01) says «Залишок «Браку» змінюють лише повернення й розділ
+  «Брак».», never a conflict to look again at.
+- **Any kept command met by a conflict that proves nothing** — a sale, a
+  delivery, a correction, a count, as already an order, a return, a payment
+  and «Каса» — stays unconfirmed: «… ще не підтверджено: сервер відповів,
+  що дані змінилися. Перевірте результат ще раз — двічі … не запишеться.»,
+  never «спробуйте ще раз».
+- **Every answer a screen already names keeps its words,** and so does
+  every shared one that is not about an order.
+
+Built on 2026-10-25; see the [report](screens-refusals-report.md).
+

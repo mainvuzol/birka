@@ -1,4 +1,13 @@
-import { test, expect, more, openStore, section, sections } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  readsOf,
+  refuseOnce,
+  section,
+  sections,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -178,13 +187,33 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await page.getByLabel("Пошук моделі").fill(coat.model);
   await page.getByLabel(`Повернути: ${coat.model}`, { exact: false }).fill("2");
   await page.getByLabel("Примітка (необов’язково)").fill("не продалось");
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  const returnReads = readsOf(page, /\/api\/v1\/supplier-returns$/);
+  await refuseOnce(page, "**/api/v1/supplier-returns", 409);
+  await page
+    .getByRole("button", { name: "Повернути постачальнику 2 од." })
+    .click();
+  await expect(
+    page.getByText(
+      "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(returnReads).toBeGreaterThan(0);
   await page
     .getByRole("button", { name: "Повернути постачальнику 2 од." })
     .click();
   await expect(
     page.getByText(`Повернено постачальнику «${supplier}»: 2 од.`),
   ).toBeVisible();
-  expect(sent.bodies).toEqual([
+  // The one refused above, then the same return as a new command.
+  expect(sent.bodies).toHaveLength(2);
+  expect({ ...(sent.bodies[0] as object), command_id: null }).toEqual({
+    ...(sent.bodies[1] as object),
+    command_id: null,
+  });
+  expect(sent.bodies.slice(1)).toEqual([
     {
       command_id: expect.any(String) as string,
       store_id: fixture.network_centre_store_id,
@@ -208,11 +237,46 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
     card.getByRole("button", { name: "Так, скасувати повернення" }),
   ).toBeDisabled();
   await card.getByLabel("Чому скасовуємо").fill("постачальник не взяв");
+  const cancelReads = readsOf(page, /\/api\/v1\/supplier-returns$/);
+  await refuseOnce(page, "**/api/v1/supplier-returns/*/cancel", 409);
+  await card.getByRole("button", { name: "Так, скасувати повернення" }).click();
+  await expect(
+    card.getByText(
+      "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(cancelReads).toBeGreaterThan(0);
   await card.getByRole("button", { name: "Так, скасувати повернення" }).click();
   await expect(
     card.getByText(/^Скасовано .* постачальник не взяв/),
   ).toBeVisible();
   expect(await available(page, coat)).toBe(4);
+
+  // The supplier edited, refused for a reason the screen does not name: its
+  // own words; a conflict reads the list again (owner decision, 2026-10-25).
+  await page.getByText("Список постачальників").click();
+  await page.getByRole("button", { name: `Змінити ${supplier}` }).click();
+  const list = page.getByRole("list", { name: "Постачальники" });
+  await refuseOnce(page, "**/api/v1/suppliers/*", 422);
+  await list.getByRole("button", { name: "Зберегти" }).click();
+  await expect(
+    page.getByText(
+      "Постачальника не збережено. Перевірте назву й телефон та спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const supplierReads = readsOf(page, /\/api\/v1\/suppliers$/);
+  await refuseOnce(page, "**/api/v1/suppliers/*", 409);
+  await list.getByRole("button", { name: "Зберегти" }).click();
+  await expect(
+    page.getByText(
+      "Постачальника не збережено: дані змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(supplierReads).toBeGreaterThan(0);
+  await list.getByRole("button", { name: "Скасувати" }).click();
 });
 
 test("goods held for an order are not offered to go back", async ({ page }) => {

@@ -5,6 +5,8 @@ import {
   fromPaper,
   grn,
   openStore,
+  readsOf,
+  refuseOnce,
   returnUnits,
   section,
   tapSize,
@@ -1586,6 +1588,23 @@ test("the network's owner erases a closed debt's customer who asks, and every su
       "Ім’я й телефон покупця зникнуть з усіх закритих боргів мережі з цим телефоном. Суми лишаються. Скасувати це не можна.",
     ),
   ).toBeVisible();
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  // The debt itself, never the list or the summary.
+  const debtReads = readsOf(
+    page,
+    /\/api\/v1\/credits\/(?!summary$|customers$)[^/]+$/,
+  );
+  await refuseOnce(page, "**/api/v1/credits/*/erase-customer", 409);
+  await page.getByRole("button", { name: "Так, стерти дані покупця" }).click();
+  await expect(
+    page.getByText(
+      "Дані покупця не стерто: борг щойно змінився — перегляньте його й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(debtReads).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Стерти дані покупця" }).click();
   await page.getByRole("button", { name: "Так, стерти дані покупця" }).click();
 
   await expect(page.getByRole("status")).toHaveText(

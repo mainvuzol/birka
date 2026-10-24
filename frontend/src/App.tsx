@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ComponentProps, JSX } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, errorText } from "@/shared/api";
+import { api, ApiError, errorText, inOwnWords } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { keptText, useAutoCheck } from "@/shared/reach";
@@ -309,7 +309,13 @@ export function App(): JSX.Element {
                 // from the bot again, which also finds any command kept
                 // from an earlier opening (redesign P1-3).
                 "Відкрийте застосунок знову кнопкою в боті вашого магазину."
-              : errorText(failure)}
+              : // Never an order's words at the door (owner decision,
+                // 2026-10-25).
+                inOwnWords(
+                  errorText(failure),
+                  "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+                  "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+                )}
         </p>
         <button onClick={readAgain}>Спробувати ще раз</button>
       </main>

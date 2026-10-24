@@ -1,4 +1,4 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import { test, expect, more, openStore, refuseOnce, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -80,6 +80,18 @@ test("a delivery of a known model is received into an explicitly chosen warehous
   await page
     .getByLabel("Примітка (накладна, постачальник)")
     .fill("Накладна 17");
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
+  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Нічого не прийнято. Перевірте рядки та спробуйте ще раз — список збережено.",
+  );
+  await refuseOnce(page, "**/api/v1/inventory/receipts", 409);
+  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Нічого не прийнято: поки ви працювали, дані змінилися. Перевірте рядки та спробуйте ще раз — список збережено.",
+  );
   const posted = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/v1/inventory/receipts") &&

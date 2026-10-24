@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, errorText, inOwnWords } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
@@ -22,6 +22,18 @@ interface Draft {
   line: ReceiptLine;
   name: string;
   size: string;
+}
+
+/** A delivery refused: what the server named, or in the delivery's words —
+ * never an order's; the list kept either way. */
+function receiptRefusal(error: unknown): string {
+  const said = errorText(error);
+  const own = inOwnWords(
+    said,
+    "Нічого не прийнято. Перевірте рядки та спробуйте ще раз — список збережено.",
+    "Нічого не прийнято: поки ви працювали, дані змінилися. Перевірте рядки та спробуйте ще раз — список збережено.",
+  );
+  return own === said ? `${said} Список збережено — нічого не прийнято.` : own;
 }
 
 /**
@@ -48,6 +60,7 @@ interface Draft {
  * at a price agreed for each (owner decisions, 2026-10-01). They are marked
  * sold, or sent back, from «Постачальникам».
  */
+
 export function Receive({
   store,
   token,
@@ -506,11 +519,7 @@ export function Receive({
           Прийняти на склад
         </button>
       </fieldset>
-      {refusal !== null && (
-        <p role="alert">
-          {errorText(refusal)} Список збережено — нічого не прийнято.
-        </p>
-      )}
+      {refusal !== null && <p role="alert">{receiptRefusal(refusal)}</p>}
     </section>
   );
 }

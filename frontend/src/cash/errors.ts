@@ -4,6 +4,7 @@ import {
   errorText,
   FAILED_TEXT,
   INVALID_TEXT,
+  inOwnWords,
   recordedNothing,
 } from "@/shared/api";
 import { methodLabels, notStated } from "@/shared/payment";
@@ -278,17 +279,19 @@ export function orderErrorText(
       ? `Операцію «${resent}» не записано. ${errorText(error)}`
       : `Операцію «${resent}» не записано: ${why}`;
   }
-  if (kept && !recordedNothing(error)) {
-    const what =
-      (label ?? resent) !== null
-        ? `Операцію «${label ?? resent ?? ""}»`
-        : "Операцію";
-    // A conflict that proves nothing: still unconfirmed, never «спробуйте
-    // ще раз», as a kept return says it (P1-2).
-    if (errorText(error) === CONFLICT_TEXT)
-      return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі вона не запишеться.`;
-    return keptUnconfirmed(error, what, "вона", misses) ?? errorText(error);
-  }
+  // A conflict that proves nothing included: still unconfirmed, never
+  // «спробуйте ще раз» (`keptUnconfirmed`; P1-2).
+  if (kept && !recordedNothing(error))
+    return (
+      keptUnconfirmed(
+        error,
+        (label ?? resent) !== null
+          ? `Операцію «${label ?? resent ?? ""}»`
+          : "Операцію",
+        "вона",
+        misses,
+      ) ?? errorText(error)
+    );
   // From its screen: what it is now, and what to do (P1-2). A waybill's
   // own fault is said as a field's, with nothing to undo.
   const why = orderReason(error, true);
@@ -345,12 +348,16 @@ export function saleErrorText(
 }
 
 /**
- * A kept delivery: the shared words for why, as «Приймання» shows a
- * refusal of its own (ADR-0013 §1).
+ * A kept delivery: refused, recorded nowhere, it says why in the delivery's
+ * own words, never an order's (ADR-0013 §1; owner decision, 2026-10-25).
  */
 export function receiptErrorText(error: unknown, misses = 0): string {
   return recordedNothing(error)
-    ? `Приймання не записано. ${errorText(error)}`
+    ? `Приймання не записано. ${inOwnWords(
+        errorText(error),
+        "Перевірте список і внесіть його ще раз.",
+        "Дані змінилися, поки сервер не відповідав: перевірте список і внесіть його ще раз.",
+      )}`
     : (keptUnconfirmed(error, "Приймання", "воно", misses) ?? errorText(error));
 }
 
@@ -405,7 +412,9 @@ export const ASK_A_MANAGER =
  * stands for it after. A request the server did not take — a 400, or a 422
  * the shared words would answer «Перевірте дані…» — is no proof either: «…
  * сервер не прийняв запит …», as a kept payment's (owner decision,
- * 2026-10-21). Null for any other answer.
+ * 2026-10-21). A conflict that proves nothing, «… сервер відповів, що дані
+ * змінилися …», never an order's words (owner decision, 2026-10-25). Null
+ * for any other answer.
  */
 export function keptUnconfirmed(
   error: unknown,
@@ -415,6 +424,10 @@ export function keptUnconfirmed(
 ): string | null {
   if (!(error instanceof ApiError)) return null;
   const text = errorText(error);
+  // Changed, said the server, of what it may have recorded: still
+  // unconfirmed, never «спробуйте ще раз» (owner decision, 2026-10-25).
+  if (text === CONFLICT_TEXT)
+    return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі ${it} не запишеться.`;
   const failed = text.startsWith(FAILED_TEXT);
   const notTaken = (failed && error.status === 400) || text === INVALID_TEXT;
   if (!failed && !notTaken) return null;
@@ -434,12 +447,11 @@ export function returnErrorText(error: unknown, misses = 0): string {
   // Not said to have recorded nothing: still unconfirmed, never «try again»,
   // which could hand the money back twice (owner decisions, 2026-10-18).
   if (!recordedNothing(error)) {
-    const text = errorText(error);
-    if (text === CONFLICT_TEXT)
-      return "Повернення ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.";
-    // A request not taken, in the shared words, with a manager from the
-    // third in a row (owner decision, 2026-10-21).
-    return keptUnconfirmed(error, "Повернення", "воно", misses) ?? text;
+    // A conflict, a request not taken — with a manager from the third in
+    // a row (owner decision, 2026-10-21) — in the shared words.
+    return (
+      keptUnconfirmed(error, "Повернення", "воно", misses) ?? errorText(error)
+    );
   }
   if (
     error instanceof ApiError &&
@@ -496,11 +508,8 @@ export function creditErrorText(
   if (!recordedNothing(error)) {
     if (right !== null) return `${what} ще не підтверджено: ${right}`;
     const text = errorText(error);
-    const twice = `Перевірте результат ще раз — двічі ${kind === "payment" ? "він" : "воно"} не запишеться.`;
-    if (text === CONFLICT_TEXT)
-      return `${what} ще не підтверджено: сервер відповів, що дані змінилися. ${twice}`;
-    // A request not taken, in the shared words, with a manager from the
-    // third in a row (owner decision, 2026-10-21).
+    // A conflict, a request not taken — with a manager from the third in
+    // a row (owner decision, 2026-10-21) — in the shared words.
     return (
       keptUnconfirmed(
         error,
@@ -578,9 +587,7 @@ export function cashJournalText(
       : keptNames[command];
   if (!recordedNothing(error)) {
     // Changed, said the server, of a command it may have recorded: still
-    // unconfirmed, as a return's and a payment's (cash task list, P2-1).
-    if (errorText(error) === CONFLICT_TEXT)
-      return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі ${it} не запишеться.`;
+    // unconfirmed (`keptUnconfirmed`; cash task list, P2-1).
     return keptUnconfirmed(error, what, it, misses) ?? errorText(error);
   }
   // These say themselves what was not recorded.

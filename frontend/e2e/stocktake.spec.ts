@@ -1,4 +1,11 @@
-import { test, expect, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  readsOf,
+  refuseOnce,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -97,7 +104,32 @@ test("a warehouse is counted position by position, each difference applied at on
 }) => {
   const sent = counts(page);
   await enter(page, fixture.stocktake_location_id);
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/stocktakes", 422);
   await begin(page);
+  await expect(
+    page.getByText("Інвентаризацію не почато. Спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const listReads = readsOf(page, /\/api\/v1\/stocktakes$/);
+  await refuseOnce(page, "**/api/v1/stocktakes", 409);
+  await page
+    .getByRole("region", { name: "Інвентаризація складу" })
+    .getByRole("button", { name: "Почати інвентаризацію" })
+    .click();
+  await expect(
+    page.getByText(
+      "Інвентаризацію не почато: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(listReads).toBeGreaterThan(0);
+  await page
+    .getByRole("region", { name: "Інвентаризація складу" })
+    .getByRole("button", { name: "Почати інвентаризацію" })
+    .click();
   const counting = page.getByRole("region", {
     name: "Інвентаризація",
     exact: true,
@@ -125,6 +157,18 @@ test("a warehouse is counted position by position, each difference applied at on
     path: "test-results/stocktake-mobile.png",
     fullPage: true,
   });
+  await refuseOnce(page, "**/api/v1/stocktakes/*/counts", 422);
+  await line(page).getByRole("button", { name: "Записати кількість" }).click();
+  await expect(
+    page.getByText(
+      "Перевірте кількість та спробуйте ще раз. Нічого не записано.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // Counted again, as the line asks after a refusal.
+  await line(page)
+    .getByLabel("Фактично на складі, од.")
+    .fill(String(system - 2));
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
   await expect(counting.getByRole("status").first()).toContainText(
     "Пораховано позицій: 1 · не перевірено: 0 · нестача: 2 од. (позицій: 1)",
@@ -162,16 +206,22 @@ test("a warehouse is counted position by position, each difference applied at on
     "Пораховано: 1 — облік змінено на +1",
   );
 
-  // Each count travels with the balance it was counted against.
-  expect(sent).toHaveLength(2);
-  expect(sent[0]).toMatchObject({
+  // Each count travels with the balance it was counted against: the refused
+  // one first, then the same count as a new command.
+  expect(sent).toHaveLength(3);
+  expect(sent[1]?.command_id).not.toBe(sent[0]?.command_id);
+  expect({ ...sent[0], command_id: null }).toEqual({
+    ...sent[1],
+    command_id: null,
+  });
+  expect(sent[1]).toMatchObject({
     product_variant_id: fixture.variant_id,
     size_id: fixture.size_id,
     counted_quantity: system - 2,
     expected_quantity: system,
   });
-  expect(sent[1]).toMatchObject({ counted_quantity: 1, expected_quantity: 0 });
-  expect(Object.keys(sent[0]).sort()).toEqual([
+  expect(sent[2]).toMatchObject({ counted_quantity: 1, expected_quantity: 0 });
+  expect(Object.keys(sent[1]).sort()).toEqual([
     "command_id",
     "counted_quantity",
     "expected_quantity",
@@ -215,6 +265,16 @@ test("a warehouse is counted position by position, each difference applied at on
       "Після завершення рахувати в цій інвентаризації вже не можна. Бот надішле підсумок власнику мережі, якщо завершує не власник.",
     ),
   ).toBeVisible();
+  const recordReads = readsOf(page, /\/api\/v1\/stocktakes\/[^/]+$/);
+  await refuseOnce(page, "**/api/v1/stocktakes/*/finish", 409);
+  await counting.getByRole("button", { name: "Так, завершити" }).click();
+  await expect(
+    page.getByText(
+      "Інвентаризацію не завершено: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(recordReads).toBeGreaterThan(0);
   await counting.getByRole("button", { name: "Так, завершити" }).click();
   const done = page.getByRole("region", { name: "Інвентаризацію завершено" });
   await expect(done.getByRole("status")).toHaveText(

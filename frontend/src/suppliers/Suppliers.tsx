@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
 import type { StockOption, Store } from "@/orders/types";
@@ -139,8 +139,13 @@ export function Suppliers({
               body,
             });
             if (outcome.kind === "done") await settled(outcome.result);
-            else if (outcome.kind === "refused")
+            else if (outcome.kind === "refused") {
+              if (isConflict(outcome.error))
+                await cache.invalidateQueries({
+                  queryKey: ["supplier-returns", store.id],
+                });
               return refusalText(outcome.error);
+            }
             return null;
           }}
         />
@@ -460,6 +465,7 @@ function ReturnCard({
       setAsking(false);
       changed();
     } catch (error) {
+      if (isConflict(error)) changed();
       setProblem(
         error instanceof ApiError
           ? refusalText(error)
@@ -595,10 +601,16 @@ function SupplierList({
         cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
       ]);
     } catch (error) {
+      if (isConflict(error))
+        await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });
       setProblem(
         error instanceof ApiError && error.details.reason === "DUPLICATE"
           ? `«${visible(String(error.details.name))}» уже є у списку.`
-          : errorText(error),
+          : inOwnWords(
+              errorText(error),
+              "Постачальника не збережено. Перевірте назву й телефон та спробуйте ще раз.",
+              "Постачальника не збережено: дані змінилися — перегляньте їх і спробуйте ще раз.",
+            ),
       );
     }
   }
@@ -695,5 +707,9 @@ function refusalText(error: unknown): string {
         return "Постачальник зарахував це повернення в накладну — спершу скасуйте залік у «Накладних».";
     }
   }
-  return errorText(error);
+  return inOwnWords(
+    errorText(error),
+    "Не записано. Перевірте повернення та спробуйте ще раз.",
+    "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
+  );
 }

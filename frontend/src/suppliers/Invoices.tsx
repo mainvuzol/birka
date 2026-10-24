@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
@@ -1141,5 +1141,9 @@ function refusalText(error: unknown): string {
         return "Списане лишається списаним.";
     }
   }
-  return errorText(error);
+  return inOwnWords(
+    errorText(error),
+    "Не записано. Перевірте дані та спробуйте ще раз.",
+    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+  );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
 import type { Store } from "@/orders/types";
@@ -131,9 +131,13 @@ export function Borrowed({
                   );
                   return null;
                 }
-                return outcome.kind === "refused"
-                  ? refusalText(outcome.error)
-                  : null;
+                if (outcome.kind !== "refused") return null;
+                // Changed in a way it does not name: the lots read again.
+                if (isConflict(outcome.error))
+                  await cache.invalidateQueries({
+                    queryKey: ["borrowed", store.id],
+                  });
+                return refusalText(outcome.error);
               }}
               sendBack={async (quantity) => {
                 const outcome = await submitReturnToSupplier(
@@ -164,9 +168,13 @@ export function Borrowed({
                   );
                   return null;
                 }
-                return outcome.kind === "refused"
-                  ? refusalText(outcome.error)
-                  : null;
+                if (outcome.kind !== "refused") return null;
+                // Changed in a way it does not name: the lots read again.
+                if (isConflict(outcome.error))
+                  await cache.invalidateQueries({
+                    queryKey: ["borrowed", store.id],
+                  });
+                return refusalText(outcome.error);
               }}
             />
           ))}
@@ -299,5 +307,9 @@ function refusalText(error: unknown): string {
         return "Для цього товару не вказали домовлену ціну.";
     }
   }
-  return errorText(error);
+  return inOwnWords(
+    errorText(error),
+    "Не записано. Перевірте кількість та спробуйте ще раз.",
+    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+  );
 }

@@ -2940,6 +2940,142 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       );
     });
 
+  test("a kept delivery met by a conflict that proves nothing is still unconfirmed; refused for its form, recorded nowhere, it says so in the delivery's words (owner decision, 2026-10-25)", async ({
+    page,
+  }) => {
+    const key = `birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`;
+    await seed(page, {
+      [key]: JSON.stringify({
+        key: randomUUID(),
+        ambiguous: true,
+        since: new Date(Date.now() - 30 * 60_000).toISOString(),
+        body: {
+          store_id: ids.store,
+          command_id: randomUUID(),
+          location_id: ids.shared,
+          notes: null,
+          lines: [
+            {
+              product_variant_id: ids.variant,
+              size_id: ids.size,
+              quantity: 1,
+              acquisition_type: "PURCHASE",
+              unit_cost: "1000.00",
+            },
+          ],
+        },
+      }),
+    });
+    await serve(page);
+    let status = 409;
+    await on(page, "/inventory/receipts", async (route) => {
+      await route.fulfill({
+        status,
+        json:
+          status === 409
+            ? { code: "CONFLICT", message: "Conflict", details: {} }
+            : {
+                code: "VALIDATION_ERROR",
+                message: "Refused",
+                details: { recorded: false },
+              },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const unsure =
+      "Приймання ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі воно не запишеться.";
+    await expect(
+      page.getByRole("alert").filter({ hasText: unsure }),
+    ).toHaveText(unsure);
+    status = 422;
+    await page
+      .getByRole("button", { name: "Перевірити результат приймання" })
+      .click();
+    const refused =
+      "Приймання не записано. Перевірте список і внесіть його ще раз.";
+    await expect(
+      page.getByRole("alert").filter({ hasText: refused }),
+    ).toHaveText(refused);
+  });
+
+  test("a kept delivery refused for a conflict, recorded nowhere, says it changed while the server did not answer (owner decision, 2026-10-25)", async ({
+    page,
+  }) => {
+    const key = `birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`;
+    await seed(page, {
+      [key]: JSON.stringify({
+        key: randomUUID(),
+        ambiguous: true,
+        since: new Date(Date.now() - 30 * 60_000).toISOString(),
+        body: {
+          store_id: ids.store,
+          command_id: randomUUID(),
+          location_id: ids.shared,
+          notes: null,
+          lines: [
+            {
+              product_variant_id: ids.variant,
+              size_id: ids.size,
+              quantity: 1,
+              acquisition_type: "PURCHASE",
+              unit_cost: "1000.00",
+            },
+          ],
+        },
+      }),
+    });
+    await serve(page);
+    await on(page, "/inventory/receipts", async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "CONFLICT",
+          message: "Conflict",
+          details: { recorded: false },
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const said =
+      "Приймання не записано. Дані змінилися, поки сервер не відповідав: перевірте список і внесіть його ще раз.";
+    await expect(page.getByRole("alert").filter({ hasText: said })).toHaveText(
+      said,
+    );
+  });
+
+  test("a kept stock correction refused for its form, recorded nowhere, says it in the correction's words (owner decision, 2026-10-25)", async ({
+    page,
+  }) => {
+    await seed(page, {
+      [adjustmentKey]: keptAdjustment({
+        quantity_delta: -2,
+        reason_code: "LOST",
+        expected_quantity: null,
+      }),
+    });
+    await serve(page);
+    await holding(page, ["inventory:view", "inventory:adjust"]);
+    await on(page, "/inventory/adjustments", async (route) => {
+      await route.fulfill({
+        status: 422,
+        json: {
+          code: "VALIDATION_ERROR",
+          message: "Refused",
+          details: { recorded: false },
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const said =
+      "Коригування не записано. Перевірте кількість та спробуйте ще раз.";
+    await expect(page.getByRole("alert").filter({ hasText: said })).toHaveText(
+      said,
+    );
+  });
+
   for (const refusal of [
     {
       name: "a count made against a balance that moved",

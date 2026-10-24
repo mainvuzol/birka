@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, errorText } from "@/shared/api";
+import { api, ApiError, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import { familyLabel } from "./FamilySearch";
@@ -409,7 +409,13 @@ function RenameForm({
           </section>
         )}
         {refusal && !similar && !sameAs && candidates.length === 0 && (
-          <p role="alert">{errorText(refusal)}</p>
+          <p role="alert">
+            {inOwnWords(
+              errorText(refusal),
+              "Назву не змінено. Перевірте поля та спробуйте ще раз.",
+              "Назву не змінено: модель щойно змінили — перегляньте її й спробуйте ще раз.",
+            )}
+          </p>
         )}
         <button
           type="submit"
@@ -559,7 +565,15 @@ function Merge({
             />
             Розумію: об’єднання не можна скасувати.
           </label>
-          {refusal && <p role="alert">{errorText(refusal)}</p>}
+          {refusal && (
+            <p role="alert">
+              {inOwnWords(
+                errorText(refusal),
+                "Моделі не об’єднано. Спробуйте ще раз.",
+                "Моделі не об’єднано: їх щойно змінили — перегляньте їх і спробуйте ще раз.",
+              )}
+            </p>
+          )}
           <button
             disabled={blocked || !sure || blockers.length > 0 || !to}
             onClick={() => {
@@ -623,6 +637,11 @@ export function Models({
     setMode(null);
     setMergeTarget(null);
     setSelected(correction.into_variant_id ?? correction.product_variant_id);
+    await reread();
+  }
+
+  /** The models, the card and a merge's preview, as they are now. */
+  async function reread(): Promise<void> {
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["catalog-models", store.id] }),
       cache.invalidateQueries({ queryKey: ["catalog-model", store.id] }),
@@ -649,7 +668,11 @@ export function Models({
       await settled(outcome.result);
       return null;
     }
-    if (outcome.kind === "refused") return outcome.error;
+    if (outcome.kind === "refused") {
+      // Changed in a way it does not name: what it shows read again.
+      if (isConflict(outcome.error)) await reread();
+      return outcome.error;
+    }
     return null;
   }
 
@@ -668,10 +691,16 @@ export function Models({
               if (outcome.kind === "done") void settled(outcome.result);
               // Proven to have recorded nothing: it says so before why
               // (ADR-0008 §9; ADR-0013 §1).
-              else if (outcome.kind === "refused")
+              else if (outcome.kind === "refused") {
                 setFailure(
-                  `Зміну каталогу не записано. ${errorText(outcome.error)}`,
+                  `Зміну каталогу не записано. ${inOwnWords(
+                    errorText(outcome.error),
+                    "Внесіть її ще раз.",
+                    "Каталог змінився, поки сервер не відповідав: перегляньте модель і внесіть зміну ще раз.",
+                  )}`,
                 );
+                if (isConflict(outcome.error)) void reread();
+              }
             },
           );
         }}
@@ -764,7 +793,14 @@ export function Models({
                       kind: "restore",
                       product_variant_id: card.data.product_variant_id,
                     }).then((error) => {
-                      if (error) setFailure(errorText(error));
+                      if (error)
+                        setFailure(
+                          inOwnWords(
+                            errorText(error),
+                            "Модель не повернуто. Спробуйте ще раз.",
+                            "Модель не повернуто: її щойно змінили — перегляньте її й спробуйте ще раз.",
+                          ),
+                        );
                     });
                   }}
                 >
@@ -779,7 +815,14 @@ export function Models({
                       kind: "retire",
                       product_variant_id: card.data.product_variant_id,
                     }).then((error) => {
-                      if (error) setFailure(errorText(error));
+                      if (error)
+                        setFailure(
+                          inOwnWords(
+                            errorText(error),
+                            "Модель не прибрано. Спробуйте ще раз.",
+                            "Модель не прибрано: її щойно змінили — перегляньте її й спробуйте ще раз.",
+                          ),
+                        );
                     });
                   }}
                 >

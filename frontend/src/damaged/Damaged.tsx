@@ -1,7 +1,13 @@
 import { useId, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText, unreachable } from "@/shared/api";
+import {
+  ApiError,
+  api,
+  errorText,
+  inOwnWords,
+  unreachable,
+} from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { Location, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
@@ -81,7 +87,11 @@ export function Damaged({
         error instanceof ApiError && error.code === "DAMAGED_UNIT_CHANGED"
           ? "Цю одиницю щойно змінив хтось інший. Список оновлено — подивіться ще раз."
           : error instanceof ApiError && !unreachable(error)
-            ? errorText(error)
+            ? inOwnWords(
+                errorText(error),
+                "Не записано. Перевірте дані та спробуйте ще раз.",
+                "Не записано: цю одиницю щойно змінили — список оновлено, подивіться ще раз.",
+              )
             : `${errorText(error)} Повторне натискання безпечне.`,
       );
     } finally {

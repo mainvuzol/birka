@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { JSX } from "react";
-import { errorText } from "@/shared/api";
+import { errorText, inOwnWords } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
@@ -287,5 +287,9 @@ export function refusalText(
     return `В обліку вже менше, ніж ви списуєте. Залишки оновлено — перевірте кількість.${after}`;
   if (details.reason === "RESERVED" && typeof details.reserved === "number")
     return `На цей товар є резерв замовлення (${String(details.reserved)} од.). Виправити облік можна після видачі або скасування замовлення.${after}`;
-  return `${errorText(error)}${after}`;
+  return `${inOwnWords(
+    errorText(error),
+    "Перевірте кількість та спробуйте ще раз.",
+    "Облік змінився — перерахуйте товар і спробуйте ще раз.",
+  )}${after}`;
 }
