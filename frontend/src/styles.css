@@ -1851,3 +1851,15 @@ html {
   width: 100%;
   min-height: 54px;
 }
+/* «Клієнт забрав» (orders task list, P0-3): its ways in two rows under
+   their captions — the money given now, three; ahead or to the carrier,
+   two. */
+.pay-caption {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.pay-ways.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

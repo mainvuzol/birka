@@ -68,6 +68,18 @@ async function draft(page: Page): Promise<void> {
     .getByRole("combobox", { name: "Перевізник", exact: true })
     .selectOption("NOVA_POSHTA");
 }
+/** What a step did is read before the next is pressed: a tap within 0.7 s
+ * of its answer is taken as meant for the step before (review,
+ * 2026-10-24). */
+async function readTheAnswer(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 800);
+      }),
+  );
+}
+
 test("reserve, dispatch, arrive, collect through real API", async ({
   page,
 }) => {
@@ -79,44 +91,57 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     page.getByText("До відправлення", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await expect(
+    page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
+  ).toBeVisible();
+  await readTheAnswer(page);
   await page
     .getByRole("button", { name: "Прибув на пошту", exact: true })
     .click();
-  // How it was paid is said at «Клієнт забрав», and nothing is chosen for
-  // the seller (owner decisions, 2026-10-04).
-  const sent = collects(page);
-  const ways = page.getByRole("group", { name: "Як оплачено замовлення" });
-  await expect(ways.getByRole("radio")).toHaveCount(5);
-  for (const name of [
-    "Переказом наперед",
-    "Накладеним платежем",
-    "Готівкою — зараз, на касі",
-    "Карткою — зараз, на терміналі",
-    "Переказом — зараз",
-  ])
-    await expect(
-      ways.getByRole("radio", { name, exact: true }),
-    ).not.toBeChecked();
   await expect(
-    page.getByText(
-      "Продаж записуємо, коли покупець забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.",
-    ),
+    page.getByRole("status").filter({ hasText: /^Прибув на пошту$/ }),
   ).toBeVisible();
-  const collect = page.getByRole("button", {
-    name: "Клієнт забрав",
-    exact: true,
+  await readTheAnswer(page);
+  // How it was paid is said at «Клієнт забрав», and nothing is chosen for
+  // the seller (owner decisions, 2026-10-04): each way is the step itself
+  // (orders task list, P0-3; owner decision, 2026-10-23, В2 (а)).
+  const sent = collects(page);
+  const ways = page.getByRole("group", {
+    name: "Клієнт забрав — як оплачено?",
   });
-  await collect.click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "Вкажіть, як оплачено замовлення.",
-  );
+  await expect(
+    ways.getByRole("group", { name: "Зараз, у магазині" }).getByRole("button"),
+  ).toHaveText(["Готівка", "Картка", "Переказ"]);
+  await expect(
+    ways
+      .getByRole("group", { name: "Наперед чи перевізнику" })
+      .getByRole("button"),
+  ).toHaveText(["Переказ наперед", "Накладений платіж"]);
+  await expect(
+    page.getByText("Продаж записуємо, коли покупець забрав товар.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   expect(sent).toEqual([]);
-  await ways
-    .getByRole("radio", { name: "Готівкою — зараз, на касі", exact: true })
-    .check();
-  await collect.click();
-  await expect(page.getByText("Продаж записано.")).toBeVisible();
-  await expect(page.getByText("Оплачено готівкою.")).toBeVisible();
+  const answered = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      /\/api\/v1\/orders\/[0-9a-f-]+$/.test(new URL(response.url()).pathname),
+  );
+  await ways.getByRole("button", { name: "Готівка", exact: true }).click();
+  const { sale_id: saleId } = (await (await answered).json()) as {
+    sale_id: string;
+  };
+  // The sale, as the till says one: the way, the sum large.
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeFocused();
+  await expect(page.locator(".order-collected .way-pill")).toHaveText(
+    "Готівка",
+  );
+  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
+    "1 200,15 грн",
+  );
   expect(sent).toEqual([
     { command_id: expect.any(String) as string, payment_method: "CASH" },
   ]);
@@ -134,7 +159,19 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     path: "test-results/order-collected-mobile.png",
     fullPage: true,
   });
-  // «Замовлення» pressed again leaves the order for the store's list.
+  // Its sale, as the receipt's: a mistake in goods or price returned, from
+  // «Повернення» opened on that very sale — no search.
+  const itsSale = page.waitForRequest((request) =>
+    request.url().includes(`/cash/sales/${saleId}/method`),
+  );
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await itsSale;
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "До списку", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/ · 1\s200,15 грн$/)).toBeVisible();
+  // «Замовлення» pressed again: the store's list.
   await section(page, "Замовлення");
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
@@ -431,14 +468,15 @@ test("an order paid by cash on delivery is collected outside the till", async ({
     .getByRole("button")
     .click();
   await page
-    .getByRole("group", { name: "Як оплачено замовлення" })
-    .getByRole("radio", { name: "Накладеним платежем", exact: true })
-    .check();
-  await page
-    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .getByRole("group", { name: "Клієнт забрав — як оплачено?" })
+    .getByRole("button", { name: "Накладений платіж", exact: true })
     .click();
-  await expect(page.getByText("Продаж записано.")).toBeVisible();
-  await expect(page.getByText("Оплачено накладеним платежем.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(page.locator(".order-collected .way-pill")).toHaveText(
+    "Накладений платіж",
+  );
   expect(sent).toEqual([
     { command_id: expect.any(String) as string, payment_method: "CARRIER_COD" },
   ]);

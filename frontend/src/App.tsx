@@ -23,6 +23,7 @@ import {
   actionLabels,
   stepDone,
 } from "@/orders/Order";
+import { chargeOnce } from "@/orders/Collected";
 import { Orders, freshOrdersView } from "@/orders/Orders";
 import type { OrdersView } from "@/orders/Orders";
 import { asShown, decimal, kopecks, money, stateText } from "@/orders/types";
@@ -872,6 +873,12 @@ function Workspace({
     id: string;
     text: string;
   } | null>(null);
+  // The order «Клієнт забрав» was just recorded on: its sale said large
+  // (orders task list, P0-3) — kept and confirmed later, said so.
+  const [collected, setCollected] = useState<{
+    id: string;
+    kept: boolean;
+  } | null>(null);
   // An order's step refused: why, at the screen's top, brought to the
   // finger from where it was pressed (review, 2026-10-23; orders task
   // list, P0-2).
@@ -883,6 +890,7 @@ function Workspace({
   async function run(command: Pending, resent = false): Promise<void> {
     setOrderResent(resent ? command.label : null);
     setOrderDone(null);
+    setCollected(null);
     const order = await submitPending(key, token, command);
     const settled = useCommand.getState();
     // A step on an order, by its path's last word: «dispatch», «cancel».
@@ -907,6 +915,12 @@ function Workspace({
       if (text !== null) {
         buzz("success");
         setOrderDone({ id: order.id, text });
+      }
+      // Collected: a sale, said as the till says one (orders task list,
+      // P0-3).
+      if (step === "collect") {
+        buzz("success");
+        setCollected({ id: order.id, kept: resent });
       }
       cache.setQueryData(["order", store.id, order.id], order);
       setSelectedId(order.id);
@@ -2104,6 +2118,7 @@ function Workspace({
             onClick={() => {
               setSelectedId(null);
               setOrderDone(null);
+              setCollected(null);
             }}
           >
             ← До замовлень
@@ -2126,9 +2141,46 @@ function Workspace({
               )}`}
               order={detail.data}
               done={orderDone?.id === detail.data.id ? orderDone.text : null}
+              collected={
+                collected?.id === detail.data.id
+                  ? collected.kept
+                    ? "kept"
+                    : "now"
+                  : null
+              }
               store={store}
               token={token}
               blocked={blocked}
+              back={() => {
+                setSelectedId(null);
+                setOrderDone(null);
+                setCollected(null);
+              }}
+              // Its sale, as the receipt's: «Каса» on it for whoever opens
+              // «Каса», «Повернення» on it for whoever takes returns.
+              fixWay={
+                canSeeCash &&
+                detail.data.sale_id &&
+                // Only where the server gives this person its way: anywhere
+                // else, «Каса» would say it (G32; review, 2026-10-24).
+                detail.data.payment_method
+                  ? () => {
+                      setCashFix({
+                        target: "SALE",
+                        id: detail.data.sale_id ?? "",
+                      });
+                      setTab("cash");
+                    }
+                  : undefined
+              }
+              returnSale={
+                canReturn && detail.data.sale_id
+                  ? () => {
+                      setReturnOf(detail.data.sale_id);
+                      setTab("returns");
+                    }
+                  : undefined
+              }
               action={(action, extra) => {
                 void run({
                   path: `/orders/${detail.data.id}/${action}`,
@@ -2150,6 +2202,7 @@ function Workspace({
           open={(order) => {
             setSelectedId(order.id);
             setOrderDone(null);
+            setCollected(null);
           }}
           create={() => {
             setTab("new");
@@ -2213,16 +2266,6 @@ function keptCreditText(body: CreditBody): string {
       : ` за «${named}${goods.length > 1 ? ` + ще ${String(goods.length - 1)}` : ""}»`;
   const way = body.payment_method ? ` ${methodHow[body.payment_method]}` : "";
   return `Внесок${body.outage ? " з паперу" : ""} ${money(body.amount)}${way}${what} — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.`;
-}
-
-/**
- * A card operation whose answer was lost, confirmed — maybe by the phone
- * itself, minutes or hours after the press. Following the paper text, the
- * seller may have charged the terminal meanwhile, so it says to charge it
- * only if nobody did (owner decision, 2026-10-07; ADR-0013 §5.6, G19).
- */
-function chargeOnce(amount: string): string {
-  return `Якщо картку ще не провели — проведіть на терміналі ${money(amount)}. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.`;
 }
 
 /**

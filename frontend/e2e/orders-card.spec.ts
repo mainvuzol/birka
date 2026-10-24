@@ -117,6 +117,8 @@ interface Server {
   lose?: boolean;
   /** How many times the order was read. */
   reads?: number;
+  /** The total the server answers «Клієнт забрав» with. */
+  collectedTotal?: string;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -132,7 +134,7 @@ async function stub(page: Page, server: Server): Promise<void> {
     server.reads = (server.reads ?? 0) + 1;
     await route.fulfill({ json: server.order });
   });
-  for (const step of ["dispatch", "arrive"])
+  for (const step of ["dispatch", "arrive", "collect"])
     await page.route(`**/api/v1/orders/*/${step}`, async (route, request) => {
       const body = request.postDataJSON() as Record<string, unknown>;
       server.sent.push({ step, body });
@@ -150,8 +152,30 @@ async function stub(page: Page, server: Server): Promise<void> {
       }
       server.order = {
         ...server.order,
-        status: step === "dispatch" ? "DISPATCHED" : "ARRIVED",
+        status:
+          step === "dispatch"
+            ? "DISPATCHED"
+            : step === "arrive"
+              ? "ARRIVED"
+              : "COLLECTED",
         ...(typeof body.waybill === "string" ? { waybill: body.waybill } : {}),
+        ...(step === "collect"
+          ? {
+              sale_id: randomUUID(),
+              payment_method: body.payment_method,
+              // The server's sum, whatever the phone showed.
+              total: server.collectedTotal ?? server.order.total,
+              ...(typeof body.credit === "object" && body.credit !== null
+                ? {
+                    credit: {
+                      credit_id: randomUUID(),
+                      paid: (body.credit as { paid_now: string }).paid_now,
+                      owed: "2500.00",
+                    },
+                  }
+                : {}),
+            }
+          : {}),
       };
       await route.fulfill({ json: server.order });
     });
@@ -196,6 +220,18 @@ async function open(
   )
     await page.getByRole("button", { name: "Показати завершені" }).click();
   await page.locator(".order-row").first().click();
+}
+
+/** What a step did is read before the next is pressed: a tap within 0.7 s
+ * of its answer is taken as meant for the step before (review,
+ * 2026-10-24). */
+async function readTheAnswer(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 800);
+      }),
+  );
 }
 
 function panel(page: Page): Locator {
@@ -313,6 +349,7 @@ test("sent with its waybill, then arrived: what is sent is as before, each a buz
   // Sent, nothing held in reserve any more.
   await expect(page.getByText(/^Товар у резерві/)).toHaveCount(0);
   await expect(panel(page).getByRole("button")).toHaveText("Прибув на пошту");
+  await readTheAnswer(page);
   await panel(page).getByRole("button", { name: "Прибув на пошту" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: /^Прибув на пошту$/ }),
@@ -325,12 +362,11 @@ test("sent with its waybill, then arrived: what is sent is as before, each a buz
     },
     { step: "arrive", body: { command_id: expect.any(String) } },
   ]);
-  // Arrived: «Клієнт забрав» is P0-3's, its money's words on its step.
-  await expect(panel(page)).toHaveCount(0);
-  await expect(page.getByText(/^Продаж записуємо/)).toBeVisible();
+  // Arrived: «Клієнт забрав» by its ways, its money's words on its step.
   await expect(
-    page.getByRole("group", { name: "Як оплачено замовлення" }),
+    page.getByRole("group", { name: "Клієнт забрав — як оплачено?" }),
   ).toBeVisible();
+  await expect(page.getByText(/^Продаж записуємо/)).toBeVisible();
 });
 
 test("sent without a waybill says it may come later; refused, a buzz of its own and why brought to the finger (orders task list, P0-2)", async ({
@@ -380,7 +416,7 @@ test("lines with their sums: two of a coat less its discount, «за 1 шт.» f
   ).toBeVisible();
   const lines = page.locator(".order-line");
   await expect(lines.nth(0).locator(".sale-meta")).toHaveText(
-    "600,00 грн за 1 шт. · знижка 20,00 грн",
+    "600,00 грн за 1 шт. · знижка 20,00 грн за 1 шт.",
   );
   await expect(lines.locator(".history-sum")).toHaveText([
     "1 160,00 грн",
@@ -458,6 +494,279 @@ test("a closed order, and an order seen by whoever may not step it, have no pane
   await expect(page.getByLabel(/Номер ТТН/)).toHaveCount(0);
 });
 
+test("«Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, and the sale said large with what to do, the server's sum, a buzz; later a line (orders task list, P0-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = {
+    order: order({ status: "ARRIVED", waybill: "20450012345678" }),
+    sent: [],
+    collectedTotal: "1100.00",
+  };
+  await open(page, server);
+  const ways = page.getByRole("group", {
+    name: "Клієнт забрав — як оплачено?",
+  });
+  await expect(ways.locator(".pay-what")).toHaveText(
+    "Лоран шоколад · M · Нова пошта",
+  );
+  await expect(ways.locator(".pay-total")).toHaveText("Разом 1 200,15 грн");
+  const now = ways.getByRole("group", { name: "Зараз, у магазині" });
+  const ahead = ways.getByRole("group", { name: "Наперед чи перевізнику" });
+  await expect(now.getByRole("button")).toHaveText([
+    "Готівка",
+    "Картка",
+    "Переказ",
+  ]);
+  await expect(ahead.getByRole("button")).toHaveText([
+    "Переказ наперед",
+    "Накладений платіж",
+  ]);
+  // Two rows, each under the thumb's size, all on the screen.
+  const rows = [
+    await now.getByRole("button").first().boundingBox(),
+    await ahead.getByRole("button").first().boundingBox(),
+  ];
+  expect(rows[0] && rows[1] && rows[1].y > rows[0].y).toBe(true);
+  for (const way of await ways.getByRole("button").all()) {
+    expect((await way.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(way).toBeInViewport({ ratio: 1 });
+  }
+  // One line above them, never the drawer's words.
+  await expect(
+    page.getByText("Продаж записуємо, коли покупець забрав товар.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(server.sent).toEqual([]);
+  await now.getByRole("button", { name: "Картка", exact: true }).click();
+  const heading = page.getByRole("heading", { name: "Продаж записано" });
+  await expect(heading).toBeFocused();
+  await expect(page.locator(".order-collected .way-pill")).toHaveText(
+    "Картка · Проведіть на терміналі",
+  );
+  // The server's sum, not what the phone showed.
+  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
+    "1 100,00 грн",
+  );
+  await expect(heading).toHaveAccessibleDescription("1 100,00 грн карткою.");
+  expect(server.sent).toEqual([
+    {
+      step: "collect",
+      body: { command_id: expect.any(String), payment_method: "CARD" },
+    },
+  ]);
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "success" },
+  ]);
+  await expect(panel(page)).toHaveCount(0);
+  await page.screenshot({ path: "test-results/order-collected-card.png" });
+  // «До замовлень», and the order seen again: a line.
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Показати завершені" }).click();
+  await page.locator(".order-row").first().click();
+  await expect(page.getByText("Продаж записано · Картка")).toBeVisible();
+  await expect(page.locator(".order-collected")).toHaveCount(0);
+});
+
+test("«Клієнт забрав» is four taps from «Ще» (orders task list, P0-3)", async ({
+  page,
+}) => {
+  const server: Server = { order: order({ status: "ARRIVED" }), sent: [] };
+  await stub(page, server);
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "click",
+      (event) => {
+        if ((event.target as Element).closest("button")) host.taps += 1;
+      },
+      true,
+    );
+  });
+  await section(page, "Замовлення");
+  await page.locator(".order-row").first().click();
+  await page
+    .getByRole("group", { name: "Зараз, у магазині" })
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { taps: number }).taps),
+  ).toBe(4);
+});
+
+/** Clicks `name` in the panel the moment it is drawn, as a double tap's
+ * second half would land: within milliseconds of the step's answer. */
+async function tapAsDrawn(page: Page, name: string): Promise<void> {
+  await page.evaluate((wanted) => {
+    const watch = new MutationObserver(() => {
+      const button = [
+        ...document.querySelectorAll<HTMLButtonElement>(".order-panel button"),
+      ].find((each) => each.textContent.trim() === wanted);
+      if (!button) return;
+      watch.disconnect();
+      button.click();
+    });
+    watch.observe(document.body, { childList: true, subtree: true });
+  }, name);
+}
+
+test("a tap meant for the step just taken, landing on the next step's button drawn in its place, is let go (review, 2026-10-24)", async ({
+  page,
+}) => {
+  const server: Server = { order: order(), sent: [] };
+  await open(page, server);
+  // «Відправлено», and «Прибув на пошту» at once in its place.
+  await tapAsDrawn(page, "Прибув на пошту");
+  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await expect(panel(page).getByRole("button")).toHaveText("Прибув на пошту");
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 300);
+      }),
+  );
+  expect(server.sent.map((each) => each.step)).toEqual(["dispatch"]);
+  // Pressed a moment later, as meant: taken.
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 700);
+      }),
+  );
+  await tapAsDrawn(page, "Накладений платіж");
+  await panel(page).getByRole("button", { name: "Прибув на пошту" }).click();
+  await expect(
+    page.getByRole("group", { name: "Наперед чи перевізнику" }),
+  ).toBeVisible();
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 300);
+      }),
+  );
+  // Never a sale by a tap meant for «Прибув на пошту».
+  expect(server.sent.map((each) => each.step)).toEqual(["dispatch", "arrive"]);
+});
+
+test("a card's «Клієнт забрав» whose answer never came, confirmed later, says it was recorded once and to charge the card only if nobody did (review, 2026-10-24)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order({ status: "ARRIVED" }),
+    sent: [],
+    lose: true,
+  };
+  await open(page, server);
+  await page
+    .getByRole("group", { name: "Зараз, у магазині" })
+    .getByRole("button", { name: "Картка", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Повторити ту саму команду" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано один раз" }),
+  ).toBeVisible();
+  // The way alone, never «Проведіть»: it may have been charged meanwhile.
+  await expect(page.locator(".order-collected .way-pill")).toHaveText("Картка");
+  await expect(
+    page.getByText(
+      "Якщо картку ще не провели — проведіть на терміналі 1 200,15 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+    ),
+  ).toBeVisible();
+  expect(server.sent).toHaveLength(2);
+  expect(server.sent[1]).toEqual(server.sent[0]);
+});
+
+test("«Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid now large, alone, and what is owed (orders task list, P0-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = {
+    order: order({ status: "ARRIVED", total: "3000.00" }),
+    sent: [],
+  };
+  await open(page, server);
+  await page.getByLabel("Оплата частинами").check();
+  await page.getByLabel("Ім’я покупця").fill("Оксана");
+  await page.getByLabel("Телефон покупця").fill("0501234567");
+  await page.getByLabel("Сплачує зараз, грн").fill("3000");
+  const cash = page
+    .getByRole("group", { name: "Зараз, у магазині" })
+    .getByRole("button", { name: "Готівка", exact: true });
+  await cash.click();
+  // Why, at the finger, over the panel — never under it.
+  const why = page.getByRole("alert");
+  await expect(why).toContainText("Покупець сплачує все одразу");
+  await expect(why).toBeFocused();
+  const box = await why.boundingBox();
+  const bar = await panel(page).boundingBox();
+  expect(box && bar && box.y + box.height <= bar.y + 1).toBe(true);
+  expect(server.sent).toEqual([]);
+  await page.getByLabel("Сплачує зараз, грн").fill("500");
+  await expect(panel(page).locator(".pay-total")).toHaveText(
+    /^Зараз 500,00 грн · винен 2\s500,00 грн$/,
+  );
+  await cash.click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeFocused();
+  // The part paid now large, the order's whole not over it.
+  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
+    "500,00 грн",
+  );
+  await expect(page.locator(".order-total")).toHaveCount(0);
+  await expect(page.locator(".order-collected .paid-owed")).toHaveText(
+    /^Покупець винен 2\s500,00 грн\. Наступні внески — у «Боргах»\.$/,
+  );
+  expect(server.sent).toEqual([
+    {
+      step: "collect",
+      body: {
+        command_id: expect.any(String),
+        payment_method: "CASH",
+        credit: {
+          customer_name: "Оксана",
+          customer_phone: "0501234567",
+          paid_now: "500.00",
+        },
+      },
+    },
+  ]);
+  await page.screenshot({ path: "test-results/order-collected-parts.png" });
+});
+
+test("a collected order whose way is not given to this person offers no «Змінити спосіб оплати» (G32; review, 2026-10-24)", async ({
+  page,
+}) => {
+  await open(page, {
+    order: order({
+      status: "COLLECTED",
+      sale_id: randomUUID(),
+      payment_method: null,
+    }),
+    sent: [],
+  });
+  await expect(
+    page.getByText("Продаж записано", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Змінити спосіб оплати" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Оформити повернення" }),
+  ).toBeVisible();
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {
@@ -511,4 +820,31 @@ for (const [name, theme] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/order-card-${name}.png` });
+  });
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme «Клієнт забрав»'s ways read at 4.5:1, nothing wider than the phone`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await open(page, { order: order({ status: "ARRIVED" }), sent: [] }, theme);
+    const ways = page.getByRole("group", {
+      name: "Клієнт забрав — як оплачено?",
+    });
+    for (const part of [
+      ways.locator(".pay-what"),
+      ways.locator(".pay-total"),
+      ways.locator(".pay-caption").first(),
+      ways.locator(".pay-caption").last(),
+      ways.getByRole("button", { name: "Готівка", exact: true }),
+      ways.getByRole("button", { name: "Накладений платіж", exact: true }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/order-collect-${name}.png` });
   });

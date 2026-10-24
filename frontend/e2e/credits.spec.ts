@@ -1320,11 +1320,6 @@ test("an order collected may be paid in parts, by the till's rules", async ({
     page.getByText("Прибув на пошту", { exact: true }),
   ).toBeVisible();
 
-  // The part paid now, in cash at the counter (ADR-0012 G2, G33).
-  await page
-    .getByRole("group", { name: "Як оплачено замовлення" })
-    .getByRole("radio", { name: "Готівкою — зараз, на касі", exact: true })
-    .check();
   await page.setViewportSize({ width: 360, height: 740 });
   await page.getByLabel("Оплата частинами").check();
   // One line at 360 px (credits task list, P1-5).
@@ -1366,10 +1361,11 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   expect(new Set(askedOf)).toEqual(new Set([fixture.store_id]));
   await page.unroute("**/api/v1/credits/customers?**");
   await page.getByLabel("Сплачує зараз, грн").fill("3000");
-  const collect = page.getByRole("button", {
-    name: "Клієнт забрав",
-    exact: true,
-  });
+  // The part paid now, in cash at the counter (ADR-0012 G2, G33): the way
+  // is the step itself (orders task list, P0-3).
+  const collect = page
+    .getByRole("group", { name: "Клієнт забрав — як оплачено?" })
+    .getByRole("button", { name: "Готівка", exact: true });
   await collect.click();
   await expect(page.getByRole("alert")).toContainText(
     "Покупець сплачує все одразу (3 000,00 грн) — це звичайний продаж.",
@@ -1378,12 +1374,21 @@ test("an order collected may be paid in parts, by the till's rules", async ({
 
   await page.getByLabel("Сплачує зараз, грн").fill("500");
   await expect(page.getByText("Лишиться винен 2 500,00 грн")).toBeVisible();
+  // As the till's panel says it.
+  await expect(page.locator(".order-panel .pay-total")).toHaveText(
+    /^Зараз 500,00 грн · винен 2\s500,00 грн$/,
+  );
   await collect.click();
-  await expect(page.getByText("Продаж записано.")).toBeVisible();
   await expect(
-    page.getByText(/Оплата частинами: сплачено 500,00 грн/),
+    page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(page.getByText(/покупець винен 2\s500,00 грн/)).toBeVisible();
+  // The part paid now large, what is owed from the server's answer.
+  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
+    "500,00 грн",
+  );
+  await expect(page.locator(".order-collected .paid-owed")).toHaveText(
+    /^Покупець винен 2\s500,00 грн\. Наступні внески — у «Боргах»\.$/,
+  );
   expect(collected.bodies).toHaveLength(1);
   const body = collected.bodies[0] as {
     command_id: string;
@@ -1417,24 +1422,20 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   // The till opens first (redesign P0-1); the order is in «Замовлення».
   await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
-  const collect = page.getByRole("button", {
-    name: "Клієнт забрав",
+  // How it was paid is asked, never guessed: nothing is preselected, and
+  // nothing is sent until a way is pressed (owner decision, 2026-10-04;
+  // orders task list, P0-3).
+  const paid = page.getByRole("group", {
+    name: "Клієнт забрав — як оплачено?",
+  });
+  await expect(paid.getByRole("button")).toHaveCount(5);
+  for (const way of await paid.getByRole("button").all())
+    await expect(way).not.toHaveAttribute("aria-pressed");
+  expect(collected.bodies).toEqual([]);
+  const collect = paid.getByRole("button", {
+    name: "Накладений платіж",
     exact: true,
   });
-  // How it was paid is asked, never guessed: nothing is preselected, and
-  // nothing is sent without it (owner decision, 2026-10-04).
-  const paid = page.getByRole("group", { name: "Як оплачено замовлення" });
-  await expect(paid.getByRole("radio")).toHaveCount(5);
-  for (const radio of await paid.getByRole("radio").all())
-    await expect(radio).not.toBeChecked();
-  await collect.click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Вкажіть, як оплачено замовлення.",
-  );
-  expect(collected.bodies).toEqual([]);
-  await paid
-    .getByRole("radio", { name: "Накладеним платежем", exact: true })
-    .check();
   // Refused at its first press, «not found»: nothing kept, so the shared
   // words — never «ще не підтверджено» (review, 2026-10-20).
   const answers = [404, 500];
@@ -1472,8 +1473,10 @@ test("an order collected without paying in parts stays an ordinary sale", async 
     ),
   ).toBeVisible();
   await page.getByRole("button", { name: "Повторити ту саму команду" }).click();
-  await expect(page.getByText("Продаж записано.")).toBeVisible();
-  await expect(page.getByText(/Оплата частинами: сплачено/)).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(page.getByText(/Покупець винен/)).toHaveCount(0);
   expect(collected.bodies).toHaveLength(3);
   // Resent as it was first sent.
   expect(collected.bodies[2]).toEqual(collected.bodies[1]);
@@ -1522,7 +1525,7 @@ test("collecting an order in parts needs the same permission", async ({
   await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
   await expect(
-    page.getByRole("button", { name: "Клієнт забрав", exact: true }),
+    page.getByRole("group", { name: "Клієнт забрав — як оплачено?" }),
   ).toBeVisible();
   await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
 });

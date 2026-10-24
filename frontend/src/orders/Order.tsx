@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
-import { methodHow } from "@/shared/payment";
+import { methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
 import { NoCustomerData } from "@/shared/NoCustomerData";
@@ -8,12 +8,11 @@ import { usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
-import { collectNeedsMethod } from "@/cash/errors";
+import { Collected, CollectedLine } from "./Collected";
 import { since, tagOf } from "./Orders";
 import {
   carrierLabels,
   collectHint,
-  collectMethods,
   decimal,
   kopecks,
   money,
@@ -51,6 +50,30 @@ export function stepDone(action: string, order: Order): string | null {
     : "Відправлено. ТТН можна вписати пізніше.";
 }
 
+/** How long after a step's answer a tap is taken as meant for that step,
+ * not for the next step's buttons that took its place: a double tap's
+ * second half. */
+const CARRIED_TAP = 700;
+
+/**
+ * How an order was paid, chosen at «Клієнт забрав» (owner decisions,
+ * 2026-10-04; ADR-0012, B12): at the counter — cash, card or transfer
+ * handed over now, as it is pressed (G1, G33) — or in advance by transfer,
+ * or cash on delivery through the carrier. Nothing is chosen for the
+ * seller; only the cash given now goes into the drawer. In the rows they
+ * are said in (orders task list, P0-3).
+ */
+const collectWays: readonly {
+  caption: string;
+  ways: readonly PaymentMethod[];
+}[] = [
+  { caption: "Зараз, у магазині", ways: ["CASH", "CARD", "TRANSFER"] },
+  {
+    caption: "Наперед чи перевізнику",
+    ways: ["PREPAID_TRANSFER", "CARRIER_COD"],
+  },
+];
+
 /** A line's sum: its price less its discount, for every unit. */
 function lineSum(item: OrderItem): string {
   const each =
@@ -63,25 +86,38 @@ function lineSum(item: OrderItem): string {
  * its goods as its title, how it goes, since when, its number small, its
  * status; its lines with their sums and «Разом» large; the next step one
  * button in the panel under the thumb, what it needs over the panel; the
- * rare at the foot. «Клієнт забрав» is as before until P0-3, its money
- * words on its step only.
+ * rare at the foot. «Клієнт забрав» is its five ways, each the step itself
+ * (P0-3); collected, the sale said large, then later in a line.
  */
 export function OrderDetail({
   order,
   done,
+  collected,
   store,
   token,
   blocked,
   action,
+  back,
+  fixWay,
+  returnSale,
 }: {
   order: Order;
   /** What the step just taken on it did. */
   done: string | null;
+  /** «Клієнт забрав» just recorded on it — at its press, or kept and
+   * confirmed later: its result, not its line. */
+  collected: "now" | "kept" | null;
   store: Store;
   /** Who asks what a number already owes, paying in parts. */
   token: string;
   blocked: boolean;
   action: (action: string, extra?: Record<string, unknown>) => void;
+  /** «До замовлень». */
+  back: () => void;
+  /** «Каса» on its sale, for whoever opens «Каса». */
+  fixWay?: (() => void) | undefined;
+  /** «Повернення» on its sale, for whoever takes returns. */
+  returnSale?: (() => void) | undefined;
 }): JSX.Element {
   const hint = useId();
   const [reason, setReason] = useState("");
@@ -89,10 +125,20 @@ export function OrderDetail({
   const [returning, setReturning] = useState(false);
   // Collected and paid in parts, as at the till (owner decision, 2026-10-01).
   const [credit, setCredit] = useState<TermsInput>(noTerms);
-  // How it was paid, said at «Клієнт забрав»; nothing chosen for the seller
-  // (owner decisions, 2026-10-04). In parts, the way of the part paid now.
-  const [way, setWay] = useState<PaymentMethod | null>(null);
   const [problem, setProblem] = useState("");
+  // Why the terms were not taken, brought to the finger over the panel
+  // (review, 2026-10-24).
+  const why = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (problem) why.current?.focus();
+  }, [problem]);
+  // Shown at once after a step, the next step's buttons stand where the
+  // last was pressed: a tap meant for it, landing on them, is let go
+  // (review, 2026-10-24). The card is mounted afresh on every step.
+  const [shownAt] = useState(() => performance.now());
+  function late(event: { timeStamp: number }): boolean {
+    return done !== null && event.timeStamp - shownAt < CARRIED_TAP;
+  }
   // The waybill, or abroad where and how it went, written as it is sent.
   const [sentWith, setSentWith] = useState("");
   const [changingShipping, setChangingShipping] = useState(false);
@@ -106,16 +152,30 @@ export function OrderDetail({
     DISPATCHED: "arrive",
     ARRIVED: "collect",
   }[order.status as "READY_TO_DISPATCH" | "DISPATCHED" | "ARRIVED"];
-  // The panel's one step: sent, or arrived; «Клієнт забрав» is P0-3's.
-  // None while where it goes is changed, or it comes back: one form at a
-  // time under the thumb (review, 2026-10-23).
+  // The panel's step: sent, arrived, or «Клієнт забрав» by its ways. None
+  // while where it goes is changed, or it comes back: one form at a time
+  // under the thumb (review, 2026-10-23).
   const panelStep =
-    mayStep &&
-    !changingShipping &&
-    !returning &&
-    (next === "dispatch" || next === "arrive")
-      ? next
+    mayStep && open && !changingShipping && !returning ? next : null;
+  const total = kopecks(order.total) ?? 0n;
+  // In parts, what is paid now and what is left, once the part is a sum
+  // under the whole, as the till's panel says it.
+  const paidNow = credit.inParts ? kopecks(credit.paid) : null;
+  const owing =
+    paidNow !== null && paidNow > 0n && paidNow < total
+      ? { now: paidNow, left: total - paidNow }
       : null;
+  /** «Клієнт забрав» by a way: in parts, its terms checked first. */
+  function collect(way: PaymentMethod): void {
+    setProblem("");
+    if (!credit.inParts) {
+      action("collect", { payment_method: way });
+      return;
+    }
+    const terms = checkTerms(credit, total);
+    if (typeof terms === "string") setProblem(terms);
+    else action("collect", { payment_method: way, credit: terms });
+  }
   const panel = useRef<HTMLDivElement>(null);
   usePanelRoom(panel, panelStep !== null);
   const [first] = order.items;
@@ -161,7 +221,7 @@ export function OrderDetail({
                   <span className="sale-meta">
                     {money(item.unit_price)} за 1 шт.
                     {discounted
-                      ? ` · знижка ${money(item.discount_amount)}`
+                      ? ` · знижка ${money(item.discount_amount)} за 1 шт.`
                       : ""}
                   </span>
                 )}
@@ -171,9 +231,13 @@ export function OrderDetail({
           );
         })}
       </ul>
-      <p className="order-total">
-        Разом <Sum value={money(order.total)} />
-      </p>
+      {/* Just collected, the sum taken stands large alone (review,
+          2026-10-24). */}
+      {collected === null && (
+        <p className="order-total">
+          Разом <Sum value={money(order.total)} />
+        </p>
+      )}
       {order.status === "READY_TO_DISPATCH" && (
         <p className="hint">Товар у резерві — на касі його не продадуть.</p>
       )}
@@ -202,40 +266,25 @@ export function OrderDetail({
           )}
         </label>
       )}
-      {order.sale_id && (
-        <p role="status">
-          Продаж записано.
-          {order.payment_method
-            ? ` Оплачено ${methodHow[order.payment_method]}.`
-            : ""}
-        </p>
-      )}
-      {order.credit && (
-        <p>
-          Оплата частинами: сплачено {money(order.credit.paid)}, покупець винен{" "}
-          {money(order.credit.owed)}. Наступні внески — у розділі «Борги».
-        </p>
-      )}
-      {next === "collect" && mayStep && (
+      {order.sale_id &&
+        (collected ? (
+          <Collected
+            order={order}
+            kept={collected === "kept"}
+            back={back}
+            fixWay={fixWay}
+            returnSale={returnSale}
+          />
+        ) : (
+          <CollectedLine
+            order={order}
+            fixWay={fixWay}
+            returnSale={returnSale}
+          />
+        ))}
+      {panelStep === "collect" && (
         <>
           <p className="hint">{collectHint}</p>
-          <fieldset disabled={blocked}>
-            <legend>Як оплачено замовлення</legend>
-            {collectMethods.map((choice) => (
-              <label className="check" key={choice.method}>
-                <input
-                  type="radio"
-                  name="collect-way"
-                  checked={way === choice.method}
-                  onChange={() => {
-                    setWay(choice.method);
-                    setProblem("");
-                  }}
-                />
-                {choice.label}
-              </label>
-            ))}
-          </fieldset>
           {mayCredit && (
             <fieldset disabled={blocked}>
               <legend>Оплата</legend>
@@ -245,7 +294,7 @@ export function OrderDetail({
                   setCredit(value);
                   setProblem("");
                 }}
-                total={kopecks(order.total) ?? 0n}
+                total={total}
                 // One line at 360 px, as at the till (credits task list,
                 // P1-5): the order is this store's, as its words before said.
                 hint="Решту — у «Боргах» цього магазину."
@@ -255,28 +304,11 @@ export function OrderDetail({
               />
             </fieldset>
           )}
-          {problem && <p role="alert">{problem}</p>}
-          <div className="actions">
-            <button
-              type="button"
-              disabled={blocked}
-              onClick={() => {
-                if (way === null) {
-                  setProblem(collectNeedsMethod);
-                  return;
-                }
-                if (!credit.inParts) {
-                  action("collect", { payment_method: way });
-                  return;
-                }
-                const terms = checkTerms(credit, kopecks(order.total) ?? 0n);
-                if (typeof terms === "string") setProblem(terms);
-                else action("collect", { payment_method: way, credit: terms });
-              }}
-            >
-              {actionLabels.collect}
-            </button>
-          </div>
+          {problem && (
+            <p role="alert" ref={why} tabIndex={-1}>
+              {problem}
+            </p>
+          )}
         </>
       )}
       {open &&
@@ -385,34 +417,90 @@ export function OrderDetail({
           </button>
         </fieldset>
       )}
-      {panelStep && (
-        <div className="pay-panel order-panel" ref={panel}>
+      {panelStep === "collect" ? (
+        // «Клієнт забрав»: each way the step itself, nothing chosen first
+        // (owner decision, 2026-10-23, В2 (а)) — at the counter now, or
+        // paid ahead or to the carrier.
+        <div
+          className="pay-panel order-panel"
+          role="group"
+          aria-label="Клієнт забрав — як оплачено?"
+          ref={panel}
+        >
           <p className="pay-what">
             {title}
             {goes ? ` · ${goes}` : ""}
           </p>
-          <button
-            type="button"
-            disabled={blocked}
-            onClick={() => {
-              if (panelStep === "arrive") {
-                action("arrive");
-                return;
-              }
-              const written = sentWith.trim();
-              action(
-                "dispatch",
-                written
-                  ? order.destination === "ABROAD"
-                    ? { abroad_note: written }
-                    : { waybill: written }
-                  : undefined,
-              );
-            }}
-          >
-            {actionLabels[panelStep]}
-          </button>
+          <p className="pay-total">
+            {owing ? (
+              <>
+                Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
+                <Sum value={money(decimal(owing.left))} />
+              </>
+            ) : (
+              <>
+                Разом <Sum value={money(order.total)} />
+              </>
+            )}
+          </p>
+          {collectWays.map(({ caption, ways }, index) => (
+            <div
+              key={caption}
+              role="group"
+              aria-labelledby={`${hint}-ways-${String(index)}`}
+            >
+              <p className="pay-caption" id={`${hint}-ways-${String(index)}`}>
+                {caption}
+              </p>
+              <div className={`pay-ways${ways.length === 2 ? " two" : ""}`}>
+                {ways.map((way) => (
+                  <button
+                    type="button"
+                    key={way}
+                    disabled={blocked}
+                    onClick={(event) => {
+                      if (late(event)) return;
+                      collect(way);
+                    }}
+                  >
+                    {methodLabels[way]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
+      ) : (
+        panelStep && (
+          <div className="pay-panel order-panel" ref={panel}>
+            <p className="pay-what">
+              {title}
+              {goes ? ` · ${goes}` : ""}
+            </p>
+            <button
+              type="button"
+              disabled={blocked}
+              onClick={(event) => {
+                if (late(event)) return;
+                if (panelStep === "arrive") {
+                  action("arrive");
+                  return;
+                }
+                const written = sentWith.trim();
+                action(
+                  "dispatch",
+                  written
+                    ? order.destination === "ABROAD"
+                      ? { abroad_note: written }
+                      : { waybill: written }
+                    : undefined,
+                );
+              }}
+            >
+              {actionLabels[panelStep]}
+            </button>
+          </div>
+        )
       )}
     </section>
   );

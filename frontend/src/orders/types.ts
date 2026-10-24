@@ -144,28 +144,10 @@ export interface Order {
   payment_method?: PaymentMethod | null;
 }
 
-/**
- * How an order was paid, chosen at «Клієнт забрав» (owner decisions,
- * 2026-10-04; ADR-0012, B12): in advance by transfer, cash on delivery
- * through the carrier, or at the counter — cash, card or transfer handed
- * over now, as «Клієнт забрав» is pressed (G1, G33). Nothing is chosen for
- * the seller. Only the cash given now goes into the drawer.
- */
-export const collectMethods: readonly {
-  method: PaymentMethod;
-  label: string;
-}[] = [
-  { method: "PREPAID_TRANSFER", label: "Переказом наперед" },
-  { method: "CARRIER_COD", label: "Накладеним платежем" },
-  { method: "CASH", label: "Готівкою — зараз, на касі" },
-  { method: "CARD", label: "Карткою — зараз, на терміналі" },
-  { method: "TRANSFER", label: "Переказом — зараз" },
-];
-
-/** What collecting records, and what it does not: the carrier's cash on
- * delivery is checked separately, later. */
-export const collectHint =
-  "Продаж записуємо, коли покупець забрав товар. У касу йде лише готівка, яку дали зараз; накладений платіж звіримо з перевізником окремо.";
+/** What collecting records: the rest is in the ways' rows (orders task
+ * list, P0-3) — the money given now, and what was paid ahead or goes
+ * through the carrier. */
+export const collectHint = "Продаж записуємо, коли покупець забрав товар.";
 export type Destination = "UKRAINE" | "ABROAD";
 export type Carrier = "NOVA_POSHTA" | "UKRPOSHTA" | "MEEST";
 export const carrierLabels: Record<Carrier, string> = {
