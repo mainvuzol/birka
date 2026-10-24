@@ -3975,6 +3975,17 @@ wait for the owner's approval):
 
 Built on 2026-10-24; see the [report](openings-refusals-report.md).
 
+## Owner decision — 2026-10-25 (after #131 was merged)
+
+Asked when #131 was merged, each answer the option recommended:
+- **«Початкові залишки»'s own refusal words are approved as built** (the
+  section above).
+- **The other screens that still fall to the shared order words** —
+  models, «Брак», a delivery, a stock correction, a stocktake, the
+  suggested price, a store's state, suppliers, erasing a customer's data,
+  the sign-in — **come next after P1-2, in one change,** each in its own
+  words.
+
 ## An order's refusals in its own words — built 2026-10-24
 
 «Замовлення»'s task list, P1-2, and the owner's answers after #128 and

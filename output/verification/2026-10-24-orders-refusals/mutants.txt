@@ -1,0 +1,16 @@
+- unchanged tree: passed 
+- the status not said by its pill: caught by «Відправлено» on an order another phone already made «Скасовано»: not recorded, said with ; «Прибув на пошту» on an order another phone already made «Повернено на склад»: not recorde; «Скасувати замовлення» on an order another phone already made «Відправлено»: not recorded,
+- «картку оновлено» on a resend too: caught by 10. a kept operation the phone settles says what became of it › a kept order step refused 
+- a transition in the shared words: caught by a step another phone already made impossible: the server refuses it, the order says what i
+- a closed order in the shared words: caught by where a closed order goes is not changed: said so, and the card read again (orders task li
+- a waybill's fault in the shared words: caught by a waybill of no digit or Latin letter: said as the field's own fault, the field kept (orde
+- any letter said to do for a waybill: caught by a waybill of no digit or Latin letter: said as the field's own fault, the field kept (orde
+- a resend told to check a field it no longer has: caught by a step whose answer never came, refused on its check for its waybill and recorded nowhere:
+- a resend's conflict said as met at work: caught by a step whose answer never came, refused on its check for a conflict and recorded nowhere: 
+- a conflict in the shared words: caught by first definitive rejection leaves draft editable
+- a resend refused in the shared words: caught by 10. a kept operation the phone settles says what became of it › a kept order step refused 
+- a kept conflict told to try again: caught by a step whose answer never came, met by a conflict on its check: still unconfirmed, never «
+- a waybill's fault said as not recorded: caught by a waybill of no digit or Latin letter: said as the field's own fault, the field kept (orde
+- its row not read again after a refusal: caught by «Відправлено» on an order another phone already made «Скасовано»: not recorded, said with ; «Прибув на пошту» on an order another phone already made «Повернено на склад»: not recorde; «Скасувати замовлення» on an order another phone already made «Відправлено»: not recorded,
+- the card not read again after a refusal: caught by «Відправлено» on an order another phone already made «Скасовано»: not recorded, said with ; «Прибув на пошту» on an order another phone already made «Повернено на склад»: not recorde; «Скасувати замовлення» on an order another phone already made «Відправлено»: not recorded,
+14 of 14 caught
