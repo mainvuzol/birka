@@ -119,12 +119,22 @@ interface Server {
   reads?: number;
   /** The total the server answers «Клієнт забрав» with. */
   collectedTotal?: string;
+  /** The next step refused with this answer, the order become `becomes`
+   * meanwhile — another phone's doing. */
+  answer?: {
+    status: number;
+    json: Record<string, unknown>;
+    becomes?: Record<string, unknown>;
+  };
+  /** How many times the list was read. */
+  listReads?: number;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
   await page.route(
     (url) => url.pathname === "/api/v1/orders",
     async (route) => {
+      server.listReads = (server.listReads ?? 0) + 1;
       await route.fulfill({
         json: { orders: [server.order], has_more: false },
       });
@@ -134,10 +144,17 @@ async function stub(page: Page, server: Server): Promise<void> {
     server.reads = (server.reads ?? 0) + 1;
     await route.fulfill({ json: server.order });
   });
-  for (const step of ["dispatch", "arrive", "collect"])
+  for (const step of ["dispatch", "arrive", "collect", "cancel", "shipping"])
     await page.route(`**/api/v1/orders/*/${step}`, async (route, request) => {
       const body = request.postDataJSON() as Record<string, unknown>;
       server.sent.push({ step, body });
+      if (server.answer) {
+        const { status, json, becomes } = server.answer;
+        delete server.answer;
+        if (becomes) server.order = { ...server.order, ...becomes };
+        await route.fulfill({ status, json });
+        return;
+      }
       if (server.lose) {
         server.lose = false;
         await route.abort("failed");
@@ -157,7 +174,11 @@ async function stub(page: Page, server: Server): Promise<void> {
             ? "DISPATCHED"
             : step === "arrive"
               ? "ARRIVED"
-              : "COLLECTED",
+              : step === "cancel"
+                ? "CANCELLED"
+                : step === "shipping"
+                  ? server.order.status
+                  : "COLLECTED",
         ...(typeof body.waybill === "string" ? { waybill: body.waybill } : {}),
         ...(step === "collect"
           ? {
@@ -378,6 +399,10 @@ test("sent without a waybill says it may come later; refused, a buzz of its own 
   await panel(page).getByRole("button", { name: "Відправлено" }).click();
   const why = page.getByRole("alert");
   await expect(why).toBeFocused();
+  // The owner's words for a conflict (2026-10-24, after #128; P1-2).
+  await expect(why).toHaveText(
+    "Не записано: дані замовлення змінилися, поки ви працювали. Перевірте замовлення й спробуйте ще раз.",
+  );
   // The order read again, as it is now.
   await expect.poll(() => server.reads ?? 0).toBeGreaterThan(read);
   expect(await buzzes(page)).toEqual([
@@ -394,6 +419,237 @@ test("sent without a waybill says it may come later; refused, a buzz of its own 
   expect(server.sent.map((each) => each.body)).toEqual([
     { command_id: expect.any(String) },
     { command_id: expect.any(String) },
+  ]);
+});
+
+/** A step refused as no longer allowed: the order already `status`. */
+function moved(status: string, action: string): Server["answer"] {
+  return {
+    status: 422,
+    json: {
+      code: "VALIDATION_ERROR",
+      message: "Invalid order transition",
+      details: { status, action, recorded: false },
+    },
+    becomes: { status },
+  };
+}
+
+for (const [pressed, before, now, word] of [
+  ["Відправлено", "READY_TO_DISPATCH", "CANCELLED", "Скасовано"],
+  ["Прибув на пошту", "DISPATCHED", "RETURNED", "Повернено на склад"],
+  ["Скасувати замовлення", "READY_TO_DISPATCH", "DISPATCHED", "Відправлено"],
+] as const)
+  test(`«${pressed}» on an order another phone already made «${word}»: not recorded, said with what it is now, focused; the card and the list read again (orders task list, P1-2)`, async ({
+    page,
+  }) => {
+    const action =
+      pressed === "Відправлено"
+        ? "dispatch"
+        : pressed === "Прибув на пошту"
+          ? "arrive"
+          : "cancel";
+    const server: Server = {
+      order: order({ status: before }),
+      sent: [],
+      answer: moved(now, action),
+    };
+    await open(page, server);
+    const reads = server.reads ?? 0;
+    const lists = server.listReads ?? 0;
+    if (action === "cancel") {
+      await page
+        .getByRole("button", { name: "Скасувати замовлення", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Так, скасувати" }).click();
+    } else await panel(page).getByRole("button", { name: pressed }).click();
+    const why = page.getByRole("alert");
+    await expect(why).toHaveText(
+      `Не записано: замовлення вже «${word}» — картку оновлено.`,
+    );
+    await expect(why).toBeFocused();
+    expect(await buzzes(page)).toEqual([
+      { type: "notification", notification_type: "error" },
+    ]);
+    // The card as it is now: its pill, and no longer the step pressed.
+    await expect.poll(() => server.reads ?? 0).toBeGreaterThan(reads);
+    await expect(page.locator(".order-status .badge")).toHaveText(word);
+    await expect(
+      page.getByRole("button", { name: pressed, exact: true }),
+    ).toHaveCount(0);
+    await expect.poll(() => server.listReads ?? 0).toBeGreaterThan(lists);
+    // Never the shared words.
+    await expect(page.getByText(/поточний статус замовлення/)).toHaveCount(0);
+    expect(server.sent.map((each) => each.step)).toEqual([action]);
+  });
+
+test("where a closed order goes is not changed: said so, and the card read again (orders task list, P1-2)", async ({
+  page,
+}) => {
+  const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
+  await open(page, server);
+  await page.getByRole("button", { name: "Змінити доставку" }).click();
+  server.answer = {
+    status: 422,
+    json: {
+      code: "VALIDATION_ERROR",
+      message: "The order is closed: where it went stays as it was",
+      details: { reason: "ORDER_CLOSED", status: "COLLECTED", recorded: false },
+    },
+    becomes: {
+      status: "COLLECTED",
+      sale_id: randomUUID(),
+      payment_method: "CASH",
+    },
+  };
+  const reads = server.reads ?? 0;
+  await page.getByLabel("Номер накладної", { exact: true }).fill("20451234");
+  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  const why = page.getByRole("alert");
+  await expect(why).toHaveText(
+    "Не записано: замовлення вже закрито, доставку більше не змінюють.",
+  );
+  await expect(why).toBeFocused();
+  await expect.poll(() => server.reads ?? 0).toBeGreaterThan(reads);
+  await expect(page.locator(".order-status .badge")).toHaveText(
+    "Клієнт забрав",
+  );
+});
+
+test("a shipping change whose answer never came, resent after the order closed: says which was not recorded, and why (orders task list, P1-2)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order({ status: "DISPATCHED" }),
+    sent: [],
+    lose: true,
+  };
+  await open(page, server);
+  await page.getByRole("button", { name: "Змінити доставку" }).click();
+  await page.getByLabel("Номер накладної", { exact: true }).fill("20451234");
+  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  const retry = page.getByRole("button", { name: "Повторити ту саму команду" });
+  await expect(retry).toBeEnabled();
+  server.answer = {
+    status: 422,
+    json: {
+      code: "VALIDATION_ERROR",
+      message: "The order is closed: where it went stays as it was",
+      details: { reason: "ORDER_CLOSED", status: "COLLECTED", recorded: false },
+    },
+    becomes: {
+      status: "COLLECTED",
+      sale_id: randomUUID(),
+      payment_method: "CASH",
+    },
+  };
+  await retry.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Операцію «Зміна доставки» не записано: замовлення вже закрито, доставку більше не змінюють.",
+  );
+  await expect(retry).toHaveCount(0);
+  expect(server.sent.map((each) => each.step)).toEqual([
+    "shipping",
+    "shipping",
+  ]);
+  expect(server.sent[1]?.body).toEqual(server.sent[0]?.body);
+});
+
+test("a step whose answer never came, met by a conflict on its check: still unconfirmed, never «try again» (orders task list, P1-2)", async ({
+  page,
+}) => {
+  const server: Server = { order: order(), sent: [], lose: true };
+  await open(page, server);
+  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  const retry = page.getByRole("button", { name: "Повторити ту саму команду" });
+  await expect(retry).toBeEnabled();
+  server.refuse = true;
+  await retry.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Операцію «Відправлено» ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі вона не запишеться.",
+  );
+  await expect(retry).toBeEnabled();
+  await expect(page.getByText(/конфліктує|спробуйте ще раз/i)).toHaveCount(0);
+});
+
+for (const [what, answer, said] of [
+  [
+    "a conflict",
+    {
+      status: 409,
+      json: {
+        code: "CONFLICT",
+        message: "Conflict",
+        details: { recorded: false },
+      },
+    },
+    "Операцію «Відправлено» не записано: дані замовлення змінилися, поки сервер не відповідав. Перевірте замовлення й спробуйте ще раз.",
+  ],
+  [
+    "its waybill",
+    {
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "A waybill has letters or digits",
+        details: { reason: "WAYBILL", recorded: false },
+      },
+    },
+    "Операцію «Відправлено» не записано: номер ТТН має містити цифри або латинські літери.",
+  ],
+] as const)
+  test(`a step whose answer never came, refused on its check for ${what} and recorded nowhere: says which, and why as a resend's (review, 2026-10-24)`, async ({
+    page,
+  }) => {
+    const server: Server = { order: order(), sent: [], lose: true };
+    await open(page, server);
+    await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("НП");
+    await panel(page).getByRole("button", { name: "Відправлено" }).click();
+    const retry = page.getByRole("button", {
+      name: "Повторити ту саму команду",
+    });
+    await expect(retry).toBeEnabled();
+    server.answer = { status: answer.status, json: { ...answer.json } };
+    await retry.click();
+    await expect(page.getByRole("alert")).toHaveText(said);
+    await expect(retry).toHaveCount(0);
+  });
+
+test("a waybill of no digit or Latin letter: said as the field's own fault, the field kept (orders task list, P1-2)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order(),
+    sent: [],
+    answer: {
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "A waybill has letters or digits",
+        details: { reason: "WAYBILL", recorded: false },
+      },
+    },
+  };
+  await open(page, server);
+  // Its letters Latin, as a waybill's: «НП» alone is none.
+  const field = page.getByLabel("Номер ТТН (можна дописати пізніше)");
+  await field.fill("НП");
+  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  const why = page.getByRole("alert");
+  await expect(why).toHaveText(
+    "Номер ТТН має містити цифри або латинські літери. Перевірте його.",
+  );
+  await expect(why).toBeFocused();
+  // What to check is still there.
+  await expect(field).toHaveValue("НП");
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "error" },
+  ]);
+  expect(server.sent).toEqual([
+    {
+      step: "dispatch",
+      body: { command_id: expect.any(String), waybill: "НП" },
+    },
   ]);
 });
 

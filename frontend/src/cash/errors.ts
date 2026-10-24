@@ -19,6 +19,8 @@ import {
   refusalText as tillRefusalText,
   TILL_CONFLICT_TEXT,
 } from "@/sales/Sale";
+import { statusLabels } from "@/orders/types";
+import type { Status } from "@/orders/types";
 import { isPaymentMethod } from "./types";
 import type { CashBody } from "./types";
 
@@ -176,6 +178,38 @@ const notTakenTexts: Record<CashBody["command"], string> = {
 export const collectNeedsMethod = "Вкажіть, як оплачено замовлення.";
 
 /**
+ * Why an order command was not recorded, in the order's words (orders task
+ * list, P1-2), as the clause after «Не записано:»; null for a refusal it
+ * does not name. `live`: sent from its screen, which is read again.
+ */
+function orderReason(error: unknown, live: boolean): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const { reason, status, action } = error.details;
+  // Already moved on — from another phone, say: what it is now, by its
+  // pill's word.
+  if (
+    reason === undefined &&
+    typeof action === "string" &&
+    typeof status === "string" &&
+    Object.hasOwn(statusLabels, status)
+  )
+    return `замовлення вже «${statusLabels[status as Status]}»${live ? " — картку оновлено" : ""}.`;
+  if (reason === "ORDER_CLOSED")
+    return "замовлення вже закрито, доставку більше не змінюють.";
+  // Its letters are Latin, as a waybill's are: «НП» alone is none (the
+  // server's `waybill_key`; review, 2026-10-24). A resend's field is gone:
+  // nothing to check in it.
+  if (reason === "WAYBILL")
+    return `номер ТТН має містити цифри або латинські літери.${live ? " Перевірте його." : ""}`;
+  // The owner's words for a conflict met as the seller works (2026-10-24,
+  // after #128); a resend's met while the server did not answer, as every
+  // journal says it (review, 2026-10-24).
+  if (errorText(error) === CONFLICT_TEXT)
+    return `дані замовлення змінилися, поки ${live ? "ви працювали" : "сервер не відповідав"}. Перевірте замовлення й спробуйте ще раз.`;
+  return null;
+}
+
+/**
  * An order command refused, as the orders' journal shows it. `resent` is the
  * label of a saved command resent — by its button or by the phone itself —
  * and null for one sent from its screen.
@@ -205,6 +239,8 @@ export function orderErrorText(
       ]
         .filter(Boolean)
         .join(" ");
+    // Recorded: never «Не записано», whatever reading it answered.
+    return text;
   }
   if (
     error instanceof ApiError &&
@@ -227,19 +263,30 @@ export function orderErrorText(
     return "Замовлення вже скасовано або повернено — «Клієнт забрав» не записано. Якщо товар віддали — внесіть його як продаж з паперу, за цінами замовлення.";
   // A saved command refused on resend: nobody is looking at its form, so it
   // says what was not recorded before why (ADR-0013 §1).
-  if (resent !== null && recordedNothing(error))
-    return `Операцію «${resent}» не записано. ${errorText(error)}`;
-  if (kept && !recordedNothing(error))
-    return (
-      keptUnconfirmed(
-        error,
-        (label ?? resent) !== null
-          ? `Операцію «${label ?? resent ?? ""}»`
-          : "Операцію",
-        "вона",
-        misses,
-      ) ?? errorText(error)
-    );
+  if (resent !== null && recordedNothing(error)) {
+    const why = orderReason(error, false);
+    return why === null
+      ? `Операцію «${resent}» не записано. ${errorText(error)}`
+      : `Операцію «${resent}» не записано: ${why}`;
+  }
+  if (kept && !recordedNothing(error)) {
+    const what =
+      (label ?? resent) !== null
+        ? `Операцію «${label ?? resent ?? ""}»`
+        : "Операцію";
+    // A conflict that proves nothing: still unconfirmed, never «спробуйте
+    // ще раз», as a kept return says it (P1-2).
+    if (errorText(error) === CONFLICT_TEXT)
+      return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі вона не запишеться.`;
+    return keptUnconfirmed(error, what, "вона", misses) ?? errorText(error);
+  }
+  // From its screen: what it is now, and what to do (P1-2). A waybill's
+  // own fault is said as a field's, with nothing to undo.
+  const why = orderReason(error, true);
+  if (why !== null)
+    return error instanceof ApiError && error.details.reason === "WAYBILL"
+      ? why.charAt(0).toUpperCase() + why.slice(1)
+      : `Не записано: ${why}`;
   return errorText(error);
 }
 

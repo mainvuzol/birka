@@ -3057,7 +3057,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await openStore(page, /Подільський/);
     await expect(
       page.getByText(
-        "Операцію «Відправлено» не записано. Перевірте дані та поточний статус замовлення.",
+        "Операцію «Відправлено» не записано: замовлення вже «Скасовано».",
         { exact: true },
       ),
     ).toBeVisible();

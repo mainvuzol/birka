@@ -389,7 +389,18 @@ test("first definitive rejection leaves draft editable", async ({
     else await route.continue();
   });
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
-  await expect(page.getByRole("alert")).toContainText("конфліктує");
+  // The owner's words for a conflict (2026-10-24, after #128; orders task
+  // list, P1-2), and what was typed kept.
+  await expect(page.getByRole("alert")).toHaveText(
+    "Не записано: дані замовлення змінилися, поки ви працювали. Перевірте замовлення й спробуйте ще раз.",
+  );
+  await expect(page.locator(".order-lines .line")).toHaveCount(1);
+  await expect(page.getByLabel("Ціна, грн")).toHaveValue("1200,15");
+  await expect(
+    page
+      .getByRole("group", { name: "Перевізник" })
+      .getByRole("button", { name: "Нова пошта" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("button", { name: "Замовити та зарезервувати" }),
   ).toBeEnabled();
@@ -433,13 +444,48 @@ test("Telegram bridge signals readiness and takes light or dark from the launch 
   expect(state.storage).toEqual([]);
 });
 
-/** An order of one coat, sent and arrived — through the API. */
-async function arrived(page: Page, waybill?: string): Promise<string> {
+/** Signed in as the seller, from another phone: the API's own headers. */
+async function another(page: Page): Promise<Record<string, string>> {
   const auth = await page.request.post("/api/v1/auth/telegram", {
     data: { init_data: initData() },
   });
   const { access_token } = (await auth.json()) as { access_token: string };
-  const headers = { Authorization: `Bearer ${access_token}` };
+  return { Authorization: `Bearer ${access_token}` };
+}
+
+test("a step another phone already made impossible: the server refuses it, the order says what it is now, the card read again (orders task list, P1-2)", async ({
+  page,
+}) => {
+  await enter(page);
+  await draft(page);
+  const made = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/orders") &&
+      response.request().method() === "POST",
+  );
+  await reserve(page);
+  const { id } = (await (await made).json()) as { id: string };
+  // Cancelled on another phone meanwhile.
+  const cancelled = await page.request.post(`/api/v1/orders/${id}/cancel`, {
+    headers: await another(page),
+    data: { command_id: randomUUID() },
+  });
+  expect(cancelled.status()).toBe(200);
+  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  const why = page.getByRole("alert");
+  await expect(why).toHaveText(
+    "Не записано: замовлення вже «Скасовано» — картку оновлено.",
+  );
+  await expect(why).toBeFocused();
+  await expect(page.locator(".order-status .badge")).toHaveText("Скасовано");
+  await expect(
+    page.getByRole("button", { name: "Відправлено", exact: true }),
+  ).toHaveCount(0);
+});
+
+/** An order of one coat, sent and arrived — through the API. */
+async function arrived(page: Page, waybill?: string): Promise<string> {
+  const headers = await another(page);
   const created = await page.request.post("/api/v1/orders", {
     headers,
     data: {
