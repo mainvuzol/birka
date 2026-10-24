@@ -56,11 +56,12 @@ export function Borrowed({
 
   async function changed(message: string): Promise<void> {
     setDone(message);
-    await Promise.all(
-      ["borrowed", "supplier-invoices", "supplier-returns", "stock"].map(
-        (name) => cache.invalidateQueries({ queryKey: [name, store.id] }),
+    await Promise.all([
+      ...["borrowed", "supplier-invoices", "supplier-returns"].map((name) =>
+        cache.invalidateQueries({ queryKey: [name, store.id] }),
       ),
-    );
+      cache.invalidateQueries({ queryKey: ["sale-stock"] }),
+    ]);
   }
 
   return (
