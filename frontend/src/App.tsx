@@ -907,16 +907,23 @@ function Workspace({
       settled.pending === null &&
       settled.error !== null
     ) {
-      // Refused, recorded nowhere: the order as it is now — or, a new one
-      // short of stock, its line marked on its screen (orders task list,
-      // P0-5).
+      // Refused, recorded nowhere: the order and its row as they are now,
+      // said so (orders task list, P1-2) — or, a new one short of stock,
+      // its line marked on its screen (P0-5).
       buzz("error");
       setStepRefused((count) => count + 1);
       if (step === "reserve" && tab === "new") setNewRefused(settled.error);
-      if (command.orderId)
+      if (command.orderId) {
         void cache.invalidateQueries({
           queryKey: ["order", store.id, command.orderId],
         });
+        // Its row too: back on the list, it is where it is now (orders
+        // task list, P1-2).
+        void cache.invalidateQueries({
+          queryKey: ["orders", store.id],
+          refetchType: "all",
+        });
+      }
     }
     if (order) {
       // Reserved, sent, arrived or cancelled: a buzz, and what it did on

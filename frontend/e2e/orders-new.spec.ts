@@ -744,7 +744,9 @@ test("refused for another reason: said over the page and brought to the finger, 
   };
   await press(page).click();
   const alert = page.getByRole("alert");
-  await expect(alert).toContainText("конфліктує");
+  await expect(alert).toHaveText(
+    "Не записано: дані замовлення змінилися, поки ви працювали. Перевірте замовлення й спробуйте ще раз.",
+  );
   await expect(alert).toBeFocused();
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "error" },

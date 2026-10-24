@@ -2,8 +2,8 @@
 
 Baseline: `5e62161` (#130, on main).
 Status: built, reviewed and proven: the whole CI run locally passed at
-`d37dbce`, and nineteen of nineteen ways of breaking it caught. The words
-wait for the owner's approval.
+`d37dbce`, and nineteen of nineteen ways of breaking it caught. Merged as
+#131 (`09431ee`); its words approved by the owner on 2026-10-25.
 Branch: `feat/openings-refusals`. Asked on 2026-10-24.
 Rules: business-rules.md, "«Початкові залишки»'s refusals in its own words".
 

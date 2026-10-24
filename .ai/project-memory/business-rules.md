@@ -3916,6 +3916,18 @@ Asked when #129 was merged, each answer the option recommended:
 
 Built on 2026-10-24; see the [report](orders-redesign-4-report.md).
 
+## Owner decision — 2026-10-24 (after #130 was merged)
+
+Asked when #130 was merged, each answer the option recommended:
+- **«Нове замовлення» as a sale is approved as built,** and the card after
+  it.
+- **Its two wordings stay:** «Лоран шоколад · M × 2» in the panel for one
+  line of more than one unit, as the till's; and, none free, «Доступних уже
+  немає — усі в резерві інших замовлень. Приберіть рядок.» (or without its
+  reserve).
+- **Next: an order's refusals in its own words, P1-2,** the conflict's as
+  approved after #128.
+
 ## «Початкові залишки»'s refusals in its own words — built 2026-10-24
 
 Asked on 2026-10-24, after a refusal of a list was seen saying «Перевірте
@@ -3962,3 +3974,53 @@ wait for the owner's approval):
   session ended, no access, the slow answer.
 
 Built on 2026-10-24; see the [report](openings-refusals-report.md).
+
+## Owner decision — 2026-10-25 (after #131 was merged)
+
+Asked when #131 was merged, each answer the option recommended:
+- **«Початкові залишки»'s own refusal words are approved as built** (the
+  section above).
+- **The other screens that still fall to the shared order words** —
+  models, «Брак», a delivery, a stock correction, a stocktake, the
+  suggested price, a store's state, suppliers, erasing a customer's data,
+  the sign-in — **come next after P1-2, in one change,** each in its own
+  words.
+
+## An order's refusals in its own words — built 2026-10-24
+
+«Замовлення»'s task list, P1-2, and the owner's answers after #128 and
+#130. How it is carried out, not decided by the owner (the task list's
+texts wait for the owner's approval at delivery):
+- **A step another phone already made impossible** — sent, arrived or
+  cancelled on an order cancelled, taken back or sent meanwhile — says
+  what the order is now, by its pill's word: «Не записано: замовлення вже
+  «Скасовано» — картку оновлено.»; with its buzz, brought to the finger,
+  the card read again, the step pressed gone.
+- **A closed order's shipping:** «Не записано: замовлення вже закрито,
+  доставку більше не змінюють.».
+- **A waybill of no digit or Latin letter,** said as the field's own
+  fault, the field kept: «Номер ТТН має містити цифри або латинські
+  літери. Перевірте його.» — not the task list's «цифри чи літери»: the
+  server counts only Latin letters, so «НП» alone would have been told it
+  holds none (review, 2026-10-24).
+- **A conflict as the seller works** (a new order too): «Не записано: дані
+  замовлення змінилися, поки ви працювали. Перевірте замовлення й
+  спробуйте ще раз.», the owner's words; what was typed kept.
+- **A saved step resent and refused, recorded nowhere,** says which, and
+  why: «Операцію «Відправлено» не записано: замовлення вже «Скасовано».»,
+  «Операцію «Зміна доставки» не записано: замовлення вже закрито, доставку
+  більше не змінюють.»; a conflict «… дані замовлення змінилися, поки
+  сервер не відповідав. Перевірте замовлення й спробуйте ще раз.», as
+  every journal says a resend's; a waybill «… номер ТТН має містити цифри
+  або латинські літери.», its field gone with the screen.
+- **A saved step met by a conflict that proves nothing** stays
+  unconfirmed, never «спробуйте ще раз», as a kept return says it:
+  «Операцію «Відправлено» ще не підтверджено: сервер відповів, що дані
+  змінилися. Перевірте результат ще раз — двічі вона не запишеться.».
+- **After any refusal of a step, its row in the list is read again** with
+  its card, so back on the list it is where it is now.
+- **As before:** the late «Клієнт забрав» after a cancel or a return
+  (G24), and a saved step without proof («… ще не підтверджено …»); a step
+  recorded whose order could not be read never says «Не записано».
+
+Built on 2026-10-24; see the [report](orders-redesign-5-report.md).
