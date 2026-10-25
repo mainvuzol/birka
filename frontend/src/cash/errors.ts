@@ -58,9 +58,17 @@ function closedBy(details: Record<string, unknown>): string {
 }
 
 /** The drawer's day a moment belongs to, by the phone's clock: 06:00 to
- * 06:00, as the server's (G8) — 00:10 and 05:59 are the evening before's. */
-function drawerDay(at: Date): string {
-  return new Date(at.getTime() - 6 * 60 * 60 * 1000).toDateString();
+ * 06:00, as the server's (G8) — 00:10 and 05:59 are the evening before's.
+ * By the hour the clock shows, as the server counts it: six hours back
+ * would be an hour off the nights the clocks change. Its noon, a moment
+ * every day has. */
+export function drawerDay(at: Date): Date {
+  return new Date(
+    at.getFullYear(),
+    at.getMonth(),
+    at.getDate() - (at.getHours() < 6 ? 1 : 0),
+    12,
+  );
 }
 
 /**
@@ -75,7 +83,8 @@ export function staleToday(error: unknown): boolean {
   return (
     typeof at === "string" &&
     !Number.isNaN(Date.parse(at)) &&
-    drawerDay(new Date(at)) === drawerDay(new Date())
+    drawerDay(new Date(at)).toDateString() ===
+      drawerDay(new Date()).toDateString()
   );
 }
 

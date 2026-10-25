@@ -44,26 +44,34 @@ function launch(theme?: Record<string, string>): string {
   return `/#${hash.toString()}`;
 }
 
-const SIX_HOURS = 6 * 60 * 60 * 1000;
-
 /** The calendar day of a moment, by this machine's clock, which the phone
  * shares. */
 function calendarDay(at: Date): string {
   return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
 }
 
+/** The drawer's day `days` back, at its noon: 06:00 to 06:00 (G8), by the
+ * hour the clock shows, as the server counts it — six hours back would be
+ * an hour off the nights the clocks change. */
+function drawerDay(days: number): Date {
+  const now = new Date();
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - days - (now.getHours() < 6 ? 1 : 0),
+    12,
+  );
+}
+
 /** The drawer's day `days` back: 06:00 to 06:00 (G8). */
 function dayOf(days: number): string {
-  const at = new Date(Date.now() - SIX_HOURS);
-  at.setDate(at.getDate() - days);
-  return calendarDay(at);
+  return calendarDay(drawerDay(days));
 }
 
 /** A moment of the drawer's day `days` back, at `time` (06:00 to 23:59). */
 function momentOf(days: number, time: string): string {
   const [hours = 0, minutes = 0] = time.split(":").map(Number);
-  const at = new Date(Date.now() - SIX_HOURS);
-  at.setDate(at.getDate() - days);
+  const at = drawerDay(days);
   at.setHours(hours, minutes, 0, 0);
   return at.toISOString();
 }

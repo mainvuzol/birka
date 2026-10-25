@@ -9,8 +9,10 @@ import { readFileSync } from "node:fs";
  * and nothing of the drawer goes on paper (owner decision, 2026-10-21, В2);
  * confirmed, «… записано один раз: …»; a count that came too late the same
  * evening is counted again (В3). The drawer is stubbed, so each answer is
- * the one each journey asks for.
+ * the one each journey asks for. Kyiv's clock, as the shops': the drawer's
+ * day is its hours, whatever zone the journeys run in.
  */
+test.use({ timezoneId: "Europe/Kyiv" });
 
 interface Fixture {
   network_cash_seller_telegram_user_id: string;
@@ -508,14 +510,11 @@ function stale(countedAt: string): Record<string, unknown> {
   };
 }
 
-/** A moment of today, by this machine's clock, which the phone shares;
- * `days` back. */
-function at(time: string, days = 0): Date {
-  const [hours = 0, minutes = 0] = time.split(":").map(Number);
-  const moment = new Date();
-  moment.setDate(moment.getDate() - days);
-  moment.setHours(hours, minutes, 0, 0);
-  return moment;
+/** A moment by Kyiv's clock, «HH:MM» on `day`: by default an ordinary
+ * Thursday, never the day the journey runs — summer time, +03:00, all of it
+ * and of the Wednesday before. */
+function at(time: string, day = "2026-10-22"): Date {
+  return new Date(`${day}T${time}:00+03:00`);
 }
 
 /** Every heading the page ever drew, however briefly: a screen opened and
@@ -545,13 +544,20 @@ const asUsual =
   "Підрахунок не записано — він дійшов надто пізно. Закрийте касу, як завжди, увечері: цей день увійде в те закриття.";
 
 // The drawer's day runs 06:00 to 06:00 (G8): 23:50 and 00:15 are one
-// evening's.
+// evening's. By the hour on the clock: the night the clocks go back an
+// hour, at 04:00 on the last Sunday of October, 05:30 is still the evening
+// before's, though six hours back from it is already that Sunday.
 for (const [name, now, counted] of [
   ["counted at 20:15, refused at 20:30", at("20:30"), at("20:15")],
   [
     "counted at 23:50, refused at 00:15 after midnight",
     at("00:15"),
-    at("23:50", 1),
+    at("23:50", "2026-10-21"),
+  ],
+  [
+    "counted at 23:50, refused at 05:30 the night the clocks go back (Kyiv, 2026-10-25)",
+    new Date("2026-10-25T05:30:00+02:00"),
+    new Date("2026-10-24T23:50:00+03:00"),
   ],
 ] as const)
   test(`a kept count that came too late the same evening — ${name} — the drawer still to close, opens the count again: «Перерахуйте касу ще раз і закрийте» (owner decision, 2026-10-21, В3)`, async ({
@@ -637,7 +643,7 @@ for (const [name, now, counted, before, after] of [
   [
     "counted on an earlier day",
     at("20:30"),
-    at("20:00", 1),
+    at("20:00", "2026-10-21"),
     drawer(),
     drawer({ movements: [seen] }),
   ],
@@ -645,6 +651,22 @@ for (const [name, now, counted, before, after] of [
     "counted at 05:50, refused at 06:10 — another day of the drawer",
     at("06:10"),
     at("05:50"),
+    drawer(),
+    drawer({ movements: [seen] }),
+  ],
+  // The nights the clocks change: six hours back from 05:50 and from 06:10
+  // is one date, an hour off the clock's.
+  [
+    "counted at 05:50, refused at 06:10 the night the clocks go back (Kyiv, 2026-10-25) — another day of the drawer",
+    new Date("2026-10-25T06:10:00+02:00"),
+    new Date("2026-10-25T05:50:00+02:00"),
+    drawer(),
+    drawer({ movements: [seen] }),
+  ],
+  [
+    "counted at 05:50, refused at 06:10 the night the clocks go forward (Kyiv, 2027-03-28) — another day of the drawer",
+    new Date("2027-03-28T06:10:00+03:00"),
+    new Date("2027-03-28T05:50:00+03:00"),
     drawer(),
     drawer({ movements: [seen] }),
   ],
