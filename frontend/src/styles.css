@@ -1847,6 +1847,56 @@ html {
 .order-sent-with {
   margin-top: 8px;
 }
+/* Where an order goes (orders task list, P1-3): its own step, a switch and
+   chips as a new order's; its history a row a version, how it went on the
+   right; the same waybill's other order its row, opened by a tap. */
+.order-shipping .way-switch {
+  margin-top: 12px;
+}
+.shipping-changes-title {
+  margin: 22px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.shipping-changes {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.shipping-change {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+/* What it was keeps more of a 360 px row than how it went, which wraps
+   on the right. */
+.shipping-kind {
+  font-size: 15px;
+  font-weight: 650;
+}
+.shipping-how {
+  max-width: 45%;
+  font-size: 15px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.same-waybill {
+  margin: 12px 0;
+  padding: 12px 16px 4px;
+  border: 1px solid var(--warn-line);
+  border-radius: 16px;
+}
+.same-waybill p {
+  margin: 0;
+}
+.same-waybill li:last-child .sale-row {
+  border-bottom: 0;
+}
 .order-panel button {
   width: 100%;
   min-height: 54px;

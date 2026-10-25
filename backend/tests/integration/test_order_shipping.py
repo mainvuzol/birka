@@ -19,16 +19,23 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import AsyncIterator
+from decimal import Decimal
 
 import pytest
-from sqlalchemy import text, update
+from sqlalchemy import delete, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 
 from app.core.idempotency import fingerprint
 from app.modules.authz.permissions import Permission
-from app.modules.orders.models import CustomerOrder, OrderCommand
-from tests.conftest import requires_database
+from app.modules.authz.scope import RequestScope
+from app.modules.orders.models import Carrier, CustomerOrder, OrderCommand
+from app.modules.orders.service import OrderLineInput, create_order
+from app.modules.tenancy.models import StockLocation, StoreLocationAccess
+from tests.conftest import provision_location, requires_database
+from tests.integration.test_customer_orders import setup
+from tests.integration.test_order_read_api import new_order
+from tests.integration.test_sale_command import give_stock
 from tests.integration.test_shared_warehouse import (
     TwoShops,
     api,
@@ -160,6 +167,7 @@ async def test_a_command_from_before_is_still_answered_with_its_order(maker):
     made = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()
     legacy = order_body(shops.primary_store, shops.shared_warehouse, *coat)
     line = legacy["lines"][0]
+    other = str(uuid.uuid4())
     async with maker() as session:
         session.add(
             OrderCommand(
@@ -184,7 +192,10 @@ async def test_a_command_from_before_is_still_answered_with_its_order(maker):
                     actor_user_id=shops.user_id,
                     store_id=shops.primary_store,
                 ),
-                response_snapshot={k: v for k, v in made.items() if k != "shipping_history"},
+                response_snapshot={k: v for k, v in made.items() if k != "shipping_history"}
+                # Another order named before its goods were (orders task
+                # list, P1-3).
+                | {"same_waybill": [{"id": other, "status": "DISPATCHED"}]},
             )
         )
         await session.commit()
@@ -192,6 +203,17 @@ async def test_a_command_from_before_is_still_answered_with_its_order(maker):
         replayed = await client.post("/api/v1/orders", json=legacy)
     assert replayed.status_code == 201, replayed.text
     assert replayed.json()["id"] == made["id"]
+    assert replayed.json()["same_waybill"] == [
+        {
+            "id": other,
+            "status": "DISPATCHED",
+            "created_at": None,
+            "display_name": None,
+            "size_label": None,
+            "quantity": None,
+            "lines": None,
+        }
+    ]
 
 
 async def test_the_waybill_is_written_when_it_is_sent_or_later(maker):
@@ -352,11 +374,27 @@ async def test_an_order_made_before_says_nothing_until_told(maker):
     assert (told.json()["destination"], told.json()["waybill"]) == ("UKRAINE", "MEEST-123")
 
 
+def named(made: dict, status: str) -> dict:
+    """Another order as the same waybill names it (orders task list, P1-3):
+    as its card's title, by its first goods and how many lines."""
+    first = made["items"][0]
+    return {
+        "id": made["id"],
+        "status": status,
+        "created_at": made["created_at"],
+        "display_name": first["display_name"],
+        "size_label": first["size_label"],
+        "quantity": first["quantity"],
+        "lines": len(made["items"]),
+    }
+
+
 async def test_one_waybill_on_two_orders_is_saved_and_each_names_the_other(maker):
     shops = await make_two_shops(maker)
     coat = await coats(maker, shops)
-    first = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()["id"]
-    second = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()["id"]
+    first_made = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()
+    second_made = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()
+    first, second = first_made["id"], second_made["id"]
     lone = (await order(maker, shops, coat, carrier="NOVA_POSHTA")).json()["id"]
     theirs_coat = await coats(maker, shops, store=shops.child_store)
     theirs = (
@@ -376,10 +414,8 @@ async def test_one_waybill_on_two_orders_is_saved_and_each_names_the_other(maker
     # One parcel: saved anyway, however it is spaced, and named.
     sent = await step(maker, shops, second, "dispatch", waybill="2045 0012 3456 78")
     assert sent.status_code == 200, sent.text
-    assert sent.json()["same_waybill"] == [{"id": first, "status": "DISPATCHED"}]
-    assert (await read(maker, shops, first))["same_waybill"] == [
-        {"id": second, "status": "DISPATCHED"}
-    ]
+    assert sent.json()["same_waybill"] == [named(first_made, "DISPATCHED")]
+    assert (await read(maker, shops, first))["same_waybill"] == [named(second_made, "DISPATCHED")]
     assert (await read(maker, shops, lone))["same_waybill"] == []
 
     async with api(maker, shops.scope(shops.primary_store)) as client:
@@ -404,6 +440,76 @@ async def test_one_waybill_on_two_orders_is_saved_and_each_names_the_other(maker
         (second, "NOVA_POSHTA", "2045 0012 3456 78"),
         (lone, "NOVA_POSHTA", None),
     }
+
+
+async def test_the_other_order_is_named_by_its_goods_and_only_where_it_may_be_read(maker):
+    """The same waybill names the other order as its card's title does
+    (orders task list, P1-3): its first goods as its card lists them first,
+    and how many lines. One the store's list leaves out is named nowhere — a
+    line from a warehouse the store no longer reaches, or, to whoever holds
+    the right network-wide only, from the store's private one."""
+    shop, first = await setup(maker)
+    async with maker() as session:
+        original = shop.location_id
+        extra = await provision_location(
+            session, organization_id=shop.organization_id, store_id=shop.store_id
+        )
+        gone = await provision_location(
+            session, organization_id=shop.organization_id, store_id=shop.store_id
+        )
+        for location in (extra, gone):
+            shop.location_id = location
+            await give_stock(session, shop, 2)
+        shop.location_id = original
+        # Two lines of unlike quantities: which is first is seen.
+        both = await create_order(
+            session,
+            scope=shop.scope(),
+            store_id=shop.store_id,
+            command_id=uuid.uuid4(),
+            carrier=Carrier.NOVA_POSHTA,
+            lines=[
+                OrderLineInput(shop.variant_id, shop.size_id, original, 1, Decimal("10")),
+                OrderLineInput(shop.variant_id, shop.size_id, extra, 2, Decimal("10")),
+            ],
+        )
+        hidden = await new_order(session, shop, [original, gone])
+        await session.commit()
+    waybill = {"destination": "UKRAINE", "carrier": "NOVA_POSHTA", "waybill": "20450099990000"}
+    async with api(maker, shop.scope()) as client:
+        for order_id in (str(first), both["id"], hidden["id"]):
+            answer = await client.post(
+                f"/api/v1/orders/{order_id}/shipping",
+                json={"command_id": str(uuid.uuid4())} | waybill,
+            )
+            assert answer.status_code == 200, answer.text
+    async with maker() as session:
+        await session.execute(
+            delete(StoreLocationAccess).where(StoreLocationAccess.location_id == gone)
+        )
+        await session.execute(
+            update(StockLocation)
+            .where(StockLocation.id == extra)
+            .values(managing_store_id=shop.store_id)
+        )
+        await session.commit()
+    async with api(maker, shop.scope()) as client:
+        made = (await client.get(f"/api/v1/orders/{first}")).json()
+        two = (await client.get(f"/api/v1/orders/{both['id']}")).json()
+        assert (await client.get(f"/api/v1/orders/{hidden['id']}")).status_code == 403
+    assert made["same_waybill"] == [named(two, "READY_TO_DISPATCH")]
+    assert two["same_waybill"] == [named(made, "READY_TO_DISPATCH")]
+    assert named(two, "READY_TO_DISPATCH")["lines"] == 2
+    network_wide = RequestScope(
+        user_id=shop.user_id,
+        organization_id=shop.organization_id,
+        org_permissions=frozenset(Permission),
+        store_permissions={shop.store_id: frozenset({Permission.INVENTORY_VIEW})},
+    )
+    async with api(maker, network_wide) as client:
+        seen = await client.get(f"/api/v1/orders/{first}")
+    assert seen.status_code == 200, seen.text
+    assert seen.json()["same_waybill"] == []
 
 
 async def test_the_downgrade_refuses_while_an_order_says_where_it_goes():

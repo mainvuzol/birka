@@ -780,7 +780,7 @@ test("a new order whose answer never came: checked again with the same command, 
     }),
   });
   await expect(banner).toContainText(
-    "Лоран шоколад · M · Нова пошта — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+    "Лоран шоколад · M · Нова пошта — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
   );
   // Kept, never refused: no buzz.
   expect(await buzzes(page)).toEqual([]);

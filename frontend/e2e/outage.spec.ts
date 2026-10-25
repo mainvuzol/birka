@@ -3242,7 +3242,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       }),
     });
     await expect(banner).toContainText(
-      "Операцію «Відправлено» — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+      "Операція «Відправлено» — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
     );
     // The phone's copy kept without it.
     const stored = await page.evaluate(
@@ -3288,7 +3288,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       }),
     });
     await expect(banner).toContainText(
-      "Операцію «Відправлено» — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+      "Операція «Відправлено» — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
     );
     // Checked by itself on opening, exactly as kept, nothing only shown sent.
     await expect.poll(() => dispatches.length).toBeGreaterThan(0);
@@ -3336,7 +3336,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     });
     await expect(banner).toBeVisible();
     await expect(banner).toContainText(
-      "Операцію «Відправлено» — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+      "Операція «Відправлено» — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
     );
     await expect(banner).toContainText(
       "Телефон перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».",

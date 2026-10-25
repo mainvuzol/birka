@@ -16,7 +16,9 @@ import { readFileSync } from "node:fs";
  * or abroad. The waybill, or abroad where and how it went, is written when
  * the order is sent or later; any of it is corrected while the order is
  * open, and every version stays. One waybill on two orders is saved, and
- * named; orders are found by it.
+ * named; orders are found by it. Where it goes is its own step, its history
+ * a row a version, the other order with its waybill its row (orders task
+ * list, P1-3).
  */
 interface Fixture {
   telegram_user_id: string;
@@ -115,6 +117,48 @@ async function reserve(page: Page): Promise<void> {
   await readTheAnswer(page);
 }
 
+/** Where an order goes, as its own step (orders task list, P1-3): the
+ * carrier's chip, the waybill typed. */
+async function where(
+  page: Page,
+  to: { carrier?: string; waybill?: string },
+): Promise<void> {
+  if (to.carrier) await carrier(page, to.carrier);
+  if (to.waybill !== undefined)
+    await page.getByLabel("Номер ТТН", { exact: true }).fill(to.waybill);
+}
+
+/** «Зберегти доставку», back on the card with what it did. A tap within
+ * 0.7 s of the screen opening is taken as carried from the row (review,
+ * 2026-10-25): a person's typing takes longer. */
+async function saveShipping(page: Page): Promise<void> {
+  await readTheAnswer(page);
+  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Доставку збережено$/ }),
+  ).toBeVisible();
+}
+
+/** When a version was stated, and by whom: «22.10, 14:05 · Оля». */
+const stated = expect.stringMatching(
+  /^\d{2}\.\d{2}, \d{2}:\d{2} · Оля$/,
+) as unknown as string;
+
+/** The history of where it went, a row a version (P1-3): what it was, when
+ * and by whom, and how it went. */
+async function changes(page: Page): Promise<string[][]> {
+  return page
+    .getByRole("list", { name: "Історія доставки" })
+    .getByRole("listitem")
+    .evaluateAll((rows) =>
+      rows.map((row) =>
+        [".shipping-kind", ".sale-meta", ".shipping-how"].map(
+          (part) => row.querySelector(part)?.textContent ?? "",
+        ),
+      ),
+    );
+}
+
 function posts(page: Page, ending: RegExp): { bodies: unknown[] } {
   const seen = { bodies: [] as unknown[] };
   page.on("request", (request: Request) => {
@@ -198,12 +242,16 @@ test("an order within Ukraine names its carrier, and its waybill when it is sent
   expect(sent.bodies).toEqual([
     { command_id: expect.any(String) as string, waybill: "0500012345678" },
   ]);
+  await expect
+    .poll(() => changes(page))
+    .toEqual([
+      ["Вказано при створенні", stated, "Укрпошта · ТТН ще немає"],
+      ["Вписано при відправленні", stated, "Укрпошта · ТТН 0500012345678"],
+    ]);
+  // Sent with its waybill: changed, never «вписати».
   await expect(
-    page.getByRole("list", { name: "Історія доставки" }).getByRole("listitem"),
-  ).toHaveText([
-    /Вказано при створенні · Укрпошта · ТТН ще немає · Оля$/,
-    /Вписано при відправленні · Укрпошта · ТТН 0500012345678 · Оля$/,
-  ]);
+    page.getByRole("button", { name: "Змінити доставку", exact: true }),
+  ).toBeVisible();
 });
 
 test("an order abroad says where and how it went, in one line", async ({
@@ -249,7 +297,7 @@ test("an order abroad says where and how it went, in one line", async ({
   ]);
 });
 
-test("where an order goes is corrected while it is open, and every version stays", async ({
+test("where an order goes is corrected while it is open, as its own step, and every version stays a row (orders task list, P1-3)", async ({
   page,
 }) => {
   const changed = posts(page, /\/shipping$/);
@@ -257,32 +305,60 @@ test("where an order goes is corrected while it is open, and every version stays
   await draft(page);
   await carrier(page, "Нова пошта");
   await reserve(page);
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
-  await expect(page.getByText("Відправлено", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Змінити доставку" }).click();
-  const where = page.getByRole("combobox", { name: "Куди", exact: true });
-  await where.selectOption("ABROAD");
-  // The hint describes the field and stays out of its name.
+  // Before it is sent, the waybill's field is over the panel: the row
+  // changes where it goes.
+  await expect(
+    page.getByRole("button", { name: "ТТН ще немає — вписати" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Змінити доставку", exact: true })
+    .click();
+  // Its own screen: its own way back, no card's step under the thumb, nor
+  // the card's field for the waybill.
+  await expect(
+    page.getByRole("heading", { name: "Доставка", exact: true }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "← До замовлень" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Відправлено", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel("Номер ТТН (можна дописати пізніше)"),
+  ).toHaveCount(0);
+  await expect(page.locator(".pay-panel .pay-what")).toHaveText(/^Лоран/);
+  // As it stands: within Ukraine, by Нова пошта.
+  await expect(
+    page.getByRole("radio", { name: "По Україні", exact: true }),
+  ).toBeChecked();
+  await expect(
+    page
+      .getByRole("group", { name: "Перевізник" })
+      .getByRole("button", { name: "Нова пошта", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  // Abroad: no carrier, where and how it went, never a customer's name.
+  await page.getByRole("radio", { name: "За кордон", exact: true }).check();
+  await expect(page.getByRole("group", { name: "Перевізник" })).toHaveCount(0);
   await expect(
     page.getByRole("textbox", {
       name: "Куди і як відправили: місто, країна, спосіб",
       exact: true,
     }),
   ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
-  await where.selectOption("UKRAINE");
-  await page
-    .getByRole("combobox", { name: "Перевізник", exact: true })
-    .selectOption("MEEST");
-  await page.getByLabel("Номер накладної", { exact: true }).fill("MEEST-777");
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  // Back within Ukraine, no carrier is chosen for the seller: the press
+  // asks for one and sends nothing.
+  await page.getByRole("radio", { name: "По Україні", exact: true }).check();
+  const press = page.locator(".pay-panel").getByRole("button");
+  await expect(press).toHaveText("Оберіть перевізника");
+  await expect(press).toBeDisabled();
+  await where(page, { carrier: "Міст", waybill: "MEEST-777" });
+  await saveShipping(page);
+  // Saved: back on the card as it now stands.
   await expect(page.locator(".order-context")).toHaveText(
     goes("Міст · ТТН MEEST-777"),
   );
-  // Saved, the form closes on the order as it now stands.
-  await expect(
-    page.getByRole("button", { name: "Змінити доставку" }),
-  ).toBeVisible();
   expect(changed.bodies).toEqual([
     {
       command_id: expect.any(String) as string,
@@ -291,15 +367,23 @@ test("where an order goes is corrected while it is open, and every version stays
       waybill: "MEEST-777",
     },
   ]);
-  await expect(
-    page.getByRole("list", { name: "Історія доставки" }).getByRole("listitem"),
-  ).toHaveText([
-    /Вказано при створенні · Нова пошта · ТТН ще немає · Оля$/,
-    /Змінено · Міст · ТТН MEEST-777 · Оля$/,
-  ]);
+  await expect
+    .poll(() => changes(page))
+    .toEqual([
+      ["Вказано при створенні", stated, "Нова пошта · ТТН ще немає"],
+      ["Змінено", stated, "Міст · ТТН MEEST-777"],
+    ]);
   // Closed, it is no longer changed. Collected, it says how it was paid:
   // every order goes by a carrier, this one paid to it on delivery (owner
   // decisions, 2026-10-04).
+  await readTheAnswer(page);
+  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Відправлено · ТТН MEEST-777$/ }),
+  ).toBeVisible();
+  await readTheAnswer(page);
   await page
     .getByRole("button", { name: "Прибув на пошту", exact: true })
     .click();
@@ -317,6 +401,97 @@ test("where an order goes is corrected while it is open, and every version stays
   await expect(
     page.getByRole("button", { name: "Змінити доставку" }),
   ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /вписати/ })).toHaveCount(0);
+});
+
+test("a waybill written after the parcel went: «ТТН ще немає — вписати», the cursor in its field, saved under the thumb (orders task list, P1-3)", async ({
+  page,
+}) => {
+  const changed = posts(page, /\/shipping$/);
+  await enter(page);
+  await draft(page);
+  await carrier(page, "Нова пошта");
+  await reserve(page);
+  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Відправлено\. ТТН можна вписати пізніше\.$/ }),
+  ).toBeVisible();
+  await readTheAnswer(page);
+  const write = page.getByRole("button", {
+    name: "ТТН ще немає — вписати",
+    exact: true,
+  });
+  await expect(write).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Змінити доставку" }),
+  ).toHaveCount(0);
+  // Back without saving: nothing sent, the row in focus.
+  await write.click();
+  await expect(page.getByLabel("Номер ТТН", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "← Замовлення" }).click();
+  await expect(write).toBeFocused();
+  expect(changed.bodies).toHaveLength(0);
+  // A tap, the number typed where the cursor already is, a tap: with the
+  // two that open «Замовлення» and the one that opens the order, five.
+  await write.click();
+  await page.keyboard.type("20451234567890");
+  await saveShipping(page);
+  await expect(page.locator(".order-context")).toHaveText(
+    goes("Нова пошта · ТТН 20451234567890"),
+  );
+  expect(changed.bodies).toEqual([
+    {
+      command_id: expect.any(String) as string,
+      destination: "UKRAINE",
+      carrier: "NOVA_POSHTA",
+      waybill: "20451234567890",
+    },
+  ]);
+  await expect
+    .poll(() => changes(page))
+    .toEqual([
+      ["Вказано при створенні", stated, "Нова пошта · ТТН ще немає"],
+      ["Змінено", stated, "Нова пошта · ТТН 20451234567890"],
+    ]);
+  await expect(
+    page.getByRole("button", { name: "Змінити доставку", exact: true }),
+  ).toBeVisible();
+});
+
+test("where an order goes saved as it was: back on its card, and a tap carried from the press is let go (orders task list, P1-3)", async ({
+  page,
+}) => {
+  const changed = posts(page, /\/shipping$/);
+  const arrived = posts(page, /\/arrive$/);
+  await enter(page);
+  await draft(page);
+  await carrier(page, "Нова пошта");
+  await reserve(page);
+  await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("20457777");
+  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Відправлено · ТТН 20457777$/ }),
+  ).toBeVisible();
+  await readTheAnswer(page);
+  await page
+    .getByRole("button", { name: "Змінити доставку", exact: true })
+    .click();
+  await saveShipping(page);
+  // Nothing changed: no version added.
+  expect(changed.bodies).toHaveLength(1);
+  await expect.poll(async () => (await changes(page)).length).toBe(2);
+  // The card's step stands where «Зберегти доставку» was: a tap at once is
+  // the save's, and nothing is sent.
+  await page
+    .getByRole("button", { name: "Прибув на пошту", exact: true })
+    .click();
+  await readTheAnswer(page);
+  expect(arrived.bodies).toHaveLength(0);
+  await expect(page.locator(".order-status .badge")).toHaveText("Відправлено");
 });
 
 test("one waybill on two orders is saved and named, and orders are found by it", async ({
@@ -340,11 +515,32 @@ test("one waybill on two orders is saved and named, and orders are found by it",
   await expect(page.locator(".order-number")).toHaveText(
     `№ ${second.slice(0, 8)}`,
   );
+  // The other order its row (orders task list, P1-3): its goods, since
+  // when and its pill — never its eight characters (В1).
   await expect(
     page.getByText(
-      `Ця накладна є також у замовленні № ${first.slice(0, 8)}. Збережено — перевірте, чи це один пакунок.`,
+      "Ця ТТН є також у замовленні — перевірте, чи це один пакунок.",
+      { exact: true },
     ),
   ).toBeVisible();
+  const other = page
+    .getByRole("list", { name: "Замовлення з цією ТТН" })
+    .getByRole("button");
+  await expect(other).toHaveCount(1);
+  await expect(other.locator(".sale-goods")).toHaveText(/^Лоран.* · \S+$/);
+  await expect(other.locator(".sale-meta")).toHaveText(/^з\s\d{2}\.\d{2}$/);
+  await expect(other.locator(".badge")).toHaveText("Відправлено");
+  await expect(other).not.toContainText(first.slice(0, 8));
+  // A tap opens it, and it names this one.
+  await other.click();
+  await expect(page.locator(".order-number")).toHaveText(
+    `№ ${first.slice(0, 8)}`,
+  );
+  await expect(
+    page
+      .getByRole("list", { name: "Замовлення з цією ТТН" })
+      .getByRole("button"),
+  ).toHaveCount(1);
 });
 
 test("a correction whose answer is lost is resent unchanged", async ({
@@ -365,10 +561,8 @@ test("a correction whose answer is lost is resent unchanged", async ({
   await carrier(page, "Нова пошта");
   await reserve(page);
   await page.getByRole("button", { name: "Змінити доставку" }).click();
-  await page
-    .getByRole("combobox", { name: "Перевізник", exact: true })
-    .selectOption("UKRPOSHTA");
-  await page.getByLabel("Номер накладної", { exact: true }).fill("20451111");
+  await where(page, { carrier: "Укрпошта", waybill: "20451111" });
+  await readTheAnswer(page);
   await page.getByRole("button", { name: "Зберегти доставку" }).click();
   await expect(
     page.getByRole("button", { name: "Перевірити результат замовлення" }),
@@ -382,7 +576,7 @@ test("a correction whose answer is lost is resent unchanged", async ({
       }),
     }),
   ).toContainText(
-    /· Укрпошта · ТТН 20451111 — сервер не відповів\. Двічі вона не запишеться\./,
+    /· Укрпошта · ТТН 20451111 — сервер не відповів\. Двічі цю операцію не запишуть\./,
   );
   await page.close();
   const reopened = await context.newPage();

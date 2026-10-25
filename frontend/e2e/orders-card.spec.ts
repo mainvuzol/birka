@@ -132,6 +132,8 @@ interface Server {
   loseRead?: boolean;
   /** The next step waits for this before it is answered. */
   hold?: Promise<void>;
+  /** Other orders, read by their id: the same waybill's. */
+  others?: Record<string, Stubbed>;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -154,7 +156,8 @@ async function stub(page: Page, server: Server): Promise<void> {
       });
       return;
     }
-    await route.fulfill({ json: server.order });
+    const id = new URL(route.request().url()).pathname.split("/").at(-1);
+    await route.fulfill({ json: server.others?.[id ?? ""] ?? server.order });
   });
   for (const step of ["dispatch", "arrive", "collect", "cancel", "shipping"])
     await page.route(`**/api/v1/orders/*/${step}`, async (route, request) => {
@@ -333,23 +336,39 @@ test("an order to send fits the phone: its goods as its title, how it goes, its 
     );
   const height = (await panel(page).boundingBox())?.height ?? 0;
   expect(Math.abs(parseFloat(await room()) - height)).toBeLessThanOrEqual(1);
-  // Where it goes changed: that form alone, no panel and no second field
-  // for the waybill (review, 2026-10-23).
+  // Where it goes changed: its own screen, its own press under the thumb
+  // and its room kept, no second field for the waybill (review,
+  // 2026-10-23; orders task list, P1-3) — and what was typed on the card
+  // kept for it (review, 2026-10-25).
+  await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("2045");
   await page.getByRole("button", { name: "Змінити доставку" }).click();
-  await expect(panel(page)).toHaveCount(0);
-  expect(await room()).toBe("");
+  await expect(panel(page).getByRole("button")).toHaveText("Зберегти доставку");
+  await expect
+    .poll(async () =>
+      Math.abs(
+        parseFloat(await room()) -
+          ((await panel(page).boundingBox())?.height ?? 0),
+      ),
+    )
+    .toBeLessThanOrEqual(1);
   await expect(
     page.getByLabel("Номер ТТН (можна дописати пізніше)"),
   ).toHaveCount(0);
-  await page
-    .getByRole("group", { name: "Доставка" })
-    .getByRole("button", { name: "Скасувати" })
-    .click();
-  await expect(panel(page)).toBeVisible();
+  // Back: the card's press and its room, the row that opened it in focus.
+  await page.getByRole("button", { name: "← Замовлення" }).click();
+  await expect(
+    panel(page).getByRole("button", { name: "Відправлено" }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => Math.abs(parseFloat(await room()) - height))
+    .toBeLessThanOrEqual(1);
+  await expect(
+    page.getByLabel("Номер ТТН (можна дописати пізніше)"),
+  ).toHaveValue("2045");
   // The rare at the foot, the panel never over the last of them.
   await expect(
     page.getByRole("button", { name: "Змінити доставку" }),
-  ).toBeVisible();
+  ).toBeFocused();
   const cancel = page.getByRole("button", {
     name: "Скасувати замовлення",
     exact: true,
@@ -505,7 +524,10 @@ test("where a closed order goes is not changed: said so, and the card read again
 }) => {
   const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
   await open(page, server);
-  await page.getByRole("button", { name: "Змінити доставку" }).click();
+  // Sent with no waybill: written later (orders task list, P1-3).
+  await page
+    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
+    .click();
   server.answer = {
     status: 422,
     json: {
@@ -520,7 +542,8 @@ test("where a closed order goes is not changed: said so, and the card read again
     },
   };
   const reads = server.reads ?? 0;
-  await page.getByLabel("Номер накладної", { exact: true }).fill("20451234");
+  await page.getByLabel("Номер ТТН", { exact: true }).fill("20451234");
+  await readTheAnswer(page);
   await page.getByRole("button", { name: "Зберегти доставку" }).click();
   const why = page.getByRole("alert");
   await expect(why).toHaveText(
@@ -542,8 +565,11 @@ test("a shipping change whose answer never came, resent after the order closed: 
     lose: true,
   };
   await open(page, server);
-  await page.getByRole("button", { name: "Змінити доставку" }).click();
-  await page.getByLabel("Номер накладної", { exact: true }).fill("20451234");
+  await page
+    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
+    .click();
+  await page.getByLabel("Номер ТТН", { exact: true }).fill("20451234");
+  await readTheAnswer(page);
   await page.getByRole("button", { name: "Зберегти доставку" }).click();
   const retry = page.getByRole("button", {
     name: "Перевірити результат замовлення",
@@ -725,7 +751,7 @@ test("a step whose answer never came names its step and its order, and is never 
     }),
   });
   await expect(banner).toContainText(
-    "Лоран шоколад · M · Нова пошта · ТТН 20451234 — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+    "Лоран шоколад · M · Нова пошта · ТТН 20451234 — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
   );
   // Never from paper: the phone checks it itself (owner decision,
   // 2026-10-23, В4 (а)).
@@ -1132,6 +1158,332 @@ test("a collected order whose way is not given to this person offers no «Змі
   ).toBeVisible();
 });
 
+/** «22.10, 14:05» of a moment, by this machine's clock, which the phone
+ * shares. */
+function stamp(iso: string): string {
+  const at = new Date(iso);
+  const two = (n: number): string => String(n).padStart(2, "0");
+  return `${two(at.getDate())}.${two(at.getMonth() + 1)}, ${two(at.getHours())}:${two(at.getMinutes())}`;
+}
+
+test("where it went, a row a version: what it was, when by the phone's clock and by whom, how it went on the right (orders task list, P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const times = [
+    "2026-01-05T08:07:00.000Z",
+    "2026-02-14T19:41:00.000Z",
+    "2026-11-30T23:59:00.000Z",
+  ];
+  await open(page, {
+    order: order({
+      status: "DISPATCHED",
+      destination: "ABROAD",
+      carrier: null,
+      abroad_note: "Варшава, Польща",
+      shipping_history: [
+        {
+          kind: "CREATED",
+          by: "Оля",
+          at: times[0],
+          destination: "UKRAINE",
+          carrier: "NOVA_POSHTA",
+          waybill: null,
+          abroad_note: null,
+        },
+        {
+          kind: "DISPATCHED",
+          by: "Петро",
+          at: times[1],
+          destination: "UKRAINE",
+          carrier: "NOVA_POSHTA",
+          waybill: "20451234567890",
+          abroad_note: null,
+        },
+        {
+          kind: "CORRECTED",
+          by: "Оля",
+          at: times[2],
+          destination: "ABROAD",
+          carrier: null,
+          waybill: null,
+          abroad_note: "Варшава, Польща",
+        },
+      ],
+    }),
+    sent: [],
+  });
+  const rows = page.getByRole("list", { name: "Історія доставки" });
+  await expect(rows.getByRole("listitem")).toHaveCount(3);
+  await expect(rows.locator(".shipping-kind")).toHaveText([
+    "Вказано при створенні",
+    "Вписано при відправленні",
+    "Змінено",
+  ]);
+  await expect(rows.locator(".sale-meta")).toHaveText([
+    `${stamp(times[0] ?? "")} · Оля`,
+    `${stamp(times[1] ?? "")} · Петро`,
+    `${stamp(times[2] ?? "")} · Оля`,
+  ]);
+  await expect(rows.locator(".shipping-how")).toHaveText([
+    "Нова пошта · ТТН ще немає",
+    "Нова пошта · ТТН 20451234567890",
+    "За кордон · Варшава, Польща",
+  ]);
+  // How it went on the right of what it was, in one row.
+  const kind = await rows.locator(".shipping-kind").nth(1).boundingBox();
+  const how = await rows.locator(".shipping-how").nth(1).boundingBox();
+  expect(kind && how && how.x >= kind.x + kind.width).toBe(true);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  // Abroad, sent: nothing to «вписати» — changed.
+  await expect(
+    page.getByRole("button", { name: "Змінити доставку", exact: true }),
+  ).toBeVisible();
+});
+
+test("the same waybill's other orders: each its row — its goods as its card's title, since when, its pill; several said so; one kept from before «Замовлення»; a tap opens it at its top (orders task list, P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const made = ago(1);
+  const other = order({
+    created_at: made,
+    items: [
+      item("Лоран шоколад", "M", 2),
+      item("Ріо графіт", "L"),
+      item("Ріо графіт", "XL"),
+    ],
+  });
+  const before = randomUUID();
+  const first = randomUUID();
+  // It names this one back.
+  other.same_waybill = [
+    {
+      id: first,
+      status: "DISPATCHED",
+      created_at: ago(2),
+      display_name: "Лоран шоколад",
+      size_label: "M",
+      quantity: 1,
+      lines: 1,
+    },
+  ];
+  const server: Server = {
+    order: order({
+      id: first,
+      status: "DISPATCHED",
+      waybill: "20451234",
+      same_waybill: [
+        {
+          id: other.id,
+          status: "READY_TO_DISPATCH",
+          created_at: made,
+          display_name: "Лоран шоколад",
+          size_label: "M",
+          quantity: 2,
+          lines: 3,
+        },
+        { id: before, status: "DISPATCHED" },
+      ],
+    }),
+    sent: [],
+    others: { [other.id]: other },
+  };
+  await open(page, server);
+  await expect(
+    page.getByText(
+      "Ця ТТН є також у замовленнях — перевірте, чи це один пакунок.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const rows = page
+    .getByRole("list", { name: "Замовлення з цією ТТН" })
+    .getByRole("button");
+  await expect(rows.locator(".sale-goods")).toHaveText([
+    "Лоран шоколад · M × 2 + ще 2",
+    "Замовлення",
+  ]);
+  await expect(rows.nth(0).locator(".sale-meta")).toHaveText(
+    `з\u00a0${short(made)}`,
+  );
+  await expect(rows.nth(1).locator(".sale-meta")).toHaveCount(0);
+  await expect(rows.locator(".badge")).toHaveText([
+    "До відправлення",
+    "Відправлено",
+  ]);
+  // Never their eight characters (В1).
+  for (const id of [other.id, before])
+    await expect(page.getByText(id.slice(0, 8))).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await rows.nth(0).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Лоран шоколад · M × 2 + ще 2",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".order-number")).toHaveText(
+    `№ ${other.id.slice(0, 8)}`,
+  );
+  // Back by its row to the first, read already: opened at its top, from
+  // wherever the page was.
+  const back = page
+    .getByRole("list", { name: "Замовлення з цією ТТН" })
+    .getByRole("button");
+  await page.evaluate(() => {
+    window.scrollTo(0, 120);
+  });
+  await expect(back).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await back.click();
+  await expect(page.locator(".order-number")).toHaveText(
+    `№ ${first.slice(0, 8)}`,
+  );
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test("a save refused for its waybill keeps where it goes and what was typed; the card read again and failed says so over it (review, 2026-10-25)", async ({
+  page,
+}) => {
+  const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
+  await open(page, server);
+  await page
+    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
+    .click();
+  const field = page.getByLabel("Номер ТТН", { exact: true });
+  await field.fill("НП");
+  await readTheAnswer(page);
+  server.answer = {
+    status: 422,
+    json: {
+      code: "VALIDATION_ERROR",
+      message: "A waybill has letters or digits",
+      details: { reason: "WAYBILL", recorded: false },
+    },
+  };
+  server.loseRead = true;
+  const reads = server.reads ?? 0;
+  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: /^Номер ТТН має містити цифри або латинські літери/ }),
+  ).toBeVisible();
+  await expect.poll(() => server.reads ?? 0).toBeGreaterThan(reads);
+  // The read again failed: said, and what was typed is still there to check.
+  const again = page.getByRole("button", { name: "Спробувати ще раз" });
+  await expect(again).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Доставка", exact: true }),
+  ).toBeVisible();
+  await expect(field).toHaveValue("НП");
+  await again.click();
+  await expect(again).toHaveCount(0);
+  await expect(field).toHaveValue("НП");
+  expect(server.sent.map((each) => each.step)).toEqual(["shipping"]);
+});
+
+test("a tap carried from «Змінити доставку» onto «Зберегти доставку», or from «← Замовлення» onto «← До замовлень», is let go (review, 2026-10-25)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order({ status: "DISPATCHED", waybill: "20451234" }),
+    sent: [],
+  };
+  await open(page, server);
+  await page.getByRole("button", { name: "Змінити доставку" }).click();
+  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await readTheAnswer(page);
+  expect(server.sent).toEqual([]);
+  await page.getByRole("button", { name: "← Замовлення" }).click();
+  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await readTheAnswer(page);
+  await expect(
+    page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
+  ).toBeVisible();
+  // Meant, it goes.
+  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await expect(page.locator(".order-row").first()).toBeVisible();
+});
+
+test("a waybill written later on a stubbed parcel: five taps from «Ще» with the typing, the cursor in its field, back on the card with a buzz (orders task list, P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  await stub(page, server);
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "click",
+      (event) => {
+        if ((event.target as Element).closest("button")) host.taps += 1;
+      },
+      true,
+    );
+  });
+  await section(page, "Замовлення");
+  await page.locator(".order-row").first().click();
+  await page
+    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
+    .click();
+  await expect(page.getByLabel("Номер ТТН", { exact: true })).toBeFocused();
+  await expect(panel(page).locator(".pay-what")).toHaveText(
+    "Лоран шоколад · M",
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await page.keyboard.type("20451234");
+  await readTheAnswer(page);
+  await panel(page).getByRole("button", { name: "Зберегти доставку" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Доставку збережено$/ }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { taps: number }).taps),
+  ).toBe(5);
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "success" },
+  ]);
+  expect(server.sent).toEqual([
+    {
+      step: "shipping",
+      body: {
+        command_id: expect.any(String),
+        destination: "UKRAINE",
+        carrier: "NOVA_POSHTA",
+        waybill: "20451234",
+      },
+    },
+  ]);
+  await expect(page.locator(".order-context")).toHaveText(
+    /^Нова пошта · ТТН 20451234 · з/,
+  );
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {
@@ -1212,4 +1564,66 @@ for (const [name, theme] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/order-collect-${name}.png` });
+  });
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme where an order goes, its history and the same waybill's order read at 4.5:1, nothing wider than the phone (orders task list, P1-3)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const ready = order({
+      status: "DISPATCHED",
+      waybill: "20451234",
+      same_waybill: [
+        {
+          id: randomUUID(),
+          status: "DISPATCHED",
+          created_at: ago(1),
+          display_name: "Ріо графіт",
+          size_label: "L",
+          quantity: 1,
+          lines: 1,
+        },
+      ],
+    });
+    await open(page, { order: ready, sent: [] }, theme);
+    for (const part of [
+      page.locator(".same-waybill p"),
+      page.locator(".same-waybill .sale-goods"),
+      page.locator(".same-waybill .sale-meta"),
+      page.locator(".same-waybill .badge"),
+      page.locator(".shipping-changes-title"),
+      page.locator(".shipping-kind"),
+      page.locator(".shipping-changes .sale-meta"),
+      page.locator(".shipping-how"),
+      page.getByRole("button", { name: "Змінити доставку" }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    // Scrolled to the foot, the panel held over nothing.
+    await page
+      .getByRole("button", { name: "Товар повернувся на склад" })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/order-history-${name}.png` });
+    await page.getByRole("button", { name: "Змінити доставку" }).click();
+    for (const part of [
+      page.getByRole("heading", { name: "Доставка", exact: true }),
+      page.locator(".way-switch label").first(),
+      page.locator(".way-switch label").last(),
+      page.getByRole("button", { name: "Нова пошта", exact: true }),
+      page.getByRole("button", { name: "Укрпошта", exact: true }),
+      page.locator(".order-shipping label", { hasText: "Номер ТТН" }),
+      panel(page).locator(".pay-what"),
+      panel(page).getByRole("button"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/order-shipping-${name}.png` });
   });

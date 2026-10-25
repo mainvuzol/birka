@@ -188,10 +188,15 @@ def _shipping_print(shipping: Shipping) -> dict[str, Any]:
     }
 
 
-async def _shipping_detail(session: AsyncSession, order: CustomerOrder) -> dict[str, Any]:
+async def _shipping_detail(
+    session: AsyncSession, scope: RequestScope, order: CustomerOrder
+) -> dict[str, Any]:
     """Every version of where the order went, and the store's other orders
     carrying the same waybill — saved anyway, since several orders may go in
-    one parcel (owner decision, 2026-10-01)."""
+    one parcel (owner decision, 2026-10-01). Each named as its card's title
+    names it, its first goods and how many lines (orders task list, P1-3),
+    and only one this person could open: one the store's list leaves out is
+    named nowhere."""
     history = (
         await session.execute(
             select(CustomerOrderShippingChange, AppUser.display_name)
@@ -203,12 +208,13 @@ async def _shipping_detail(session: AsyncSession, order: CustomerOrder) -> dict[
     same = (
         (
             await session.execute(
-                select(CustomerOrder.id, CustomerOrder.status)
+                select(CustomerOrder.id, CustomerOrder.status, CustomerOrder.created_at)
                 .where(
                     CustomerOrder.organization_id == order.organization_id,
                     CustomerOrder.store_id == order.store_id,
                     CustomerOrder.waybill_key == order.waybill_key,
                     CustomerOrder.id != order.id,
+                    ~_unreadable(scope, order.store_id),
                 )
                 .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id)
                 .limit(MAX_SAME_WAYBILL)
@@ -217,6 +223,12 @@ async def _shipping_detail(session: AsyncSession, order: CustomerOrder) -> dict[
         if order.waybill_key
         else []
     )
+    lines: dict[uuid.UUID, list[CustomerOrderItem]] = {row.id: [] for row in same}
+    if lines:
+        for item in await session.scalars(
+            select(CustomerOrderItem).where(CustomerOrderItem.order_id.in_(lines))
+        ):
+            lines[item.order_id].append(item)
     return {
         "shipping_history": [
             {
@@ -230,8 +242,28 @@ async def _shipping_detail(session: AsyncSession, order: CustomerOrder) -> dict[
             }
             for change, name in history
         ],
-        "same_waybill": [{"id": str(row.id), "status": row.status} for row in same],
+        "same_waybill": [_same_print(row, lines[row.id]) for row in same],
     }
+
+
+def _same_print(row: Any, items: list[CustomerOrderItem]) -> dict[str, Any]:
+    """Another order with the same waybill, read only: its first line as its
+    card shows it first (`_response` orders them so), and how many."""
+    first = min(items, key=lambda item: str(item.id), default=None)
+    return {
+        "id": str(row.id),
+        "status": row.status,
+        "created_at": row.created_at.isoformat(),
+        "lines": len(items),
+    } | (
+        {
+            "display_name": first.display_name_snapshot,
+            "size_label": first.variant_snapshot.get("size"),
+            "quantity": first.quantity,
+        }
+        if first is not None
+        else {}
+    )
 
 
 def validate_lines(lines: list[OrderLineInput]) -> None:
@@ -379,7 +411,7 @@ async def _save(
     body = (
         _response(order, items)
         | _credit(credit)
-        | await _shipping_detail(session, order)
+        | await _shipping_detail(session, scope, order)
         # The collection's own answer says how it was paid, as the seller
         # said it; a read takes it from the collected sale (ADR-0012, B10).
         | print_of(payment_method)
@@ -591,7 +623,39 @@ async def read_order(
         if order.sale_id is not None
         else None
     )
-    return _response(order, items) | _credit(credit) | await _shipping_detail(session, order)
+    return _response(order, items) | _credit(credit) | await _shipping_detail(session, scope, order)
+
+
+def _unreadable(scope: RequestScope, store_id: uuid.UUID) -> Any:
+    """An order of the store with a line from a warehouse the store does not
+    reach, or from a private one whose orders this person may not read
+    there: the store's list leaves it out, and no order names it."""
+    private_store = (
+        store_id
+        if Permission.SALE_VIEW in scope.store_permissions.get(store_id, frozenset())
+        else None
+    )
+    accessible = (
+        select(StockLocation.id)
+        .join(StoreLocationAccess, StoreLocationAccess.location_id == StockLocation.id)
+        .where(
+            StockLocation.organization_id == scope.organization_id,
+            StoreLocationAccess.organization_id == scope.organization_id,
+            StoreLocationAccess.store_id == store_id,
+            or_(
+                StockLocation.managing_store_id.is_(None),
+                StockLocation.managing_store_id == private_store,
+            ),
+        )
+    )
+    return (
+        select(CustomerOrderItem.id)
+        .where(
+            CustomerOrderItem.order_id == CustomerOrder.id,
+            CustomerOrderItem.source_location_id.not_in(accessible),
+        )
+        .exists()
+    )
 
 
 async def list_orders(
@@ -611,32 +675,6 @@ async def list_orders(
     still to send or on their way — or the closed ones (orders task list,
     P0-1); newest first, as every order is (owner decision, 2026-10-23)."""
     scope.require(Permission.SALE_VIEW, store_id)
-    private_store = (
-        store_id
-        if Permission.SALE_VIEW in scope.store_permissions.get(store_id, frozenset())
-        else None
-    )
-    accessible = (
-        select(StockLocation.id)
-        .join(StoreLocationAccess, StoreLocationAccess.location_id == StockLocation.id)
-        .where(
-            StockLocation.organization_id == scope.organization_id,
-            StoreLocationAccess.organization_id == scope.organization_id,
-            StoreLocationAccess.store_id == store_id,
-            or_(
-                StockLocation.managing_store_id.is_(None),
-                StockLocation.managing_store_id == private_store,
-            ),
-        )
-    )
-    inaccessible_item = (
-        select(CustomerOrderItem.id)
-        .where(
-            CustomerOrderItem.order_id == CustomerOrder.id,
-            CustomerOrderItem.source_location_id.not_in(accessible),
-        )
-        .exists()
-    )
     wanted = waybill_key(waybill or "")
     open_ = CustomerOrder.status.in_([each.value for each in OPEN_STATUSES])
     orders = list(
@@ -646,7 +684,7 @@ async def list_orders(
                 .where(
                     CustomerOrder.organization_id == scope.organization_id,
                     CustomerOrder.store_id == store_id,
-                    ~inaccessible_item,
+                    ~_unreadable(scope, store_id),
                     *([CustomerOrder.waybill_key.contains(wanted)] if wanted else []),
                     *([open_] if status == "open" else [~open_] if status == "closed" else []),
                 )

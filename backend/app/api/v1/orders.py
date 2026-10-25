@@ -143,8 +143,17 @@ class ShippingChangeResponse(BaseModel):
 
 
 class SameWaybillResponse(BaseModel):
+    """Another of the store's orders with the same waybill, named as its
+    card's title names it (orders task list, P1-3). None of the rest in an
+    answer kept from before it was named so."""
+
     id: uuid.UUID
     status: str
+    created_at: datetime | None = None
+    display_name: str | None = None
+    size_label: str | None = None
+    quantity: int | None = None
+    lines: int | None = None
 
 
 class OrderResponse(BaseModel):
