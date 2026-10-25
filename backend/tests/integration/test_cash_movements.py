@@ -43,6 +43,7 @@ from tests.integration.test_cash_close import (
     at,
     close,
     d,
+    days_ago,
     figures,
     network,
     seen,
@@ -170,7 +171,7 @@ async def test_change_put_in_and_recorded_after_a_close_it_came_before_explains_
     before, explains that close as «Розмін» — the kind's own word, as «Каса»
     says it on every screen (owner decision, 2026-10-22)."""
     net = await network(maker)
-    first = await close(maker, net, "2000.00", now=datetime.now(UTC) - timedelta(days=2))
+    first = await close(maker, net, "2000.00", now=days_ago(2))
     tuesday = await close(maker, net, "2100.00", now=datetime.now(UTC) - timedelta(minutes=5))
     assert tuesday.difference == d("100.00")
 
@@ -197,7 +198,7 @@ async def test_j_a_take_out_resent_after_another_phones_close_explains_that_clos
     Olena presses «Повторити». It lands on Marina's close — not in the next
     period, where it would show as 150 over and a second message."""
     net = await network(maker)
-    first = await close(maker, net, "2000.00", now=datetime.now(UTC) - timedelta(days=2))
+    first = await close(maker, net, "2000.00", now=days_ago(2))
     await sold(maker, net, "3000.00", "CASH")
     tuesday = await close(maker, net, "4850.00", now=datetime.now(UTC) - timedelta(minutes=5))
     assert (tuesday.expected, tuesday.difference) == (d("5000.00"), d("-150.00"))
@@ -222,7 +223,7 @@ async def test_j_a_take_out_resent_after_another_phones_close_explains_that_clos
 
     await sold(maker, net, "1000.00", "CASH")
     # Wednesday evening, a business day later by the server's clock.
-    wednesday = await close(maker, net, "5850.00", now=datetime.now(UTC) + timedelta(days=1))
+    wednesday = await close(maker, net, "5850.00", now=days_ago(-1))
     assert figures(wednesday, "taken_out", "expected", "difference") == (
         d("0.00"),
         d("5850.00"),
@@ -270,9 +271,9 @@ async def test_a_take_out_naming_a_close_two_back_reaches_no_closed_day(maker):
     nothing is written, and the old close stays unexplained. The owner or a
     manager names that close (`cash:correct`), and it explains it."""
     net = await network(maker)
-    first = await close(maker, net, "1000.00", now=datetime.now(UTC) - timedelta(days=5))
+    first = await close(maker, net, "1000.00", now=days_ago(5))
     await sold(maker, net, "500.00", "CASH")
-    short = await close(maker, net, "1200.00", now=datetime.now(UTC) - timedelta(days=4))
+    short = await close(maker, net, "1200.00", now=days_ago(4))
     assert short.difference == d("-300.00")
     newest = await close(maker, net, "1200.00", now=None)
 
@@ -302,7 +303,7 @@ async def test_a_take_out_resent_more_than_ten_minutes_after_the_close_is_refuse
     more than ten minutes ago: the server cannot tell this from a closed day
     reached on purpose. Within ten minutes it is example J."""
     net = await network(maker)
-    first = await close(maker, net, "2000.00", now=datetime.now(UTC) - timedelta(days=2))
+    first = await close(maker, net, "2000.00", now=days_ago(2))
     await sold(maker, net, "3000.00", "CASH")
     tuesday = await close(maker, net, "4850.00", now=datetime.now(UTC) - timedelta(minutes=11))
 
@@ -322,7 +323,7 @@ async def test_a_take_out_resent_more_than_ten_minutes_after_the_close_is_refuse
 
 async def test_a_take_out_resent_nine_minutes_after_the_close_is_moved_onto_it(maker):
     net = await network(maker)
-    first = await close(maker, net, "2000.00", now=datetime.now(UTC) - timedelta(days=2))
+    first = await close(maker, net, "2000.00", now=days_ago(2))
     tuesday = await close(maker, net, "1850.00", now=datetime.now(UTC) - timedelta(minutes=9))
     resent = await record(maker, net, net.colleague, body(net, "EXPENSES", after=first.id))
     assert resent.status_code == 201, resent.text
@@ -331,7 +332,7 @@ async def test_a_take_out_resent_nine_minutes_after_the_close_is_moved_onto_it(m
 
 async def test_a_take_out_on_time_stays_in_the_open_period(maker):
     net = await network(maker)
-    first = await close(maker, net, "1000.00", now=datetime.now(UTC) - timedelta(days=1))
+    first = await close(maker, net, "1000.00", now=days_ago(1))
     on_time = await record(maker, net, net.seller, body(net, "EXPENSES", "100.00", after=first.id))
     assert figures(on_time.json(), "for_close_id", "moved_to_close") == (None, False)
     second = await close(maker, net, "900.00", now=None)
@@ -427,7 +428,7 @@ async def test_a_take_out_recorded_before_a_block_is_still_answered_and_the_owne
 
 async def test_the_drawer_shows_a_seller_her_own_movements_and_a_manager_all(maker):
     net = await network(maker)
-    first = await close(maker, net, "1000.00", now=datetime.now(UTC) - timedelta(days=1))
+    first = await close(maker, net, "1000.00", now=days_ago(1))
     await record(maker, net, net.seller, body(net, "EXPENSES", "10.00", after=first.id))
     await record(maker, net, net.colleague, body(net, "EXPENSES", "20.00", after=first.id))
     await record(maker, net, net.manager, body(net, "CHANGE", "500.00", after=first.id))

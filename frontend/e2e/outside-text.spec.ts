@@ -302,13 +302,26 @@ test("text from outside is shown with its hidden characters marked, on every scr
   await open(page, seller, sellerName, "Каса");
   await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
   // A cash day runs from 06:00 to 06:00, Kyiv time: a sale just after
-  // midnight is the evening before's (owner, 2026-10-04).
-  const cashDay = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Kyiv",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(Date.now() - 6 * 3600 * 1000));
+  // midnight is the evening before's (owner, 2026-10-04). By the hour
+  // Kyiv's clock shows, as the server counts it: six hours back would be
+  // an hour off the nights the clocks change.
+  const kyiv = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map(({ type, value }) => [type, Number(value)]),
+  ) as Record<"year" | "month" | "day" | "hour", number>;
+  const cashDay = new Date(
+    Date.UTC(kyiv.year, kyiv.month - 1, kyiv.day - (kyiv.hour < 6 ? 1 : 0)),
+  )
+    .toISOString()
+    .slice(0, 10);
   // By Kyiv's clock, which the phone's may not be: on the calendar (cash
   // task list, P2-4).
   await page.getByRole("radio", { name: "Інший день" }).check();

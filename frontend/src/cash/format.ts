@@ -1,7 +1,7 @@
 import { kopecks, money } from "@/orders/types";
 import { methodLabels, notStated } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
-import { dayOf, timeOf } from "./errors";
+import { dayOf, drawerDay, timeOf } from "./errors";
 import { movementLabels } from "./types";
 import type { Correction, Movement, WaySums } from "./types";
 
@@ -64,7 +64,7 @@ export function daysAgo(days: number): string {
 /** The drawer's day `days` before today's, by the phone's clock: 06:00 to
  * 06:00, as the server's (G8) — at 00:30 today's is the evening before's. */
 export function cashDay(days: number): string {
-  const at = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const at = drawerDay(new Date());
   at.setDate(at.getDate() - days);
   return isoDay(at);
 }

@@ -24,7 +24,7 @@ import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -57,6 +57,7 @@ from tests.integration.test_cash_close import (
     at,
     close,
     d,
+    days_ago,
     handed_back,
     network,
     paid,
@@ -374,7 +375,7 @@ async def test_two_phones_closing_at_once_make_one_close(maker):
     """Both screens showed the same last close: one close is recorded, the
     other count was taken in a period already closed."""
     net = await network(maker)
-    first = await close(maker, net, "100.00", now=datetime.now(UTC) - timedelta(days=1))
+    first = await close(maker, net, "100.00", now=days_ago(1))
     async with maker() as session:
         marina = await resolve_scope(session, net.seller)
         olena = await resolve_scope(session, net.colleague)
