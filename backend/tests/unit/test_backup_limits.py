@@ -3,7 +3,9 @@
 and only a drill's own forgotten copies are ever dropped.
 
 Fake tools stand in for `pg_dump`, `pg_restore` and `age`: shell scripts
-that hang, with limits of a fraction of a second.
+that hang, with limits of two seconds or less. A limit counts from when
+the tool hangs (`limited_from_the_hang`), so a machine slow to start a shell
+never has a tool stopped before it said its id.
 """
 
 from __future__ import annotations
@@ -11,11 +13,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 import scripts.postgres_tools as postgres_tools
@@ -34,6 +38,10 @@ BACKEND = Path(__file__).resolve().parents[2]
 RECIPIENT = "age1" + "q" * 58
 NOW = datetime(2026, 10, 3, 3, 15, tzinfo=UTC)
 LIMIT_VARIABLES = [variable for variable, _ in STEP_TIMEOUTS.values()]
+# How long a fake tool may take to start. A machine busy with Docker,
+# PostgreSQL and the whole suite took longer than a test's half-second limit
+# (a local CI run, 2026-10-15); only a tool that never starts waits this long.
+START_WITHIN_SECONDS = 60
 
 
 @pytest.fixture(autouse=True)
@@ -57,6 +65,41 @@ def hanging(directory: Path, name: str) -> Path:
     return fake_tool(directory, name, 'echo $$ > "$1"\nexec sleep 60')
 
 
+async def hanging_pid(pidfile: Path) -> int:
+    """The process id a hanging tool wrote, once it has written it."""
+    deadline = time.monotonic() + START_WITHIN_SECONDS
+    while not (pidfile.exists() and pidfile.read_text().strip()):
+        if time.monotonic() > deadline:
+            pytest.fail(f"the fake tool did not start within {START_WITHIN_SECONDS} s")
+        await asyncio.sleep(0.01)
+    return int(pidfile.read_text())
+
+
+def limited_from_the_hang(monkeypatch: pytest.MonkeyPatch, pidfile: Path) -> list[float]:
+    """`run` gets the tool it starts only once the tool has written its id to
+    `pidfile` — once it hangs — so its limit counts from the hang, however
+    long the machine took to start it. The id is checked to be the process
+    `run` started; the list says when the tool began to hang."""
+    start = asyncio.create_subprocess_exec
+    hung_at: list[float] = []
+
+    async def start_then_wait_for_the_hang(
+        *command: Any, **options: Any
+    ) -> asyncio.subprocess.Process:
+        process = await start(*command, **options)
+        try:
+            assert await hanging_pid(pidfile) == process.pid
+        except BaseException:
+            process.kill()
+            await process.wait()
+            raise
+        hung_at.append(time.monotonic())
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", start_then_wait_for_the_hang)
+    return hung_at
+
+
 def gone(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -68,17 +111,15 @@ def gone(pid: int) -> bool:
 # --- time limits --------------------------------------------------------------
 
 
-async def test_a_tool_that_hangs_is_stopped_and_its_step_says_so(tmp_path):
+async def test_a_tool_that_hangs_is_stopped_and_its_step_says_so(tmp_path, monkeypatch):
     tool = hanging(tmp_path / "bin", "pg_dump")
     pidfile = tmp_path / "pid"
-    started = time.monotonic()
+    hung_at = limited_from_the_hang(monkeypatch, pidfile)
 
-    # 2 s, not less: a tool stopped before its shell wrote its id would leave
-    # nothing to check the stop by (it failed so once in ten runs at 0.5 s).
     with pytest.raises(ToolError, match=r"^pg_dump did not finish within 2 s and was stopped$"):
         await run(tool, str(pidfile), timeout=2)
 
-    assert time.monotonic() - started < 10
+    assert time.monotonic() - hung_at[0] < 10, "stopped by its limit, not by its own end"
     assert gone(int(pidfile.read_text())), "the hung tool was killed, not left behind"
 
 
@@ -93,6 +134,7 @@ async def test_each_step_has_its_own_limit_and_its_variable_changes_it(tmp_path,
     assert timeout_for("pg_dump") == 2 * 3600
     tool = hanging(tmp_path / "bin", "pg_restore")
     pidfile = tmp_path / "pid"
+    limited_from_the_hang(monkeypatch, pidfile)
     with pytest.raises(ToolError) as refused:
         await run(tool, str(pidfile))
     assert str(refused.value) == (
@@ -136,14 +178,11 @@ async def test_a_night_cancelled_leaves_no_tool_running(tmp_path):
     tool = hanging(tmp_path / "bin", "pg_dump")
     pidfile = tmp_path / "pid"
     task = asyncio.create_task(run(tool, str(pidfile)))
-    for _ in range(100):
-        if pidfile.exists() and pidfile.read_text().strip():
-            break
-        await asyncio.sleep(0.05)
+    pid = await hanging_pid(pidfile)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert gone(int(pidfile.read_text()))
+    assert gone(pid)
 
 
 async def test_encryption_that_hangs_keeps_the_plaintext_and_nothing_half_written(
@@ -151,12 +190,17 @@ async def test_encryption_that_hangs_keeps_the_plaintext_and_nothing_half_writte
 ):
     """`BIRKA_AGE` may name any program; the encryption's limit is the step's,
     whatever the program is called."""
+    pidfile = tmp_path / "pid"
     age = fake_tool(
         tmp_path / "bin",
         "age-wrapper",
         # Starts writing its output, as age does, then hangs.
-        'while [ "$1" != "--output" ]; do shift; done\necho partial > "$2"\nexec sleep 60',
+        'while [ "$1" != "--output" ]; do shift; done\necho partial > "$2"\n'
+        f"echo $$ > {shlex.quote(str(pidfile))}\nexec sleep 60",
     )
+    # Stopped only once its output is half written: earlier, there would be
+    # nothing half written to leave behind.
+    limited_from_the_hang(monkeypatch, pidfile)
     monkeypatch.setenv("BIRKA_AGE", str(age))
     monkeypatch.setenv("BIRKA_BACKUP_ENCRYPT_TIMEOUT_SECONDS", "0.5")
     out = tmp_path / "backups"
@@ -169,6 +213,7 @@ async def test_encryption_that_hangs_keeps_the_plaintext_and_nothing_half_writte
 
     assert archive.read_bytes() == b"the night's archive"
     assert sorted(path.name for path in out.iterdir()) == [archive.name]
+    assert gone(int(pidfile.read_text()))
 
 
 # --- one night at a time ------------------------------------------------------
