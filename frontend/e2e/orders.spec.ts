@@ -291,12 +291,34 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   await reopened.getByRole("button", { name: "Так, скасувати" }).click();
   await expect(reopened.getByText("Скасовано", { exact: true })).toBeVisible();
 });
-test("return requires physical confirmation", async ({ page }) => {
+test("goods come back as their own step: the warehouse named, physical confirmation required, the result naming it (orders task list, P2-4)", async ({
+  page,
+}) => {
+  const returned: unknown[] = [];
+  page.on("request", (request: Request) => {
+    if (request.method() === "POST" && request.url().endsWith("/return"))
+      returned.push(request.postDataJSON());
+  });
   await enter(page);
   await draft(page);
   await reserve(page);
   await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await expect(
+    page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Товар повернувся на склад" }).click();
+  // Its own screen: what comes back where read first, the card's step gone.
+  await expect(
+    page.getByRole("heading", { name: "Товар повернувся на склад" }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Прибув на пошту", exact: true }),
+  ).toHaveCount(0);
+  const where = page
+    .getByRole("list", { name: "Куди повернеться товар" })
+    .getByRole("listitem");
+  await expect(where).toHaveText([/^Повернеться на склад «.+»: Лоран/]);
+  const warehouse = /«(.+)»/.exec((await where.textContent()) ?? "")?.[1];
   const confirm = page.getByRole("button", {
     name: "Прийняти повернення",
     exact: true,
@@ -309,13 +331,32 @@ test("return requires physical confirmation", async ({ page }) => {
     .getByLabel("Причина повернення")
     .fill("Клієнт не забрав, товар повернувся");
   await expect(confirm).toBeDisabled();
+  // The tick says the goods are in hand: a tap within 0.7 s of the screen
+  // opening is taken as carried from the row (review, 2026-10-25).
+  await readTheAnswer(page);
   await page
     .getByLabel("Усі товари фізично отримані на складах відправлення")
     .check();
   await confirm.click();
+  // Back on the card: how many went back to which warehouse.
   await expect(
-    page.getByText("Повернено на склад", { exact: true }),
+    page
+      .getByRole("status")
+      .filter({ hasText: `Повернено на склад «${warehouse ?? ""}»: 1 шт.` }),
   ).toBeVisible();
+  await expect(page.locator(".order-status .badge")).toHaveText(
+    "Повернено на склад",
+  );
+  expect(returned).toEqual([
+    {
+      command_id: expect.any(String) as string,
+      reason: "Клієнт не забрав, товар повернувся",
+      physically_received: true,
+    },
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Товар повернувся на склад" }),
+  ).toHaveCount(0);
 });
 test("browser without Telegram shows entry guidance", async ({ page }) => {
   await page.goto("/");

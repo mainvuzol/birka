@@ -5,29 +5,27 @@ import { keptCashText } from "@/shared/reach";
 import { directionOf, isPaymentMethod, movementLabels } from "./types";
 import type { CashBody } from "./types";
 
-/** How each kept command is called: in the heading and the button, in its
- * line, and stood for after («Двічі він не запишеться»). */
+/** How each kept command is called: in the heading and the button, and in
+ * its line. */
 interface Name {
   heading: string;
   line: string;
-  it: "він" | "вона" | "воно";
 }
 
 function nameOf(body: CashBody): Name {
   switch (body.command) {
     case "close":
-      return { heading: "Підрахунок", line: "Підрахунок", it: "він" };
+      return { heading: "Підрахунок", line: "Підрахунок" };
     case "reason":
-      return { heading: "Причину", line: "Причина різниці", it: "вона" };
+      return { heading: "Причину", line: "Причина різниці" };
     case "movement":
       return directionOf(body.movement_kind) === "IN"
-        ? { heading: "Внесення", line: "Внесення", it: "воно" }
-        : { heading: "Видачу", line: "Видача", it: "вона" };
+        ? { heading: "Внесення", line: "Внесення" }
+        : { heading: "Видачу", line: "Видача" };
     case "correction":
       return {
         heading: "Зміну способу оплати",
         line: "Зміна способу оплати",
-        it: "вона",
       };
   }
 }
@@ -108,9 +106,11 @@ export function Kept({
       <h3>
         {busy ? `Перевіряємо ${lower}…` : `${name.heading} ще не підтверджено`}
       </h3>
+      {/* As an order's banner says it (owner decision after #137,
+          2026-10-25). */}
       <p>
-        {whatOf(body, name)} — сервер не відповів. Двічі {name.it} не
-        запишеться. Поки чекаємо, інші дії недоступні.
+        {whatOf(body, name)} — сервер не відповів. Двічі цю операцію не
+        запишуть. Поки чекаємо, інші дії недоступні.
       </p>
       <p>{keptCashText(since)}</p>
       <button disabled={busy} onClick={check}>

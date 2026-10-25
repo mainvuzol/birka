@@ -4202,3 +4202,53 @@ the owner's approval:
   after «← Замовлення», are let go.
 
 Built on 2026-10-25; see the [report](orders-redesign-7-report.md).
+
+## Owner decision — 2026-10-25 (after #137 was merged)
+
+Asked when #137 was merged, each answer the option recommended:
+- **Where an order goes, its own step, is approved as built:** «Доставка»,
+  its history's rows and the same waybill's other order its row, with what
+  was decided in building it — «ТТН ще немає — вписати» only once the parcel
+  is sent, «… у замовленнях — …» for several, and an order its reader could
+  not open named nowhere.
+- **«Каса»'s banners say it as the order's do:** «Двічі цю операцію не
+  запишуть.», not «Двічі вона не запишеться.», carried out with the next
+  task.
+- **Next: «Замовлення»'s P2-4,** «Товар повернувся на склад» as its own
+  step.
+
+## The goods come back, their own step — built 2026-10-25
+
+«Замовлення»'s task list, P2-4, and the owner's answers after #137. How it
+is carried out, not decided by the owner; the screen and its words wait for
+the owner's approval:
+- **Its own step:** «Товар повернувся на склад ›», the last row of a sent
+  order's card for whoever takes returns and receives goods, opens a screen
+  of that name with «← Замовлення»: which warehouse each coat goes back to —
+  «Повернеться на склад «Свій»: Лоран шоколад · M × 2», a line a warehouse,
+  as the server puts each back where it left from — then, under «Фізичне
+  повернення всього замовлення», «Причина повернення» with «Без імен і
+  телефонів покупців.», the tick «Усі товари фізично отримані на складах
+  відправлення», and «Прийняти повернення» under the thumb, held until both.
+  What is sent is unchanged.
+- **Taken, back on the card:** «Повернено на склад «Свій»: 1 шт.», a
+  sentence a warehouse, with a buzz.
+- **Warehouses named only where the server takes them back:** one not read
+  — whoever may not see the store's warehouses, or a read refused since —
+  or paused, or not receiving, and the screen says as before «Товар
+  повернеться на ті склади, звідки його відправили.»; taken unnamed,
+  «Повернено на склад відправлення: N шт.» («… на склади відправлення …»
+  for several).
+- **What comes back where is read first:** the heading in focus, the
+  keyboard only once the reason is tapped — seven taps from «Ще» with the
+  typing.
+- **The tick only meant:** a tap carried from the row onto it within 0.7 s
+  is let go — it says the goods are in hand.
+- **Back, the row that opened it in focus,** as from «Доставка».
+- **A kept return confirmed later** says «Операцію «Прийняти повернення»
+  записано один раз» (P1-1), never which warehouse.
+- **«Каса»'s banners** say «Двічі цю операцію не запишуть.» (the owner's
+  answer after #137); its refusals' «… двічі вона не запишеться.» were not
+  asked of, and stay — to be asked.
+
+Built on 2026-10-25; see the [report](orders-redesign-8-report.md).
