@@ -872,6 +872,8 @@ function Workspace({
     id: string;
     kept: boolean;
   } | null>(null);
+  // Each step that came back with its order: its card mounted afresh.
+  const [orderEpoch, setOrderEpoch] = useState(0);
   // An order's step refused: why, at the screen's top, brought to the
   // finger from where it was pressed (review, 2026-10-23; orders task
   // list, P0-2).
@@ -966,6 +968,7 @@ function Workspace({
         setCollected({ id: order.id, kept: resent });
       }
       cache.setQueryData(["order", store.id, order.id], order);
+      setOrderEpoch((epoch) => epoch + 1);
       setSelectedId(order.id);
       setTab("list");
       await Promise.all([
@@ -1842,12 +1845,14 @@ function Workspace({
                 : `Операцію «${visible(pending.label)}» ще не підтверджено`}
           </h3>
           <p>
+            {/* The operation the subject (owner decision after #136,
+                2026-10-25), and said by name after a line of goods. */}
             {pending.shown
               ? `${visible(pending.shown)} — `
-              : `Операцію «${visible(pending.label)}» — `}
+              : `Операція «${visible(pending.label)}» — `}
             {pending.acknowledged
               ? "замовлення ще не вдалося показати."
-              : "сервер не відповів. Двічі вона не запишеться."}{" "}
+              : "сервер не відповів. Двічі цю операцію не запишуть."}{" "}
             Поки чекаємо, інші дії недоступні.
           </p>
           {/* An order's step is never typed from paper: one not recorded is
@@ -2185,33 +2190,51 @@ function Workspace({
           }}
         />
       ) : selectedId ? (
-        <>
-          <button
-            className="quiet"
-            onClick={() => {
-              setSelectedId(null);
-              setOrderDone(null);
-              setCollected(null);
-            }}
-          >
-            ← До замовлень
-          </button>
-          {detail.isPending ? (
-            <p role="status">Завантажуємо замовлення…</p>
-          ) : detail.error ? (
-            <Failure
-              error={detail.error}
-              retry={() => {
-                void detail.refetch();
+        detail.data === undefined ? (
+          <>
+            <button
+              className="quiet"
+              onClick={() => {
+                setSelectedId(null);
+                setOrderDone(null);
+                setCollected(null);
               }}
-            />
-          ) : (
+            >
+              ← До замовлень
+            </button>
+            {detail.isPending ? (
+              <p role="status">Завантажуємо замовлення…</p>
+            ) : (
+              <Failure
+                error={detail.error}
+                retry={() => {
+                  void detail.refetch();
+                }}
+              />
+            )}
+          </>
+        ) : (
+          // «← До замовлень» its own: where it goes is a step with its own
+          // way back (orders task list, P1-3). Read again and failed — the
+          // phone back from the carrier's app, a refusal's re-read — the
+          // card as last read stays, what was typed with it, and why over
+          // it (review, 2026-10-25).
+          <>
+            {detail.error && (
+              <Failure
+                error={detail.error}
+                retry={() => {
+                  void detail.refetch();
+                }}
+              />
+            )}
             <OrderDetail
               // Afresh once it moves on or says where it goes otherwise, so
-              // no form keeps what it showed before.
+              // no form keeps what it showed before — and after every step
+              // it took, so a tap carried from it is let go.
               key={`${detail.data.id}:${detail.data.status}:${String(
                 detail.data.shipping_history?.length ?? 0,
-              )}`}
+              )}:${String(orderEpoch)}`}
               order={detail.data}
               done={orderDone?.id === detail.data.id ? orderDone.text : null}
               collected={
@@ -2263,9 +2286,16 @@ function Workspace({
                   shown: stepShown(detail.data, extra),
                 });
               }}
+              // The same waybill's other order, opened at its top.
+              openOther={(id) => {
+                setSelectedId(id);
+                setOrderDone(null);
+                setCollected(null);
+                window.scrollTo(0, 0);
+              }}
             />
-          )}
-        </>
+          </>
+        )
       ) : (
         <Orders
           store={store}

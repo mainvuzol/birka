@@ -4,12 +4,13 @@ import { methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
 import { visible } from "@/shared/visible";
 import { NoCustomerData } from "@/shared/NoCustomerData";
-import { usePanelRoom } from "@/shared/panel";
+import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { Collected, CollectedLine } from "./Collected";
-import { since, tagOf } from "./Orders";
+import { since, sinceDay, tagOf } from "./Orders";
+import { Shipping } from "./Shipping";
 import {
   carrierLabels,
   collectHint,
@@ -21,9 +22,9 @@ import {
 } from "./types";
 import type {
   Carrier,
-  Destination,
   Order,
   OrderItem,
+  SameWaybill,
   ShippingChange,
   Store,
 } from "./types";
@@ -98,17 +99,14 @@ export function stepDone(action: string, order: Order): string | null {
       : null;
   if (action === "cancel") return "Замовлення скасовано, резерв звільнено.";
   if (action === "arrive") return "Прибув на пошту";
+  // Its own step, said on the card it went back to (P1-3).
+  if (action === "shipping") return "Доставку збережено";
   if (action !== "dispatch") return null;
   if (order.destination === "ABROAD") return "Відправлено.";
   return order.waybill
     ? `Відправлено · ТТН ${visible(order.waybill)}`
     : "Відправлено. ТТН можна вписати пізніше.";
 }
-
-/** How long after a step's answer a tap is taken as meant for that step,
- * not for the next step's buttons that took its place: a double tap's
- * second half. */
-const CARRIED_TAP = 700;
 
 /**
  * How an order was paid, chosen at «Клієнт забрав» (owner decisions,
@@ -136,26 +134,7 @@ function lineSum(item: OrderItem): string {
   return money(decimal(each * BigInt(item.quantity)));
 }
 
-/**
- * One order (orders task list, P0-2): what it is and where it goes on top —
- * its goods as its title, how it goes, since when, its number small, its
- * status; its lines with their sums and «Разом» large; the next step one
- * button in the panel under the thumb, what it needs over the panel; the
- * rare at the foot. «Клієнт забрав» is its five ways, each the step itself
- * (P0-3); collected, the sale said large, then later in a line.
- */
-export function OrderDetail({
-  order,
-  done,
-  collected,
-  store,
-  token,
-  blocked,
-  action,
-  back,
-  fixWay,
-  returnSale,
-}: {
+interface CardProps {
   order: Order;
   /** What the step just taken on it did. */
   done: string | null;
@@ -173,6 +152,73 @@ export function OrderDetail({
   fixWay?: (() => void) | undefined;
   /** «Повернення» on its sale, for whoever takes returns. */
   returnSale?: (() => void) | undefined;
+  /** Another order with the same waybill, opened from its row. */
+  openOther: (id: string) => void;
+}
+
+/**
+ * One order: its card, and over it where it goes — its own step (orders
+ * task list, P1-3) — the card kept under it with what was typed there,
+ * «← Замовлення» back to it with the row that opened it in focus. Saved,
+ * the card is mounted afresh with what it did.
+ */
+export function OrderDetail(props: CardProps): JSX.Element {
+  const [shipping, setShipping] = useState<"write" | "change" | null>(null);
+  // The card first: its panel's room let go before the step's is kept.
+  return (
+    <>
+      <Card
+        {...props}
+        away={shipping !== null}
+        changeShipping={(writing) => {
+          setShipping(writing ? "write" : "change");
+        }}
+      />
+      {shipping !== null && (
+        <Shipping
+          order={props.order}
+          title={titleOf(props.order)}
+          writing={shipping === "write"}
+          blocked={props.blocked}
+          back={() => {
+            setShipping(null);
+          }}
+          save={(body) => {
+            props.action("shipping", body);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * One order (orders task list, P0-2): what it is and where it goes on top —
+ * its goods as its title, how it goes, since when, its number small, its
+ * status; its lines with their sums and «Разом» large; the next step one
+ * button in the panel under the thumb, what it needs over the panel; the
+ * rare at the foot. «Клієнт забрав» is its five ways, each the step itself
+ * (P0-3); collected, the sale said large, then later in a line.
+ */
+function Card({
+  order,
+  done,
+  collected,
+  store,
+  token,
+  blocked,
+  action,
+  back,
+  fixWay,
+  returnSale,
+  openOther,
+  away,
+  changeShipping,
+}: CardProps & {
+  /** Where it goes is shown over it: hidden, its panel with it. */
+  away: boolean;
+  /** Where it goes, its own step: to write the waybill, or to change it. */
+  changeShipping: (writing: boolean) => void;
 }): JSX.Element {
   const hint = useId();
   const [reason, setReason] = useState("");
@@ -200,9 +246,20 @@ export function OrderDetail({
   useEffect(() => {
     if (done !== null) heading.current?.scrollIntoView({ block: "nearest" });
   }, [done]);
+  // Back from where it goes: the row that opened it in focus, and a tap
+  // carried from «← Замовлення» onto «← До замовлень» let go.
+  const shippingRow = useRef<HTMLButtonElement>(null);
+  const wasAway = useRef(false);
+  const backAt = useRef(-Infinity);
+  useEffect(() => {
+    if (away) wasAway.current = true;
+    else if (wasAway.current) {
+      backAt.current = performance.now();
+      shippingRow.current?.focus();
+    }
+  }, [away]);
   // The waybill, or abroad where and how it went, written as it is sent.
   const [sentWith, setSentWith] = useState("");
-  const [changingShipping, setChangingShipping] = useState(false);
   const mayStep = store.permissions.includes("sale:create");
   const mayCredit = store.permissions.includes("sale:credit");
   const open = ["READY_TO_DISPATCH", "DISPATCHED", "ARRIVED"].includes(
@@ -214,10 +271,15 @@ export function OrderDetail({
     ARRIVED: "collect",
   }[order.status as "READY_TO_DISPATCH" | "DISPATCHED" | "ARRIVED"];
   // The panel's step: sent, arrived, or «Клієнт забрав» by its ways. None
-  // while where it goes is changed, or it comes back: one form at a time
-  // under the thumb (review, 2026-10-23).
-  const panelStep =
-    mayStep && open && !changingShipping && !returning ? next : null;
+  // while it comes back: one form at a time under the thumb (review,
+  // 2026-10-23).
+  const panelStep = mayStep && open && !returning && !away ? next : null;
+  // Sent within Ukraine with no waybill: written later, as it often is
+  // (orders task list, P1-3). Before it is sent, the field over the panel.
+  const writeLater =
+    order.destination === "UKRAINE" &&
+    !order.waybill &&
+    order.status !== "READY_TO_DISPATCH";
   const total = kopecks(order.total) ?? 0n;
   // In parts, what is paid now and what is left, once the part is a sum
   // under the whole, as the till's panel says it.
@@ -242,7 +304,17 @@ export function OrderDetail({
   const title = titleOf(order);
   const goes = goesOf(order);
   return (
-    <section className="order">
+    <section className="order" hidden={away}>
+      <button
+        type="button"
+        className="quiet"
+        onClick={(event) => {
+          if (event.timeStamp - backAt.current < CARRIED_TAP) return;
+          back();
+        }}
+      >
+        ← До замовлень
+      </button>
       <h2 className="order-title" ref={heading}>
         {title}
       </h2>
@@ -258,11 +330,42 @@ export function OrderDetail({
         <small className="order-number">№ {order.id.slice(0, 8)}</small>
       </p>
       {order.same_waybill && order.same_waybill.length > 0 && (
-        <p className="notice">
-          Ця накладна є також у замовленні №{" "}
-          {order.same_waybill.map((other) => other.id.slice(0, 8)).join(", № ")}
-          . Збережено — перевірте, чи це один пакунок.
-        </p>
+        // Saved anyway: several orders may go in one parcel (owner decision,
+        // 2026-10-01). Each other order its row, opened by a tap (orders
+        // task list, P1-3), never its eight characters (В1).
+        <div className="notice same-waybill">
+          <p>
+            {order.same_waybill.length === 1
+              ? "Ця ТТН є також у замовленні — перевірте, чи це один пакунок."
+              : "Ця ТТН є також у замовленнях — перевірте, чи це один пакунок."}
+          </p>
+          <ul className="order-rows" aria-label="Замовлення з цією ТТН">
+            {order.same_waybill.map((other) => (
+              <li key={other.id}>
+                <button
+                  type="button"
+                  className="sale-row order-row"
+                  onClick={() => {
+                    openOther(other.id);
+                  }}
+                >
+                  <span className="sale-main">
+                    <span className="sale-goods">{sameTitle(other)}</span>
+                    {other.created_at && (
+                      <span className="sale-meta">
+                        {sinceDay(other.created_at)}
+                      </span>
+                    )}
+                    <span className="badge">{statusLabels[other.status]}</span>
+                  </span>
+                  <span className="sale-open" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <ul className="order-lines" aria-label="Товар">
         {order.items.map((item) => {
@@ -365,43 +468,40 @@ export function OrderDetail({
           )}
         </>
       )}
-      {open &&
-        mayStep &&
-        (changingShipping ? (
-          <ShippingForm
-            order={order}
-            blocked={blocked}
-            cancel={() => {
-              setChangingShipping(false);
-            }}
-            save={(shipping) => {
-              action("shipping", shipping);
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            className="quiet order-rare"
-            disabled={blocked}
-            onClick={() => {
-              setChangingShipping(true);
-            }}
-          >
-            Змінити доставку
-          </button>
-        ))}
+      {open && mayStep && (
+        <button
+          type="button"
+          className="quiet order-rare"
+          ref={shippingRow}
+          disabled={blocked}
+          onClick={() => {
+            changeShipping(writeLater);
+          }}
+        >
+          {writeLater ? "ТТН ще немає — вписати" : "Змінити доставку"}{" "}
+          <span aria-hidden="true">›</span>
+        </button>
+      )}
       {order.shipping_history && order.shipping_history.length > 0 && (
+        // Each version a row (orders task list, P1-3): what it was, when
+        // and by whom; how it went on the right.
         <>
-          <h3>Історія доставки</h3>
-          <ul aria-label="Історія доставки">
+          <h3 className="shipping-changes-title">Історія доставки</h3>
+          <ul className="shipping-changes" aria-label="Історія доставки">
             {order.shipping_history.map((change, index) => (
-              <li key={`${change.at}:${String(index)}`}>
-                {new Date(change.at).toLocaleString("uk-UA", {
-                  dateStyle: "short",
-                  timeStyle: "short",
-                })}{" "}
-                · {shippingKinds[change.kind]} · {shippingText(change)} ·{" "}
-                {visible(change.by)}
+              <li
+                className="shipping-change"
+                key={`${change.at}:${String(index)}`}
+              >
+                <span className="sale-main">
+                  <span className="shipping-kind">
+                    {shippingKinds[change.kind]}
+                  </span>
+                  <span className="sale-meta">
+                    {at(change.at)} · {visible(change.by)}
+                  </span>
+                </span>
+                <span className="shipping-how">{shippingText(change)}</span>
               </li>
             ))}
           </ul>
@@ -622,146 +722,28 @@ function CancelOrder({
   );
 }
 
-/** Within Ukraine by one of three carriers, or abroad. */
-export function DestinationFields({
-  destination,
-  carrier,
-  change,
-}: {
-  destination: Destination;
-  carrier: Carrier | "";
-  change: (destination: Destination, carrier: Carrier | "") => void;
-}): JSX.Element {
-  return (
-    <div className="fields">
-      <label>
-        Куди
-        <select
-          value={destination}
-          onChange={(event) => {
-            const next = event.target.value as Destination;
-            change(next, next === "UKRAINE" ? carrier : "");
-          }}
-        >
-          <option value="UKRAINE">По Україні</option>
-          <option value="ABROAD">За кордон</option>
-        </select>
-      </label>
-      {destination === "UKRAINE" && (
-        <label>
-          Перевізник
-          <select
-            value={carrier}
-            onChange={(event) => {
-              change("UKRAINE", event.target.value as Carrier | "");
-            }}
-          >
-            <option value="">Оберіть перевізника</option>
-            {(Object.keys(carrierLabels) as Carrier[]).map((key) => (
-              <option key={key} value={key}>
-                {carrierLabels[key]}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    </div>
-  );
-}
-
 const shippingKinds: Record<ShippingChange["kind"], string> = {
   CREATED: "Вказано при створенні",
   DISPATCHED: "Вписано при відправленні",
   CORRECTED: "Змінено",
 };
 
-/** Where an open order goes, as it should stand: corrected or written later.
- * Every earlier version stays in its history (owner decision, 2026-10-01). */
-function ShippingForm({
-  order,
-  blocked,
-  cancel,
-  save,
-}: {
-  order: Order;
-  blocked: boolean;
-  cancel: () => void;
-  save: (shipping: Record<string, unknown>) => void;
-}): JSX.Element {
-  const hint = useId();
-  const [destination, setDestination] = useState<Destination>(
-    order.destination ?? "UKRAINE",
-  );
-  const [carrier, setCarrier] = useState<Carrier | "">(order.carrier ?? "");
-  const [waybill, setWaybill] = useState(order.waybill ?? "");
-  const [note, setNote] = useState(order.abroad_note ?? "");
-  const [problem, setProblem] = useState("");
-  return (
-    <fieldset disabled={blocked}>
-      <legend>Доставка</legend>
-      <DestinationFields
-        destination={destination}
-        carrier={carrier}
-        change={(nextDestination, nextCarrier) => {
-          setDestination(nextDestination);
-          setCarrier(nextCarrier);
-          setProblem("");
-        }}
-      />
-      {destination === "UKRAINE" ? (
-        <label>
-          Номер накладної
-          <input
-            value={waybill}
-            maxLength={64}
-            onChange={(event) => {
-              setWaybill(event.target.value);
-            }}
-          />
-        </label>
-      ) : (
-        <label>
-          Куди і як відправили: місто, країна, спосіб
-          <textarea
-            value={note}
-            maxLength={1000}
-            aria-describedby={hint}
-            onChange={(event) => {
-              setNote(event.target.value);
-            }}
-          />
-          <NoCustomerData id={hint} />
-        </label>
-      )}
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        <button
-          type="button"
-          onClick={() => {
-            if (destination === "UKRAINE" && carrier === "") {
-              setProblem("Оберіть перевізника.");
-              return;
-            }
-            save(
-              destination === "UKRAINE"
-                ? {
-                    destination,
-                    carrier,
-                    ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
-                  }
-                : {
-                    destination,
-                    ...(note.trim() ? { abroad_note: note.trim() } : {}),
-                  },
-            );
-          }}
-        >
-          Зберегти доставку
-        </button>
-        <button type="button" className="quiet" onClick={cancel}>
-          Скасувати
-        </button>
-      </div>
-    </fieldset>
-  );
+/** «22.10, 14:05»: when a version was stated, by the phone's own clock. */
+function at(iso: string): string {
+  const when = new Date(iso);
+  const two = (n: number): string => String(n).padStart(2, "0");
+  return `${two(when.getDate())}.${two(when.getMonth() + 1)}, ${two(when.getHours())}:${two(when.getMinutes())}`;
+}
+
+/** Another order with the same waybill, as its card's title says it: its
+ * first goods, and how many more lines (P1-3). An answer kept from before
+ * it was named so: «Замовлення». */
+function sameTitle(other: SameWaybill): string {
+  if (!other.display_name) return "Замовлення";
+  const more = (other.lines ?? 1) - 1;
+  return `${tagOf({
+    display_name: other.display_name,
+    size_label: other.size_label ?? null,
+    quantity: other.quantity ?? 1,
+  })}${more > 0 ? ` + ще ${String(more)}` : ""}`;
 }

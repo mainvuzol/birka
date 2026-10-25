@@ -36,7 +36,9 @@ export const freshOrdersView: OrdersView = {
 };
 
 /** «Лоран шоколад · M», and «× 2» for more than one. */
-export function tagOf(item: OrderItem): string {
+export function tagOf(
+  item: Pick<OrderItem, "display_name" | "size_label" | "quantity">,
+): string {
   const size =
     item.size_label === null || item.size_label === "UNKNOWN"
       ? "розмір невідомий"
@@ -55,12 +57,16 @@ function goesBy(order: Order): string {
     : shippingText(order);
 }
 
-/** «з 21.10»: since when the order waits, by the phone's own calendar,
+/** « · з 21.10»: since when the order waits, by the phone's own calendar,
  * never broken after «з». */
-export function since(iso: string | null): string {
-  if (!iso) return "";
+export function since(iso: string | null | undefined): string {
+  return iso ? ` · ${sinceDay(iso)}` : "";
+}
+
+/** «з 21.10», alone. */
+export function sinceDay(iso: string): string {
   const at = new Date(iso);
-  return ` · з\u00a0${String(at.getDate()).padStart(2, "0")}.${String(at.getMonth() + 1).padStart(2, "0")}`;
+  return `з\u00a0${String(at.getDate()).padStart(2, "0")}.${String(at.getMonth() + 1).padStart(2, "0")}`;
 }
 
 /**

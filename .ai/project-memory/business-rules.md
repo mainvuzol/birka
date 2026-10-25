@@ -4145,3 +4145,60 @@ and after #134. How it is carried out, not decided by the owner:
 
 Built on 2026-10-25; see the [report](orders-redesign-6-report.md).
 
+
+## Owner decision — 2026-10-25 (after #136 was merged)
+
+Asked when #136 was merged, each answer the option recommended:
+- **A kept order step's words are approved as built,** with those decided
+  in building it: one answered whose order could not be read, «Операцію
+  «Відправлено» записано» and «… — замовлення ще не вдалося показати.» with
+  no paper line; one confirmed later, «Операцію «…» записано один раз», a
+  shipping change and a return too.
+- **The task list's two phrasings are changed:** a command kept before the
+  order was kept beside it says «Операція «Відправлено» — …», its verb's
+  subject, not «Операцію …»; and «Двічі вона не запишеться.» after a line of
+  goods says «Двічі цю операцію не запишуть.». The order's banner only: was
+  not asked of «Каса»'s, which says it the same way — to be asked.
+- **Next: «Замовлення»'s P1-3,** shipping as its own step, its history in
+  rows, and the same waybill as the other order's row.
+
+## Where an order goes, its own step — built 2026-10-25
+
+«Замовлення»'s task list, P1-3, and the owner's answers after #136. How it
+is carried out, not decided by the owner; the screens and words wait for
+the owner's approval:
+- **Its own step:** «Змінити доставку ›» opens «Доставка» with «←
+  Замовлення» — «По Україні» or «За кордон» by a switch, the carrier by a
+  chip, «Номер ТТН» or «Куди і як відправили: місто, країна, спосіб» with
+  «Без імен і телефонів покупців.», and «Зберегти доставку» under the
+  thumb, «Оберіть перевізника» while within Ukraine no carrier is chosen.
+  What is sent is unchanged. Saved, back on the card: «Доставку
+  збережено», with a buzz — saved as it was too, no version added.
+- **A waybill written later:** a parcel sent within Ukraine with no
+  waybill offers «ТТН ще немає — вписати ›», opening with the cursor in
+  «Номер ТТН»: five taps from «Ще» with the typing. Before it is sent, the
+  waybill goes in the field over the panel, and the row says «Змінити
+  доставку»; abroad, and an order made before orders said where they go,
+  «Змінити доставку» too.
+- **The card kept under «Доставка»,** with what was typed there; back, the
+  row that opened it in focus; the card's «← До замовлень» is the card's
+  own. A card read again and failed keeps what was last read, and the
+  screen over it what was typed, with why and «Спробувати ще раз» over
+  them.
+- **Its history a row a version:** «Вказано при створенні», «Вписано при
+  відправленні» or «Змінено», under it «22.10, 14:05 · Оля» by the phone's
+  clock, how it went on the right.
+- **The same waybill:** «Ця ТТН є також у замовленні — перевірте, чи це
+  один пакунок.», «… у замовленнях — …» for several, and each other order
+  its row — named as its card's title, «Лоран шоколад · M × 2 + ще 2», «з
+  22.10», its pill and «›» — a tap opening it at its top; never its eight
+  characters (В1). The server gives its first line, how many lines and since
+  when, read only; an answer kept from before says only «Замовлення». An
+  order its reader could not open is named nowhere, as the store's list
+  leaves it out; before, it was named by its number.
+- **Taps carried from a press are let go:** after every step that came
+  back, the card is mounted afresh, a save that changed nothing too; and
+  «Зберегти доставку» right after «Доставка» opened, «← До замовлень» right
+  after «← Замовлення», are let go.
+
+Built on 2026-10-25; see the [report](orders-redesign-7-report.md).

@@ -138,10 +138,26 @@ export interface Order {
   /** One order only: every version of where it went. */
   shipping_history?: ShippingChange[];
   /** One order only: the store's other orders with the same waybill. */
-  same_waybill?: { id: string; status: Status }[];
+  same_waybill?: SameWaybill[];
   /** How a collected order was paid, said at «Клієнт забрав» (owner
    * decision, 2026-10-04); none before it was asked. */
   payment_method?: PaymentMethod | null;
+}
+
+/**
+ * Another of the store's orders with the same waybill (orders task list,
+ * P1-3), read only: named as its card's title names it, by its first goods
+ * and how many lines. An answer kept from before it was named so says only
+ * its id and status.
+ */
+export interface SameWaybill {
+  id: string;
+  status: Status;
+  created_at?: string | null;
+  display_name?: string | null;
+  size_label?: string | null;
+  quantity?: number | null;
+  lines?: number | null;
 }
 
 /** What collecting records: the rest is in the ways' rows (orders task

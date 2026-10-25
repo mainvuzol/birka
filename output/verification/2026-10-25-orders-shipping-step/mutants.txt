@@ -1,0 +1,30 @@
+- unchanged tree: passed 
+- «вписати» before it is sent: caught by where an order goes is corrected while it is open, as its own step, and every version stay
+- «вписати» never offered: caught by a waybill written after the parcel went: «ТТН ще немає — вписати», the cursor in its field
+- the cursor not in the waybill's field: caught by a waybill written after the parcel went: «ТТН ще немає — вписати», the cursor in its field
+- back, the row not in focus: caught by a waybill written after the parcel went: «ТТН ще немає — вписати», the cursor in its field
+- saved with no carrier: caught by where an order goes is corrected while it is open, as its own step, and every version stay
+- the press never asks for a carrier: caught by where an order goes is corrected while it is open, as its own step, and every version stay
+- the order not named over the press: caught by a waybill written later on a stubbed parcel: five taps from «Ще» with the typing, the curs
+- saved, nothing said: caught by a waybill written later on a stubbed parcel: five taps from «Ще» with the typing, the curs
+- the card not afresh after a step: caught by where an order goes saved as it was: back on its card, and a tap carried from the press is
+- the steps not counted: caught by where an order goes saved as it was: back on its card, and a tap carried from the press is
+- the other order by its id: caught by one waybill on two orders is saved and named, and orders are found by it; the same waybill's other orders: each its row — its goods as its card's title, since when,
+- several said as one: caught by the same waybill's other orders: each its row — its goods as its card's title, since when,
+- the other order's more lines not said: caught by the same waybill's other orders: each its row — its goods as its card's title, since when,
+- the other order not opened: caught by one waybill on two orders is saved and named, and orders are found by it
+- the other order opened where the page was: caught by the same waybill's other orders: each its row — its goods as its card's title, since when,
+- the history's month a month off: caught by where it went, a row a version: what it was, when by the phone's clock and by whom, how it
+- the history not saying how it went: caught by where it went, a row a version: what it was, when by the phone's clock and by whom, how it
+- the banner's old «Операцію …» before a line kept: caught by 10. a kept operation the phone settles says what became of it › a kept order step with wha
+- the banner's old «Двічі вона не запишеться»: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- an order its reader could not open named: caught by test_the_other_order_is_named_by_its_goods_and_only_where_it_may_be_read
+- the other order's last line named as its first: caught by test_the_other_order_is_named_by_its_goods_and_only_where_it_may_be_read
+- its lines not counted: caught by test_the_other_order_is_named_by_its_goods_and_only_where_it_may_be_read
+- the list naming what it may not: caught by test_order_pages_filter_whole_inaccessible_orders_before_pagination; test_order_private_permissions_and_tenant_store_boundaries
+- a private warehouse's order named to whoever holds the right network-wide: caught by test_the_other_order_is_named_by_its_goods_and_only_where_it_may_be_read
+- a failed read again drops the card and what was typed: caught by a save refused for its waybill keeps where it goes and what was typed; the card read again
+- the card not kept under where it goes: caught by an order to send fits the phone: its goods as its title, how it goes, its sum, the waybill
+- a tap carried onto «Зберегти доставку» taken: caught by a tap carried from «Змінити доставку» onto «Зберегти доставку», or from «← Замовлення» ont
+- a tap carried onto «← До замовлень» taken: caught by a tap carried from «Змінити доставку» onto «Зберегти доставку», or from «← Замовлення» ont
+28 of 28 caught
