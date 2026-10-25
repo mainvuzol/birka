@@ -1,0 +1,757 @@
+CI job `backend` — backend (lint, types, contracts, tests)
+Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local_tree.py from /Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/.github/workflows/ci.yml (GitHub Actions unavailable).
+
+commit:   2eaeae7 (claude/friendly-williamson-c70f68) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local_tree.py sha256 266f4258b20eb605c68a720f088f5f4224f408a77178e502fcf54ce04457f794
+date:     2026-10-25 05:49:34 EET → 05:57:56 (8m21s)
+machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
+tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
+env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
+images:   postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
+network:  from Docker's VM during the job (Docker Desktop's log): none
+result:   failed
+counts:   PG17 Tests: 3457 passed, 7 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 0 passed, 0 failed, 0 skipped
+why:      step(s) failed: Tests
+
+DEVIATIONS from CI:
+  - The runner is a copy of ci_local.py pointed at /Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68 (CI_LOCAL_REPO), not the main checkout; its edge job's compose project is birka-ci-local-edge (not birka-edge-check), with BIRKA_BACKUP_DIR in its work directory; the isolated E2E API it pauses is given back from /Users/nikitahlushak/birka/backend, as it was found.
+  - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of GitHub's ubuntu-24.04 runner (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
+  - Every job runs with TZ=UTC, LANG=C.UTF-8 and LC_ALL=C.UTF-8, as on the ubuntu runner (this Mac's own zone is Europe/Kyiv); every tool the job starts inherits them, Playwright's Chromium included.
+  - The working tree as it is, not a fresh checkout (the header says clean or dirty).
+  - CI=true; GITHUB_ENV and GITHUB_STEP_SUMMARY point into the runner's work directory; upload-artifact copies into the evidence directory. uv's and npm's caches are in the runner's work directory.
+  - Nothing is installed and no image is pulled; builds use only the local build cache. The network is used only where CI's own steps use it: `npm audit` and pip-audit's queries.
+  - Nothing is re-run: a failing step or test fails the job, as in CI.
+  - PostgreSQL 17: postgres:17-alpine (same env, initdb args and health check) in Docker Desktop's Linux VM, published on 127.0.0.1:55417 instead of localhost:5432; the database URLs say so.
+  - `PostgreSQL 17 client tools and age, for the backup tests` (apt in CI): NOT RUN, the declared gap (see GAPS).
+  - Tests and the assertion run CI's commands unchanged; the runner adds, in their environment only, PYTEST_ADDOPTS='--junitxml=<work>/… -o cache_dir=<work>/pytest-cache' to list each skip (from the junit file, not from -rs, so the text CI's assertion greps is CI's own) and to start from an empty pytest cache, as CI does (the repository's .pytest_cache is left alone).
+  - ruff and mypy start without a cache, as in CI (RUFF_CACHE_DIR/MYPY_CACHE_DIR in the work directory); `lint-imports` gets `--cache-dir <work>/import-linter-cache` so it too starts empty (the repository's backend/.import_linter_cache is left alone).
+  - /tmp paths moved to the runner's work directory; the catalogue evaluation report is in the evidence directory (CI uploads it as an artifact).
+  - `Install`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements-dev.lock (71 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 3 package(s) requirements-dev.lock does not pin, which CI's install would not have: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2. The lock's hashes are not checked here (nothing is downloaded); the images built in restore-drill and edge install it with --require-hashes.
+
+GAPS (declared; nothing else may be missing):
+  - none
+
+====================================================================================================
+[runner] Docker engine is down: starting Docker Desktop (open -a Docker); this run quits it when it ends
+[runner] Docker engine is up
+===== [runner] job backend: backend (lint, types, contracts, tests)
+[runner] 5 step(s) the runner replaces or does not run match their sha256 in ci.yml
+[runner] service postgres: docker run -d --pull never --name birka-ci-local-pg --label com.birka.ci-local=1 -p 127.0.0.1:55417:5432 -e POSTGRES_USER=birka -e POSTGRES_PASSWORD=birka -e POSTGRES_DB=birka_test -e 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale-provider=icu --icu-locale=uk-UA --locale=C.UTF-8' --health-cmd 'pg_isready -U birka -d birka_test' --health-interval 5s --health-timeout 5s --health-retries 20 postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+[runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55417->5432
+
+===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+[runner] the working tree at 2eaeae7 (clean), not a fresh checkout
+===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
+
+===== actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+[runner] setup-python 3.12.14: the isolated venv /Users/nikitahlushak/.cache/birka-runtime/python/bin/python (Python 3.12.14)
+===== replaced: ok: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 (0.0s)
+
+===== Install
+[runner] no pip install (no downloads): checking /Users/nikitahlushak/.cache/birka-runtime/python/bin/python against requirements-dev.lock
+[runner] 71 pins installed at their locked versions; 1 pins not for this platform (markers)
+[runner] the venv also holds 3 package(s) requirements-dev.lock does not pin: fasteners 0.20, pgserver 0.1.4, psutil 7.2.2
+$ uv pip check --python /Users/nikitahlushak/.cache/birka-runtime/python/bin/python
+Using Python 3.12.14 environment at: /Users/nikitahlushak/.cache/birka-runtime/python
+Checked 74 packages in 8ms
+All installed packages are compatible
+===== replaced: ok: Install (0.2s)
+
+===== Lint
+All checks passed!
+356 files already formatted
+===== ok: Lint (0.3s)
+
+===== Type check
+Success: no issues found in 165 source files
+===== ok: Type check (7.5s)
+
+===== Architecture contracts (ADR-0001)
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 149 files, 758 dependencies.
+-------------------------------------
+
+Layered architecture: api -> modules -> core KEPT
+core must not depend on any module KEPT
+tenancy is the base module and depends on no sibling KEPT
+module layering: identity -> authz -> tenancy KEPT
+catalog is a leaf: it may not import another business module KEPT
+authz must not depend on business modules KEPT
+refunds read history, not the catalog KEPT
+transfers move stock through inventory and read nothing else KEPT
+a sale neither refunds nor transfers KEPT
+credit keeps money owed and moves no stock KEPT
+inventory may read catalog but sales may not write stock directly KEPT
+only the inventory module may write stock (invariant I3) KEPT
+catalog parser cannot consult database or mutable catalog knowledge KEPT
+a legacy stock list opens a ledger and does nothing else KEPT
+nothing depends on the legacy list workflow KEPT
+backups reads no shop's business KEPT
+nothing depends on the backups section KEPT
+telegram only talks to Telegram KEPT
+damaged goods move only through the ledger's own commands KEPT
+only a return puts units in «Брак» KEPT
+a store's state changes nothing but the state KEPT
+nothing depends on the store-state command KEPT
+a return to a supplier moves goods through the ledger and reads nothing else KEPT
+what a store owes its suppliers moves no goods KEPT
+only «Брак» and the API use the supplier returns KEPT
+a report only reads KEPT
+nothing depends on the reports KEPT
+a merge moves stock only through the ledger's own door KEPT
+nothing depends on the catalogue corrections KEPT
+the drawer counts money and moves no goods KEPT
+only the API, the report and the watcher depend on the drawer KEPT
+a stocktake corrects stock only through the ledger's own door KEPT
+only the API and the watcher depend on the stocktake KEPT
+
+Contracts: 33 kept, 0 broken.
+===== ok: Architecture contracts (ADR-0001) (0.3s)
+
+===== Apply migrations
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+INFO  [alembic.runtime.migration] Running upgrade 0038_customer_erasure -> 0039_outage_mark_debts_returns, The mark «під час збою» on returns and debt payments. Owner decision, 2026-10-10; ADR-0021.
+INFO  [alembic.runtime.migration] Running upgrade 0039_outage_mark_debts_returns -> 0040_warehouse_stocktake, A stocktake of a whole warehouse. Owner decisions, 2026-10-10; ADR-0022.
+INFO  [alembic.runtime.migration] Running upgrade 0040_warehouse_stocktake -> 0041_first_days_mark, «З паперу»: the first days' paper, a mark of its own. Owner decisions, 2026-10-15 and 2026-10-16.
+===== ok: Apply migrations (1.4s)
+
+===== Migration drift check
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.schemas
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.tables
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.types
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.constraints
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.defaults
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments
+No new upgrade operations detected.
+===== ok: Migration drift check (0.5s)
+
+===== Migration downgrade is reversible
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 0041_first_days_mark -> 0040_warehouse_stocktake, «З паперу»: the first days' paper, a mark of its own. Owner decisions, 2026-10-15 and 2026-10-16.
+INFO  [alembic.runtime.migration] Running downgrade 0040_warehouse_stocktake -> 0039_outage_mark_debts_returns, A stocktake of a whole warehouse. Owner decisions, 2026-10-10; ADR-0022.
+INFO  [alembic.runtime.migration] Running downgrade 0039_outage_mark_debts_returns -> 0038_customer_erasure, The mark «під час збою» on returns and debt payments. Owner decision, 2026-10-10; ADR-0021.
+INFO  [alembic.runtime.migration] Running downgrade 0038_customer_erasure -> 0037_stock_list_parts, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+INFO  [alembic.runtime.migration] Running downgrade 0037_stock_list_parts -> 0036_outage_mark, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running downgrade 0036_outage_mark -> 0035_cash_and_card, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running downgrade 0035_cash_and_card -> 0034_server_incidents, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running downgrade 0034_server_incidents -> 0033_session_epoch, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running downgrade 0033_session_epoch -> 0032_size_spelling, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running downgrade 0032_size_spelling -> 0031_catalog_correction, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running downgrade 0031_catalog_correction -> 0030_opening_list_hold, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running downgrade 0030_opening_list_hold -> 0029_borrowed_goods, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running downgrade 0029_borrowed_goods -> 0028_order_shipping, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0028_order_shipping -> 0027_supplier_invoices, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0027_supplier_invoices -> 0026_supplier_returns, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0026_supplier_returns -> 0025_store_states, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0025_store_states -> 0024_returns_elsewhere, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0024_returns_elsewhere -> 0023_customer_credit, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0023_customer_credit -> 0022_shelf_shortage, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running downgrade 0022_shelf_shortage -> 0021_suggested_price, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running downgrade 0021_suggested_price -> 0020_damaged_units, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running downgrade 0020_damaged_units -> 0019_till_returns, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running downgrade 0019_till_returns -> 0018_backup_alerts, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running downgrade 0018_backup_alerts -> 0017_stock_adjustment, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running downgrade 0017_stock_adjustment -> 0016_goods_receipt, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running downgrade 0016_goods_receipt -> 0015_snapshot_import, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running downgrade 0015_snapshot_import -> 0014_alias_feedback_identity, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running downgrade 0014_alias_feedback_identity -> 0013_catalog_knowledge, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running downgrade 0013_catalog_knowledge -> 0012_catalog_trigram, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running downgrade 0012_catalog_trigram -> 0011_customer_orders, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running downgrade 0011_customer_orders -> 0010_stock_reservations, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running downgrade 0010_stock_reservations -> 0009_private_locations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running downgrade 0009_private_locations -> 0008_transfer_replay, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running downgrade 0008_transfer_replay -> 0007_missing_at_sale, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running downgrade 0007_missing_at_sale -> 0006_stock_rekey, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running downgrade 0006_stock_rekey -> 0005_stock_locations, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running downgrade 0005_stock_locations -> 0004_refund_replay, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running downgrade 0004_refund_replay -> 0003_sale_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running downgrade 0003_sale_replay -> 0002_m1b, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running downgrade 0002_m1b -> 0001_m1a, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running downgrade 0001_m1a -> , M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_m1a, M1A: tenancy, identity and authorization
+INFO  [alembic.runtime.migration] Running upgrade 0001_m1a -> 0002_m1b, M1B: catalog identity, evidence, inventory ledger, sales
+INFO  [alembic.runtime.migration] Running upgrade 0002_m1b -> 0003_sale_replay, Persist the original sale command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0003_sale_replay -> 0004_refund_replay, Persist the original refund command fingerprint and response.
+INFO  [alembic.runtime.migration] Running upgrade 0004_refund_replay -> 0005_stock_locations, Add empty location/access tables without changing the stock model.
+INFO  [alembic.runtime.migration] Running upgrade 0005_stock_locations -> 0006_stock_rekey, Move the stock key from the selling store to the physical location.
+INFO  [alembic.runtime.migration] Running upgrade 0006_stock_rekey -> 0007_missing_at_sale, Add the `MISSING_AT_SALE` movement reason.
+INFO  [alembic.runtime.migration] Running upgrade 0007_missing_at_sale -> 0008_transfer_replay, Transfer command replay, and tenant-bound transfer references. M1-018.
+INFO  [alembic.runtime.migration] Running upgrade 0008_transfer_replay -> 0009_private_locations, Explicit private warehouse control; preserve legacy/shared access.
+INFO  [alembic.runtime.migration] Running upgrade 0009_private_locations -> 0010_stock_reservations, Physical stock reservations and customer dispatch ledger types.
+INFO  [alembic.runtime.migration] Running upgrade 0010_stock_reservations -> 0011_customer_orders, Orders, frozen lines and permanent command responses; no stock backfill.
+INFO  [alembic.runtime.migration] Running upgrade 0011_customer_orders -> 0012_catalog_trigram, Enable PostgreSQL trigram similarity for read-only catalog suggestions.
+INFO  [alembic.runtime.migration] Running upgrade 0012_catalog_trigram -> 0013_catalog_knowledge, Transactional organization knowledge revision for catalog matching inputs.
+INFO  [alembic.runtime.migration] Running upgrade 0013_catalog_knowledge -> 0014_alias_feedback_identity, One evidence event per decision and alias, without rewriting history.
+INFO  [alembic.runtime.migration] Running upgrade 0014_alias_feedback_identity -> 0015_snapshot_import, Legacy snapshot import: who acts, a safe retry, several sizes per line, a frozen record. M1-023.
+INFO  [alembic.runtime.migration] Running upgrade 0015_snapshot_import -> 0016_goods_receipt, A goods receipt becomes a business operation, not just its side effects.
+INFO  [alembic.runtime.migration] Running upgrade 0016_goods_receipt -> 0017_stock_adjustment, A stock adjustment becomes a business operation. ADR-0007.
+INFO  [alembic.runtime.migration] Running upgrade 0017_stock_adjustment -> 0018_backup_alerts, The owner hears about the server's backups. M1-028.
+INFO  [alembic.runtime.migration] Running upgrade 0018_backup_alerts -> 0019_till_returns, Returns at the till: intact or damaged, and each store's «Брак». M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0019_till_returns -> 0020_damaged_units, The «Брак» section: one row per unit returned damaged. M1-027.
+INFO  [alembic.runtime.migration] Running upgrade 0020_damaged_units -> 0021_suggested_price, Who may set a suggested selling price. M1-028, owner question Q-F.
+INFO  [alembic.runtime.migration] Running upgrade 0021_suggested_price -> 0022_shelf_shortage, The empty shelf: a basket nothing of which was there. M1-030, owner question Q-G.
+INFO  [alembic.runtime.migration] Running upgrade 0022_shelf_shortage -> 0023_customer_credit, A sale paid in parts: what the customer owes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0023_customer_credit -> 0024_returns_elsewhere, Returns at another store. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0024_returns_elsewhere -> 0025_store_states, Store states: trading, blocked, archived. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0025_store_states -> 0026_supplier_returns, Returns to a supplier. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0026_supplier_returns -> 0027_supplier_invoices, What a store owes its suppliers. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0027_supplier_invoices -> 0028_order_shipping, Where an order goes. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0028_order_shipping -> 0029_borrowed_goods, Borrowed goods, and goods under consignment. Owner decisions, 2026-10-01.
+INFO  [alembic.runtime.migration] Running upgrade 0029_borrowed_goods -> 0030_opening_list_hold, A warehouse waits for its opening list. Owner decision, 2026-10-02.
+INFO  [alembic.runtime.migration] Running upgrade 0030_opening_list_hold -> 0031_catalog_correction, Correcting the catalogue. Owner decision, 2026-10-03; ADR-0008.
+INFO  [alembic.runtime.migration] Running upgrade 0031_catalog_correction -> 0032_size_spelling, One size, one spelling. Owner decision, 2026-10-03; ADR-0009.
+INFO  [alembic.runtime.migration] Running upgrade 0032_size_spelling -> 0033_session_epoch, Ending a person's sign-ins. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0033_session_epoch -> 0034_server_incidents, Trouble on the server, kept. Owner decision, 2026-10-03.
+INFO  [alembic.runtime.migration] Running upgrade 0034_server_incidents -> 0035_cash_and_card, Cash and card, the day's close. Owner decisions, 2026-10-04; ADR-0012.
+INFO  [alembic.runtime.migration] Running upgrade 0035_cash_and_card -> 0036_outage_mark, The mark «продано під час збою». Owner decisions, 2026-10-04 and 2026-10-07; ADR-0013.
+INFO  [alembic.runtime.migration] Running upgrade 0036_outage_mark -> 0037_stock_list_parts, A stock list filled by parts: a parser's file, or lines typed by hand. Owner decision, 2026-10-08; ADR-0014.
+INFO  [alembic.runtime.migration] Running upgrade 0037_stock_list_parts -> 0038_customer_erasure, A customer's name and phone are erased from a debt once it has been closed long enough, or on the owner's word. Owner decision, 2026-10-09; ADR-0015.
+INFO  [alembic.runtime.migration] Running upgrade 0038_customer_erasure -> 0039_outage_mark_debts_returns, The mark «під час збою» on returns and debt payments. Owner decision, 2026-10-10; ADR-0021.
+INFO  [alembic.runtime.migration] Running upgrade 0039_outage_mark_debts_returns -> 0040_warehouse_stocktake, A stocktake of a whole warehouse. Owner decisions, 2026-10-10; ADR-0022.
+INFO  [alembic.runtime.migration] Running upgrade 0040_warehouse_stocktake -> 0041_first_days_mark, «З паперу»: the first days' paper, a mark of its own. Owner decisions, 2026-10-15 and 2026-10-16.
+===== ok: Migration downgrade is reversible (2.1s)
+
+===== Catalog evaluation regression gate
+===== ok: Catalog evaluation regression gate (0.4s)
+
+===== Preserve catalog evaluation report
+[runner] artifact catalog-evaluation: /Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/output/verification/2026-10-25-drawer-day-ci-local/backend-catalog-evaluation.json (already in the evidence directory)
+===== replaced: ok: Preserve catalog evaluation report (0.0s)
+
+===== PostgreSQL 17 client tools and age, for the backup tests
+[runner] NOT RUN (declared gap): owner decision 2026-10-08: no PostgreSQL 17 client tools and no `age` on this Mac (CI installs them with apt). BIRKA_PG_BIN stays unset, so the backup tests skip on PostgreSQL 17 and CI's no-skip assertion fails on its skip check; the runner then runs exactly those tests on the project's PostgreSQL 16.2 cluster with its own 16.2 client. restore-drill runs pg_dump 17 and age (the ops image) against PostgreSQL 17.
+===== NOT RUN (declared gap): PostgreSQL 17 client tools and age, for the backup tests (0.0s)
+
+===== Tests
+....................................................ssssssssssssssssss.s [  2%]
+.......................................................F......FFF..F.... [  4%]
+....F.......................F........................................... [  6%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+...........................                                              [100%]
+=================================== FAILURES ===================================
+________________ test_two_phones_closing_at_once_make_one_close ________________
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x1130dbb50>, autoflush=True, expire_on_commit=False)
+
+    async def test_two_phones_closing_at_once_make_one_close(maker):
+        """Both screens showed the same last close: one close is recorded, the
+        other count was taken in a period already closed."""
+        net = await network(maker)
+        first = await close(maker, net, "100.00", now=datetime.now(UTC) - timedelta(days=1))
+        async with maker() as session:
+            marina = await resolve_scope(session, net.seller)
+            olena = await resolve_scope(session, net.colleague)
+    
+        async def count(scope: RequestScope) -> Any:
+            async with maker() as session:
+                found = await close_day(
+                    session,
+                    scope=scope,
+                    store_id=net.store,
+                    command_id=uuid.uuid4(),
+                    counted=d("100.00"),
+                    counted_at=datetime.now(UTC),
+                    after_close_id=first.id,
+                )
+                await session.commit()
+                return found
+    
+        results = await asyncio.gather(count(marina), count(olena), return_exceptions=True)
+        closes = [one for one in results if not isinstance(one, BaseException)]
+        refusals = [one for one in results if isinstance(one, BaseException)]
+>       assert len(closes) == 1 and len(refusals) == 1, results
+E       AssertionError: [ValidationFailedError('The drawer was already closed this business day'), ValidationFailedError('The drawer was already closed this business day')]
+E       assert (0 == 1)
+E        +  where 0 = len([])
+
+tests/integration/test_cash_concurrency.py:399: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:50:48 [info     ] cash.closed                    [app.modules.cash.service] close_id=fef89e63-9742-4051-9f1d-51b6645fdf3d number=1 store_id=e03cf71f-7d58-4490-86e9-45ba1a9df761
+_______ test_a_seller_fixes_her_own_sale_before_the_close_and_not_after ________
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x115aff950>, autoflush=True, expire_on_commit=False)
+till = (Net(shops=TwoShops(organization_id=UUID('f440f0e2-b03b-40e1-b697-b35d8b8ecfa8'), primary_store=UUID('50222ff2-cfcd-4d...9ef-1c86df5cfe8f'): 3495946956950272}), '49f2bad3-dab5-45b9-9012-2eb91b35fcdd', 'c36552f4-f50c-46f5-aa03-1d75be715233')
+
+    async def test_a_seller_fixes_her_own_sale_before_the_close_and_not_after(maker, till):
+        """B6.4: the seller pressed «Картка», the terminal refused, the customer paid
+        cash. After the close it is the owner's or a manager's to correct."""
+        net, variant, size = till
+        await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+        sale = await sell(maker, net, variant, size, "CARD")
+    
+        theirs = await fix(maker, net, net.colleague, "SALE", sale["id"], "CARD", "CASH")
+        assert theirs.status_code == 403, theirs.text
+        mine = await fix(maker, net, net.seller, "SALE", sale["id"], "CARD", "CASH", note="термінал")
+        assert mine.status_code == 201, mine.text
+        made = mine.json()
+        assert set(made) == CORRECTION_KEYS
+        assert figures(
+            made, "seq", "target", "target_id", "amount", "direction", "from_method", "to_method"
+        ) == (1, "SALE", sale["id"], "1500.00", "IN", "CARD", "CASH")
+        assert figures(made, "explains_close_id", "explains_day", "by", "note") == (
+            None,
+            None,
+            "Марина",
+            "термінал",
+        )
+    
+>       closed = await close(maker, net, "1500.00", now=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_cash_corrections.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_cash_close.py:486: in close
+    found = await close_day(
+app/modules/cash/service.py:584: in close_day
+    refuse("ALREADY_CLOSED_TODAY", **await _closed_by(session, previous))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'ALREADY_CLOSED_TODAY'
+details = {'closed_at': '2026-10-24T03:50:52.083541+00:00', 'closed_by': 'Марина'}
+
+    def refuse(reason: str, **details: Any) -> NoReturn:
+        """Refuse a drawer command after its replay lookup: `422 VALIDATION_ERROR`
+        with `reason`, and `recorded: false`, since the lock and the lookup came
+        first and so prove this command wrote nothing (ADR-0012, B4)."""
+>       raise ValidationFailedError(REFUSALS[reason], reason=reason, recorded=False, **details)
+E       app.core.errors.ValidationFailedError: The drawer was already closed this business day
+
+app/modules/cash/service.py:163: ValidationFailedError
+---------------------------- Captured stdout setup -----------------------------
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f440f0e2-b03b-40e1-b697-b35d8b8ecfa8 types=['DELIVERY']
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:50:52 [info     ] cash.closed                    [app.modules.cash.service] close_id=40b4ed5a-5a56-452a-a4a7-34dfbf9d5ebf number=1 store_id=50222ff2-cfcd-4d9b-93a3-abc2bcd4fd56
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f440f0e2-b03b-40e1-b697-b35d8b8ecfa8 types=['SALE']
+2026-10-25 03:50:52 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CARD reclassifications=0 sale_id=5d687e6f-1ae6-4c9d-a14f-78f8b461d60d shortages=0 store_id=50222ff2-cfcd-4d9b-93a3-abc2bcd4fd56 total=1500.00
+2026-10-25 03:50:52 [warning  ] domain_error                   [app.main] code=PERMISSION_DENIED status=403
+2026-10-25 03:50:52 [info     ] cash.corrected                 [app.modules.cash.service] correction_id=01f2f824-d96d-4c98-842a-60f770679e67 store_id=50222ff2-cfcd-4d9b-93a3-abc2bcd4fd56
+_____ test_a_seller_fixes_her_own_debt_payment_and_return_and_no_one_elses _____
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x11675bd90>, autoflush=True, expire_on_commit=False)
+till = (Net(shops=TwoShops(organization_id=UUID('66f09e29-2c2d-472f-9050-61400e7eb5fd'), primary_store=UUID('c2e4931f-d0ec-4a...bed-c201bee82838'): 4350608870407577}), 'daee31c4-d698-4402-979d-7c61e0ad4eba', 'd5994af8-a471-47ea-9707-e11e8cdb187e')
+
+    async def test_a_seller_fixes_her_own_debt_payment_and_return_and_no_one_elses(maker, till):
+        """Section 0, G16: their own debt payments and returns too, while open."""
+        net, variant, size = till
+        await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+        in_parts = await sell(maker, net, variant, size, "CASH", paid_now="500.00")
+        credit_id = in_parts["credit"]["credit_id"]
+        await pay(maker, net, credit_id, "300.00", "CARD", by=net.seller)
+        her_payment = await last_payment(maker, net, credit_id, net.seller)
+        await pay(maker, net, credit_id, "100.00", "CARD", by=net.colleague)
+        their_payment = await last_payment(maker, net, credit_id, net.colleague)
+        in_full = await sell(maker, net, variant, size, "CASH")
+        her_return = await give_back(maker, net, in_full, "CASH", by=net.seller)
+        other = await sell(maker, net, variant, size, "CARD", by=net.colleague)
+        their_return = await give_back(maker, net, other, "CARD", by=net.colleague)
+    
+        assert (
+            await fix(maker, net, net.seller, "PAYMENT", their_payment, "CARD", "CASH")
+        ).status_code == 403
+        assert (
+            await fix(maker, net, net.seller, "REFUND", their_return["id"], "CARD", "CASH")
+        ).status_code == 403
+    
+        payment = await fix(maker, net, net.seller, "PAYMENT", her_payment, "CARD", "TRANSFER")
+        assert payment.status_code == 201, payment.text
+        assert figures(payment.json(), "target", "amount", "direction") == ("PAYMENT", "300.00", "IN")
+        returned = await fix(maker, net, net.seller, "REFUND", her_return["id"], "CASH", "CARD")
+        assert returned.status_code == 201, returned.text
+        assert figures(returned.json(), "target", "amount", "direction") == ("REFUND", "1500.00", "OUT")
+    
+        async with as_(maker, net, net.seller) as client:
+            mine = (await client.get(f"/api/v1/cash/events?store_id={net.store}&mine=true")).json()
+        kinds = sorted((item["target"], item["target_id"]) for item in mine["items"])
+        assert kinds == sorted(
+            [
+                ("SALE", in_parts["id"]),
+                ("PAYMENT", her_payment),
+                ("SALE", in_full["id"]),
+                ("REFUND", her_return["id"]),
+            ]
+        )
+        assert all("Лоран" in item["label"] for item in mine["items"])
+    
+>       await close(maker, net, "0.00", now=None)
+
+tests/integration/test_cash_corrections.py:292: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_cash_close.py:486: in close
+    found = await close_day(
+app/modules/cash/service.py:584: in close_day
+    refuse("ALREADY_CLOSED_TODAY", **await _closed_by(session, previous))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'ALREADY_CLOSED_TODAY'
+details = {'closed_at': '2026-10-24T03:50:52.448697+00:00', 'closed_by': 'Марина'}
+
+    def refuse(reason: str, **details: Any) -> NoReturn:
+        """Refuse a drawer command after its replay lookup: `422 VALIDATION_ERROR`
+        with `reason`, and `recorded: false`, since the lock and the lookup came
+        first and so prove this command wrote nothing (ADR-0012, B4)."""
+>       raise ValidationFailedError(REFUSALS[reason], reason=reason, recorded=False, **details)
+E       app.core.errors.ValidationFailedError: The drawer was already closed this business day
+
+app/modules/cash/service.py:163: ValidationFailedError
+---------------------------- Captured stdout setup -----------------------------
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=66f09e29-2c2d-472f-9050-61400e7eb5fd types=['DELIVERY']
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:50:52 [info     ] cash.closed                    [app.modules.cash.service] close_id=0e10c07b-6f2a-483b-94d0-3caa271c4dc4 number=1 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=66f09e29-2c2d-472f-9050-61400e7eb5fd types=['SALE']
+2026-10-25 03:50:52 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CASH reclassifications=0 sale_id=bdf9fb4b-7cec-47e9-bc0a-3cd8d9ab4f59 shortages=0 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c total=1500.00
+2026-10-25 03:50:52 [info     ] credit.opened                  [app.modules.credit.service] credit_id=5e646a3e-53bb-4756-9a54-c78879af9820 sale_id=bdf9fb4b-7cec-47e9-bc0a-3cd8d9ab4f59
+2026-10-25 03:50:52 [info     ] credit.paid                    [app.modules.credit.service] credit_id=5e646a3e-53bb-4756-9a54-c78879af9820 taken_at_store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c
+2026-10-25 03:50:52 [info     ] credit.paid                    [app.modules.credit.service] credit_id=5e646a3e-53bb-4756-9a54-c78879af9820 taken_at_store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=66f09e29-2c2d-472f-9050-61400e7eb5fd types=['SALE']
+2026-10-25 03:50:52 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CASH reclassifications=0 sale_id=7c464dc1-eddb-4b22-adfe-909eb688572f shortages=0 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c total=1500.00
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=66f09e29-2c2d-472f-9050-61400e7eb5fd types=['REFUND_RETURN']
+2026-10-25 03:50:52 [info     ] refund.created                 [app.modules.refunds.service] lines=1 payment_method=CASH refund_id=5c4a2fb9-825c-4692-9621-0360123911d8 restocked=1 sale_id=7c464dc1-eddb-4b22-adfe-909eb688572f store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c taken_at_store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c total=1500.00
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=66f09e29-2c2d-472f-9050-61400e7eb5fd types=['SALE']
+2026-10-25 03:50:52 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CARD reclassifications=0 sale_id=3a407b00-5af4-4e9c-8abd-b5a2cc86de52 shortages=0 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c total=1500.00
+2026-10-25 03:50:52 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=66f09e29-2c2d-472f-9050-61400e7eb5fd types=['REFUND_RETURN']
+2026-10-25 03:50:52 [info     ] refund.created                 [app.modules.refunds.service] lines=1 payment_method=CARD refund_id=61a2c7cb-4a02-4924-a810-4f917717e011 restocked=1 sale_id=3a407b00-5af4-4e9c-8abd-b5a2cc86de52 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c taken_at_store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c total=1500.00
+2026-10-25 03:50:53 [warning  ] domain_error                   [app.main] code=PERMISSION_DENIED status=403
+2026-10-25 03:50:53 [warning  ] domain_error                   [app.main] code=PERMISSION_DENIED status=403
+2026-10-25 03:50:53 [info     ] cash.corrected                 [app.modules.cash.service] correction_id=760c7503-f17a-4405-b71a-239eee92a491 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c
+2026-10-25 03:50:53 [info     ] cash.corrected                 [app.modules.cash.service] correction_id=def24f79-0ecf-4b5a-8910-cccfe562a680 store_id=c2e4931f-d0ec-4a97-9ef8-0187ddb1e34c
+_______ test_after_the_close_her_own_operations_no_longer_offer_a_change _______
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x115f8a790>, autoflush=True, expire_on_commit=False)
+till = (Net(shops=TwoShops(organization_id=UUID('f085b7d3-847e-4b6e-bd22-506b1743d50b'), primary_store=UUID('d3b22019-0581-42...3c3-7408188663c9'): 1823678937593989}), 'a02d688b-836b-45d3-b1ec-0e536151be56', 'ff661f9f-f01e-4b19-be41-fd9f32de4705')
+
+    async def test_after_the_close_her_own_operations_no_longer_offer_a_change(maker, till):
+        """B6.2, G16: «Змінити спосіб оплати» follows the rule the command keeps
+        (`may_change`): offered to the seller for their own sale, debt payment and
+        return while their period is open, not after the close; still offered to
+        a manager, who corrects a closed day."""
+        net, variant, size = till
+        await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+        sale = await sell(maker, net, variant, size, "CARD")
+        in_parts = await sell(maker, net, variant, size, "CASH", paid_now="500.00")
+        credit_id = in_parts["credit"]["credit_id"]
+        await pay(maker, net, credit_id, "300.00", "CARD", by=net.seller)
+        payment = await last_payment(maker, net, credit_id, net.seller)
+        in_full = await sell(maker, net, variant, size, "CASH")
+        returned = await give_back(maker, net, in_full, "CASH", by=net.seller)
+        paths = (
+            f"/api/v1/cash/sales/{sale['id']}/method?store_id={net.store}",
+            f"/api/v1/cash/payments/{payment}/method",
+            f"/api/v1/cash/refunds/{returned['id']}/method",
+        )
+    
+        async def offered(by: uuid.UUID) -> list[bool]:
+            async with as_(maker, net, by) as client:
+                answers = [await client.get(path) for path in paths]
+            assert all(answer.status_code == 200 for answer in answers), [a.text for a in answers]
+            return [answer.json()["may_change"] for answer in answers]
+    
+        assert await offered(net.seller) == [True, True, True]
+>       await close(maker, net, "0.00", now=None)
+
+tests/integration/test_cash_corrections.py:331: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_cash_close.py:486: in close
+    found = await close_day(
+app/modules/cash/service.py:584: in close_day
+    refuse("ALREADY_CLOSED_TODAY", **await _closed_by(session, previous))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'ALREADY_CLOSED_TODAY'
+details = {'closed_at': '2026-10-24T03:50:53.465185+00:00', 'closed_by': 'Марина'}
+
+    def refuse(reason: str, **details: Any) -> NoReturn:
+        """Refuse a drawer command after its replay lookup: `422 VALIDATION_ERROR`
+        with `reason`, and `recorded: false`, since the lock and the lookup came
+        first and so prove this command wrote nothing (ADR-0012, B4)."""
+>       raise ValidationFailedError(REFUSALS[reason], reason=reason, recorded=False, **details)
+E       app.core.errors.ValidationFailedError: The drawer was already closed this business day
+
+app/modules/cash/service.py:163: ValidationFailedError
+---------------------------- Captured stdout setup -----------------------------
+2026-10-25 03:50:53 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f085b7d3-847e-4b6e-bd22-506b1743d50b types=['DELIVERY']
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:50:53 [info     ] cash.closed                    [app.modules.cash.service] close_id=a78d85dc-cb45-4f5d-afb1-ab619e6793a2 number=1 store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d
+2026-10-25 03:50:53 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f085b7d3-847e-4b6e-bd22-506b1743d50b types=['SALE']
+2026-10-25 03:50:53 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CARD reclassifications=0 sale_id=7195ff14-fa08-46c8-93b6-79fcc08c79a6 shortages=0 store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d total=1500.00
+2026-10-25 03:50:53 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f085b7d3-847e-4b6e-bd22-506b1743d50b types=['SALE']
+2026-10-25 03:50:53 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CASH reclassifications=0 sale_id=02476f16-4de7-413f-85c9-23a912f78f83 shortages=0 store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d total=1500.00
+2026-10-25 03:50:53 [info     ] credit.opened                  [app.modules.credit.service] credit_id=9fb1458a-65ae-46c8-8dd9-6611d6c17fb7 sale_id=02476f16-4de7-413f-85c9-23a912f78f83
+2026-10-25 03:50:53 [info     ] credit.paid                    [app.modules.credit.service] credit_id=9fb1458a-65ae-46c8-8dd9-6611d6c17fb7 taken_at_store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d
+2026-10-25 03:50:53 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f085b7d3-847e-4b6e-bd22-506b1743d50b types=['SALE']
+2026-10-25 03:50:53 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CASH reclassifications=0 sale_id=f250f135-8b16-4a0d-aaf8-c565734d2f05 shortages=0 store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d total=1500.00
+2026-10-25 03:50:53 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=f085b7d3-847e-4b6e-bd22-506b1743d50b types=['REFUND_RETURN']
+2026-10-25 03:50:53 [info     ] refund.created                 [app.modules.refunds.service] lines=1 payment_method=CASH refund_id=b3d9ff0e-f5dc-4e4b-b3ca-d21970962c3b restocked=1 sale_id=f250f135-8b16-4a0d-aaf8-c565734d2f05 store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d taken_at_store_id=d3b22019-0581-4279-a184-2e1ddcfa8f8d total=1500.00
+_____________ test_a_way_never_stated_is_corrected_from_not_stated _____________
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x117ca0990>, autoflush=True, expire_on_commit=False)
+
+    async def test_a_way_never_stated_is_corrected_from_not_stated(maker):
+        """B6.1: a row with a period and no way — the code of #67 during a
+        rollback — is corrected from «не вказано»; its cash then counts."""
+        net = await network(maker)
+        await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+        unknown = await sold(maker, net, "400.00", None)
+        made = await fix(maker, net, net.manager, "SALE", unknown, None, "CASH")
+        assert made.status_code == 201, made.text
+        assert made.json()["from_method"] is None
+>       closed = await close(maker, net, "400.00", now=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_cash_corrections.py:381: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_cash_close.py:486: in close
+    found = await close_day(
+app/modules/cash/service.py:584: in close_day
+    refuse("ALREADY_CLOSED_TODAY", **await _closed_by(session, previous))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'ALREADY_CLOSED_TODAY'
+details = {'closed_at': '2026-10-24T03:50:54.422496+00:00', 'closed_by': 'Марина'}
+
+    def refuse(reason: str, **details: Any) -> NoReturn:
+        """Refuse a drawer command after its replay lookup: `422 VALIDATION_ERROR`
+        with `reason`, and `recorded: false`, since the lock and the lookup came
+        first and so prove this command wrote nothing (ADR-0012, B4)."""
+>       raise ValidationFailedError(REFUSALS[reason], reason=reason, recorded=False, **details)
+E       app.core.errors.ValidationFailedError: The drawer was already closed this business day
+
+app/modules/cash/service.py:163: ValidationFailedError
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:50:54 [info     ] cash.closed                    [app.modules.cash.service] close_id=150c873d-491c-4bd7-9b37-c105f8f7f958 number=1 store_id=ceca0d4d-4fbb-4d65-98cc-998d064b467a
+2026-10-25 03:50:54 [info     ] cash.corrected                 [app.modules.cash.service] correction_id=2b2461f3-6e7e-46c3-9155-3dcf8deec06c store_id=ceca0d4d-4fbb-4d65-98cc-998d064b467a
+______________ test_a_closed_operation_names_the_close_it_fell_in ______________
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x1187a7810>, autoflush=True, expire_on_commit=False)
+till = (Net(shops=TwoShops(organization_id=UUID('05b67006-6658-40c3-a82e-ed95a1360390'), primary_store=UUID('58177a43-543a-4d...68a-0db034b0bc5a'): 4308173621012585}), '8383c46c-498b-4e54-a649-dfd59fd1c1a2', 'bb58df29-ecc0-4456-9a0d-086bb45d35c1')
+
+    async def test_a_closed_operation_names_the_close_it_fell_in(maker, till):
+        """The business day of the close that ended its period — what a
+        correction of it explains (G7) — named by the server, as no phone can
+        from the closes it has read; an open one names none (cash task list,
+        P2-4)."""
+        net, variant, size = till
+        await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+        closed = await sell(maker, net, variant, size, "CARD")
+>       ended = await close(maker, net, "0.00", now=None)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_cash_corrections.py:556: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_cash_close.py:486: in close
+    found = await close_day(
+app/modules/cash/service.py:584: in close_day
+    refuse("ALREADY_CLOSED_TODAY", **await _closed_by(session, previous))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'ALREADY_CLOSED_TODAY'
+details = {'closed_at': '2026-10-24T03:50:57.737033+00:00', 'closed_by': 'Марина'}
+
+    def refuse(reason: str, **details: Any) -> NoReturn:
+        """Refuse a drawer command after its replay lookup: `422 VALIDATION_ERROR`
+        with `reason`, and `recorded: false`, since the lock and the lookup came
+        first and so prove this command wrote nothing (ADR-0012, B4)."""
+>       raise ValidationFailedError(REFUSALS[reason], reason=reason, recorded=False, **details)
+E       app.core.errors.ValidationFailedError: The drawer was already closed this business day
+
+app/modules/cash/service.py:163: ValidationFailedError
+---------------------------- Captured stdout setup -----------------------------
+2026-10-25 03:50:57 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=05b67006-6658-40c3-a82e-ed95a1360390 types=['DELIVERY']
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:50:57 [info     ] cash.closed                    [app.modules.cash.service] close_id=a53af6e2-c0df-4975-a7eb-ecb9f9bec4f7 number=1 store_id=58177a43-543a-4da5-93c7-b81ba78edb3e
+2026-10-25 03:50:57 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=05b67006-6658-40c3-a82e-ed95a1360390 types=['SALE']
+2026-10-25 03:50:57 [info     ] sale.created                   [app.modules.sales.service] corrections=0 during_outage=False first_days=False lines=1 payment_method=CARD reclassifications=0 sale_id=cc2e5e65-5c40-4f61-ad29-2f2b0fb12f63 shortages=0 store_id=58177a43-543a-4da5-93c7-b81ba78edb3e total=1500.00
+_______________ test_a_take_out_on_time_stays_in_the_open_period _______________
+
+maker = async_sessionmaker(class_='AsyncSession', bind=<sqlalchemy.ext.asyncio.engine.AsyncEngine object at 0x11896b490>, autoflush=True, expire_on_commit=False)
+
+    async def test_a_take_out_on_time_stays_in_the_open_period(maker):
+        net = await network(maker)
+        first = await close(maker, net, "1000.00", now=datetime.now(UTC) - timedelta(days=1))
+        on_time = await record(maker, net, net.seller, body(net, "EXPENSES", "100.00", after=first.id))
+        assert figures(on_time.json(), "for_close_id", "moved_to_close") == (None, False)
+>       second = await close(maker, net, "900.00", now=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_cash_movements.py:337: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_cash_close.py:486: in close
+    found = await close_day(
+app/modules/cash/service.py:584: in close_day
+    refuse("ALREADY_CLOSED_TODAY", **await _closed_by(session, previous))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'ALREADY_CLOSED_TODAY'
+details = {'closed_at': '2026-10-24T03:51:03.664525+00:00', 'closed_by': 'Марина'}
+
+    def refuse(reason: str, **details: Any) -> NoReturn:
+        """Refuse a drawer command after its replay lookup: `422 VALIDATION_ERROR`
+        with `reason`, and `recorded: false`, since the lock and the lookup came
+        first and so prove this command wrote nothing (ADR-0012, B4)."""
+>       raise ValidationFailedError(REFUSALS[reason], reason=reason, recorded=False, **details)
+E       app.core.errors.ValidationFailedError: The drawer was already closed this business day
+
+app/modules/cash/service.py:163: ValidationFailedError
+----------------------------- Captured stdout call -----------------------------
+2026-10-25 03:51:03 [info     ] cash.closed                    [app.modules.cash.service] close_id=a154fb37-8ab2-4526-85d7-1372a1efeb23 number=1 store_id=04fcb21e-6d41-4cfd-84ff-b7941e0c382e
+2026-10-25 03:51:03 [info     ] cash.moved                     [app.modules.cash.service] movement_id=0529e512-f8c4-40bf-b9a3-a73b898427cd store_id=04fcb21e-6d41-4cfd-84ff-b7941e0c382e
+=============================== warnings summary ===============================
+../../../../../.cache/birka-runtime/python/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/test_cash_concurrency.py::test_two_phones_closing_at_once_make_one_close - AssertionError: [ValidationFailedError('The drawer was already closed this business day'), ValidationFailedError('The drawer was already closed this business day')]
+assert (0 == 1)
+ +  where 0 = len([])
+FAILED tests/integration/test_cash_corrections.py::test_a_seller_fixes_her_own_sale_before_the_close_and_not_after - app.core.errors.ValidationFailedError: The drawer was already closed this business day
+FAILED tests/integration/test_cash_corrections.py::test_a_seller_fixes_her_own_debt_payment_and_return_and_no_one_elses - app.core.errors.ValidationFailedError: The drawer was already closed this business day
+FAILED tests/integration/test_cash_corrections.py::test_after_the_close_her_own_operations_no_longer_offer_a_change - app.core.errors.ValidationFailedError: The drawer was already closed this business day
+FAILED tests/integration/test_cash_corrections.py::test_a_way_never_stated_is_corrected_from_not_stated - app.core.errors.ValidationFailedError: The drawer was already closed this business day
+FAILED tests/integration/test_cash_corrections.py::test_a_closed_operation_names_the_close_it_fell_in - app.core.errors.ValidationFailedError: The drawer was already closed this business day
+FAILED tests/integration/test_cash_movements.py::test_a_take_out_on_time_stays_in_the_open_period - app.core.errors.ValidationFailedError: The drawer was already closed this business day
+7 failed, 3457 passed, 19 skipped, 1 warning in 464.24s (0:07:44)
+===== FAILED (1): Tests (478.4s)
+
+===== [runner] what skipped on PostgreSQL 17, and why (from the junit files)
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_backup_is_never_overwritten: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_backup_restores_and_proves_it_is_the_same_data: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_copy_missing_rows_fails_and_names_the_table: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_damaged_archive_is_refused_before_anything_is_created: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_dump_that_hangs_is_stopped_and_the_night_says_so: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_good_night_backs_up_proves_and_keeps_what_the_owner_keeps: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_ledger_left_unprotected_fails_the_drill: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_ledger_that_does_not_reconcile_fails_the_drill: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_finding_the_last_one_still_running_starts_nothing: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_first_drops_what_a_stopped_drill_left: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_that_cannot_back_up_says_so: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_whose_drill_fails_keeps_its_backup_and_deletes_nothing: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_night_without_the_owners_key_fails_and_deletes_nothing: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_restore_that_hangs_fails_the_drill_and_drops_its_copy: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_a_sale_during_the_backup_is_in_neither_the_counts_nor_the_archive: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_an_encrypted_night_can_only_be_read_with_the_owners_key: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_kept_copies_stay_for_inspection_and_are_never_the_source: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_stock_left_under_a_merged_model_fails_the_drill: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+  SKIPPED tests/integration/test_backup_restore_drill.py::test_the_counts_are_the_snapshot_the_archive_holds: PostgreSQL client tools unavailable: pg_dump not found; install the PostgreSQL client or set BIRKA_PG_BIN
+::error::[runner] step(s) failed: Tests
+[runner] removed container birka-ci-local-pg and its anonymous volume
+
+===== [runner] steps
+  replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
+  replaced: ok                       actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  (0.0s)
+  replaced: ok                       Install  (0.2s)
+  ok                                 Lint  (0.3s)
+  ok                                 Type check  (7.5s)
+  ok                                 Architecture contracts (ADR-0001)  (0.3s)
+  ok                                 Apply migrations  (1.4s)
+  ok                                 Migration drift check  (0.5s)
+  ok                                 Migration downgrade is reversible  (2.1s)
+  ok                                 Catalog evaluation regression gate  (0.4s)
+  replaced: ok                       Preserve catalog evaluation report  (0.0s)
+  NOT RUN (declared gap)             PostgreSQL 17 client tools and age, for the backup tests  (0.0s)
+  FAILED (1)                         Tests  (478.4s)
+  skipped (if: success())            Assert the database tests actually ran
+===== [runner] backend: FAILED — PG17 Tests: 3457 passed, 7 failed, 19 skipped (19 declared tool gaps); assertion's integration run: 0 passed, 0 failed, 0 skipped
+  because: step(s) failed: Tests
