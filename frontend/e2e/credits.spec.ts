@@ -1463,7 +1463,9 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   ).toBeVisible();
   await expect(page.getByText(/ще не підтверджено/)).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Незавершена операція" }),
+    page.getByRole("heading", {
+      name: "Операцію «Клієнт забрав» ще не підтверджено",
+    }),
   ).toHaveCount(0);
   // A server's error at its first press: kept, unconfirmed, and named from
   // the first, not only once resent (review, 2026-10-20).
@@ -1474,7 +1476,9 @@ test("an order collected without paying in parts stays an ordinary sale", async 
       { exact: true },
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Повторити ту саму команду" }).click();
+  await page
+    .getByRole("button", { name: "Перевірити результат замовлення" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();

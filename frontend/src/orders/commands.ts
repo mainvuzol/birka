@@ -26,6 +26,13 @@ export interface Pending {
   /** Its checks' «not found» in a row, kept beside it across reopening
    * (owner decision, 2026-10-21; `@/shared/journal`). */
   misses?: number;
+  /**
+   * What it is about, for its banner while its answer is unknown — the
+   * goods, how they go, the waybill (orders task list, P1-1): beside the
+   * body, never sent, never trusted. It adds no customer's name or phone —
+   * an order holds none. Absent from a command kept before it was added.
+   */
+  shown?: string;
 }
 interface CommandState {
   pending: Pending | null;
@@ -81,7 +88,14 @@ function validatePending(key: string, value: unknown): Pending {
   ) {
     throw new Error("Некоректна збережена команда. Зверніться до менеджера.");
   }
-  return { ...pending, misses: countOf(pending.misses) };
+  // What is only shown is read defensively: anything else is dropped,
+  // never a reason to refuse the command itself.
+  const { shown, ...kept } = pending;
+  return {
+    ...kept,
+    misses: countOf(pending.misses),
+    ...(typeof shown === "string" && shown.length <= 1000 ? { shown } : {}),
+  };
 }
 export function loadPending(key: string): Pending | null {
   // Upgrade the initial session-only journal without losing an uncertain command.

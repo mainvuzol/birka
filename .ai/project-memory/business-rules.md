@@ -4102,3 +4102,46 @@ decided by the owner (the words wait for the owner's approval):
 
 Built on 2026-10-25; see the [report](screens-refusals-report.md).
 
+
+## Owner decision — 2026-10-25 (after #134 was merged)
+
+Asked when #134 was merged, the answer the option recommended:
+- **The other screens' refusal words are approved as built,** each
+  screen's as listed above, «Брак»'s rule and a kept command's conflict
+  without proof included.
+- **Next, as chosen after #132: «Замовлення»'s P1-1,** a saved step's words.
+
+## A kept order step says which step and which order — built 2026-10-25
+
+«Замовлення»'s task list, P1-1, and the owner's answers В4 (а) (2026-10-23)
+and after #134. How it is carried out, not decided by the owner:
+- **Its banner names the step,** as an order's refusals name it: «Операцію
+  «Відправлено» ще не підтверджено», while checked «Перевіряємо операцію
+  «Відправлено»…».
+- **And the order:** «Лоран шоколад · M · Нова пошта · ТТН 20451234 —
+  сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії
+  недоступні.» — the goods as the card's title, how it goes, the waybill
+  sent with it or the order's; a shipping change, the delivery it sets,
+  whole; a new order, its first goods «+ ще N» and how it goes. Kept beside
+  the command on the phone only to be shown: never sent, never trusted —
+  anything but a string of at most 1 000 characters is dropped, the command
+  kept as ever. An order holds no customer's name or phone, so none is kept. A
+  command kept before it: «Операцію «Відправлено» — сервер не відповів. …».
+- **Never from paper** (В4 (а)): «Телефон перевірить сам. Нічого не
+  повторюйте, поки він не скаже «не записано».», as «Каса»'s; a step not
+  recorded is made again here, one recorded the server refuses by its
+  status.
+- **Its button «Перевірити результат замовлення»;** «Оновити результат» for
+  one answered whose order could not be read, which says «Операцію
+  «Відправлено» записано» and «… — замовлення ще не вдалося показати.»,
+  with no paper line: it is recorded.
+- **No banner while a first press is on its way,** as «Каса»'s: nothing is
+  unanswered until it comes back so.
+- **Confirmed later, a step on an order says «Операцію «Відправлено»
+  записано один раз»,** with a buzz — a shipping change and a return too; a
+  new order still says what it reserved (P0-5, approved), or «… записано
+  один раз» if it moved on meanwhile; a collect its sale «… один раз»
+  (P0-3).
+
+Built on 2026-10-25; see the [report](orders-redesign-6-report.md).
+
