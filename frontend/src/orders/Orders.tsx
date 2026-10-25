@@ -4,7 +4,8 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { useSettled } from "@/sales/StockSearch";
-import { shippingText, statusLabels } from "./types";
+import { Placeholder } from "@/shared/Placeholder";
+import { shippingText, statusLabels, statusPills } from "./types";
 import type { Order, OrderItem, Store } from "./types";
 
 interface OrderPage {
@@ -98,7 +99,9 @@ export function OrderRow({
           {goesBy(order)}
           {since(order.created_at)}
         </span>
-        <span className="badge">{statusLabels[order.status]}</span>
+        <span className={statusPills[order.status]}>
+          {statusLabels[order.status]}
+        </span>
       </span>
       <span className="sale-open" aria-hidden="true">
         ›
@@ -141,8 +144,10 @@ function useOrders(
   return { pages, orders };
 }
 
-/** What could not be read, and «Спробувати ще раз», over the rows read. */
-function Unread({
+/** What could not be read, and «Спробувати ще раз», over the rows read: a
+ * warning's plate, as «Каса»'s, never a debt's red (orders task list,
+ * P2-3). The card's too. */
+export function Unread({
   error,
   retry,
 }: {
@@ -150,7 +155,7 @@ function Unread({
   retry: () => void;
 }): JSX.Element {
   return (
-    <div role="alert">
+    <div className="notice read-failure" role="alert">
       <p>{errorText(error)}</p>
       <button type="button" onClick={retry}>
         Спробувати ще раз
@@ -304,9 +309,9 @@ export function Orders({
           </button>
         )}
       </div>
-      {!mayRead ? (
-        <p>Немає права переглядати замовлення.</p>
-      ) : (
+      {/* Never opened without the right (orders task list, P2-1): nothing
+          is said of the rule. */}
+      {!mayRead ? null : (
         <>
           <form
             className="search"
@@ -339,7 +344,7 @@ export function Orders({
             // said of this search only (review, 2026-10-23).
             found.pages.isPending ||
             (found.pages.isPlaceholderData && found.orders.length === 0) ? (
-              <p role="status">Шукаємо…</p>
+              <Placeholder said="Шукаємо…" rows={3} day={false} />
             ) : (
               <>
                 {found.pages.error && (
@@ -385,7 +390,9 @@ export function Orders({
               </>
             )
           ) : opened.pages.isPending ? (
-            <p role="status">Завантажуємо…</p>
+            // A group's heading and its rows' places (orders task list,
+            // P2-2).
+            <Placeholder said="Завантажуємо замовлення…" rows={3} />
           ) : (
             <>
               {opened.pages.error && (
@@ -401,7 +408,7 @@ export function Orders({
               {more(opened.pages)}
               {nothingOpen &&
                 (closed.pages.isPending ? (
-                  <p role="status">Завантажуємо…</p>
+                  <Placeholder said="Завантажуємо замовлення…" rows={3} />
                 ) : closed.pages.error ? (
                   <Unread
                     error={closed.pages.error}
@@ -434,14 +441,15 @@ export function Orders({
                       }}
                     />
                   )}
-                  {closed.pages.isPending ? (
-                    <p role="status">Завантажуємо…</p>
-                  ) : (
-                    !closed.pages.error &&
-                    closed.orders.length === 0 && (
-                      <p>Завершених замовлень немає.</p>
-                    )
-                  )}
+                  {closed.pages.isPending
+                    ? // Nothing open: its places stand above already.
+                      !nothingOpen && (
+                        <Placeholder said="Завантажуємо замовлення…" rows={3} />
+                      )
+                    : !closed.pages.error &&
+                      closed.orders.length === 0 && (
+                        <p>Завершених замовлень немає.</p>
+                      )}
                   {group("Завершені", closed.orders, false, closedHeading)}
                   {more(closed.pages)}
                   <button

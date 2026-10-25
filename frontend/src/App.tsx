@@ -17,11 +17,17 @@ import {
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
-import { OrderDetail, actionLabels, stepDone, stepShown } from "@/orders/Order";
+import {
+  CardPlaceholder,
+  OrderDetail,
+  actionLabels,
+  stepDone,
+  stepShown,
+} from "@/orders/Order";
 import { placesRead } from "@/orders/Returned";
 import { chargeOnce } from "@/orders/Collected";
 import { NewOrder, shortOf } from "@/orders/NewOrder";
-import { Orders, freshOrdersView } from "@/orders/Orders";
+import { Orders, Unread, freshOrdersView } from "@/orders/Orders";
 import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
@@ -691,6 +697,12 @@ function Workspace({
   useEffect(() => {
     setSearchFirst(false);
   }, [tab]);
+  // «Замовлення» only for whoever may read them; nothing is said of the
+  // rule to anyone else (orders task list, P2-1).
+  const canSeeOrders = store.permissions.includes("sale:view");
+  // Read, not watched, as `canReturnNow`.
+  const canSeeOrdersNow = useRef(canSeeOrders);
+  canSeeOrdersNow.current = canSeeOrders;
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   // Read, not watched, as `canReturnNow` (credits task list, P2-1).
@@ -844,8 +856,10 @@ function Workspace({
       const saved = loadPending(key);
       useCommand.getState().set(saved);
       if (saved) {
-        // Its own tab, as every kept operation: the till opens first now.
-        setTab("list");
+        // Its own tab, as every kept operation: the till opens first now —
+        // for whoever may read orders; anyone else's banner stands over
+        // any tab (orders task list, P2-1).
+        if (canSeeOrdersNow.current) setTab("list");
         loadedFromDisk("orders");
       }
     } catch {
@@ -1323,7 +1337,7 @@ function Workspace({
     {
       tab: "list",
       label: "Замовлення",
-      shown: true,
+      shown: canSeeOrders,
       disabled: blocked,
       forgetsOrder: true,
     },
@@ -1428,6 +1442,15 @@ function Workspace({
   );
   const shown = sections.filter((section) => section.shown);
   const rest = shown.filter((section) => !counter.has(section.tab));
+  // Opened on «Замовлення» with no till to open first, by whoever may not
+  // read them: the first section shown instead (orders task list, P2-1) —
+  // unless a kept operation turned to its own tab meanwhile (review,
+  // 2026-10-25).
+  const firstShown = shown[0]?.tab;
+  useEffect(() => {
+    if (tab === "list" && !canSeeOrders && firstShown !== undefined)
+      setTab((now) => (now === "list" ? firstShown : now));
+  }, [tab, canSeeOrders, firstShown]);
   setScreen(tab);
   return (
     <>
@@ -2191,10 +2214,13 @@ function Workspace({
             });
           }}
         />
-      ) : selectedId ? (
+      ) : !canSeeOrders ? null : selectedId ? (
         detail.data === undefined ? (
-          <>
+          // In the card's own frame, its way back where the card's will
+          // stand: nothing moves when it comes (orders task list, P2-2).
+          <section className="order">
             <button
+              type="button"
               className="quiet"
               onClick={() => {
                 setSelectedId(null);
@@ -2205,16 +2231,16 @@ function Workspace({
               ← До замовлень
             </button>
             {detail.isPending ? (
-              <p role="status">Завантажуємо замовлення…</p>
+              <CardPlaceholder />
             ) : (
-              <Failure
+              <Unread
                 error={detail.error}
                 retry={() => {
                   void detail.refetch();
                 }}
               />
             )}
-          </>
+          </section>
         ) : (
           // «← До замовлень» its own: where it goes is a step with its own
           // way back (orders task list, P1-3). Read again and failed — the
@@ -2223,7 +2249,7 @@ function Workspace({
           // it (review, 2026-10-25).
           <>
             {detail.error && (
-              <Failure
+              <Unread
                 error={detail.error}
                 retry={() => {
                   void detail.refetch();
@@ -2400,19 +2426,5 @@ function SettledSale({ sale }: { sale: SaleReceipt }): JSX.Element {
         {way === "CARD" && paid === null && ` ${chargeOnce(sale.total)}`}
       </p>
     </>
-  );
-}
-function Failure({
-  error,
-  retry,
-}: {
-  error: unknown;
-  retry: () => void;
-}): JSX.Element {
-  return (
-    <div role="alert">
-      <p>{errorText(error)}</p>
-      <button onClick={retry}>Спробувати ще раз</button>
-    </div>
   );
 }

@@ -104,6 +104,10 @@ interface Server {
   gate?: Promise<void>;
   /** The cancel's answer, once `gate` opens: refused, or recorded. */
   cancelRefused?: boolean;
+  /** The open orders answered only once this opens. */
+  openHeld?: Promise<void>;
+  /** The open orders' read fails with the server's own error. */
+  openFails?: boolean;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -117,6 +121,14 @@ async function stub(page: Page, server: Server): Promise<void> {
       const offset = Number(params.get("offset") ?? "0");
       server.asked.push(`${status ?? ""}|${waybill ?? ""}|${String(offset)}`);
       if (waybill !== null && waybill === server.heldFor) await server.gate;
+      if (status === "open" && server.openHeld) await server.openHeld;
+      if (status === "open" && server.openFails) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Internal error" },
+        });
+        return;
+      }
       const all =
         waybill !== null
           ? (server.found[waybill] ?? [])
@@ -203,6 +215,11 @@ const abroad = order({
   destination: "ABROAD",
   carrier: null,
   abroad_note: note,
+});
+const cancelled = order({
+  status: "CANCELLED",
+  created_at: ago(10),
+  items: [item("Ріо графіт", "L")],
 });
 const collected = order({
   status: "COLLECTED",
@@ -365,7 +382,12 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
     open = done;
   });
   await field.fill("2046");
-  await expect(page.getByText("Шукаємо…")).toBeVisible();
+  // The rows' places while searched, heard as «Шукаємо…» (orders task
+  // list, P2-2).
+  await expect(
+    page.getByRole("status").filter({ hasText: "Шукаємо…" }),
+  ).toBeAttached();
+  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
   await expect(page.getByText(/замовлень не знайдено/)).toHaveCount(0);
   open();
   await expect(found).toHaveCount(1);
@@ -467,6 +489,62 @@ test("no order yet says what an order does, with «Нове замовлення
   await expect(
     page.getByText("Зараз нічого не треба відправляти."),
   ).toHaveCount(0);
+});
+
+test("while the open orders are read, a group's heading and three rows hold their places: the field and the first row stand where they will, heard as «Завантажуємо замовлення…» (orders task list, P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let release = (): void => undefined;
+  const orders = server({
+    open: [toSend, sent],
+    openHeld: new Promise((done) => {
+      release = done;
+    }),
+  });
+  await stub(page, orders);
+  await enter(page);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
+  ).toBeAttached();
+  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
+  await expect(page.getByText(/^Завантажуємо…$/)).toHaveCount(0);
+  const field = await page.getByLabel("Номер ТТН").boundingBox();
+  const place = await page
+    .locator(".placeholder .sale-row")
+    .first()
+    .boundingBox();
+  release();
+  const first = page.locator(".order-row").first();
+  await expect(first).toBeVisible();
+  const row = await first.boundingBox();
+  expect(Math.abs((row?.y ?? 0) - (place?.y ?? 0))).toBeLessThanOrEqual(1);
+  expect((await page.getByLabel("Номер ТТН").boundingBox())?.y).toBe(field?.y);
+});
+
+test("a list that could not be read says so on a warning's plate, never a debt's red, with «Спробувати ще раз» (orders task list, P2-3)", async ({
+  page,
+}) => {
+  const orders = server({ open: [toSend], openFails: true });
+  await stub(page, orders);
+  await enter(page);
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toHaveAttribute("role", "alert");
+  await expect(plate.getByRole("button")).toHaveText("Спробувати ще раз");
+  // The warning's colours, as «Каса»'s plate.
+  const colours = await plate.evaluate((node) => {
+    const probe = document.createElement("p");
+    probe.className = "notice";
+    document.body.append(probe);
+    const notice = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { plate: getComputedStyle(node).backgroundColor, notice };
+  });
+  expect(colours.plate).toBe(colours.notice);
+  orders.openFails = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(page.locator(".order-row")).toHaveCount(1);
+  await expect(plate).toHaveCount(0);
 });
 
 test("«Скасувати замовлення» asks first, «Ні, залишити» keeps it, and «Так, скасувати» cancels once, with a buzz and what it did (orders task list, P0-4)", async ({
@@ -647,7 +725,13 @@ for (const [name, theme] of [
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
-    await stub(page, server({ open: [toSend, arrived, sent, abroad] }));
+    await stub(
+      page,
+      server({
+        open: [toSend, arrived, sent, abroad],
+        closed: [collected, cancelled],
+      }),
+    );
     await enter(page, { theme });
     const first = page.locator(".order-row").first();
     await expect(first).toBeVisible();
@@ -675,6 +759,47 @@ for (const [name, theme] of [
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
+    // Pills by what they mean (orders task list, P2-3; В5 (а)): to be sent,
+    // a warning's; on its way, in transit's; collected, the accent;
+    // cancelled, nothing more to do — each at 4.5:1.
+    await page.getByRole("button", { name: "Показати завершені" }).click();
+    const pill = (list: string, n: number): Locator =>
+      page
+        .getByRole("list", { name: list })
+        .getByRole("button")
+        .nth(n)
+        .locator(".badge");
+    await expect(pill("Потрібно відправити", 0)).toHaveClass("badge warn");
+    // «Прибув на пошту» and «Відправлено» alike.
+    await expect(pill("В дорозі", 0)).toHaveText("Прибув на пошту");
+    await expect(pill("В дорозі", 0)).toHaveClass("badge transit");
+    await expect(pill("В дорозі", 1)).toHaveText("Відправлено");
+    await expect(pill("В дорозі", 1)).toHaveClass("badge transit");
+    await expect(pill("Завершені", 0)).toHaveClass("badge");
+    await expect(pill("Завершені", 1)).toHaveClass("badge neutral");
+    // «В дорозі» in the direction's own colours, «в пути» (§4).
+    expect(
+      await pill("В дорозі", 0).evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--transit)";
+        probe.style.background = "var(--transit-bg)";
+        document.body.append(probe);
+        const want = getComputedStyle(probe);
+        const got = getComputedStyle(node);
+        const same =
+          got.color === want.color &&
+          got.backgroundColor === want.backgroundColor;
+        probe.remove();
+        return same;
+      }),
+    ).toBe(true);
+    for (const each of [
+      pill("Потрібно відправити", 0),
+      pill("В дорозі", 0),
+      pill("Завершені", 0),
+      pill("Завершені", 1),
+    ])
+      expect(await contrast(each)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({
       path: `test-results/orders-list-${name}.png`,
       fullPage: true,

@@ -20,6 +20,7 @@ import type {
   StockOption,
   Store,
 } from "./types";
+import { Unread } from "./Orders";
 import { WhereTo } from "./WhereTo";
 
 interface DraftLine {
@@ -65,23 +66,6 @@ function shortText(short: Shortfall): string {
   return short.reserved === true
     ? `Доступно лише ${String(short.available)} шт. — решта в резерві інших замовлень.`
     : `Доступно лише ${String(short.available)} шт.`;
-}
-
-function Failure({
-  error,
-  retry,
-}: {
-  error: unknown;
-  retry: () => void;
-}): JSX.Element {
-  return (
-    <div role="alert">
-      <p>{errorText(error)}</p>
-      <button type="button" onClick={retry}>
-        Спробувати ще раз
-      </button>
-    </div>
-  );
 }
 
 /**
@@ -306,7 +290,7 @@ export function NewOrder({
         {locations.isPending ? (
           <Placeholder said="Завантажуємо склади…" field />
         ) : locations.error ? (
-          <Failure
+          <Unread
             error={locations.error}
             retry={() => {
               void locations.refetch();
@@ -351,7 +335,7 @@ export function NewOrder({
               searchRef={searchRef}
               failure={
                 stock.error ? (
-                  <Failure
+                  <Unread
                     error={stock.error}
                     retry={() => {
                       void stock.refetch();

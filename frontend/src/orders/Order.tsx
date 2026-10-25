@@ -20,6 +20,7 @@ import {
   money,
   shippingText,
   statusLabels,
+  statusPills,
 } from "./types";
 import type {
   Carrier,
@@ -163,6 +164,32 @@ interface CardProps {
   /** Another order with the same waybill, opened from its row. */
   openOther: (id: string) => void;
 }
+/**
+ * An order's place while it is read (orders task list, P2-2): its title,
+ * its line of context, its pill and two of its lines, in their sizes; a
+ * screen reader hears «Завантажуємо замовлення…».
+ */
+export function CardPlaceholder(): JSX.Element {
+  return (
+    <>
+      <p role="status" className="visually-hidden">
+        Завантажуємо замовлення…
+      </p>
+      <div className="placeholder order-placeholder" aria-hidden="true">
+        <span className="skeleton skeleton-title" />
+        <span className="skeleton skeleton-meta" />
+        <span className="skeleton skeleton-pill" />
+        {[0, 1].map((n) => (
+          <div className="order-line" key={n}>
+            <span className="skeleton skeleton-name" />
+            <span className="skeleton skeleton-owed" />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** «Повернено на склад «Свій»: 1 шт.», a sentence for each warehouse the
  * units went back to; a warehouse not read, unnamed (P2-4). */
 function returnedText(order: Order, places: readonly Location[]): string {
@@ -369,7 +396,9 @@ function Card({
       {/* Its status, and its number small beside it (owner decision,
           2026-10-23, В1): the context one line at 360 px. */}
       <p className="order-status">
-        <span className="badge">{statusLabels[order.status]}</span>
+        <span className={statusPills[order.status]}>
+          {statusLabels[order.status]}
+        </span>
         <small className="order-number">№ {order.id.slice(0, 8)}</small>
       </p>
       {order.same_waybill && order.same_waybill.length > 0 && (
@@ -399,7 +428,9 @@ function Card({
                         {sinceDay(other.created_at)}
                       </span>
                     )}
-                    <span className="badge">{statusLabels[other.status]}</span>
+                    <span className={statusPills[other.status]}>
+                      {statusLabels[other.status]}
+                    </span>
                   </span>
                   <span className="sale-open" aria-hidden="true">
                     ›
@@ -439,7 +470,9 @@ function Card({
         </p>
       )}
       {order.status === "READY_TO_DISPATCH" && (
-        <p className="hint">Товар у резерві — на касі його не продадуть.</p>
+        <p className="hint reserve-hint">
+          Товар у резерві — на касі його не продадуть.
+        </p>
       )}
       {panelStep === "dispatch" && order.destination && (
         // What the step needs, under the sum and over the panel where it

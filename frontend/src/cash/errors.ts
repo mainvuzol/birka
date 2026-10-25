@@ -288,7 +288,7 @@ export function orderErrorText(
         (label ?? resent) !== null
           ? `Операцію «${label ?? resent ?? ""}»`
           : "Операцію",
-        "вона",
+        twiceOf("вона"),
         misses,
       ) ?? errorText(error)
     );
@@ -344,7 +344,9 @@ export function saleErrorText(
   if (recordedNothing(error))
     return `Продаж не записано (${saleReason(error)}). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.`;
   if (recorded) return errorText(error);
-  return keptUnconfirmed(error, "Продаж", "він", misses) ?? errorText(error);
+  return (
+    keptUnconfirmed(error, "Продаж", twiceOf("він"), misses) ?? errorText(error)
+  );
 }
 
 /**
@@ -358,7 +360,8 @@ export function receiptErrorText(error: unknown, misses = 0): string {
         "Перевірте список і внесіть його ще раз.",
         "Дані змінилися, поки сервер не відповідав: перевірте список і внесіть його ще раз.",
       )}`
-    : (keptUnconfirmed(error, "Приймання", "воно", misses) ?? errorText(error));
+    : (keptUnconfirmed(error, "Приймання", twiceOf("воно"), misses) ??
+        errorText(error));
 }
 
 /**
@@ -370,7 +373,8 @@ export function receiptErrorText(error: unknown, misses = 0): string {
 export function adjustmentErrorText(error: unknown, misses = 0): string {
   if (!recordedNothing(error) || !(error instanceof ApiError))
     return (
-      keptUnconfirmed(error, "Коригування", "воно", misses) ?? errorText(error)
+      keptUnconfirmed(error, "Коригування", twiceOf("воно"), misses) ??
+      errorText(error)
     );
   const counted = error.details.expected;
   return `Коригування не записано. ${correctionRefusalText(
@@ -401,6 +405,16 @@ function lostPlace(error: ApiError): boolean {
 export const ASK_A_MANAGER =
   "Зверніться до менеджера: нехай перевірить, чи записано.";
 
+/** «двічі він не запишеться»: a kept command never recorded twice, said of
+ * it after its subject. */
+export function twiceOf(it: string): string {
+  return `двічі ${it} не запишеться`;
+}
+
+/** As «Каса» says it, in its banners and its refusals alike (owner
+ * decisions after #137 and #138, 2026-10-25). */
+export const NEVER_TWICE = "двічі цю операцію не запишуть";
+
 /**
  * A kept command asked about again, and answered by a server's error or a
  * request it could not find: no answer about the command. Still
@@ -408,8 +422,9 @@ export const ASK_A_MANAGER =
  * money twice; the request's number kept, for whoever reads the log — for
  * every kept command (owner decisions, 2026-10-18 and 2026-10-19). From the
  * third «not found» in a row (`misses`), a manager is asked to look. `what`
- * is the sentence's subject («Продаж», «Операцію «Відправлено»»), `it`
- * stands for it after. A request the server did not take — a 400, or a 422
+ * is the sentence's subject («Продаж», «Операцію «Відправлено»»), `twice`
+ * says it is never recorded twice — `twiceOf` it, or as «Каса» says it,
+ * `NEVER_TWICE` (owner decision after #138). A request the server did not take — a 400, or a 422
  * the shared words would answer «Перевірте дані…» — is no proof either: «…
  * сервер не прийняв запит …», as a kept payment's (owner decision,
  * 2026-10-21). A conflict that proves nothing, «… сервер відповів, що дані
@@ -419,7 +434,7 @@ export const ASK_A_MANAGER =
 export function keptUnconfirmed(
   error: unknown,
   what: string,
-  it: string,
+  twice: string,
   misses = 0,
 ): string | null {
   if (!(error instanceof ApiError)) return null;
@@ -427,12 +442,12 @@ export function keptUnconfirmed(
   // Changed, said the server, of what it may have recorded: still
   // unconfirmed, never «спробуйте ще раз» (owner decision, 2026-10-25).
   if (text === CONFLICT_TEXT)
-    return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі ${it} не запишеться.`;
+    return `${what} ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — ${twice}.`;
   const failed = text.startsWith(FAILED_TEXT);
   const notTaken = (failed && error.status === 400) || text === INVALID_TEXT;
   if (!failed && !notTaken) return null;
   return [
-    `${what} ще не підтверджено: сервер ${notTaken ? "не прийняв запит" : "не зміг відповісти"}. Перевірте результат ще раз — двічі ${it} не запишеться.`,
+    `${what} ще не підтверджено: сервер ${notTaken ? "не прийняв запит" : "не зміг відповісти"}. Перевірте результат ще раз — ${twice}.`,
     failed ? text.slice(FAILED_TEXT.length).trim() : "",
     // Only «not found» and a request not taken count, in one row; any other
     // answer begins it again (`@/shared/journal`).
@@ -450,7 +465,8 @@ export function returnErrorText(error: unknown, misses = 0): string {
     // A conflict, a request not taken — with a manager from the third in
     // a row (owner decision, 2026-10-21) — in the shared words.
     return (
-      keptUnconfirmed(error, "Повернення", "воно", misses) ?? errorText(error)
+      keptUnconfirmed(error, "Повернення", twiceOf("воно"), misses) ??
+      errorText(error)
     );
   }
   if (
@@ -514,7 +530,7 @@ export function creditErrorText(
       keptUnconfirmed(
         error,
         what,
-        kind === "payment" ? "він" : "воно",
+        twiceOf(kind === "payment" ? "він" : "воно"),
         misses,
       ) ?? text
     );
@@ -558,17 +574,17 @@ const notRecorded: Record<CashBody["command"], string> = {
   correction: "Зміну способу оплати не записано.",
 };
 
-/** What each of the drawer's commands is called, and stood for after; a
- * movement by its way, when known (review, 2026-10-20). */
-const keptNames: Record<CashBody["command"], [string, string]> = {
-  close: ["Підрахунок", "він"],
-  reason: ["Причину", "вона"],
-  movement: ["Видачу чи внесення", "це"],
-  correction: ["Зміну способу оплати", "вона"],
+/** What each of the drawer's commands is called; a movement by its way,
+ * when known (review, 2026-10-20). */
+const keptNames: Record<CashBody["command"], string> = {
+  close: "Підрахунок",
+  reason: "Причину",
+  movement: "Видачу чи внесення",
+  correction: "Зміну способу оплати",
 };
-const movementNames: Record<"OUT" | "IN", [string, string]> = {
-  OUT: ["Видачу", "вона"],
-  IN: ["Внесення", "воно"],
+const movementNames: Record<"OUT" | "IN", string> = {
+  OUT: "Видачу",
+  IN: "Внесення",
 };
 
 /** The drawer's own journal: what was not recorded, then why. */
@@ -581,14 +597,17 @@ export function cashJournalText(
   /** The drawer is still to be closed today (`cashErrorText`). */
   closeNow = false,
 ): string {
-  const [what, it] =
+  const what =
     command === "movement" && direction
       ? movementNames[direction]
       : keptNames[command];
   if (!recordedNothing(error)) {
     // Changed, said the server, of a command it may have recorded: still
-    // unconfirmed (`keptUnconfirmed`; cash task list, P2-1).
-    return keptUnconfirmed(error, what, it, misses) ?? errorText(error);
+    // unconfirmed (`keptUnconfirmed`; cash task list, P2-1), in «Каса»'s
+    // words (owner decision after #138).
+    return (
+      keptUnconfirmed(error, what, NEVER_TWICE, misses) ?? errorText(error)
+    );
   }
   // These say themselves what was not recorded.
   if (

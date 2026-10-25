@@ -377,7 +377,7 @@ test("a kept take-out the server says changed is still unconfirmed, by its own n
   await open(page);
   await page.getByRole("button", { name: "Каса", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Видачу ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі вона не запишеться.",
+    "Видачу ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі цю операцію не запишуть.",
   );
   expect(
     await page.evaluate((stored) => localStorage.getItem(stored), key),

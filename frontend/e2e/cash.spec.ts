@@ -781,7 +781,6 @@ for (const kept of [
       note: null,
     },
     what: "Зміну способу оплати ще не підтверджено",
-    it: "вона",
   },
   {
     name: "count at the close",
@@ -793,14 +792,12 @@ for (const kept of [
       after_close_id: null,
     },
     what: "Підрахунок ще не підтверджено",
-    it: "він",
   },
   {
     name: "reason of a difference",
     path: "closes/*/reason",
     body: { command: "reason", close_id: randomUUID(), reason: "Решта" },
     what: "Причину ще не підтверджено",
-    it: "вона",
   },
   {
     name: "money taken out",
@@ -813,7 +810,6 @@ for (const kept of [
       after_close_id: null,
     },
     what: "Видачу ще не підтверджено",
-    it: "вона",
   },
   {
     name: "money put in",
@@ -826,7 +822,6 @@ for (const kept of [
       after_close_id: null,
     },
     what: "Внесення ще не підтверджено",
-    it: "воно",
   },
 ])
   test(`a kept ${kept.name} a server fails to answer is still unconfirmed, by its own name (owner decision, 2026-10-19)`, async ({
@@ -862,7 +857,8 @@ for (const kept of [
     await openStore(page, /^Каса CASH/);
     await page.getByRole("button", { name: "Каса", exact: true }).click();
     // Never «спробуйте ще раз»: it may be recorded already.
-    const unconfirmed = `${kept.what}: сервер не зміг відповісти. Перевірте результат ще раз — двічі ${kept.it} не запишеться.`;
+    // In «Каса»'s words (owner decision after #138, 2026-10-25).
+    const unconfirmed = `${kept.what}: сервер не зміг відповісти. Перевірте результат ще раз — двічі цю операцію не запишуть.`;
     const said = page.getByRole("alert");
     await expect(said).toHaveText(`${unconfirmed} Номер запиту: 5a6b7c8d.`);
     expect(
