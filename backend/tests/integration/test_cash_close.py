@@ -51,7 +51,13 @@ from app.modules.authz.service import resolve_scope, seed_default_roles
 from app.modules.cash.models import CashClose, CashMovement, MovementKind
 from app.modules.cash.read import reason_owed
 from app.modules.cash.service import Target as CorrectionTarget
-from app.modules.cash.service import close_day, correct, newest_close, record_movement
+from app.modules.cash.service import (
+    business_day,
+    close_day,
+    correct,
+    newest_close,
+    record_movement,
+)
 from app.modules.credit.models import CreditEntry, CustomerCredit
 from app.modules.identity.models import AppUser
 from app.modules.identity.session import issue_session_token
@@ -122,6 +128,35 @@ def maker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 def at(day: int, hour: int, minute: int = 0, *, month: int = 10) -> datetime:
     """A moment in Kyiv, October 2026 (B7's week)."""
     return datetime(2026, month, day, hour, minute, tzinfo=KYIV)
+
+
+def days_ago(days: int, *, now: datetime | None = None) -> datetime:
+    """This moment `days` calendar days back by Kyiv's clock, ahead when
+    negative: that many of the drawer's days back (G8), whatever the clocks
+    do between. `now - 24 hours` is not: the night they go back, 05:30 on the
+    Sunday less 24 hours is 06:30 on the Saturday, the same drawer's day."""
+    return ((now or datetime.now(UTC)).astimezone(KYIV) - timedelta(days=days)).astimezone(UTC)
+
+
+@pytest.mark.parametrize(
+    "now",
+    [
+        # The Sunday the clocks go back, 2026-10-25: 24 hours before 05:30 is
+        # 06:30 on the Saturday.
+        at(25, 5, 30),
+        # That Saturday: 24 hours after 06:30 is 05:30 on the Sunday.
+        at(24, 6, 30),
+        # The Sunday they go forward, 2027-03-28: 24 hours before 06:30 is
+        # 05:30 on the Saturday.
+        datetime(2027, 3, 28, 6, 30, tzinfo=KYIV),
+    ],
+)
+def test_days_ago_are_the_drawers_days_the_nights_the_clocks_change(now: datetime) -> None:
+    today = business_day(now, "Europe/Kyiv")
+    for days in (-1, 1, 2, 3, 4, 5):
+        moment = days_ago(days, now=now)
+        assert business_day(moment, "Europe/Kyiv") == today - timedelta(days=days)
+        assert moment.astimezone(KYIV).time() == now.time()
 
 
 def d(value: str) -> Decimal:
@@ -868,7 +903,7 @@ async def test_h_a_blocked_store_is_closed_by_the_network_owner_alone(maker):
     """Example H (G14): neither a network manager, nor the store's own owner,
     nor its seller; the owner's answer is in full."""
     net = await network(maker)
-    await close(maker, net, "100.00", now=datetime.now(UTC) - timedelta(days=2))
+    await close(maker, net, "100.00", now=days_ago(2))
     await sold(maker, net, "3100.00", "CASH")
     await set_state(maker, net, net.store, "BLOCKED")
 
@@ -1074,7 +1109,7 @@ async def test_an_archived_store_is_not_closed_and_comes_back_with_an_opening_co
     """G14, G30: the drawer of a store in the archive is not closed; the
     first close after it opens again only records what is there."""
     net = await network(maker)
-    two_days_ago = datetime.now(UTC) - timedelta(days=2)
+    two_days_ago = days_ago(2)
     await close(maker, net, "500.00", now=two_days_ago, by=net.child_seller, store=net.other)
     await set_state(maker, net, net.other, "ARCHIVED")
     error = await refused(close(maker, net, "0.00", now=None, by=net.owner, store=net.other))
@@ -1254,7 +1289,7 @@ async def test_nothing_a_seller_reaches_before_her_count_says_what_the_drawer_ho
     way; a colleague's sale shows no way; their own open operations are time
     and goods only."""
     net = await network(maker)
-    await close(maker, net, "2000.00", now=datetime.now(UTC) - timedelta(days=1), by=net.colleague)
+    await close(maker, net, "2000.00", now=days_ago(1), by=net.colleague)
     async with api(maker, net.shops.scope(net.store)) as stocking:
         variant, size = await stock_a_coat(
             stocking, net.shops, store=net.store, warehouse=net.shops.shared_warehouse, qty=2
@@ -1312,7 +1347,7 @@ async def test_nothing_a_seller_reaches_before_her_count_says_what_the_drawer_ho
 
 async def test_a_sellers_own_open_operations_are_listed_by_time_and_goods_only(maker):
     net = await network(maker)
-    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    await close(maker, net, "0.00", now=days_ago(1))
     own = await sold(maker, net, "300.00", "CARD")
     await sold(maker, net, "500.00", "CASH", seller=net.colleague)
     async with as_(maker, net, net.seller) as client:
@@ -1458,9 +1493,9 @@ async def test_the_drawer_says_whether_the_next_count_opens_and_whether_today_is
         False,
         [],
     )
-    three_days_ago = datetime.now(UTC) - timedelta(days=3)
-    first = await close(maker, net, "100.00", now=three_days_ago, by=net.colleague)
-    await sold(maker, net, "50.00", "CASH", when=datetime.now(UTC) - timedelta(days=2))
+    first = await close(maker, net, "100.00", now=days_ago(3), by=net.colleague)
+    two_days_ago = days_ago(2)
+    await sold(maker, net, "50.00", "CASH", when=two_days_ago)
     before = await drawer_of(maker, net, net.seller)
     assert figures(before, "next_is_opening", "closed_today") == (False, False)
     assert figures(before["last_close"], "id", "number", "closed_by", "mine") == (
@@ -1469,8 +1504,8 @@ async def test_the_drawer_says_whether_the_next_count_opens_and_whether_today_is
         "Олена",
         False,
     )
-    two_days_ago = (datetime.now(UTC) - timedelta(days=2)).astimezone(KYIV) - timedelta(hours=6)
-    assert before["unclosed_days"] == [two_days_ago.date().isoformat()]
+    sold_on = (two_days_ago.astimezone(KYIV) - timedelta(hours=6)).date().isoformat()
+    assert before["unclosed_days"] == [sold_on]
 
     async with as_(maker, net, net.seller) as client:
         answer = await client.post(
@@ -1494,7 +1529,7 @@ async def test_the_drawer_says_whether_the_next_count_opens_and_whether_today_is
         True,
     )
     assert all(mine[key] is None for key in STARRED)
-    assert mine["unclosed_days"] == [two_days_ago.date().isoformat()]
+    assert mine["unclosed_days"] == [sold_on]
     after = await drawer_of(maker, net, net.seller)
     assert figures(after, "closed_today", "unclosed_days") == (True, [])
     assert figures(after["last_close"], "id", "mine") == (mine["id"], True)
@@ -1516,13 +1551,13 @@ async def test_a_close_of_a_store_since_archived_owes_no_reason(maker):
     """The store went to the archive before the reason was written: the
     reason can no longer be taken, so nothing holds their phone for it."""
     net = await network(maker)
-    two_days_ago = datetime.now(UTC) - timedelta(days=2)
+    two_days_ago = days_ago(2)
     await close(maker, net, "100.00", now=two_days_ago, by=net.child_seller, store=net.other)
     short = await close(
         maker,
         net,
         "50.00",
-        now=two_days_ago + timedelta(days=1),
+        now=days_ago(1),
         by=net.child_seller,
         store=net.other,
     )

@@ -24,7 +24,6 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -43,6 +42,7 @@ from tests.integration.test_cash_close import (
     close,
     collected,
     d,
+    days_ago,
     figures,
     handed_back,
     network,
@@ -215,7 +215,7 @@ async def test_a_seller_fixes_her_own_sale_before_the_close_and_not_after(maker,
     """B6.4: the seller pressed «Картка», the terminal refused, the customer paid
     cash. After the close it is the owner's or a manager's to correct."""
     net, variant, size = till
-    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    await close(maker, net, "0.00", now=days_ago(1))
     sale = await sell(maker, net, variant, size, "CARD")
 
     theirs = await fix(maker, net, net.colleague, "SALE", sale["id"], "CARD", "CASH")
@@ -250,7 +250,7 @@ async def test_a_seller_fixes_her_own_sale_before_the_close_and_not_after(maker,
 async def test_a_seller_fixes_her_own_debt_payment_and_return_and_no_one_elses(maker, till):
     """Section 0, G16: their own debt payments and returns too, while open."""
     net, variant, size = till
-    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    await close(maker, net, "0.00", now=days_ago(1))
     in_parts = await sell(maker, net, variant, size, "CASH", paid_now="500.00")
     credit_id = in_parts["credit"]["credit_id"]
     await pay(maker, net, credit_id, "300.00", "CARD", by=net.seller)
@@ -307,7 +307,7 @@ async def test_after_the_close_her_own_operations_no_longer_offer_a_change(maker
     return while their period is open, not after the close; still offered to
     a manager, who corrects a closed day."""
     net, variant, size = till
-    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    await close(maker, net, "0.00", now=days_ago(1))
     sale = await sell(maker, net, variant, size, "CARD")
     in_parts = await sell(maker, net, variant, size, "CASH", paid_now="500.00")
     credit_id = in_parts["credit"]["credit_id"]
@@ -373,7 +373,7 @@ async def test_a_way_never_stated_is_corrected_from_not_stated(maker):
     """B6.1: a row with a period and no way — the code of #67 during a
     rollback — is corrected from «не вказано»; its cash then counts."""
     net = await network(maker)
-    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    await close(maker, net, "0.00", now=days_ago(1))
     unknown = await sold(maker, net, "400.00", None)
     made = await fix(maker, net, net.manager, "SALE", unknown, None, "CASH")
     assert made.status_code == 201, made.text
@@ -511,7 +511,7 @@ async def test_an_unknown_operation_is_not_found(maker):
 
 async def test_the_days_money_is_listed_with_sums_and_ways_for_whoever_reads_it(maker, till):
     net, variant, size = till
-    first = await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    first = await close(maker, net, "0.00", now=days_ago(1))
     assert first.number == 1
     card = await sell(maker, net, variant, size, "CARD")
     in_parts = await sell(maker, net, variant, size, "CASH", paid_now="500.00", by=net.colleague)
@@ -551,7 +551,7 @@ async def test_a_closed_operation_names_the_close_it_fell_in(maker, till):
     from the closes it has read; an open one names none (cash task list,
     P2-4)."""
     net, variant, size = till
-    await close(maker, net, "0.00", now=datetime.now(UTC) - timedelta(days=1))
+    await close(maker, net, "0.00", now=days_ago(1))
     closed = await sell(maker, net, variant, size, "CARD")
     ended = await close(maker, net, "0.00", now=None)
     still_open = await sell(maker, net, variant, size, "CARD")
