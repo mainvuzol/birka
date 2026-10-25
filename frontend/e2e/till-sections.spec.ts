@@ -227,6 +227,50 @@ test("whoever does none of the counter's work has «Ще» alone, holding only w
   ]);
 });
 
+test("whoever may not read orders has no «Замовлення» in «Ще», opens on the first section shown, and is never told of the rule (orders task list, P2-1)", async ({
+  page,
+}) => {
+  const taken = [
+    "sale:view",
+    "sale:create",
+    "sale:refund",
+    "sale:credit",
+    "cash:close",
+    "cash:expense",
+    "report:view_financial",
+  ];
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (permission) => !taken.includes(permission),
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  // The first section shown, not «Замовлення».
+  await expect(
+    page.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(/Немає права переглядати замовлення/),
+  ).toHaveCount(0);
+  await more(page);
+  await expect(underMore(page)).toHaveText([
+    "Каталог",
+    "Приймання",
+    "Залишки",
+    "Брак",
+  ]);
+});
+
 test("the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's sections", async ({
   page,
 }) => {

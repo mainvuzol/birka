@@ -536,8 +536,10 @@ async def test_a_marked_return_and_payment_replay_after_their_day_aged_out(maker
     credit_id = await on_credit(maker, net)
     return_body = a_return(sale, mark=outage(net.seller, written))
     payment_body = a_payment(mark=outage(net.seller, written))
-    real = datetime.now(UTC)
-    monkeypatch.setattr(outage_module, "_now", lambda: real - timedelta(days=2))
+    # Two days back on the store's wall clock, not 48 hours: across the
+    # night the clocks change, those land on another day of Kyiv's.
+    real = datetime.now(KYIV)
+    monkeypatch.setattr(outage_module, "_now", lambda: (real - timedelta(days=2)).astimezone(UTC))
     taken = await take_back(maker, net, net.seller, sale, return_body)
     paid = await pay(maker, net, net.seller, credit_id, payment_body)
     monkeypatch.undo()

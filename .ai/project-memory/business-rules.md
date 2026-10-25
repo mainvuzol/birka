@@ -4252,3 +4252,57 @@ the owner's approval:
   asked of, and stay — to be asked.
 
 Built on 2026-10-25; see the [report](orders-redesign-8-report.md).
+
+## Owner decision — 2026-10-25 (after #138 was merged)
+
+Asked when #138 was merged:
+- **The goods coming back, their own step, are approved as built,** with
+  what was decided in building it — a line a warehouse and a sentence a
+  warehouse taken; a warehouse named only where the server takes the goods
+  back, else the old sentence and «Повернено на склад відправлення: N
+  шт.»; the heading in focus; a carried tap on the tick let go; a kept
+  return confirmed later naming no warehouse. (The option recommended.)
+- **«Каса»'s refusals say it as its banners do:** «… — двічі цю операцію не
+  запишуть.», not «… двічі вона не запишеться.» (the option recommended).
+- **Next: «Замовлення»'s P2-1, P2-2 and P2-3 together,** in one change —
+  the section's words and rights, its places while read, and its pills by
+  what they mean — closing its task list but for P2-5, which waits on the
+  bottom menu (the owner's choice over one task at a time).
+
+## «Замовлення»'s words, rights, places while read and pills — built 2026-10-25
+
+«Замовлення»'s task list, P2-1, P2-2 and P2-3, and the owner's answers after
+#138. How it is carried out, not decided by the owner; the screens wait for
+the owner's approval:
+- **«Замовлення» only for whoever may read them** (`sale:view`): not in
+  «Ще» otherwise, and «Немає права переглядати замовлення.» is said nowhere.
+  Opened on it with no till to open first, the app opens on the first
+  section shown instead — unless a kept operation turned to its own tab; a
+  kept order step of whoever may not read orders turns to none, its banner
+  standing over any.
+- **To be asked:** a role that sells but may not read orders — no default
+  role is so — still has «+ Нове замовлення», as before; its order,
+  recorded, cannot be shown, since the phone reads it back, and its banner
+  waits on «Оновити результат». Whether to offer it only with the right to
+  read orders is the owner's.
+- **One word for each thing:** what was left of the old words — the loading
+  and searching lines — gives way to places while read; the rest was carried
+  out with the tasks before.
+- **Places while read:** the list, a group's heading and three rows; a
+  search, three rows; the card, in its own frame, its title, its line of
+  context, its pill and two lines. A screen reader hears «Завантажуємо
+  замовлення…» and «Шукаємо…», as before.
+- **Pills by what they mean** (В5 (а)): «До відправлення» a warning's,
+  «Відправлено» and «Прибув на пошту» «в дорозі»'s blue, «Клієнт забрав» the
+  accent, «Скасовано» and «Повернено на склад» nothing more to do.
+- **What is said under a step, 14 px,** as «Каса»'s; «Товар у резерві — на
+  касі його не продадуть.» close to what it explains, so an order to send
+  stays whole on a phone of 360 × 640, its waybill's field over the panel.
+- **What could not be read, on a warning's plate,** as «Каса»'s, never a
+  debt's red: the list, the card and a new order's goods, each with
+  «Спробувати ще раз»; a step refused stays red.
+- **«Каса»'s refusals:** «… — двічі цю операцію не запишуть.», as its
+  banners (the owner's answer after #138); the till's, deliveries',
+  corrections', returns', stocktakes', debts' and orders' keep their own.
+
+Built on 2026-10-25; see the [report](orders-redesign-9-report.md).

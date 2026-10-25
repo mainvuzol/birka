@@ -537,6 +537,11 @@ nav:not(.sections) {
   background: var(--field);
   color: var(--text-2);
 }
+/* On its way (orders task list, P2-3): the direction's colour «в пути». */
+.badge.transit {
+  background: var(--transit-bg);
+  color: var(--transit);
+}
 .nights,
 .troubles {
   list-style: none;
@@ -1676,15 +1681,18 @@ html {
   border-radius: 15px;
 }
 /* A server that does not answer, on «Каса»'s screens: a warning's plate,
-   as the direction draws it, never a debt's red (cash task list, P2-3). */
-.cash .notice[role="alert"] {
+   as the direction draws it, never a debt's red (cash task list, P2-3);
+   on «Замовлення»'s, whatever could not be read (orders task list, P2-3). */
+.cash .notice[role="alert"],
+.notice.read-failure[role="alert"] {
   padding: 15px;
   border: 1px solid var(--warn-line);
   border-radius: 10px;
   background: var(--warn-bg);
   color: var(--text);
 }
-.cash .notice[role="alert"] p:first-child {
+.cash .notice[role="alert"] p:first-child,
+.notice.read-failure[role="alert"] p:first-child {
   margin-top: 0;
 }
 /* What is said under a field or a task, 14 px on every screen of «Каса»
@@ -1846,6 +1854,32 @@ html {
 }
 .order-sent-with {
   margin-top: 8px;
+}
+/* What is said under a field or a step, 14 px on every screen of
+   «Замовлення» (orders task list, P2-3), as «Каса»'s. */
+.orders .hint,
+.order .hint,
+.order-new .hint,
+.order-shipping .hint,
+.order-returned .hint {
+  font-size: 14px;
+}
+/* Close to what it explains, so an order to send stays whole on a phone of
+   360 × 640, its waybill's field over the panel (orders task list, P0-2). */
+.reserve-hint {
+  margin: 6px 0;
+  line-height: 1.4;
+}
+/* An order's place while it is read (P2-2): its title, its context, its
+   pill and two lines, in their sizes. */
+.order-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skeleton-title {
+  width: 70%;
+  height: 28px;
 }
 /* Where an order goes (orders task list, P1-3): its own step, a switch and
    chips as a new order's; its history a row a version, how it went on the

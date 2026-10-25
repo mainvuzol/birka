@@ -194,6 +194,20 @@ export function shippingText(shipping: Shipping): string {
     ? `${carrier} · ТТН ${visible(shipping.waybill)}`
     : `${carrier} · ТТН ще немає`;
 }
+/**
+ * Each status's pill by what it means (orders task list, P2-3; owner
+ * decision, 2026-10-23, В5 (а)): to be sent, a warning's — something to
+ * do; on its way, in transit's; collected, the accent; cancelled or come
+ * back, nothing more to do.
+ */
+export const statusPills: Record<Status, string> = {
+  READY_TO_DISPATCH: "badge warn",
+  DISPATCHED: "badge transit",
+  ARRIVED: "badge transit",
+  COLLECTED: "badge",
+  CANCELLED: "badge neutral",
+  RETURNED: "badge neutral",
+};
 export const statusLabels: Record<Status, string> = {
   READY_TO_DISPATCH: "До відправлення",
   DISPATCHED: "Відправлено",

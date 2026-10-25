@@ -10,7 +10,7 @@ import {
   recordedNothing,
 } from "@/shared/api";
 import { visible } from "@/shared/visible";
-import { keptUnconfirmed } from "@/cash/errors";
+import { keptUnconfirmed, twiceOf } from "@/cash/errors";
 import type { Location, Store } from "@/orders/types";
 import { CatalogPicker } from "./CatalogPicker";
 import { submitCount, useCountCommand } from "./stocktakeCommands";
@@ -103,7 +103,8 @@ export function countRefusalText(
 export function countErrorText(error: unknown, misses = 0): string {
   if (!recordedNothing(error) || !(error instanceof ApiError))
     return (
-      keptUnconfirmed(error, "Підрахунок", "він", misses) ?? errorText(error)
+      keptUnconfirmed(error, "Підрахунок", twiceOf("він"), misses) ??
+      errorText(error)
     );
   return `Підрахунок не записано. ${countRefusalText(error, "")}`;
 }

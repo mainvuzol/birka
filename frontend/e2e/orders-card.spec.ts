@@ -134,6 +134,8 @@ interface Server {
   hold?: Promise<void>;
   /** Other orders, read by their id: the same waybill's. */
   others?: Record<string, Stubbed>;
+  /** The next read of the order answered only once this opens. */
+  readHeld?: Promise<void>;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -148,6 +150,11 @@ async function stub(page: Page, server: Server): Promise<void> {
   );
   await page.route("**/api/v1/orders/*", async (route) => {
     server.reads = (server.reads ?? 0) + 1;
+    if (server.readHeld) {
+      const held = server.readHeld;
+      delete server.readHeld;
+      await held;
+    }
     if (server.loseRead) {
       server.loseRead = false;
       await route.fulfill({
@@ -1830,6 +1837,63 @@ test("a tap carried from «Товар повернувся на склад» ont
   await readTheAnswer(page);
   await tick.click();
   await expect(tick).toBeChecked();
+});
+
+test("while an order is read, its title, context, pill and two lines hold their places, heard as «Завантажуємо замовлення…»; one that could not be read says so on a warning's plate (orders task list, P2-2, P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let release = (): void => undefined;
+  const server: Server = {
+    order: order(),
+    sent: [],
+    readHeld: new Promise((done) => {
+      release = done;
+    }),
+  };
+  await open(page, server);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
+  ).toBeAttached();
+  await expect(page.locator(".order-placeholder")).toBeVisible();
+  const back = page.getByRole("button", { name: "← До замовлень" });
+  const before = await back.boundingBox();
+  const place = await page.locator(".skeleton-title").boundingBox();
+  release();
+  const title = page.getByRole("heading", {
+    name: "Лоран шоколад · M",
+    exact: true,
+  });
+  await expect(title).toBeVisible();
+  expect((await back.boundingBox())?.y).toBe(before?.y);
+  expect(
+    Math.abs(((await title.boundingBox())?.y ?? 0) - (place?.y ?? 0)),
+  ).toBeLessThanOrEqual(1);
+  // What is said under a step, 14 px (P2-3).
+  expect(
+    await page
+      .locator(".order .hint")
+      .first()
+      .evaluate((node) => getComputedStyle(node).fontSize),
+  ).toBe("14px");
+  // Read again and failed: a warning's plate, the card as last read under
+  // it.
+  await back.click();
+  server.loseRead = true;
+  await page.locator(".order-row").first().click();
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toHaveAttribute("role", "alert");
+  await expect(plate.getByRole("button")).toHaveText("Спробувати ще раз");
+  // The warning's colours, never a debt's red.
+  const colours = await plate.evaluate((node) => {
+    const probe = document.createElement("p");
+    probe.className = "notice";
+    document.body.append(probe);
+    const notice = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { plate: getComputedStyle(node).backgroundColor, notice };
+  });
+  expect(colours.plate).toBe(colours.notice);
 });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

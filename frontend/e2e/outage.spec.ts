@@ -2942,6 +2942,60 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       );
     });
 
+  test("a kept delivery of whoever may not read orders opens on «Приймання», never on the first section instead (orders task list, P2-1; review, 2026-10-25)", async ({
+    page,
+  }) => {
+    const key = `birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`;
+    await seed(page, {
+      [key]: JSON.stringify({
+        key: randomUUID(),
+        ambiguous: true,
+        since: new Date(Date.now() - 30 * 60_000).toISOString(),
+        body: {
+          store_id: ids.store,
+          command_id: randomUUID(),
+          location_id: ids.shared,
+          notes: null,
+          lines: [
+            {
+              product_variant_id: ids.variant,
+              size_id: ids.size,
+              quantity: 1,
+              acquisition_type: "PURCHASE",
+              unit_cost: "1000.00",
+            },
+          ],
+        },
+      }),
+    });
+    await serve(page);
+    // No till, and «Каталог» shown before «Приймання»: opened on
+    // «Замовлення», nothing of orders to read.
+    await on(page, "/me", async (route) => {
+      await route.fulfill({
+        json: {
+          ...me,
+          stores: me.stores.map((store) => ({
+            ...store,
+            permissions: [
+              "catalog:confirm",
+              "inventory:receive",
+              "inventory:view",
+            ],
+          })),
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Приймання товару" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Перевірка каталогу" }),
+    ).toHaveCount(0);
+  });
+
   test("a kept delivery met by a conflict that proves nothing is still unconfirmed; refused for its form, recorded nowhere, it says so in the delivery's words (owner decision, 2026-10-25)", async ({
     page,
   }) => {
