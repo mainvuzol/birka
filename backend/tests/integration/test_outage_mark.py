@@ -549,8 +549,10 @@ async def test_a_marked_sale_replays_after_its_day_aged_out(maker, monkeypatch):
     net = await network(maker)
     coat = await coats(maker, net, qty=2)
     written = paper(3, "19:40")
-    real = datetime.now(UTC)
-    monkeypatch.setattr(outage, "_now", lambda: real - timedelta(days=2))
+    # Two days back on the store's wall clock, not 48 hours: across the
+    # night the clocks change, those land on another day of Kyiv's.
+    real = datetime.now(KYIV)
+    monkeypatch.setattr(outage, "_now", lambda: (real - timedelta(days=2)).astimezone(UTC))
     body = typed(net, coat, sold_by=net.seller, sold_at=written)
     sold = await send(maker, net, net.seller, body)
     monkeypatch.undo()
