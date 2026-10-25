@@ -18,6 +18,7 @@ import {
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
 import { OrderDetail, actionLabels, stepDone, stepShown } from "@/orders/Order";
+import { placesRead } from "@/orders/Returned";
 import { chargeOnce } from "@/orders/Collected";
 import { NewOrder, shortOf } from "@/orders/NewOrder";
 import { Orders, freshOrdersView } from "@/orders/Orders";
@@ -954,8 +955,9 @@ function Workspace({
           ? null
           : resent && step !== "reserve" && step !== "collect"
             ? once
-            : // A new order confirmed late and moved on meanwhile: once.
-              (stepDone(step, order) ??
+            : // Come back, by the warehouses its screen read (P2-4); a new
+              // order confirmed late and moved on meanwhile: once.
+              (stepDone(step, order, placesRead(cache, store.id)) ??
               (resent && step === "reserve" ? once : null));
       if (text !== null) {
         buzz("success");

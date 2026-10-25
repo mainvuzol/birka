@@ -159,7 +159,14 @@ async function stub(page: Page, server: Server): Promise<void> {
     const id = new URL(route.request().url()).pathname.split("/").at(-1);
     await route.fulfill({ json: server.others?.[id ?? ""] ?? server.order });
   });
-  for (const step of ["dispatch", "arrive", "collect", "cancel", "shipping"])
+  for (const step of [
+    "dispatch",
+    "arrive",
+    "collect",
+    "cancel",
+    "shipping",
+    "return",
+  ])
     await page.route(`**/api/v1/orders/*/${step}`, async (route, request) => {
       const body = request.postDataJSON() as Record<string, unknown>;
       server.sent.push({ step, body });
@@ -198,7 +205,9 @@ async function stub(page: Page, server: Server): Promise<void> {
                 ? "CANCELLED"
                 : step === "shipping"
                   ? server.order.status
-                  : "COLLECTED",
+                  : step === "return"
+                    ? "RETURNED"
+                    : "COLLECTED",
         ...(typeof body.waybill === "string" ? { waybill: body.waybill } : {}),
         ...(step === "collect"
           ? {
@@ -1484,6 +1493,345 @@ test("a waybill written later on a stubbed parcel: five taps from «Ще» with 
   );
 });
 
+/** Two warehouses, the store's own and the neighbour's, as
+ * `/stock-locations` names them; or refused, as to whoever may not see the
+ * store's warehouses; or the neighbour's not among them, paused, or not
+ * receiving. */
+type Warehouses = "both" | "refused" | "unknown" | "paused" | "not receiving";
+async function warehouses(
+  page: Page,
+  as: Warehouses = "both",
+  /** Asked again, refused from then on. */
+  after?: { refused: boolean },
+): Promise<void> {
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    if (as === "refused" || after?.refused) {
+      await route.fulfill({
+        status: 403,
+        json: { code: "PERMISSION_DENIED", message: "Permission denied" },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: (as === "unknown" ? [OWN] : [OWN, NEXT]).map(([id, name]) => ({
+        id,
+        name,
+        code: name.toUpperCase(),
+        is_active: !(as === "paused" && id === NEXT[0]),
+        can_sell: true,
+        can_receive: !(as === "not receiving" && id === NEXT[0]),
+        damaged_returns: false,
+        awaiting_first_stock: false,
+      })),
+    });
+  });
+}
+const OWN = [randomUUID(), "Свій"] as const;
+const NEXT = [randomUUID(), "Сусідній"] as const;
+
+/** A parcel come back from two warehouses: two coats from the store's own,
+ * one from the neighbour's. */
+function cameBack(): Stubbed {
+  return order({
+    status: "DISPATCHED",
+    waybill: "20451234",
+    items: [
+      { ...item("Лоран шоколад", "M", 2), source_location_id: OWN[0] },
+      { ...item("Ріо графіт", "L"), source_location_id: NEXT[0] },
+    ],
+  });
+}
+
+test("goods come back as their own step: each warehouse they go back to named, seven taps from «Ще» with the typing, the result a sentence a warehouse with a buzz (orders task list, P2-4)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = { order: cameBack(), sent: [] };
+  await warehouses(page);
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  await stub(page, server);
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        host.taps += 1;
+      },
+      true,
+    );
+  });
+  await section(page, "Замовлення");
+  await page.locator(".order-row").first().click();
+  const row = page.getByRole("button", { name: "Товар повернувся на склад" });
+  await row.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар повернувся на склад" }),
+  ).toBeFocused();
+  await expect(
+    page
+      .getByRole("list", { name: "Куди повернеться товар" })
+      .getByRole("listitem"),
+  ).toHaveText([
+    "Повернеться на склад «Свій»: Лоран шоколад · M × 2",
+    "Повернеться на склад «Сусідній»: Ріо графіт · L",
+  ]);
+  await expect(panel(page).locator(".pay-what")).toHaveText(
+    "Лоран шоколад · M × 2 + ще 1",
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await page.getByLabel("Причина повернення").click();
+  await page.keyboard.type("Не забрали з пошти");
+  await readTheAnswer(page);
+  await page
+    .getByLabel("Усі товари фізично отримані на складах відправлення")
+    .check();
+  await panel(page)
+    .getByRole("button", { name: "Прийняти повернення" })
+    .click();
+  await expect(
+    page.getByRole("status").filter({
+      hasText:
+        /^Повернено на склад «Свій»: 2 шт\. Повернено на склад «Сусідній»: 1 шт\.$/,
+    }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { taps: number }).taps),
+  ).toBe(7);
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "success" },
+  ]);
+  expect(server.sent).toEqual([
+    {
+      step: "return",
+      body: {
+        command_id: expect.any(String),
+        reason: "Не забрали з пошти",
+        physically_received: true,
+      },
+    },
+  ]);
+});
+
+test("goods come back to whoever may not see the store's warehouses: said as before, unnamed, the result too (orders task list, P2-4)", async ({
+  page,
+}) => {
+  const server: Server = { order: cameBack(), sent: [] };
+  await warehouses(page, "refused");
+  await open(page, server);
+  const row = page.getByRole("button", { name: "Товар повернувся на склад" });
+  // Back without taking it: nothing sent, the row in focus.
+  await row.click();
+  await page.getByRole("button", { name: "← Замовлення" }).click();
+  await expect(row).toBeFocused();
+  expect(server.sent).toEqual([]);
+  await row.click();
+  await expect(
+    page.getByText("Товар повернеться на ті склади, звідки його відправили.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Куди повернеться товар" }),
+  ).toHaveCount(0);
+  const press = panel(page).getByRole("button", {
+    name: "Прийняти повернення",
+  });
+  // Neither the reason alone nor the tick alone.
+  await page.getByLabel("Причина повернення").fill("Не забрали");
+  await expect(press).toBeDisabled();
+  await page.getByLabel("Причина повернення").fill("   ");
+  await readTheAnswer(page);
+  await page
+    .getByLabel("Усі товари фізично отримані на складах відправлення")
+    .check();
+  await expect(press).toBeDisabled();
+  await page.getByLabel("Причина повернення").fill("Не забрали");
+  await press.click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Повернено на склади відправлення: 3 шт\.$/ }),
+  ).toBeVisible();
+});
+
+for (const as of ["unknown", "paused", "not receiving"] as const)
+  test(`goods come back with the neighbour's warehouse ${as}: said as before, unnamed — never a warehouse the server would not take them back to (review, 2026-10-25)`, async ({
+    page,
+  }) => {
+    await warehouses(page, as);
+    await open(page, { order: cameBack(), sent: [] });
+    await page
+      .getByRole("button", { name: "Товар повернувся на склад" })
+      .click();
+    await expect(
+      page.getByText(
+        "Товар повернеться на ті склади, звідки його відправили.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Повернеться на склад/)).toHaveCount(0);
+  });
+
+/** On «Товар повернувся на склад», a reason typed and the goods ticked in
+ * hand. */
+async function readyToTake(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Товар повернувся на склад" }).click();
+  await page.getByLabel("Причина повернення").fill("Не забрали з пошти");
+  await readTheAnswer(page);
+  await page
+    .getByLabel("Усі товари фізично отримані на складах відправлення")
+    .check();
+}
+
+test("a return refused as changed keeps its screen, the reason and the tick; one another phone already took back shows the card as it is now (review, 2026-10-25)", async ({
+  page,
+}) => {
+  const server: Server = { order: cameBack(), sent: [] };
+  await warehouses(page);
+  await open(page, server);
+  await readyToTake(page);
+  server.answer = {
+    status: 409,
+    json: {
+      code: "CONFLICT",
+      message: "Conflict",
+      details: { recorded: false },
+    },
+  };
+  const take = panel(page).getByRole("button", { name: "Прийняти повернення" });
+  await take.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Товар повернувся на склад" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Причина повернення")).toHaveValue(
+    "Не забрали з пошти",
+  );
+  await expect(
+    page.getByLabel("Усі товари фізично отримані на складах відправлення"),
+  ).toBeChecked();
+  // Pressed again, it was taken back meanwhile by another phone: the card
+  // as it is now, nothing more to take back.
+  server.answer = {
+    status: 409,
+    json: {
+      code: "CONFLICT",
+      message: "Conflict",
+      details: { recorded: false },
+    },
+    becomes: { status: "RETURNED" },
+  };
+  await take.click();
+  await expect(page.locator(".order-status .badge")).toHaveText(
+    "Повернено на склад",
+  );
+  await expect(
+    page.getByRole("heading", { name: "Товар повернувся на склад" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Товар повернувся на склад" }),
+  ).toHaveCount(0);
+});
+
+test("a return whose answer never came names its step and its order; checked again and recorded, it says so once, with a buzz (orders task list, P1-1, P2-4)", async ({
+  page,
+}) => {
+  const server: Server = { order: cameBack(), sent: [], lose: true };
+  await warehouses(page);
+  await open(page, server);
+  await readyToTake(page);
+  await panel(page)
+    .getByRole("button", { name: "Прийняти повернення" })
+    .click();
+  const again = page.getByRole("button", {
+    name: "Перевірити результат замовлення",
+  });
+  await expect(again).toBeEnabled();
+  await expect(
+    page.locator("section.notice", {
+      has: page.getByRole("heading", {
+        name: "Операцію «Прийняти повернення» ще не підтверджено",
+      }),
+    }),
+  ).toContainText(
+    "Лоран шоколад · M × 2 + ще 1 · Нова пошта · ТТН 20451234 — сервер не відповів. Двічі цю операцію не запишуть.",
+  );
+  await again.click();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: /^Операцію «Прийняти повернення» записано один раз$/,
+    }),
+  ).toBeVisible();
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "success" },
+  ]);
+  expect(server.sent).toHaveLength(2);
+  expect(server.sent[1]).toEqual(server.sent[0]);
+});
+
+test("the right to see the warehouses gone while goods come back: read again on return to the app and refused, the screen and the result say them unnamed (review, 2026-10-25)", async ({
+  page,
+}) => {
+  const after = { refused: false };
+  await warehouses(page, "both", after);
+  await open(page, { order: cameBack(), sent: [] });
+  await readyToTake(page);
+  await expect(page.getByText(/^Повернеться на склад «Свій»/)).toBeVisible();
+  after.refused = true;
+  // Back in the app: what it shows is read again.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(
+    page.getByText("Товар повернеться на ті склади, звідки його відправили.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await panel(page)
+    .getByRole("button", { name: "Прийняти повернення" })
+    .click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^Повернено на склади відправлення: 3 шт\.$/ }),
+  ).toBeVisible();
+});
+
+test("a tap carried from «Товар повернувся на склад» onto the tick is let go: the goods are ticked in hand only meant (review, 2026-10-25)", async ({
+  page,
+}) => {
+  await warehouses(page);
+  await open(page, { order: cameBack(), sent: [] });
+  await page.getByRole("button", { name: "Товар повернувся на склад" }).click();
+  const tick = page.getByLabel(
+    "Усі товари фізично отримані на складах відправлення",
+  );
+  await tick.click();
+  await expect(tick).not.toBeChecked();
+  await readTheAnswer(page);
+  await tick.click();
+  await expect(tick).toBeChecked();
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {
@@ -1626,4 +1974,43 @@ for (const [name, theme] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/order-shipping-${name}.png` });
+  });
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme goods coming back read at 4.5:1, nothing wider than the phone (orders task list, P2-4)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await warehouses(page);
+    await open(page, { order: cameBack(), sent: [] }, theme);
+    await page
+      .getByRole("button", { name: "Товар повернувся на склад" })
+      .click();
+    await page.getByLabel("Причина повернення").fill("Не забрали з пошти");
+    // Ready to take: the press as it is pressed.
+    await readTheAnswer(page);
+    await page
+      .getByLabel("Усі товари фізично отримані на складах відправлення")
+      .check();
+    for (const part of [
+      page.getByRole("heading", { name: "Товар повернувся на склад" }),
+      page.locator(".order-returned legend"),
+      page.locator(".returned-places li").first(),
+      page.locator(".order-returned label").first(),
+      page.locator(".order-returned .check"),
+      panel(page).locator(".pay-what"),
+      panel(page).getByRole("button"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    // From its top, as it opens.
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    await page.screenshot({ path: `test-results/order-returned-${name}.png` });
   });

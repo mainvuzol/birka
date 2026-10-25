@@ -535,7 +535,7 @@ test("cash taken out and unanswered: the form held under «Каса»'s banner w
     page.getByRole("heading", { name: "Видати з каси" }),
   ).toBeVisible();
   await expect(page.locator("section.notice p").first()).toHaveText(
-    "Видача 150,00 грн · Витрати — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+    "Видача 150,00 грн · Витрати — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
   );
   await expect(sum(page)).toHaveValue("150");
   await expect(sum(page)).toBeDisabled();

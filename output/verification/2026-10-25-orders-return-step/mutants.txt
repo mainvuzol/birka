@@ -1,0 +1,22 @@
+- unchanged tree: passed 
+- the row opens nothing: caught by goods come back as their own step: the warehouse named, physical confirmation required, th
+- the heading not in focus: caught by goods come back as their own step: the warehouse named, physical confirmation required, th
+- the warehouse not named: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «
+- the lines not by warehouse: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «
+- warehouses not read named anyway: caught by goods come back to whoever may not see the store's warehouses: said as before, unnamed, th
+- taken without the tick: caught by goods come back to whoever may not see the store's warehouses: said as before, unnamed, th
+- taken without a reason: caught by goods come back to whoever may not see the store's warehouses: said as before, unnamed, th
+- the card's step under the screen: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «
+- back, the return's row not in focus: caught by goods come back to whoever may not see the store's warehouses: said as before, unnamed, th
+- taken, nothing said: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «
+- the result not naming the warehouse: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «; goods come back as their own step: the warehouse named, physical confirmation required, th
+- the result's units the whole order's: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «
+- warehouses not read named in the result: caught by goods come back to whoever may not see the store's warehouses: said as before, unnamed, th
+- the result without the screen's warehouses: caught by goods come back as their own step: each warehouse they go back to named, seven taps from «
+- a paused warehouse named: caught by goods come back with the neighbour's warehouse paused: said as before, unnamed — never a w
+- a warehouse not receiving named: caught by goods come back with the neighbour's warehouse not receiving: said as before, unnamed — ne
+- a tap carried onto the tick taken: caught by a tap carried from «Товар повернувся на склад» onto the tick is let go: the goods are tick
+- names from a read refused: caught by the right to see the warehouses gone while goods come back: read again on return to the ap
+- the result named from a read refused: caught by the right to see the warehouses gone while goods come back: read again on return to the ap
+- «Каса»'s banner in its old words: caught by a kept count at the close names what waits and for how much, the phone checks it itself, a; a kept fix of a way names what waits and for how much, the phone checks it itself, and con; a kept fix of a way that explains a close names what waits and for how much, the phone che; a kept money put in names what waits and for how much, the phone checks it itself, and con; a kept money put in the server put on a colleague's close names what waits and for how muc; a kept money taken out names what waits and for how much, the phone checks it itself, and ; a kept money taken out the server put on a colleague's close names what waits and for how ; a kept reason first sent past the bot's wait names what waits and for how much, the phone ; a kept reason of a difference names what waits and for how much, the phone checks it itsel; a kept reason to a close of an hour ago names what waits and for how much, the phone check
+20 of 20 caught

@@ -10,6 +10,7 @@ import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { Collected, CollectedLine } from "./Collected";
 import { since, sinceDay, tagOf } from "./Orders";
+import { Returned, byPlace } from "./Returned";
 import { Shipping } from "./Shipping";
 import {
   carrierLabels,
@@ -22,6 +23,7 @@ import {
 } from "./types";
 import type {
   Carrier,
+  Location,
   Order,
   OrderItem,
   SameWaybill,
@@ -90,8 +92,13 @@ export function stepShown(
 
 /** What a step just recorded says on its order (orders task list, P0-2):
  * the step, and for a parcel sent its waybill, or that it may come later;
- * a new order, how many units it holds now (P0-5). */
-export function stepDone(action: string, order: Order): string | null {
+ * a new order, how many units it holds now (P0-5); come back, how many went
+ * back to which warehouse, by the warehouses read for it (P2-4). */
+export function stepDone(
+  action: string,
+  order: Order,
+  places?: readonly Location[],
+): string | null {
   // Confirmed late, it may have moved on meanwhile: then nothing said.
   if (action === "reserve")
     return order.status === "READY_TO_DISPATCH"
@@ -101,6 +108,7 @@ export function stepDone(action: string, order: Order): string | null {
   if (action === "arrive") return "Прибув на пошту";
   // Its own step, said on the card it went back to (P1-3).
   if (action === "shipping") return "Доставку збережено";
+  if (action === "return") return returnedText(order, places ?? []);
   if (action !== "dispatch") return null;
   if (order.destination === "ABROAD") return "Відправлено.";
   return order.waybill
@@ -155,36 +163,70 @@ interface CardProps {
   /** Another order with the same waybill, opened from its row. */
   openOther: (id: string) => void;
 }
+/** «Повернено на склад «Свій»: 1 шт.», a sentence for each warehouse the
+ * units went back to; a warehouse not read, unnamed (P2-4). */
+function returnedText(order: Order, places: readonly Location[]): string {
+  const names = new Map(places.map((place) => [place.id, place.name]));
+  const lines = byPlace(order);
+  const units = (items: readonly OrderItem[]): string =>
+    `${String(items.reduce((n, item) => n + item.quantity, 0))} шт.`;
+  if (!lines.every(([id]) => names.has(id)))
+    return `Повернено на ${lines.length > 1 ? "склади" : "склад"} відправлення: ${units(order.items)}`;
+  return lines
+    .map(
+      ([id, items]) =>
+        `Повернено на склад «${visible(names.get(id) ?? "")}»: ${units(items)}`,
+    )
+    .join(" ");
+}
 
 /**
- * One order: its card, and over it where it goes — its own step (orders
- * task list, P1-3) — the card kept under it with what was typed there,
- * «← Замовлення» back to it with the row that opened it in focus. Saved,
- * the card is mounted afresh with what it did.
+ * One order: its card, and over it a rare step on a screen of its own —
+ * where it goes (orders task list, P1-3) or the goods come back (P2-4) —
+ * the card kept under it with what was typed there, «← Замовлення» back to
+ * it with the row that opened it in focus. Taken, the card is mounted
+ * afresh with what it did.
  */
 export function OrderDetail(props: CardProps): JSX.Element {
-  const [shipping, setShipping] = useState<"write" | "change" | null>(null);
+  const [step, setStep] = useState<"write" | "change" | "return" | null>(null);
+  const back = (): void => {
+    setStep(null);
+  };
   // The card first: its panel's room let go before the step's is kept.
   return (
     <>
       <Card
         {...props}
-        away={shipping !== null}
+        away={step === null ? null : step === "return" ? "return" : "shipping"}
         changeShipping={(writing) => {
-          setShipping(writing ? "write" : "change");
+          setStep(writing ? "write" : "change");
+        }}
+        takeBack={() => {
+          setStep("return");
         }}
       />
-      {shipping !== null && (
+      {(step === "write" || step === "change") && (
         <Shipping
           order={props.order}
           title={titleOf(props.order)}
-          writing={shipping === "write"}
+          writing={step === "write"}
           blocked={props.blocked}
-          back={() => {
-            setShipping(null);
-          }}
+          back={back}
           save={(body) => {
             props.action("shipping", body);
+          }}
+        />
+      )}
+      {step === "return" && (
+        <Returned
+          order={props.order}
+          store={props.store}
+          token={props.token}
+          title={titleOf(props.order)}
+          blocked={props.blocked}
+          back={back}
+          take={(body) => {
+            props.action("return", body);
           }}
         />
       )}
@@ -214,16 +256,16 @@ function Card({
   openOther,
   away,
   changeShipping,
+  takeBack,
 }: CardProps & {
-  /** Where it goes is shown over it: hidden, its panel with it. */
-  away: boolean;
+  /** A rare step shown over it, which: hidden, its panel with it. */
+  away: "shipping" | "return" | null;
   /** Where it goes, its own step: to write the waybill, or to change it. */
   changeShipping: (writing: boolean) => void;
+  /** «Товар повернувся на склад», its own step. */
+  takeBack: () => void;
 }): JSX.Element {
   const hint = useId();
-  const [reason, setReason] = useState("");
-  const [received, setReceived] = useState(false);
-  const [returning, setReturning] = useState(false);
   // Collected and paid in parts, as at the till (owner decision, 2026-10-01).
   const [credit, setCredit] = useState<TermsInput>(noTerms);
   const [problem, setProblem] = useState("");
@@ -246,16 +288,17 @@ function Card({
   useEffect(() => {
     if (done !== null) heading.current?.scrollIntoView({ block: "nearest" });
   }, [done]);
-  // Back from where it goes: the row that opened it in focus, and a tap
+  // Back from a rare step: the row that opened it in focus, and a tap
   // carried from «← Замовлення» onto «← До замовлень» let go.
   const shippingRow = useRef<HTMLButtonElement>(null);
-  const wasAway = useRef(false);
+  const returnRow = useRef<HTMLButtonElement>(null);
+  const opened = useRef<"shipping" | "return" | null>(null);
   const backAt = useRef(-Infinity);
   useEffect(() => {
-    if (away) wasAway.current = true;
-    else if (wasAway.current) {
+    if (away !== null) opened.current = away;
+    else if (opened.current !== null) {
       backAt.current = performance.now();
-      shippingRow.current?.focus();
+      (opened.current === "return" ? returnRow : shippingRow).current?.focus();
     }
   }, [away]);
   // The waybill, or abroad where and how it went, written as it is sent.
@@ -271,9 +314,9 @@ function Card({
     ARRIVED: "collect",
   }[order.status as "READY_TO_DISPATCH" | "DISPATCHED" | "ARRIVED"];
   // The panel's step: sent, arrived, or «Клієнт забрав» by its ways. None
-  // while it comes back: one form at a time under the thumb (review,
-  // 2026-10-23).
-  const panelStep = mayStep && open && !returning && !away ? next : null;
+  // while a rare step is over the card: one press at a time under the thumb
+  // (review, 2026-10-23).
+  const panelStep = mayStep && open && away === null ? next : null;
   // Sent within Ukraine with no waybill: written later, as it often is
   // (orders task list, P1-3). Before it is sent, the field over the panel.
   const writeLater =
@@ -304,7 +347,7 @@ function Card({
   const title = titleOf(order);
   const goes = goesOf(order);
   return (
-    <section className="order" hidden={away}>
+    <section className="order" hidden={away !== null}>
       <button
         type="button"
         className="quiet"
@@ -520,57 +563,18 @@ function Card({
       {["DISPATCHED", "ARRIVED"].includes(order.status) &&
         store.permissions.includes("sale:refund") &&
         store.permissions.includes("inventory:receive") && (
+          // Its own step, the last row of the card's foot (orders task list,
+          // P2-4).
           <button
             type="button"
             className="quiet order-rare"
+            ref={returnRow}
             disabled={blocked}
-            onClick={() => {
-              setReturning(!returning);
-            }}
+            onClick={takeBack}
           >
-            Товар повернувся на склад
+            Товар повернувся на склад <span aria-hidden="true">›</span>
           </button>
         )}
-      {returning && ["DISPATCHED", "ARRIVED"].includes(order.status) && (
-        <fieldset disabled={blocked}>
-          <legend>Фізичне повернення всього замовлення</legend>
-          <p>Товар повернеться на ті склади, звідки його відправили.</p>
-          <label>
-            Причина повернення
-            <textarea
-              maxLength={1000}
-              value={reason}
-              aria-describedby={`${hint}-return`}
-              onChange={(e) => {
-                setReason(e.target.value);
-              }}
-            />
-            <NoCustomerData id={`${hint}-return`} />
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={received}
-              onChange={(e) => {
-                setReceived(e.target.checked);
-              }}
-            />
-            Усі товари фізично отримані на складах відправлення
-          </label>
-          <button
-            type="button"
-            disabled={!received || !reason.trim()}
-            onClick={() => {
-              action("return", {
-                reason: reason.trim(),
-                physically_received: true,
-              });
-            }}
-          >
-            Прийняти повернення
-          </button>
-        </fieldset>
-      )}
       {panelStep === "collect" ? (
         // «Клієнт забрав»: each way the step itself, nothing chosen first
         // (owner decision, 2026-10-23, В2 (а)) — at the counter now, or

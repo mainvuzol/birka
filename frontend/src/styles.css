@@ -1897,6 +1897,18 @@ html {
 .same-waybill li:last-child .sale-row {
   border-bottom: 0;
 }
+/* The goods come back (orders task list, P2-4): which warehouse each goes
+   back to, a line a warehouse, then the reason and the units in hand. */
+.returned-places {
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.returned-places li {
+  padding: 4px 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
 .order-panel button {
   width: 100%;
   min-height: 54px;
