@@ -38,6 +38,55 @@ export const actionLabels: Record<string, string> = {
   return: "Прийняти повернення",
 };
 
+/** An order as its card's title says it: its first goods, and how many
+ * more (orders task list, P0-2). */
+function titleOf(order: Order): string {
+  const [first] = order.items;
+  const more = order.items.length - 1;
+  return first
+    ? `${tagOf(first)}${more > 0 ? ` + ще ${String(more)}` : ""}`
+    : "Замовлення";
+}
+
+/** How it goes, as the card's panel names it: the carrier, or abroad. */
+function goesOf(order: Order): string | null {
+  return order.destination === "ABROAD"
+    ? "За кордон"
+    : order.carrier
+      ? carrierLabels[order.carrier]
+      : null;
+}
+
+/**
+ * What a step on an order is about, kept beside it for its banner while its
+ * answer is unknown (orders task list, P1-1): the goods, and how they go —
+ * a shipping change the delivery it sets, whole (the server replaces it);
+ * any other step the order's, with the waybill sent with it or its own.
+ */
+export function stepShown(
+  order: Order,
+  extra: Record<string, unknown> = {},
+): string {
+  const setting =
+    extra.destination === "UKRAINE" || extra.destination === "ABROAD";
+  const goes = setting
+    ? extra.destination === "ABROAD"
+      ? "За кордон"
+      : typeof extra.carrier === "string" && extra.carrier in carrierLabels
+        ? carrierLabels[extra.carrier as Carrier]
+        : null
+    : goesOf(order);
+  const waybill =
+    typeof extra.waybill === "string"
+      ? extra.waybill
+      : setting
+        ? null
+        : order.waybill;
+  return [titleOf(order), goes, waybill ? `ТТН ${visible(waybill)}` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** What a step just recorded says on its order (orders task list, P0-2):
  * the step, and for a parcel sent its waybill, or that it may come later;
  * a new order, how many units it holds now (P0-5). */
@@ -190,17 +239,8 @@ export function OrderDetail({
   }
   const panel = useRef<HTMLDivElement>(null);
   usePanelRoom(panel, panelStep !== null);
-  const [first] = order.items;
-  const more = order.items.length - 1;
-  const title = first
-    ? `${tagOf(first)}${more > 0 ? ` + ще ${String(more)}` : ""}`
-    : "Замовлення";
-  const goes =
-    order.destination === "ABROAD"
-      ? "За кордон"
-      : order.carrier
-        ? carrierLabels[order.carrier]
-        : null;
+  const title = titleOf(order);
+  const goes = goesOf(order);
   return (
     <section className="order">
       <h2 className="order-title" ref={heading}>

@@ -365,19 +365,38 @@ test("a correction whose answer is lost is resent unchanged", async ({
   await carrier(page, "Нова пошта");
   await reserve(page);
   await page.getByRole("button", { name: "Змінити доставку" }).click();
+  await page
+    .getByRole("combobox", { name: "Перевізник", exact: true })
+    .selectOption("UKRPOSHTA");
   await page.getByLabel("Номер накладної", { exact: true }).fill("20451111");
   await page.getByRole("button", { name: "Зберегти доставку" }).click();
   await expect(
-    page.getByRole("button", { name: "Повторити ту саму команду" }),
+    page.getByRole("button", { name: "Перевірити результат замовлення" }),
   ).toBeEnabled();
+  // The delivery it sets, whole — never the old carrier with the new
+  // waybill (orders task list, P1-1; review, 2026-10-25).
+  await expect(
+    page.locator("section.notice", {
+      has: page.getByRole("heading", {
+        name: "Операцію «Зміна доставки» ще не підтверджено",
+      }),
+    }),
+  ).toContainText(
+    /· Укрпошта · ТТН 20451111 — сервер не відповів\. Двічі вона не запишеться\./,
+  );
   await page.close();
   const reopened = await context.newPage();
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
   await reopen(reopened);
   await expect(reopened.locator(".order-context")).toHaveText(
-    goes("Нова пошта · ТТН 20451111"),
+    goes("Укрпошта · ТТН 20451111"),
   );
+  await expect(
+    reopened.getByRole("status").filter({
+      hasText: /^Операцію «Зміна доставки» записано один раз$/,
+    }),
+  ).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toEqual(commands[0]);
   await expect(

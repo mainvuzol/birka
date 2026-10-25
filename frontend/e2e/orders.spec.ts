@@ -218,9 +218,10 @@ test("lost committed response survives reopening and reuses the same command", a
   });
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
   await expect(
-    page.getByRole("button", { name: "Повторити ту саму команду" }),
+    page.getByRole("button", { name: "Перевірити результат замовлення" }),
   ).toBeEnabled();
-  await waitsFor(page, /Незавершена операція/);
+  // Which step and which order (orders task list, P1-1).
+  await waitsFor(page, /Операцію «Резервування замовлення» ще не підтверджено/);
   await page.close();
   const reopened = await context.newPage();
   // Read from the phone's storage, it is checked at once, with no tap
@@ -261,7 +262,7 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   });
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
   await expect(
-    page.getByRole("button", { name: "Повторити ту саму команду" }),
+    page.getByRole("button", { name: "Перевірити результат замовлення" }),
   ).toBeEnabled();
   await page.close();
   // Reopened, the phone's own check loses its answer too: the kept order
@@ -269,7 +270,7 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   const reopened = await context.newPage();
   await reopen(reopened);
   const retry = reopened.getByRole("button", {
-    name: "Повторити ту саму команду",
+    name: "Перевірити результат замовлення",
   });
   // Its own check on opening, and once more if another read answers after
   // that check was lost — the server is back (`useAutoCheck`): which comes
@@ -358,7 +359,9 @@ test("uncertain command stays blocked after access denial, then reconciles", asy
     else await route.continue();
   });
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
-  const retry = page.getByRole("button", { name: "Повторити ту саму команду" });
+  const retry = page.getByRole("button", {
+    name: "Перевірити результат замовлення",
+  });
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
@@ -405,7 +408,7 @@ test("first definitive rejection leaves draft editable", async ({
     page.getByRole("button", { name: "Замовити та зарезервувати" }),
   ).toBeEnabled();
   await expect(
-    page.getByRole("button", { name: "Повторити ту саму команду" }),
+    page.getByRole("button", { name: "Перевірити результат замовлення" }),
   ).toHaveCount(0);
 });
 
@@ -587,7 +590,7 @@ test("a «Клієнт забрав» saved before the way was asked is refused 
   );
   await enter(page);
   const resend = page.getByRole("button", {
-    name: "Повторити ту саму команду",
+    name: "Перевірити результат замовлення",
   });
   const answer = await refused;
   expect(answer.status()).toBe(422);

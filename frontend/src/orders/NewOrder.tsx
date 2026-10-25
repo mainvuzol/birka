@@ -11,7 +11,7 @@ import { PriceHint } from "@/sales/PriceHint";
 import { StockSearch, useSettled, useStock } from "@/sales/StockSearch";
 import { shortfallOf, stockKey } from "@/sales/types";
 import type { Shortfall } from "@/sales/types";
-import { decimal, kopecks, money } from "./types";
+import { carrierLabels, decimal, kopecks, money } from "./types";
 import type {
   Carrier,
   Destination,
@@ -115,6 +115,8 @@ export function NewOrder({
     lines: Line[],
     destination: Destination,
     carrier: Carrier | null,
+    /** What it is, for its banner if its answer is lost (P1-1). */
+    shown: string,
   ) => void;
 }): JSX.Element {
   const [text, setText] = useState("");
@@ -288,6 +290,11 @@ export function NewOrder({
   const units = draft.reduce((n, d) => n + d.line.quantity, 0);
   const noCarrier = destination === "UKRAINE" && carrier === "";
   const first = draft[0];
+  // What is ordered, as the panel says it (and a kept one's banner, P1-1).
+  const what =
+    draft.length === 1 && first
+      ? `${visible(first.name)} · ${visible(first.size)}${placeOf(first.line.source_location_id)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}`
+      : `У замовленні: ${String(units)} шт.`;
 
   return (
     <section className="order-new">
@@ -470,11 +477,7 @@ export function NewOrder({
           «Каса»'s «Оберіть новий спосіб». */}
       {draft.length > 0 && (
         <div className="pay-panel" ref={panelRef}>
-          <p className="pay-what">
-            {draft.length === 1 && first
-              ? `${visible(first.name)} · ${visible(first.size)}${placeOf(first.line.source_location_id)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}`
-              : `У замовленні: ${String(units)} шт.`}
-          </p>
+          <p className="pay-what">{what}</p>
           <p className="pay-total">
             Разом{" "}
             {priced ? (
@@ -493,6 +496,18 @@ export function NewOrder({
                 draft.map((d) => d.line),
                 destination,
                 destination === "UKRAINE" && carrier !== "" ? carrier : null,
+                [
+                  first
+                    ? `${visible(first.name)} · ${visible(first.size)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}${draft.length > 1 ? ` + ще ${String(draft.length - 1)}` : ""}`
+                    : what,
+                  destination === "ABROAD"
+                    ? "За кордон"
+                    : carrier !== ""
+                      ? carrierLabels[carrier]
+                      : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
               );
             }}
           >

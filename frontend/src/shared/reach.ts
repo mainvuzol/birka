@@ -224,10 +224,11 @@ export function keptText(since: string | undefined, person: string): string {
 }
 
 /**
- * The drawer's own line under its kept command's banner (owner decision,
- * 2026-10-21, В2): nothing of the drawer is typed from paper — a count not
- * recorded is counted again, cash taken out recorded again — so there is no
- * paper line to mark, only nothing to repeat.
+ * The line under a kept command's banner where nothing is typed from paper
+ * — the drawer's (owner decision, 2026-10-21, В2): a count not recorded is
+ * counted again, cash taken out recorded again; and an order's step's (owner
+ * decision, 2026-10-23, В4 (а)): one not recorded is made again — so there
+ * is no paper line to mark, only nothing to repeat.
  */
 export function keptCashText(since: string | undefined): string {
   return `${waitsSince(since)}Телефон перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».`;

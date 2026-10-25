@@ -769,8 +769,19 @@ test("a new order whose answer never came: checked again with the same command, 
   await chip(page, `${loran}:${sizeM}`).click();
   await carrier(page, "Нова пошта");
   await press(page).click();
-  const retry = page.getByRole("button", { name: "Повторити ту саму команду" });
+  const retry = page.getByRole("button", {
+    name: "Перевірити результат замовлення",
+  });
   await expect(retry).toBeEnabled();
+  // Which order: what is ordered and how it goes (P1-1).
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", {
+      name: "Операцію «Резервування замовлення» ще не підтверджено",
+    }),
+  });
+  await expect(banner).toContainText(
+    "Лоран шоколад · M · Нова пошта — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+  );
   // Kept, never refused: no buzz.
   expect(await buzzes(page)).toEqual([]);
   await retry.click();
@@ -781,6 +792,9 @@ test("a new order whose answer never came: checked again with the same command, 
   ).toBeVisible();
   expect(stubbed.made).toHaveLength(2);
   expect(stubbed.made[1]?.command_id).toBe(stubbed.made[0]?.command_id);
+  // Byte for byte, and nothing only shown in it (P1-1).
+  expect(stubbed.made[1]).toEqual(stubbed.made[0]);
+  expect(stubbed.made[0]).not.toHaveProperty("shown");
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -796,6 +810,15 @@ test("a new order answered whose reading failed: «Оновити результ
   await press(page).click();
   const again = page.getByRole("button", { name: "Оновити результат" });
   await expect(again).toBeEnabled();
+  // Answered: recorded, only not yet shown (P1-1).
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", {
+      name: "Операцію «Резервування замовлення» записано",
+    }),
+  });
+  await expect(banner).toContainText(
+    "Лоран шоколад · M · Нова пошта — замовлення ще не вдалося показати. Поки чекаємо, інші дії недоступні.",
+  );
   await again.click();
   await expect(
     page

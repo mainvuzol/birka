@@ -128,6 +128,10 @@ interface Server {
   };
   /** How many times the list was read. */
   listReads?: number;
+  /** The next read of the order fails with the server's own error. */
+  loseRead?: boolean;
+  /** The next step waits for this before it is answered. */
+  hold?: Promise<void>;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -142,12 +146,25 @@ async function stub(page: Page, server: Server): Promise<void> {
   );
   await page.route("**/api/v1/orders/*", async (route) => {
     server.reads = (server.reads ?? 0) + 1;
+    if (server.loseRead) {
+      server.loseRead = false;
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
     await route.fulfill({ json: server.order });
   });
   for (const step of ["dispatch", "arrive", "collect", "cancel", "shipping"])
     await page.route(`**/api/v1/orders/*/${step}`, async (route, request) => {
       const body = request.postDataJSON() as Record<string, unknown>;
       server.sent.push({ step, body });
+      if (server.hold) {
+        const held = server.hold;
+        delete server.hold;
+        await held;
+      }
       if (server.answer) {
         const { status, json, becomes } = server.answer;
         delete server.answer;
@@ -528,7 +545,9 @@ test("a shipping change whose answer never came, resent after the order closed: 
   await page.getByRole("button", { name: "Змінити доставку" }).click();
   await page.getByLabel("Номер накладної", { exact: true }).fill("20451234");
   await page.getByRole("button", { name: "Зберегти доставку" }).click();
-  const retry = page.getByRole("button", { name: "Повторити ту саму команду" });
+  const retry = page.getByRole("button", {
+    name: "Перевірити результат замовлення",
+  });
   await expect(retry).toBeEnabled();
   server.answer = {
     status: 422,
@@ -561,7 +580,9 @@ test("a step whose answer never came, met by a conflict on its check: still unco
   const server: Server = { order: order(), sent: [], lose: true };
   await open(page, server);
   await panel(page).getByRole("button", { name: "Відправлено" }).click();
-  const retry = page.getByRole("button", { name: "Повторити ту саму команду" });
+  const retry = page.getByRole("button", {
+    name: "Перевірити результат замовлення",
+  });
   await expect(retry).toBeEnabled();
   server.refuse = true;
   await retry.click();
@@ -606,7 +627,7 @@ for (const [what, answer, said] of [
     await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("НП");
     await panel(page).getByRole("button", { name: "Відправлено" }).click();
     const retry = page.getByRole("button", {
-      name: "Повторити ту саму команду",
+      name: "Перевірити результат замовлення",
     });
     await expect(retry).toBeEnabled();
     server.answer = { status: answer.status, json: { ...answer.json } };
@@ -686,28 +707,111 @@ test("lines with their sums: two of a coat less its discount, «за 1 шт.» f
   );
 });
 
-test("a step whose answer never came is kept, with no buzz; checked again and recorded, a buzz and what it did (orders task list, P0-2)", async ({
+test("a step whose answer never came names its step and its order, and is never typed from paper; checked again and recorded, it says it was recorded once, with a buzz (orders task list, P0-2, P1-1)", async ({
   page,
 }) => {
   const server: Server = { order: order(), sent: [], lose: true };
   await open(page, server);
   await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("20451234");
   await panel(page).getByRole("button", { name: "Відправлено" }).click();
-  const again = page.getByRole("button", { name: "Повторити ту саму команду" });
+  const again = page.getByRole("button", {
+    name: "Перевірити результат замовлення",
+  });
   await expect(again).toBeEnabled();
+  // Which step, and which order: its goods, how it goes, its waybill.
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", {
+      name: "Операцію «Відправлено» ще не підтверджено",
+    }),
+  });
+  await expect(banner).toContainText(
+    "Лоран шоколад · M · Нова пошта · ТТН 20451234 — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+  );
+  // Never from paper: the phone checks it itself (owner decision,
+  // 2026-10-23, В4 (а)).
+  await expect(banner).toContainText(
+    "Телефон перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».",
+  );
+  await expect(banner).not.toContainText("на папері");
+  // What it names is kept beside it on the phone, never sent.
+  const kept = await page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("birka:pending:"))
+      .map((key) => JSON.parse(localStorage.getItem(key) ?? "{}") as object),
+  );
+  expect(kept).toEqual([
+    expect.objectContaining({
+      shown: "Лоран шоколад · M · Нова пошта · ТТН 20451234",
+    }),
+  ]);
   // Kept: nothing is said to be recorded, nothing buzzes.
   expect(await buzzes(page)).toEqual([]);
   await expect(page.getByText(/^Відправлено ·/)).toHaveCount(0);
   await again.click();
   await expect(
-    page.getByText("Відправлено · ТТН 20451234", { exact: true }),
+    page.getByRole("status").filter({
+      hasText: /^Операцію «Відправлено» записано один раз$/,
+    }),
   ).toBeVisible();
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
-  // The same command, resent.
+  // The same command, resent, byte for byte, and nothing only shown in it.
   expect(server.sent).toHaveLength(2);
   expect(server.sent[1]).toEqual(server.sent[0]);
+  expect(server.sent[0]?.body).toEqual({
+    command_id: expect.any(String),
+    waybill: "20451234",
+  });
+});
+
+test("a step answered whose order could not be read says it is recorded, never to wait for «не записано»; read again, recorded once (orders task list, P1-1; review, 2026-10-25)", async ({
+  page,
+}) => {
+  const server: Server = { order: order(), sent: [] };
+  await open(page, server);
+  server.loseRead = true;
+  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  const again = page.getByRole("button", { name: "Оновити результат" });
+  await expect(again).toBeEnabled();
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", {
+      name: "Операцію «Відправлено» записано",
+    }),
+  });
+  await expect(banner).toContainText(
+    "Лоран шоколад · M · Нова пошта — замовлення ще не вдалося показати. Поки чекаємо, інші дії недоступні.",
+  );
+  await expect(banner).not.toContainText("не записано");
+  await again.click();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: /^Операцію «Відправлено» записано один раз$/,
+    }),
+  ).toBeVisible();
+  expect(server.sent).toHaveLength(1);
+});
+
+test("while a step's first press is on its way, no banner says the server did not answer (orders task list, P1-1; review, 2026-10-25)", async ({
+  page,
+}) => {
+  let release: () => void = () => undefined;
+  const server: Server = {
+    order: order(),
+    sent: [],
+    hold: new Promise<void>((done) => {
+      release = done;
+    }),
+  };
+  await open(page, server);
+  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await expect.poll(() => server.sent.length).toBe(1);
+  await expect(page.getByText(/сервер не відповів/)).toHaveCount(0);
+  await expect(page.locator("section.notice h3")).toHaveCount(0);
+  release();
+  await expect(
+    page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("a closed order, and an order seen by whoever may not step it, have no panel (orders task list, P0-2)", async ({
@@ -928,10 +1032,15 @@ test("a card's «Клієнт забрав» whose answer never came, confirmed 
     .getByRole("group", { name: "Зараз, у магазині" })
     .getByRole("button", { name: "Картка", exact: true })
     .click();
-  await page.getByRole("button", { name: "Повторити ту саму команду" }).click();
+  await page
+    .getByRole("button", { name: "Перевірити результат замовлення" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано один раз" }),
   ).toBeVisible();
+  await expect(
+    page.getByText("Операцію «Клієнт забрав» записано один раз"),
+  ).toHaveCount(0);
   // The way alone, never «Проведіть»: it may have been charged meanwhile.
   await expect(page.locator(".order-collected .way-pill")).toHaveText("Картка");
   await expect(

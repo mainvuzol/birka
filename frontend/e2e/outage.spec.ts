@@ -2172,7 +2172,9 @@ test.describe("9. what to do with money after the outage", () => {
         ),
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Незавершена операція" }),
+        page.getByRole("heading", {
+          name: /^Операцію «.+» ще не підтверджено$/,
+        }),
       ).toHaveCount(0);
       expect(collects).toHaveLength(1);
       expect(
@@ -3198,12 +3200,99 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Незавершена операція" }),
+      page.getByRole("heading", { name: /^Операцію «.+» ще не підтверджено$/ }),
     ).toHaveCount(0);
     expect(dispatches).toHaveLength(1);
     expect(
       await page.evaluate((key) => localStorage.getItem(key), orderKey),
     ).toBeNull();
+  });
+
+  test("a kept order step with what it names spoiled on the phone is kept and checked as ever, said by its step alone (orders task list, P1-1)", async ({
+    page,
+  }) => {
+    const order = "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c16";
+    const command = randomUUID();
+    await seed(page, {
+      [orderKey]: JSON.stringify({
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: command },
+        label: "Відправлено",
+        orderId: order,
+        ambiguous: true,
+        // Never trusted: anything but a string is dropped, the command kept.
+        shown: { not: "a line" },
+      }),
+    });
+    await serve(page);
+    const dispatches: unknown[] = [];
+    await on(page, `/orders/${order}/dispatch`, async (route, request) => {
+      dispatches.push(request.postDataJSON());
+      await route.fulfill({
+        status: 500,
+        headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
+        json: { code: "INTERNAL_ERROR", message: "Внутрішня помилка сервера." },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const banner = page.locator("section.notice", {
+      has: page.getByRole("heading", {
+        name: "Операцію «Відправлено» ще не підтверджено",
+      }),
+    });
+    await expect(banner).toContainText(
+      "Операцію «Відправлено» — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+    );
+    // The phone's copy kept without it.
+    const stored = await page.evaluate(
+      (key) => localStorage.getItem(key),
+      orderKey,
+    );
+    expect(JSON.parse(stored ?? "{}")).not.toHaveProperty("shown");
+    // Checked by itself on opening, exactly as kept, nothing only shown sent.
+    await expect.poll(() => dispatches.length).toBeGreaterThan(0);
+    expect(dispatches[0]).toEqual({ command_id: command });
+  });
+
+  test("a kept order step whose line to show is past its length is kept, said by its step alone (orders task list, P1-1)", async ({
+    page,
+  }) => {
+    const order = "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c17";
+    const command = randomUUID();
+    await seed(page, {
+      [orderKey]: JSON.stringify({
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: command },
+        label: "Відправлено",
+        orderId: order,
+        ambiguous: true,
+        shown: "Лоран шоколад · M ".repeat(80),
+      }),
+    });
+    await serve(page);
+    const dispatches: unknown[] = [];
+    await on(page, `/orders/${order}/dispatch`, async (route, request) => {
+      dispatches.push(request.postDataJSON());
+      await route.fulfill({
+        status: 500,
+        headers: { "X-Request-ID": "5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
+        json: { code: "INTERNAL_ERROR", message: "Внутрішня помилка сервера." },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const banner = page.locator("section.notice", {
+      has: page.getByRole("heading", {
+        name: "Операцію «Відправлено» ще не підтверджено",
+      }),
+    });
+    await expect(banner).toContainText(
+      "Операцію «Відправлено» — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+    );
+    // Checked by itself on opening, exactly as kept, nothing only shown sent.
+    await expect.poll(() => dispatches.length).toBeGreaterThan(0);
+    expect(dispatches[0]).toEqual({ command_id: command });
   });
 
   test("a kept order step whose resend meets a server error stays kept, and is never said not recorded", async ({
@@ -3239,9 +3328,19 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ),
     ).toBeVisible();
     await expect(page.getByText(/«Відправлено» не записано/)).toHaveCount(0);
-    await expect(
-      page.getByRole("heading", { name: "Незавершена операція" }),
-    ).toBeVisible();
+    // Kept from before it named its goods: the step alone (P1-1).
+    const banner = page.locator("section.notice", {
+      has: page.getByRole("heading", {
+        name: "Операцію «Відправлено» ще не підтверджено",
+      }),
+    });
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText(
+      "Операцію «Відправлено» — сервер не відповів. Двічі вона не запишеться. Поки чекаємо, інші дії недоступні.",
+    );
+    await expect(banner).toContainText(
+      "Телефон перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».",
+    );
     expect(dispatches).toHaveLength(1);
     expect(
       await page.evaluate((key) => localStorage.getItem(key), orderKey),
@@ -3359,10 +3458,13 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await openStore(page, /Подільський/);
     const unconfirmed =
       "Операцію «Відправлено» ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться.";
-    const said = page.getByText(/^Операцію «Відправлено» ще не підтверджено/);
+    // The alert, never the banner's heading of the same words.
+    const said = page
+      .getByRole("alert")
+      .filter({ hasText: /^Операцію «Відправлено» ще не підтверджено/ });
     await expect(said).toHaveText(unconfirmed);
     const again = page.getByRole("button", {
-      name: "Повторити ту саму команду",
+      name: "Перевірити результат замовлення",
     });
     await thriceNotFound(again, () => dispatches.length, said, unconfirmed);
     // Any other answer begins the count again.
@@ -4536,7 +4638,10 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect.poll(() => dispatches.length).toBe(1);
     // Its own check on opening is the third in a row.
     await expect(
-      page.getByText(/^Операцію «Відправлено» ще не підтверджено/),
+      // The alert, never the banner's heading of the same words.
+      page
+        .getByRole("alert")
+        .filter({ hasText: /^Операцію «Відправлено» ще не підтверджено/ }),
     ).toHaveText(
       "Операцію «Відправлено» ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться. Зверніться до менеджера: нехай перевірить, чи записано.",
     );

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText, inOwnWords } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
-import { keptText, useAutoCheck } from "@/shared/reach";
+import { keptCashText, keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
@@ -17,7 +17,7 @@ import {
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
-import { OrderDetail, actionLabels, stepDone } from "@/orders/Order";
+import { OrderDetail, actionLabels, stepDone, stepShown } from "@/orders/Order";
 import { chargeOnce } from "@/orders/Collected";
 import { NewOrder, shortOf } from "@/orders/NewOrder";
 import { Orders, freshOrdersView } from "@/orders/Orders";
@@ -881,6 +881,7 @@ function Workspace({
   // line, and forgotten with the screen, never said again over the list or
   // the next new order (orders task list, P0-5; review, 2026-10-24).
   const [newRefused, setNewRefused] = useState<unknown>(null);
+  const [firstSend, setFirstSend] = useState(false);
   useEffect(() => {
     if (tab === "new" || newRefused === null) return;
     const settled = useCommand.getState();
@@ -896,7 +897,16 @@ function Workspace({
     setOrderDone(null);
     setCollected(null);
     setNewRefused(null);
-    const order = await submitPending(key, token, command);
+    // Its first sending is written down before it goes, yet nothing is
+    // unanswered until it comes back without an answer: no banner meanwhile,
+    // as «Каса»'s (review, 2026-10-25).
+    if (!resent) setFirstSend(true);
+    let order: Order | null;
+    try {
+      order = await submitPending(key, token, command);
+    } finally {
+      setFirstSend(false);
+    }
     const settled = useCommand.getState();
     // A step on an order, by its path's last word: «dispatch», «cancel»;
     // a new one, «reserve» — by its path first, since one answered is kept
@@ -933,8 +943,18 @@ function Workspace({
     }
     if (order) {
       // Reserved, sent, arrived or cancelled: a buzz, and what it did on
-      // the order (orders task list, P0-2, P0-4, P0-5).
-      const text = step === "" ? null : stepDone(step, order);
+      // the order (orders task list, P0-2, P0-4, P0-5); a step kept and
+      // confirmed later, that it was recorded once (P1-1) — a new order
+      // says what it reserved, a collect its sale.
+      const once = `Операцію «${visible(command.label)}» записано один раз`;
+      const text =
+        step === ""
+          ? null
+          : resent && step !== "reserve" && step !== "collect"
+            ? once
+            : // A new order confirmed late and moved on meanwhile: once.
+              (stepDone(step, order) ??
+              (resent && step === "reserve" ? once : null));
       if (text !== null) {
         buzz("success");
         setOrderDone({ id: order.id, text });
@@ -1810,15 +1830,35 @@ function Workspace({
           {countErrorText(countCommand.error, countCommand.misses)}
         </p>
       )}
-      {pending && (
+      {pending && !firstSend && (
+        // Which step and which order (orders task list, P1-1), named as the
+        // order's refusals name it (owner decision, 2026-10-20).
         <section className="notice">
-          <h3>{busy ? "Перевіряємо результат…" : "Незавершена операція"}</h3>
-          <p>{pending.label}. Поки чекаємо, інші дії недоступні.</p>
-          <p>{keptText(pending.since, me.display_name)}</p>
+          <h3>
+            {busy
+              ? `Перевіряємо операцію «${visible(pending.label)}»…`
+              : pending.acknowledged
+                ? `Операцію «${visible(pending.label)}» записано`
+                : `Операцію «${visible(pending.label)}» ще не підтверджено`}
+          </h3>
+          <p>
+            {pending.shown
+              ? `${visible(pending.shown)} — `
+              : `Операцію «${visible(pending.label)}» — `}
+            {pending.acknowledged
+              ? "замовлення ще не вдалося показати."
+              : "сервер не відповів. Двічі вона не запишеться."}{" "}
+            Поки чекаємо, інші дії недоступні.
+          </p>
+          {/* An order's step is never typed from paper: one not recorded is
+              made again here, and one recorded the server refuses by its
+              status (owner decision, 2026-10-23, В4 (а)). Answered, it is
+              recorded: nothing to wait for but its order. */}
+          {!pending.acknowledged && <p>{keptCashText(pending.since)}</p>}
           <button disabled={busy} onClick={checkOrder}>
             {pending.acknowledged
               ? "Оновити результат"
-              : "Повторити ту саму команду"}
+              : "Перевірити результат замовлення"}
           </button>
         </section>
       )}
@@ -2129,7 +2169,7 @@ function Workspace({
           back={() => {
             setTab("list");
           }}
-          submit={(lines, destination, carrier) => {
+          submit={(lines, destination, carrier, shown) => {
             void run({
               path: "/orders",
               body: {
@@ -2140,6 +2180,7 @@ function Workspace({
                 ...(carrier ? { carrier } : {}),
               },
               label: "Резервування замовлення",
+              shown,
             });
           }}
         />
@@ -2219,6 +2260,7 @@ function Workspace({
                   body: { command_id: crypto.randomUUID(), ...extra },
                   label: actionLabels[action] ?? action,
                   orderId: detail.data.id,
+                  shown: stepShown(detail.data, extra),
                 });
               }}
             />
