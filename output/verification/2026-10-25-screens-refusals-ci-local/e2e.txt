@@ -1,18 +1,19 @@
 CI job `e2e` — end to end (Playwright, real API, PostgreSQL 17)
-Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.sh from /Users/nikitahlushak/birka/.github/workflows/ci.yml (GitHub Actions unavailable).
+Run locally by /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local_tree.py from /Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/.github/workflows/ci.yml (GitHub Actions unavailable).
 
-commit:   6ff94cf (feat/screens-refusals) — dirty: ?? .ai/project-memory/screens-refusals-report.md; ?? output/verification/2026-10-25-screens-refusals/mutants.py; ?? output/verification/2026-10-25-screens-refusals/mutants.txt
-runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local.py sha256 3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da
-date:     2026-10-25 02:17:21 EEST → 02:25:17 (7m55s)
+commit:   667e134 (feat/screens-refusals) — clean
+runner:   /Users/nikitahlushak/.cache/birka-runtime/ci/ci_local_tree.py sha256 266f4258b20eb605c68a720f088f5f4224f408a77178e502fcf54ce04457f794
+date:     2026-10-25 11:26:11 EET → 11:34:22 (8m11s)
 machine:  macOS 26.7.1 arm64, Apple M5, 10 cores, 32 GB RAM; Docker Engine 29.8.2 (Docker Desktop VM aarch64, 10 CPUs, 7.7 GB)
 tools:    Python 3.12.14 (isolated venv /Users/nikitahlushak/.cache/birka-runtime/python), node v24.18.0, npm 11.16.0, /bin/bash 3.2.57(1)-release
 env:      TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 (as the ubuntu runner)
 images:   postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled
 network:  from Docker's VM during the job (Docker Desktop's log): none
 result:   passed
-counts:   609 passed
+counts:   612 passed
 
 DEVIATIONS from CI:
+  - The runner is a copy of ci_local.py pointed at /Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68 (CI_LOCAL_REPO), not the main checkout; its edge job's compose project is birka-ci-local-edge (not birka-edge-check), with BIRKA_BACKUP_DIR in its work directory; the isolated E2E API it pauses is given back from /Users/nikitahlushak/birka/backend, as it was found.
   - Runs on this Mac (macOS 26.7.1 arm64, BSD userland, /bin/bash 3.2.57(1)-release) instead of GitHub's ubuntu-24.04 runner (x86_64, GNU userland, bash 5). Each `run` is executed as GitHub does it: `bash -e <script>` by default, `bash --noprofile --norc -eo pipefail` for shell: bash, `sh -e` for shell: sh, `python <script>` for shell: python; the step's shell, else the job's, else the workflow's defaults.run.shell.
   - Every job runs with TZ=UTC, LANG=C.UTF-8 and LC_ALL=C.UTF-8, as on the ubuntu runner (this Mac's own zone is Europe/Kyiv); every tool the job starts inherits them, Playwright's Chromium included.
   - The working tree as it is, not a fresh checkout (the header says clean or dirty).
@@ -30,7 +31,7 @@ GAPS (declared; nothing else may be missing):
 ====================================================================================================
 ===== [runner] job e2e: end to end (Playwright, real API, PostgreSQL 17)
 [runner] 6 step(s) the runner replaces or does not run match their sha256 in ci.yml
-[runner] stopping pid 63097 on port 58042: /Users/nikitahlushak/.cache/birka-runtime/python/bin/python -m uvicorn app.main:app --app-dir /Users/nikitahlushak/birka/backend --host 127.0.0.1 --port 58042
+[runner] stopping pid 1593 on port 58042: /Users/nikitahlushak/.cache/birka-runtime/python/bin/python -m uvicorn app.main:app --app-dir /Users/nikitahlushak/birka/backend --host 127.0.0.1 --port 58042
 [runner] the isolated E2E API (fresh_e2e.sh's) is started again when the whole run ends
 [runner] stopping the local PostgreSQL 16 E2E cluster on 55442 for this job: /Users/nikitahlushak/.cache/birka-runtime/python/lib/python3.12/site-packages/pgserver/pginstall/bin/postgres -D /Users/nikitahlushak/.cache/birka-runtime/pg-e2e -p 55442 -c unix_socket_directories= -c listen_addresses=127.0.0.1
 waiting for server to shut down.... done
@@ -40,7 +41,7 @@ server stopped
 [runner] service postgres healthy: postgres (PostgreSQL) 17.11, timezone UTC, published 127.0.0.1:55442->5432
 
 ===== actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-[runner] the working tree at 6ff94cf (dirty), not a fresh checkout
+[runner] the working tree at 667e134 (clean), not a fresh checkout
 ===== replaced: ok: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 (0.0s)
 
 ===== actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -53,9 +54,9 @@ server stopped
 [runner] the venv also holds 31 package(s) requirements.lock does not pin: Pygments 2.21.0, ast_serialize 0.11.2, cfgv 3.5.0, distlib 0.4.3, fasteners 0.20, filelock 4.0.8, grimp 3.17, httpcore 1.0.9, httpx 0.28.1, identify 2.6.20, import-linter 2.15, iniconfig 2.3.0, librt 0.16.0, markdown-it-py 4.2.0, mdurl 0.1.2, mypy 2.3.1, mypy_extensions 1.1.0, nodeenv 1.11.0, packaging 26.3, pathspec 1.1.1, pgserver 0.1.4, platformdirs 4.12.2, pluggy 1.6.0, pre_commit 4.6.2, psutil 7.2.2, pytest 9.1.1, pytest-asyncio 1.4.0, python-discovery 1.6.1, rich 15.0.0, ruff 0.16.7, virtualenv 21.14.2
 $ uv pip check --python /Users/nikitahlushak/.cache/birka-runtime/python/bin/python
 Using Python 3.12.14 environment at: /Users/nikitahlushak/.cache/birka-runtime/python
-Checked 74 packages in 6ms
+Checked 74 packages in 11ms
 All installed packages are compatible
-===== replaced: ok: Install the API (0.2s)
+===== replaced: ok: Install the API (0.1s)
 
 ===== Migrate and seed the synthetic shop
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
@@ -105,16 +106,17 @@ birka_app: created
 75 tables: read and write
 alembic_version: read only
 the database: connect only, no temporary tables
-2026-10-24 23:17:30 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=7 organization_id=9c01ee2e-5009-490b-a544-14440e39751b types=['DELIVERY']
-2026-10-24 23:17:30 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=9c01ee2e-5009-490b-a544-14440e39751b types=['OPENING_BALANCE']
-2026-10-24 23:17:30 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=9c01ee2e-5009-490b-a544-14440e39751b types=['DELIVERY']
-===== ok: Migrate and seed the synthetic shop (2.1s)
+2026-10-25 09:26:20 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=7 organization_id=b532c9f9-b1c0-4391-80bd-e3dd95f5d3aa types=['DELIVERY']
+2026-10-25 09:26:20 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=b532c9f9-b1c0-4391-80bd-e3dd95f5d3aa types=['OPENING_BALANCE']
+2026-10-25 09:26:20 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=1 organization_id=b532c9f9-b1c0-4391-80bd-e3dd95f5d3aa types=['DELIVERY']
+===== ok: Migrate and seed the synthetic shop (2.6s)
 
 ===== Start the API
 curl: (7) Failed to connect to 127.0.0.1 port 58042 after 0 ms: Couldn't connect to server
 curl: (7) Failed to connect to 127.0.0.1 port 58042 after 0 ms: Couldn't connect to server
+curl: (7) Failed to connect to 127.0.0.1 port 58042 after 0 ms: Couldn't connect to server
 {"status":"ok","environment":"ci"}
-===== ok: Start the API (2.2s)
+===== ok: Start the API (3.2s)
 
 ===== actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
 [runner] setup-node 24.21.0: the host's node v24.18.0
@@ -128,9 +130,9 @@ curl: (7) Failed to connect to 127.0.0.1 port 58042 after 0 ms: Couldn't connect
 
 ===== Every journey, against the real API
 
-Running 609 tests using 1 worker
+Running 612 tests using 1 worker
 ················································································
-·········[WebServer] 11:18:22 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+············[WebServer] 9:27:18 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -148,7 +150,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:18:22 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:27:18 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -166,15 +168,15 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:18:22 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:27:18 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-·······································································
-··················[WebServer] 11:19:57 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+····································································
+·····················[WebServer] 9:28:55 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -192,7 +194,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:19:57 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:28:55 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -210,14 +212,14 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:19:57 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:28:55 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-·[WebServer] 11:19:58 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+·[WebServer] 9:28:56 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -235,7 +237,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-·[WebServer] 11:19:58 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+·[WebServer] 9:28:56 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -253,14 +255,14 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:19:58 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:28:56 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-[WebServer] 11:19:58 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+·[WebServer] 9:28:56 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -278,7 +280,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-·[WebServer] 11:19:58 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:28:56 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -296,14 +298,14 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:19:58 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:28:56 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-[WebServer] 11:19:58 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:28:57 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -321,7 +323,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:19:58 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:28:57 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -339,34 +341,34 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:19:58 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:28:57 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-·[WebServer] 11:20:00 PM [vite] (client) [Unhandled rejection] Error: INTERNAL_ERROR
+·[WebServer] 9:28:58 AM [vite] (client) [Unhandled rejection] Error: INTERNAL_ERROR
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] Unknown Error: [object Object]
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] Unknown Error: [object Object]
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 1
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 1
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 1
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 1
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 2
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 2
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 3
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 3
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 4
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 4
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 5
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 5
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 6
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 6
 [WebServer] 
-[WebServer] 11:20:00 PM [vite] (client) [Unhandled error] RangeError: broken 7
+[WebServer] 9:28:58 AM [vite] (client) [Unhandled error] RangeError: broken 7
 [WebServer] 
-·[WebServer] 11:20:01 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+·[WebServer] 9:28:59 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -384,7 +386,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-·[WebServer] 11:20:01 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+·[WebServer] 9:28:59 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -402,14 +404,14 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:20:01 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:28:59 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-[WebServer] 11:20:01 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:28:59 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -427,7 +429,7 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:20:01 PM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
+[WebServer] 9:28:59 AM [vite] (client) [Unhandled error] TypeError: Cannot read properties of null (reading 'find')
 [WebServer]  > App src/App.tsx:333:32
 [WebServer]     331 |    // two or more, the person chooses each time, nothing chosen beforehand: a
 [WebServer]     332 |    // sale is written to the store chosen (owner decision, 2026-10-14).
@@ -445,36 +447,36 @@ Running 609 tests using 1 worker
 [WebServer]  > performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26596:11
 [WebServer]  > workLoopSync node_modules/react-dom/cjs/react-dom.development.js:26505:4
 [WebServer] 
-[WebServer] 11:20:01 PM [vite] (client) [console.error] The above error occurred in the <App> component:
+[WebServer] 9:28:59 AM [vite] (client) [console.error] The above error occurred in the <App> component:
 [WebServer] 
 [WebServer]     at App (http://127.0.0.1:5178/src/App.tsx:210:2)
-[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=878aa1ca:13:30)
+[WebServer]     at QueryClientProvider (http://127.0.0.1:5178/node_modules/.vite/deps/@tanstack_react-query.js?v=3569f4ea:13:30)
 [WebServer]     at CrashBoundary (http://127.0.0.1:5178/src/shared/CrashScreen.tsx:145:8)
 [WebServer] 
 [WebServer] React will try to recreate this component tree from scratch using the error boundary you provided, CrashBoundary.
-························································
+·····················································
 ················································································
 ················································································
-························2026-10-24 23:23:04 [info     ] people.granted                 [app.modules.identity.people] membership_id=2cd14d92-d2fe-4655-8b93-2972c46c28cc role=E2E
-·2026-10-24 23:23:08 [info     ] people.granted                 [app.modules.identity.people] membership_id=7a2f2582-b6c3-430c-884d-4dcdd887eeca role=E2E
-2026-10-24 23:23:08 [info     ] people.deactivated             [app.modules.identity.people] memberships=1 user_id=2a08866e-15d3-4fa1-8a4d-58d4f946d322
-·······················································
+···························2026-10-25 09:32:10 [info     ] people.granted                 [app.modules.identity.people] membership_id=df7d8084-3a49-4098-ad92-2d2585467533 role=E2E
+·2026-10-25 09:32:13 [info     ] people.granted                 [app.modules.identity.people] membership_id=d3499e62-2a8d-452c-a1ee-c8d1a46398cb role=E2E
+2026-10-25 09:32:14 [info     ] people.deactivated             [app.modules.identity.people] memberships=1 user_id=d83f050f-4d84-42e3-8cc6-d4da5c152c71
+····················································
 ················································································
-·················································
-  609 passed (7.7m)
-===== ok: Every journey, against the real API (463.6s)
-[runner] stopping pid 66941 on port 58042: python -m uvicorn app.main:app --host 127.0.0.1 --port 58042
+····················································
+  612 passed (8.0m)
+===== ok: Every journey, against the real API (478.3s)
+[runner] stopping pid 32884 on port 58042: python -m uvicorn app.main:app --host 127.0.0.1 --port 58042
 [runner] removed container birka-ci-local-pg and its anonymous volume
 [runner] the local PostgreSQL 16 E2E cluster is started again when the whole run ends
 
 ===== [runner] steps
   replaced: ok                       actions/checkout@11d5960a326750d5838078e36cf38b85af677262  (0.0s)
   replaced: ok                       actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  (0.0s)
-  replaced: ok                       Install the API  (0.2s)
-  ok                                 Migrate and seed the synthetic shop  (2.1s)
-  ok                                 Start the API  (2.2s)
+  replaced: ok                       Install the API  (0.1s)
+  ok                                 Migrate and seed the synthetic shop  (2.6s)
+  ok                                 Start the API  (3.2s)
   replaced: ok                       actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  (0.0s)
   replaced: ok                       Install the app and its browser  (0.2s)
-  ok                                 Every journey, against the real API  (463.6s)
+  ok                                 Every journey, against the real API  (478.3s)
   skipped (if: failure())            Preserve traces and the API log
-===== [runner] e2e: PASSED — 609 passed
+===== [runner] e2e: PASSED — 612 passed

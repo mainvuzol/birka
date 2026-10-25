@@ -4,29 +4,29 @@
   "result": "passed",
   "counts": "9/9 steps passed",
   "reasons": [],
-  "commit": "6ff94cf",
-  "tree": "dirty",
-  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-25T02:25:36+03:00",
-  "finished": "2026-10-25T02:26:00+03:00",
+  "commit": "667e134",
+  "tree": "clean",
+  "runner_sha256": "266f4258b20eb605c68a720f088f5f4224f408a77178e502fcf54ce04457f794",
+  "started": "2026-10-25T11:34:42+02:00",
+  "finished": "2026-10-25T11:35:05+02:00",
   "duration": "0m23s",
-  "brief": "run_edge.py's way: project birka-edge-check, Caddy on :58080; images never pulled, builds from the local cache only (pinned bases, dead proxy); stack removed after",
+  "brief": "run_edge.py's way: project birka-ci-local-edge, Caddy on :58080; images never pulled, builds from the local cache only (pinned bases, dead proxy); stack removed after",
   "images": [
     "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled",
     "caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028 @ sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028 (CADDY_VERSION=v2.11.6), local image store, never pulled",
     "python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f, named by digest in its Dockerfile, in the local build cache",
     "node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1, named by digest in its Dockerfile, in the local build cache",
     "alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8, named by digest in its Dockerfile, in the local build cache",
-    "birka-edge-check-api @ sha256:38ace0967212e8f835aa0061899e02ee83307e7b583cc0242e49f194a3b09874, built here from the cache",
-    "birka-edge-check-web @ sha256:c74f563aed8117511bdd17fa5582526ba64abcd7bdb9505ecda5311951a31df1, built here from the cache",
-    "birka-edge-check-ops @ sha256:f4567450298c56e7dfc01bfb77ebfa0c8584ccd3f005617acd675560ebf9ab9d, built here from the cache"
+    "birka-ci-local-edge-api @ sha256:c47e01977fd716a29220eee0276c3ae47e87b95d5ba1f22da02e3f61fb790686, built here from the cache",
+    "birka-ci-local-edge-web @ sha256:09b38ed1b39aad55626b3157ce65e678cc570ab69a19620c8b798551d94d5ebd, built here from the cache",
+    "birka-ci-local-edge-ops @ sha256:b146f430af991f6e1e6b081e48bb040161b2642719e2f29f307b485cd68ff8eb, built here from the cache"
   ],
   "deviations": [
-    "As edge/run_edge.py runs it: the isolated compose project birka-edge-check (CI: the file's own `birka`), Caddy published on 58080/58443 instead of 80/443 (edge/override.yml), every http://localhost in the steps becomes http://localhost:58080; BIRKA_DOMAIN stays http://localhost; BIRKA_BACKUP_DIR is edge/backups. The port check reads the config merged with the runner's two files, which touch only caddy's ports and the builds.",
+    "As edge/run_edge.py runs it: the isolated compose project birka-ci-local-edge (CI: the file's own `birka`), Caddy published on 58080/58443 instead of 80/443 (edge/override.yml), every http://localhost in the steps becomes http://localhost:58080; BIRKA_DOMAIN stays http://localhost; BIRKA_BACKUP_DIR is the runner's work/edge-backups. The port check reads the config merged with the runner's two files, which touch only caddy's ports and the builds.",
     "Images: a third compose file (work/edge/edge-offline.yml) sets `pull_policy: never` on every service with an image (postgres:17-alpine, caddy:2-alpine come from the local image store, never pulled; CI pulls them fresh), pins every build's base image to the digest in the local build cache and passes a dead HTTP(S) proxy as build args, so a step that would download fails; `docker run --pull never`.",
     "BIRKA_RELEASE is the full HEAD commit, as github.sha is in CI.",
-    "Afterwards the stack is removed (`docker compose --profile ops down -v --remove-orphans`, project birka-edge-check only); its images are kept.",
-    "Before it, the image birka-edge-check-ops a previous run kept is removed, so `compose run ops` builds it from this tree, as on a fresh runner that has none."
+    "Afterwards the stack is removed (`docker compose --profile ops down -v --remove-orphans`, project birka-ci-local-edge only); its images are kept.",
+    "Before it, the image birka-ci-local-edge-ops a previous run kept is removed, so `compose run ops` builds it from this tree, as on a fresh runner that has none."
   ],
   "gaps": [],
   "coverage": null,
@@ -52,13 +52,13 @@
     {
       "name": "Build the images and start the stack",
       "status": "ok",
-      "seconds": 13.7,
+      "seconds": 13.4,
       "code": 0
     },
     {
       "name": "The API is ready behind the edge, healthy to Docker, and keeps its internals in",
       "status": "ok",
-      "seconds": 2.9,
+      "seconds": 3.0,
       "code": 0
     },
     {
@@ -76,13 +76,13 @@
     {
       "name": "Sign-ins are counted per real address, whatever a client claims",
       "status": "ok",
-      "seconds": 0.2,
+      "seconds": 0.3,
       "code": 0
     },
     {
       "name": "The edge's own log keeps no query string",
       "status": "ok",
-      "seconds": 3.5,
+      "seconds": 3.7,
       "code": 0
     },
     {
@@ -98,5 +98,5 @@
       "code": null
     }
   ],
-  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-25-screens-refusals-ci-local/edge.txt"
+  "log": "/Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/output/verification/2026-10-25-screens-refusals-ci-local/edge.txt"
 }

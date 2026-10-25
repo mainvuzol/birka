@@ -4,11 +4,11 @@
   "result": "passed",
   "counts": "pip-audit audited 43 packages: 0 known vulnerabilities (\"No known vulnerabilities found\")",
   "reasons": [],
-  "commit": "6ff94cf",
-  "tree": "dirty",
-  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-25T02:25:31+03:00",
-  "finished": "2026-10-25T02:25:36+03:00",
+  "commit": "667e134",
+  "tree": "clean",
+  "runner_sha256": "266f4258b20eb605c68a720f088f5f4224f408a77178e502fcf54ce04457f794",
+  "started": "2026-10-25T11:34:37+02:00",
+  "finished": "2026-10-25T11:34:42+02:00",
   "duration": "0m04s",
   "brief": "pip-audit 2.9.0 from its own venv (Python 3.12.14); its report as JSON, counted from pip-audit's own output",
   "images": [
@@ -36,9 +36,9 @@
     {
       "name": "Audit requirements.lock",
       "status": "ok",
-      "seconds": 3.1,
+      "seconds": 3.3,
       "code": 0
     }
   ],
-  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-25-screens-refusals-ci-local/python-audit.txt"
+  "log": "/Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/output/verification/2026-10-25-screens-refusals-ci-local/python-audit.txt"
 }

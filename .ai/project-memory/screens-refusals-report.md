@@ -1,9 +1,10 @@
 # The other screens' refusals in their own words — 2026-10-25
 
-Baseline: `1f14716` (#132, an order's refusals, on main).
+Baseline: `e20e8b2` (#133, the drawer's day by the clock's hour, on main);
+built on `1f14716` (#132) and rebased onto #133.
 Status: built, reviewed and proven: the whole CI run locally passed at
-`6ff94cf`, and thirty-five of thirty-five ways of breaking it caught. The
-words wait for the owner's approval.
+`667e134`, after the rebase, and thirty-five of thirty-five ways of
+breaking it caught. The words wait for the owner's approval.
 Branch: `feat/screens-refusals`.
 Owner: business-rules.md, "after #131" and "after #132" (2026-10-25).
 
@@ -79,14 +80,16 @@ No backend change; nothing sent changes.
   and the first sign-in — passed with it before the review; after its fixes,
   the 13 specs changed, 214, passed. The one that did not, at 01:23 on
   25 October, counts a drawer's day across 05:50 and 06:10 of today: that
-  night Kyiv's clocks go back an hour, both fall on one day by the app's
-  «minus six hours», and it passes with every job's TZ=UTC, as CI runs it
-  (below, Not covered).
+  night Kyiv's clocks go back an hour, and both fell on one day by the
+  app's «minus six hours». #133 counts it by the clock's hour; rebased onto
+  it, the journey passes (below).
 - **Mutation:** 35 ways of breaking it, one at a time, after the unchanged
   tree passed with everything they name: all 35 caught — 34 at first;
   the one that survived, erasing's conflict not read again, showed that
   the debt shown is no cached query, and it now reads the debt itself
   ([`mutants.txt`](../../output/verification/2026-10-25-screens-refusals/mutants.txt)).
+  Run at `6ff94cf`, before the rebase: every line the 35 change is in the
+  rebased tree as it was, once each.
 
 ## Review
 
@@ -118,23 +121,19 @@ never saying so.
 
 - [`output/verification/2026-10-25-screens-refusals/`](../../output/verification/2026-10-25-screens-refusals/):
   `mutants.py`, `mutants.txt`.
-- **CI, run locally at `6ff94cf`**
+- **CI, run locally at `667e134`**, the branch rebased onto #133
   ([summary](../../output/verification/2026-10-25-screens-refusals-ci-local/summary.md)),
   on the host's Node 24.18, every job with TZ=UTC: every job passed, the
   backend with its declared gap.
-  - backend: 3 464 on PostgreSQL 17;
-  - e2e: 609 journeys;
-  - hot path: worst p95 93.1 ms (the search by six sellers) and 80.9 ms
+  - backend: 3 467 on PostgreSQL 17;
+  - e2e: 612 journeys;
+  - hot path: worst p95 92.0 ms (the search by six sellers) and 71.3 ms
     (`POST /sales`), within 300 and 500;
   - python-audit: 43 packages, 0 known vulnerabilities; `npm audit` 0;
   - restore drill, frontend and edge passed.
 
 ## Not covered here
 
-- **The drawer's day on the night the clocks change:** «Каса» tells a
-  count that came too late «the same evening» or «another day» by the
-  phone's time less six hours, an hour off on the night Kyiv's clocks go
-  back; seen in a local run, not this change's, and left for its own.
 - **Reads** that fail with a 422 still show the shared words: only a bad
   parameter makes one, and the catalogue's search is now held to the
   server's length.

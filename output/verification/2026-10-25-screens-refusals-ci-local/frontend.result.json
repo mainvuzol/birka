@@ -2,13 +2,13 @@
   "job": "frontend",
   "name": "frontend (lint, types, build)",
   "result": "passed",
-  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 158 modules, built in 97ms",
+  "counts": "eslint 0 problems (exit 0); tsc --noEmit 0 errors (exit 0); npm audit: found 0 vulnerabilities; vite 158 modules, built in 82ms",
   "reasons": [],
-  "commit": "6ff94cf",
-  "tree": "dirty",
-  "runner_sha256": "3e1564d8fa8f012077b980d4bfc42f1c6b440049499decf4939a22587b9ff8da",
-  "started": "2026-10-25T02:25:17+03:00",
-  "finished": "2026-10-25T02:25:31+03:00",
+  "commit": "667e134",
+  "tree": "clean",
+  "runner_sha256": "266f4258b20eb605c68a720f088f5f4224f408a77178e502fcf54ce04457f794",
+  "started": "2026-10-25T11:34:23+02:00",
+  "finished": "2026-10-25T11:34:36+02:00",
   "duration": "0m13s",
   "brief": "node v24.18.0 for 24; npm ci replaced by a check that node_modules is exactly the lock",
   "images": [
@@ -44,27 +44,27 @@
     {
       "name": "npm audit --audit-level=high",
       "status": "ok",
-      "seconds": 1.5,
+      "seconds": 1.4,
       "code": 0
     },
     {
       "name": "npm run lint",
       "status": "ok",
-      "seconds": 7.7,
+      "seconds": 8.1,
       "code": 0
     },
     {
       "name": "npm run typecheck",
       "status": "ok",
-      "seconds": 1.8,
+      "seconds": 1.9,
       "code": 0
     },
     {
       "name": "npm run build",
       "status": "ok",
-      "seconds": 2.0,
+      "seconds": 2.1,
       "code": 0
     }
   ],
-  "log": "/Users/nikitahlushak/birka/output/verification/2026-10-25-screens-refusals-ci-local/frontend.txt"
+  "log": "/Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/output/verification/2026-10-25-screens-refusals-ci-local/frontend.txt"
 }
