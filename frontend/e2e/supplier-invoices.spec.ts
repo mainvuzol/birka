@@ -4,6 +4,7 @@ import {
   grn,
   more,
   openStore,
+  refuseOnce,
   section,
   sections,
 } from "./fixtures";
@@ -150,6 +151,16 @@ test("an invoice is recorded and paid in parts until it is settled", async ({
   await page.getByRole("button", { name: "+ Записати накладну" }).click();
   await page.getByRole("button", { name: "+ Новий постачальник" }).click();
   await page.getByLabel("Назва постачальника").fill(supplier);
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/suppliers", 422);
+  await page.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(
+    page.getByText(
+      "Постачальника не додано. Перевірте назву й телефон та спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Додати постачальника" }).click();
   await expect(
     page.getByRole("combobox", { name: "Постачальник", exact: true }).first(),
@@ -177,6 +188,16 @@ test("an invoice is recorded and paid in parts until it is settled", async ({
   ]);
 
   await page.getByLabel("Сума оплати, грн").fill("999,50");
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/payments", 409);
+  await page.getByRole("button", { name: "Сплатити" }).click();
+  await expect(
+    page.getByText(
+      "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // Typed again, as the form asks after a refusal.
+  await page.getByLabel("Сума оплати, грн").fill("999,50");
   await page.getByRole("button", { name: "Сплатити" }).click();
   await expect(
     page.getByText("Оплату 999,50 грн записано. Залишок 3 000,00 грн."),
@@ -200,7 +221,14 @@ test("an invoice is recorded and paid in parts until it is settled", async ({
   await expect(
     page.getByRole("list", { name: "Історія накладної" }).getByRole("listitem"),
   ).toHaveCount(3);
-  expect(paid.bodies).toEqual([
+  // The one refused above, then the same payment as a new command, then
+  // the rest.
+  expect(paid.bodies).toHaveLength(3);
+  expect({ ...(paid.bodies[0] as object), command_id: null }).toEqual({
+    ...(paid.bodies[1] as object),
+    command_id: null,
+  });
+  expect(paid.bodies.slice(1)).toEqual([
     { command_id: expect.any(String) as string, amount: "999.50" },
     { command_id: expect.any(String) as string, amount: "3000.00" },
   ]);

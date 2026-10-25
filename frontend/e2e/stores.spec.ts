@@ -1,4 +1,12 @@
-import { test, expect, more, openStore, section, sections } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  refuseOnce,
+  section,
+  sections,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -211,12 +219,30 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     market.getByRole("button", { name: "Так, заблокувати «Ринок»" }),
   ).toBeDisabled();
   await market.getByLabel(/^Причина/).fill("Ревізія каси");
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/stores/*/state", 409);
+  await market
+    .getByRole("button", { name: "Так, заблокувати «Ринок»" })
+    .click();
+  await expect(
+    market.getByText(
+      "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await market
     .getByRole("button", { name: "Так, заблокувати «Ринок»" })
     .click();
   await expect(market.getByText("Заблоковано", { exact: true })).toBeVisible();
   await expect(market.getByText("Причина: Ревізія каси")).toBeVisible();
-  expect(changes.bodies).toEqual([
+  // The one refused above, then the same change as a new command.
+  expect(changes.bodies).toHaveLength(2);
+  expect({
+    ...(changes.bodies[0] as object),
+    command_id: null,
+  }).toEqual({ ...(changes.bodies[1] as object), command_id: null });
+  expect(changes.bodies.slice(1)).toEqual([
     {
       command_id: expect.any(String) as string,
       state: "BLOCKED",

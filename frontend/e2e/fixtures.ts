@@ -114,6 +114,55 @@ export async function section(page: Page, name: string): Promise<void> {
 }
 
 /**
+ * The next command sent to `pattern` — never a read of it — refused once,
+ * for a reason no screen names: its form (422) or a conflict (409); the
+ * shared words for those speak of an order, and every screen says its own
+ * (owner decisions, 2026-10-24 and 2026-10-25). `details` as the server
+ * would add them, e.g. `{ recorded: false }`.
+ */
+export async function refuseOnce(
+  page: Page,
+  pattern: string,
+  status: 422 | 409,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  let used = false;
+  await page.route(pattern, async (route) => {
+    if (used || route.request().method() === "GET") {
+      await route.fallback();
+      return;
+    }
+    used = true;
+    await route.fulfill({
+      status,
+      json:
+        status === 422
+          ? {
+              code: "VALIDATION_ERROR",
+              message: "Request failed validation",
+              details,
+            }
+          : { code: "CONFLICT", message: "Conflict", details },
+    });
+  });
+}
+
+/** How many times a path `path` matches was read (GET) from now on: a
+ * screen reading again what it shows after a conflict (review,
+ * 2026-10-25). */
+export function readsOf(page: Page, path: RegExp): () => number {
+  let count = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "GET" &&
+      path.test(new URL(request.url()).pathname)
+    )
+      count += 1;
+  });
+  return () => count;
+}
+
+/**
  * A coat into the till's basket as a seller puts it (redesign P0-3): a tap
  * on its size chip, under its model's tag — of `locationId`'s, when every
  * warehouse is listed (a new order's, orders task list, P0-5). «Ще товари»

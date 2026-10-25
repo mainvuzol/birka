@@ -1,4 +1,12 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  readsOf,
+  refuseOnce,
+  section,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -219,6 +227,25 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     "1 500,00 грн за од. · взято 3 · продано 0 · повернено 0 · на руках 3",
   );
   await lot.getByLabel("Скільки одиниць").fill("2");
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/supplier-invoices/sold", 422);
+  await lot.getByRole("button", { name: "Продано" }).click();
+  await expect(
+    page.getByText("Не записано. Перевірте кількість та спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const lotReads = readsOf(page, /\/api\/v1\/borrowed$/);
+  await refuseOnce(page, "**/api/v1/supplier-invoices/sold", 409);
+  await lot.getByRole("button", { name: "Продано" }).click();
+  await expect(
+    page.getByText(
+      "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(lotReads).toBeGreaterThan(0);
   await lot.getByRole("button", { name: "Продано" }).click();
   await expect(
     page.getByText(

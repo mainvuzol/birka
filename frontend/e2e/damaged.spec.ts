@@ -1,4 +1,4 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import { test, expect, more, openStore, refuseOnce, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -188,6 +188,15 @@ test("a damaged coat is taken for inspection and goes back on sale where it was 
   ).toBeVisible();
   await expect(unit).toContainText("продано зі складу «Склад повернень»");
 
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/damaged-units/*/take", 422);
+  await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
+  await expect(
+    page.getByText("Не записано. Перевірте дані та спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
   await expect(
     page.locator('[data-status="INSPECTING"]').filter({ hasText: model }),

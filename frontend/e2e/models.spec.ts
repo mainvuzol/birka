@@ -4,6 +4,8 @@ import {
   fillLine,
   more,
   openStore,
+  readsOf,
+  refuseOnce,
   section,
   sections,
   tapSize,
@@ -283,6 +285,11 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
     if (attempts === 1) await route.abort("failed");
     else await route.fulfill({ response });
   });
+  await refuseOnce(page, "**/api/v1/catalog/models/*/merge", 422);
+  await merge.click();
+  await expect(
+    page.getByText("Моделі не об’єднано. Спробуйте ще раз.", { exact: true }),
+  ).toBeVisible();
   await merge.click();
   await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
   await expect(
@@ -397,6 +404,23 @@ test("a rename warns of a similar word, and taking the word in use saves it", as
   await expect(page.getByLabel("Колір", { exact: true })).toHaveValue(
     colour.right,
   );
+  // Refused for a reason the screen does not name: its own words, never an
+  // order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 422);
+  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await expect(
+    page.getByText("Назву не змінено. Перевірте поля та спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 409);
+  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await expect(
+    page.getByText(
+      "Назву не змінено: модель щойно змінили — перегляньте її й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Зберегти назву" }).click();
   await expect(
     page.getByText(
@@ -418,6 +442,17 @@ test("a retired model is not received until it is brought back", async ({
   );
   await enter(page, "Моделі");
   await open(page, name, /графіт/);
+  const cardReads = readsOf(page, /\/api\/v1\/catalog\/models\/[^/]+$/);
+  await refuseOnce(page, "**/api/v1/catalog/models/*/retire", 409);
+  await page.getByRole("button", { name: "Прибрати модель" }).click();
+  await expect(
+    page.getByText(
+      "Модель не прибрано: її щойно змінили — перегляньте її й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // The card read again, as it says.
+  await expect.poll(cardReads).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Прибрати модель" }).click();
   await expect(
     page.getByText(
@@ -452,6 +487,11 @@ test("a retired model is not received until it is brought back", async ({
   expect(((await refused.json()) as { code: string }).code).toBe(
     "MODEL_RETIRED",
   );
+  await refuseOnce(page, "**/api/v1/catalog/models/*/restore", 422);
+  await page.getByRole("button", { name: "Повернути модель" }).click();
+  await expect(
+    page.getByText("Модель не повернуто. Спробуйте ще раз.", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Повернути модель" }).click();
   await expect(
     page.getByText(`«${name} графіт» повернуто: її знову приймають.`),
@@ -980,6 +1020,55 @@ test("a rename whose answer was lost settles when it was refused", async ({
   ).toBeEnabled();
   expect(attempts).toBe(2);
 });
+
+for (const [what, status, said] of [
+  ["a form", 422, "Зміну каталогу не записано. Внесіть її ще раз."],
+  [
+    "a conflict",
+    409,
+    "Зміну каталогу не записано. Каталог змінився, поки сервер не відповідав: перегляньте модель і внесіть зміну ще раз.",
+  ],
+] as const)
+  test(`a rename whose answer was lost, refused on its check for ${what} no screen names and recorded nowhere, says it in the catalogue's words (owner decision, 2026-10-25)`, async ({
+    page,
+  }) => {
+    const bearer = await token(page);
+    const name = `Форма ${randomUUID().slice(0, 8)}`;
+    await model(
+      page,
+      bearer,
+      { concept: name, variant: { color: "графіт" } },
+      0,
+    );
+    let attempts = 0;
+    await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+      attempts += 1;
+      if (attempts === 1) await route.abort("connectionfailed");
+      else
+        await route.fulfill({
+          status,
+          json: {
+            code: status === 422 ? "VALIDATION_ERROR" : "CONFLICT",
+            message: "Refused",
+            details: { recorded: false },
+          },
+        });
+    });
+    await enter(page, "Моделі");
+    await open(page, name, /графіт/);
+    await page.getByRole("button", { name: "Перейменувати" }).click();
+    await page.getByLabel("Колір", { exact: true }).fill("сірий");
+    await page.getByRole("button", { name: "Зберегти назву" }).click();
+    await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
+    const cardReads = readsOf(page, /\/api\/v1\/catalog\/models\/[^/]+$/);
+    await page
+      .getByRole("button", { name: "Перевірити результат зміни" })
+      .click();
+    await expect(page.getByText(said, { exact: true })).toBeVisible();
+    expect(attempts).toBe(2);
+    // A conflict reads the card again.
+    if (status === 409) await expect.poll(cardReads).toBeGreaterThan(0);
+  });
 
 test("a product whose creation answer was lost settles when it was refused", async ({
   page,

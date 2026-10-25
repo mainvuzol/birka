@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { StoreState } from "@/orders/types";
 import {
@@ -324,5 +324,9 @@ function refusalText(error: unknown): string {
         return "Вкажіть причину.";
     }
   }
-  return errorText(error);
+  return inOwnWords(
+    errorText(error),
+    "Стан магазину не змінено. Перевірте причину та спробуйте ще раз.",
+    "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+  );
 }

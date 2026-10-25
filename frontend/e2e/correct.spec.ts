@@ -1,4 +1,11 @@
-import { test, expect, openStore, section, waitsFor } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  refuseOnce,
+  section,
+  waitsFor,
+} from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -101,6 +108,52 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
     path: "test-results/correct-mobile.png",
     fullPage: true,
   });
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/inventory/adjustments", 422);
+  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await expect(
+    page.getByText(
+      "Перевірте кількість та спробуйте ще раз. Нічого не записано.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // Counted again, as the form asks after a refusal.
+  await page.getByLabel("Фактично на складі, од.").fill(String(system - 2));
+  await refuseOnce(page, "**/api/v1/inventory/adjustments", 409);
+  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await expect(
+    page.getByText(
+      "Облік змінився — перерахуйте товар і спробуйте ще раз. Нічого не записано.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // «Брак» changes only through returns and its own section: said, never a
+  // count to make again (owner decision, 2026-10-01).
+  await page.getByLabel("Фактично на складі, од.").fill(String(system - 2));
+  await page.route(
+    "**/api/v1/inventory/adjustments",
+    async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "DAMAGED_STOCK_CLOSED",
+          message:
+            "Stock in «Брак» changes only through returns and the «Брак» section",
+          details: {},
+        },
+      });
+    },
+    { times: 1 },
+  );
+  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await expect(
+    page.getByText(
+      "Залишок «Браку» змінюють лише повернення й розділ «Брак». Нічого не записано.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("Фактично на складі, од.").fill(String(system - 2));
   await page.getByRole("button", { name: "Записати коригування" }).click();
 
   await expect(page.getByRole("status")).toContainText(
@@ -109,9 +162,15 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   await expect(
     row(page).getByText(`На складі: ${String(system - 2)}`, { exact: true }),
   ).toBeVisible();
-  // The count travels as a change *and* the balance it was worked out from.
-  expect(sent).toHaveLength(1);
-  expect(sent[0]).toMatchObject({
+  // The count travels as a change *and* the balance it was worked out from:
+  // the refused one first, then the same change as a new command.
+  expect(sent).toHaveLength(4);
+  expect(sent[3]?.command_id).not.toBe(sent[0]?.command_id);
+  expect({ ...sent[0], command_id: null }).toEqual({
+    ...sent[3],
+    command_id: null,
+  });
+  expect(sent[3]).toMatchObject({
     location_id: fixture.count_location_id,
     size_id: fixture.size_id,
     quantity_delta: -2,

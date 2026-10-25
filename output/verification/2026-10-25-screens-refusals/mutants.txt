@@ -1,0 +1,43 @@
+- unchanged tree: passed 
+- the shared words kept for a form: caught by a rename warns of a similar word, and taking the word in use saves it
+- the shared words kept for a conflict: caught by a retired model is not received until it is brought back
+- no conflict seen: caught by a retired model is not received until it is brought back
+- «Брак» said as a conflict: caught by a stocktake states what the shelf holds, and the ledger takes the difference
+- a kept conflict told it failed: caught by 10. a kept operation the phone settles says what became of it › a kept delivery met by a c
+- a kept delivery recorded nowhere in the shared words: caught by 10. a kept operation the phone settles says what became of it › a kept delivery refused fo
+- a rename refused in the shared words: caught by a rename warns of a similar word, and taking the word in use saves it
+- a merge refused in the shared words: caught by a duplicate is merged after a preview, its stock moving to the model that stays
+- a retire's conflict in the shared words: caught by a retired model is not received until it is brought back
+- a restore refused in the shared words: caught by a retired model is not received until it is brought back
+- a model's conflict not read again: caught by a retired model is not received until it is brought back
+- a kept model change's conflict not read again: caught by a rename whose answer was lost, refused on its check for a conflict no screen names and re
+- a kept model change in the shared words: caught by a rename whose answer was lost, refused on its check for a form no screen names and record
+- «Брак»'s action refused in the shared words: caught by a damaged coat is taken for inspection and goes back on sale where it was sold
+- a delivery refused in the shared words: caught by a delivery of a known model is received into an explicitly chosen warehouse
+- a delivery's conflict in the shared words: caught by a delivery of a known model is received into an explicitly chosen warehouse
+- a correction refused in the shared words: caught by a stocktake states what the shelf holds, and the ledger takes the difference
+- a count refused in the shared words: caught by a warehouse is counted position by position, each difference applied at once, and finished
+- a stocktake's start's conflict not read again: caught by a warehouse is counted position by position, each difference applied at once, and finished
+- a stocktake's finish's conflict not read again: caught by a warehouse is counted position by position, each difference applied at once, and finished
+- a price refused in the shared words: caught by the owner sets the shared price where goods arrive, and the store's own overrides it
+- a price's conflict not read again: caught by the owner sets the shared price where goods arrive, and the store's own overrides it
+- a store's state refused in the shared words: caught by the owner blocks a store; its seller sees only that, and the owner reads it
+- a supplier edited in the shared words: caught by goods go back to a supplier from a warehouse, and come back when it is cancelled
+- a supplier's conflict not read again: caught by goods go back to a supplier from a warehouse, and come back when it is cancelled
+- a return's conflict in the shared words: caught by goods go back to a supplier from a warehouse, and come back when it is cancelled
+- a return's conflict not read again: caught by goods go back to a supplier from a warehouse, and come back when it is cancelled
+- a cancel's conflict not read again: caught by goods go back to a supplier from a warehouse, and come back when it is cancelled
+- a supplier added in the shared words: caught by an invoice is recorded and paid in parts until it is settled
+- an invoice's conflict in the shared words: caught by an invoice is recorded and paid in parts until it is settled
+- borrowed goods refused in the shared words: caught by jackets borrowed from another shop are taken at a price, marked sold, and owed in «Накладн
+- borrowed goods' conflict not read again: caught by jackets borrowed from another shop are taken at a price, marked sold, and owed in «Накладн
+- erasing refused in the shared words: caught by the network's owner erases a closed debt's customer who asks, and every sum stays
+- erasing's conflict not read again: SURVIVED
+- a sign-in refused in the shared words: caught by a sign-in refused for a reason the app does not name says how to sign in, never an order's
+34 of 35 caught
+
+After the debt's re-read was made a read of the debt itself (the survivor above):
+- unchanged tree: passed 
+- erasing refused in the shared words: caught by the network's owner erases a closed debt's customer who asks, and every sum stays
+- erasing's conflict not read again: caught by the network's owner erases a closed debt's customer who asks, and every sum stays
+2 of 2 caught

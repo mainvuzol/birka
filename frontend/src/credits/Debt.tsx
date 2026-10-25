@@ -7,6 +7,8 @@ import {
   INVALID_TEXT,
   api,
   errorText,
+  inOwnWords,
+  isConflict,
 } from "@/shared/api";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
@@ -356,7 +358,26 @@ export function Debt({
       // The customer is erased in every store of the network.
       void cache.invalidateQueries({ queryKey: ["credits"] });
     } catch (error) {
-      tell(refusalText(error));
+      tell(
+        inOwnWords(
+          refusalText(error),
+          "Дані покупця не стерто. Спробуйте ще раз.",
+          "Дані покупця не стерто: борг щойно змінився — перегляньте його й спробуйте ще раз.",
+        ),
+      );
+      // Changed in a way it does not name: the debt shown as it is now, as
+      // a refused payment's.
+      if (isConflict(error))
+        try {
+          changed(
+            await api<Credit>(
+              `/credits/${credit.id}${elsewhere ? `?store_id=${store.id}` : ""}`,
+              token,
+            ),
+          );
+        } catch {
+          // What was shown stays; the refusal says what to do.
+        }
     } finally {
       setErasing(null);
     }

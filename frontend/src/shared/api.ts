@@ -229,11 +229,35 @@ export function refusedOutright(error: unknown): error is ApiError {
   );
 }
 
-/** What any screen says of a conflict or a request it could not read when
- * nothing more is known; the till says its own (`@/sales/Sale`, P2-4). */
+/** What is said of a conflict or a request the server could not read when
+ * nothing more is known. Both speak of an order: every other screen says its
+ * own in their place (`inOwnWords`). */
 export const CONFLICT_TEXT =
   "Дані змінилися або команда конфліктує з попередньою. Оновіть замовлення.";
 export const INVALID_TEXT = "Перевірте дані та поточний статус замовлення.";
+
+/**
+ * Those two speak of an order: every other screen says its own instead —
+ * `invalid`, what was not done and what to check; `conflict`, that the data
+ * changed — never an order's (owner decisions, 2026-10-24 and 2026-10-25).
+ * Any other answer — no server, a session ended, no access — stays as it
+ * was `said`.
+ */
+export function inOwnWords(
+  said: string,
+  invalid: string,
+  conflict: string,
+): string {
+  if (said === INVALID_TEXT) return invalid;
+  if (said === CONFLICT_TEXT) return conflict;
+  return said;
+}
+
+/** A conflict no screen names: the screen reads again what it shows, so
+ * what it says to look at is what is now (review, 2026-10-25). */
+export function isConflict(error: unknown): boolean {
+  return errorText(error) === CONFLICT_TEXT;
+}
 /** What any screen says when the server failed, or the app did: the request
  * is safe to make again. A kept command whose outcome is unknown says its
  * own, as it may be recorded (`keptUnconfirmed`, `@/cash/errors`). */
@@ -319,6 +343,10 @@ export function errorText(error: unknown): string {
   // A stocktake someone finished meanwhile (ADR-0022).
   if (error.code === "STOCKTAKE_FINISHED")
     return "Цю інвентаризацію вже завершили. Щоб рахувати далі, почніть нову.";
+  // What is in «Брак» changes only through returns and its own section
+  // (owner decision, 2026-10-01): said, never a conflict to look again at.
+  if (error.code === "DAMAGED_STOCK_CLOSED")
+    return "Залишок «Браку» змінюють лише повернення й розділ «Брак».";
   if (error.code === "IDEMPOTENCY_IN_PROGRESS")
     return "Попередня спроба ще виконується. Зачекайте кілька секунд і перевірте результат.";
   if (error.status === 409) return CONFLICT_TEXT;

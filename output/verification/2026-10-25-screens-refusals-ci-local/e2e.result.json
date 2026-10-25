@@ -1,0 +1,82 @@
+{
+  "job": "e2e",
+  "name": "end to end (Playwright, real API, PostgreSQL 17)",
+  "result": "passed",
+  "counts": "612 passed",
+  "reasons": [],
+  "commit": "667e134",
+  "tree": "clean",
+  "runner_sha256": "266f4258b20eb605c68a720f088f5f4224f408a77178e502fcf54ce04457f794",
+  "started": "2026-10-25T11:26:11+02:00",
+  "finished": "2026-10-25T11:34:22+02:00",
+  "duration": "8m11s",
+  "brief": "PG17 in Docker on 127.0.0.1:55442 (the local PG16 E2E cluster paused); node v24.18.0 for 24; npm ci and playwright install replaced by checks of what is installed",
+  "images": [
+    "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 @ sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (PG_VERSION=17.11), local image store, never pulled"
+  ],
+  "deviations": [
+    "PostgreSQL 17: postgres:17-alpine (same env, initdb args, health check) in Docker Desktop's Linux VM, published on 127.0.0.1:55442 exactly as CI, which the seed's guard demands. The local PostgreSQL 16 E2E cluster (pg-e2e) listens there, so it is stopped for this job and started again when the whole run ends; an idle E2E API left on 58042 by fresh_e2e.sh is stopped and started again likewise.",
+    "Node v24.18.0, the host's, instead of node 24; `npm ci` replaced by a check that the installed node_modules is exactly package-lock.json (the step fails otherwise); `npx playwright install --with-deps chromium` replaced by the Chromium headless shell already in the runtime (PLAYWRIGHT_BROWSERS_PATH), the revision this Playwright expects; no OS packages (macOS). Chromium gets TZ=UTC and LANG/LC_ALL=C.UTF-8 like every tool of the job (it reports timeZone UTC, language en-US).",
+    "The fixture and the API log live in the runner's work directory instead of /tmp; on failure the traces and the API log are copied to the evidence directory (CI uploads them).",
+    "`Install the API`: nothing installed; /Users/nikitahlushak/.cache/birka-runtime/python checked against requirements.lock (43 pins at their versions), `uv pip check` for `pip check`; the backend is imported from backend/, not `pip install -e`'d. The venv also holds 31 package(s) requirements.lock does not pin, which CI's install would not have: Pygments 2.21.0, ast_serialize 0.11.2, cfgv 3.5.0, distlib 0.4.3, fasteners 0.20, filelock 4.0.8, grimp 3.17, httpcore 1.0.9, httpx 0.28.1, identify 2.6.20, import-linter 2.15, iniconfig 2.3.0, librt 0.16.0, markdown-it-py 4.2.0, mdurl 0.1.2, mypy 2.3.1, mypy_extensions 1.1.0, nodeenv 1.11.0, packaging 26.3, pathspec 1.1.1, pgserver 0.1.4, platformdirs 4.12.2, pluggy 1.6.0, pre_commit 4.6.2, psutil 7.2.2, pytest 9.1.1, pytest-asyncio 1.4.0, python-discovery 1.6.1, rich 15.0.0, ruff 0.16.7, virtualenv 21.14.2. The lock's hashes are not checked here (nothing is downloaded); the images built in restore-drill and edge install it with --require-hashes."
+  ],
+  "gaps": [],
+  "coverage": null,
+  "steps": [
+    {
+      "name": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Install the API",
+      "status": "replaced: ok",
+      "seconds": 0.1,
+      "code": 0
+    },
+    {
+      "name": "Migrate and seed the synthetic shop",
+      "status": "ok",
+      "seconds": 2.6,
+      "code": 0
+    },
+    {
+      "name": "Start the API",
+      "status": "ok",
+      "seconds": 3.2,
+      "code": 0
+    },
+    {
+      "name": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+      "status": "replaced: ok",
+      "seconds": 0.0,
+      "code": 0
+    },
+    {
+      "name": "Install the app and its browser",
+      "status": "replaced: ok",
+      "seconds": 0.2,
+      "code": 0
+    },
+    {
+      "name": "Every journey, against the real API",
+      "status": "ok",
+      "seconds": 478.3,
+      "code": 0
+    },
+    {
+      "name": "Preserve traces and the API log",
+      "status": "skipped (if: failure())",
+      "seconds": 0.0,
+      "code": null
+    }
+  ],
+  "log": "/Users/nikitahlushak/birka/.claude/worktrees/friendly-williamson-c70f68/output/verification/2026-10-25-screens-refusals-ci-local/e2e.txt"
+}

@@ -1,4 +1,11 @@
-import { test, expect, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  readsOf,
+  refuseOnce,
+  section,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -227,6 +234,26 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   await expect(
     page.getByRole("combobox", { name: "Яку ціну змінюємо" }),
   ).toHaveValue("ORGANIZATION");
+  await page.getByLabel("Нова ціна, грн").fill("2000");
+  // Refused once for a reason the screen does not name: its own words,
+  // never an order's (owner decision, 2026-10-25).
+  await refuseOnce(page, "**/api/v1/catalog/prices", 422);
+  await page.getByRole("button", { name: "Зберегти ціну" }).click();
+  await expect(
+    page.getByText("Ціну не збережено. Перевірте суму та спробуйте ще раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const priceReads = readsOf(page, /\/api\/v1\/catalog\/prices$/);
+  await refuseOnce(page, "**/api/v1/catalog/prices", 409);
+  await page.getByRole("button", { name: "Зберегти ціну" }).click();
+  await expect(
+    page.getByText(
+      "Ціну не збережено: її щойно змінили — перевірте й збережіть ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect.poll(priceReads).toBeGreaterThan(0);
   await page.getByLabel("Нова ціна, грн").fill("2000");
   await page.getByRole("button", { name: "Зберегти ціну" }).click();
   await expect(

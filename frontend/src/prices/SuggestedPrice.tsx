@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -212,9 +212,14 @@ function Form({
         );
         await refetch();
       } else {
+        if (isConflict(error)) await refetch();
         setProblem(
           error instanceof ApiError
-            ? errorText(error)
+            ? inOwnWords(
+                errorText(error),
+                "Ціну не збережено. Перевірте суму та спробуйте ще раз.",
+                "Ціну не збережено: її щойно змінили — перевірте й збережіть ще раз.",
+              )
             : "Немає відповіді сервера. Натисніть ще раз — повторне збереження безпечне.",
         );
       }

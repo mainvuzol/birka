@@ -97,6 +97,28 @@ async function launchDataExpired(page: Page): Promise<{ sent: number }> {
   return signIns;
 }
 
+test("a sign-in refused for a reason the app does not name says how to sign in, never an order's words (owner decision, 2026-10-25)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/auth/telegram", async (route) => {
+    await route.fulfill({
+      status: 422,
+      json: {
+        code: "VALIDATION_ERROR",
+        message: "Request failed validation",
+        details: {},
+      },
+    });
+  });
+  await openAs(page, owner);
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+  );
+});
+
 test("the owner changes a store's state over an hour after opening the app, and keeps working", async ({
   page,
 }) => {

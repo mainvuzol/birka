@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { ApiError, api, errorText } from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import type { Supplier } from "./types";
@@ -67,7 +67,14 @@ export function SupplierPicker({
         setNote(
           `«${visible(String(error.details.name))}» уже є у списку — обрано його.`,
         );
-      } else setNote(errorText(error));
+      } else
+        setNote(
+          inOwnWords(
+            errorText(error),
+            "Постачальника не додано. Перевірте назву й телефон та спробуйте ще раз.",
+            "Постачальника не додано: дані змінилися — спробуйте ще раз.",
+          ),
+        );
     } finally {
       setBusy(false);
     }
