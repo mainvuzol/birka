@@ -1,0 +1,14 @@
+- unchanged tree: passed 
+- the banner names no step: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- the banner names no order: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- an order's step told to type it from paper: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- an answered step told to wait for «не записано»: caught by a step answered whose order could not be read says it is recorded, never to wait for «не з
+- the old button: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- confirmed later said as fresh: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- a banner while the first press flies: caught by while a step's first press is on its way, no banner says the server did not answer (orders
+- anything kept as what is shown: caught by 10. a kept operation the phone settles says what became of it › a kept order step with wha
+- what is shown kept however long: caught by 10. a kept operation the phone settles says what became of it › a kept order step whose li
+- what is shown never kept: caught by a step whose answer never came names its step and its order, and is never typed from paper
+- a shipping change named by the old delivery: caught by a correction whose answer is lost is resent unchanged
+- the waybill not named: caught by a step whose answer never came names its step and its order, and is never typed from paper
+12 of 12 caught
