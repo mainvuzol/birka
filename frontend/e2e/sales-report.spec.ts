@@ -70,7 +70,7 @@ async function reportAs(
     `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId, name) }).toString()}`,
   );
   await openStore(page, "Центр CENTRE");
-  await section(page, "Звіт");
+  await section(page, "Звіт про продажі");
 }
 
 async function as(
@@ -491,7 +491,7 @@ test("a manager reads their store alone, and a seller has no report", async ({
   ).toBeVisible();
   await more(page);
   await expect(
-    page.getByRole("button", { name: "Звіт", exact: true }),
+    page.getByRole("button", { name: "Звіт про продажі", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -535,7 +535,7 @@ test("yesterday, this week, this month, or any days", async ({ page }) => {
     .toBe(`?date_from=${iso(now).slice(0, 8)}01&date_to=${iso(now)}`);
 
   await page.getByLabel("Від").fill("2026-03-09");
-  await page.getByLabel("До").fill("2026-03-10");
+  await page.getByLabel("До", { exact: true }).fill("2026-03-10");
   await expect(page.getByRole("heading", { name: /^з / })).toHaveText(
     "з 09.03.2026 по 10.03.2026",
   );

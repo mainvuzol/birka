@@ -21,6 +21,8 @@ import type {
   ReturnPage,
   SupplierDebts,
 } from "./types";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 const pageSize = 20;
 
@@ -50,6 +52,7 @@ export function Invoices({
   blocked,
   readOnly = false,
   networkOwner = false,
+  back,
 }: {
   store: Store;
   token: string;
@@ -60,6 +63,9 @@ export function Invoices({
   readOnly?: boolean;
   /** The owner of the network, who writes off an invoice of a store that does not trade. */
   networkOwner?: boolean;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error } = useInvoiceCommand();
@@ -203,6 +209,7 @@ export function Invoices({
 
   return (
     <section>
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Накладні</h2>
         <button

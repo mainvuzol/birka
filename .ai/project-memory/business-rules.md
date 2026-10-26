@@ -4477,3 +4477,62 @@ their icons wait for the owner's approval by the screens:
   відсутній товар прийміть через «Приймання».».
 
 Built on 2026-10-26; see the [report](navigation-redesign-3-report.md).
+
+## Owner decision — 2026-10-26 (after #142 was merged)
+
+Asked when #142 was merged, each answer the option recommended:
+- **«Товар» is approved as built,** with what was decided in building it —
+  the tiles' two icons until the bottom menu's own set, «1 очікує
+  перевірки» for one, «← Товар» read «Назад до товару», whoever neither
+  sells nor reads orders opening on «Товар».
+- **Two texts name the places as they are now:** the price hint «Ціну для
+  всіх задає менеджер у «Товарі».», and «Початкові залишки»'s «…а
+  відсутній товар прийміть через «Товар» › «Прийшов товар».». The till's
+  «Решту — у «Боргах» цього магазину.» and an order's «Наступні внески — у
+  «Боргах».» stay as they are.
+- **Next: the bottom menu's P0-4, «Ще» by groups,** as the task list has it:
+  its items named as their screens' headings («Каталог» → «Перевірка
+  каталогу», «Звіт» → «Звіт про продажі»), the groups «Гроші»,
+  «Постачальники», «Товар і каталог», «Мережа», the heading «Ще», «← Ще»
+  over a section opened from it, and «Змінити магазин» from the header to
+  the bottom of «Ще» — two taps for whoever has two or more stores; the
+  header «{Магазин} · {Ім’я}» alone. Approved again by the screens once
+  built.
+
+## «Ще» by groups — built 2026-10-26
+
+The bottom menu's task list, P0-4, and the owner's answers after #142. How
+it is carried out, not decided by the owner; the screen and its words wait
+for the owner's approval by the screens:
+- **«Ще» is a screen of its own,** headed «Ще», no longer a list opened
+  under the row: its sections by groups — «Гроші» («Звіт про продажі»),
+  «Постачальники» («Накладні», «Постачальникам»), «Товар і каталог»
+  («Перевірка каталогу», «Моделі», «Початкові залишки»), «Мережа»
+  («Магазини», «Резервні копії» with its «⚠») — a group with nothing in it
+  not shown; a row each, in the lists' rhythm (56 px) with its chevron,
+  held by its own section's rule as before. A row chosen, the focus stays
+  on «Ще», as it did when «Ще» was a list.
+- **«Змінити магазин» is the last line of «Ще,»** for whoever has two
+  stores or more, held as the row is; the header is «{Магазин} · {Ім’я}»
+  alone. Only over a store that cannot be worked in, which has no «Ще», is
+  it still in the header.
+- **«Ще» is in the row only when it holds something** — a section, or the
+  stores to change to — marked on its screen and on every section opened
+  from it.
+- **«Ще» and «← Ще» are held only while a first send is in flight,** free
+  otherwise — while something is kept or a reason owed too. The task list
+  says «Ще» is never held; that was written for a list opened over the
+  screen, and «Ще» now leaves it: a sale's answer, said on the till alone,
+  would be lost to whoever pressed «Ще» while it was sent, and the sale
+  perhaps typed again. To approve.
+- **«← Ще» over the heading of every section opened from «Ще»** leads back
+  to its groups, read «Назад до «Ще»», as «← Каса» is «Назад до каси»; «Ще»
+  pressed again does the same; the focus stays on «Ще».
+- **«Каса» stays a tab for everyone** until «Огляд» takes its place (P1-1):
+  the tab rule's «first four» are «Продаж · Товар · Клієнти · Каса» until
+  then, so «Гроші» holds «Звіт про продажі» alone.
+- **The two texts the owner changed:** the price hint «Ціну для всіх задає
+  менеджер у «Товарі».» and «Початкові залишки»'s «…а відсутній товар
+  прийміть через «Товар» › «Прийшов товар».».
+
+Built on 2026-10-26; see the [report](navigation-redesign-4-report.md).

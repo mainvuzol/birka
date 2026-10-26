@@ -44,8 +44,17 @@ test("stock screen explicitly selects warehouse and shows real API balances with
     if (!["GET", "HEAD"].includes(r.method())) writes.push(r.url());
   });
   await expect(page.getByLabel("Склад для перегляду")).toHaveValue("");
+  // The chosen warehouse's own list: the till, open first, reads the same
+  // address for its own warehouse, and may answer after this one is asked.
+  const chosen = await page
+    .getByLabel("Склад для перегляду")
+    .locator("option", { hasText: /^Основний склад$/ })
+    .getAttribute("value");
   const request = page.waitForResponse(
-    (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
+    (r) =>
+      r.url().includes("/catalog/stock-options?") &&
+      r.url().includes(`location_id=${chosen ?? "none"}`) &&
+      r.status() === 200,
   );
   await page
     .getByLabel("Склад для перегляду")

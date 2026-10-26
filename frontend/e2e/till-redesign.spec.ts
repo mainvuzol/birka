@@ -1,4 +1,5 @@
 import {
+  more,
   test,
   expect,
   fillLine,
@@ -182,6 +183,8 @@ test("one store opens straight on the till, with nothing to change to", async ({
   await expect(
     page.getByRole("heading", { name: "Оберіть магазин" }),
   ).toHaveCount(0);
+  // Nothing to change to, in «Ще» either (navigation task list, P0-4).
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toHaveCount(0);
@@ -200,9 +203,24 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
   await page.getByRole("button", { name: "Основний MAIN" }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  // The header is the store and the person alone; «Змінити магазин» is at
+  // the bottom of «Ще», after its groups (navigation task list, P0-4).
+  await expect(page.locator(".store-line").getByRole("button")).toHaveCount(0);
+  await more(page);
+  const change = page.getByRole("button", { name: "Змінити магазин" });
+  await expect(change).toBeVisible();
+  const last = await page
+    .locator(".more-screen")
+    .getByRole("button")
+    .last()
+    .textContent();
+  expect(last).toBe("Змінити магазин");
+  await change.click();
   await expect(
-    page.getByRole("button", { name: "Змінити магазин" }),
+    page.getByRole("heading", { name: "Оберіть магазин" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   // Opened again, nothing is remembered: the choice again (owner, В6).
   await page.goto("about:blank");
   await page.goto(launch());
@@ -210,6 +228,53 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
     page.getByRole("heading", { name: "Оберіть магазин" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
+});
+
+test("«Ще» only when it holds something: nothing under it and one store, no «Ще»; two stores, «Ще» holds «Змінити магазин» alone (navigation task list, P0-4)", async ({
+  page,
+}) => {
+  // The counter's work alone: nothing of «Ще»'s.
+  const counterOnly = [
+    "sale:create",
+    "sale:view",
+    "sale:credit",
+    "inventory:view",
+    "cash:close",
+  ];
+  let stores = 1;
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      organization_permissions: string[];
+      stores: MeStore[];
+    };
+    body.organization_permissions = [];
+    body.stores = body.stores
+      .sort((a, b) => Number(b.code === "MAIN") - Number(a.code === "MAIN"))
+      .slice(0, stores)
+      .map((s) => ({
+        ...s,
+        permissions: s.permissions.filter((p) => counterOnly.includes(p)),
+      }));
+    await route.fulfill({ response, json: body });
+  });
+  const row = page
+    .getByRole("navigation", { name: "Розділи" })
+    .getByRole("button");
+  await page.goto(launch());
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(row).toHaveText(["Продаж", "Товар", "Клієнти", "Каса"]);
+  // Two stores: «Ще», for «Змінити магазин» alone — no group.
+  stores = 2;
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await expect(row).toHaveText(["Продаж", "Товар", "Клієнти", "Каса", "Ще"]);
+  await more(page);
+  await expect(page.locator(".more-group")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Змінити магазин" }),
+  ).toBeVisible();
 });
 
 test("whoever does not sell opens on the orders, as before", async ({
@@ -230,6 +295,26 @@ test("whoever does not sell opens on the orders, as before", async ({
   await expect(
     page.getByRole("button", { name: "Нове замовлення" }),
   ).toHaveCount(0);
+});
+
+test("a store that cannot be worked in, among two, keeps «Змінити магазин» in its header: it has no «Ще» (navigation task list, P0-4)", async ({
+  page,
+}) => {
+  await stubMe(page, (stores) =>
+    stores.map((s) =>
+      s.code === "MAIN" ? { ...s, state: "BLOCKED", permissions: [] } : s,
+    ),
+  );
+  await page.goto(launch());
+  await page.getByRole("button", { name: /^Основний MAIN/ }).click();
+  await expect(page.getByRole("button", { name: "Оновити" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Розділи" })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Змінити магазин" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Оберіть магазин" }),
+  ).toBeVisible();
 });
 
 test("a single store that does not trade shows its state, with nothing to change to", async ({

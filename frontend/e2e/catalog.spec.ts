@@ -32,7 +32,7 @@ function launch(): string {
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await section(page, "Каталог");
+  await section(page, "Перевірка каталогу");
 }
 async function draft(page: Page, raw: string): Promise<void> {
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
@@ -104,7 +104,7 @@ test("reject proposal and retrieve its preserved reason from history", async ({
   ).toBeVisible();
   await page.reload();
   await openStore(page, "Основний MAIN");
-  await section(page, "Каталог");
+  await section(page, "Перевірка каталогу");
   await page.getByLabel("Стан пропозицій").selectOption({ label: "Відхилені" });
   await page.getByRole("button", { name: new RegExp(raw) }).click();
   await expect(
@@ -200,7 +200,7 @@ test("catalog navigation requires catalog permission", async ({ page }) => {
   await openStore(page, "Основний MAIN");
   await more(page);
   await expect(
-    page.getByRole("button", { name: "Каталог", exact: true }),
+    page.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toHaveCount(0);
 });
 

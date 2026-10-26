@@ -80,7 +80,7 @@ test("the owner is shown last night's failed copy, and why Telegram did not say 
   // Seen before «Ще» is opened.
   await expect(moreTab(page)).toHaveText("Ще ⚠");
   await more(page);
-  await expect(tab(page)).toHaveText("Резервні копії ⚠");
+  await expect(tab(page)).toHaveAccessibleName("Резервні копії ⚠");
   await tab(page).click();
 
   const verdict = page.locator('[data-state="FAILED"]');
@@ -120,7 +120,10 @@ test("a seller, even holding every permission for the store, has no such section
   await enter(page, fixture.telegram_user_id);
   await more(page);
   await expect(
-    sections(page).getByRole("button", { name: "Каталог", exact: true }),
+    sections(page).getByRole("button", {
+      name: "Перевірка каталогу",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(tab(page)).toHaveCount(0);
   await expect(moreTab(page)).toHaveText("Ще");
@@ -152,7 +155,10 @@ test("copies in order leave the tab unmarked and say when and how big", async ({
   // Read once the state has arrived: before it, the tab is unmarked anyway.
   await expect(moreTab(page)).toHaveText("Ще");
   await more(page);
-  await expect(tab(page)).toHaveText("Резервні копії");
+  await expect(tab(page)).toHaveAccessibleName("Резервні копії");
+  // «Ще» is a screen of its own (navigation task list, P0-4): back to the
+  // section from it.
+  await tab(page).click();
   await expect(verdict).toContainText("перевірена відновленням за 0,4 с.");
   await expect(verdict).toContainText("Розмір: 2,4 МБ.");
   await expect(page.getByText("Останнє повідомлення надіслано")).toBeVisible();
@@ -191,7 +197,7 @@ test("a server never backed up says so plainly", async ({ page }) => {
   await enter(page, fixture.owner_telegram_user_id);
   await expect(moreTab(page)).toHaveText("Ще ⚠");
   await more(page);
-  await expect(tab(page)).toHaveText("Резервні копії ⚠");
+  await expect(tab(page)).toHaveAccessibleName("Резервні копії ⚠");
   await tab(page).click();
   await expect(
     page

@@ -512,6 +512,8 @@ counted:
 | the stock | 2 («Ще», «Залишки») | **1** («Товар») | P0-3 | `till-sections.spec.ts`, its counter of presses |
 | receiving | 2 («Ще», «Приймання») | **2** («Товар», «Прийшов товар») | P0-3 | the same |
 | «Брак» | 2 («Ще», «Брак») | **2** («Товар», «Брак») | P0-3 | the same |
+| a section of «Ще» | 2 («Ще», its button) | **2** («Ще», its row) | P0-4 | `till-sections.spec.ts`, the presses |
+| another store | 1 («Змінити магазин» in the header) | **2** («Ще», «Змінити магазин») | P0-4 | `till-redesign.spec.ts`, the presses |
 
 The counter is the page's own: every `pointerdown` from the first press,
 in a store where this person has both debts and orders. A whole new order,

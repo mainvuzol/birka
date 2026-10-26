@@ -1,0 +1,23 @@
+- unchanged tree: passed 
+- «Ще» unmarked on its own screen: caught by a seller's sections are the counter's four and «Ще» in one row at 360 px, under a one-line
+- «Ще» shown when it holds nothing: caught by «Ще» only when it holds something: nothing under it and one store, no «Ще»; two stores, «Щ
+- «Ще» hidden when it holds «Змінити магазин» alone: caught by «Ще» only when it holds something: nothing under it and one store, no «Ще»; two stores, «Щ
+- «Ще» free while a sale is sent: caught by while a sale is being sent, «Ще» is held as the row is: its answer is said on the till, ne
+- «← Ще» free while a section's change is sent: caught by the owner blocks a store; its seller sees only that, and the owner reads it
+- an empty group shown: caught by a seller's sections are the counter's four and «Ще» in one row at 360 px, under a one-line
+- no «Гроші»: caught by a manager's «Ще» is money, suppliers, goods and catalogue, with no network (navigation tas
+- a row free while its section is held: caught by «Оля»'s day at «Каса» › they sell for cash and by card, fix the card sale from its receipt
+- «Змінити магазин» free while the row is held: caught by «Оля»'s day at «Каса» › they sell for cash and by card, fix the card sale from its receipt
+- «Змінити магазин» in the header inside a store: caught by two stores are chosen each time, nothing chosen beforehand, and the till comes first
+- no «Змінити магазин» in «Ще»: caught by two stores are chosen each time, nothing chosen beforehand, and the till comes first
+- no «Змінити магазин» over a store that cannot be worked in: caught by a store that cannot be worked in, among two, keeps «Змінити магазин» in its header: it has
+- no «← Ще» over «Резервні копії»: caught by the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's s
+- «← Ще» read as «Ще»: caught by a seller's sections are the counter's four and «Ще» in one row at 360 px, under a one-line
+- the focus lost after a row: caught by a seller's sections are the counter's four and «Ще» in one row at 360 px, under a one-line
+- the focus lost after «← Ще»: caught by a seller's sections are the counter's four and «Ще» in one row at 360 px, under a one-line
+- rows not the list's width: caught by the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's s
+- «Каталог» as before: caught by a seller's sections are the counter's four and «Ще» in one row at 360 px, under a one-line
+- the price hint's old «Залишках»: caught by a model with no price: its field takes the cursor, and the ways wait for a price
+- «Початкові залишки»'s old «Приймання»: caught by a split the list does not state asks who counted, and a warehouse with history refuses it
+20 of 20 caught
+exit=0

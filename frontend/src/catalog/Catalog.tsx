@@ -15,6 +15,8 @@ import type { Command } from "./commands";
 import { fieldLabels, reviewText, statusLabels } from "./types";
 import type { Decision } from "./types";
 import { CreateProduct } from "./CreateProduct";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 const base = "/catalog/match-decisions";
 function message(error: unknown): string {
   // Correcting the catalogue (owner decision, 2026-10-03) says its own.
@@ -39,6 +41,7 @@ export function Catalog({
   journalKey,
   storageError,
   person,
+  back,
 }: {
   store: Store;
   token: string;
@@ -46,6 +49,9 @@ export function Catalog({
   storageError: boolean;
   /** Whoever this phone belongs to: named on the kept operation's paper line. */
   person: string;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
@@ -163,6 +169,7 @@ export function Catalog({
         </p>
       )}
       {success && <p role="status">{success}</p>}
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Перевірка каталогу</h2>
         <button

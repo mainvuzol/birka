@@ -289,7 +289,7 @@ test("text from outside is shown with its hidden characters marked, on every scr
   );
 
   // «Звіт», today's.
-  await open(page, fixture.telegram_user_id, "Оля", "Звіт");
+  await open(page, fixture.telegram_user_id, "Оля", "Звіт про продажі");
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`);
 
   // «Повернення»: the seller's sale, found by the model.

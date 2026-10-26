@@ -532,7 +532,7 @@ test("taking returns needs its own permission", async ({ page }) => {
   ).toHaveCount(0);
   await more(page);
   await expect(
-    page.getByRole("button", { name: "Каталог", exact: true }),
+    page.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Повернення", exact: true }),

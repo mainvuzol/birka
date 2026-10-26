@@ -355,7 +355,7 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
   await expect(price).toHaveValue("");
   await expect(
     page.getByText(
-      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у «Залишках».",
+      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у «Товарі».",
     ),
   ).toBeVisible();
   await expect(pay(page, "Готівка")).toBeDisabled();

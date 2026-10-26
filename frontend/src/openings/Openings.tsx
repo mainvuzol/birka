@@ -43,6 +43,8 @@ import type {
   StockList,
   StockPart,
 } from "./types";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 /**
  * «Початкові залишки»: the goods already in a shop, entered as a list.
@@ -78,12 +80,16 @@ export function Openings({
   token,
   scopeKey,
   blocked,
+  back,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const canImport = store.permissions.includes("snapshot:import");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -124,6 +130,7 @@ export function Openings({
     );
   return (
     <section className="openings">
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Початкові залишки</h2>
         <button
@@ -1901,7 +1908,7 @@ function Approval({
           : !(error instanceof ApiError)
             ? "Немає відповіді сервера. Оновіть список і подивіться, чи рішення збережено."
             : error.code === "OPENING_BALANCE_CONFLICT"
-              ? `У складі «${warehouse}» уже був рух товару, тому початковий залишок туди внести не можна. Відхиліть цей список, а відсутній товар прийміть через «Приймання».`
+              ? `У складі «${warehouse}» уже був рух товару, тому початковий залишок туди внести не можна. Відхиліть цей список, а відсутній товар прийміть через «Товар» › «Прийшов товар».`
               : reasonCode === "REVISION_CHANGED"
                 ? "Поки ви дивились, хтось змінив відповідь у списку. Перегляньте підсумок ще раз."
                 : reasonCode === "ROWS_NEED_REVIEW"

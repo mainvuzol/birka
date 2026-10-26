@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentProps, JSX } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +34,8 @@ import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { GoodsTiles } from "@/inventory/Goods";
+import { More } from "@/shared/More";
+import type { MoreBack, MoreGroup } from "@/shared/More";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
@@ -135,7 +137,9 @@ type Tab =
   | "invoices"
   | "report"
   | "models"
-  | "cash";
+  | "cash"
+  /** «Ще»'s own screen, its groups (navigation task list, P0-4). */
+  | "more";
 
 /**
  * The counter's work (redesign P1-6): these sections stand in the row,
@@ -156,20 +160,19 @@ const counter: ReadonlySet<Tab> = new Set([
 ]);
 
 /**
- * The workspace's one line (redesign P1-6): the store and who works in it,
- * and «Змінити магазин» for whoever has two or more stores. The app's name
- * stands on the screens before a store opens, and in the title.
+ * The workspace's one line (redesign P1-6): the store and who works in it.
+ * «Змінити магазин» is at the bottom of «Ще» (navigation task list, P0-4);
+ * here only over a store that cannot be worked in, which has no «Ще». The
+ * app's name stands on the screens before a store opens, and in the title.
  */
 function StoreLine({
   store,
   person,
   changeStore,
-  blocked = false,
 }: {
   store: string;
   person: string;
-  changeStore: (() => void) | undefined;
-  blocked?: boolean;
+  changeStore?: (() => void) | undefined;
 }): JSX.Element {
   return (
     <header className="store-line">
@@ -178,7 +181,7 @@ function StoreLine({
         <span> · {visible(person)}</span>
       </h1>
       {changeStore && (
-        <button className="quiet" disabled={blocked} onClick={changeStore}>
+        <button className="quiet" onClick={changeStore}>
           Змінити магазин
         </button>
       )}
@@ -455,19 +458,12 @@ function Workspace({
       ? "sale"
       : "list",
   );
-  // «Ще» is open on the section it was opened on (redesign P1-6): the app
-  // turning to another by itself closes it, and a section chosen forgets it,
-  // so coming back to that section does not open it again (review,
-  // 2026-10-16).
-  const [moreAt, setMoreAt] = useState<Tab | null>(null);
   // A way of «Продаж» just chosen by its switch: the next screen's switch
   // takes the focus (navigation task list, P0-1; review, 2026-10-26).
   const [modeChosen, setModeChosen] = useState(false);
   const modeFocused = useCallback(() => {
     setModeChosen(false);
   }, []);
-  const moreId = useId();
-  const moreButton = useRef<HTMLButtonElement>(null);
   // A store that does not trade is read, and nothing else is done in it
   // (owner decisions, 2026-10-01). `store` already shows only what reads.
   const trading = store.state === "ACTIVE";
@@ -1269,6 +1265,23 @@ function Workspace({
     supplierUnsettled ||
     invoiceUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
+  // A first send in flight: whatever answers it is said on its own screen,
+  // so nothing leaves it until then — «Ще» and «← Ще» too, free otherwise
+  // (navigation task list, P0-4; review, 2026-10-26).
+  const sending =
+    busy ||
+    saleCommand.busy ||
+    catalogCommand.busy ||
+    receiptCommand.busy ||
+    returnCommand.busy ||
+    creditCommand.busy ||
+    cashCommand.busy ||
+    correctionCommand.busy ||
+    adjustmentCommand.busy ||
+    countCommand.busy ||
+    stateCommand.busy ||
+    supplierCommand.busy ||
+    invoiceCommand.busy;
   // The seller's kept operations, checked by themselves (G11). «Каса» and
   // the catalogue check their own, on their screens.
   useAutoCheck([
@@ -1390,7 +1403,7 @@ function Workspace({
     },
     {
       tab: "catalog",
-      label: "Каталог",
+      label: "Перевірка каталогу",
       shown: store.permissions.includes("catalog:confirm"),
       disabled: blocked,
     },
@@ -1426,7 +1439,7 @@ function Workspace({
     },
     {
       tab: "report",
-      label: "Звіт",
+      label: "Звіт про продажі",
       shown: canSeeReport,
       disabled: blocked,
     },
@@ -1437,10 +1450,9 @@ function Workspace({
       disabled: otherThanStores,
     },
   ];
-  // Whatever section is open, «Ще» marks it when it is one of its own; its
-  // screen's heading names it. Open, it closes once a section is chosen.
+  // Whatever section is open, «Ще» marks it when it is one of its own, and
+  // on its own screen; the section's heading names it.
   const inMore = !counter.has(tab);
-  const moreOpen = moreAt === tab;
   const standsFor = (section: (typeof sections)[number]): boolean =>
     tab === section.tab || (section.also?.includes(tab) ?? false);
   const sectionButton = (section: (typeof sections)[number]): JSX.Element => (
@@ -1452,7 +1464,6 @@ function Workspace({
       onClick={() => {
         if (section.again && standsFor(section)) {
           section.again();
-          setMoreAt(null);
           return;
         }
         setTab(section.tab);
@@ -1460,10 +1471,6 @@ function Workspace({
           setSelectedId(null);
           setOrdersView(freshOrdersView);
         }
-        // Chosen under «Ще», the button goes as «Ще» closes: the focus
-        // stays on «Ще», not lost to the page (review, 2026-10-16).
-        if (moreOpen && !counter.has(section.tab)) moreButton.current?.focus();
-        setMoreAt(null);
       }}
     >
       {section.label}
@@ -1472,15 +1479,8 @@ function Workspace({
   const shown = sections.filter((section) => section.shown);
   // «Товар»'s tiles and the way back to them (navigation task list, P0-3),
   // held as the row is.
-  // A tile or «← Товар» closes «Ще», as the row's buttons do: opened over
-  // one of «Товар»'s screens, it is not opened again by coming back to it
-  // (review, 2026-10-26).
-  const goodsTo = (to: "stock" | "receive" | "damaged"): void => {
-    setTab(to);
-    setMoreAt(null);
-  };
   const toGoods = (): void => {
-    goodsTo("stock");
+    setTab("stock");
   };
   const goodsTiles = (
     <GoodsTiles
@@ -1490,14 +1490,14 @@ function Workspace({
       receive={
         canReceive
           ? () => {
-              goodsTo("receive");
+              setTab("receive");
             }
           : null
       }
       damaged={
         canSeeDamaged
           ? () => {
-              goodsTo("damaged");
+              setTab("damaged");
             }
           : null
       }
@@ -1524,7 +1524,6 @@ function Workspace({
             setSelectedId(null);
             setOrdersView(freshOrdersView);
           }
-          setMoreAt(null);
         }}
       />
     ) : null;
@@ -1550,11 +1549,46 @@ function Workspace({
             setSelectedId(null);
             setOrdersView(freshOrdersView);
           }
-          setMoreAt(null);
         }}
       />
     ) : null;
   const rest = shown.filter((section) => !counter.has(section.tab));
+  // «Ще»'s groups, in the direction's order (navigation task list, P0-4):
+  // money, suppliers, goods and catalogue, the network. «Каса» joins
+  // «Гроші» once «Огляд» takes its place in the row (P1-1).
+  const moreOrder: readonly { title: string; tabs: readonly Tab[] }[] = [
+    { title: "Гроші", tabs: ["report"] },
+    { title: "Постачальники", tabs: ["invoices", "suppliers"] },
+    { title: "Товар і каталог", tabs: ["catalog", "models", "openings"] },
+    { title: "Мережа", tabs: ["stores", "backups"] },
+  ];
+  const moreGroups: MoreGroup[] = moreOrder.map((group) => ({
+    title: group.title,
+    rows: group.tabs.flatMap((key) =>
+      rest
+        .filter((section) => section.tab === key)
+        .map((section) => ({
+          key: section.tab,
+          label: section.label,
+          disabled: section.disabled,
+          open: () => {
+            setTab(section.tab);
+            moreButton.current?.focus();
+          },
+        })),
+    ),
+  }));
+  // «Ще» is shown when it holds anything: a section, or the stores to change
+  // to (navigation task list, §4).
+  const hasMore = rest.length > 0 || changeStore !== undefined;
+  // The focus stays on «Ще», never lost to the page, as the screen under it
+  // goes (review, 2026-10-16 and 2026-10-26).
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const toMore = (): void => {
+    setTab("more");
+    moreButton.current?.focus();
+  };
+  const moreBack: MoreBack = { go: toMore, held: sending };
   // Opened on «Замовлення» with no till to open first, by whoever may not
   // read them: the first section shown instead (orders task list, P2-1) —
   // unless a kept operation turned to its own tab meanwhile (review,
@@ -1567,12 +1601,7 @@ function Workspace({
   setScreen(tab);
   return (
     <>
-      <StoreLine
-        store={store.name}
-        person={me.display_name}
-        changeStore={changeStore}
-        blocked={blocked}
-      />
+      <StoreLine store={store.name} person={me.display_name} />
       {!trading && (
         <p className="notice" role="status">
           {stateText(store)}. Лише перегляд: продажі, приймання, повернення й
@@ -1584,21 +1613,17 @@ function Workspace({
           {shown
             .filter((section) => counter.has(section.tab))
             .map(sectionButton)}
-          <button
-            ref={moreButton}
-            className={inMore ? "active" : "quiet"}
-            aria-current={inMore ? "true" : undefined}
-            aria-expanded={moreOpen}
-            aria-controls={moreId}
-            onClick={() => {
-              setMoreAt(moreOpen ? null : tab);
-            }}
-          >
-            Ще{backupsNeedYou ? " ⚠" : ""}
-          </button>
-        </div>
-        <div id={moreId} className="more" hidden={!moreOpen}>
-          {rest.map(sectionButton)}
+          {hasMore && (
+            <button
+              ref={moreButton}
+              className={inMore ? "active" : "quiet"}
+              aria-current={inMore ? "true" : undefined}
+              disabled={sending}
+              onClick={toMore}
+            >
+              Ще{backupsNeedYou ? " ⚠" : ""}
+            </button>
+          )}
         </div>
       </nav>
       {catalogStorageError && (
@@ -2214,6 +2239,12 @@ function Workspace({
         ) : (
           <p role="alert">Немає доступу до розділу «Брак».</p>
         )
+      ) : tab === "more" ? (
+        <More
+          groups={moreGroups}
+          changeStore={changeStore}
+          changeHeld={blocked}
+        />
       ) : tab === "openings" ? (
         canSeeOpenings ? (
           <Openings
@@ -2221,13 +2252,14 @@ function Workspace({
             token={token}
             scopeKey={key}
             blocked={blocked}
+            back={moreBack}
           />
         ) : (
           <p role="alert">Немає доступу до початкових залишків.</p>
         )
       ) : tab === "backups" ? (
         canSeeBackups ? (
-          <Backups token={token} scopeKey={backupsKey} />
+          <Backups token={token} scopeKey={backupsKey} back={moreBack} />
         ) : (
           <p role="alert">Цей розділ бачить лише власник.</p>
         )
@@ -2239,6 +2271,7 @@ function Workspace({
             journalKey={supplierKey}
             invoiceJournalKey={invoiceKey}
             blocked={otherThanSuppliers}
+            back={moreBack}
           />
         ) : (
           <p role="alert">Повертають постачальнику власник і менеджери.</p>
@@ -2254,6 +2287,7 @@ function Workspace({
             networkOwner={me.organization_permissions.includes(
               "supplier:write_off",
             )}
+            back={moreBack}
           />
         ) : (
           <p role="alert">Накладні ведуть власник і менеджери.</p>
@@ -2265,6 +2299,7 @@ function Workspace({
             token={token}
             journalKey={correctionKey}
             blocked={otherThanCorrections}
+            back={moreBack}
           />
         ) : (
           <p role="alert">Каталог виправляють власник і менеджери.</p>
@@ -2285,7 +2320,7 @@ function Workspace({
         null
       ) : tab === "report" ? (
         canSeeReport ? (
-          <SalesReport token={token} scopeKey={reportKey} />
+          <SalesReport token={token} scopeKey={reportKey} back={moreBack} />
         ) : (
           <p role="alert">Звіт бачать власник і менеджери.</p>
         )
@@ -2297,6 +2332,7 @@ function Workspace({
             journalKey={storesKey}
             blocked={otherThanStores}
             changed={storesChanged}
+            back={moreBack}
           />
         ) : (
           <p role="alert">Цей розділ бачить лише власник мережі.</p>
@@ -2311,6 +2347,7 @@ function Workspace({
               catalogStorageError || storageError || busy || pending !== null
             }
             person={me.display_name}
+            back={moreBack}
           />
         ) : (
           <p role="alert">

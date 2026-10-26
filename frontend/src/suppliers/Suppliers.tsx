@@ -15,6 +15,8 @@ import {
 import { Borrowed } from "./Borrowed";
 import { SupplierPicker, useSuppliers } from "./Picker";
 import type { ReturnPage, Supplier, SupplierReturn } from "./types";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 const pageSize = 20;
 
@@ -34,6 +36,7 @@ export function Suppliers({
   journalKey,
   invoiceJournalKey,
   blocked,
+  back,
 }: {
   store: Store;
   token: string;
@@ -42,6 +45,9 @@ export function Suppliers({
   invoiceJournalKey: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error } = useReturnToSupplier();
@@ -78,6 +84,7 @@ export function Suppliers({
 
   return (
     <section>
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Постачальникам</h2>
         <button

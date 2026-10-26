@@ -2,7 +2,6 @@ import {
   test,
   expect,
   fillLine,
-  more,
   openStore,
   section,
   returnUnits,
@@ -142,6 +141,47 @@ function pay(page: Page, way: string) {
     .getByRole("group", { name: "Продати — як платить покупець" })
     .getByRole("button", { name: way, exact: true });
 }
+
+test("while a sale is being sent, «Ще» is held as the row is: its answer is said on the till, never lost to another screen (navigation task list, P0-4; review, 2026-10-26)", async ({
+  page,
+}) => {
+  await stubList(page);
+  let release: () => void = () => undefined;
+  const answered = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route("**/api/v1/sales", async (route) => {
+    const body = route.request().postDataJSON() as { payment_method: string };
+    await answered;
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: randomUUID(),
+        store_id: fixture.store_id,
+        currency_code: "UAH",
+        subtotal: "1850.00",
+        discount_total: "0.00",
+        total: "1850.00",
+        items: [item()],
+        corrections: [],
+        shortages: [],
+        size_reclassifications: [],
+        payment_method: body.payment_method,
+      },
+    });
+  });
+  await onTheTill(page);
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  const more = sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
+  await expect(more).toBeEnabled();
+  await pay(page, "Готівка").click();
+  await expect(more).toBeDisabled();
+  release();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(more).toBeEnabled();
+});
 
 test("the receipt names each line's size, and the shelf's corrections in coats", async ({
   page,
@@ -415,9 +455,6 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expect(
     page.getByRole("group", { name: "Продаж або повернення" }),
   ).toHaveCount(0);
-  // «Ще» left open over the receipt closes as the app turns to «Повернення»
-  // by itself (redesign P1-6).
-  await more(page);
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
@@ -428,9 +465,6 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expect(
     page.getByRole("group", { name: "Продаж або повернення" }),
   ).toHaveCount(0);
-  await expect(
-    sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
-  ).toHaveAttribute("aria-expanded", "false");
   await expect(
     page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();

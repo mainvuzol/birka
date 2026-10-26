@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { changeStore, test, expect, openStore, section } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -1226,7 +1226,7 @@ test("the shared warehouse's list is seen and filled from the other store, and n
     if (/\/api\/v1\/snapshots\/[^/?]+/.test(request.url()))
       asked.push(request.url());
   });
-  await page.getByRole("button", { name: "Змінити магазин" }).click();
+  await changeStore(page);
   await openStore(page, "Другий SECOND");
   await section(page, "Початкові залишки");
   const listed = page.getByRole("article", { name: `Список ${name}` });

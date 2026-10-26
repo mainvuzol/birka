@@ -11,6 +11,8 @@ import {
 } from "./commands";
 import { stateLabels } from "./types";
 import type { Leftover, StoreRecord } from "./types";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 /**
  * The network's stores and their states (owner decisions, 2026-10-01).
@@ -27,6 +29,7 @@ export function Stores({
   journalKey,
   blocked,
   changed,
+  back,
 }: {
   /** The store the owner is working in, which the journal is kept under. */
   storeId: string;
@@ -36,6 +39,9 @@ export function Stores({
   blocked: boolean;
   /** A state changed: what the app knows of its stores is read again. */
   changed: () => void;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error } = useStateCommand();
@@ -56,6 +62,7 @@ export function Stores({
 
   return (
     <section>
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Магазини</h2>
         <button

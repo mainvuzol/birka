@@ -42,7 +42,7 @@ async function createWithSize(
   system: string,
   size: string,
 ): Promise<void> {
-  await open(page, "Каталог");
+  await open(page, "Перевірка каталогу");
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
   await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
   await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
