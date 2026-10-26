@@ -1,0 +1,173 @@
+gate: one-seller; 10 CPUs; harness, API and database on one machine
+python: 3.12.14 (CPython)
+postgresql: PostgreSQL 17.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync on, synchronous_commit on
+api: http://127.0.0.1:58043, environment ci
+seeding 400 variants × 6 sizes …
+2026-10-26 21:46:16 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:17 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:18 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:19 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:21 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=400 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:22 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:23 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=500 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+2026-10-26 21:46:24 [info     ] inventory.movements_applied    [app.modules.inventory.service] lines=200 organization_id=27219800-0008-40cd-8df4-1346df6762ce types=['DELIVERY']
+seeded 2400 stock keys
+GET /catalog/stock-options               n=200  p50=   16.7  p95=   20.0  p99=   23.9  max=   74.8  pass
+GET /catalog/stock-options (6 sellers)   n=300  p50=   29.9  p95=   81.2  p99=   91.0  max=  129.7  pass  (not gated)
+POST /sales · 1 line                     n=200  p50=   20.1  p95=   25.3  p99=   26.3  max=   28.3  pass
+POST /sales · 1 line (6 sellers)         n=300  p50=   38.2  p95=   45.0  p99=  100.8  max=  111.4  pass  (not gated)
+POST /sales · 4 lines (6 sellers)        n=200  p50=   55.6  p95=   62.1  p99=  111.7  max=  161.5  pass  (not gated)
+POST /sales · same coat, 6 sellers       n=120  p50=   57.9  p95=  111.0  p99=  112.2  max=  122.1  pass  (not gated)
+POST /sales · paid in parts              n=200  p50=   24.2  p95=   28.8  p99=   32.6  max=   38.8  pass
+POST /sales · paid in parts (6 sellers)  n=300  p50=   44.9  p95=   51.7  p99=  104.4  max=  114.4  pass  (not gated)
+GET /catalog/stock-options · search      n=200  p50=   13.2  p95=   16.4  p99=   17.8  max=   98.4  pass
+GET /catalog/stock-options · search (6 sellers) n=300  p50=   31.1  p95=   95.6  p99=   99.2  max=  102.2  pass  (not gated)
+GET /catalog/stock-options · every warehouse n=200  p50=   12.1  p95=   16.6  p99=   18.3  max=   89.6  pass
+GET /catalog/stock-options · every warehouse (6 sellers) n=300  p50=   29.3  p95=   96.3  p99=  121.7  max=  142.2  pass  (not gated)
+
+[
+  {
+    "case": "GET /catalog/stock-options",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 16.714979545213282,
+    "p95": 20.042499992996454,
+    "p99": 23.916249978356063,
+    "max": 74.8017500154674,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 29.86131201032549,
+    "p95": 81.17641706485301,
+    "p99": 90.97975003533065,
+    "max": 129.66924998909235,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 1 line",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 20.07324999431148,
+    "p95": 25.29637492261827,
+    "p99": 26.29333292134106,
+    "max": 28.321791905909777,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 1 line (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 38.19749999092892,
+    "p95": 44.95449992828071,
+    "p99": 100.76866601593792,
+    "max": 111.37825006153435,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 4 lines (6 sellers)",
+    "concurrency": 6,
+    "n": 200,
+    "p50": 55.60210399562493,
+    "p95": 62.05170799512416,
+    "p99": 111.688542063348,
+    "max": 161.54658293817192,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 same coat, 6 sellers",
+    "concurrency": 6,
+    "n": 120,
+    "p50": 57.945771026425064,
+    "p95": 110.97804200835526,
+    "p99": 112.21116699744016,
+    "max": 122.1336250891909,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "POST /sales \u00b7 paid in parts",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 24.206145957577974,
+    "p95": 28.783833025954664,
+    "p99": 32.59387495927513,
+    "max": 38.78349997103214,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "POST /sales \u00b7 paid in parts (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 44.920666492544115,
+    "p95": 51.736957975663245,
+    "p99": 104.40220800228417,
+    "max": 114.39758399501443,
+    "budget": 500.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 search",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 13.163625437300652,
+    "p95": 16.432708012871444,
+    "p99": 17.8316249512136,
+    "max": 98.41354098170996,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 search (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 31.111270538531244,
+    "p95": 95.56979197077453,
+    "p99": 99.1914999904111,
+    "max": 102.206917013973,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": false
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 every warehouse",
+    "concurrency": 1,
+    "n": 200,
+    "p50": 12.118333484977484,
+    "p95": 16.62345801014453,
+    "p99": 18.2514589978382,
+    "max": 89.59175006020814,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": true
+  },
+  {
+    "case": "GET /catalog/stock-options \u00b7 every warehouse (6 sellers)",
+    "concurrency": 6,
+    "n": 300,
+    "p50": 29.25824950216338,
+    "p95": 96.32512496318668,
+    "p99": 121.68183294124901,
+    "max": 142.17095798812807,
+    "budget": 300.0,
+    "verdict": "pass",
+    "gated": false
+  }
+]
