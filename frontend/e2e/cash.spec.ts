@@ -191,7 +191,7 @@ function dayOf(day: string): string {
 }
 
 /** Every tab but «Каса», as a phone held for a reason shows them. */
-const otherTabs = ["Замовлення", "Продаж", "Борги"];
+const otherTabs = ["Продаж", "Клієнти"];
 
 test.describe("«Оля»'s day at «Каса»", () => {
   // One day, in order: what they sell is what they count, and what they

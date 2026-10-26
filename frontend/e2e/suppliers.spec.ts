@@ -429,7 +429,7 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
     .click();
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Борги", exact: true }),
+    page.getByRole("button", { name: "Клієнти", exact: true }),
   ).toBeDisabled();
   // Its own section stays open under «Ще», every other is held (P1-6).
   await more(page);

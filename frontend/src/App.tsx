@@ -144,6 +144,8 @@ const counter: ReadonlySet<Tab> = new Set([
   "sale",
   "returns",
   "credits",
+  "list",
+  "new",
   "cash",
 ]);
 
@@ -1319,8 +1321,10 @@ function Workspace({
     shown: boolean;
     disabled: boolean;
     forgetsOrder?: true;
-    /** Another tab it stands for, marked with it. */
-    also?: Tab;
+    /** The other tabs it stands for, marked with it. */
+    also?: readonly Tab[];
+    /** Pressed again where it stands: its first screen. */
+    again?: () => void;
   }[] = [
     // «Продаж» holds the returns too, by «Продати | Повернути» under its
     // heading (navigation task list, P0-1): for whoever only takes
@@ -1335,29 +1339,32 @@ function Workspace({
       ...(store.permissions.includes("sale:create")
         ? { forgetsOrder: true as const }
         : {}),
-      also: "returns",
+      also: ["returns"],
     },
-    { tab: "credits", label: "Борги", shown: canSeeCredits, disabled: blocked },
+    // «Клієнти»: «Борги» and «Замовлення», by «Борги | Замовлення» under
+    // their headings (navigation task list, P0-2) — opened on the debts,
+    // or the one of them this person has; pressed again, its first screen.
+    {
+      tab: canSeeCredits ? "credits" : "list",
+      label: "Клієнти",
+      shown: canSeeCredits || canSeeOrders,
+      disabled: blocked,
+      forgetsOrder: true,
+      also: ["credits", "list", "new"],
+      again: () => {
+        if (tab === "credits") setCreditEpoch((epoch) => epoch + 1);
+        else {
+          setTab("list");
+          setSelectedId(null);
+          setOrdersView(freshOrdersView);
+        }
+      },
+    },
     {
       tab: "cash",
       label: "Каса",
       shown: canSeeCash,
       disabled: otherThanCash,
-      forgetsOrder: true,
-    },
-    {
-      tab: "list",
-      label: "Замовлення",
-      shown: canSeeOrders,
-      disabled: blocked,
-      forgetsOrder: true,
-    },
-    {
-      tab: "new",
-      label: "+ Нове замовлення",
-      // Whoever makes one sees it (owner decision after #139, 2026-10-26).
-      shown: store.permissions.includes("sale:create") && canSeeOrders,
-      disabled: blocked,
       forgetsOrder: true,
     },
     {
@@ -1431,17 +1438,20 @@ function Workspace({
   // screen's heading names it. Open, it closes once a section is chosen.
   const inMore = !counter.has(tab);
   const moreOpen = moreAt === tab;
+  const standsFor = (section: (typeof sections)[number]): boolean =>
+    tab === section.tab || (section.also?.includes(tab) ?? false);
   const sectionButton = (section: (typeof sections)[number]): JSX.Element => (
     <button
       key={section.tab}
-      className={
-        tab === section.tab || tab === section.also ? "active" : "quiet"
-      }
-      aria-current={
-        tab === section.tab || tab === section.also ? "page" : undefined
-      }
+      className={standsFor(section) ? "active" : "quiet"}
+      aria-current={standsFor(section) ? "page" : undefined}
       disabled={section.disabled}
       onClick={() => {
+        if (section.again && standsFor(section)) {
+          section.again();
+          setMoreAt(null);
+          return;
+        }
         setTab(section.tab);
         if (section.forgetsOrder) {
           setSelectedId(null);
@@ -1457,6 +1467,31 @@ function Workspace({
     </button>
   );
   const shown = sections.filter((section) => section.shown);
+  // Debts and orders, one section's two ways (navigation task list, P0-2):
+  // for whoever has both, under each list's heading, held as the row is.
+  const debtsOrOrders = (current: "credits" | "list"): JSX.Element | null =>
+    canSeeCredits && canSeeOrders ? (
+      <ModeSwitch
+        label="Борги або замовлення"
+        modes={[
+          { mode: "credits", label: "Борги" },
+          { mode: "list", label: "Замовлення" },
+        ]}
+        current={current}
+        disabled={blocked}
+        focus={modeChosen}
+        focused={modeFocused}
+        choose={(mode) => {
+          setModeChosen(true);
+          setTab(mode);
+          if (mode === "list") {
+            setSelectedId(null);
+            setOrdersView(freshOrdersView);
+          }
+          setMoreAt(null);
+        }}
+      />
+    ) : null;
   // Selling and taking back, one section's two ways (navigation task list,
   // P0-1): for whoever does both, under each screen's heading, held as the
   // row is.
@@ -2080,6 +2115,7 @@ function Workspace({
         canSeeCredits ? (
           <Credits
             key={creditEpoch}
+            mode={debtsOrOrders("credits")}
             store={store}
             token={token}
             journalKey={creditKey}
@@ -2370,6 +2406,7 @@ function Workspace({
         )
       ) : (
         <Orders
+          mode={debtsOrOrders("list")}
           store={store}
           token={token}
           blocked={blocked}

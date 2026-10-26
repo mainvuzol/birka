@@ -552,7 +552,12 @@ test("a sale of this store is returned as before, with no store named", async ({
   await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
-  await expect(page.getByRole("article")).not.toContainText("Магазин «");
+  // The sale found, alone: the day's other sales may stand until the search
+  // answers.
+  const found = page.getByRole("article").filter({ hasText: model });
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(found).toHaveCount(1);
+  await expect(found).not.toContainText("Магазин «");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await returnUnits(page, { intact: 1 });
   await page

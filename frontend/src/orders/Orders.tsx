@@ -178,6 +178,7 @@ export function Orders({
   change,
   open,
   create,
+  mode = null,
 }: {
   store: Store;
   token: string;
@@ -187,6 +188,11 @@ export function Orders({
   change: (view: OrdersView) => void;
   open: (order: Order) => void;
   create: () => void;
+  /**
+   * «Борги | Замовлення» under the heading, for whoever has both
+   * (navigation task list, P0-2); none for anyone else.
+   */
+  mode?: JSX.Element | null;
 }): JSX.Element {
   const mayCreate = store.permissions.includes("sale:create");
   const mayRead = store.permissions.includes("sale:view");
@@ -309,6 +315,7 @@ export function Orders({
           </button>
         )}
       </div>
+      {mode}
       {/* Never opened without the right (orders task list, P2-1): nothing
           is said of the rule. */}
       {!mayRead ? null : (

@@ -4371,3 +4371,48 @@ wait for the owner's approval:
   decision after #139), built with it.
 
 Built on 2026-10-26; see the [report](navigation-redesign-1-report.md).
+
+## Owner decision — 2026-10-26 (after #140 was merged)
+
+Asked when #140 was merged, each answer the option recommended:
+- **«Продати | Повернути» is approved as built,** with what was decided in
+  building it — the heading naming the way open, the till's own spacing (in
+  a store of two warehouses, the first tag's sizes at the fold on a phone of
+  360 × 640, to be seen on a phone), «Продаж» opening the returns for
+  whoever only takes them.
+- **Next: the bottom menu's P0-2, «Клієнти»** with «Борги | Замовлення».
+
+## «Клієнти» with «Борги | Замовлення» — built 2026-10-26
+
+The bottom menu's task list, P0-2, and the owner's answers after #140.
+How it is carried out, not decided by the owner; the section, its switch
+and its words wait for the owner's approval:
+- **«Борги» leaves the row for «Клієнти»:** the row is «Продаж · Клієнти ·
+  Каса · Ще», and a seller's «Ще» holds «Каталог · Приймання · Залишки ·
+  Брак». «Клієнти» stands for the debts, the orders and a new order, marked
+  on each; shown with the right to debts or to read orders, never without
+  both.
+- **«Клієнти» opens the debts,** or the one of the two this person has;
+  whoever does none of the counter's work but reads orders opens on the
+  orders, as before.
+- **«Борги | Замовлення» under each list's heading** for whoever has both:
+  two segments, for a reader «Борги або замовлення», the way open marked
+  and focused, held as the row is. None on a debt, a customer's card, an
+  order's card, a new order or its delivery. The headings «Борги» and
+  «Замовлення» name the way open, as P0-1's do.
+- **«Клієнти» pressed again** brings its way's first screen: the debts'
+  list from a debt — a sum typed in a payment is lost, as on leaving for
+  another section — and the orders' list from an order's card or a new
+  order.
+- **«Замовлення» and «+ Нове замовлення» leave «Ще»:** a new order is the
+  «+» in «Замовлення»'s heading, as before; from the till, three taps where
+  it was two (the task list's count).
+- **A kept payment or write-off** opens on «Борги», «Клієнти» and the
+  segment «Борги» marked; **a kept order step** on «Замовлення» and then
+  its card, «Клієнти» marked.
+- **A store that does not trade:** both ways read only, no «+».
+- **The receipt's «Наступні внески — у розділі «Борги».»** is kept as it
+  was, though the row has no «Борги» now: its words are the owner's to
+  change.
+
+Built on 2026-10-26; see the [report](navigation-redesign-2-report.md).

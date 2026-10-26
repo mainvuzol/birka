@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -162,13 +162,30 @@ async function opened(
 ): Promise<void> {
   await page.goto(launch(theme, version));
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await page.getByRole("button", { name: /^Відкрити борг: / }).click();
 }
 
 function panel(page: Page): Locator {
   return page.getByRole("group", { name: "Внесок", exact: true });
 }
+
+test("«Клієнти» pressed again on a debt brings the debts' first screen (navigation task list, P0-2)", async ({
+  page,
+}) => {
+  await serve(page, debt());
+  await opened(page);
+  await expect(panel(page)).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Розділи" })
+    .getByRole("button", { name: "Клієнти", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Відкрити борг: / }),
+  ).toBeVisible();
+});
 
 test("a debt says who and what in one line, what is owed first and large, how much is paid, and its history a row an entry", async ({
   page,
@@ -384,7 +401,7 @@ test("a payment's result says what was done, how, the sum large and what is owed
   }));
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await page.getByLabel("Ім’я або телефон").fill("Окс");
   await page.getByRole("button", { name: /^Відкрити борг: / }).click();
   await page.getByLabel("Сума внеску, грн").fill("400");
@@ -681,7 +698,7 @@ for (const [kind, status, said] of [
         .click();
     }
     await expect(page.getByRole("alert")).toHaveText(said);
-    // The «Ще» menu's «+ Нове замовлення» aside: the debt never says it.
+    // «Замовлення»'s «+» aside: the debt never says it.
     await expect(page.locator(".debt-detail")).not.toContainText("замовлення");
   });
 

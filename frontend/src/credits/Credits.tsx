@@ -57,6 +57,7 @@ export function Credits({
   networkOwner = false,
   mayErase = false,
   sell,
+  mode = null,
 }: {
   store: Store;
   token: string;
@@ -76,6 +77,11 @@ export function Credits({
    * may sell here (credits task list, P1-4).
    */
   sell?: (() => void) | undefined;
+  /**
+   * «Борги | Замовлення» under the heading, for whoever has both
+   * (navigation task list, P0-2); none for anyone else.
+   */
+  mode?: JSX.Element | null;
 }): JSX.Element {
   const cache = useQueryClient();
   // What the seller types, searched once they pause, from two letters, as
@@ -219,6 +225,7 @@ export function Credits({
       <h2 ref={heading} tabIndex={-1}>
         Борги
       </h2>
+      {mode}
       {readOnly && (
         // The store's own notice says it does not trade; this says who
         // takes the payments (credits task list, P0-1).

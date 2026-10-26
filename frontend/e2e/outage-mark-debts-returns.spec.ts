@@ -254,7 +254,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
   const sent = bodiesOf(page, "/payments");
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await page.getByLabel("Ім’я або телефон").fill(name);
   await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
   // Ticked, nothing is paid until the series says which paper it is.
@@ -342,7 +342,7 @@ test("the switch is one for the store: ticked on «Повернення», the t
   );
 
   // «Борги»: the same.
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await page.getByLabel("Ім’я або телефон").fill(name);
   await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
   await expect(page.getByLabel("Вношу внесок з паперу")).toBeChecked();
@@ -456,7 +456,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
   });
 
   // «Борги»: the series is the first days' paper there too.
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await page.getByLabel("Ім’я або телефон").fill(name);
   await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
   await expect(

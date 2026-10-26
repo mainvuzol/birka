@@ -532,7 +532,7 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
     page.getByText("Незавершена операція з накладною"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Борги", exact: true }),
+    page.getByRole("button", { name: "Клієнти", exact: true }),
   ).toBeDisabled();
   // Its own section stays open under «Ще», every other is held (P1-6).
   await more(page);
