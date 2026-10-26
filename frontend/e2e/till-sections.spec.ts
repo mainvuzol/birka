@@ -8,11 +8,12 @@ import { readFileSync } from "node:fs";
  * the till's reminder once the server is back (P1-7; owner decisions,
  * 2026-10-15: the reminder is the till's alone, В7 (б)).
  *
- * The counter's work stands in one row — «Продаж», «Клієнти», «Каса», each
- * for whoever may do it; «Повернення» is «Продаж»'s other way, «Борги» and
- * «Замовлення» are «Клієнти»'s (navigation task list, P0-1, P0-2) — and
- * every other section is under «Ще», by the same rights as before. The
- * header is one line, «{Магазин} · {Ім’я}».
+ * The counter's work stands in one row — «Продаж», «Товар», «Клієнти»,
+ * «Каса», each for whoever may do it; «Повернення» is «Продаж»'s other way,
+ * «Борги» and «Замовлення» are «Клієнти»'s, «Прийшов товар» and «Брак» are
+ * «Товар»'s tiles (navigation task list, P0-1, P0-2, P0-3) — and every
+ * other section is under «Ще», by the same rights as before. The header is
+ * one line, «{Магазин} · {Ім’я}».
  */
 
 interface Fixture {
@@ -148,7 +149,13 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toHaveCount(0);
 
-  await expect(row(page)).toHaveText(["Продаж", "Клієнти", "Каса", "Ще"]);
+  await expect(row(page)).toHaveText([
+    "Продаж",
+    "Товар",
+    "Клієнти",
+    "Каса",
+    "Ще",
+  ]);
   await expect(row(page).first()).toHaveAttribute("aria-current", "page");
   await oneLine(page);
   const overflow = await page.evaluate(
@@ -164,15 +171,12 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   // Two taps to any other section, by the same rights as before.
   await moreButton(page).click();
   await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
-  await expect(underMore(page)).toHaveText([
-    "Каталог",
-    "Приймання",
-    "Залишки",
-    "Брак",
-  ]);
+  await expect(underMore(page)).toHaveText(["Каталог"]);
   await oneLine(page);
-  await underMore(page).filter({ hasText: "Залишки" }).click();
-  await expect(page.getByRole("heading", { name: "Залишки" })).toBeVisible();
+  await underMore(page).filter({ hasText: "Каталог" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
   // Chosen, «Ще» closes, keeps the focus the chosen button had, and marks
   // that the section open is one of its own.
   await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
@@ -182,14 +186,16 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   await expect(row(page).first()).toHaveClass(/quiet/);
   await expect(row(page).first()).not.toHaveAttribute("aria-current");
   await moreButton(page).click();
-  await expect(underMore(page).filter({ hasText: "Залишки" })).toHaveAttribute(
+  await expect(underMore(page).filter({ hasText: "Каталог" })).toHaveAttribute(
     "aria-current",
     "page",
   );
   // Pressed again, it closes on the same section.
   await moreButton(page).click();
   await expect(underMore(page)).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Залишки" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
 
   // One of the counter's, from the row: «Ще» is no longer marked.
   await moreButton(page).click();
@@ -203,17 +209,19 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   // again when the till is back (review, 2026-10-16).
   await row(page).filter({ hasText: "Продаж" }).click();
   await moreButton(page).click();
-  await underMore(page).filter({ hasText: "Залишки" }).click();
-  await expect(page.getByRole("heading", { name: "Залишки" })).toBeVisible();
+  await underMore(page).filter({ hasText: "Каталог" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
   await row(page).filter({ hasText: "Продаж" }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
   await expect(underMore(page)).toHaveCount(0);
   // Nor when a section open under it is pressed again.
   await moreButton(page).click();
-  await underMore(page).filter({ hasText: "Залишки" }).click();
+  await underMore(page).filter({ hasText: "Каталог" }).click();
   await moreButton(page).click();
-  await underMore(page).filter({ hasText: "Залишки" }).click();
+  await underMore(page).filter({ hasText: "Каталог" }).click();
   await expect(underMore(page)).toHaveCount(0);
   await row(page).filter({ hasText: "Клієнти" }).click();
   await row(page).filter({ hasText: "Продаж" }).click();
@@ -319,6 +327,211 @@ test("debts and orders are «Клієнти»'s two ways: opened on «Борги
   await expect(debts).toBeFocused();
 });
 
+test("the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row at 360 px; the stock a tap, receiving and «Брак» two; «Товар» marked on each, «← Товар» back to the tiles (navigation task list, P0-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        host.taps += 1;
+      },
+      true,
+    );
+  });
+  const taps = (): Promise<number> =>
+    page.evaluate(() => (window as unknown as { taps: number }).taps);
+  const untapped = (): Promise<void> =>
+    page.evaluate(() => {
+      (window as unknown as { taps: number }).taps = 0;
+    });
+  const goods = row(page).filter({ hasText: "Товар" });
+  const tiles = page.locator(".goods-tiles");
+  const received = tiles.getByRole("button", { name: /^Прийшов товар/ });
+  const damaged = tiles.getByRole("button", { name: /^Брак/ });
+  const back = page.locator(".goods-part .back");
+  // The stock: a tap.
+  await goods.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар", exact: true }),
+  ).toBeVisible();
+  expect(await taps()).toBe(1);
+  await expect(goods).toHaveAttribute("aria-current", "page");
+  await expect(moreButton(page)).not.toHaveAttribute("aria-current", "true");
+  // The stock's own list stays under the tiles.
+  await expect(
+    page.getByRole("button", { name: "Оновити залишки" }),
+  ).toBeVisible();
+  // Two in a row, each 64 px or more, its words whole.
+  const left = await received.boundingBox();
+  const right = await damaged.boundingBox();
+  expect(Math.round(left?.y ?? -1)).toBe(Math.round(right?.y ?? -2));
+  expect(left?.height).toBeGreaterThanOrEqual(64);
+  expect(right?.height).toBeGreaterThanOrEqual(64);
+  for (const tile of [received, damaged])
+    expect(
+      await tile.evaluate(
+        (element) => element.scrollWidth - element.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+  // Receiving: two taps, «Товар» marked.
+  await received.click();
+  await expect(
+    page.getByRole("heading", { name: "Приймання товару" }),
+  ).toBeVisible();
+  expect(await taps()).toBe(2);
+  await expect(goods).toHaveAttribute("aria-current", "page");
+  await expect(moreButton(page)).not.toHaveAttribute("aria-current", "true");
+  // «← Товар»: the tiles again.
+  await back.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар", exact: true }),
+  ).toBeVisible();
+  // «Брак»: two taps from the till.
+  await row(page).filter({ hasText: "Продаж" }).click();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await untapped();
+  await goods.click();
+  await damaged.click();
+  await expect(
+    page.getByRole("heading", { name: "Брак", exact: true }),
+  ).toBeVisible();
+  expect(await taps()).toBe(2);
+  await expect(goods).toHaveAttribute("aria-current", "page");
+  await expect(moreButton(page)).not.toHaveAttribute("aria-current", "true");
+  // «Ще» opened over the tiles closes with a tile, and coming back by
+  // «← Товар» does not open it again (review, 2026-10-26).
+  await goods.click();
+  await moreButton(page).click();
+  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
+  await damaged.click();
+  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+  await back.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар", exact: true }),
+  ).toBeVisible();
+  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+  await expect(underMore(page)).toHaveCount(0);
+  // Nor opened over «Брак»: back by «← Товар», and the tile again.
+  await damaged.click();
+  await moreButton(page).click();
+  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
+  await back.click();
+  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+  await damaged.click();
+  await expect(
+    page.getByRole("heading", { name: "Брак", exact: true }),
+  ).toBeVisible();
+  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+  await expect(underMore(page)).toHaveCount(0);
+  await back.click();
+  // «← Товар» read as where it goes, never as the row's «Товар».
+  await damaged.click();
+  await expect(
+    page.getByRole("button", { name: "Назад до товару" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Товар", exact: true }),
+  ).toHaveCount(1);
+  // «Товар» pressed on a tile's screen: the tiles.
+  await goods.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар", exact: true }),
+  ).toBeVisible();
+  await damaged.click();
+  await back.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар", exact: true }),
+  ).toBeVisible();
+});
+
+test("«Брак»'s tile says how many units wait to be inspected, as its screen counts them; nothing waiting, «нічого не чекає»; grey while read, and unread, no line and nothing said (navigation task list, P0-3)", async ({
+  page,
+}) => {
+  // What the server answers; held, the read waits and then fails.
+  const answer: { units: object[]; held: boolean; failed: boolean } = {
+    units: [
+      { status: "AWAITING" },
+      { status: "AWAITING" },
+      { status: "INSPECTING" },
+      { status: "CONFIRMED" },
+    ],
+    held: false,
+    failed: false,
+  };
+  let release: () => void = () => undefined;
+  await page.route("**/api/v1/damaged-units?**", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    if (answer.failed) {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
+    if (!answer.held) {
+      await route.fulfill({ json: { units: answer.units } });
+      return;
+    }
+    await new Promise<void>((done) => {
+      release = done;
+    });
+    await route.fulfill({
+      status: 500,
+      json: { code: "INTERNAL_ERROR", message: "Internal error" },
+    });
+  });
+  const damaged = page
+    .locator(".goods-tiles")
+    .getByRole("button", { name: /^Брак/ });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Товар" }).click();
+  // Two waiting; one on inspection and one confirmed are not.
+  await expect(damaged).toHaveText("Брак 2 очікують перевірки");
+  // Nothing waiting.
+  answer.units = [];
+  // Read anew: the same address is not a new page.
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Товар" }).click();
+  await expect(damaged.locator(".tile-meta")).toHaveText("нічого не чекає");
+  // One: «очікує».
+  answer.units = [{ status: "AWAITING" }];
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Товар" }).click();
+  await expect(damaged.locator(".tile-meta")).toHaveText("1 очікує перевірки");
+  // Read again and refused: no line, though one was read before — as the
+  // screen says no count (review, 2026-10-26).
+  answer.failed = true;
+  await row(page).filter({ hasText: "Продаж" }).click();
+  await row(page).filter({ hasText: "Товар" }).click();
+  await expect(damaged).toHaveText(/^Брак\s*$/);
+  answer.failed = false;
+  // Grey while read; unread, the tile alone, no alarm.
+  answer.held = true;
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Товар" }).click();
+  await expect(damaged.locator(".skeleton")).toBeVisible();
+  await expect(damaged.locator(".tile-meta")).toHaveCount(0);
+  release();
+  await expect(damaged.locator(".skeleton")).toHaveCount(0);
+  await expect(damaged.locator(".tile-meta")).toHaveCount(0);
+  await expect(damaged).toHaveText(/^Брак\s*$/);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P0-1)", async ({
   page,
 }) => {
@@ -348,7 +561,7 @@ for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
 ] as const)
-  test(`in the ${name} theme «Продати | Повернути» reads at 4.5:1, nothing wider than the phone (navigation task list, P0-1)`, async ({
+  test(`in the ${name} theme «Продати | Повернути», «Борги | Замовлення» and «Товар»'s tiles read at 4.5:1, nothing wider than the phone (navigation task list, P0-1, P0-2, P0-3)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
@@ -380,6 +593,22 @@ for (const [name, theme] of [
     await page.screenshot({
       path: `test-results/debts-or-orders-${name}.png`,
     });
+    // «Товар»'s tiles the same (P0-3), their icons at 3:1.
+    await row(page).filter({ hasText: "Товар" }).click();
+    const tiles = page.locator(".goods-tiles");
+    await expect(tiles.locator(".tile-meta")).toBeVisible();
+    for (const part of [
+      tiles.locator(".tile-word").first(),
+      tiles.locator(".tile-word").last(),
+      tiles.locator(".tile-meta"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    for (const icon of await tiles.locator(".tile-icon").all())
+      expect(await contrast(icon)).toBeGreaterThanOrEqual(3);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/goods-${name}.png` });
     await row(page).filter({ hasText: "Продаж" }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
@@ -387,7 +616,7 @@ for (const [name, theme] of [
     await page.screenshot({ path: `test-results/sale-or-return-${name}.png` });
   });
 
-test("whoever does none of the counter's work but reads orders has «Клієнти» and «Ще», holding only what they may open", async ({
+test("whoever neither sells nor takes money but reads orders opens on them: «Товар», «Клієнти» and «Ще», holding only what they may open", async ({
   page,
 }) => {
   const counterRights = [
@@ -414,20 +643,18 @@ test("whoever does none of the counter's work but reads orders has «Клієн�
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  // Orders read, nothing else of the counter's: «Клієнти» and «Ще»
-  // (navigation task list, P0-2).
-  await expect(row(page)).toHaveText(["Клієнти", "Ще"]);
-  await expect(row(page).first()).toHaveAttribute("aria-current", "page");
+  // Orders read, and the goods: «Товар», «Клієнти» and «Ще» (navigation
+  // task list, P0-2, P0-3), «Клієнти» marked.
+  await expect(row(page)).toHaveText(["Товар", "Клієнти", "Ще"]);
+  await expect(row(page).filter({ hasText: "Клієнти" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await more(page);
-  await expect(underMore(page)).toHaveText([
-    "Каталог",
-    "Приймання",
-    "Залишки",
-    "Брак",
-  ]);
+  await expect(underMore(page)).toHaveText(["Каталог"]);
 });
 
-test("whoever may not read orders has no «Замовлення» in «Ще», opens on the first section shown, and is never told of the rule (orders task list, P2-1); nor debts: no «Клієнти» (navigation task list, P0-2)", async ({
+test("whoever may not read orders has no «Замовлення», opens on the first section shown — «Товар» — and is never told of the rule (orders task list, P2-1); nor debts: no «Клієнти» (navigation task list, P0-2, P0-3)", async ({
   page,
 }) => {
   const taken = [
@@ -454,7 +681,7 @@ test("whoever may not read orders has no «Замовлення» in «Ще», o
   await openStore(page, "Центр CENTRE");
   // The first section shown, not «Замовлення».
   await expect(
-    page.getByRole("heading", { name: "Перевірка каталогу" }),
+    page.getByRole("heading", { name: "Товар", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
@@ -462,14 +689,10 @@ test("whoever may not read orders has no «Замовлення» in «Ще», o
   await expect(
     page.getByText(/Немає права переглядати замовлення/),
   ).toHaveCount(0);
-  await expect(row(page)).toHaveText([/^Ще( ⚠)?$/]);
+  await expect(row(page)).toHaveText(["Товар", /^Ще( ⚠)?$/]);
+  await expect(row(page).first()).toHaveAttribute("aria-current", "page");
   await more(page);
-  await expect(underMore(page)).toHaveText([
-    "Каталог",
-    "Приймання",
-    "Залишки",
-    "Брак",
-  ]);
+  await expect(underMore(page)).toHaveText(["Каталог"]);
 });
 
 test("whoever sells but may not read orders has «Клієнти» open the debts alone: no «Замовлення», no switch, no «+» — an order made is an order seen (owner decision after #139, 2026-10-26; navigation task list, P0-2)", async ({
@@ -492,6 +715,7 @@ test("whoever sells but may not read orders has «Клієнти» open the debt
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(row(page)).toHaveText([
     "Продаж",
+    "Товар",
     "Клієнти",
     "Каса",
     /^Ще( ⚠)?$/,
@@ -522,6 +746,7 @@ test("the owner's row is the same four and «Ще», on one line at 360 px; «Щ
   await openStore(page, "Основний MAIN");
   await expect(row(page)).toHaveText([
     "Продаж",
+    "Товар",
     "Клієнти",
     "Каса",
     /^Ще( ⚠)?$/,
@@ -532,6 +757,11 @@ test("the owner's row is the same four and «Ще», on one line at 360 px; «Щ
     await expect(
       underMore(page).filter({ hasText: new RegExp(`^${name}$`) }),
     ).toHaveCount(1);
+  // «Приймання», «Залишки» and «Брак» are «Товар»'s (P0-3).
+  for (const name of ["Приймання", "Залишки", "Брак"])
+    await expect(
+      underMore(page).filter({ hasText: new RegExp(`^${name}$`) }),
+    ).toHaveCount(0);
   await expect(
     underMore(page).filter({ hasText: /^Резервні копії/ }),
   ).toHaveCount(1);

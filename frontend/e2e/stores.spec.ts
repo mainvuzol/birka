@@ -271,7 +271,6 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await more(page);
   for (const name of [
     "Продаж",
-    "Приймання",
     "Повернення",
     "Повернути",
     "Каталог",
@@ -280,9 +279,15 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
       0,
     );
+  // «Товар» without «Прийшов товар»: nothing is received here; «Брак» read
+  // (navigation task list, P0-3).
+  await section(page, "Залишки");
   await expect(
-    page.getByRole("button", { name: "Залишки", exact: true }),
+    page.locator(".goods-tiles").getByRole("button", { name: /^Брак/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Прийшов товар/ }),
+  ).toHaveCount(0);
   await section(page, "Борги");
   // The store's own notice says it does not trade; «Борги» says who takes
   // the payments, once (credits task list, P0-1).
@@ -639,7 +644,7 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
       sections(page).getByRole("button", { name: "Магазини", exact: true }),
     ).toBeEnabled();
     await expect(
-      sections(page).getByRole("button", { name: "Залишки", exact: true }),
+      sections(page).getByRole("button", { name: "Товар", exact: true }),
     ).toBeDisabled();
     // Written down before it was sent: a reload still knows what to ask about.
     await page.reload();

@@ -1,4 +1,4 @@
-import { test, expect, more, openStore, refuseOnce, section } from "./fixtures";
+import { test, expect, openStore, refuseOnce, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -311,8 +311,12 @@ test("receiving needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await more(page);
+  // «Товар» without its tile (navigation task list, P0-3).
+  await section(page, "Залишки");
   await expect(
-    page.getByRole("button", { name: "Приймання", exact: true }),
+    page.locator(".goods-tiles").getByRole("button", { name: /^Брак/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Прийшов товар/ }),
   ).toHaveCount(0);
 });

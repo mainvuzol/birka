@@ -1607,7 +1607,9 @@ function Receipt({
           <p>
             Покупець винен <strong>{money(receipt.credit.owed)}</strong>
           </p>
-          <p className="hint">Наступні внески — у розділі «Борги».</p>
+          {/* The row's button, opened on the debts for whoever sells in
+              parts (owner decision after #141, 2026-10-26). */}
+          <p className="hint">Наступні внески — у розділі «Клієнти».</p>
         </div>
       )}
       {/* Each line as a tag: the model, its size, how many at what price

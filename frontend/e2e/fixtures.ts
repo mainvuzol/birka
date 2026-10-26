@@ -86,8 +86,9 @@ export async function openStore(
 
 /** The counter's work, in the row of sections; every other is under «Ще».
  * «Повернення» is «Продаж»'s other way (navigation task list, P0-1); «Борги»
- * and «Замовлення» are «Клієнти»'s two (P0-2). */
-const counter = ["Продаж", "Клієнти", "Каса"];
+ * and «Замовлення» are «Клієнти»'s two (P0-2); «Залишки» are «Товар»'s own
+ * screen, «Приймання» and «Брак» its tiles (P0-3). */
+const counter = ["Продаж", "Товар", "Клієнти", "Каса"];
 
 /** The workspace's sections (redesign P1-6). */
 export function sections(page: Page): Locator {
@@ -108,7 +109,7 @@ export async function more(page: Page): Promise<void> {
 
 /**
  * A section opened as a person opens it: one of the counter's from the
- * row, any other from «Ще».
+ * row — and its way or tile under it — any other from «Ще».
  */
 export async function section(page: Page, name: string): Promise<void> {
   if (name === "Повернення") {
@@ -148,6 +149,29 @@ export async function section(page: Page, name: string): Promise<void> {
       await way.click();
     await expect(
       page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+    return;
+  }
+  if (name === "Залишки" || name === "Приймання" || name === "Брак") {
+    // «Товар», then the tile asked for (P0-3).
+    await sections(page)
+      .getByRole("button", { name: "Товар", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Товар", exact: true }),
+    ).toBeVisible();
+    if (name === "Залишки") return;
+    await page
+      .locator(".goods-tiles")
+      .getByRole("button", {
+        name: name === "Приймання" ? /^Прийшов товар/ : /^Брак/,
+      })
+      .click();
+    await expect(
+      page.getByRole("heading", {
+        name: name === "Приймання" ? "Приймання товару" : "Брак",
+        exact: true,
+      }),
     ).toBeVisible();
     return;
   }

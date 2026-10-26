@@ -2845,6 +2845,21 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     expect(
       await page.evaluate((key) => localStorage.getItem(key), adjustmentKey),
     ).not.toBeNull();
+    // On «Товар», marked; its tile held as the row is (navigation task
+    // list, P0-3).
+    await expect(
+      page.getByRole("heading", { name: "Товар", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Розділи" })
+        .getByRole("button", { name: "Товар", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page
+        .locator(".goods-tiles")
+        .getByRole("button", { name: /^Прийшов товар/ }),
+    ).toBeDisabled();
     status = 404;
     await thriceNotFound(
       page.getByRole("button", { name: "Перевірити результат коригування" }),
@@ -2942,7 +2957,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       );
     });
 
-  test("a kept delivery of whoever may not read orders opens on «Приймання», never on the first section instead (orders task list, P2-1; review, 2026-10-25)", async ({
+  test("a kept delivery of whoever may not read orders opens on «Приймання товару», never on the first section instead (orders task list, P2-1; review, 2026-10-25), «Товар» marked, it and «← Товар» held (navigation task list, P0-3)", async ({
     page,
   }) => {
     const key = `birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`;
@@ -2969,7 +2984,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       }),
     });
     await serve(page);
-    // No till, and «Каталог» shown before «Приймання»: opened on
+    // No till, and «Товар» the first section shown: opened on
     // «Замовлення», nothing of orders to read.
     await on(page, "/me", async (route) => {
       await route.fulfill({
@@ -2992,8 +3007,16 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Приймання товару" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Перевірка каталогу" }),
+      page.getByRole("heading", { name: "Товар", exact: true }),
     ).toHaveCount(0);
+    // «Товар» marked; it and «← Товар» held while the delivery waits
+    // (navigation task list, P0-3).
+    const goods = page
+      .getByRole("navigation", { name: "Розділи" })
+      .getByRole("button", { name: "Товар", exact: true });
+    await expect(goods).toHaveAttribute("aria-current", "page");
+    await expect(goods).toBeDisabled();
+    await expect(page.locator(".goods-part .back")).toBeDisabled();
   });
 
   test("a kept delivery met by a conflict that proves nothing is still unconfirmed; refused for its form, recorded nowhere, it says so in the delivery's words (owner decision, 2026-10-25)", async ({

@@ -282,6 +282,11 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
     page.getByText("Сплачено зараз 1 000,00 грн готівкою"),
   ).toBeVisible();
   await expect(page.getByText("Покупець винен 2 000,00 грн")).toBeVisible();
+  // Where the next payments go: the row's button (owner decision after
+  // #141, 2026-10-26).
+  await expect(
+    page.getByText("Наступні внески — у розділі «Клієнти».", { exact: true }),
+  ).toBeVisible();
   expect(sales.bodies).toHaveLength(1);
   // The way travels at the top of the body; the terms are as they were.
   expect((sales.bodies[0] as { payment_method: unknown }).payment_method).toBe(

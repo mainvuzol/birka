@@ -33,6 +33,7 @@ import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
+import { GoodsTiles } from "@/inventory/Goods";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
@@ -138,11 +139,16 @@ type Tab =
 
 /**
  * The counter's work (redesign P1-6): these sections stand in the row,
- * each for whoever may do it; every other is under «Ще».
+ * each for whoever may do it, or under its button — a way of «Продаж» or
+ * «Клієнти», a tile of «Товар» (navigation task list, P0-1…P0-3); every
+ * other is under «Ще».
  */
 const counter: ReadonlySet<Tab> = new Set([
   "sale",
   "returns",
+  "stock",
+  "receive",
+  "damaged",
   "credits",
   "list",
   "new",
@@ -712,6 +718,12 @@ function Workspace({
   // Read, not watched, as `canReturnNow`.
   const canSeeOrdersNow = useRef(canSeeOrders);
   canSeeOrdersNow.current = canSeeOrders;
+  // «Товар»: the stock, «Прийшов товар» and «Брак», each by its own right
+  // (navigation task list, P0-3).
+  const canSeeStock = store.permissions.includes("inventory:view");
+  const canReceive = store.permissions.includes("inventory:receive");
+  const canSeeDamaged = store.permissions.includes("damaged:handle");
+  const canSeeGoods = canSeeStock || canReceive || canSeeDamaged;
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   // Read, not watched, as `canReturnNow` (credits task list, P2-1).
@@ -1341,6 +1353,15 @@ function Workspace({
         : {}),
       also: ["returns"],
     },
+    // «Товар»: the stock, «Прийшов товар» and «Брак» as tiles over it
+    // (navigation task list, P0-3, the minimal one) — marked on each.
+    {
+      tab: "stock",
+      label: "Товар",
+      shown: canSeeGoods,
+      disabled: blocked,
+      also: ["receive", "damaged"],
+    },
     // «Клієнти»: «Борги» and «Замовлення», by «Борги | Замовлення» under
     // their headings (navigation task list, P0-2) — opened on the debts,
     // or the one of them this person has; pressed again, its first screen.
@@ -1371,24 +1392,6 @@ function Workspace({
       tab: "catalog",
       label: "Каталог",
       shown: store.permissions.includes("catalog:confirm"),
-      disabled: blocked,
-    },
-    {
-      tab: "receive",
-      label: "Приймання",
-      shown: store.permissions.includes("inventory:receive"),
-      disabled: blocked,
-    },
-    {
-      tab: "stock",
-      label: "Залишки",
-      shown: store.permissions.includes("inventory:view"),
-      disabled: blocked,
-    },
-    {
-      tab: "damaged",
-      label: "Брак",
-      shown: store.permissions.includes("damaged:handle"),
       disabled: blocked,
     },
     {
@@ -1467,6 +1470,39 @@ function Workspace({
     </button>
   );
   const shown = sections.filter((section) => section.shown);
+  // «Товар»'s tiles and the way back to them (navigation task list, P0-3),
+  // held as the row is.
+  // A tile or «← Товар» closes «Ще», as the row's buttons do: opened over
+  // one of «Товар»'s screens, it is not opened again by coming back to it
+  // (review, 2026-10-26).
+  const goodsTo = (to: "stock" | "receive" | "damaged"): void => {
+    setTab(to);
+    setMoreAt(null);
+  };
+  const toGoods = (): void => {
+    goodsTo("stock");
+  };
+  const goodsTiles = (
+    <GoodsTiles
+      store={store}
+      token={token}
+      disabled={blocked}
+      receive={
+        canReceive
+          ? () => {
+              goodsTo("receive");
+            }
+          : null
+      }
+      damaged={
+        canSeeDamaged
+          ? () => {
+              goodsTo("damaged");
+            }
+          : null
+      }
+    />
+  );
   // Debts and orders, one section's two ways (navigation task list, P0-2):
   // for whoever has both, under each list's heading, held as the row is.
   const debtsOrOrders = (current: "credits" | "list"): JSX.Element | null =>
@@ -2032,11 +2068,13 @@ function Workspace({
           <p role="alert">Немає права оформлювати продаж.</p>
         )
       ) : tab === "receive" ? (
-        store.permissions.includes("inventory:receive") ? (
+        canReceive ? (
           <Receive
             store={store}
             token={token}
             journalKey={receiptKey}
+            back={toGoods}
+            backHeld={blocked}
             blocked={
               storageError ||
               catalogStorageError ||
@@ -2058,7 +2096,7 @@ function Workspace({
           <p role="alert">Немає права приймати товар.</p>
         )
       ) : tab === "stock" ? (
-        store.permissions.includes("inventory:view") ? (
+        canSeeStock ? (
           <Stock
             store={store}
             token={token}
@@ -2068,7 +2106,16 @@ function Workspace({
             blocked={
               otherThanAdjustment || adjustmentStorageError || countStorageError
             }
+            tiles={goodsTiles}
           />
+        ) : canSeeGoods ? (
+          // The tiles alone, for whoever may not read the stock.
+          <section>
+            <div className="toolbar">
+              <h2>Товар</h2>
+            </div>
+            {goodsTiles}
+          </section>
         ) : (
           <p role="alert">Немає доступу до залишків.</p>
         )
@@ -2156,12 +2203,13 @@ function Workspace({
         // (credits task list, P2-1).
         null
       ) : tab === "damaged" ? (
-        store.permissions.includes("damaged:handle") ? (
+        canSeeDamaged ? (
           <Damaged
             store={store}
             token={token}
             blocked={blocked}
             readOnly={!trading}
+            back={toGoods}
           />
         ) : (
           <p role="alert">Немає доступу до розділу «Брак».</p>
