@@ -47,6 +47,7 @@ import {
 } from "@/sales/commands";
 import type { SaleAttempt } from "@/sales/commands";
 import { clearPaper } from "@/sales/paper";
+import { forgetBasket } from "@/sales/basket";
 import type { PaperView } from "@/sales/paperMark";
 import { markText, paidDuringOutage } from "@/sales/types";
 import { Receive } from "@/inventory/Receive";
@@ -448,8 +449,15 @@ function Workspace({
     );
   }, []);
   // A series of paper sales is this store's: another store, or leaving,
-  // ends it (ADR-0013 §7).
-  useEffect(() => clearPaper, []);
+  // ends it (ADR-0013 §7); so is the till's basket kept while it is left
+  // (navigation task list, P0-5).
+  useEffect(
+    () => () => {
+      clearPaper();
+      forgetBasket();
+    },
+    [],
+  );
   const [tab, setTab] = useState<Tab>(
     // The till first, for whoever sells there (redesign, P0-1): the book is
     // opened at the page of the day's work. Kept operations still turn to
@@ -2051,6 +2059,7 @@ function Workspace({
         store.permissions.includes("sale:create") ? (
           <Sale
             key={saleEpoch}
+            keptAt={`${store.id}:${String(saleEpoch)}`}
             mode={saleOrReturn("sale")}
             store={store}
             token={token}
