@@ -274,6 +274,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     "+ Нове замовлення",
     "Приймання",
     "Повернення",
+    "Повернути",
     "Каталог",
     "Початкові залишки",
   ])

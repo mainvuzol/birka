@@ -71,6 +71,7 @@ export function Returns({
   open = null,
   opened,
   sell,
+  mode = null,
 }: {
   store: Store;
   token: string;
@@ -88,6 +89,11 @@ export function Returns({
    * (returns task list, P0-5). Only for whoever may sell.
    */
   sell?: (() => void) | undefined;
+  /**
+   * «Продати | Повернути» under the heading, for whoever does both
+   * (navigation task list, P0-1); none for anyone else.
+   */
+  mode?: JSX.Element | null;
 }): JSX.Element {
   const cache = useQueryClient();
   // What the seller types, searched once they pause, from two letters, as
@@ -229,6 +235,7 @@ export function Returns({
   return (
     <section className="returns">
       <h2>Повернення</h2>
+      {mode}
       <form
         className="search"
         role="search"

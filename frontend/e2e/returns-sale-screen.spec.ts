@@ -1,4 +1,11 @@
-import { test, expect, fromPaper, openStore, returnUnits } from "./fixtures";
+import {
+  test,
+  expect,
+  fromPaper,
+  openStore,
+  section,
+  returnUnits,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -202,7 +209,7 @@ async function opened(
   );
   await page.goto(launch(theme, version));
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByRole("button", { name: /^Оформити повернення: / }).click();
   await asked;
 }

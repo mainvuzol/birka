@@ -126,6 +126,7 @@ export function Sale({
   fixMethod,
   returnSale,
   searchFirst = false,
+  mode = null,
 }: {
   store: Store;
   token: string;
@@ -151,6 +152,11 @@ export function Sale({
    * it is there (returns task list, P0-5).
    */
   searchFirst?: boolean;
+  /**
+   * «Продати | Повернути» under the heading, for whoever does both
+   * (navigation task list, P0-1); none for anyone else.
+   */
+  mode?: JSX.Element | null;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   // What the seller types to find a model (redesign P0-2).
@@ -798,6 +804,7 @@ export function Sale({
   return (
     <section>
       <h2>Продаж</h2>
+      {mode}
       {back && (
         <section className="notice" aria-label="Сервер знову відповідає">
           <p>

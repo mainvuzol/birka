@@ -146,7 +146,7 @@ async function held(
 async function findElsewhere(page: Page, model: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   // Typed first; the other stores offered under this store's results
   // (owner decision, 2026-10-17, В3 (а); returns task list, P1-1).
   await page.getByLabel("Що повертають?").fill(model);
@@ -188,7 +188,7 @@ test("goods bought at another store come back here, and this store hands the mon
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   // The other stores' sales are found, never browsed: nothing is asked of
   // them, nor offered, before two letters (returns task list, P1-1).
   await page.getByLabel("Що повертають?").fill(model.slice(0, 1));
@@ -549,7 +549,7 @@ test("a sale of this store is returned as before, with no store named", async ({
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).not.toContainText("Магазин «");

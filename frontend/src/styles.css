@@ -1262,6 +1262,33 @@ html {
 .way-switch:disabled input {
   cursor: not-allowed;
 }
+/* A section's two ways (redesign direction §5, «Переключатель режима»;
+   navigation task list, P0-1): segments on a grey field, as the way's
+   switch, the way open marked. Under the screen's heading, on one line at
+   360 px. */
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--field);
+}
+.mode-switch button {
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 650;
+}
+.mode-switch button[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 .return-go {
   width: 100%;
   min-height: 54px;

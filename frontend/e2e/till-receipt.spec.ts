@@ -4,6 +4,7 @@ import {
   fillLine,
   more,
   openStore,
+  section,
   returnUnits,
   sections,
   tapSize,
@@ -395,7 +396,7 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // «Повернення» read before the sale: its page then is not the one opened.
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page
@@ -410,12 +411,23 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   await expect(page.getByText("Помилилися з товаром чи ціною?")).toBeVisible();
+  // No «Продати | Повернути» on the receipt (navigation task list, P0-1).
+  await expect(
+    page.getByRole("group", { name: "Продаж або повернення" }),
+  ).toHaveCount(0);
   // «Ще» left open over the receipt closes as the app turns to «Повернення»
   // by itself (redesign P1-6).
   await more(page);
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  // «Продаж» marked in the row; on one sale's return, no switch.
+  await expect(
+    sections(page).getByRole("button", { name: "Продаж", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("group", { name: "Продаж або повернення" }),
+  ).toHaveCount(0);
   await expect(
     sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
   ).toHaveAttribute("aria-expanded", "false");
@@ -602,7 +614,7 @@ test("a return asked from the receipt and left before its list came opens no sal
   const read = page.waitForResponse(
     (r) => r.url().includes("/api/v1/sales?store_id=") && r.ok(),
   );
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await read;
   // A moment for what the answer would open: the list stays.
   await page.waitForTimeout(500);

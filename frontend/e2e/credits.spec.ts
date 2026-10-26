@@ -668,7 +668,7 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   const { model, sale, token } = await onCredit(page, name);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   // Its own sale, never the recent ones still shown while the search is

@@ -4345,3 +4345,29 @@ with option (а), the one recommended:
   does.**
 - **First: P0-1, «Продати | Повернути» on the till,** a pull request a
   step, each for the owner's approval.
+
+## «Продати | Повернути» on the till — built 2026-10-26
+
+The bottom menu's task list, P0-1, and the owner's answers of 2026-10-26.
+How it is carried out, not decided by the owner; the switch and its words
+wait for the owner's approval:
+- **«Повернення» leaves the row:** the row is «Продаж · Борги · Каса · Ще».
+  «Продаж» stands for the till and the returns, marked on either; for
+  whoever only takes returns it opens them, with no switch, an order left
+  open kept as before.
+- **«Продати | Повернути» under the heading** of the till and of the
+  returns' list, for whoever does both: two segments on a grey field, the
+  way open marked, for a reader «Продаж або повернення»; a tap each way.
+  Held while the row is held. None on a receipt, a sale's return or its
+  result. The headings «Продаж» and «Повернення» name the way open, as
+  before.
+- **The way just chosen takes the focus,** never lost to the page.
+- **The receipt's «Оформити повернення», a kept return and the result's
+  «Новий продаж»** open as before; «Продаж» marked on each.
+- **On a phone of 360 × 640** the switch, the search and the first tag's
+  name stay in view; in a store of two warehouses, its sizes begin at the
+  fold — to be seen on a phone (the task list's С1).
+- **«+ Нове замовлення» only with the right to read orders** (the owner's
+  decision after #139), built with it.
+
+Built on 2026-10-26; see the [report](navigation-redesign-1-report.md).
