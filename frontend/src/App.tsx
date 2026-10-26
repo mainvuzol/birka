@@ -1344,7 +1344,8 @@ function Workspace({
     {
       tab: "new",
       label: "+ Нове замовлення",
-      shown: store.permissions.includes("sale:create"),
+      // Whoever makes one sees it (owner decision after #139, 2026-10-26).
+      shown: store.permissions.includes("sale:create") && canSeeOrders,
       disabled: blocked,
       forgetsOrder: true,
     },

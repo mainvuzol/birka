@@ -271,6 +271,31 @@ test("whoever may not read orders has no «Замовлення» in «Ще», o
   ]);
 });
 
+test("whoever sells but may not read orders is offered no «+ Нове замовлення»: an order made is an order seen (owner decision after #139, 2026-10-26)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (permission) => permission !== "sale:view",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  // The till first, as for whoever sells.
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await more(page);
+  await expect(underMore(page).filter({ hasText: "Замовлення" })).toHaveCount(
+    0,
+  );
+  await expect(underMore(page)).not.toHaveCount(0);
+});
+
 test("the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's sections", async ({
   page,
 }) => {
