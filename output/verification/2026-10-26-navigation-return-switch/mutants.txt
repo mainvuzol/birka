@@ -1,0 +1,12 @@
+- unchanged tree: passed 
+- «Продаж» not marked on the returns: caught by selling and taking back are one section's two ways: «Продати | Повернути» under the headin
+- the switch for whoever only takes returns: caught by whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P
+- the switch for whoever takes no returns: caught by taking returns needs its own permission
+- «Продаж» opens the till for whoever only takes returns: caught by whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P
+- no «Продаж» for whoever only takes returns: caught by whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P
+- the way open not marked: caught by selling and taking back are one section's two ways: «Продати | Повернути» under the headin
+- the focus lost to the page: caught by selling and taking back are one section's two ways: «Продати | Повернути» under the headin
+- no switch under the till: caught by selling and taking back are one section's two ways: «Продати | Повернути» under the headin
+- no switch under the returns: caught by selling and taking back are one section's two ways: «Продати | Повернути» under the headin
+- the switch free while the row is held: caught by 10. a kept operation the phone settles says what became of it › a kept return confirmed by
+10 of 10 caught

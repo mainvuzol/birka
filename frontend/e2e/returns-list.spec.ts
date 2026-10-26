@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -137,7 +137,7 @@ async function returns(
 ): Promise<void> {
   await page.goto(launch(theme));
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
 }
 
 const ago = (days: number, hours = 0): Date => {
@@ -423,7 +423,7 @@ test("the list read again and refused says so above the rows it had, and is read
   await expect(page.getByRole("article")).toHaveCount(1);
   refuse = true;
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   const failed = page.getByRole("alert");
   await expect(failed).toBeVisible();
   // The rows as they were, under what is said of them.

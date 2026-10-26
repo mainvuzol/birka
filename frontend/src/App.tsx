@@ -28,6 +28,7 @@ import { placesRead } from "@/orders/Returned";
 import { chargeOnce } from "@/orders/Collected";
 import { NewOrder, shortOf } from "@/orders/NewOrder";
 import { Orders, Unread, freshOrdersView } from "@/orders/Orders";
+import { ModeSwitch } from "@/shared/ModeSwitch";
 import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
@@ -451,6 +452,12 @@ function Workspace({
   // so coming back to that section does not open it again (review,
   // 2026-10-16).
   const [moreAt, setMoreAt] = useState<Tab | null>(null);
+  // A way of «Продаж» just chosen by its switch: the next screen's switch
+  // takes the focus (navigation task list, P0-1; review, 2026-10-26).
+  const [modeChosen, setModeChosen] = useState(false);
+  const modeFocused = useCallback(() => {
+    setModeChosen(false);
+  }, []);
   const moreId = useId();
   const moreButton = useRef<HTMLButtonElement>(null);
   // A store that does not trade is read, and nothing else is done in it
@@ -1312,19 +1319,23 @@ function Workspace({
     shown: boolean;
     disabled: boolean;
     forgetsOrder?: true;
+    /** Another tab it stands for, marked with it. */
+    also?: Tab;
   }[] = [
+    // «Продаж» holds the returns too, by «Продати | Повернути» under its
+    // heading (navigation task list, P0-1): for whoever only takes
+    // returns, it opens them.
     {
-      tab: "sale",
+      tab: store.permissions.includes("sale:create") ? "sale" : "returns",
       label: "Продаж",
-      shown: store.permissions.includes("sale:create"),
+      shown: store.permissions.includes("sale:create") || canReturn,
       disabled: blocked,
-      forgetsOrder: true,
-    },
-    {
-      tab: "returns",
-      label: "Повернення",
-      shown: canReturn,
-      disabled: blocked,
+      // An order left open is kept by the returns, as before (review,
+      // 2026-10-26).
+      ...(store.permissions.includes("sale:create")
+        ? { forgetsOrder: true as const }
+        : {}),
+      also: "returns",
     },
     { tab: "credits", label: "Борги", shown: canSeeCredits, disabled: blocked },
     {
@@ -1344,7 +1355,8 @@ function Workspace({
     {
       tab: "new",
       label: "+ Нове замовлення",
-      shown: store.permissions.includes("sale:create"),
+      // Whoever makes one sees it (owner decision after #139, 2026-10-26).
+      shown: store.permissions.includes("sale:create") && canSeeOrders,
       disabled: blocked,
       forgetsOrder: true,
     },
@@ -1422,8 +1434,12 @@ function Workspace({
   const sectionButton = (section: (typeof sections)[number]): JSX.Element => (
     <button
       key={section.tab}
-      className={tab === section.tab ? "active" : "quiet"}
-      aria-current={tab === section.tab ? "page" : undefined}
+      className={
+        tab === section.tab || tab === section.also ? "active" : "quiet"
+      }
+      aria-current={
+        tab === section.tab || tab === section.also ? "page" : undefined
+      }
       disabled={section.disabled}
       onClick={() => {
         setTab(section.tab);
@@ -1441,6 +1457,32 @@ function Workspace({
     </button>
   );
   const shown = sections.filter((section) => section.shown);
+  // Selling and taking back, one section's two ways (navigation task list,
+  // P0-1): for whoever does both, under each screen's heading, held as the
+  // row is.
+  const saleOrReturn = (current: "sale" | "returns"): JSX.Element | null =>
+    store.permissions.includes("sale:create") && canReturn ? (
+      <ModeSwitch
+        label="Продаж або повернення"
+        modes={[
+          { mode: "sale", label: "Продати" },
+          { mode: "returns", label: "Повернути" },
+        ]}
+        current={current}
+        disabled={blocked}
+        focus={modeChosen}
+        focused={modeFocused}
+        choose={(mode) => {
+          setModeChosen(true);
+          setTab(mode);
+          if (mode === "sale") {
+            setSelectedId(null);
+            setOrdersView(freshOrdersView);
+          }
+          setMoreAt(null);
+        }}
+      />
+    ) : null;
   const rest = shown.filter((section) => !counter.has(section.tab));
   // Opened on «Замовлення» with no till to open first, by whoever may not
   // read them: the first section shown instead (orders task list, P2-1) —
@@ -1913,6 +1955,7 @@ function Workspace({
         store.permissions.includes("sale:create") ? (
           <Sale
             key={saleEpoch}
+            mode={saleOrReturn("sale")}
             store={store}
             token={token}
             userId={me.user_id}
@@ -1998,6 +2041,7 @@ function Workspace({
         canReturn ? (
           <Returns
             key={returnsEpoch}
+            mode={saleOrReturn("returns")}
             store={store}
             token={token}
             journalKey={returnKey}

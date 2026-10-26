@@ -172,7 +172,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   const sent = bodiesOf(page, "/refunds");
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   await page
@@ -328,7 +328,7 @@ test("the switch is one for the store: ticked on «Повернення», the t
     .selectOption({ label: "Ганна" });
 
   // «Повернення»: in paper mode too, and nobody named for the return.
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   await page
@@ -355,7 +355,7 @@ test("the switch is one for the store: ticked on «Повернення», the t
   // Unticked at the till: off on «Повернення».
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page.getByLabel("Вношу продаж з паперу").uncheck();
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   await page
@@ -401,7 +401,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
   const day = await daysAgoOf(page, 9);
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   await page

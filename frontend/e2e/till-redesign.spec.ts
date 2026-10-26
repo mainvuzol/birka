@@ -118,6 +118,29 @@ async function oneLine(page: Page, quantity = 1): Promise<void> {
   await fillLine(page, { quantity });
 }
 
+test("under «Продати | Повернути», the till's search and its first tag's name are still in view on a phone of 360 × 640, with no scroll — in a store of two warehouses its sizes begin at the fold (navigation task list, P0-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await stubStock(page, 3);
+  await onTheTill(page);
+  await expect(
+    page.getByRole("group", { name: "Продаж або повернення" }),
+  ).toBeInViewport({ ratio: 1 });
+  await page
+    .getByRole("combobox", { name: "Склад", exact: true })
+    .selectOption(fixture.till_location_id);
+  await expect(
+    page.getByRole("searchbox", { name: "Знайти модель" }),
+  ).toBeInViewport({ ratio: 1 });
+  const tag = page.getByRole("group", { name: "Лоран шоколад" });
+  await expect(tag.locator(".tag-head")).toBeInViewport({ ratio: 1 });
+  // Its sizes begin in view: the warehouse's choice of two takes their
+  // place (to be seen on a phone, navigation task list С1).
+  await expect(tag.getByRole("button").first()).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {

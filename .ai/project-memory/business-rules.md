@@ -4306,3 +4306,68 @@ the owner's approval:
   corrections', returns', stocktakes', debts' and orders' keep their own.
 
 Built on 2026-10-25; see the [report](orders-redesign-9-report.md).
+
+## Owner decision — 2026-10-26 (after #139 was merged)
+
+Asked when #139 was merged, each answer the option recommended:
+- **«Замовлення»'s words, rights, places while read and pills are approved
+  as built,** with what was decided in building them — the first section
+  shown to whoever may not read orders, a kept operation keeping its own
+  tab, «Товар у резерві …» close to what it explains, a new order's goods
+  not read on the same plate.
+- **«+ Нове замовлення» only for whoever may also read orders**
+  (`sale:create` and `sale:view`): whoever makes one sees it. No default
+  role is touched; a role made to sell without reading orders no longer
+  makes an order it cannot then be shown.
+- **Next: the task list for the bottom menu** of five tabs by role
+  (`redesign/design-direction.md` §3), put off on 2026-10-14; with it, what
+  every counter section left for it — the till's, «Повернення»'s P2-6,
+  «Борги»' P2-5, «Каса»'s P2-5, «Замовлення»'s P2-5.
+
+## Owner decision — 2026-10-26 (the bottom menu's task list)
+
+The task list for the bottom menu is written
+(`redesign/2026-10-26-redesign-tz-navigation.md`, the owner's version
+beside it). Asked its seven questions the same day, the owner answered each
+with option (а), the one recommended:
+- **В1. «Товар» and «Огляд» minimal now,** from what already exists; their
+  full task lists apart, after the menu.
+- **В2. «Каса» for the owner and managers in «Ще › Гроші»,** as the
+  direction draws it; a seller's a tab. Theirs: «Огляд · Продаж · Товар ·
+  Клієнти · Ще».
+- **В3. The owner and managers open on «Огляд»** once it exists.
+- **В4. «Огляд» shows the store open,** as every tab; the network in
+  «Звіт про продажі», as now.
+- **В5. «Тиждень» and «Місяць» from Monday and from the 1st** to today.
+- **В6. The menu shown under the pay panel too, and the basket kept** until
+  it is sold or the store changed: a tap gone astray loses nothing.
+- **В7. Telegram's «Назад» does on a screen within a section what its «←»
+  does.**
+- **First: P0-1, «Продати | Повернути» on the till,** a pull request a
+  step, each for the owner's approval.
+
+## «Продати | Повернути» on the till — built 2026-10-26
+
+The bottom menu's task list, P0-1, and the owner's answers of 2026-10-26.
+How it is carried out, not decided by the owner; the switch and its words
+wait for the owner's approval:
+- **«Повернення» leaves the row:** the row is «Продаж · Борги · Каса · Ще».
+  «Продаж» stands for the till and the returns, marked on either; for
+  whoever only takes returns it opens them, with no switch, an order left
+  open kept as before.
+- **«Продати | Повернути» under the heading** of the till and of the
+  returns' list, for whoever does both: two segments on a grey field, the
+  way open marked, for a reader «Продаж або повернення»; a tap each way.
+  Held while the row is held. None on a receipt, a sale's return or its
+  result. The headings «Продаж» and «Повернення» name the way open, as
+  before.
+- **The way just chosen takes the focus,** never lost to the page.
+- **The receipt's «Оформити повернення», a kept return and the result's
+  «Новий продаж»** open as before; «Продаж» marked on each.
+- **On a phone of 360 × 640** the switch, the search and the first tag's
+  name stay in view; in a store of two warehouses, its sizes begin at the
+  fold — to be seen on a phone (the task list's С1).
+- **«+ Нове замовлення» only with the right to read orders** (the owner's
+  decision after #139), built with it.
+
+Built on 2026-10-26; see the [report](navigation-redesign-1-report.md).

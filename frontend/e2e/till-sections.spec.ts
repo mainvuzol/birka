@@ -27,7 +27,11 @@ const fixture = JSON.parse(
 // «Ліда»: the default seller's rights, at «Центр» alone.
 const lida = fixture.network_centre_cashier_telegram_user_id;
 
-function launch(telegramUserId: string, name: string): string {
+function launch(
+  telegramUserId: string,
+  name: string,
+  theme?: Record<string, string>,
+): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${telegramUserId},"first_name":"${name}"}`,
@@ -40,7 +44,44 @@ function launch(telegramUserId: string, name: string): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
+  if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  return `/#${hash.toString()}`;
+}
+
+/** «Продати | Повернути» (navigation task list, P0-1). */
+function saleOrReturn(page: Page): Locator {
+  return page.getByRole("group", { name: "Продаж або повернення" });
+}
+
+/** The WCAG contrast of an element's text against what it is drawn on. */
+async function contrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    let ground: Element | null = node;
+    let background = "rgba(0, 0, 0, 0)";
+    while (ground) {
+      background = getComputedStyle(ground).backgroundColor;
+      const alpha = rgb(background)[3];
+      if (alpha === undefined || alpha > 0) break;
+      ground = ground.parentElement;
+    }
+    const fore = luminance(rgb(getComputedStyle(node).color));
+    const back = luminance(rgb(background));
+    return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+  });
 }
 
 const UNREACHABLE =
@@ -106,13 +147,7 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toHaveCount(0);
 
-  await expect(row(page)).toHaveText([
-    "Продаж",
-    "Повернення",
-    "Борги",
-    "Каса",
-    "Ще",
-  ]);
+  await expect(row(page)).toHaveText(["Продаж", "Борги", "Каса", "Ще"]);
   await expect(row(page).first()).toHaveAttribute("aria-current", "page");
   await oneLine(page);
   const overflow = await page.evaluate(
@@ -187,6 +222,92 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   await row(page).filter({ hasText: "Продаж" }).click();
   await expect(underMore(page)).toHaveCount(0);
 });
+
+test("selling and taking back are one section's two ways: «Продати | Повернути» under the heading, a tap each, «Продаж» marked in the row on both (navigation task list, P0-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  const ways = saleOrReturn(page);
+  const sell = ways.getByRole("button", { name: "Продати", exact: true });
+  const back = ways.getByRole("button", { name: "Повернути", exact: true });
+  await expect(sell).toHaveAttribute("aria-current", "page");
+  await expect(back).not.toHaveAttribute("aria-current", "page");
+  // One line at 360 px, under the heading.
+  const left = await sell.boundingBox();
+  const right = await back.boundingBox();
+  expect(Math.round(left?.y ?? -1)).toBe(Math.round(right?.y ?? -2));
+  expect(left?.height).toBeGreaterThanOrEqual(44);
+  // A tap: the returns, «Продаж» still the row's mark.
+  await back.click();
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(back).toHaveAttribute("aria-current", "page");
+  // The focus on the way now open, never lost to the page.
+  await expect(back).toBeFocused();
+  await expect(row(page).filter({ hasText: "Продаж" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(moreButton(page)).not.toHaveAttribute("aria-current", "true");
+  // A tap back: the till.
+  await sell.click();
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(sell).toHaveAttribute("aria-current", "page");
+  await expect(sell).toBeFocused();
+});
+
+test("whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P0-1)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (permission) => permission !== "sale:create",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Продаж" }).click();
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(row(page).filter({ hasText: "Продаж" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(saleOrReturn(page)).toHaveCount(0);
+});
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme «Продати | Повернути» reads at 4.5:1, nothing wider than the phone (navigation task list, P0-1)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.goto(launch(lida, "Ліда", theme));
+    await openStore(page, "Центр CENTRE");
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.theme),
+    ).toBe(name);
+    const ways = saleOrReturn(page);
+    await expect(ways).toBeVisible();
+    for (const part of [
+      ways.getByRole("button", { name: "Продати", exact: true }),
+      ways.getByRole("button", { name: "Повернути", exact: true }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/sale-or-return-${name}.png` });
+  });
 
 test("whoever does none of the counter's work has «Ще» alone, holding only what they may open", async ({
   page,
@@ -271,19 +392,38 @@ test("whoever may not read orders has no «Замовлення» in «Ще», o
   ]);
 });
 
+test("whoever sells but may not read orders is offered no «+ Нове замовлення»: an order made is an order seen (owner decision after #139, 2026-10-26)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (permission) => permission !== "sale:view",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  // The till first, as for whoever sells.
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await more(page);
+  await expect(underMore(page).filter({ hasText: "Замовлення" })).toHaveCount(
+    0,
+  );
+  await expect(underMore(page)).not.toHaveCount(0);
+});
+
 test("the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's sections", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto(launch(fixture.owner_telegram_user_id, "Власник"));
   await openStore(page, "Основний MAIN");
-  await expect(row(page)).toHaveText([
-    "Продаж",
-    "Повернення",
-    "Борги",
-    "Каса",
-    /^Ще( ⚠)?$/,
-  ]);
+  await expect(row(page)).toHaveText(["Продаж", "Борги", "Каса", /^Ще( ⚠)?$/]);
   await oneLine(page);
   await more(page);
   for (const name of ["Звіт", "Накладні", "Постачальникам", "Моделі"])

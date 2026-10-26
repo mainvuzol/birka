@@ -152,7 +152,7 @@ async function held(
 async function find(page: Page, model: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
   await expect(page.getByRole("article")).toHaveCount(1);
@@ -501,7 +501,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
 test("the search says when no sale has such goods", async ({ page }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Повернення", exact: true }).click();
+  await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(`немає ${randomUUID()}`);
   await page.getByLabel("Що повертають?").press("Enter");
   await expect(
@@ -521,6 +521,15 @@ test("taking returns needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  // The till, with no way to take a return: no «Повернути», nor a switch
+  // (navigation task list, P0-1).
+  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Продаж або повернення" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Повернути", exact: true }),
+  ).toHaveCount(0);
   await more(page);
   await expect(
     page.getByRole("button", { name: "Залишки", exact: true }),

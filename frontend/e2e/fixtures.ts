@@ -84,8 +84,9 @@ export async function openStore(
   );
 }
 
-/** The counter's work, in the row of sections; every other is under «Ще». */
-const counter = ["Продаж", "Повернення", "Борги", "Каса"];
+/** The counter's work, in the row of sections; every other is under «Ще».
+ * «Повернення» is «Продаж»'s other way (navigation task list, P0-1). */
+const counter = ["Продаж", "Борги", "Каса"];
 
 /** The workspace's sections (redesign P1-6). */
 export function sections(page: Page): Locator {
@@ -109,6 +110,24 @@ export async function more(page: Page): Promise<void> {
  * row, any other from «Ще».
  */
 export async function section(page: Page, name: string): Promise<void> {
+  if (name === "Повернення") {
+    // «Продаж», then «Повернути» — for whoever only takes returns,
+    // «Продаж» opens them, with no switch.
+    await sections(page)
+      .getByRole("button", { name: "Продаж", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: /^(Продаж|Повернення)$/ }),
+    ).toBeVisible();
+    const back = page
+      .getByRole("group", { name: "Продаж або повернення" })
+      .getByRole("button", { name: "Повернути", exact: true });
+    if ((await back.count()) > 0) await back.click();
+    await expect(
+      page.getByRole("heading", { name: "Повернення" }),
+    ).toBeVisible();
+    return;
+  }
   if (!counter.includes(name)) await more(page);
   await sections(page).getByRole("button", { name, exact: true }).click();
 }

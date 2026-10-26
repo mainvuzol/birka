@@ -3788,6 +3788,20 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       name: "Перевірити результат повернення",
     });
     await expect(check).toBeEnabled();
+    // Its own tab: «Продаж» marked, «Повернути» the way open — held, as the
+    // row is, while it is kept (navigation task list, P0-1).
+    await expect(
+      page
+        .getByRole("navigation", { name: "Розділи" })
+        .getByRole("button", { name: "Продаж", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    const switchOf = page.getByRole("group", { name: "Продаж або повернення" });
+    await expect(
+      switchOf.getByRole("button", { name: "Повернути", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      switchOf.getByRole("button", { name: "Продати", exact: true }),
+    ).toBeDisabled();
     expect(sent).toHaveLength(1);
     await check.click();
     await expect(page.getByText(said, { exact: true })).toBeVisible();
@@ -4194,7 +4208,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
     ).toBeEnabled();
     await expect(
-      page.getByRole("button", { name: "Повернення", exact: true }),
+      page.getByRole("group", { name: "Продаж або повернення" }),
     ).toHaveCount(0);
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
     expect(sent).toHaveLength(1);
