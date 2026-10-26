@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import type { JSX } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
   api,
@@ -15,6 +15,7 @@ import { sizeLabel } from "@/returns/types";
 import { SupplierPicker } from "@/suppliers/Picker";
 import { visible } from "@/shared/visible";
 import type { DamagedUnit } from "./types";
+import { useDamagedUnits } from "./units";
 
 /**
  * The store's «Брак» (owner decisions, 2026-10-01).
@@ -35,6 +36,7 @@ export function Damaged({
   token,
   blocked,
   readOnly = false,
+  back,
 }: {
   store: Store;
   token: string;
@@ -42,19 +44,14 @@ export function Damaged({
   blocked: boolean;
   /** The store does not trade: its «Брак» is read, and nothing is done in it. */
   readOnly?: boolean;
+  /** «← Товар» over the heading: the screen is one of «Товар»'s tiles
+   * (navigation task list, P0-3). */
+  back?: (() => void) | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const units = useQuery({
-    queryKey: ["damaged-units", store.id],
-    queryFn: () =>
-      api<{ units: DamagedUnit[] }>(
-        `/damaged-units?store_id=${store.id}`,
-        token,
-      ),
-    retry: false,
-  });
+  const units = useDamagedUnits(store, token);
   const places = useBackOnSale(
     store,
     token,
@@ -111,7 +108,18 @@ export function Damaged({
   ];
 
   return (
-    <section>
+    <section className="goods-part">
+      {back && (
+        <button
+          type="button"
+          className="quiet back"
+          aria-label="Назад до товару"
+          disabled={blocked}
+          onClick={back}
+        >
+          <span aria-hidden="true">← </span>Товар
+        </button>
+      )}
       <div className="toolbar">
         <h2>Брак</h2>
         <button

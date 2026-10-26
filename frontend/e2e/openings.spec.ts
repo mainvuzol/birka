@@ -669,7 +669,7 @@ test("approving is for whoever may approve, and the section for whoever handles 
   await openStore(page, "Основний MAIN");
   await more(page);
   await expect(
-    page.getByRole("button", { name: "Залишки", exact: true }),
+    page.getByRole("button", { name: "Каталог", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Початкові залишки" }),

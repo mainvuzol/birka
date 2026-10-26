@@ -509,6 +509,9 @@ counted:
 | the debts' list | 1 («Борги») | **1** («Клієнти») | P0-2 | `till-sections.spec.ts`, its counter of presses |
 | the orders' list | 2 («Ще», «Замовлення») | **2** («Клієнти», «Замовлення») | P0-2 | the same |
 | a new order's form | 2 («Ще», «+ Нове замовлення») | **3** («Клієнти», «Замовлення», «+») | P0-2 | the same |
+| the stock | 2 («Ще», «Залишки») | **1** («Товар») | P0-3 | `till-sections.spec.ts`, its counter of presses |
+| receiving | 2 («Ще», «Приймання») | **2** («Товар», «Прийшов товар») | P0-3 | the same |
+| «Брак» | 2 («Ще», «Брак») | **2** («Товар», «Брак») | P0-3 | the same |
 
 The counter is the page's own: every `pointerdown` from the first press,
 in a store where this person has both debts and orders. A whole new order,

@@ -90,7 +90,9 @@ test("stock screen explicitly selects warehouse and shows real API balances with
   });
 });
 
-test("stock navigation requires inventory permission", async ({ page }) => {
+test("without the right to read the stock, «Товар» is its tiles alone, and nothing is said of the rule (navigation task list, P0-3)", async ({
+  page,
+}) => {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as {
@@ -104,10 +106,51 @@ test("stock navigation requires inventory permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await more(page);
+  // «Товар» is its tiles alone: no stock, and nothing said of the rule
+  // (navigation task list, P0-3).
+  await section(page, "Залишки");
   await expect(
-    page.getByRole("button", { name: "Залишки", exact: true }),
+    page
+      .locator(".goods-tiles")
+      .getByRole("button", { name: /^Прийшов товар/ }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".goods-tiles").getByRole("button", { name: /^Брак/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Оновити залишки" }),
   ).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Склад" })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("without the stock, receiving and «Брак», no «Товар» (navigation task list, P0-3)", async ({
+  page,
+}) => {
+  const goods = ["inventory:view", "inventory:receive", "damaged:handle"];
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter((p) => !goods.includes(p));
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  const sections = page.getByRole("navigation", { name: "Розділи" });
+  await expect(
+    sections.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeVisible();
+  await expect(
+    sections.getByRole("button", { name: "Товар", exact: true }),
+  ).toHaveCount(0);
+  await more(page);
+  for (const name of ["Залишки", "Приймання", "Брак"])
+    await expect(
+      sections.getByRole("button", { name, exact: true }),
+    ).toHaveCount(0);
 });
 
 test("stock access denial hides stale balances and offers retry", async ({

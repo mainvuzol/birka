@@ -4416,3 +4416,64 @@ and its words wait for the owner's approval:
   change.
 
 Built on 2026-10-26; see the [report](navigation-redesign-2-report.md).
+
+## Owner decision — 2026-10-26 (after #141 was merged)
+
+Asked when #141 was merged, each answer the option recommended:
+- **«Клієнти» with «Борги | Замовлення» is approved as built,** with what
+  was decided in building it — the headings naming the way open («Борги»
+  twice on the debts, the heading and the segment), the section opening on
+  the debts, «Клієнти» pressed again on a debt bringing the list (a sum
+  typed in a payment lost, as on leaving for another section), a new order
+  three taps where it was two.
+- **The receipt of a sale paid in parts says «Наступні внески — у розділі
+  «Клієнти».»**: the row's button, which opens on the debts for whoever
+  sells in parts.
+- **Next: the bottom menu's P0-3, «Товар»** — the minimal one (В1).
+- **«Товар»'s words as the task list has them:** the row's button and the
+  heading «Товар» where «Залишки» was; the tiles «Прийшов товар», leading to
+  «Приймання товару», and «Брак», its line «2 очікують перевірки» or
+  «нічого не чекає»; «← Товар» over those screens. Approved again by the
+  screens once built.
+
+## «Товар», the minimal one — built 2026-10-26
+
+The bottom menu's task list, P0-3, and the owner's answers after #141.
+How it is carried out, not decided by the owner; the section, its tiles and
+their icons wait for the owner's approval by the screens:
+- **«Приймання», «Залишки» and «Брак» leave «Ще» for «Товар»:** the row is
+  «Продаж · Товар · Клієнти · Каса · Ще», and a seller's «Ще» holds
+  «Каталог». «Товар» stands for the stock, receiving and «Брак», marked on
+  each; shown with any of their rights.
+- **«Товар» is the stock's screen,** its heading «Товар» where «Залишки»
+  was, «Оновити залишки» beside it as before, and under the heading two
+  tiles, each by its own right — «Прийшов товар», leading to «Приймання
+  товару», and «Брак» — one alone the whole width; the stock's list below,
+  unchanged. Whoever may not read the stock has the heading and the tiles
+  alone, and is told nothing of the rule.
+- **«Брак»'s tile says how many units wait to be inspected,** from the same
+  read as its screen: «2 очікують перевірки», one «1 очікує перевірки»,
+  none «нічого не чекає»; grey while read, and unread, the tile with no line
+  and nothing said.
+- **«← Товар» over «Приймання товару» and «Брак»** leads back to the tiles,
+  read as «Назад до товару», as «← Каса» is read «Назад до каси». It, the
+  tiles and the row are held together; leaving receiving drops the lines
+  typed, as leaving for any section did. A tile or «← Товар» closes «Ще».
+- **A kept delivery** opens on «Приймання товару», a kept correction or
+  count on «Товар»; «Товар» marked on each.
+- **A store that does not trade:** no «Прийшов товар»; «Брак» read only.
+- **Whoever neither sells nor reads orders** opens on the first section
+  shown, which is now «Товар».
+- **The tiles' two icons** — an arrow into a tray, a tag with a cross — are
+  drawn here; the app has no icon set before the bottom menu (P0-6).
+- **The receipt's «Наступні внески — у розділі «Клієнти».»,** the owner's
+  answer, built with it. The till's «Решту — у «Боргах» цього магазину.» and
+  an order's «Клієнт забрав» «Наступні внески — у «Боргах».» are kept: the
+  first names the store's debts, the second is said inside «Клієнти», where
+  «Борги» is the switch's.
+- **Two texts still name sections that left «Ще»,** kept as they were, their
+  words the owner's: the price hint «Ціну для всіх задає менеджер у
+  «Залишках».» (the till, a new order) and «Початкові залишки»'s «…а
+  відсутній товар прийміть через «Приймання».».
+
+Built on 2026-10-26; see the [report](navigation-redesign-3-report.md).

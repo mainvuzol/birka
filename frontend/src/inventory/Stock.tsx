@@ -40,6 +40,7 @@ export function Stock({
   journalKey,
   countKey,
   blocked,
+  tiles = null,
 }: {
   store: Store;
   token: string;
@@ -48,6 +49,9 @@ export function Stock({
   /** Where a stocktake's count is kept until it is settled. */
   countKey: string;
   blocked: boolean;
+  /** «Прийшов товар» and «Брак» under the heading, for whoever may open
+   * them (navigation task list, P0-3). */
+  tiles?: JSX.Element | null;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [offset, setOffset] = useState(0);
@@ -146,7 +150,7 @@ export function Stock({
   return (
     <section>
       <div className="toolbar">
-        <h2>Залишки</h2>
+        <h2>Товар</h2>
         <button
           className="quiet"
           disabled={refreshing || locations.isFetching || stock.isFetching}
@@ -157,6 +161,7 @@ export function Stock({
           Оновити залишки
         </button>
       </div>
+      {tiles}
       <p className="hint">
         Оберіть один склад. «Доступно» — залишок після віднімання резервів
         замовлень.

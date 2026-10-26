@@ -540,7 +540,7 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
     sections(page).getByRole("button", { name: "Накладні", exact: true }),
   ).toBeEnabled();
   await expect(
-    sections(page).getByRole("button", { name: "Залишки", exact: true }),
+    sections(page).getByRole("button", { name: "Товар", exact: true }),
   ).toBeDisabled();
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();

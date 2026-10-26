@@ -120,7 +120,7 @@ test("a seller, even holding every permission for the store, has no such section
   await enter(page, fixture.telegram_user_id);
   await more(page);
   await expect(
-    sections(page).getByRole("button", { name: "Залишки", exact: true }),
+    sections(page).getByRole("button", { name: "Каталог", exact: true }),
   ).toBeVisible();
   await expect(tab(page)).toHaveCount(0);
   await expect(moreTab(page)).toHaveText("Ще");

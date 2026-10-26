@@ -1,12 +1,4 @@
-import {
-  test,
-  expect,
-  fillLine,
-  grn,
-  more,
-  openStore,
-  tapSize,
-} from "./fixtures";
+import { test, expect, fillLine, grn, openStore, tapSize } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -554,9 +546,8 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toBeDisabled();
-  await more(page);
   await expect(
-    page.getByRole("button", { name: "Залишки", exact: true }),
+    page.getByRole("button", { name: "Товар", exact: true }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })

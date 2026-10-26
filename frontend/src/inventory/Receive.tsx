@@ -66,11 +66,18 @@ export function Receive({
   token,
   journalKey,
   blocked,
+  back,
+  backHeld = false,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   blocked: boolean;
+  /** «← Товар» over the heading: the screen is one of «Товар»'s tiles
+   * (navigation task list, P0-3). */
+  back?: (() => void) | undefined;
+  /** Held as the row is: a kept delivery keeps its screen (P0-3). */
+  backHeld?: boolean;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [variant, setVariant] = useState<ReceivableVariant | null>(null);
@@ -284,7 +291,18 @@ export function Receive({
     );
 
   return (
-    <section>
+    <section className="goods-part">
+      {back && (
+        <button
+          type="button"
+          className="quiet back"
+          aria-label="Назад до товару"
+          disabled={backHeld}
+          onClick={back}
+        >
+          <span aria-hidden="true">← </span>Товар
+        </button>
+      )}
       <h2>Приймання товару</h2>
       <p className="hint">
         Оберіть склад, куди фізично надійшов товар. Шукайте в каталозі — зокрема
