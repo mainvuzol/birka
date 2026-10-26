@@ -2101,7 +2101,7 @@ test.describe("9. what to do with money after the outage", () => {
       await debts(page);
       await page.goto(launch());
       await openStore(page, /Подільський/);
-      await page.getByRole("button", { name: "Борги", exact: true }).click();
+      await section(page, "Борги");
       await page
         .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
         .click();
@@ -2120,7 +2120,7 @@ test.describe("9. what to do with money after the outage", () => {
       const payments = await debts(page);
       await page.goto(launch());
       await openStore(page, /Подільський/);
-      await page.getByRole("button", { name: "Борги", exact: true }).click();
+      await section(page, "Борги");
       await page
         .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
         .click();
@@ -2615,7 +2615,7 @@ test.describe("9. what to do with money after the outage", () => {
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
-    await page.getByRole("button", { name: "Борги", exact: true }).click();
+    await section(page, "Борги");
     await page
       .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
       .click();
@@ -4555,6 +4555,11 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         await expect(
           page.getByRole("button", { name: "Борги", exact: true }),
         ).toHaveCount(0);
+        // Neither debts nor orders: no «Клієнти» (navigation task list,
+        // P0-2).
+        await expect(
+          page.getByRole("button", { name: "Клієнти", exact: true }),
+        ).toHaveCount(0);
         await expect(page.getByText(/Немає доступу/)).toHaveCount(0);
       });
 
@@ -4762,8 +4767,41 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Борги", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Борги", exact: true }),
+      page.getByRole("button", { name: "Клієнти", exact: true }),
     ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("a kept payment on a phone whose person also reads orders turns to «Клієнти» on «Борги», marked in «Борги | Замовлення», the switch held (navigation task list, P0-2)", async ({
+    page,
+  }) => {
+    await seed(page, { [creditKey]: keptDebt("payment") });
+    await serve(page);
+    await holding(page, ["sale:view"]);
+    await on(page, `/credits/${ids.credit}/payments`, async (route) => {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Борги", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Клієнти", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    const ways = page.getByRole("group", { name: "Борги або замовлення" });
+    await expect(
+      ways.getByRole("button", { name: "Борги", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    // Held as the row is, till the payment is settled.
+    await expect(
+      ways.getByRole("button", { name: "Замовлення", exact: true }),
+    ).toBeDisabled();
   });
 
   test("a kept return refused on resend, part of it returned meanwhile, says so in «Повернення»'s words", async ({

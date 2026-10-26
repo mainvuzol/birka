@@ -494,3 +494,25 @@ its `ci` environment, every case gated (`BIRKA_PERF_GATE=all`). Evidence:
   2026-10-08, one seller's unchanged.
 - **`POST /sales` is unchanged,** and its figures are within the earlier
   readings' spread.
+
+## Update — 2026-10-26: the bottom menu's taps
+
+The bottom menu's task list
+([redesign/2026-10-26-redesign-tz-navigation.md](redesign/2026-10-26-redesign-tz-navigation.md))
+asks for its taps to be recorded here; navigation had not been counted. The
+taps from the till, the first screen once the store is open, typing not
+counted:
+
+| to | before | after | step | how counted |
+|---|---|---|---|---|
+| the returns' list | 1 («Повернення») | 1 («Повернути») | P0-1 | the switch under the till's heading, pressed in `till-sections.spec.ts` |
+| the debts' list | 1 («Борги») | **1** («Клієнти») | P0-2 | `till-sections.spec.ts`, its counter of presses |
+| the orders' list | 2 («Ще», «Замовлення») | **2** («Клієнти», «Замовлення») | P0-2 | the same |
+| a new order's form | 2 («Ще», «+ Нове замовлення») | **3** («Клієнти», «Замовлення», «+») | P0-2 | the same |
+
+The counter is the page's own: every `pointerdown` from the first press,
+in a store where this person has both debts and orders. A whole new order,
+its search typed, is six taps where it was five (`orders-new.spec.ts`), the
+task list's own count. A sale is unchanged — three taps, the till the first
+screen — and no server request changed, so the hot path's cases stand as
+last measured.

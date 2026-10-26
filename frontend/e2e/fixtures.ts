@@ -85,8 +85,9 @@ export async function openStore(
 }
 
 /** The counter's work, in the row of sections; every other is under «Ще».
- * «Повернення» is «Продаж»'s other way (navigation task list, P0-1). */
-const counter = ["Продаж", "Борги", "Каса"];
+ * «Повернення» is «Продаж»'s other way (navigation task list, P0-1); «Борги»
+ * and «Замовлення» are «Клієнти»'s two (P0-2). */
+const counter = ["Продаж", "Клієнти", "Каса"];
 
 /** The workspace's sections (redesign P1-6). */
 export function sections(page: Page): Locator {
@@ -126,6 +127,37 @@ export async function section(page: Page, name: string): Promise<void> {
     await expect(
       page.getByRole("heading", { name: "Повернення" }),
     ).toBeVisible();
+    return;
+  }
+  if (name === "Борги" || name === "Замовлення") {
+    // «Клієнти», then the way asked for — for whoever has one of them,
+    // «Клієнти» opens it, with no switch.
+    await sections(page)
+      .getByRole("button", { name: "Клієнти", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: /^(Борги|Замовлення)$/ }),
+    ).toBeVisible();
+    const way = page
+      .getByRole("group", { name: "Борги або замовлення" })
+      .getByRole("button", { name, exact: true });
+    if (
+      (await way.count()) > 0 &&
+      (await way.getAttribute("aria-current")) !== "page"
+    )
+      await way.click();
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+    return;
+  }
+  if (name === "+ Нове замовлення") {
+    // «+» in «Замовлення»'s heading (P0-2).
+    await section(page, "Замовлення");
+    await page
+      .locator(".orders-head")
+      .getByRole("button", { name: "Нове замовлення" })
+      .click();
     return;
   }
   if (!counter.includes(name)) await more(page);

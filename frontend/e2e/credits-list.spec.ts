@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -192,7 +192,7 @@ async function credits(
 ): Promise<void> {
   await page.goto(launch(theme));
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
 }
 
 function rows(page: Page): Locator {

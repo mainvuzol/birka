@@ -1,0 +1,18 @@
+- unchanged tree: passed 
+- «Клієнти» not marked on the orders: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- «Клієнти» not marked on a new order: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- «Ще» marked on the orders: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- «Клієнти» opens the orders for whoever has both: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- «Клієнти» opens the debts for whoever has no right to them: caught by paying in parts needs its own permission
+- no «Клієнти» for whoever only reads orders: caught by whoever does none of the counter's work but reads orders has «Клієнти» and «Ще», holding o
+- «Клієнти» for whoever has neither: caught by whoever may not read orders has no «Замовлення» in «Ще», opens on the first section shown,
+- the switch for whoever may not read orders: caught by whoever sells but may not read orders has «Клієнти» open the debts alone: no «Замовлення»,
+- the switch for whoever may not take debts: caught by paying in parts needs its own permission
+- no switch under the debts: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- no switch under the orders: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- «Клієнти» pressed again goes to the debts: caught by debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under e
+- «Клієнти» pressed again keeps the debt open: caught by «Клієнти» pressed again on a debt brings the debts' first screen (navigation task list, P0
+- «Клієнти» pressed again keeps the order open: caught by «Клієнти» pressed again on an order's card brings the orders' first screen (navigation tas
+- the switch free while the row is held: caught by 10. a kept operation the phone settles says what became of it › a kept payment on a phone 
+15 of 15 caught
+exit=0

@@ -828,7 +828,7 @@ test("a new order answered whose reading failed: «Оновити результ
   expect(stubbed.made).toHaveLength(1);
 });
 
-test("a new order is five taps from «Ще», the search typed (orders task list, P0-5)", async ({
+test("a new order is six taps, the search typed: «Клієнти», «Замовлення», «+», the size, the carrier and the press (orders task list, P0-5; navigation task list, P0-2: one more than from «Ще», 2 → 3 to the form)", async ({
   page,
 }) => {
   const stubbed = server();
@@ -858,7 +858,7 @@ test("a new order is five taps from «Ще», the search typed (orders task list
   await expect(page.getByText(/^Зарезервовано: 1 шт\./)).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(5);
+  ).toBe(6);
 });
 
 /** Clicks the card's «Відправлено» the moment it is drawn, as a double

@@ -8,10 +8,11 @@ import { readFileSync } from "node:fs";
  * the till's reminder once the server is back (P1-7; owner decisions,
  * 2026-10-15: the reminder is the till's alone, В7 (б)).
  *
- * The counter's work stands in one row — «Продаж», «Повернення», «Борги»,
- * «Каса», each for whoever may do it — and every other section is under
- * «Ще», by the same rights as before. The header is one line,
- * «{Магазин} · {Ім’я}».
+ * The counter's work stands in one row — «Продаж», «Клієнти», «Каса», each
+ * for whoever may do it; «Повернення» is «Продаж»'s other way, «Борги» and
+ * «Замовлення» are «Клієнти»'s (navigation task list, P0-1, P0-2) — and
+ * every other section is under «Ще», by the same rights as before. The
+ * header is one line, «{Магазин} · {Ім’я}».
  */
 
 interface Fixture {
@@ -147,7 +148,7 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toHaveCount(0);
 
-  await expect(row(page)).toHaveText(["Продаж", "Борги", "Каса", "Ще"]);
+  await expect(row(page)).toHaveText(["Продаж", "Клієнти", "Каса", "Ще"]);
   await expect(row(page).first()).toHaveAttribute("aria-current", "page");
   await oneLine(page);
   const overflow = await page.evaluate(
@@ -164,8 +165,6 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   await moreButton(page).click();
   await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
   await expect(underMore(page)).toHaveText([
-    "Замовлення",
-    "+ Нове замовлення",
     "Каталог",
     "Приймання",
     "Залишки",
@@ -216,7 +215,7 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   await moreButton(page).click();
   await underMore(page).filter({ hasText: "Залишки" }).click();
   await expect(underMore(page)).toHaveCount(0);
-  await row(page).filter({ hasText: "Борги" }).click();
+  await row(page).filter({ hasText: "Клієнти" }).click();
   await row(page).filter({ hasText: "Продаж" }).click();
   await moreButton(page).click();
   await row(page).filter({ hasText: "Продаж" }).click();
@@ -256,6 +255,68 @@ test("selling and taking back are one section's two ways: «Продати | П�
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(sell).toHaveAttribute("aria-current", "page");
   await expect(sell).toBeFocused();
+});
+
+test("debts and orders are «Клієнти»'s two ways: opened on «Борги», «Борги | Замовлення» under each list's heading, the way open marked and focused, «Клієнти» marked on both; a debt a tap, the orders two, a new order three (navigation task list, P0-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        host.taps += 1;
+      },
+      true,
+    );
+  });
+  const taps = (): Promise<number> =>
+    page.evaluate(() => (window as unknown as { taps: number }).taps);
+  const customers = row(page).filter({ hasText: "Клієнти" });
+  await customers.click();
+  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  expect(await taps()).toBe(1);
+  const ways = page.getByRole("group", { name: "Борги або замовлення" });
+  const debts = ways.getByRole("button", { name: "Борги", exact: true });
+  const orders = ways.getByRole("button", { name: "Замовлення", exact: true });
+  await expect(debts).toHaveAttribute("aria-current", "page");
+  await expect(customers).toHaveAttribute("aria-current", "page");
+  await orders.click();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
+  expect(await taps()).toBe(2);
+  await expect(orders).toHaveAttribute("aria-current", "page");
+  await expect(orders).toBeFocused();
+  await expect(customers).toHaveAttribute("aria-current", "page");
+  await expect(moreButton(page)).not.toHaveAttribute("aria-current", "true");
+  // One line at 360 px.
+  const left = await debts.boundingBox();
+  const right = await orders.boundingBox();
+  expect(Math.round(left?.y ?? -1)).toBe(Math.round(right?.y ?? -2));
+  // A new order: «+» in the heading, the third tap.
+  await page
+    .locator(".orders-head")
+    .getByRole("button", { name: "Нове замовлення" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Нове замовлення" }),
+  ).toBeVisible();
+  expect(await taps()).toBe(3);
+  await expect(customers).toHaveAttribute("aria-current", "page");
+  // «Клієнти» pressed again: its way's first screen, the orders.
+  await customers.click();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
+  // And back to the debts.
+  await debts.click();
+  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  await expect(debts).toBeFocused();
 });
 
 test("whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P0-1)", async ({
@@ -303,13 +364,30 @@ for (const [name, theme] of [
       ways.getByRole("button", { name: "Повернути", exact: true }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // «Борги | Замовлення» the same (P0-2).
+    await row(page).filter({ hasText: "Клієнти" }).click();
+    const debtsOrOrders = page.getByRole("group", {
+      name: "Борги або замовлення",
+    });
+    for (const part of [
+      debtsOrOrders.getByRole("button", { name: "Борги", exact: true }),
+      debtsOrOrders.getByRole("button", { name: "Замовлення", exact: true }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/debts-or-orders-${name}.png`,
+    });
+    await row(page).filter({ hasText: "Продаж" }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/sale-or-return-${name}.png` });
   });
 
-test("whoever does none of the counter's work has «Ще» alone, holding only what they may open", async ({
+test("whoever does none of the counter's work but reads orders has «Клієнти» and «Ще», holding only what they may open", async ({
   page,
 }) => {
   const counterRights = [
@@ -336,11 +414,12 @@ test("whoever does none of the counter's work has «Ще» alone, holding only w
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  await expect(row(page)).toHaveText(["Ще"]);
-  await expect(moreButton(page)).toHaveClass(/active/);
+  // Orders read, nothing else of the counter's: «Клієнти» and «Ще»
+  // (navigation task list, P0-2).
+  await expect(row(page)).toHaveText(["Клієнти", "Ще"]);
+  await expect(row(page).first()).toHaveAttribute("aria-current", "page");
   await more(page);
   await expect(underMore(page)).toHaveText([
-    "Замовлення",
     "Каталог",
     "Приймання",
     "Залишки",
@@ -348,7 +427,7 @@ test("whoever does none of the counter's work has «Ще» alone, holding only w
   ]);
 });
 
-test("whoever may not read orders has no «Замовлення» in «Ще», opens on the first section shown, and is never told of the rule (orders task list, P2-1)", async ({
+test("whoever may not read orders has no «Замовлення» in «Ще», opens on the first section shown, and is never told of the rule (orders task list, P2-1); nor debts: no «Клієнти» (navigation task list, P0-2)", async ({
   page,
 }) => {
   const taken = [
@@ -383,6 +462,7 @@ test("whoever may not read orders has no «Замовлення» in «Ще», o
   await expect(
     page.getByText(/Немає права переглядати замовлення/),
   ).toHaveCount(0);
+  await expect(row(page)).toHaveText([/^Ще( ⚠)?$/]);
   await more(page);
   await expect(underMore(page)).toHaveText([
     "Каталог",
@@ -392,7 +472,7 @@ test("whoever may not read orders has no «Замовлення» in «Ще», o
   ]);
 });
 
-test("whoever sells but may not read orders is offered no «+ Нове замовлення»: an order made is an order seen (owner decision after #139, 2026-10-26)", async ({
+test("whoever sells but may not read orders has «Клієнти» open the debts alone: no «Замовлення», no switch, no «+» — an order made is an order seen (owner decision after #139, 2026-10-26; navigation task list, P0-2)", async ({
   page,
 }) => {
   await page.route("**/api/v1/me", async (route) => {
@@ -410,6 +490,23 @@ test("whoever sells but may not read orders is offered no «+ Нове замо�
   await openStore(page, "Центр CENTRE");
   // The till first, as for whoever sells.
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(row(page)).toHaveText([
+    "Продаж",
+    "Клієнти",
+    "Каса",
+    /^Ще( ⚠)?$/,
+  ]);
+  const customers = row(page).filter({ hasText: "Клієнти" });
+  await customers.click();
+  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  await expect(customers).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("group", { name: "Борги або замовлення" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Замовлення/ })).toHaveCount(0);
+  // Pressed again, the debts still.
+  await customers.click();
+  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
   await more(page);
   await expect(underMore(page).filter({ hasText: "Замовлення" })).toHaveCount(
     0,
@@ -423,7 +520,12 @@ test("the owner's row is the same four and «Ще», on one line at 360 px; «Щ
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto(launch(fixture.owner_telegram_user_id, "Власник"));
   await openStore(page, "Основний MAIN");
-  await expect(row(page)).toHaveText(["Продаж", "Борги", "Каса", /^Ще( ⚠)?$/]);
+  await expect(row(page)).toHaveText([
+    "Продаж",
+    "Клієнти",
+    "Каса",
+    /^Ще( ⚠)?$/,
+  ]);
   await oneLine(page);
   await more(page);
   for (const name of ["Звіт", "Накладні", "Постачальникам", "Моделі"])
@@ -496,7 +598,7 @@ async function answered(page: Page, server: { down: boolean }): Promise<void> {
 
 /** Another section, and the till again: it reads its warehouses anew. */
 async function tillAgain(page: Page): Promise<void> {
-  await sections(page).getByRole("button", { name: "Борги" }).click();
+  await sections(page).getByRole("button", { name: "Клієнти" }).click();
   await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
   await sections(page).getByRole("button", { name: "Продаж" }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();

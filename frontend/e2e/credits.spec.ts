@@ -224,7 +224,7 @@ async function debt(page: Page, name: string): Promise<void> {
   await page.goto("about:blank");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await searchField(page).fill(name);
   await expect(rows(page)).toHaveCount(1);
   await customerRow(page, name).click();
@@ -296,7 +296,7 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await page.getByRole("button", { name: "Новий продаж" }).click();
   await expect(page.getByLabel("Оплата частинами")).not.toBeChecked();
 
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   // Pasted from the phone's contacts, between the two invisible direction
   // marks they add: owed here, so its row, never the rule that nothing is
   // owed here (review, 2026-10-19).
@@ -1212,7 +1212,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   const total = page.getByLabel("Скільки винні магазину");
   await expect(total).toContainText("Магазину винні");
   await expect(total.locator(".owed-sum")).toHaveText(
@@ -1405,7 +1405,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   expect(body.payment_method).toBe("CASH");
 
   // A debt like any other, in this store's «Борги».
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await searchField(page).fill(tel);
   const row = customerRow(page, name);
   await expect(row).toHaveAccessibleName(
@@ -1507,6 +1507,15 @@ test("paying in parts needs its own permission", async ({ page }) => {
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
+  // «Клієнти» opens the orders alone: no «Борги», nor a switch
+  // (navigation task list, P0-2).
+  await page.getByRole("button", { name: "Клієнти", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Борги або замовлення" }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Борги", exact: true }),
   ).toHaveCount(0);
@@ -1558,7 +1567,7 @@ async function everyDebtOf(
   await page.goto("about:blank");
   await page.goto(launch(telegramUserId));
   await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Борги", exact: true }).click();
+  await section(page, "Борги");
   await page
     .getByRole("button", { name: "Показати сплачені й списані" })
     .click();

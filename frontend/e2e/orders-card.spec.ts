@@ -1896,6 +1896,22 @@ test("while an order is read, its title, context, pill and two lines hold their 
   expect(colours.plate).toBe(colours.notice);
 });
 
+test("«Клієнти» pressed again on an order's card brings the orders' first screen (navigation task list, P0-2)", async ({
+  page,
+}) => {
+  await open(page, { order: order(), sent: [] });
+  await expect(page.locator(".order-title")).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Розділи" })
+    .getByRole("button", { name: "Клієнти", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".order-title")).toHaveCount(0);
+  await expect(page.locator(".order-row").first()).toBeVisible();
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {
