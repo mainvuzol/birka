@@ -1,0 +1,26 @@
+- unchanged tree: passed 
+- the basket never kept: caught by the basket stays while the till is left — «Повернути», «Клієнти», «Ще» — and comes back as
+- the basket never restored: caught by the basket stays while the till is left — «Повернути», «Клієнти», «Ще» — and comes back as
+- its command not restored: caught by the basket stays while the till is left — «Повернути», «Клієнти», «Ще» — and comes back as
+- its warehouse not restored: caught by the basket stays while the till is left — «Повернути», «Клієнти», «Ще» — and comes back as
+- paying in parts not restored: caught by paying in parts comes back with the basket: the customer, the number and the part paid now
+- the shelf's answers not restored: caught by an answer about the shelf already given comes back with the basket, and is sent with it un
+- the shelf's question not restored: caught by an unmarked basket keeps its lines when the paper is ticked on another screen, not its she
+- not under the settled kept sales: caught by a kept sale settled while the till is left opens it empty: the basket never comes back und
+- not forgotten with the store: SURVIVED
+- an emptied basket keeps its terms: caught by an emptied basket keeps nothing: paying in parts was the last customer's (navigation task 
+- a paper basket back under the paper ticked again: caught by a basket built from paper is gone once the paper is unticked on another screen — and untic
+- an unmarked basket dropped under the paper ticked: caught by an unmarked basket keeps its lines when the paper is ticked on another screen, not its she
+- the shelf's answers kept under the paper ticked: caught by an answer about the shelf already given is never sent with the paper's mark once the paper
+- the shelf's question kept under the paper ticked: caught by an unmarked basket keeps its lines when the paper is ticked on another screen, not its she
+- the paper switch's moves not counted: caught by a basket built from paper is gone once the paper is unticked on another screen — and untic
+14 of 15 caught
+exit=0
+
+Rerun after the survivor: the paper's clearing no longer counts as a move of its switch, so the store left clears the basket by `forgetBasket` alone:
+- unchanged tree: passed 
+- not forgotten with the store: caught by «Новий продаж» and another store leave the till empty, as before (navigation task list, P0
+- a paper basket back under the paper ticked again: caught by a basket built from paper is gone once the paper is unticked on another screen — and untic
+- the paper switch's moves not counted: caught by a basket built from paper is gone once the paper is unticked on another screen — and untic
+3 of 3 caught
+exit=0
