@@ -1,0 +1,29 @@
+- unchanged tree: passed 
+- «Товар» not marked on receiving: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+- «Товар» not marked on «Брак»: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+- «Ще» marked on receiving: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+- «Товар» only for whoever may read the stock: caught by without the right to read the stock, «Товар» is its tiles alone, and nothing is said of th
+- no tiles alone for whoever may not read the stock: caught by without the right to read the stock, «Товар» is its tiles alone, and nothing is said of th
+- no tiles over the stock: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+- «Прийшов товар» without its right: caught by receiving needs its own permission
+- «Брак» without its right: caught by the «Брак» section needs its own permission
+- the tiles free while the row is held: caught by 10. a kept operation the phone settles says what became of it › a kept stock correction a 
+- no «← Товар» from receiving: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+- «← Товар» free while a delivery waits: caught by 10. a kept operation the phone settles says what became of it › a kept delivery of whoever
+- every unit counted, not those waiting: caught by «Брак»'s tile says how many units wait to be inspected, as its screen counts them; nothing
+- one said as many: caught by «Брак»'s tile says how many units wait to be inspected, as its screen counts them; nothing
+- nothing waiting said as a number: caught by «Брак»'s tile says how many units wait to be inspected, as its screen counts them; nothing
+- no grey line while read: caught by «Брак»'s tile says how many units wait to be inspected, as its screen counts them; nothing
+- «Ще» opened again over «Брак»: SURVIVED
+- «Ще» opened again by «← Товар»: SURVIVED
+- «← Товар» read as the row's «Товар»: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+- an old count kept after a failed read: caught by «Брак»'s tile says how many units wait to be inspected, as its screen counts them; nothing
+- the receipt's old «Борги»: caught by a sale paid in parts leaves the rest owed, and «Борги» takes it until nothing is
+18 of 20 caught
+exit=0
+
+Rerun after the two survivors (the tile's close and «← Товар»'s, each covering the other) became one helper, `goodsTo`:
+- unchanged tree: passed 
+- «Ще» opened again by a tile or «← Товар»: caught by the goods are «Товар»: the stock under «Прийшов товар» and «Брак» as tiles, two in a row a
+1 of 1 caught
+exit=0
