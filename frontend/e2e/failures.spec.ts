@@ -648,9 +648,13 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     // section under it.
     await expect(tab(page)).toHaveText("Ще ⚠");
     await more(page);
-    await expect(
-      sections(page).getByRole("button", { name: /^Резервні копії/ }),
-    ).toHaveText("Резервні копії ⚠");
+    const backups = sections(page).getByRole("button", {
+      name: /^Резервні копії/,
+    });
+    await expect(backups).toHaveAccessibleName("Резервні копії ⚠");
+    // «Ще» is a screen of its own (navigation task list, P0-4): back to the
+    // section from it.
+    await backups.click();
 
     const block = page.locator('[data-server="TROUBLE"]');
     await expect(block.getByRole("heading")).toHaveText("Проблема на сервері");
@@ -923,7 +927,7 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     // The till is the seller's again; its three ways come with a basket
     // (redesign direction §5).
     await expect(
-      page.getByRole("button", { name: "Змінити магазин" }),
+      page.getByRole("button", { name: "Товар", exact: true }),
     ).toBeEnabled();
     await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
     await expect(

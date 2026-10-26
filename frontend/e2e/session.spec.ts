@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { changeStore, test, expect, openStore, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -137,7 +137,7 @@ test("the owner changes a store's state over an hour after opening the app, and 
     await expect(card.getByText("Заблоковано", { exact: true })).toBeVisible();
 
     // What the app knows of the stores is read again, with the token.
-    await page.getByRole("button", { name: "Змінити магазин" }).click();
+    await changeStore(page);
     await expect(
       page.getByRole("button", { name: /^Ринок MARKET/ }),
     ).toContainText("Заблоковано власником з");

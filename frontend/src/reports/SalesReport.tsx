@@ -29,6 +29,8 @@ import {
   type StoreFigures,
   type WayFigures,
 } from "./types";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 type Range = { from: string; to: string };
 
@@ -129,9 +131,13 @@ const stateLabels: Record<StoreFigures["store_state"], string> = {
 export function SalesReport({
   token,
   scopeKey,
+  back,
 }: {
   token: string;
   scopeKey: string;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   // None is today, as the server counts it where the stores are.
   const [range, setRange] = useState<Range | null>(null);
@@ -181,6 +187,7 @@ export function SalesReport({
     : range;
   return (
     <section>
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Звіт про продажі</h2>
         <button

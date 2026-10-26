@@ -231,10 +231,25 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
       { exact: true },
     ),
   ).toBeVisible();
+  // While the change is sent, «← Ще» is held: its answer is said here
+  // (navigation task list, P0-4; review, 2026-10-26).
+  let letGo: () => void = () => undefined;
+  const sending = new Promise<void>((done) => {
+    letGo = done;
+  });
+  await page.route("**/api/v1/stores/*/state", async (route) => {
+    await sending;
+    await route.fallback();
+  });
+  const back = page.getByRole("button", { name: "Назад до «Ще»" });
+  await expect(back).toBeEnabled();
   await market
     .getByRole("button", { name: "Так, заблокувати «Ринок»" })
     .click();
+  await expect(back).toBeDisabled();
+  letGo();
   await expect(market.getByText("Заблоковано", { exact: true })).toBeVisible();
+  await expect(back).toBeEnabled();
   await expect(market.getByText("Причина: Ревізія каси")).toBeVisible();
   // The one refused above, then the same change as a new command.
   expect(changes.bodies).toHaveLength(2);
@@ -273,7 +288,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     "Продаж",
     "Повернення",
     "Повернути",
-    "Каталог",
+    "Перевірка каталогу",
     "Початкові залишки",
   ])
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(

@@ -1,4 +1,5 @@
 import {
+  changeStore,
   test,
   expect,
   fillLine,
@@ -1416,7 +1417,7 @@ test("6b. the series ends when the switch is unticked, and when the store is lef
 
   // Leaving the store ends the series: back at its till, the switch is off.
   await who.selectOption({ label: colleague });
-  await page.getByRole("button", { name: "Змінити магазин" }).click();
+  await changeStore(page);
   await openStore(page, /Подільський/);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(
@@ -1798,7 +1799,7 @@ test.describe("8. the real server keeps the mark", () => {
       fixture.network_owner_telegram_user_id,
       "Власник мережі",
     );
-    await section(page, "Звіт");
+    await section(page, "Звіт про продажі");
     const entry = page
       .getByRole("list", { name: "Продажі й повернення" })
       .getByRole("listitem")

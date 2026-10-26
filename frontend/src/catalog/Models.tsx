@@ -22,6 +22,8 @@ import type {
   MergePreview,
   StockLine,
 } from "./modelTypes";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 const pageSize = 20;
 type Field =
@@ -606,12 +608,16 @@ export function Models({
   token,
   journalKey,
   blocked,
+  back,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending } = useCorrectionCommand();
@@ -713,6 +719,7 @@ export function Models({
   return (
     <>
       {notice}
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Моделі</h2>
         {selected && (

@@ -34,8 +34,10 @@ export function PriceHint({
         </span>
       ) : (
         <span className="hint">
+          {/* Where the manager sets it, as the row names it now (owner
+              decision after #142, 2026-10-26). */}
           Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає
-          менеджер у «Залишках».
+          менеджер у «Товарі».
         </span>
       )}
       {price === "0.00" && (

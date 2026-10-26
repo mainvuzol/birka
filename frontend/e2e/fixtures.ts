@@ -90,21 +90,32 @@ export async function openStore(
  * screen, «Приймання» and «Брак» its tiles (P0-3). */
 const counter = ["Продаж", "Товар", "Клієнти", "Каса"];
 
-/** The workspace's sections (redesign P1-6). */
+/** The workspace's sections (redesign P1-6): the row, and «Ще»'s own
+ * screen while it is open (navigation task list, P0-4). */
 export function sections(page: Page): Locator {
-  return page.getByRole("navigation", { name: "Розділи" });
+  return page.getByRole("navigation", { name: /^(Розділи|Ще)$/ });
 }
 
 /**
- * «Ще» opened, if it is not already: every section but the counter's is
- * under it. A section looked for while «Ще» is closed is never found, so a
- * journey that says one is absent, or disabled, opens it first.
+ * «Ще»'s screen opened, if it is not already: every section but the
+ * counter's is on it, by groups. A section looked for while it is not open
+ * is never found, so a journey that says one is absent, or disabled, opens
+ * it first.
  */
 export async function more(page: Page): Promise<void> {
-  const button = sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
-  if ((await button.getAttribute("aria-expanded")) !== "true")
-    await button.click();
-  await expect(button).toHaveAttribute("aria-expanded", "true");
+  const screen = page.getByRole("heading", { name: "Ще", exact: true });
+  if (!(await screen.isVisible()))
+    await page
+      .getByRole("navigation", { name: "Розділи" })
+      .getByRole("button", { name: /^Ще( ⚠)?$/ })
+      .click();
+  await expect(screen).toBeVisible();
+}
+
+/** «Змінити магазин», at the bottom of «Ще» (navigation task list, P0-4). */
+export async function changeStore(page: Page): Promise<void> {
+  await more(page);
+  await page.getByRole("button", { name: "Змінити магазин" }).click();
 }
 
 /**

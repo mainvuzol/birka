@@ -295,7 +295,8 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
-  // Its own section stays open under «Ще», every other is held (P1-6).
+  // Its own section stays free on «Ще», every other is held (P1-6; navigation
+  // task list, P0-4).
   await more(page);
   await expect(
     sections(page).getByRole("button", { name: "Моделі", exact: true }),
@@ -303,6 +304,9 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await expect(
     sections(page).getByRole("button", { name: "Товар", exact: true }),
   ).toBeDisabled();
+  await sections(page)
+    .getByRole("button", { name: "Моделі", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Перевірити результат зміни" })
     .click();
@@ -555,7 +559,7 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Змінити магазин" }),
+    page.getByRole("button", { name: "Товар", exact: true }),
   ).toBeEnabled();
   expect(attempts).toBe(2);
   expect(await held(page, bearer, stays.variant)).toBe(5);
@@ -573,7 +577,7 @@ test("creating a product with a Latin letter in a known word is warned once", as
     { concept: `${name} інша`, variant: { color: colour.right } },
     0,
   );
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
   await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
   await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
@@ -688,7 +692,7 @@ test("creating a product keeps a similar word once the person says it is another
     { concept: `${name} вже`, variant: { color: colour.right } },
     0,
   );
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
   await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
   await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
@@ -726,7 +730,7 @@ test("a similar name refused is not left over the queue after another tab", asyn
   );
   const raw = `${name} опис`;
   await queue(page, bearer, [await proposal(page, bearer, raw)]);
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: new RegExp(raw) }).click();
   await fillProduct(page, name, colour.typo);
   await page
@@ -741,7 +745,7 @@ test("a similar name refused is not left over the queue after another tab", asyn
   // A first attempt refused kept nothing: the refusal answered that form,
   // and goes with it.
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await section(page, "Каталог");
+  await section(page, "Перевірка каталогу");
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
@@ -776,7 +780,7 @@ test("a similar name refused on one proposal is not answered on another", async 
     await proposal(page, bearer, first),
     await proposal(page, bearer, second),
   ]);
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: new RegExp(first) }).click();
   await fillProduct(page, name, colour.typo);
   await page
@@ -820,7 +824,7 @@ test("words changed after a similar-name warning are checked, not confirmed", as
     if (request.url().endsWith("/create-product"))
       sent.push(request.postDataJSON() as Record<string, unknown>);
   });
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
   await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
   await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
@@ -1091,7 +1095,7 @@ test("a product whose creation answer was lost settles when it was refused", asy
       else await route.continue();
     },
   );
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
   await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
   await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
@@ -1146,7 +1150,7 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
       else await route.continue();
     },
   );
-  await enter(page, "Каталог");
+  await enter(page, "Перевірка каталогу");
   await page.getByRole("button", { name: new RegExp(first) }).click();
   await fillProduct(page, name, colour.typo);
   await page
@@ -1167,7 +1171,7 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   await page.getByRole("button", { name: "← До черги перевірки" }).click();
   await expect(kept).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await section(page, "Каталог");
+  await section(page, "Перевірка каталогу");
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();

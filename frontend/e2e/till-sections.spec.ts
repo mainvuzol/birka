@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 
 interface Fixture {
   owner_telegram_user_id: string;
+  network_centre_manager_telegram_user_id: string;
   network_centre_cashier_telegram_user_id: string;
 }
 const fixture = JSON.parse(
@@ -97,9 +98,25 @@ function moreButton(page: Page): Locator {
   return sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
 }
 
-/** Whatever «Ще» holds, while it is open. */
+/** What «Ще» holds, by its rows' labels, while its screen is open
+ * (navigation task list, P0-4). */
 function underMore(page: Page): Locator {
-  return sections(page).locator(".more").getByRole("button");
+  return page.getByRole("navigation", { name: "Ще" }).locator(".more-label");
+}
+
+/** «Ще»'s rows themselves. */
+function moreRows(page: Page): Locator {
+  return page.getByRole("navigation", { name: "Ще" }).getByRole("button");
+}
+
+/** «Ще»'s groups, by their labels. */
+function groups(page: Page): Locator {
+  return page.locator(".more-group h3");
+}
+
+/** «← Ще» over a section opened from «Ще». */
+function toMore(page: Page): Locator {
+  return page.getByRole("button", { name: "Назад до «Ще»" });
 }
 
 /**
@@ -144,11 +161,6 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
   );
   await expect(page.getByText("РОБОЧЕ МІСЦЕ ПРОДАВЦЯ")).toHaveCount(0);
   await expect(page.getByText("/ магазин")).toHaveCount(0);
-  // One store: nothing to change to.
-  await expect(
-    page.getByRole("button", { name: "Змінити магазин" }),
-  ).toHaveCount(0);
-
   await expect(row(page)).toHaveText([
     "Продаж",
     "Товар",
@@ -164,70 +176,56 @@ test("a seller's sections are the counter's four and «Ще» in one row at 360 
       document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
-  // The rest is not shown until asked for.
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+  // The rest is on «Ще»'s own screen (navigation task list, P0-4).
   await expect(underMore(page)).toHaveCount(0);
 
   // Two taps to any other section, by the same rights as before.
   await moreButton(page).click();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
-  await expect(underMore(page)).toHaveText(["Каталог"]);
+  await expect(
+    page.getByRole("heading", { name: "Ще", exact: true }),
+  ).toBeVisible();
+  await expect(moreButton(page)).toHaveClass(/active/);
+  await expect(moreButton(page)).toHaveAttribute("aria-current", "true");
+  await expect(row(page).first()).not.toHaveAttribute("aria-current");
+  await expect(groups(page)).toHaveText(["Товар і каталог"]);
+  await expect(underMore(page)).toHaveText(["Перевірка каталогу"]);
+  // One store: nothing to change to.
+  await expect(
+    page.getByRole("button", { name: "Змінити магазин" }),
+  ).toHaveCount(0);
   await oneLine(page);
-  await underMore(page).filter({ hasText: "Каталог" }).click();
+  await underMore(page).filter({ hasText: "Перевірка каталогу" }).click();
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
-  // Chosen, «Ще» closes, keeps the focus the chosen button had, and marks
-  // that the section open is one of its own.
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+  // The focus stays on «Ще», never lost to the page.
   await expect(moreButton(page)).toBeFocused();
+  // «Ще» marks the section open from it; «← Ще» over its heading leads back
+  // to the groups, and so does «Ще» pressed again.
   await expect(moreButton(page)).toHaveClass(/active/);
   await expect(moreButton(page)).toHaveAttribute("aria-current", "true");
   await expect(row(page).first()).toHaveClass(/quiet/);
-  await expect(row(page).first()).not.toHaveAttribute("aria-current");
-  await moreButton(page).click();
-  await expect(underMore(page).filter({ hasText: "Каталог" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  // Pressed again, it closes on the same section.
-  await moreButton(page).click();
-  await expect(underMore(page)).toHaveCount(0);
+  await toMore(page).click();
+  await expect(
+    page.getByRole("heading", { name: "Ще", exact: true }),
+  ).toBeVisible();
+  await expect(moreButton(page)).toBeFocused();
+  await underMore(page).filter({ hasText: "Перевірка каталогу" }).click();
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
+  await moreButton(page).click();
+  await expect(
+    page.getByRole("heading", { name: "Ще", exact: true }),
+  ).toBeVisible();
 
   // One of the counter's, from the row: «Ще» is no longer marked.
-  await moreButton(page).click();
   await row(page).filter({ hasText: "Каса" }).click();
   await expect(page.getByRole("heading", { name: "Каса" })).toBeVisible();
   await expect(moreButton(page)).toHaveClass(/quiet/);
   await expect(moreButton(page)).not.toHaveAttribute("aria-current");
   await expect(underMore(page)).toHaveCount(0);
-
-  // Opened over the till and left by one of its own, «Ще» does not open
-  // again when the till is back (review, 2026-10-16).
-  await row(page).filter({ hasText: "Продаж" }).click();
-  await moreButton(page).click();
-  await underMore(page).filter({ hasText: "Каталог" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Перевірка каталогу" }),
-  ).toBeVisible();
-  await row(page).filter({ hasText: "Продаж" }).click();
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
-  await expect(underMore(page)).toHaveCount(0);
-  // Nor when a section open under it is pressed again.
-  await moreButton(page).click();
-  await underMore(page).filter({ hasText: "Каталог" }).click();
-  await moreButton(page).click();
-  await underMore(page).filter({ hasText: "Каталог" }).click();
-  await expect(underMore(page)).toHaveCount(0);
-  await row(page).filter({ hasText: "Клієнти" }).click();
-  await row(page).filter({ hasText: "Продаж" }).click();
-  await moreButton(page).click();
-  await row(page).filter({ hasText: "Продаж" }).click();
-  await expect(underMore(page)).toHaveCount(0);
+  await expect(toMore(page)).toHaveCount(0);
 });
 
 test("selling and taking back are one section's two ways: «Продати | Повернути» under the heading, a tap each, «Продаж» marked in the row on both (navigation task list, P0-1)", async ({
@@ -405,31 +403,6 @@ test("the goods are «Товар»: the stock under «Прийшов товар�
   expect(await taps()).toBe(2);
   await expect(goods).toHaveAttribute("aria-current", "page");
   await expect(moreButton(page)).not.toHaveAttribute("aria-current", "true");
-  // «Ще» opened over the tiles closes with a tile, and coming back by
-  // «← Товар» does not open it again (review, 2026-10-26).
-  await goods.click();
-  await moreButton(page).click();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
-  await damaged.click();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
-  await back.click();
-  await expect(
-    page.getByRole("heading", { name: "Товар", exact: true }),
-  ).toBeVisible();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
-  await expect(underMore(page)).toHaveCount(0);
-  // Nor opened over «Брак»: back by «← Товар», and the tile again.
-  await damaged.click();
-  await moreButton(page).click();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "true");
-  await back.click();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
-  await damaged.click();
-  await expect(
-    page.getByRole("heading", { name: "Брак", exact: true }),
-  ).toBeVisible();
-  await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
-  await expect(underMore(page)).toHaveCount(0);
   await back.click();
   // «← Товар» read as where it goes, never as the row's «Товар».
   await damaged.click();
@@ -561,7 +534,7 @@ for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
 ] as const)
-  test(`in the ${name} theme «Продати | Повернути», «Борги | Замовлення» and «Товар»'s tiles read at 4.5:1, nothing wider than the phone (navigation task list, P0-1, P0-2, P0-3)`, async ({
+  test(`in the ${name} theme «Продати | Повернути», «Борги | Замовлення», «Товар»'s tiles and «Ще» read at 4.5:1, nothing wider than the phone (navigation task list, P0-1…P0-4)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
@@ -609,6 +582,18 @@ for (const [name, theme] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/goods-${name}.png` });
+    // «Ще»'s screen the same (P0-4): its groups' labels and its rows.
+    await more(page);
+    for (const part of [
+      groups(page).first(),
+      underMore(page).first(),
+      page.getByRole("heading", { name: "Ще", exact: true }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/more-${name}.png` });
     await row(page).filter({ hasText: "Продаж" }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
@@ -651,7 +636,7 @@ test("whoever neither sells nor takes money but reads orders opens on them: «Т
     "page",
   );
   await more(page);
-  await expect(underMore(page)).toHaveText(["Каталог"]);
+  await expect(underMore(page)).toHaveText(["Перевірка каталогу"]);
 });
 
 test("whoever may not read orders has no «Замовлення», opens on the first section shown — «Товар» — and is never told of the rule (orders task list, P2-1); nor debts: no «Клієнти» (navigation task list, P0-2, P0-3)", async ({
@@ -692,7 +677,7 @@ test("whoever may not read orders has no «Замовлення», opens on the 
   await expect(row(page)).toHaveText(["Товар", /^Ще( ⚠)?$/]);
   await expect(row(page).first()).toHaveAttribute("aria-current", "page");
   await more(page);
-  await expect(underMore(page)).toHaveText(["Каталог"]);
+  await expect(underMore(page)).toHaveText(["Перевірка каталогу"]);
 });
 
 test("whoever sells but may not read orders has «Клієнти» open the debts alone: no «Замовлення», no switch, no «+» — an order made is an order seen (owner decision after #139, 2026-10-26; navigation task list, P0-2)", async ({
@@ -738,7 +723,7 @@ test("whoever sells but may not read orders has «Клієнти» open the debt
   await expect(underMore(page)).not.toHaveCount(0);
 });
 
-test("the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's sections", async ({
+test("the owner's row is the same four and «Ще», on one line at 360 px; «Ще» holds the owner's sections by groups, «← Ще» back from each (navigation task list, P0-4)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -752,19 +737,97 @@ test("the owner's row is the same four and «Ще», on one line at 360 px; «Щ
     /^Ще( ⚠)?$/,
   ]);
   await oneLine(page);
+  // «Ще» by groups, a row each, named as its screen's heading (navigation
+  // task list, P0-4); «Приймання», «Залишки» and «Брак» are «Товар»'s
+  // (P0-3).
   await more(page);
-  for (const name of ["Звіт", "Накладні", "Постачальникам", "Моделі"])
-    await expect(
-      underMore(page).filter({ hasText: new RegExp(`^${name}$`) }),
-    ).toHaveCount(1);
-  // «Приймання», «Залишки» and «Брак» are «Товар»'s (P0-3).
-  for (const name of ["Приймання", "Залишки", "Брак"])
-    await expect(
-      underMore(page).filter({ hasText: new RegExp(`^${name}$`) }),
-    ).toHaveCount(0);
+  await expect(groups(page)).toHaveText([
+    "Гроші",
+    "Постачальники",
+    "Товар і каталог",
+    "Мережа",
+  ]);
+  await expect(underMore(page)).toHaveText([
+    "Звіт про продажі",
+    "Накладні",
+    "Постачальникам",
+    "Перевірка каталогу",
+    "Моделі",
+    "Початкові залишки",
+    "Магазини",
+    /^Резервні копії( ⚠)?$/,
+  ]);
+  // 52 px or more each, its label whole; scrolled, never wider than the
+  // phone.
+  const list = await page.getByRole("navigation", { name: "Ще" }).boundingBox();
+  for (const button of await moreRows(page).all()) {
+    const box = await button.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(52);
+    // The whole width, its chevron at the edge (review of the screens).
+    expect(Math.round(box?.width ?? -1)).toBe(Math.round(list?.width ?? -2));
+    expect(
+      await button.evaluate(
+        (element) => element.scrollWidth - element.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  // Two stores: «Змінити магазин» last, after the groups, a quiet line;
+  // none in the header.
   await expect(
-    underMore(page).filter({ hasText: /^Резервні копії/ }),
-  ).toHaveCount(1);
+    page.locator(".more-screen").getByRole("button").last(),
+  ).toHaveText("Змінити магазин");
+  await expect(page.locator(".store-line").getByRole("button")).toHaveCount(0);
+  await page.screenshot({
+    path: "test-results/more-owner.png",
+    fullPage: true,
+  });
+  // From its sections, «← Ще» back to the groups.
+  for (const name of [
+    "Звіт про продажі",
+    "Накладні",
+    "Постачальникам",
+    "Перевірка каталогу",
+    "Моделі",
+    "Початкові залишки",
+    "Магазини",
+    "Резервні копії",
+  ]) {
+    await underMore(page).filter({ hasText: name }).click();
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+    await toMore(page).click();
+    await expect(
+      page.getByRole("heading", { name: "Ще", exact: true }),
+    ).toBeVisible();
+  }
+});
+
+test("a manager's «Ще» is money, suppliers, goods and catalogue, with no network (navigation task list, P0-4)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(
+    launch(fixture.network_centre_manager_telegram_user_id, "Марта"),
+  );
+  await openStore(page, "Центр CENTRE");
+  await more(page);
+  await expect(groups(page)).toHaveText([
+    "Гроші",
+    "Постачальники",
+    "Товар і каталог",
+  ]);
+  await expect(underMore(page)).toHaveText([
+    "Звіт про продажі",
+    "Накладні",
+    "Постачальникам",
+    "Перевірка каталогу",
+    "Моделі",
+    "Початкові залишки",
+  ]);
 });
 
 /** The till's warehouses, read while the server does not answer. */

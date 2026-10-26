@@ -11,6 +11,8 @@ import type {
   Trouble,
   TroubleKind,
 } from "./types";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 
 /**
  * The server's backups, read for whoever holds `backup:view`
@@ -72,13 +74,18 @@ function size(bytes: number | null): string {
 export function Backups({
   token,
   scopeKey,
+  back,
 }: {
   token: string;
   scopeKey: string;
+  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
+   * list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const backups = useBackups(token, scopeKey, true);
   return (
     <section>
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Резервні копії</h2>
         <button

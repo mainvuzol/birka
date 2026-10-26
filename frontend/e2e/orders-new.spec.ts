@@ -547,7 +547,7 @@ test("a model with no price: its field empty and focused, the panel's sum a dash
   await expect(price).toBeFocused();
   await expect(
     line.getByText(
-      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у «Залишках».",
+      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у «Товарі».",
     ),
   ).toBeVisible();
   await carrier(page, "Міст");

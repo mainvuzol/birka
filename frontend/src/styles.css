@@ -259,7 +259,7 @@ label .hint {
   font-weight: 400;
 }
 .toolbar,
-nav:not(.sections),
+nav:not(.sections, .more-list),
 .actions,
 .fields {
   display: flex;
@@ -276,13 +276,14 @@ nav:not(.sections),
 nav {
   margin-top: 20px;
 }
-nav:not(.sections) {
+nav:not(.sections, .more-list) {
   justify-content: flex-start;
 }
 /* The sections (redesign P1-6): the counter's work and «Ще» in one row of
-   48 px targets, one line at 360 px; «Ще» opens every other below it. On a
-   narrower screen, or a larger text, a label is cut short rather than push
-   the page sideways (review, 2026-10-16). */
+   48 px targets, one line at 360 px; «Ще» opens its own screen of every
+   other (navigation task list, P0-4). On a narrower screen, or a larger
+   text, a label is cut short rather than push the page sideways (review,
+   2026-10-16). */
 nav.sections .row {
   display: flex;
   gap: 4px;
@@ -294,15 +295,6 @@ nav.sections .row button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-nav.sections .more {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-}
-nav.sections .more[hidden] {
-  display: none;
 }
 .actions {
   flex-wrap: wrap;
@@ -425,7 +417,7 @@ button.active {
   .fields {
     gap: 10px;
   }
-  nav:not(.sections) button {
+  nav:not(.sections, .more-list) button {
     flex: 1;
     padding: 12px 8px;
     font-size: 14px;
@@ -437,7 +429,7 @@ button.active {
     width: 100%;
   }
 }
-nav:not(.sections) {
+nav:not(.sections, .more-list) {
   flex-wrap: wrap;
 }
 .catalog-raw {
@@ -2079,5 +2071,37 @@ html {
 }
 .goods-part .back + h2,
 .goods-part .back + .toolbar {
+  margin-top: 4px;
+}
+/* «Ще», a screen of its own (navigation task list, P0-4): groups under a
+   13 px label, a row each in the lists' rhythm — `.sale-row`, 56 px, a
+   chevron — and «Змінити магазин» last, a quiet line. */
+.more-group h3 {
+  margin: 18px 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.more-screen h2 + nav .more-group:first-child h3 {
+  margin-top: 6px;
+}
+.more-label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.more-change {
+  width: 100%;
+  margin-top: 22px;
+}
+/* «← Ще», a quiet line over a section's heading, as «← Товар». */
+.back.to-more {
+  min-height: 44px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  font-weight: 650;
+}
+.back.to-more + .toolbar {
   margin-top: 4px;
 }

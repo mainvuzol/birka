@@ -544,7 +544,7 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   ).toBeVisible();
   // Everything else is locked while one sale's outcome is unknown.
   await expect(
-    page.getByRole("button", { name: "Змінити магазин" }),
+    page.getByRole("button", { name: "Клієнти", exact: true }),
   ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Товар", exact: true }),
@@ -562,7 +562,7 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   // The journal replays the attempt it wrote down, under its own key.
   expect(keys[0]).toBe(keys[1]);
   await expect(
-    page.getByRole("button", { name: "Змінити магазин" }),
+    page.getByRole("button", { name: "Товар", exact: true }),
   ).toBeEnabled();
 });
 

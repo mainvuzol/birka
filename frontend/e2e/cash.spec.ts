@@ -1,4 +1,12 @@
-import { test, expect, fillLine, more, openStore, tapSize } from "./fixtures";
+import {
+  changeStore,
+  test,
+  expect,
+  fillLine,
+  more,
+  openStore,
+  tapSize,
+} from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -191,7 +199,7 @@ function dayOf(day: string): string {
 }
 
 /** Every tab but «Каса», as a phone held for a reason shows them. */
-const otherTabs = ["Продаж", "Клієнти"];
+const otherTabs = ["Продаж", "Товар", "Клієнти"];
 
 test.describe("«Оля»'s day at «Каса»", () => {
   // One day, in order: what they sell is what they count, and what they
@@ -464,6 +472,13 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByRole("button", { name: "Каса", exact: true }),
     ).toBeEnabled();
+    // «Ще» opens, never held; its rows and «Змінити магазин» are
+    // (navigation task list, P0-4).
+    const rows = page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button");
+    await expect(rows).not.toHaveCount(0);
+    for (const row of await rows.all()) await expect(row).toBeDisabled();
     await expect(
       page.getByRole("button", { name: "Змінити магазин" }),
     ).toBeDisabled();
@@ -483,7 +498,6 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByText("Причину записано. Власник отримає повідомлення."),
     ).toBeVisible();
-    await more(page);
     for (const name of otherTabs)
       await expect(
         page.getByRole("button", { name, exact: true }),
@@ -926,7 +940,7 @@ test("a refusal read in one store's «Каса» does not follow into another st
   const said =
     "Зміну способу оплати не записано. Цю операцію записано до того, як застосунок почав рахувати касу: її спосіб оплати не змінюють.";
   await expect(page.getByRole("alert")).toHaveText(said);
-  await page.getByRole("button", { name: "Змінити магазин" }).click();
+  await changeStore(page);
   await openStore(page, /^Ринок MARKET/);
   await expect(
     page.getByText(/^Не вдалося прочитати збережену операцію каси/),

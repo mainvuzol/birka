@@ -578,6 +578,13 @@ test("a split the list does not state asks who counted, and a warehouse with his
       /уже був рух товару, тому початковий залишок туди внести не можна/,
     ),
   ).toBeVisible();
+  // Where the missing goods go in, as the row names it now (owner decision
+  // after #142, 2026-10-26).
+  await expect(
+    approval.getByText(
+      /Відхиліть цей список, а відсутній товар прийміть через «Товар» › «Прийшов товар»\.$/,
+    ),
+  ).toBeVisible();
 
   await approval.getByRole("button", { name: "Відхилити список" }).click();
   await approval.getByLabel("Чому відхиляємо").fill("склад уже працює");
@@ -669,7 +676,7 @@ test("approving is for whoever may approve, and the section for whoever handles 
   await openStore(page, "Основний MAIN");
   await more(page);
   await expect(
-    page.getByRole("button", { name: "Каталог", exact: true }),
+    page.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Початкові залишки" }),
