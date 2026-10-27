@@ -4577,3 +4577,34 @@ How it is carried out, not decided by the owner:
 - **Nothing new on the phone's disk,** and no new words.
 
 Built on 2026-10-27; see the [report](navigation-redesign-5-report.md).
+
+## Owner decision — 2026-10-27 (the design «Усе на бірці» becomes the direction)
+
+Decided in chat on 2026-10-27: the concept and design «Усе на бірці»,
+shown on 2026-10-22, become Birka's main design.
+`redesign/design-direction.md` now describes it; the direction of
+2026-10-11 is kept as `redesign/design-direction-2026-10-11.md`; the
+concept's spec, tokens and icons are in `redesign/concept-all-on-the-tag/`.
+- **Adopted:** the idea and its stub «Корінець»; seven principles; the
+  tabs by role — «Сьогодні · Продаж · Замовлення · Гроші · Ще» for the
+  owner and managers, «Продаж · Замовлення · Каса · Ще» for sellers (the
+  concept's Q-12) — with «Внесок» on the till; the lime thread on
+  greyboard and ink (Q-2, as shown; the olive not taken); Fira Sans Extra
+  Condensed for titles, money and sizes, the system face for text; crisp
+  radii and the tag silhouette; the components, the Telegram rules, the
+  voice, and screens S01–S29 as look and behaviour.
+- **Not decided by it:** the concept's proposals that change rules, data
+  or behaviour — Q-1 (the owner opens on «Сьогодні» and picks a store at
+  her first store action), Q-3 to Q-11, and Q-13 (an English interface).
+  Until the owner answers, each is built as its «if no»
+  (`redesign/design-direction.md` §9): the door question as now, no
+  customer link on orders, no capture from chats, no channel, no wants,
+  no payment plan, no count of days at the post office, «,00» everywhere,
+  no message from the bot, only «Окремо від «Разом»» on «Гроші», Ukrainian
+  only.
+- **Work under way:** what was built under the 2026-10-11 direction stays
+  until a new task list redoes it. Of the bottom menu's task list
+  (`redesign/2026-10-26-redesign-tz-navigation.md`), P0-5 (the basket
+  kept, built 2026-10-27) stays, and P1-2, P2-2, P2-3 fit the new
+  design; P0-6, P1-1 and P2-1 are not built as written — a task list
+  against the new direction takes their place.
