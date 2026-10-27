@@ -4,8 +4,9 @@ Baseline: `379cc15` (#145, on main), and the two task lists for «Усе на
 бірці» ([the frame](redesign/2026-10-27-redesign-tz-all-on-the-tag.md),
 [the sections](redesign/2026-10-27-redesign-tz-all-on-the-tag-sections.md)),
 which land with this work.
-Status: built and proven by its journeys and mutants; CI run locally
-(below). Not yet tried on a real phone.
+Status: built, reviewed and proven: the whole CI run locally passed at
+`435e54e`, and 9 of 9 ways of breaking it caught. Not yet tried on a real
+phone.
 Branch: `feat/no-rule-refusals`. Tasks: the frame's P2-1; of the sections'
 P1-2, the guard against a carried tap alone.
 Chosen: business-rules.md, "Chosen in chat — 2026-10-28"; every question
@@ -113,7 +114,18 @@ found, all addressed before the first commit:
 
 - [`output/verification/2026-10-28-all-on-the-tag-quick-wins/`](../../output/verification/2026-10-28-all-on-the-tag-quick-wins/):
   `mutants.txt`.
-- CI: CILOCAL
+- **CI, run locally at `435e54e`**
+  ([summary](../../output/verification/2026-10-28-all-on-the-tag-quick-wins-ci-local/summary.md)),
+  on the host's Node 24.18, every job with TZ=UTC: every job passed, the
+  backend with its declared gap.
+  - backend: 3 468 on PostgreSQL 17; the 19 backup tests on PostgreSQL
+    16.2, 18 passed, 1 skipped (age);
+  - e2e: 676 journeys;
+  - hot path: worst p95 92.0 ms (the search by six sellers) and 70.0 ms
+    (`POST /sales`, the same coat by six sellers), within 300 and 500;
+  - frontend: eslint and tsc clean, the build; `npm audit` 0;
+  - python-audit: 43 packages, 0 known vulnerabilities;
+  - restore drill and edge passed.
 
 ## Not covered here
 
