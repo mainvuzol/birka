@@ -1,0 +1,352 @@
+/* Birka demo tokens — GENERATED from spec/tokens.json by work/foundation/gen.py. Do not edit by hand.
+   Light values on bare :root; dark under the guarded media query and again under [data-theme="dark"].
+   Presenter "Thread: Lime | Olive" (spec §5.1, Q-2): [data-thread="olive"] swaps only thread / on-thread,
+   primary / on-primary and chosen / on-chosen. */
+
+:root {
+  color-scheme: light;
+  --paper: #ECEDE7;
+  --card: #FFFFFF;
+  --fold: #F4F5F0;
+  --ink: #15170F;
+  --pencil: #52564C;
+  --edge: #83877A;
+  --hairline: #D2D4CB;
+  --perforation: #9A9E91;
+  --inverse: #15170F;
+  --on-inverse: #F4F5F0;
+  --inverse-pencil: #B3B7A8;
+  --inverse-edge: #15170F;
+  --thread: #C6EF3E;
+  --on-thread: #15170F;
+  --thread-alt: #B9C86E;
+  --on-thread-alt: #15170F;
+  --primary: #15170F;
+  --on-primary: #C6EF3E;
+  --chosen: #15170F;
+  --on-chosen: #C6EF3E;
+  --link: #15170F;
+  --focus: #15170F;
+  --paid: #0D6A44;
+  --paid-bg: #DDF1E5;
+  --on-paid: #FFFFFF;
+  --success: #0D6A44;
+  --success-bg: #DDF1E5;
+  --on-success: #FFFFFF;
+  --owed: #A1380E;
+  --owed-bg: #FBE8DE;
+  --on-owed: #FFFFFF;
+  --warning: #7A5200;
+  --warning-bg: #FAEECB;
+  --on-warning: #FFFFFF;
+  --transit: #1C54A2;
+  --transit-bg: #E1EBFA;
+  --on-transit: #FFFFFF;
+  --online: #5B3BC4;
+  --online-bg: #ECE6FC;
+  --on-online: #FFFFFF;
+  --offline: #3E4238;
+  --offline-bg: #E5E7DF;
+  --on-offline: #FFFFFF;
+  --damaged: #8C2968;
+  --damaged-bg: #F6E3EF;
+  --on-damaged: #FFFFFF;
+  --danger: #B42318;
+  --danger-bg: #FDE7E4;
+  --on-danger: #FFFFFF;
+  --skeleton: #E2E4DC;
+  --skeleton-hi: #F0F1EC;
+  --tg-popup-bg: #FFFFFF;
+  --tg-popup-text: #000000;
+  --tg-popup-hint: #6D7277;
+  --tg-popup-button: #1F6CB0;
+  --tg-popup-destructive: #C62828;
+  --tg-chat-bg: #DCE4E8;
+  --tg-bubble-in: #FFFFFF;
+  --tg-bubble-text: #000000;
+  --tg-bubble-meta: #64696E;
+  --tg-menu-btn: #1F6CB0;
+  --on-tg-menu-btn: #FFFFFF;
+  --scrim: rgba(13,14,10,0.40);
+  --shadow-0: none;
+  --shadow-1: 0 1px 0 rgba(21,23,15,0.06);
+  --shadow-2: 0 -6px 24px rgba(21,23,15,0.14);
+  --shadow-3: 0 8px 24px rgba(21,23,15,0.16);
+  --shadow-1-drop: drop-shadow(0 1px 0 rgba(21,23,15,0.06));
+  --tag-outline: var(--hairline);
+  --thread-line: var(--ink);
+  --match-bg: var(--inverse);
+  --match-fg: var(--thread);
+  --suggest: var(--ink);
+
+  /* type families (§5.5) */
+  --font-display: "Fira Sans Extra Condensed", "Fira Sans Condensed", "Arial Narrow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-text: "Fira Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+
+  /* space scale (§5.6) */
+  --sp-0: 0px;
+  --sp-2: 2px;
+  --sp-4: 4px;
+  --sp-6: 6px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-20: 20px;
+  --sp-24: 24px;
+  --sp-32: 32px;
+  --sp-40: 40px;
+  --sp-48: 48px;
+  --sp-64: 64px;
+  --gutter: 16px;
+
+  /* radii (§5.6) */
+  --r-none: 0px;
+  --r-xs: 3px;
+  --r-s: 4px;
+  --r-m: 6px;
+  --r-l: 8px;
+  --r-tg: 10px;
+  --r-sheet: 16px;
+  --r-round: 999px;
+
+  /* sizes (§5.6) */
+  --touch: 44px;
+  --h-tg-header: 56px;
+  --h-tabbar: 64px;
+  --h-main-button: 50px;
+  --pad-bottom-bar: 8px;
+  --h-search: 52px;
+  --h-segmented: 44px;
+  --size-cell: 60px;
+  --h-pay: 56px;
+  --h-primary: 52px;
+  --h-verb: 44px;
+  --h-row: 64px;
+  --h-tag: 76px;
+  --h-pill: 48px;
+  --h-key: 60px;
+  --avatar: 40px;
+  --avatar-l: 48px;
+  --eyelet: 8px;
+  --eyelet-hero: 12px;
+  --icon: 24px;
+  --icon-s: 20px;
+  --icon-xs: 16px;
+  --h-sticker: 28px;
+  --badge: 18px;
+  --content-max: 560px;
+  --chamfer-tag: 10px;
+  --chamfer-hero: 14px;
+
+  /* motion (§5.8) */
+  --dur-instant: 0ms;
+  --dur-press: 80ms;
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-tear: 220ms;
+  --dur-sheetIn: 240ms;
+  --dur-sheetOut: 180ms;
+  --dur-knot: 300ms;
+  --dur-blink: 400ms;
+  --dur-tieOffCap: 600ms;
+  --dur-spinnerTurn: 900ms;
+  --dur-toast: 4000ms;
+  --dur-undo: 5000ms;
+  --dur-keptRecheck: 20000ms;
+  --dur-stillSending: 3000ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* z-order (§5.7) */
+  --z-base: 0;
+  --z-stickyHeader: 10;
+  --z-tray: 20;
+  --z-tabBar: 30;
+  --z-capturePill: 35;
+  --z-sheet: 40;
+  --z-toast: 50;
+  --z-popup: 60;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0D0E0A;
+    --card: #181A14;
+    --fold: #22251D;
+    --ink: #F1F2EA;
+    --pencil: #A5A99B;
+    --edge: #737869;
+    --hairline: #30342A;
+    --perforation: #5C6054;
+    --inverse: #262B1E;
+    --on-inverse: #F1F2EA;
+    --inverse-pencil: #B4B8A8;
+    --inverse-edge: #7E8570;
+    --thread: #C6EF3E;
+    --on-thread: #15170F;
+    --thread-alt: #B9C86E;
+    --on-thread-alt: #15170F;
+    --primary: #C6EF3E;
+    --on-primary: #15170F;
+    --chosen: #C6EF3E;
+    --on-chosen: #15170F;
+    --link: #C6EF3E;
+    --focus: #C6EF3E;
+    --paid: #6CD8A3;
+    --paid-bg: #10301F;
+    --on-paid: #0D0E0A;
+    --success: #6CD8A3;
+    --success-bg: #10301F;
+    --on-success: #0D0E0A;
+    --owed: #FF9D6E;
+    --owed-bg: #3A1D10;
+    --on-owed: #0D0E0A;
+    --warning: #F2C451;
+    --warning-bg: #33280A;
+    --on-warning: #0D0E0A;
+    --transit: #86B5FF;
+    --transit-bg: #13243F;
+    --on-transit: #0D0E0A;
+    --online: #BAA5FF;
+    --online-bg: #261D47;
+    --on-online: #0D0E0A;
+    --offline: #C8CBBE;
+    --offline-bg: #262920;
+    --on-offline: #0D0E0A;
+    --damaged: #F28CCA;
+    --damaged-bg: #3B162F;
+    --on-damaged: #0D0E0A;
+    --danger: #FF8B80;
+    --danger-bg: #3D1512;
+    --on-danger: #0D0E0A;
+    --skeleton: #22251D;
+    --skeleton-hi: #2B2F25;
+    --tg-popup-bg: #1E2832;
+    --tg-popup-text: #F5F7FA;
+    --tg-popup-hint: #9AA6B2;
+    --tg-popup-button: #6AB2F2;
+    --tg-popup-destructive: #FF7A7A;
+    --tg-chat-bg: #0E1621;
+    --tg-bubble-in: #182533;
+    --tg-bubble-text: #F5F7FA;
+    --tg-bubble-meta: #8DA0B3;
+    --tg-menu-btn: #2F6EA5;
+    --on-tg-menu-btn: #FFFFFF;
+    --scrim: rgba(0,0,0,0.60);
+    --shadow-0: none;
+    --shadow-1: none;
+    --shadow-2: 0 -6px 24px rgba(0,0,0,0.50);
+    --shadow-3: 0 8px 24px rgba(0,0,0,0.50);
+    --shadow-1-drop: none;
+    --tag-outline: var(--card);
+    --thread-line: var(--thread);
+    --match-bg: var(--thread);
+    --match-fg: var(--on-thread);
+    --suggest: var(--thread);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0D0E0A;
+  --card: #181A14;
+  --fold: #22251D;
+  --ink: #F1F2EA;
+  --pencil: #A5A99B;
+  --edge: #737869;
+  --hairline: #30342A;
+  --perforation: #5C6054;
+  --inverse: #262B1E;
+  --on-inverse: #F1F2EA;
+  --inverse-pencil: #B4B8A8;
+  --inverse-edge: #7E8570;
+  --thread: #C6EF3E;
+  --on-thread: #15170F;
+  --thread-alt: #B9C86E;
+  --on-thread-alt: #15170F;
+  --primary: #C6EF3E;
+  --on-primary: #15170F;
+  --chosen: #C6EF3E;
+  --on-chosen: #15170F;
+  --link: #C6EF3E;
+  --focus: #C6EF3E;
+  --paid: #6CD8A3;
+  --paid-bg: #10301F;
+  --on-paid: #0D0E0A;
+  --success: #6CD8A3;
+  --success-bg: #10301F;
+  --on-success: #0D0E0A;
+  --owed: #FF9D6E;
+  --owed-bg: #3A1D10;
+  --on-owed: #0D0E0A;
+  --warning: #F2C451;
+  --warning-bg: #33280A;
+  --on-warning: #0D0E0A;
+  --transit: #86B5FF;
+  --transit-bg: #13243F;
+  --on-transit: #0D0E0A;
+  --online: #BAA5FF;
+  --online-bg: #261D47;
+  --on-online: #0D0E0A;
+  --offline: #C8CBBE;
+  --offline-bg: #262920;
+  --on-offline: #0D0E0A;
+  --damaged: #F28CCA;
+  --damaged-bg: #3B162F;
+  --on-damaged: #0D0E0A;
+  --danger: #FF8B80;
+  --danger-bg: #3D1512;
+  --on-danger: #0D0E0A;
+  --skeleton: #22251D;
+  --skeleton-hi: #2B2F25;
+  --tg-popup-bg: #1E2832;
+  --tg-popup-text: #F5F7FA;
+  --tg-popup-hint: #9AA6B2;
+  --tg-popup-button: #6AB2F2;
+  --tg-popup-destructive: #FF7A7A;
+  --tg-chat-bg: #0E1621;
+  --tg-bubble-in: #182533;
+  --tg-bubble-text: #F5F7FA;
+  --tg-bubble-meta: #8DA0B3;
+  --tg-menu-btn: #2F6EA5;
+  --on-tg-menu-btn: #FFFFFF;
+  --scrim: rgba(0,0,0,0.60);
+  --shadow-0: none;
+  --shadow-1: none;
+  --shadow-2: 0 -6px 24px rgba(0,0,0,0.50);
+  --shadow-3: 0 8px 24px rgba(0,0,0,0.50);
+  --shadow-1-drop: none;
+  --tag-outline: var(--card);
+  --thread-line: var(--thread);
+  --match-bg: var(--thread);
+  --match-fg: var(--on-thread);
+  --suggest: var(--thread);
+}
+
+/* Thread: Olive (owner check Q-2). Light: thread / on-primary / on-chosen become thread-alt. */
+:root[data-thread="olive"] {
+  --thread: var(--thread-alt);
+  --on-thread: var(--on-thread-alt);
+  --on-primary: var(--thread-alt);
+  --on-chosen: var(--thread-alt);
+}
+/* Dark: primary / chosen become thread-alt with ink labels. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-thread="olive"] {
+    --thread: var(--thread-alt);
+    --on-thread: var(--on-thread-alt);
+    --primary: var(--thread-alt);
+    --on-primary: var(--on-thread-alt);
+    --chosen: var(--thread-alt);
+    --on-chosen: var(--on-thread-alt);
+  }
+}
+:root[data-theme="dark"][data-thread="olive"] {
+  --thread: var(--thread-alt);
+  --on-thread: var(--on-thread-alt);
+  --primary: var(--thread-alt);
+  --on-primary: var(--on-thread-alt);
+  --chosen: var(--thread-alt);
+  --on-chosen: var(--on-thread-alt);
+}
