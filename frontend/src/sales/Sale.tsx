@@ -1428,11 +1428,10 @@ export function Sale({
                       </button>
                     </>
                   )}
+                  {/* The next step alone, never the rule («Усе на бірці»
+                      task list, P2-1). */}
                   {!mayCorrect && !mayReportMissing && (
-                    <p>
-                      Немає права виправляти залишок під час продажу. Покличте
-                      менеджера або зменшіть кількість.
-                    </p>
+                    <p>Покличте менеджера або зменшіть кількість.</p>
                   )}
                   {mayCorrect && !mayReportMissing && (
                     <p>

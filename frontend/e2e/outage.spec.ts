@@ -1,5 +1,6 @@
 import {
   changeStore,
+  confirmClose,
   test,
   expect,
   fillLine,
@@ -1959,7 +1960,7 @@ test.describe("9. what to do with money after the outage", () => {
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
-    await page.getByRole("button", { name: "Так, закрити" }).click();
+    await confirmClose(page);
     const reason = page.getByLabel("Чому не збігається? (обов’язково)");
     await expect(reason).toBeVisible();
     await page.getByRole("button", { name: "Продаж під час збою" }).click();
@@ -1990,7 +1991,7 @@ test.describe("9. what to do with money after the outage", () => {
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
-    await page.getByRole("button", { name: "Так, закрити" }).click();
+    await confirmClose(page);
     const banner = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Підрахунок ще не підтверджено" }),
     });
@@ -3018,6 +3019,251 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(goods).toHaveAttribute("aria-current", "page");
     await expect(goods).toBeDisabled();
     await expect(page.locator(".goods-part .back")).toBeDisabled();
+  });
+
+  for (const kept of [
+    {
+      name: "delivery",
+      scope: "receipt-pending",
+      path: "/inventory/receipts",
+      right: "inventory:receive",
+      body: {
+        location_id: ids.shared,
+        notes: null,
+        lines: [
+          {
+            product_variant_id: ids.variant,
+            size_id: ids.size,
+            quantity: 1,
+            acquisition_type: "PURCHASE",
+            unit_cost: "1000.00",
+          },
+        ],
+      },
+      check: "Перевірити результат приймання",
+    },
+    {
+      name: "stock correction",
+      scope: "adjustment-pending",
+      path: "/inventory/adjustments",
+      right: "inventory:view",
+      body: {
+        location_id: ids.shared,
+        product_variant_id: ids.variant,
+        size_id: ids.size,
+        note: null,
+        quantity_delta: -2,
+        reason_code: "LOST",
+        expected_quantity: null,
+      },
+      check: "Перевірити результат коригування",
+    },
+    {
+      name: "stocktake's count",
+      scope: "stocktake-count-pending",
+      path: `/stocktakes/${stocktake}/counts`,
+      right: "inventory:view",
+      body: {
+        stocktake_id: stocktake,
+        product_variant_id: ids.variant,
+        size_id: ids.size,
+        counted_quantity: 3,
+        expected_quantity: 5,
+      },
+      check: "Перевірити результат підрахунку",
+    },
+  ])
+    test(`a kept ${kept.name} of whoever may not open its screen stays kept over the till, checked by itself, never «Немає права» («Усе на бірці» task list, P2-1)`, async ({
+      page,
+    }) => {
+      const key = `birka:${kept.scope}:${ids.organization}:${ids.user}:${ids.store}`;
+      await seed(page, {
+        [key]: JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          since: new Date(Date.now() - 30 * 60_000).toISOString(),
+          body: { store_id: ids.store, command_id: randomUUID(), ...kept.body },
+        }),
+      });
+      await serve(page);
+      await on(page, "/me", async (route) => {
+        await route.fulfill({
+          json: {
+            ...me,
+            stores: me.stores.map((store) => ({
+              ...store,
+              permissions: store.permissions.filter(
+                (permission) => permission !== kept.right,
+              ),
+            })),
+          },
+        });
+      });
+      let sent = 0;
+      await on(page, kept.path, async (route) => {
+        sent += 1;
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Refused" },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      // Checked by itself, its banner over the till.
+      await expect.poll(() => sent).toBeGreaterThan(0);
+      await expect(
+        page.getByRole("button", { name: kept.check }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate((stored) => localStorage.getItem(stored), key),
+      ).not.toBeNull();
+      // The till beneath it, held, never the screen it was kept on.
+      await expect(
+        page.getByRole("heading", { name: "Продаж", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      ).toBeDisabled();
+      // Nothing of a screen's rule; a server that answers says it refused
+      // the command in its own words, as for a kept return (below).
+      await expect(page.getByText(/Немає права/)).toHaveCount(0);
+    });
+
+  test("a kept sale of whoever may not sell stays kept over another section, checked by itself, never the till nor «Немає права» («Усе на бірці» task list, P2-1)", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: keptSale("CASH") });
+    const server = await serve(page);
+    await on(page, "/me", async (route) => {
+      await route.fulfill({
+        json: {
+          ...me,
+          stores: me.stores.map((store) => ({
+            ...store,
+            permissions: store.permissions.filter(
+              (permission) => permission !== "sale:create",
+            ),
+          })),
+        },
+      });
+    });
+    let sent = 0;
+    server.sale = async (route) => {
+      sent += 1;
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Refused" },
+      });
+    };
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect.poll(() => sent).toBeGreaterThan(0);
+    await expect(
+      page.getByRole("button", { name: "Перевірити результат продажу" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate((stored) => localStorage.getItem(stored), saleKey),
+    ).not.toBeNull();
+    // A section of theirs beneath it, marked; never the till.
+    await expect(
+      page
+        .getByRole("navigation", { name: "Розділи" })
+        .locator("[aria-current=page]"),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+    ).toHaveCount(0);
+    await expect(page.getByText(/Немає права/)).toHaveCount(0);
+  });
+
+  test("a kept sale of whoever may not sell, answered already, settles in its words over a section of theirs, never the till («Усе на бірці» task list, P2-1)", async ({
+    page,
+  }) => {
+    const sale = randomUUID();
+    const kept = JSON.parse(keptSale("CASH")) as {
+      body: SaleBody;
+    } & Record<string, unknown>;
+    await seed(page, {
+      [saleKey]: JSON.stringify({ ...kept, acknowledged: true, saleId: sale }),
+    });
+    await serve(page);
+    await on(page, "/me", async (route) => {
+      await route.fulfill({
+        json: {
+          ...me,
+          stores: me.stores.map((store) => ({
+            ...store,
+            permissions: store.permissions.filter(
+              (permission) => permission !== "sale:create",
+            ),
+          })),
+        },
+      });
+    });
+    await on(page, `/sales/${sale}`, async (route) => {
+      await route.fulfill({ json: receiptOf(kept.body) });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано один раз" }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate((stored) => localStorage.getItem(stored), saleKey),
+      )
+      .toBeNull();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Розділи" })
+        .locator("[aria-current=page]"),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+    ).toHaveCount(0);
+  });
+
+  test("a kept stocktake's count of whoever may read the stock still opens on «Товар» («Усе на бірці» task list, P2-1)", async ({
+    page,
+  }) => {
+    const key = `birka:stocktake-count-pending:${ids.organization}:${ids.user}:${ids.store}`;
+    await seed(page, {
+      [key]: JSON.stringify({
+        key: randomUUID(),
+        ambiguous: true,
+        since: new Date(Date.now() - 30 * 60_000).toISOString(),
+        body: {
+          store_id: ids.store,
+          command_id: randomUUID(),
+          stocktake_id: stocktake,
+          product_variant_id: ids.variant,
+          size_id: ids.size,
+          counted_quantity: 3,
+          expected_quantity: 5,
+        },
+      }),
+    });
+    await serve(page);
+    await holding(page, ["inventory:view"]);
+    await on(page, `/stocktakes/${stocktake}/counts`, async (route) => {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Refused" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("button", { name: "Перевірити результат підрахунку" }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Розділи" })
+        .getByRole("button", { name: "Товар", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+    ).toHaveCount(0);
   });
 
   test("a kept delivery met by a conflict that proves nothing is still unconfirmed; refused for its form, recorded nowhere, it says so in the delivery's words (owner decision, 2026-10-25)", async ({

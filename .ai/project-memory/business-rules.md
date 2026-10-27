@@ -4608,3 +4608,37 @@ concept's spec, tokens and icons are in `redesign/concept-all-on-the-tag/`.
   kept, built 2026-10-27) stays, and P1-2, P2-2, P2-3 fit the new
   design; P0-6, P1-1 and P2-1 are not built as written — a task list
   against the new direction takes their place.
+
+## Chosen in chat — 2026-10-28 (the first work on «Усе на бірці»: two quick wins)
+
+Chosen in chat on 2026-10-28, once the two task lists for «Усе на бірці»
+were written (`redesign/2026-10-27-redesign-tz-all-on-the-tag.md`, the
+frame; `redesign/2026-10-27-redesign-tz-all-on-the-tag-sections.md`, the
+sections): the quick wins first — the frame's P2-1 and, of the sections'
+P1-2, only the guard against a carried tap on «Так, закрити»; every
+question to the owner built as its (а) until answered.
+- **No rule said anywhere (frame P2-1).** A kept sale, delivery, stock
+  correction or stocktake count turns to its own screen only for whoever
+  may open it — `sale:create`, `inventory:receive`, `inventory:view` — as
+  kept returns, payments and orders already did; anyone else sees its
+  banner over the section open, and the phone checks it by itself. A
+  section opened without its right shows nothing: the twelve sentences
+  that named a rule («Немає права оформлювати продаж.», «Звіт бачать
+  власник і менеджери.» and the rest) are gone. The till's shortfall,
+  where neither correction is allowed, says the next step alone:
+  «Покличте менеджера або зменшіть кількість.»
+- **Kept as they are:** «Немає доступу до перевірки каталогу. Зверніться
+  до менеджера.» (the catalogue's kept operation is checked on its own
+  screen, as the task list says); the words for the server's refusal of
+  a command, «Немає доступу до цієї операції або складу. Зверніться до
+  менеджера.», which say what the server answered; and «Цей розділ бачить
+  лише власник.» in the hint of «Резервні копії», said to the owner on the
+  owner's own screen, not a refusal.
+- **«Так, закрити» lets a double tap go (the quick win of sections P1-2).**
+  It is drawn where «Закрити касу» stood: a tap on it sooner than 0.7 s
+  after «Закрити касу» is taken as that tap's second half and does
+  nothing, as on the orders' screens; a key held down from «Закрити
+  касу» does not close it by its repeats; pressed once the sum is read, it
+  closes. The close is still four taps and the sum. The rest of P1-2 —
+  the keypad, the dock, the sheet with MainButton — waits for the frame's
+  components.

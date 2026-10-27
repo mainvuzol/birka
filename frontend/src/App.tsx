@@ -588,6 +588,19 @@ function Workspace({
   const saleKey = `birka:sale-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [catalogStorageError, setCatalogStorageError] = useState(false);
   const [saleStorageError, setSaleStorageError] = useState(false);
+  // «Товар»: the stock, «Прийшов товар» and «Брак», each by its own right
+  // (navigation task list, P0-3).
+  const canSeeStock = store.permissions.includes("inventory:view");
+  const canReceive = store.permissions.includes("inventory:receive");
+  const canSeeDamaged = store.permissions.includes("damaged:handle");
+  const canSeeGoods = canSeeStock || canReceive || canSeeDamaged;
+  // Read, not watched, as `canReturnNow`: a kept delivery, correction or
+  // count turns to its screen only for whoever may open it; anyone else's
+  // banner stands over any tab («Усе на бірці» task list, P2-1).
+  const canReceiveNow = useRef(canReceive);
+  canReceiveNow.current = canReceive;
+  const canSeeStockNow = useRef(canSeeStock);
+  canSeeStockNow.current = canSeeStock;
   const receiptKey = `birka:receipt-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [receiptStorageError, setReceiptStorageError] = useState(false);
   const receiptCommand = useReceiptCommand();
@@ -601,7 +614,7 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        setTab("receive");
+        if (canReceiveNow.current) setTab("receive");
         loadedFromDisk("receipt");
       }
     } catch {
@@ -624,7 +637,7 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        setTab("stock");
+        if (canSeeStockNow.current) setTab("stock");
         loadedFromDisk("adjustment");
       }
     } catch {
@@ -646,7 +659,7 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        setTab("stock");
+        if (canSeeStockNow.current) setTab("stock");
         loadedFromDisk("count");
       }
     } catch {
@@ -722,12 +735,6 @@ function Workspace({
   // Read, not watched, as `canReturnNow`.
   const canSeeOrdersNow = useRef(canSeeOrders);
   canSeeOrdersNow.current = canSeeOrders;
-  // «Товар»: the stock, «Прийшов товар» and «Брак», each by its own right
-  // (navigation task list, P0-3).
-  const canSeeStock = store.permissions.includes("inventory:view");
-  const canReceive = store.permissions.includes("inventory:receive");
-  const canSeeDamaged = store.permissions.includes("damaged:handle");
-  const canSeeGoods = canSeeStock || canReceive || canSeeDamaged;
   // Sales paid in parts: whoever sells that way takes the payments.
   const canSeeCredits = store.permissions.includes("sale:credit");
   // Read, not watched, as `canReturnNow` (credits task list, P2-1).
@@ -849,6 +856,11 @@ function Workspace({
   // Bumped to remount the till after a settled sale, so its basket and its
   // `command_id` do not survive an operation that turned out to be complete.
   const [saleEpoch, setSaleEpoch] = useState(0);
+  // Read, not watched, as `canReturnNow`: a kept sale turns to the till only
+  // for whoever may sell there («Усе на бірці» task list, P2-1).
+  const canSell = store.permissions.includes("sale:create");
+  const canSellNow = useRef(canSell);
+  canSellNow.current = canSell;
   useEffect(() => {
     try {
       const saved = loadSale(saleKey);
@@ -859,7 +871,7 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        setTab("sale");
+        if (canSellNow.current) setTab("sale");
         loadedFromDisk("sale");
       }
     } catch {
@@ -1038,20 +1050,22 @@ function Workspace({
     const attempt = saleCommand.pending;
     if (!attempt) return;
     void resolve(saleKey, token, attempt).then((outcome) => {
+      // Its words stand over any tab; the till is turned to only for
+      // whoever may sell («Усе на бірці» task list, P2-1).
       if (outcome.kind === "sold") {
         setSettled(outcome.sale);
         setSaleEpoch((epoch) => epoch + 1);
-        setTab("sale");
+        if (canSellNow.current) setTab("sale");
       } else if (outcome.kind === "nothing-sold") {
         setShelfSettled(true);
         setSaleEpoch((epoch) => epoch + 1);
-        setTab("sale");
+        if (canSellNow.current) setTab("sale");
       } else if (outcome.kind === "refused") {
         // Proven to have recorded nothing (ADR-0013 §1): the basket is
         // the seller's again, and the refusal says why and what to do.
         useSaleCommand.setState({ error: outcome.error });
         setSaleEpoch((epoch) => epoch + 1);
-        setTab("sale");
+        if (canSellNow.current) setTab("sale");
       }
     });
   }
@@ -2098,9 +2112,9 @@ function Workspace({
                 }
               : {})}
           />
-        ) : (
-          <p role="alert">Немає права оформлювати продаж.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "receive" ? (
         canReceive ? (
           <Receive
@@ -2126,9 +2140,9 @@ function Workspace({
               cashUnsettled
             }
           />
-        ) : (
-          <p role="alert">Немає права приймати товар.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "stock" ? (
         canSeeStock ? (
           <Stock
@@ -2150,9 +2164,9 @@ function Workspace({
             </div>
             {goodsTiles}
           </section>
-        ) : (
-          <p role="alert">Немає доступу до залишків.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "returns" ? (
         canReturn ? (
           <Returns
@@ -2245,9 +2259,9 @@ function Workspace({
             readOnly={!trading}
             back={toGoods}
           />
-        ) : (
-          <p role="alert">Немає доступу до розділу «Брак».</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "more" ? (
         <More
           groups={moreGroups}
@@ -2263,15 +2277,15 @@ function Workspace({
             blocked={blocked}
             back={moreBack}
           />
-        ) : (
-          <p role="alert">Немає доступу до початкових залишків.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "backups" ? (
         canSeeBackups ? (
           <Backups token={token} scopeKey={backupsKey} back={moreBack} />
-        ) : (
-          <p role="alert">Цей розділ бачить лише власник.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "suppliers" ? (
         canReturnToSupplier ? (
           <Suppliers
@@ -2282,9 +2296,9 @@ function Workspace({
             blocked={otherThanSuppliers}
             back={moreBack}
           />
-        ) : (
-          <p role="alert">Повертають постачальнику власник і менеджери.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "invoices" ? (
         canSeeInvoices ? (
           <Invoices
@@ -2298,9 +2312,9 @@ function Workspace({
             )}
             back={moreBack}
           />
-        ) : (
-          <p role="alert">Накладні ведуть власник і менеджери.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "models" ? (
         canCorrect && trading ? (
           <Models
@@ -2310,9 +2324,9 @@ function Workspace({
             blocked={otherThanCorrections}
             back={moreBack}
           />
-        ) : (
-          <p role="alert">Каталог виправляють власник і менеджери.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "cash" ? (
         canSeeCash ? (
           <Cash
@@ -2330,9 +2344,9 @@ function Workspace({
       ) : tab === "report" ? (
         canSeeReport ? (
           <SalesReport token={token} scopeKey={reportKey} back={moreBack} />
-        ) : (
-          <p role="alert">Звіт бачать власник і менеджери.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "stores" ? (
         canManageStores ? (
           <Stores
@@ -2343,9 +2357,9 @@ function Workspace({
             changed={storesChanged}
             back={moreBack}
           />
-        ) : (
-          <p role="alert">Цей розділ бачить лише власник мережі.</p>
-        )
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
       ) : tab === "catalog" ? (
         store.permissions.includes("catalog:confirm") ? (
           <Catalog

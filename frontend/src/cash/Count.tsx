@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { decimal, kopecks, money } from "@/orders/types";
-import { usePanelRoom } from "@/shared/panel";
+import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
 
 /**
@@ -10,7 +10,9 @@ import { Sum } from "@/shared/Sum";
  * the owner kept for this screen (2026-10-21, В1 (а)); and «Закрити касу»
  * in the panel under the thumb, confirmed there — «Каса», «Закрити касу»,
  * the sum, «Закрити касу», «Так, закрити». Nothing tells what the drawer
- * should hold (G32).
+ * should hold (G32). «Так, закрити» stands where «Закрити касу» stood, so a
+ * double tap's second half is let go: the sum is looked at before the close
+ * that cannot be changed («Усе на бірці» sections task list, P1-2).
  */
 export function Count({
   typed,
@@ -55,6 +57,9 @@ export function Count({
   // The panel's buttons change under the finger: the focus follows them.
   const closeButton = useRef<HTMLButtonElement>(null);
   const yes = useRef<HTMLButtonElement>(null);
+  // When «Закрити касу» was pressed: a tap on «Так, закрити» sooner than
+  // `CARRIED_TAP` after it was meant for «Закрити касу».
+  const askedAt = useRef(-Infinity);
   useEffect(() => {
     field.current?.focus();
   }, []);
@@ -136,8 +141,10 @@ export function Count({
               type="button"
               className="cash-panel-button"
               disabled={disabled || reading || cents === null}
-              onClick={() => {
-                if (cents !== null) setAsking(decimal(cents));
+              onClick={(event) => {
+                if (cents === null) return;
+                askedAt.current = event.timeStamp;
+                setAsking(decimal(cents));
               }}
             >
               Закрити касу
@@ -156,7 +163,13 @@ export function Count({
                 type="button"
                 className="cash-panel-button"
                 disabled={disabled || reading}
-                onClick={() => {
+                onKeyDown={(event) => {
+                  // A key held from «Закрити касу» repeats onto it: only a
+                  // fresh press closes.
+                  if (event.repeat) event.preventDefault();
+                }}
+                onClick={(event) => {
+                  if (event.timeStamp - askedAt.current < CARRIED_TAP) return;
                   void close(asking).then((settled) => {
                     if (settled === "done") return;
                     setAsking(null);

@@ -450,11 +450,13 @@ test("a seller without the correction permissions is offered neither", async ({
   await expect(
     page.getByRole("button", { name: "Продати стільки, скільки є" }),
   ).toHaveCount(0);
+  // The next step alone, never the rule («Усе на бірці» task list, P2-1).
   await expect(
-    page.getByText("Немає права виправляти залишок під час продажу", {
-      exact: false,
+    page.getByText("Покличте менеджера або зменшіть кількість.", {
+      exact: true,
     }),
   ).toBeVisible();
+  await expect(page.getByText(/Немає права/)).toHaveCount(0);
 });
 
 test("a reserved shortfall is not offered as correctable", async ({ page }) => {

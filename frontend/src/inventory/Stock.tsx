@@ -52,7 +52,7 @@ export function Stock({
   /** «Прийшов товар» and «Брак» under the heading, for whoever may open
    * them (navigation task list, P0-3). */
   tiles?: JSX.Element | null;
-}): JSX.Element {
+}): JSX.Element | null {
   const [locationId, setLocationId] = useState("");
   const [offset, setOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,7 +145,9 @@ export function Stock({
     }
   }
 
-  if (!allowed) return <p role="alert">Немає права переглядати залишки.</p>;
+  // Never opened without the right: nothing is said of the rule
+  // («Усе на бірці» task list, P2-1).
+  if (!allowed) return null;
 
   return (
     <section>
