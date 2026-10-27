@@ -22,6 +22,8 @@ import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
 import { PriceHint, priceText } from "./PriceHint";
 import { setPaper, setSoldBy, usePaper } from "./paper";
+import { forgetBasket, keepBasket, keptBasket } from "./basket";
+import type { Basket, Draft } from "./basket";
 import {
   PaperKind,
   PaperWhen,
@@ -54,30 +56,6 @@ const paperReserved =
 function asPrice(typed: string): string {
   const cents = kopecks(typed);
   return cents === null ? "" : decimal(cents);
-}
-
-interface Draft {
-  /** The line's own, whatever its size becomes: its key and its price field. */
-  id: string;
-  /** What is sent; its `unit_price` is the price typed, once it reads as one. */
-  line: SaleLine;
-  /** The price as typed in the line (redesign P0-3). */
-  price: string;
-  /** The model's price for this store, which the line starts from. */
-  suggested: string | null;
-  name: string;
-  size: string;
-  /** The balance the coat was picked from. */
-  stockSizeId: string;
-  /** That balance's size is not known (ADR-0005 §11). */
-  unknownStock: boolean;
-  /** When it was put in, its model was listed here with coats whose size is
-   * not known: the coat in hand may be one of those. */
-  unknownNearby: boolean;
-  /** Sold as "size not known": there is no size to clarify, nothing to find. */
-  unknownSize: boolean;
-  /** Its size was read off a coat held with its size not known. */
-  fromUnknown: boolean;
 }
 
 /**
@@ -127,6 +105,7 @@ export function Sale({
   returnSale,
   searchFirst = false,
   mode = null,
+  keptAt,
 }: {
   store: Store;
   token: string;
@@ -157,8 +136,42 @@ export function Sale({
    * (navigation task list, P0-1); none for anyone else.
    */
   mode?: JSX.Element | null;
+  /**
+   * Where this till's basket is kept while the till is left: the store and
+   * how many kept sales have settled (navigation task list, P0-5).
+   */
+  keptAt: string;
 }): JSX.Element {
-  const [locationId, setLocationId] = useState("");
+  // Paper mode: the switch and «Хто продав» outlive this screen (`./paper`);
+  // the paper's time is this sale's alone.
+  const paper = usePaper((state) => state.storeId === store.id);
+  const moved = usePaper((state) => state.moved);
+  // The basket kept while the till was left (navigation task list, P0-5).
+  // Empty, nothing is kept: paying in parts was the last customer's (review,
+  // 2026-10-27). The switch moved meanwhile, on another screen, however
+  // often: as the till's own would leave it — one built from paper, or any
+  // once the paper is off, is gone, never sent unmarked; one built unmarked,
+  // the paper now on, keeps its lines, not its shelf's answers
+  // (`turnPaper`).
+  const [kept] = useState<Basket | null>(() => {
+    const basket = keptBasket(keptAt);
+    if (basket === null || basket.draft.length === 0) return null;
+    if (basket.moved === moved) return basket;
+    return basket.paper || !paper
+      ? null
+      : {
+          ...basket,
+          paper,
+          moved,
+          found: {},
+          missing: {},
+          clarified: {},
+          shortfall: null,
+          present: "",
+          method: null,
+        };
+  });
+  const [locationId, setLocationId] = useState(kept?.locationId ?? "");
   // What the seller types to find a model (redesign P0-2).
   const [text, setText] = useState("");
   const query = useSettled(text);
@@ -169,19 +182,27 @@ export function Sale({
   const [focusPrice, setFocusPrice] = useState<string | null>(null);
   // «Новий продаж» puts the cursor in the search (P0-3).
   const [focusSearch, setFocusSearch] = useState(searchFirst);
-  const [draft, setDraft] = useState<Draft[]>([]);
-  const [commandId, setCommandId] = useState(() => crypto.randomUUID());
-  const [found, setFound] = useState<Record<number, number>>({});
-  const [missing, setMissing] = useState<Record<number, number>>({});
-  const [clarified, setClarified] = useState<Record<number, number>>({});
+  const [draft, setDraft] = useState<Draft[]>(kept?.draft ?? []);
+  const [commandId, setCommandId] = useState(
+    () => kept?.commandId ?? crypto.randomUUID(),
+  );
+  const [found, setFound] = useState<Record<number, number>>(kept?.found ?? {});
+  const [missing, setMissing] = useState<Record<number, number>>(
+    kept?.missing ?? {},
+  );
+  const [clarified, setClarified] = useState<Record<number, number>>(
+    kept?.clarified ?? {},
+  );
   // `location:variant` keys this till has learned hold the model with its
   // size not known — from the server refusing «товар на місці» because of it.
   const [heldUnknown, setHeldUnknown] = useState<ReadonlySet<string>>(
-    () => new Set(),
+    () => kept?.heldUnknown ?? new Set(),
   );
-  const [shortfall, setShortfall] = useState<Shortfall | null>(null);
+  const [shortfall, setShortfall] = useState<Shortfall | null>(
+    kept?.shortfall ?? null,
+  );
   const [refusal, setRefusal] = useState<unknown>(null);
-  const [present, setPresent] = useState("");
+  const [present, setPresent] = useState(kept?.present ?? "");
   const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
   // Lines dropped from the receipt's sale because nothing was on the shelf.
   const [dropped, setDropped] = useState<string[]>([]);
@@ -192,13 +213,43 @@ export function Sale({
   const [validation, setValidation] = useState("");
   // Paying in parts (owner decisions, 2026-10-01): the customer takes the
   // goods now, pays part and owes the rest to this store.
-  const [credit, setCredit] = useState<TermsInput>(noTerms);
+  const [credit, setCredit] = useState<TermsInput>(kept?.credit ?? noTerms);
   // The way the seller pressed. A shortfall's answers resend the same sale,
   // so they keep it and say it (ADR-0012 §B12); a changed basket forgets it.
-  const [method, setMethod] = useState<TillMethod | null>(null);
-  // Paper mode: the switch and «Хто продав» outlive this screen (`./paper`);
-  // the paper's time is this sale's alone.
-  const paper = usePaper((state) => state.storeId === store.id);
+  const [method, setMethod] = useState<TillMethod | null>(kept?.method ?? null);
+  // Kept as it changes: whatever the till is left by, the basket is there.
+  useEffect(() => {
+    keepBasket(keptAt, {
+      paper,
+      moved,
+      locationId,
+      draft,
+      commandId,
+      found,
+      missing,
+      clarified,
+      heldUnknown,
+      shortfall,
+      present,
+      credit,
+      method,
+    });
+  }, [
+    keptAt,
+    paper,
+    moved,
+    locationId,
+    draft,
+    commandId,
+    found,
+    missing,
+    clarified,
+    heldUnknown,
+    shortfall,
+    present,
+    credit,
+    method,
+  ]);
   const soldBy = usePaper((state) =>
     state.storeId === store.id ? state.soldBy : null,
   );
@@ -596,6 +647,9 @@ export function Sale({
       },
     });
     if (outcome.kind === "sold" || outcome.kind === "nothing-sold") {
+      // Answered: the basket kept is this sale's no more, whether or not the
+      // till is still open to say so (review, 2026-10-27).
+      forgetBasket();
       if (outcome.kind === "sold") {
         setReceipt(outcome.sale);
         setSentSizes(

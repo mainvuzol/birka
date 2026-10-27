@@ -4536,3 +4536,44 @@ for the owner's approval by the screens:
   прийміть через «Товар» › «Прийшов товар».».
 
 Built on 2026-10-26; see the [report](navigation-redesign-4-report.md).
+
+## Owner decision — 2026-10-26 (after #143 was merged)
+
+Asked when #143 was merged, each answer the option recommended:
+- **«Ще» by groups is approved as built,** with what was decided in building
+  it — «Ще» and «← Ще» held only while a first send is in flight, the
+  task list's «never held» written for a list opened over the screen; the
+  focus kept on «Ще»; «← Ще» read «Назад до «Ще»»; «Змінити магазин» kept
+  in the header of a store that cannot be worked in; rows of 56 px; «Каса»
+  into «Гроші» only with «Огляд».
+- **Next: the bottom menu's P0-5, the basket kept** while the till is left
+  and come back to, as the task list has it (В6 (а)); no new words.
+
+## The till's basket kept — built 2026-10-27
+
+The bottom menu's task list, P0-5, and the owner's В6 (а) (2026-10-26).
+How it is carried out, not decided by the owner:
+- **The basket stays while the till is left** — by a tab of the row,
+  «Повернути» or «Ще» — and comes back as it was: its lines, quantities and
+  prices, paying in parts, the answers about the shelf, the way pressed and
+  its `command_id`, together; the warehouse chosen with it.
+- **It is gone as before:** once a sale is recorded, and after «Новий
+  продаж»; with another store; on reload; and once a kept sale settles —
+  kept under the store and the count of settled kept sales, so the till
+  then opens empty and never takes the command of a sale already answered.
+  A sale answered forgets it at once, whether or not the till is open.
+- **An emptied basket keeps nothing:** paying in parts — a customer's name,
+  number and the part paid — was the last customer's.
+- **«Новий продаж» from a return's result and from «Борги»** opens the till
+  on the basket kept, its cursor in the search: the basket is kept until it
+  is sold or the store changed (В6 (а)). Asked of the owner.
+- **The paper mode is one series across the screens:** every move of its
+  switch is counted. A basket built from paper is gone once the switch
+  moved elsewhere — unticked, or unticked and ticked again — never sent
+  unmarked nor in another series; a basket built unmarked keeps its lines
+  when the paper was ticked elsewhere, not its answers about the shelf nor
+  its question, and is gone once it was unticked — as the till's own switch
+  does. The paper's day and time are asked again: a wrong one is permanent.
+- **Nothing new on the phone's disk,** and no new words.
+
+Built on 2026-10-27; see the [report](navigation-redesign-5-report.md).

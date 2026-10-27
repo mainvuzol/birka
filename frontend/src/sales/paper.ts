@@ -41,6 +41,13 @@ interface Paper {
    * (false); null until it is said.
    */
   firstDays: boolean | null;
+  /**
+   * Every tick and untick counted: the till's basket kept while it is left
+   * learns from it that the switch moved meanwhile, however often
+   * (navigation task list, P0-5; review, 2026-10-27). The store left clears
+   * the basket itself (`forgetBasket`).
+   */
+  moved: number;
 }
 
 const nobody = { refund: null, credit: null };
@@ -50,6 +57,7 @@ export const usePaper = create<Paper>(() => ({
   soldBy: null,
   takenBy: nobody,
   firstDays: null,
+  moved: 0,
 }));
 
 /**
@@ -63,12 +71,13 @@ export function setPaper(
   firstDays: boolean | null = null,
 ): void {
   if (on) backNoted();
-  usePaper.setState({
+  usePaper.setState((state) => ({
     storeId: on ? storeId : null,
     soldBy: null,
     takenBy: nobody,
     firstDays: on ? firstDays : null,
-  });
+    moved: state.moved + 1,
+  }));
 }
 
 /** Which paper the series is, said for the store in paper mode. */
