@@ -3,8 +3,10 @@ import {
   confirmClose,
   test,
   expect,
+  expectStub,
   fillLine,
   fromPaper,
+  more,
   openStore,
   section,
   tapSize,
@@ -1354,11 +1356,10 @@ test("6. a sale typed from paper carries the mark, says who sold and from where,
       `Продано під час збою · продавець: ${colleague} · за папером ${day}.${month}, 19:40`,
     ),
   ).toBeVisible();
-  await expect(
-    page.getByText(
-      "— оплату провели під час збою, на терміналі не проводьте ще раз",
-    ),
-  ).toBeVisible();
+  await expectStub(page, {
+    way: "Картка",
+    say: "Оплату провели під час збою, на терміналі не проводьте ще раз.",
+  });
   await expect(page.getByText(/Проведіть на терміналі/)).toHaveCount(0);
 
   // The next paper sale of the series: the mode and who sold stay, the
@@ -5104,5 +5105,260 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     expect(
       await page.evaluate((key) => localStorage.getItem(key), returnKey),
     ).toBeNull();
+  });
+});
+
+test.describe("11. the stub «Корінець»: every press says what became of it («Усе на бірці» task list, P0-2)", () => {
+  /** `POST /sales` held until the returned call, then answered as usual. */
+  function held(server: Server): () => void {
+    let release: (() => void) | undefined;
+    const answered = new Promise<void>((done) => {
+      release = done;
+    });
+    server.sale = async (route, body) => {
+      await answered;
+      await route.fulfill({ status: 201, json: receiptOf(body) });
+    };
+    return () => release?.();
+  }
+
+  /** «Подільський», where this person also reads «Звіт»: «Ще» holds it. */
+  async function withReport(page: Page): Promise<void> {
+    await on(page, "/me", async (route) => {
+      await route.fulfill({
+        json: {
+          ...me,
+          stores: me.stores.map((store) => ({
+            ...store,
+            permissions: [...store.permissions, "report:view_financial"],
+          })),
+        },
+      });
+    });
+  }
+
+  test("a slow answer: the pressed way turns its ring, the other two step back, and past 3 s «Ще надсилаємо…» over the dock (spec §6.5)", async ({
+    page,
+  }) => {
+    await page.clock.install();
+    const server = await serve(page);
+    const release = held(server);
+    await openTill(page);
+    await basket(page);
+    await pay(page, "Картка").click();
+    const card = pay(page, "Картка");
+    await expect(card).toHaveClass(/\bpressed\b/);
+    const ring = card.locator(".eyelet-spin");
+    await expect(ring).toHaveCount(1);
+    // A turn in 900 ms, and only on the button pressed.
+    await expect(ring).toHaveCSS("animation-name", "eyelet-spin");
+    await expect(ring).toHaveCSS("animation-duration", "0.9s");
+    await expect(page.locator(".eyelet-spin")).toHaveCount(1);
+    for (const way of ["Готівка", "Переказ"]) {
+      await expect(pay(page, way)).toBeDisabled();
+      await expect(pay(page, way)).toHaveClass(/\bstepped-back\b/);
+    }
+    // Nothing said before 3 s; then, so a slow answer is never taken for a
+    // press that did nothing.
+    await page.clock.runFor(2_900);
+    await expect(page.getByText("Ще надсилаємо…")).toHaveCount(0);
+    await page.clock.runFor(200);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Ще надсилаємо…" }),
+    ).toBeVisible();
+    release();
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано" }),
+    ).toBeVisible();
+    await expect(page.locator(".sending-line")).toHaveCount(0);
+    await expect(page.locator(".eyelet-spin")).toHaveCount(0);
+    expect(server.sales).toHaveLength(1);
+  });
+
+  test("the receipt is its stub torn off, in view with «Новий продаж» at 360 × 640: the way's sticker, what to do, the sum large, the goods under the perforation (spec S11)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await serve(page);
+    await openTill(page);
+    await basket(page);
+    await pay(page, "Картка").click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано" }),
+    ).toBeVisible();
+    const stub = page.locator(".receipt .stub");
+    await expect(stub).toHaveClass(/\bstub-recorded\b/);
+    await expect(stub.locator("> .eyelet")).toHaveClass(/\beyelet-filled\b/);
+    await expectStub(page, {
+      way: "Картка",
+      say: "Проведіть на терміналі",
+      sum: "3 000,00 грн",
+    });
+    // The way's glyph on its sticker; the sum never under 40 px.
+    await expect(stub.locator(".way-pill svg")).toHaveCount(1);
+    const size = await stub
+      .locator(".stub-sum .sum")
+      .evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+    expect(size).toBeGreaterThanOrEqual(40);
+    await expect(stub.locator(".perforation")).toHaveCount(1);
+    await expect(stub.locator(".line")).toHaveCount(1);
+    await expect(stub.locator(".line")).toContainText("1 × 3 000,00 грн");
+    for (const part of [
+      stub.locator(".way-pill"),
+      stub.locator(".stub-sum"),
+      page.getByRole("button", { name: "Новий продаж" }),
+    ])
+      await expect(part).toBeInViewport({ ratio: 1 });
+    // Not under the dock, which stays over the page's bottom.
+    const sum = await stub.locator(".stub-sum").boundingBox();
+    const dock = await page.locator(".result-dock").boundingBox();
+    if (!sum || !dock) throw new Error("not laid out");
+    expect(sum.y + sum.height).toBeLessThanOrEqual(dock.y);
+  });
+
+  test("a kept sale is its stub still attached on the till and a banner over «Ще», its check line telling when it last asked; answered, it tears off (spec S12)", async ({
+    page,
+  }) => {
+    await page.clock.install();
+    const server = await serve(page);
+    await withReport(page);
+    await openTill(page);
+    await basket(page);
+    await soldWithNoAnswer(page, server);
+    const kept = page.locator(".stub-notice .stub");
+    await expect(kept).toHaveClass(/\bstub-kept\b/);
+    await expect(kept.locator("> .eyelet")).toHaveClass(/\beyelet-dashed\b/);
+    await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
+    await expect(
+      kept.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(
+      kept.getByRole("button", { name: "Перевірити результат продажу" }),
+    ).toHaveClass(/\bquiet\b/);
+    // Not asked yet: no last check to tell.
+    const check = kept.locator(".check-line");
+    await expect(check).toHaveText("Перевіряємо кожні 20 с");
+    await page.clock.fastForward("00:10");
+    await expect.poll(() => server.readies).toBe(1);
+    const asked = /^Перевіряємо кожні 20 с · остання перевірка \d{2}:\d{2}:\d{2}$/;
+    await expect(check).toHaveText(asked);
+    const first = await check.innerText();
+    await page.clock.runFor("00:20");
+    await expect.poll(() => server.readies).toBe(2);
+    await expect(check).toHaveText(asked);
+    await expect(check).not.toHaveText(first);
+
+    // Checked again by its button: the stub stays, the ring on its check
+    // line; the dock says nothing — this is no first send.
+    let answer: (() => void) | undefined;
+    server.sale = async (route) => {
+      await new Promise<void>((done) => {
+        answer = done;
+      });
+      await route.abort("connectionreset");
+    };
+    await kept
+      .getByRole("button", { name: "Перевірити результат продажу" })
+      .click();
+    await expect(kept.locator(".check-line .eyelet-spin")).toHaveCount(1);
+    await expect(page.locator(".eyelet-spin")).toHaveCount(1);
+    await expect(page.locator("button.pressed, button.stepped-back")).toHaveCount(
+      0,
+    );
+    await page.clock.runFor(3_100);
+    await expect(page.locator(".sending-line")).toHaveCount(0);
+    await expect.poll(() => server.sales.length).toBe(2);
+    answer?.();
+    await expect(kept.locator(".check-line .eyelet-spin")).toHaveCount(0);
+    await expect(kept).toHaveClass(/\bstub-kept\b/);
+    await expect(check).toHaveText(asked);
+
+    // Over another screen, a banner with the same words; the button plain.
+    await more(page);
+    const banner = page.locator("section.banner-kept");
+    await expect(
+      banner.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(banner.locator(".check-line")).toHaveText(asked);
+    await expect(page.locator(".stub-kept")).toHaveCount(0);
+    await expect(
+      banner.getByRole("button", { name: "Перевірити результат продажу" }),
+    ).not.toHaveClass(/\bquiet\b/);
+    // The till is held while it waits, as before.
+    const till = page
+      .getByRole("navigation", { name: "Розділи" })
+      .getByRole("button", { name: "Продаж", exact: true });
+    await expect(till).toBeDisabled();
+
+    // The server back: the same sale resent by itself, and the till opened
+    // on its stub, torn off.
+    server.ready = "ok";
+    server.sale = async (route, body) => {
+      await route.fulfill({ status: 201, json: receiptOf(body) });
+    };
+    await page.clock.runFor("00:20");
+    await expect(till).toHaveAttribute("aria-current", "page");
+    // «Сервер знову відповідає» stays; no banner for the sale.
+    await expect(
+      page.locator("section.banner-kept, section.banner-recorded"),
+    ).toHaveCount(0);
+    const settled = page.locator(".stub-notice .stub");
+    await expect(
+      settled.getByRole("heading", { name: "Продаж записано один раз" }),
+    ).toBeVisible();
+    await expect(settled).toHaveClass(/\bstub-recorded\b/);
+    await expect(settled.locator("> .eyelet")).toHaveClass(/\beyelet-filled\b/);
+    expect(server.sales).toHaveLength(3);
+    for (const sale of server.sales)
+      expect(sale.key).toBe(server.sales[0]?.key);
+  });
+
+  test("where motion is reduced nothing turns or tears: the pressed way's ring stands still beside «Чекаємо на сервер», and the receipt comes as it is (spec §4)", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const server = await serve(page);
+    const release = held(server);
+    await openTill(page);
+    await basket(page);
+    await pay(page, "Готівка").click();
+    await expect(pay(page, "Готівка").locator(".eyelet-spin")).toHaveCSS(
+      "animation-name",
+      "none",
+    );
+    await expect(page.locator(".sending-line")).toHaveText(
+      "Чекаємо на сервер",
+    );
+    await expect(page.getByText("Чекаємо на сервер")).toBeVisible();
+    release();
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано" }),
+    ).toBeVisible();
+    for (const still of [".stub-recorded", ".recorded-ring", ".recorded-tick"])
+      await expect(page.locator(still).first()).toHaveCSS(
+        "animation-name",
+        "none",
+      );
+  });
+
+  test("the eyelet's ring is the app's only spinner: no other style turns a whole turn (spec §1)", async ({
+    page,
+  }) => {
+    await serve(page);
+    await openTill(page);
+    const turning = await page.evaluate(() => {
+      const names: string[] = [];
+      const walk = (rules: CSSRuleList): void => {
+        for (const rule of Array.from(rules))
+          if (rule instanceof CSSKeyframesRule) {
+            if (/rotate\(-?(1turn|360deg)\)/.test(rule.cssText))
+              names.push(rule.name);
+          } else if (rule instanceof CSSGroupingRule) walk(rule.cssRules);
+      };
+      for (const sheet of Array.from(document.styleSheets))
+        walk(sheet.cssRules);
+      return names;
+    });
+    expect(turning).toEqual(["eyelet-spin"]);
   });
 });

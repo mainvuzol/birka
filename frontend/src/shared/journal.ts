@@ -93,6 +93,12 @@ export interface JournalState<Body> {
    * 2026-10-19).
    */
   misses: number;
+  /**
+   * The attempt being sent was never sent before: the press's own dock says
+   * it is being sent, and it is shown as kept only once its answer is lost
+   * («Усе на бірці» task list, P0-2).
+   */
+  firstSend: boolean;
 }
 
 export interface Journal<Body, Result> {
@@ -150,6 +156,7 @@ export function journal<
     busy: false,
     error: null,
     misses: 0,
+    firstSend: false,
   }));
   const scopeKey = new RegExp(`^birka:${scope}:(${uuid}):(${uuid}):(${uuid})$`);
 
@@ -232,7 +239,7 @@ export function journal<
         ...sinceOf(existing, current),
         misses: use.getState().misses,
       };
-      use.setState({ pending: current });
+      use.setState({ pending: current, firstSend: !previouslyAmbiguous });
       localStorage.setItem(storageKey, JSON.stringify(current));
       written = true;
       const result = await api<Result>(
@@ -268,7 +275,7 @@ export function journal<
       } else use.setState({ error, misses });
       return { kind: "unknown" };
     } finally {
-      use.setState({ busy: false });
+      use.setState({ busy: false, firstSend: false });
     }
   }
 

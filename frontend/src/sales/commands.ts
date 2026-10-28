@@ -106,6 +106,9 @@ interface SaleCommandState {
   /** The kept sale's checks answered «not found» this many times in a row
    * (owner decision, 2026-10-19; `@/shared/journal`). */
   misses: number;
+  /** The sale being sent was never sent before: the till's dock says so,
+   * and it is shown as kept only once its answer is lost (P0-2). */
+  firstSend: boolean;
   set: (pending: SaleAttempt | null) => void;
 }
 
@@ -114,6 +117,7 @@ export const useSaleCommand = create<SaleCommandState>((set) => ({
   busy: false,
   error: null,
   misses: 0,
+  firstSend: false,
   set: (pending) => {
     set({ pending, error: null, misses: pending?.misses ?? 0 });
   },
@@ -335,7 +339,10 @@ export async function submitSale(
       ...sinceOf(existing, current),
       misses: useSaleCommand.getState().misses,
     };
-    useSaleCommand.setState({ pending: current });
+    useSaleCommand.setState({
+      pending: current,
+      firstSend: !previouslyAmbiguous,
+    });
     localStorage.setItem(storageKey, JSON.stringify(current));
     written = true;
 
@@ -419,7 +426,7 @@ export async function submitSale(
     } else useSaleCommand.setState({ error, misses });
     return { kind: "unknown" };
   } finally {
-    useSaleCommand.setState({ busy: false });
+    useSaleCommand.setState({ busy: false, firstSend: false });
   }
 }
 

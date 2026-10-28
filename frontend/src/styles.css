@@ -2542,3 +2542,463 @@ html {
 .back.to-more + .toolbar {
   margin-top: 4px;
 }
+/* The eyelet (spec §1.4, §6.0; «Усе на бірці» task list, P0-2): filled
+   once recorded, dashed while kept, knotted once settled, a ring turning
+   while the server is asked — the app's only spinner, still and dashed
+   where motion is reduced, with its words beside it. */
+.eyelet {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.eyelet-8 {
+  width: 8px;
+  height: 8px;
+}
+.eyelet-20 {
+  width: 20px;
+  height: 20px;
+}
+.eyelet-filled {
+  background: var(--success);
+}
+.eyelet-dashed {
+  border: 1.5px dashed var(--warning);
+  background: var(--paper);
+}
+.eyelet-knot {
+  border: 1.5px solid var(--edge);
+  background: var(--paper);
+}
+.eyelet-loop {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 1px);
+  width: 14px;
+  height: 12px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--paid);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.eyelet-loop path {
+  stroke-dasharray: 1;
+  animation: knot-tie var(--dur-knot) var(--ease-standard) both;
+}
+@keyframes knot-tie {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+.eyelet-spin {
+  border: 1.5px solid var(--edge);
+  border-top-color: var(--ink);
+  animation: eyelet-spin var(--dur-spinnerTurn) linear infinite;
+}
+@keyframes eyelet-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.waiting-words {
+  display: none;
+}
+/* The check in its eyelet over a result (spec §6.30): the ring closes,
+   then the tick is drawn. */
+.recorded-mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: var(--success);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.recorded-ring {
+  stroke-dasharray: 77;
+  animation: mark-ring var(--dur-tear) var(--ease-standard) both;
+}
+.recorded-tick {
+  stroke-dasharray: 16;
+  animation: mark-tick var(--dur-fast) var(--ease-standard) var(--dur-base) both;
+}
+@keyframes mark-ring {
+  from {
+    stroke-dashoffset: 77;
+  }
+}
+@keyframes mark-tick {
+  from {
+    stroke-dashoffset: 16;
+  }
+}
+.result-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* The stub «Корінець» (spec §6.0, §6.30; P0-2): a slip on the card, kept
+   attached by a dashed perforation and two notches, or torn off along its
+   top once recorded. It tears as it comes, a kept one sways once; still
+   where motion is reduced. */
+.stub {
+  position: relative;
+  margin: 16px 0;
+  padding: 20px 16px 16px;
+  background-color: var(--card);
+  color: var(--ink);
+}
+.stub > .eyelet {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+}
+.stub > .eyelet-knot {
+  right: 32px;
+}
+.stub-kept {
+  background-image: radial-gradient(
+    circle at 3.5px 1.5px,
+    var(--warning) 1.5px,
+    transparent 1.6px
+  );
+  background-size: 7px 3px;
+  background-repeat: repeat-x;
+  box-shadow: var(--shadow-1);
+  animation: stub-sway 300ms var(--ease-standard);
+}
+.stub-kept::before,
+.stub-kept::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--paper);
+}
+.stub-kept::before {
+  left: -6px;
+}
+.stub-kept::after {
+  right: -6px;
+}
+.stub-recorded,
+.stub-settled {
+  clip-path: polygon(
+    0% 4px,
+    2.273% 0,
+    4.545% 4px,
+    6.818% 0,
+    9.091% 4px,
+    11.364% 0,
+    13.636% 4px,
+    15.909% 0,
+    18.182% 4px,
+    20.455% 0,
+    22.727% 4px,
+    25% 0,
+    27.273% 4px,
+    29.545% 0,
+    31.818% 4px,
+    34.091% 0,
+    36.364% 4px,
+    38.636% 0,
+    40.909% 4px,
+    43.182% 0,
+    45.455% 4px,
+    47.727% 0,
+    50% 4px,
+    52.273% 0,
+    54.545% 4px,
+    56.818% 0,
+    59.091% 4px,
+    61.364% 0,
+    63.636% 4px,
+    65.909% 0,
+    68.182% 4px,
+    70.455% 0,
+    72.727% 4px,
+    75% 0,
+    77.273% 4px,
+    79.545% 0,
+    81.818% 4px,
+    84.091% 0,
+    86.364% 4px,
+    88.636% 0,
+    90.909% 4px,
+    93.182% 0,
+    95.455% 4px,
+    97.727% 0,
+    100% 4px,
+    100% 100%,
+    0 100%
+  );
+  animation: stub-tear var(--dur-tear) var(--ease-standard);
+}
+@keyframes stub-tear {
+  40% {
+    transform: translateY(-8px) rotate(-1.5deg);
+  }
+}
+@keyframes stub-sway {
+  33% {
+    transform: rotate(1deg);
+  }
+  66% {
+    transform: rotate(-1deg);
+  }
+}
+/* Its parts: the way's sticker clear of the eyelet, what to do, the sum,
+   a perforation, and the goods in meta. */
+.stub-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 32px 10px 0;
+}
+.stub-head .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+.stub-say {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.stub-sum {
+  margin: 0;
+  line-height: 1.1;
+}
+.stub-sum .sum {
+  font-size: clamp(40px, 14vw, 56px);
+  letter-spacing: -0.01em;
+}
+.stub-line {
+  margin: 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+}
+.stub-line strong {
+  color: var(--ink);
+}
+/* «Пошкоджені» keeps the colour of «Брак» on the stub (returns P2-4). */
+.stub-line.damaged-line {
+  color: var(--damaged);
+}
+.stub h3 {
+  margin: 0 32px 8px 0;
+}
+.stub > p:last-child,
+.stub > button:last-child {
+  margin-bottom: 0;
+}
+.perforation {
+  height: 3px;
+  margin: 14px -16px;
+  background: radial-gradient(
+      circle at 3.5px 1.5px,
+      var(--perforation) 1.5px,
+      transparent 1.6px
+    )
+    0 0 / 7px 3px repeat-x;
+}
+/* A kept operation's stub on its own screen stands on the page itself. */
+.notice.stub-notice {
+  margin: 16px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* The phone checking what it keeps (spec S12): the ring and the line. */
+.check-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pencil);
+}
+/* A banner over the screen (spec §6.23; P0-2): its glyph, a title in
+   15/700 and the rest in meta, in the colours of what it is. */
+.banner {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: var(--warning-bg);
+  color: var(--ink);
+}
+.banner-glyph {
+  display: flex;
+  padding-top: 1px;
+  color: var(--warning);
+}
+.banner-body h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+}
+.banner-body p {
+  margin: 4px 0;
+  font-size: 14px;
+  line-height: 19px;
+}
+.banner-body > :first-child {
+  margin-top: 0;
+}
+.banner-body button {
+  margin-top: 8px;
+}
+.banner-back,
+.banner-recorded {
+  background: var(--paid-bg);
+}
+.banner-back .banner-glyph,
+.banner-recorded .banner-glyph {
+  color: var(--paid);
+}
+.banner-blocked {
+  background: var(--offline-bg);
+}
+.banner-blocked .banner-glyph {
+  color: var(--offline);
+}
+/* The dock while its press is sent (spec §6.5; P0-2): the pressed button
+   keeps its colour and turns its ring; the others step back, dashed. */
+.sending-line {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pencil);
+  pointer-events: none;
+}
+.sending-line > span {
+  padding: 4px 10px;
+  border-radius: var(--r-s);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+.sending-words {
+  display: inline-block;
+}
+button.pressed:disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 1;
+}
+button.pressed .eyelet-spin {
+  border-color: transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+}
+button.stepped-back:disabled {
+  opacity: 1;
+  background: var(--fold);
+  color: var(--pencil);
+  border: 1px dashed var(--edge);
+}
+@media (prefers-reduced-motion: reduce) {
+  .eyelet-spin {
+    animation: none;
+    border: 1.5px dashed var(--pencil);
+  }
+  button.pressed .eyelet-spin {
+    border: 1.5px dashed currentColor;
+  }
+  .waiting-words {
+    display: inline;
+  }
+  .recorded-ring,
+  .recorded-tick,
+  .eyelet-loop path,
+  .stub-kept,
+  .stub-recorded,
+  .stub-settled {
+    animation: none;
+  }
+}
+/* A result on the page itself (spec S11, S22; P0-2): its title with the
+   check, then its stub, and «Новий продаж» under the thumb. */
+section.receipt {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.stub-sum-what {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--pencil);
+}
+.stub .line {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 4px 0;
+  border: 0;
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--pencil);
+}
+.stub .line strong {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.result-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 18px -6px 0;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--card);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  box-shadow: var(--shadow-2);
+}
+.result-dock button {
+  width: 100%;
+  min-height: 52px;
+}
+/* A stub inside a card is a slip of the paper's colour, so it is seen on
+   the card in either theme. */
+section:not(.receipt):not(.stub-notice) .stub {
+  background-color: var(--paper);
+}
+.stub .hand-back {
+  margin: 0;
+}
+.stub .hand-back .badge {
+  margin: 0;
+}
+.stub .return-goods p {
+  margin: 4px 0;
+}

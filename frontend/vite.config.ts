@@ -30,8 +30,11 @@ export default defineConfig({
       output: {
         // The libraries (React, TanStack Query, zustand, the Telegram SDK)
         // in a file of their own, so the app's code alone stays under the
-        // 500 kB warning, and the icon set («Усе на бірці», P0-1) in
-        // another. Rolldown puts its own small runtime in a fourth.
+        // 500 kB warning, the icon set («Усе на бірці», P0-1) in another,
+        // and the design's parts every screen draws (P0-2) in a third —
+        // each of them importing nothing of the app's, so no file waits on
+        // another in a circle. Rolldown puts its own small runtime in a
+        // fifth.
         // The page names all of them and they load at start, as one file
         // did: no screen loads later, so none can fail to load on its own.
         // The image keeps every file the page names for a month after it is
@@ -40,6 +43,10 @@ export default defineConfig({
           groups: [
             { name: "vendor", test: /[\\/]node_modules[\\/]/ },
             { name: "icons", test: /[\\/]src[\\/]shared[\\/]icons\.ts$/ },
+            {
+              name: "parts",
+              test: /[\\/]src[\\/]shared[\\/](Banner|Eyelet|Icon|Sending|Sum)\.tsx$/,
+            },
           ],
         },
       },

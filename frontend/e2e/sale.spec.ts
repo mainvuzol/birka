@@ -1,4 +1,12 @@
-import { test, expect, fillLine, grn, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  expectStub,
+  fillLine,
+  grn,
+  openStore,
+  tapSize,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -154,7 +162,7 @@ test("a seller sells stock the ledger agrees with, and the sale is recorded once
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(page.getByText("Готівка · Разом 300,00 грн")).toBeVisible();
+  await expectStub(page, { way: "Готівка", say: "У касу", sum: "300,00 грн" });
   // Nothing is left in the journal to recover.
   await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   expect(
@@ -214,9 +222,11 @@ test("«товар на місці» answers a real refusal and completes the sa
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(
-    page.getByText(`Картка · Проведіть на терміналі ${grn(receipt.total)}`),
-  ).toBeVisible();
+  await expectStub(page, {
+    way: "Картка",
+    say: "Проведіть на терміналі",
+    sum: grn(receipt.total),
+  });
   // In coats, as the server counted them (redesign P1-1).
   await expect(
     page.getByText("Знайдене на полиці додано в облік: 1 шт."),
@@ -327,11 +337,11 @@ test("«на місці лише стільки» sends the count present, not t
     ),
   ).toBeVisible();
   // A transfer is checked before the goods go (ADR-0012 G38).
-  await expect(
-    page.getByText(
-      "Переказ · Разом 150,00 грн — перевірте, що переказ надійшов, перш ніж віддати товар",
-    ),
-  ).toBeVisible();
+  await expectStub(page, {
+    way: "Переказ",
+    say: "Перевірте, що переказ надійшов, перш ніж віддати товар",
+    sum: "150,00 грн",
+  });
   expect(sent.map((body) => body.missing_in_store)).toEqual([
     [],
     [{ line_index: 0, quantity: 1 }],
@@ -384,9 +394,11 @@ test("the three ways wait for a basket, and an answer recorded without a way nam
   await pickFirstProduct(page);
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Картка", exact: true }).click();
-  await expect(
-    page.getByText("Картка · Проведіть на терміналі 150,00 грн"),
-  ).toBeVisible();
+  await expectStub(page, {
+    way: "Картка",
+    say: "Проведіть на терміналі",
+    sum: "150,00 грн",
+  });
   expect(sent[0]?.payment_method).toBe("CARD");
 
   echo = false;
@@ -398,10 +410,8 @@ test("the three ways wait for a basket, and an answer recorded without a way nam
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Разом 150,00 грн", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Готівка ·|Картка ·|Переказ ·/)).toHaveCount(0);
+  // No way named: no sticker, nothing to do, «Разом» before the sum.
+  await expectStub(page, { way: null, say: null, sum: "Разом 150,00 грн" });
   expect(sent[1]?.payment_method).toBe("CASH");
 });
 

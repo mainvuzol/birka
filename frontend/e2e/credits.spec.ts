@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectStub,
   fillLine,
   fromPaper,
   grn,
@@ -278,9 +279,13 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Сплачено зараз 1 000,00 грн готівкою"),
-  ).toBeVisible();
+  // What is paid now leads the stub (spec S11; «Усе на бірці» task list,
+  // P0-2).
+  await expectStub(page, {
+    way: "Готівка",
+    say: "У касу",
+    sum: "Зараз 1 000,00 грн",
+  });
   await expect(page.getByText("Покупець винен 2 000,00 грн")).toBeVisible();
   // Where the next payments go: the row's button (owner decision after
   // #141, 2026-10-26).
@@ -341,8 +346,7 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(
     paid.getByRole("heading", { name: "Внесок записано" }),
   ).toBeVisible();
-  await expect(paid.locator(".way-pill")).toHaveText("Готівка");
-  await expect(paid.locator(".hand-back-sum")).toHaveText("500,00 грн");
+  await expectStub(paid, { way: "Готівка", say: "У касу", sum: "500,00 грн" });
   await expect(paid.locator(".paid-owed")).toHaveText(
     "Залишок боргу 1 500,00 грн",
   );
@@ -359,10 +363,11 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(page.getByLabel("Сума внеску, грн")).toHaveValue("1500,00");
   await paying(page).getByRole("button", { name: "Картка" }).click();
   // By card, what to do (owner decision, 2026-10-18, В1 (а)).
-  await expect(paid.locator(".way-pill")).toHaveText(
-    "Картка · Проведіть на терміналі",
-  );
-  await expect(paid.locator(".hand-back-sum")).toHaveText("1 500,00 грн");
+  await expectStub(paid, {
+    way: "Картка",
+    say: "Проведіть на терміналі",
+    sum: "1 500,00 грн",
+  });
   await expect(paid.locator(".paid-owed")).toHaveText(
     "Борг сплачено повністю.",
   );
@@ -485,12 +490,17 @@ test("a sale paid in parts whose answer is lost is resent with the same terms", 
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
 
   await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
-  await page
+  // Pressed — unless the phone, answered meanwhile by another read, checks
+  // it by itself first: either way, the same sale under the same key.
+  const settled = page.getByRole("heading", {
+    name: "Продаж записано один раз",
+  });
+  const pressed = page
     .getByRole("button", { name: "Перевірити результат продажу" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Продаж записано один раз" }),
-  ).toBeVisible();
+    .click()
+    .catch(() => undefined);
+  await Promise.race([pressed, settled.waitFor()]);
+  await expect(settled).toBeVisible();
   await expect(
     page.getByText(/Оплата частинами: сплачено зараз 1\s000,00\sгрн/),
   ).toBeVisible();
@@ -1248,9 +1258,10 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   await page.getByRole("button", { name: "Увесь залишок" }).click();
   await paying(page).getByRole("button", { name: "Переказ" }).click();
   const paid = page.locator(".paid-result");
-  await expect(paid.locator(".way-pill")).toHaveText(
-    "Переказ · Перевірте, що переказ надійшов",
-  );
+  await expectStub(paid, {
+    way: "Переказ",
+    say: "Перевірте, що переказ надійшов",
+  });
   await expect(paid.locator(".paid-owed")).toHaveText(
     "Борг сплачено повністю.",
   );
@@ -1765,18 +1776,10 @@ test("a written-off debt's reason is erased with its customer", async ({
 
 // The receipt of a sale paid in parts leads with what the customer pays now,
 // and how (redesign P0-6): the terminal is charged that, never the whole.
-for (const [way, top, wrong] of [
-  [
-    "Картка",
-    "Картка · Проведіть на терміналі 1 000,00 грн",
-    "Проведіть на терміналі 3 000,00 грн",
-  ],
-  ["Готівка", "Готівка · Зараз 1 000,00 грн", "Проведіть на терміналі"],
-  [
-    "Переказ",
-    "Переказ · Зараз 1 000,00 грн — перевірте, що переказ надійшов, перш ніж віддати товар",
-    "Проведіть на терміналі",
-  ],
+for (const [way, say] of [
+  ["Картка", "Проведіть на терміналі"],
+  ["Готівка", "У касу"],
+  ["Переказ", "Перевірте, що переказ надійшов, перш ніж віддати товар"],
 ] as const) {
   test(`paid in parts by «${way}», the receipt leads with the 1000 paid now, not the 3000`, async ({
     page,
@@ -1791,8 +1794,9 @@ for (const [way, top, wrong] of [
     await expect(
       page.getByRole("heading", { name: "Продаж записано" }),
     ).toBeVisible();
-    await expect(page.getByText(top)).toBeVisible();
-    await expect(page.getByText(wrong)).toHaveCount(0);
+    // The stub leads with what is paid now (spec S11; P0-2).
+    await expectStub(page, { way, say, sum: "Зараз 1 000,00 грн" });
+    await expect(page.getByText("3 000,00 грн")).toHaveCount(1);
     await expect(page.getByText("Разом за товар 3 000,00 грн")).toBeVisible();
     await expect(page.getByText("Покупець винен 2 000,00 грн")).toBeVisible();
   });
@@ -1813,10 +1817,10 @@ test("paid in parts by card typed from paper, the receipt says the card was char
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(
-    page.getByText(
-      "Картка · Зараз 1 000,00 грн — оплату провели під час збою, на терміналі не проводьте ще раз",
-    ),
-  ).toBeVisible();
+  await expectStub(page, {
+    way: "Картка",
+    say: "Оплату провели під час збою, на терміналі не проводьте ще раз.",
+    sum: "Зараз 1 000,00 грн",
+  });
   await expect(page.getByText("Проведіть на терміналі")).toHaveCount(0);
 });

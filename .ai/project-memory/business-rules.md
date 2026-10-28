@@ -4666,3 +4666,28 @@ no-break space.
   - an inline skeleton line breathes, while a block's place sweeps;
   - a changed sum shows the fold for 400 ms, never on first show and never
     with reduced motion.
+
+## Chosen in chat — 2026-10-28 (the stub of «Усе на бірці»)
+
+Chosen in chat on 2026-10-28, after #147: the frame's P0-2 next
+(`all-on-the-tag-stub-report.md`). No rule, figure or sum changes. The words
+are the task list's: «Готівка · Разом 1 850,00 грн» becomes the sticker
+«Готівка», «У касу» and the sum; «Перевіряємо продаж…» becomes «Продаж ще
+не підтверджено» with its ring; new are «Ще не підтверджено», «Ще
+надсилаємо…», «Перевіряємо кожні 20 с · остання перевірка 11:42:20»,
+«Чекаємо на сервер» and «У касу». Every other word stays as it was.
+- **Decided here:**
+  - an attempt's first send is its dock's to say — the pressed way's
+    ring, then «Ще надсилаємо…» — and it is shown as kept only once its
+    answer is lost, or while it is checked again;
+  - the check line shows only while the phone does check: the server not
+    answering, or a kept attempt being resent; its time is that of the
+    last question, kept in memory only;
+  - a kept operation confirmed later keeps its way's sticker but not what
+    to do, as the owner chose on 2026-10-07 and 2026-10-08;
+  - the knotted stub is a debt paid off in full;
+  - the till's form while a sale is kept stays drawn and disabled, as
+    before;
+  - a sale typed from paper says only what the paper says of its money,
+    and nothing of cash, as before;
+  - the toast waits for its first user (P0-6 or P1-4).

@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectStub,
   fromPaper,
   openStore,
   section,
@@ -395,10 +396,11 @@ test("the way not read says so, the seller's own goes, and the result's sum is t
     page.getByRole("heading", { name: "Повернення записано" }),
   ).toBeFocused();
   await expect(page.locator(".line-return")).toHaveCount(0);
-  await expect(
-    page.getByText("Переказ · Надішліть покупцю переказом"),
-  ).toBeVisible();
-  await expect(page.locator(".hand-back-sum")).toHaveText("2 950,00 грн");
+  await expectStub(page, {
+    way: "Переказ",
+    say: "Надішліть покупцю переказом",
+    sum: "2 950,00 грн",
+  });
   // Seen as the pill and the sum, heard as the one sentence.
   await expect(page.locator(".hand-back-sum")).toHaveAttribute(
     "aria-hidden",

@@ -357,3 +357,22 @@ export async function fromPaper(
     })
     .check();
 }
+
+/**
+ * A result's stub as it reads (spec S11, S22; «Усе на бірці» task list,
+ * P0-2): its way's sticker, what to do with the money, and the sum — with
+ * «Зараз» before what is paid now in parts, «Разом» where the answer names
+ * no way. `null`: not there at all.
+ */
+export async function expectStub(
+  scope: Page | Locator,
+  { way, say, sum }: { way: string | null; say: string | null; sum?: string },
+): Promise<void> {
+  const stub = scope.locator(".stub").first();
+  await expect(stub).toBeVisible();
+  if (way === null) await expect(stub.locator(".way-pill")).toHaveCount(0);
+  else await expect(stub.locator(".way-pill")).toHaveText(way);
+  if (say === null) await expect(stub.locator(".stub-say")).toHaveCount(0);
+  else await expect(stub.locator(".stub-say")).toHaveText(say);
+  if (sum !== undefined) await expect(stub.locator(".stub-sum")).toHaveText(sum);
+}

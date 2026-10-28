@@ -9,6 +9,8 @@ import { keptCashText, keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
+import { Banner } from "@/shared/Banner";
+import { Kept, Settled } from "@/shared/Kept";
 import {
   buzz,
   connectTelegram,
@@ -1620,15 +1622,30 @@ function Workspace({
     if (tab === "list" && !canSeeOrders && firstShown !== undefined)
       setTab((now) => (now === "list" ? firstShown : now));
   }, [tab, canSeeOrders, firstShown]);
+  // A first send is its dock's to say: an attempt is shown as kept only
+  // once its answer is lost, or while it is checked again («Усе на бірці»
+  // task list, P0-2).
+  const keptSale =
+    saleCommand.busy && saleCommand.firstSend ? null : saleCommand.pending;
+  const keptReturn =
+    returnCommand.busy && returnCommand.firstSend
+      ? null
+      : returnCommand.pending;
+  const keptCredit =
+    creditCommand.busy && creditCommand.firstSend
+      ? null
+      : creditCommand.pending;
   setScreen(tab);
   return (
     <>
       <StoreLine store={store.name} person={me.display_name} />
       {!trading && (
-        <p className="notice" role="status">
-          {stateText(store)}. Лише перегляд: продажі, приймання, повернення й
-          оплати в цьому магазині зупинено.
-        </p>
+        <Banner kind="blocked" role="status" as="div">
+          <p>
+            {stateText(store)}. Лише перегляд: продажі, приймання, повернення й
+            оплати в цьому магазині зупинено.
+          </p>
+        </Banner>
       )}
       <nav aria-label="Розділи" className="sections">
         <div className="row">
@@ -1696,26 +1713,27 @@ function Workspace({
           зверніться до менеджера.
         </p>
       )}
-      {saleCommand.pending && (
-        <section className="notice">
-          <h3>
-            {saleCommand.busy
-              ? "Перевіряємо продаж…"
-              : saleCommand.pending.emptyShelf
-                ? "Запис нестачі ще не підтверджено"
-                : "Продаж ще не підтверджено"}
-          </h3>
+      {/* Kept and confirmed: the stub on the till, a banner over any other
+          screen («Усе на бірці» task list, P0-2). */}
+      {keptSale && (
+        <Kept
+          own={tab === "sale"}
+          title={
+            keptSale.emptyShelf
+              ? "Запис нестачі ще не підтверджено"
+              : "Продаж ще не підтверджено"
+          }
+          busy={saleCommand.busy}
+          check={{ label: "Перевірити результат продажу", run: checkSale }}
+        >
           {/* Which customer it was: the attempt's own sum and way, never
               the server's total (redesign P1-4). */}
-          <p>{keptSaleText(saleCommand.pending)}</p>
-          <p>{keptText(saleCommand.pending.since, me.display_name)}</p>
-          <button disabled={saleCommand.busy} onClick={checkSale}>
-            Перевірити результат продажу
-          </button>
-        </section>
+          <p>{keptSaleText(keptSale)}</p>
+          <p>{keptText(keptSale.since, me.display_name)}</p>
+        </Kept>
       )}
       {settled && (
-        <section className="notice" role="status">
+        <Settled own={tab === "sale"}>
           <h3>Продаж записано один раз</h3>
           <SettledSale sale={settled} />
           {settled.credit && (
@@ -1738,10 +1756,10 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </section>
+        </Settled>
       )}
       {shelfSettled && (
-        <section className="notice" role="status">
+        <Banner kind="recorded" role="status">
           <h3>Продажу не було</h3>
           <p>
             Нічого з кошика не було на полиці — нестачу записано. Повторно вона
@@ -1754,7 +1772,7 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </section>
+        </Banner>
       )}
       {saleCommand.error !== null && (
         <p role="alert">
@@ -1800,24 +1818,21 @@ function Workspace({
           застосунку; зверніться до менеджера.
         </p>
       )}
-      {returnCommand.pending && (
-        <section className="notice">
-          <h3>
-            {returnCommand.busy
-              ? "Перевіряємо повернення…"
-              : "Повернення ще не підтверджено"}
-          </h3>
+      {keptReturn && (
+        <Kept
+          own={tab === "returns"}
+          title="Повернення ще не підтверджено"
+          busy={returnCommand.busy}
+          check={{ label: "Перевірити результат повернення", run: checkReturn }}
+        >
           {/* Which customer it was: the goods and the sum the attempt kept
               beside its body, never the server's (returns task list, P1-2). */}
-          <p>{keptReturnText(returnCommand.pending.body)}</p>
-          <p>{keptText(returnCommand.pending.since, me.display_name)}</p>
-          <button disabled={returnCommand.busy} onClick={checkReturn}>
-            Перевірити результат повернення
-          </button>
-        </section>
+          <p>{keptReturnText(keptReturn.body)}</p>
+          <p>{keptText(keptReturn.since, me.display_name)}</p>
+        </Kept>
       )}
       {returnSettled && (
-        <section className="notice" role="status">
+        <Settled own={tab === "returns"}>
           <ReturnResult
             store={store}
             token={token}
@@ -1832,7 +1847,7 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </section>
+        </Settled>
       )}
       {returnCommand.error !== null && (
         <p role="alert">
@@ -1845,30 +1860,31 @@ function Workspace({
           зверніться до менеджера.
         </p>
       )}
-      {creditCommand.pending && (
-        <section className="notice">
-          <h3>
-            {creditCommand.pending.body.kind === "payment"
-              ? creditCommand.busy
-                ? "Перевіряємо внесок…"
-                : "Внесок ще не підтверджено"
-              : creditCommand.busy
-                ? "Перевіряємо списання…"
-                : "Списання ще не підтверджено"}
-          </h3>
+      {keptCredit && (
+        <Kept
+          own={tab === "credits"}
+          title={
+            keptCredit.body.kind === "payment"
+              ? "Внесок ще не підтверджено"
+              : "Списання ще не підтверджено"
+          }
+          busy={creditCommand.busy}
+          check={{
+            label:
+              keptCredit.body.kind === "payment"
+                ? "Перевірити результат внеску"
+                : "Перевірити результат списання",
+            run: checkCredit,
+          }}
+        >
           {/* Which payment: its sum, way and goods, as the attempt kept them
               (credits task list, P1-2). */}
-          <p>{keptCreditText(creditCommand.pending.body)}</p>
-          <p>{keptText(creditCommand.pending.since, me.display_name)}</p>
-          <button disabled={creditCommand.busy} onClick={checkCredit}>
-            {creditCommand.pending.body.kind === "payment"
-              ? "Перевірити результат внеску"
-              : "Перевірити результат списання"}
-          </button>
-        </section>
+          <p>{keptCreditText(keptCredit.body)}</p>
+          <p>{keptText(keptCredit.since, me.display_name)}</p>
+        </Kept>
       )}
       {creditSettled && (
-        <section className="notice" role="status">
+        <Settled own={tab === "credits"}>
           {/* The payment's result, compact (credits task list, P1-2): a card
               is charged only if nobody did while the server did not answer
               (owner decision, 2026-10-07). */}
@@ -1909,7 +1925,7 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </section>
+        </Settled>
       )}
       {creditCommand.error !== null && (
         <p role="alert">
