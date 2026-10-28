@@ -1,0 +1,36 @@
+Mutants of the quick wins of «Усе на бірці» — 2026-10-28
+Branch feat/no-rule-refusals, uncommitted tree on 379cc15. One mutant at a
+time, the file restored from a copy and compared byte for byte after each;
+each run is the journey that names the guard, on the isolated E2E API.
+
+M1  Count.tsx: «Так, закрити» without the carried-tap check
+    (`if (event.timeStamp - askedAt.current < CARRIED_TAP) return;` removed)
+    cash-close.spec.ts "a double tap on «Закрити касу» never closes…"   1 failed  CAUGHT
+M2  App.tsx: a kept delivery turns to «Приймання» without inventory:receive
+    outage.spec.ts "a kept delivery of whoever may no longer open…"    1 failed  CAUGHT
+M3  App.tsx: a kept stocktake count turns to «Товар» without inventory:view
+    outage.spec.ts "a kept stocktake's count of whoever…"              1 failed  CAUGHT
+M4  App.tsx: a kept sale turns to the till without sale:create
+    outage.spec.ts "a kept sale of whoever may no longer sell…"
+      first run: 1 passed  SURVIVED — the journey asserted only what is
+      absent, and the till without its right now draws nothing, so the
+      turn left no trace. The journey now also asserts a section of the
+      person's beneath the banner, marked in «Розділи».
+      again:     1 failed  CAUGHT
+M5  Sale.tsx: the old shortfall words «Немає права виправляти залишок…»
+    sale.spec.ts "a seller without the correction permissions…"        1 failed  CAUGHT
+M6  App.tsx: a kept stock correction turns to «Товар» without inventory:view
+    outage.spec.ts "a kept stock correction of whoever…"               1 failed  CAUGHT
+
+
+After the independent review (a settled kept sale, a held key, a kept count
+that must still open its screen):
+M7  App.tsx: a kept sale settled as sold turns to the till without sale:create
+    outage.spec.ts "a kept sale of whoever may not sell, answered already…"  1 failed  CAUGHT
+M8  Count.tsx: «Так, закрити» takes a held key's repeats
+    (`if (event.repeat) event.preventDefault();` removed)
+    cash-close.spec.ts "Enter held on «Закрити касу» never closes…"   1 failed  CAUGHT
+M9  App.tsx: a kept stocktake count never turns to «Товар», the right held
+    outage.spec.ts "a kept stocktake's count of whoever may read the stock…"  1 failed  CAUGHT
+
+9 of 9 caught as the journeys stand.

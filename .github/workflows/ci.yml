@@ -511,9 +511,26 @@ jobs:
 
       - name: Install the app and its browser
         working-directory: frontend
+        # The journeys run on a Pixel 7's profile, and so does its text: left
+        # alone, Chromium here draws `system-ui` in DejaVu Sans, wider than
+        # any phone's font, and a line that fits a phone at 360 px wraps.
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fontconfig fonts-roboto
+          mkdir -p ~/.config/fontconfig
+          cat > ~/.config/fontconfig/fonts.conf <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+          <fontconfig>
+            <alias binding="strong"><family>sans</family><prefer><family>Roboto</family></prefer></alias>
+            <alias binding="strong"><family>sans-serif</family><prefer><family>Roboto</family></prefer></alias>
+          </fontconfig>
+          EOF
+          fc-cache -f
+          fc-match sans
+          fc-match sans | grep -q Roboto
+          fc-match sans-serif | grep -q Roboto
 
       - name: Every journey, against the real API
         working-directory: frontend

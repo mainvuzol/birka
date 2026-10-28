@@ -1,5 +1,6 @@
 import {
   changeStore,
+  confirmClose,
   test,
   expect,
   fillLine,
@@ -406,7 +407,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
       "Змінити потім не можна.",
     );
     const closed = page.waitForResponse(isClose);
-    await page.getByRole("button", { name: "Так, закрити" }).click();
+    await confirmClose(page);
     const response = await closed;
     expect(response.status()).toBe(201);
     const sent = response.request().postDataJSON() as Record<string, unknown>;
@@ -973,7 +974,7 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
   await page.getByLabel("Скільки готівки в касі зараз").fill("320");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
   const closed = page.waitForResponse(isClose);
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   expect((await closed).status()).toBe(201);
   await expect(
     page.getByRole("heading", { name: "Перший підрахунок записано" }),

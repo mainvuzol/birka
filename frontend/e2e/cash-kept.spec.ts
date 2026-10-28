@@ -1,4 +1,4 @@
-import { test, expect, grn, openStore } from "./fixtures";
+import { confirmClose, test, expect, grn, openStore } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -621,7 +621,7 @@ for (const [name, now, counted] of [
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
-    await page.getByRole("button", { name: "Так, закрити" }).click();
+    await confirmClose(page);
     await expect(
       page.getByRole("heading", { name: "Касу закрито" }),
     ).toBeVisible();
@@ -807,7 +807,7 @@ test("a count on its first sending says nothing of a server that did not answer,
   await page.getByLabel("Скільки готівки в касі зараз").fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
   const yes = page.getByRole("button", { name: "Так, закрити" });
-  await yes.click();
+  await confirmClose(page);
   await expect.poll(() => arrived).toBe(true);
   // Drawn with the command under way: no banner yet.
   await expect(yes).toBeDisabled();

@@ -50,6 +50,20 @@ export async function waitsFor(page: Page, heading: RegExp): Promise<void> {
   ).toContainText("Поки чекаємо, інші дії недоступні.");
 }
 
+/** «Так, закрити», pressed as a person presses it: the sum read first. It
+ * stands where «Закрити касу» stood, and a tap there sooner than 0.7 s after
+ * «Закрити касу» is let go as a double tap's second half («Усе на бірці»
+ * sections task list, P1-2). */
+export async function confirmClose(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 800);
+      }),
+  );
+  await page.getByRole("button", { name: "Так, закрити" }).click();
+}
+
 /** A sum of the server's, «1850.00», as the app writes it: «1 850,00 грн»,
  * thousands apart by a no-break space (sale-slice TZ, P2-1). */
 export function grn(sum: string): string {

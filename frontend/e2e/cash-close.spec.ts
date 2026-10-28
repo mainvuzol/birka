@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { confirmClose, test, expect, openStore } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -361,7 +361,7 @@ test("the count: the card reads the drawer again, the cursor is in the field, an
   expect(box.y + box.height).toBeGreaterThan(640 - 120);
   expect(box.height).toBeGreaterThanOrEqual(54);
   await close.click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   await expect.poll(() => server.closes.length).toBe(1);
   const sent = server.closes[0]?.postDataJSON() as Record<string, unknown>;
   expect(Object.keys(sent).sort()).toEqual([
@@ -449,7 +449,7 @@ test("the close's figures are the server's: «Мало бути» and «Пора
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   await expect(
     page.getByRole("heading", { name: "Касу закрито" }),
   ).toBeFocused();
@@ -502,7 +502,7 @@ test("to the kopeck is the accent's, and the first count is one figure", async (
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   const difference = page
     .getByRole("group", { name: "Закриття каси" })
     .locator(".cash-difference");
@@ -529,7 +529,7 @@ test("to the kopeck is the accent's, and the first count is one figure", async (
     .click();
   await field(page).fill("320");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   await expect(
     page.getByRole("heading", { name: "Перший підрахунок записано" }),
   ).toBeVisible();
@@ -566,7 +566,7 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   const difference = page
     .getByRole("group", { name: "Закриття каси" })
     .locator(".cash-difference");
@@ -636,7 +636,7 @@ test("Telegram buzzes once when the close is recorded and once when it is refuse
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   // Refused at its press: why, over the panel; the sum still there.
   await expect(page.getByRole("alert")).toHaveText(
     /^Касу сьогодні вже закрито о \d{2}:\d{2} · Олена\. Наступне закриття — завтра\.$/,
@@ -647,7 +647,7 @@ test("Telegram buzzes once when the close is recorded and once when it is refuse
   ]);
   state.answer = closeOf();
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   await expect(
     page.getByRole("heading", { name: "Касу закрито" }),
   ).toBeVisible();
@@ -777,7 +777,7 @@ for (const [name, theme, scheme] of [
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
-    await page.getByRole("button", { name: "Так, закрити" }).click();
+    await confirmClose(page);
     const figures = page.getByRole("group", { name: "Закриття каси" });
     for (const part of [
       figures.locator(".cash-sum").first(),
@@ -860,11 +860,88 @@ test("the count is four taps and the sum: «Каса», the card, «Закрит
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   await expect.poll(() => server.closes.length).toBe(1);
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
   ).toBe(4);
+});
+
+test("a double tap on «Закрити касу» never closes the drawer: its second half on «Так, закрити» is let go; pressed once the sum is read, it closes («Усе на бірці» sections task list, P1-2)", async ({
+  page,
+}) => {
+  const state = { now: drawer(), answer: closeOf() };
+  const server = await stubDrawer(page, state);
+  await cash(page);
+  await card(page).click();
+  await field(page).fill("2000");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
+  // The second half lands on «Так, закрити»: where «Закрити касу» stood
+  // when the question fits one line, lower when a wider font wraps it.
+  const box = await page
+    .getByRole("button", { name: "Так, закрити" })
+    .boundingBox();
+  if (!box) throw new Error("not laid out");
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 100);
+      }),
+  );
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 300);
+      }),
+  );
+  expect(server.closes).toHaveLength(0);
+  await expect(page.locator(".pay-panel .pay-total")).toHaveText(
+    "Закрити касу: у касі 2 000,00 грн?",
+  );
+  // Pressed as meant, once the sum is read: taken, once.
+  await confirmClose(page);
+  await expect(
+    page.getByRole("heading", { name: "Касу закрито" }),
+  ).toBeVisible();
+  expect(server.closes).toHaveLength(1);
+});
+
+test("Enter held on «Закрити касу» never closes the drawer: its repeats on «Так, закрити» are let go; pressed afresh, it closes («Усе на бірці» sections task list, P1-2)", async ({
+  page,
+}) => {
+  const state = { now: drawer(), answer: closeOf() };
+  const server = await stubDrawer(page, state);
+  await cash(page);
+  await card(page).click();
+  await field(page).fill("2000");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).focus();
+  await page.keyboard.down("Enter");
+  await expect(
+    page.getByRole("button", { name: "Так, закрити" }),
+  ).toBeFocused();
+  // Held past 0.7 s: the key repeats onto «Так, закрити».
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 800);
+      }),
+  );
+  await page.keyboard.down("Enter");
+  await page.keyboard.down("Enter");
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 300);
+      }),
+  );
+  expect(server.closes).toHaveLength(0);
+  await page.keyboard.up("Enter");
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Касу закрито" }),
+  ).toBeVisible();
+  expect(server.closes).toHaveLength(1);
 });
 
 test("with the server out of reach, the card never opens the count: «Каса» says to count for yourself and close later (G26)", async ({
@@ -973,7 +1050,7 @@ test("the owner's close holds the period's figures (G27)", async ({ page }) => {
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+  await confirmClose(page);
   const period = page.getByLabel("Готівка за період");
   await expect(period).toContainText("Готівкою отримано");
   await expect(period).toContainText("500,00 грн");

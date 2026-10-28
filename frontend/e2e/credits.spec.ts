@@ -745,7 +745,9 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
       ),
     ),
   ).toBeVisible();
-  await waitsFor(page, /повернення/);
+  // «Повернення ще не підтверджено», or «Перевіряємо повернення…» while the
+  // phone checks it by itself.
+  await waitsFor(page, /повернення/i);
   await page
     .getByRole("button", { name: "Перевірити результат повернення" })
     .click();
