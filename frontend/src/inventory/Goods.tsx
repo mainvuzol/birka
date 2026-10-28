@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import type { Store } from "@/orders/types";
 import { useDamagedUnits } from "@/damaged/units";
+import { Icon } from "@/shared/Icon";
 
 /** «2 очікують перевірки», «1 очікує перевірки», «нічого не чекає». */
 export function awaitingText(count: number): string {
@@ -47,13 +48,7 @@ export function GoodsTiles({
           disabled={disabled}
           onClick={receive}
         >
-          <svg
-            className="tile-icon receive-icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path d="M12 3.5v10M7.5 9.5l4.5 4.5 4.5-4.5M4 14v5.5h16V14" />
-          </svg>
+          <Icon name="arrived" className="tile-icon receive-icon" />
           <span className="tile-word">Прийшов товар</span>
         </button>
       )}
@@ -64,14 +59,7 @@ export function GoodsTiles({
           disabled={disabled}
           onClick={damaged}
         >
-          <svg
-            className="tile-icon damaged-icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path d="M3.5 4h8l9 9-7.5 7.5-9-9zM12.5 13.5l4 4M16.5 13.5l-4 4" />
-            <circle cx="7.5" cy="8" r="1.4" />
-          </svg>
+          <Icon name="damaged" className="tile-icon damaged-icon" />
           <span className="tile-word">Брак</span>
           {/* Read as two words, not run together; a flex item's gap is
               not a space. */}{" "}

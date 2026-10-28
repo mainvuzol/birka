@@ -197,14 +197,14 @@ export function shippingText(shipping: Shipping): string {
 /**
  * Each status's pill by what it means (orders task list, P2-3; owner
  * decision, 2026-10-23, В5 (а)): to be sent, a warning's — something to
- * do; on its way, in transit's; collected, the accent; cancelled or come
- * back, nothing more to do.
+ * do; on its way, in transit's; collected, the accent's green, the
+ * design's paid; cancelled or come back, nothing more to do.
  */
 export const statusPills: Record<Status, string> = {
   READY_TO_DISPATCH: "badge warn",
   DISPATCHED: "badge transit",
   ARRIVED: "badge transit",
-  COLLECTED: "badge",
+  COLLECTED: "badge paid",
   CANCELLED: "badge neutral",
   RETURNED: "badge neutral",
 };
@@ -225,12 +225,13 @@ export function kopecks(value: string): bigint | null {
 export function decimal(value: bigint): string {
   return `${(value / 100n).toString()}.${(value % 100n).toString().padStart(2, "0")}`;
 }
-/** «1 850,00 грн»: thousands apart by a no-break space, so the figure never
- * breaks across lines (sale-slice TZ, P2-1). An input keeps «1850,50»,
- * which `kopecks()` reads. */
+/** «1 850,00 грн»: thousands apart by a no-break space, and «грн» too, so
+ * the figure never breaks across lines nor leaves its «грн» on the next
+ * (sale-slice TZ, P2-1; «Усе на бірці» task list, P0-1). An input keeps
+ * «1850,50», which `kopecks()` reads. */
 export function money(value: string): string {
   const parsed = kopecks(value);
   if (parsed === null) return "—";
   const [whole = "0", fraction = "00"] = decimal(parsed).split(".");
-  return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction} грн`;
+  return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction}\u00a0грн`;
 }

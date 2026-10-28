@@ -516,7 +516,9 @@ export function Debt({
               <p>
                 <span
                   className={
-                    credit.status === "WRITTEN_OFF" ? "badge neutral" : "badge"
+                    credit.status === "WRITTEN_OFF"
+                      ? "badge neutral"
+                      : "badge paid"
                   }
                 >
                   {statusLabels[credit.status]}

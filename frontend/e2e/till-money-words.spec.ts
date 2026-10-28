@@ -126,11 +126,29 @@ test("sums read «12 950,00 грн», thousands kept together, in even digits, a
   });
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  await fillLine(page, { quantity: 7 });
   const total = page.locator(".pay-total");
+  const sum = total.locator(".sum");
+  // A sum as it first shows does not blink (P0-1).
+  await expect(sum).toBeVisible();
+  await expect(sum.locator(".sum-flash")).toHaveCount(0);
+  await fillLine(page, { quantity: 7 });
   await expect(total).toHaveText("Разом 12 950,00 грн");
   // A regex is not normalised: a no-break space, so «12 950» never splits.
-  await expect(total).toHaveText(/^Разом 12\u00a0950,00 грн$/);
+  await expect(total).toHaveText(/^Разом 12\u00a0950,00\u00a0грн$/);
+  // Its parts (spec §6.17; P0-1): the figures, then «,00» at 0.55 of them
+  // and «грн» at 0.6, held to them by a no-break space.
+  await expect(sum.locator(".sum-kop")).toHaveText(",00");
+  await expect(sum.locator(".sum-unit")).toHaveText(/^\u00a0грн$/);
+  const [whole = 0, kopecks = 0, unit = 0] = await sum.evaluate((node) =>
+    [node, node.querySelector(".sum-kop"), node.querySelector(".sum-unit")].map(
+      (part) => (part ? parseFloat(getComputedStyle(part).fontSize) : 0),
+    ),
+  );
+  expect(kopecks / whole).toBeCloseTo(0.55, 2);
+  expect(unit / whole).toBeCloseTo(0.6, 2);
+  // Changed under the eye: the fold behind it, faded out by 400 ms.
+  await expect(sum.locator(".sum-flash")).toHaveCount(1);
+  await expect(sum.locator(".sum-flash")).toHaveCSS("opacity", "0");
   expect(
     await total
       .locator(".sum")
@@ -144,16 +162,29 @@ test("sums read «12 950,00 грн», thousands kept together, in even digits, a
   const price = page.locator(".line").getByLabel("Ціна, грн");
   await price.fill("1850,50");
   await expect(price).toHaveValue("1850,50");
-  await expect(total).toHaveText(/^Разом 12\u00a0953,50 грн$/);
+  await expect(total).toHaveText(/^Разом 12\u00a0953,50\u00a0грн$/);
 
   await pay(page, "Готівка").click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   await expect(page.locator(".line span")).toHaveText(
-    /^7 × 1\u00a0850,50 грн$/,
+    /^7 × 1\u00a0850,50\u00a0грн$/,
   );
-  await expect(page.locator("p.total")).toHaveText(/12\u00a0953,50 грн/);
+  await expect(page.locator("p.total")).toHaveText(/12\u00a0953,50\u00a0грн/);
+});
+
+test("where motion is reduced a changed sum shows no fold behind it (spec §5.8; P0-1)", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await onTheTill(page);
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await fillLine(page, { quantity: 7 });
+  const sum = page.locator(".pay-total .sum");
+  await expect(sum).toHaveText("12 950,00 грн");
+  await expect(sum.locator(".sum-flash")).toHaveCount(1);
+  await expect(sum.locator(".sum-flash")).toBeHidden();
 });
 
 test("the basket of two lines counts «шт.», and «Кошик» names no more than the lines", async ({

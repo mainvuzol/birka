@@ -18,7 +18,7 @@ const pageSize = 20;
 
 /** «2 000,00» of «2 000,00 грн»: a row's figures, the pill saying the sum. */
 function bare(value: string): string {
-  return value.replace(/ грн$/, "");
+  return value.replace(/\u00a0грн$/, "");
 }
 
 /** What a close came to, as a pill: a shortage or a surplus a warning, to
@@ -29,7 +29,7 @@ function Pill({ close }: { close: Close }): JSX.Element {
     return <span className="badge neutral">Перший підрахунок</span>;
   const difference = differenceOf(close.difference ?? "0.00");
   return difference.match ? (
-    <span className="badge">Збіглося</span>
+    <span className="badge match">Збіглося</span>
   ) : (
     <span className="badge warn">{difference.text}</span>
   );

@@ -65,10 +65,11 @@ export async function confirmClose(page: Page): Promise<void> {
 }
 
 /** A sum of the server's, «1850.00», as the app writes it: «1 850,00 грн»,
- * thousands apart by a no-break space (sale-slice TZ, P2-1). */
+ * thousands apart by a no-break space, and «грн» too (sale-slice TZ, P2-1;
+ * «Усе на бірці» task list, P0-1). */
 export function grn(sum: string): string {
   const [whole = "0", fraction = "00"] = sum.split(".");
-  return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction.padEnd(2, "0")} грн`;
+  return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction.padEnd(2, "0")}\u00a0грн`;
 }
 
 /**

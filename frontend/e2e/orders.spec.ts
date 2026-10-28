@@ -188,7 +188,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await expect(
     page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/ · 1\s200,15 грн$/)).toBeVisible();
+  await expect(page.getByText(/ · 1\s200,15\sгрн$/)).toBeVisible();
   // «Замовлення» pressed again: the store's list.
   await section(page, "Замовлення");
   await expect(

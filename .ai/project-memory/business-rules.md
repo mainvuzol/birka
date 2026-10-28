@@ -4642,3 +4642,27 @@ question to the owner built as its (а) until answered.
   closes. The close is still four taps and the sum. The rest of P1-2 —
   the keypad, the dock, the sheet with MainButton — waits for the frame's
   components.
+
+## Chosen in chat — 2026-10-28 (the design system of «Усе на бірці»)
+
+Chosen in chat on 2026-10-28, after #146: the frame's P0-1 next, and Fira
+Sans Extra Condensed 800 fetched from its official source and subset for
+the app (`all-on-the-tag-design-system-report.md`). No rule, figure or word
+changes, except the space before «грн» and between thousands, now a
+no-break space.
+- **The owner's "accent", in the new palette.** «Клієнт забрав» (В5 (а))
+  and «Сплачено» are the accent's green, which is the design's paid. The
+  «Збіглося» pill (В4 (а)) is the design's match: the thread on ink in
+  light, ink on the thread in dark (spec §6.18). The drawer's «Збіглося до
+  копійки» in text is the same green.
+- **Kept as the owner chose it:** «До відправлення» is a warning (В5 (а)),
+  although the design approved on 2026-10-27 draws it `online`. To ask.
+- **Decided here:**
+  - a sticker with no meaning of its own is ink on the fold;
+  - a chosen switch segment is the card with its edge, in ink, and the
+    others are pencil (spec §6.7);
+  - the narrow face draws headings and sums only, until each screen's own
+    task;
+  - an inline skeleton line breathes, while a block's place sweeps;
+  - a changed sum shows the fold for 400 ms, never on first show and never
+    with reduced motion.

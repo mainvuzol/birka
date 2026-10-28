@@ -1,106 +1,334 @@
-/* The design's tokens (redesign direction §4, approved 2026-10-11): one
-   palette, light and dark, the theme taken from Telegram's own (its
-   background's brightness, `src/shared/telegram.ts`), or from the device
-   outside Telegram. Telegram's colours themselves are no longer painted:
-   its dark theme made light text on the light notices unreadable (P0-5).
-   Departures from the direction, chosen here: the dark backgrounds of the
-   meaning colours, and the dark foregrounds of «в пути» and «брак», to keep
-   4.5:1; and tokens the direction does not name — `--line-strong` (a field's
-   and a quiet button's edge), `--warn-line`, `--focus`, `--accent-text` in
-   light (the accent itself), the two shadows, and the dark card's three
-   (`--dark-card`, its text and its edge): dark in either theme, as the owner
-   chose (2026-10-21), an edge at 3:1 to stand out on the dark background. */
-:root {
-  --bg: #f4f4f1;
-  --surface: #ffffff;
-  --field: #eeeeea;
-  --text: #121715;
-  --text-2: #5e6662;
-  --line: #e7e7e2;
-  --line-strong: #cfd3cc;
-  --accent: #0f6e58;
-  --on-accent: #ffffff;
-  --accent-text: #0f6e58;
-  --accent-soft: #e2f0eb;
-  --debt: #a33a0b;
-  --debt-bg: #fbebe3;
-  --warn: #7a4e0b;
-  --warn-bg: #fbf1de;
-  --warn-line: #e8cf9c;
-  --transit: #1e4e79;
-  --transit-bg: #e3eef8;
-  --damaged: #5b2e7a;
-  --damaged-bg: #f1e9f6;
-  --focus: #9a5a10;
-  --panel-shadow: rgb(0 0 0 / 8%);
-  --active-shadow: rgb(15 110 88 / 10%);
-  --dark-card: #121715;
-  --on-dark-card: #f4f4f1;
-  --dark-card-line: #121715;
-  color-scheme: light;
+/* The design's tokens, «Усе на бірці» (direction §4, the main design since
+   2026-10-27; the frame's task list, P0-1): the concept's own
+   (`.ai/project-memory/redesign/concept-all-on-the-tag/tokens.css`), light
+   and dark, the theme taken from Telegram's (its background's brightness,
+   `src/shared/telegram.ts`) or from the device outside Telegram. Left out:
+   the olive thread (not chosen, Q-2) and the `--tg-*` that draw Telegram's
+   own chrome on the canvas. The app never takes Telegram's colours: its
+   dark theme made light text on light notices unreadable (P0-5); Telegram
+   takes the app's instead, for its header and bottom bar. */
+@font-face {
+  /* The one face that ships (direction §4, «Шрифт»): 800, Latin and
+     Cyrillic with ґ є і ї ’ ₴ № « » − and the no-break space, under the OFL
+     (`assets/fonts/OFL.txt`). Optional: a till never redraws its sum when
+     it arrives late; preloaded (`index.html`), so it all but always does. */
+  font-family: "Fira Sans Extra Condensed";
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url("./assets/fonts/fira-sans-extra-condensed-800.woff2") format("woff2");
 }
-:root[data-theme="dark"] {
-  --bg: #0e1513;
-  --surface: #18211e;
-  --field: #222c29;
-  --text: #f1f4f2;
-  --text-2: #9aa5a0;
-  --line: #26312d;
-  --line-strong: #3a4642;
-  --accent: #38b28f;
-  --on-accent: #0b1210;
-  --accent-text: #6fd3b4;
-  --accent-soft: #173a31;
-  --debt: #f08a5d;
-  --debt-bg: #2e1d15;
-  --warn: #e2b34a;
-  --warn-bg: #2a2414;
-  --warn-line: #5a4a22;
-  --transit: #9cc3ea;
-  --transit-bg: #17263a;
-  --damaged: #c9a6e3;
-  --damaged-bg: #261c30;
-  --focus: #e2b34a;
-  --panel-shadow: rgb(0 0 0 / 45%);
-  --active-shadow: rgb(0 0 0 / 30%);
-  --dark-card: #222c29;
-  --on-dark-card: #f1f4f2;
-  --dark-card-line: #66726d;
-  color-scheme: dark;
+:root {
+  color-scheme: light;
+  --paper: #ecede7;
+  --card: #ffffff;
+  --fold: #f4f5f0;
+  --ink: #15170f;
+  --pencil: #52564c;
+  --edge: #83877a;
+  --hairline: #d2d4cb;
+  --perforation: #9a9e91;
+  --inverse: #15170f;
+  --on-inverse: #f4f5f0;
+  --inverse-pencil: #b3b7a8;
+  --inverse-edge: #15170f;
+  --thread: #c6ef3e;
+  --on-thread: #15170f;
+  --primary: #15170f;
+  --on-primary: #c6ef3e;
+  --chosen: #15170f;
+  --on-chosen: #c6ef3e;
+  --link: #15170f;
+  --focus: #15170f;
+  --paid: #0d6a44;
+  --paid-bg: #ddf1e5;
+  --on-paid: #ffffff;
+  --success: #0d6a44;
+  --success-bg: #ddf1e5;
+  --on-success: #ffffff;
+  --owed: #a1380e;
+  --owed-bg: #fbe8de;
+  --on-owed: #ffffff;
+  --warning: #7a5200;
+  --warning-bg: #faeecb;
+  --on-warning: #ffffff;
+  --transit: #1c54a2;
+  --transit-bg: #e1ebfa;
+  --on-transit: #ffffff;
+  --online: #5b3bc4;
+  --online-bg: #ece6fc;
+  --on-online: #ffffff;
+  --offline: #3e4238;
+  --offline-bg: #e5e7df;
+  --on-offline: #ffffff;
+  --damaged: #8c2968;
+  --damaged-bg: #f6e3ef;
+  --on-damaged: #ffffff;
+  --danger: #b42318;
+  --danger-bg: #fde7e4;
+  --on-danger: #ffffff;
+  --skeleton: #e2e4dc;
+  --skeleton-hi: #f0f1ec;
+  --scrim: rgba(13, 14, 10, 0.4);
+  --shadow-0: none;
+  --shadow-1: 0 1px 0 rgba(21, 23, 15, 0.06);
+  --shadow-2: 0 -6px 24px rgba(21, 23, 15, 0.14);
+  --shadow-3: 0 8px 24px rgba(21, 23, 15, 0.16);
+  --shadow-1-drop: drop-shadow(0 1px 0 rgba(21, 23, 15, 0.06));
+  --tag-outline: var(--hairline);
+  --thread-line: var(--ink);
+  --match-bg: var(--inverse);
+  --match-fg: var(--thread);
+  --suggest: var(--ink);
+
+  /* type families (§5.5): the display face ships, the text is the device's */
+  --font-display:
+    "Fira Sans Extra Condensed", "Arial Narrow", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-text:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans", sans-serif;
+
+  /* space scale (§5.6) */
+  --sp-0: 0px;
+  --sp-2: 2px;
+  --sp-4: 4px;
+  --sp-6: 6px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-20: 20px;
+  --sp-24: 24px;
+  --sp-32: 32px;
+  --sp-40: 40px;
+  --sp-48: 48px;
+  --sp-64: 64px;
+  --gutter: 16px;
+
+  /* radii (§5.6) */
+  --r-none: 0px;
+  --r-xs: 3px;
+  --r-s: 4px;
+  --r-m: 6px;
+  --r-l: 8px;
+  --r-tg: 10px;
+  --r-sheet: 16px;
+  --r-round: 999px;
+
+  /* sizes (§5.6) */
+  --touch: 44px;
+  --h-tg-header: 56px;
+  --h-tabbar: 64px;
+  --h-main-button: 50px;
+  --pad-bottom-bar: 8px;
+  --h-search: 52px;
+  --h-segmented: 44px;
+  --size-cell: 60px;
+  --h-pay: 56px;
+  --h-primary: 52px;
+  --h-verb: 44px;
+  --h-row: 64px;
+  --h-tag: 76px;
+  --h-pill: 48px;
+  --h-key: 60px;
+  --avatar: 40px;
+  --avatar-l: 48px;
+  --eyelet: 8px;
+  --eyelet-hero: 12px;
+  --icon: 24px;
+  --icon-s: 20px;
+  --icon-xs: 16px;
+  --h-sticker: 28px;
+  --badge: 18px;
+  --content-max: 560px;
+  --chamfer-tag: 10px;
+  --chamfer-hero: 14px;
+
+  /* motion (§5.8) */
+  --dur-instant: 0ms;
+  --dur-press: 80ms;
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-tear: 220ms;
+  --dur-sheetIn: 240ms;
+  --dur-sheetOut: 180ms;
+  --dur-knot: 300ms;
+  --dur-blink: 400ms;
+  --dur-tieOffCap: 600ms;
+  --dur-spinnerTurn: 900ms;
+  --dur-toast: 4000ms;
+  --dur-undo: 5000ms;
+  --dur-keptRecheck: 20000ms;
+  --dur-stillSending: 3000ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* z-order (§5.7) */
+  --z-base: 0;
+  --z-stickyHeader: 10;
+  --z-tray: 20;
+  --z-tabBar: 30;
+  --z-capturePill: 35;
+  --z-sheet: 40;
+  --z-toast: 50;
+  --z-popup: 60;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1513;
-    --surface: #18211e;
-    --field: #222c29;
-    --text: #f1f4f2;
-    --text-2: #9aa5a0;
-    --line: #26312d;
-    --line-strong: #3a4642;
-    --accent: #38b28f;
-    --on-accent: #0b1210;
-    --accent-text: #6fd3b4;
-    --accent-soft: #173a31;
-    --debt: #f08a5d;
-    --debt-bg: #2e1d15;
-    --warn: #e2b34a;
-    --warn-bg: #2a2414;
-    --warn-line: #5a4a22;
-    --transit: #9cc3ea;
-    --transit-bg: #17263a;
-    --damaged: #c9a6e3;
-    --damaged-bg: #261c30;
-    --focus: #e2b34a;
-    --panel-shadow: rgb(0 0 0 / 45%);
-    --active-shadow: rgb(0 0 0 / 30%);
-    --dark-card: #222c29;
-    --on-dark-card: #f1f4f2;
-    --dark-card-line: #66726d;
     color-scheme: dark;
+    --paper: #0d0e0a;
+    --card: #181a14;
+    --fold: #22251d;
+    --ink: #f1f2ea;
+    --pencil: #a5a99b;
+    --edge: #737869;
+    --hairline: #30342a;
+    --perforation: #5c6054;
+    --inverse: #262b1e;
+    --on-inverse: #f1f2ea;
+    --inverse-pencil: #b4b8a8;
+    --inverse-edge: #7e8570;
+    --thread: #c6ef3e;
+    --on-thread: #15170f;
+    --primary: #c6ef3e;
+    --on-primary: #15170f;
+    --chosen: #c6ef3e;
+    --on-chosen: #15170f;
+    --link: #c6ef3e;
+    --focus: #c6ef3e;
+    --paid: #6cd8a3;
+    --paid-bg: #10301f;
+    --on-paid: #0d0e0a;
+    --success: #6cd8a3;
+    --success-bg: #10301f;
+    --on-success: #0d0e0a;
+    --owed: #ff9d6e;
+    --owed-bg: #3a1d10;
+    --on-owed: #0d0e0a;
+    --warning: #f2c451;
+    --warning-bg: #33280a;
+    --on-warning: #0d0e0a;
+    --transit: #86b5ff;
+    --transit-bg: #13243f;
+    --on-transit: #0d0e0a;
+    --online: #baa5ff;
+    --online-bg: #261d47;
+    --on-online: #0d0e0a;
+    --offline: #c8cbbe;
+    --offline-bg: #262920;
+    --on-offline: #0d0e0a;
+    --damaged: #f28cca;
+    --damaged-bg: #3b162f;
+    --on-damaged: #0d0e0a;
+    --danger: #ff8b80;
+    --danger-bg: #3d1512;
+    --on-danger: #0d0e0a;
+    --skeleton: #22251d;
+    --skeleton-hi: #2b2f25;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --shadow-0: none;
+    --shadow-1: none;
+    --shadow-2: 0 -6px 24px rgba(0, 0, 0, 0.5);
+    --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-1-drop: none;
+    --tag-outline: var(--card);
+    --thread-line: var(--thread);
+    --match-bg: var(--thread);
+    --match-fg: var(--on-thread);
+    --suggest: var(--thread);
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0d0e0a;
+  --card: #181a14;
+  --fold: #22251d;
+  --ink: #f1f2ea;
+  --pencil: #a5a99b;
+  --edge: #737869;
+  --hairline: #30342a;
+  --perforation: #5c6054;
+  --inverse: #262b1e;
+  --on-inverse: #f1f2ea;
+  --inverse-pencil: #b4b8a8;
+  --inverse-edge: #7e8570;
+  --thread: #c6ef3e;
+  --on-thread: #15170f;
+  --primary: #c6ef3e;
+  --on-primary: #15170f;
+  --chosen: #c6ef3e;
+  --on-chosen: #15170f;
+  --link: #c6ef3e;
+  --focus: #c6ef3e;
+  --paid: #6cd8a3;
+  --paid-bg: #10301f;
+  --on-paid: #0d0e0a;
+  --success: #6cd8a3;
+  --success-bg: #10301f;
+  --on-success: #0d0e0a;
+  --owed: #ff9d6e;
+  --owed-bg: #3a1d10;
+  --on-owed: #0d0e0a;
+  --warning: #f2c451;
+  --warning-bg: #33280a;
+  --on-warning: #0d0e0a;
+  --transit: #86b5ff;
+  --transit-bg: #13243f;
+  --on-transit: #0d0e0a;
+  --online: #baa5ff;
+  --online-bg: #261d47;
+  --on-online: #0d0e0a;
+  --offline: #c8cbbe;
+  --offline-bg: #262920;
+  --on-offline: #0d0e0a;
+  --damaged: #f28cca;
+  --damaged-bg: #3b162f;
+  --on-damaged: #0d0e0a;
+  --danger: #ff8b80;
+  --danger-bg: #3d1512;
+  --on-danger: #0d0e0a;
+  --skeleton: #22251d;
+  --skeleton-hi: #2b2f25;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-0: none;
+  --shadow-1: none;
+  --shadow-2: 0 -6px 24px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-1-drop: none;
+  --tag-outline: var(--card);
+  --thread-line: var(--thread);
+  --match-bg: var(--thread);
+  --match-fg: var(--on-thread);
+  --suggest: var(--thread);
+}
+/* The names before «Усе на бірці», each the token of its meaning, so a
+   screen not yet redrawn takes the new colours as it is (P0-1). Of the
+   four with no token of their own: the soft accent of a chip or a store
+   card is the fold; a warning's edge, the warning; the two shadows, the
+   levels 1 and 2 where they are used. */
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --bg: var(--paper);
+  --surface: var(--card);
+  --field: var(--fold);
+  --text: var(--ink);
+  --text-2: var(--pencil);
+  --line: var(--hairline);
+  --line-strong: var(--edge);
+  --accent: var(--primary);
+  --on-accent: var(--on-primary);
+  --accent-text: var(--link);
+  --accent-soft: var(--fold);
+  --debt: var(--owed);
+  --debt-bg: var(--owed-bg);
+  --warn: var(--warning);
+  --warn-bg: var(--warning-bg);
+  --warn-line: var(--warning);
+  --dark-card: var(--inverse);
+  --on-dark-card: var(--on-inverse);
+  --dark-card-line: var(--inverse-edge);
+}
+:root {
+  font-family: var(--font-text);
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -129,19 +357,84 @@ header {
   padding-bottom: 26px;
   border-bottom: 1px solid var(--line);
 }
-h1 {
-  font-size: 32px;
-  letter-spacing: -1px;
+/* The text's roles (direction §4, «Ролі»; spec §5.5). A first heading is
+   the tab's title, a second the screen's, in the display face; the rest
+   wait for their screens' tasks, each with its own pictures (P0-1). */
+h1,
+.t-title-xl {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 36px;
+  letter-spacing: -0.005em;
   margin: 6px 0;
 }
 h1 span {
+  font-family: var(--font-text);
   font-size: 17px;
   font-weight: 400;
   letter-spacing: 0;
 }
-h2 {
-  font-size: 23px;
+h2,
+.t-title-l {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 30px;
   margin: 6px 0 18px;
+}
+.t-sheet {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 26px;
+}
+.t-money-xl,
+.t-money-hero,
+.t-money-l {
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+.t-money-xl {
+  font-size: 56px;
+  line-height: 56px;
+  letter-spacing: -0.01em;
+}
+.t-money-hero {
+  font-size: 48px;
+  line-height: 48px;
+  letter-spacing: -0.01em;
+}
+.t-money-l {
+  font-size: 32px;
+  line-height: 34px;
+}
+.t-row {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.t-button {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.t-meta {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.t-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.t-tab {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
 }
 h3 {
   margin-top: 0;
@@ -153,7 +446,10 @@ header.store-line {
   align-items: center;
 }
 .store-line h1 {
+  font-family: var(--font-text);
   font-size: 17px;
+  font-weight: 700;
+  line-height: normal;
   letter-spacing: 0;
   margin: 0;
   overflow-wrap: anywhere;
@@ -240,12 +536,18 @@ textarea:focus-visible {
 .order-card:hover {
   border-color: var(--accent);
 }
+/* A status as a printed sticker (spec §6.18): 28 high, its corners cut
+   square, a word in its meaning's colours (P0-1; its glyph comes with the
+   stub's task, P0-2). One without a meaning of its own is ink on the fold,
+   in both themes. */
 .badge {
-  font-size: 12px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  border-radius: 20px;
-  padding: 6px 11px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  background: var(--fold);
+  color: var(--ink);
+  border-radius: var(--r-xs);
+  padding: 5px 8px;
   align-self: flex-start;
   width: fit-content;
   display: inline-block;
@@ -391,7 +693,7 @@ textarea {
   border-radius: 10px;
 }
 button.active {
-  box-shadow: 0 2px 4px var(--active-shadow);
+  box-shadow: var(--shadow-1);
 }
 @media (max-width: 480px) {
   main {
@@ -534,6 +836,18 @@ nav:not(.sections, .more-list) {
   background: var(--transit-bg);
   color: var(--transit);
 }
+/* Done with: «Клієнт забрав» and «Сплачено» in the accent's green, the
+   design's paid (owner decisions В5 and 2026-10-18; spec §6.18). */
+.badge.paid {
+  background: var(--paid-bg);
+  color: var(--paid);
+}
+/* The drawer to the kopeck, the accent's (owner decision В4 (а)): the
+   design's match, the thread on ink (spec §6.18). */
+.badge.match {
+  background: var(--match-bg);
+  color: var(--match-fg);
+}
 .nights,
 .troubles {
   list-style: none;
@@ -607,7 +921,7 @@ nav:not(.sections, .more-list) {
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: 16px;
-  box-shadow: 0 -6px 18px var(--panel-shadow);
+  box-shadow: var(--shadow-2);
 }
 /* The panel's height, kept clear wherever the page scrolls to
    (`shared/panel.ts`). */
@@ -628,10 +942,47 @@ html {
   font-size: 26px;
   font-weight: 800;
 }
-.sum-rest {
-  font-size: 0.62em;
-  font-weight: 700;
-  color: var(--text-2);
+/* A sum in one piece (spec §6.17): its figures in the display face, the
+   kopecks at 0.55 and «грн» at 0.6 of it, in pencil (P0-1). */
+.sum {
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+.sum-kop,
+.sum-unit {
+  color: var(--pencil);
+}
+.sum-kop {
+  font-size: 0.55em;
+}
+.sum-unit {
+  font-size: 0.6em;
+}
+/* A changed sum: the fold behind it, fading over 400 ms (spec §5.8,
+   «blink»; P0-1). Its opacity alone moves, never the figures, and nothing
+   where motion is reduced. */
+.sum.flashing {
+  position: relative;
+  isolation: isolate;
+}
+.sum-flash {
+  position: absolute;
+  inset: -1px -3px;
+  z-index: -1;
+  border-radius: var(--r-xs);
+  background: var(--fold);
+  opacity: 0;
+  animation: sum-flash var(--dur-blink) ease-out;
+}
+@keyframes sum-flash {
+  from {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sum-flash {
+    display: none;
+  }
 }
 .pay-ways {
   display: grid;
@@ -888,7 +1239,8 @@ html {
   font-weight: 800;
   letter-spacing: -0.8px;
 }
-.owed-sum .sum-rest {
+.owed-sum .sum-kop,
+.owed-sum .sum-unit {
   color: var(--debt);
 }
 .owed-count {
@@ -1154,8 +1506,6 @@ html {
 }
 .skeleton-line {
   border-radius: 10px;
-  background: var(--line);
-  animation: skeleton-breathe 1.4s ease-in-out infinite;
 }
 .skeleton-line > span {
   visibility: hidden;
@@ -1187,11 +1537,6 @@ html {
   min-height: 44px;
   padding: 8px 14px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-line {
-    animation: none;
-  }
-}
 /* The return's panel (P0-4): the till's, with the way as a switch over the
    one button. */
 .pay-note {
@@ -1222,6 +1567,7 @@ html {
   padding: 6px 4px;
   border-radius: 11px;
   text-align: center;
+  color: var(--pencil);
 }
 /* The whole segment is the radio's target. */
 .way-switch input {
@@ -1238,10 +1584,12 @@ html {
 }
 /* Drawn on the label's text, which follows its radio: no `:has()`, which
    older web views lack (review, 2026-10-17). */
+/* The way chosen as spec §6.7's segment: the card on the fold, its edge,
+   ink; the others pencil. A choice, never an action's colour (P0-1). */
 .way-switch input:checked + span {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--edge);
 }
 .way-switch input:focus-visible + span {
   outline: 3px solid var(--focus);
@@ -1273,13 +1621,13 @@ html {
   border: 0;
   border-radius: 11px;
   background: transparent;
-  color: var(--text);
+  color: var(--pencil);
   font-weight: 650;
 }
 .mode-switch button[aria-current="page"] {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--edge);
 }
 .return-go {
   width: 100%;
@@ -1350,8 +1698,38 @@ html {
 .skeleton {
   display: block;
   border-radius: 10px;
-  background: var(--line);
-  animation: skeleton-breathe 1.4s ease-in-out infinite;
+}
+/* Every place of what is read, in the skeleton's grey with a lighter sweep
+   across it every 1.2 s (spec §6.27; P0-1): moved, never repainted, and
+   still where motion is reduced. A line inside text cannot hold a sweep in
+   its box, which would run out past the screen's edge: it breathes in the
+   same 1.2 s instead (review of P0-1, 2026-10-28). */
+.skeleton,
+.skeleton-line,
+.cash-card-skeleton {
+  background: var(--skeleton);
+}
+.skeleton,
+.cash-card-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-line {
+  animation: skeleton-breathe 1.2s ease-in-out infinite;
+}
+.skeleton::after,
+.cash-card-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--skeleton-hi),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: skeleton-sweep 1.2s linear infinite;
 }
 .skeleton-label {
   width: 7em;
@@ -1369,14 +1747,22 @@ html {
 .chip.skeleton {
   width: 72px;
 }
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
 @keyframes skeleton-breathe {
   50% {
     opacity: 0.55;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .skeleton,
-  .cash-card-skeleton {
+  .skeleton::after,
+  .cash-card-skeleton::after {
+    content: none;
+  }
+  .skeleton-line {
     animation: none;
   }
 }
@@ -1488,6 +1874,7 @@ html {
   padding: 8px 0;
   border: 0;
   background: transparent;
+  font-family: var(--font-display);
   font-size: 48px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1547,7 +1934,7 @@ html {
   color: var(--warn);
 }
 .cash-difference.match {
-  color: var(--accent-text);
+  color: var(--paid);
 }
 .cash-slip {
   margin: 4px 0 8px;
@@ -1607,7 +1994,9 @@ html {
   font-size: 15px;
 }
 .move-field input {
+  font-family: var(--font-display);
   font-size: 34px;
+  font-weight: 800;
 }
 /* A way changed (cash task list, P1-3): the operations as rows by time,
    never a sum (G32); one operation's sum large, its way a pill, the ways as
@@ -1684,8 +2073,7 @@ html {
    its words unseen; an operation's pill and ways. */
 .cash-card-skeleton {
   border-color: transparent;
-  background: var(--line);
-  animation: skeleton-breathe 1.4s ease-in-out infinite;
+  background: var(--skeleton);
 }
 .cash-card-skeleton > span {
   visibility: hidden;
@@ -2030,24 +2418,73 @@ html {
   color: var(--text);
   text-align: left;
 }
-.tile-icon {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* The tag's silhouette (spec §6.0; P0-1), for the tags to come: a row's
+   two left corners cut 10 px, a hero's two top corners 14 px. In light a
+   hairline goes round it: the cut shape filled with it, the card 1 px
+   inside, cut 1 px less; in dark the card's fill on the paper alone (its
+   outline is the card). */
+.tag-row {
+  clip-path: polygon(
+    var(--chamfer-tag) 0,
+    100% 0,
+    100% 100%,
+    var(--chamfer-tag) 100%,
+    0 calc(100% - var(--chamfer-tag)),
+    0 var(--chamfer-tag)
+  );
+}
+.tag-hero {
+  clip-path: polygon(
+    var(--chamfer-hero) 0,
+    calc(100% - var(--chamfer-hero)) 0,
+    100% var(--chamfer-hero),
+    100% 100%,
+    0 100%,
+    0 var(--chamfer-hero)
+  );
+}
+.tag-outline {
+  padding: 1px;
+  background: var(--tag-outline);
+}
+.tag-outline > * {
+  background: var(--card);
+}
+.tag-outline.tag-row > * {
+  clip-path: polygon(
+    9px 0,
+    100% 0,
+    100% 100%,
+    9px 100%,
+    0 calc(100% - 9px),
+    0 9px
+  );
+}
+.tag-outline.tag-hero > * {
+  clip-path: polygon(
+    13px 0,
+    calc(100% - 13px) 0,
+    100% 13px,
+    100% 100%,
+    0 100%,
+    0 13px
+  );
+}
+/* A tag's cut corners would cut its focus ring away: the ring drawn inside
+   it, where the cut leaves it whole on every side. */
+.tag-row:focus-visible,
+.tag-hero:focus-visible {
+  outline-offset: -3px;
+}
+/* The set's own icons (`shared/Icon.tsx`), never shrunk by a row. */
+.icon {
+  flex: none;
 }
 .receive-icon {
   color: var(--accent-text);
 }
 .damaged-icon {
   color: var(--damaged);
-}
-.damaged-icon circle {
-  fill: currentColor;
-  stroke: none;
 }
 .tile-word {
   font-size: 16px;

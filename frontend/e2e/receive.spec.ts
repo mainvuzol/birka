@@ -192,7 +192,7 @@ test("a delivery carries what the shop paid, and shows back what was stored", as
     page.getByRole("heading", { name: "Товар прийнято" }),
   ).toBeVisible();
   await expect(
-    page.getByText(/\+5 · тепер на складі \d+ · 1\s850,50 грн за од\./),
+    page.getByText(/\+5 · тепер на складі \d+ · 1\s850,50\sгрн за од\./),
   ).toBeVisible();
   await expect(
     page.getByText("Закупівельна вартість 9 252,50 грн"),

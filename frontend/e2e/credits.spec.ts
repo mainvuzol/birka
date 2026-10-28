@@ -492,9 +492,9 @@ test("a sale paid in parts whose answer is lost is resent with the same terms", 
     page.getByRole("heading", { name: "Продаж записано один раз" }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Оплата частинами: сплачено зараз 1\s000,00 грн/),
+    page.getByText(/Оплата частинами: сплачено зараз 1\s000,00\sгрн/),
   ).toBeVisible();
-  await expect(page.getByText(/покупець винен 2\s000,00 грн/)).toBeVisible();
+  await expect(page.getByText(/покупець винен 2\s000,00\sгрн/)).toBeVisible();
   expect(sales.bodies).toHaveLength(2);
   expect(sales.bodies[1]).toEqual(sales.bodies[0]);
   expect((sales.bodies[0] as { payment_method: unknown }).payment_method).toBe(
@@ -528,7 +528,7 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   ).toBeVisible();
   await expect(
     page.getByText(
-      /^Внесок 700,00 грн переказом за «.+» — сервер не відповів\. Двічі він не запишеться\. Поки чекаємо, інші дії недоступні\.$/,
+      /^Внесок 700,00\sгрн переказом за «.+» — сервер не відповів\. Двічі він не запишеться\. Поки чекаємо, інші дії недоступні\.$/,
     ),
   ).toBeVisible();
   await waitsFor(page, /^Внесок ще не підтверджено$/);
@@ -1385,7 +1385,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await expect(page.getByText("Лишиться винен 2 500,00 грн")).toBeVisible();
   // As the till's panel says it.
   await expect(page.locator(".order-panel .pay-total")).toHaveText(
-    /^Зараз 500,00 грн · винен 2\s500,00 грн$/,
+    /^Зараз 500,00\sгрн · винен 2\s500,00\sгрн$/,
   );
   await collect.click();
   await expect(
@@ -1396,7 +1396,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
     "500,00 грн",
   );
   await expect(page.locator(".order-collected .paid-owed")).toHaveText(
-    /^Покупець винен 2\s500,00 грн\. Наступні внески — у «Боргах»\.$/,
+    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Боргах»\.$/,
   );
   expect(collected.bodies).toHaveLength(1);
   const body = collected.bodies[0] as {

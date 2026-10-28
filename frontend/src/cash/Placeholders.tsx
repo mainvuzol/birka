@@ -73,7 +73,7 @@ export function OperationPlaceholder(): JSX.Element {
           </p>
           <p className="fix-sum">
             <span className="sum">
-              <Line size="000,00 грн" />
+              <Line size={"000,00\u00a0грн"} />
             </span>
           </p>
           <span className="skeleton skeleton-pill" />
@@ -103,13 +103,13 @@ export function ClosePlaceholder(): JSX.Element {
             </p>
             <p className="cash-sum">
               <span className="sum">
-                <Line size="0 000,00 грн" />
+                <Line size={"0\u00a0000,00\u00a0грн"} />
               </span>
             </p>
           </div>
         ))}
         <p className="cash-difference">
-          <Line size="Нестача 00,00 грн" />
+          <Line size={"Нестача 00,00\u00a0грн"} />
         </p>
       </div>
     </>

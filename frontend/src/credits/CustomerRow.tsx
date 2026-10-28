@@ -90,7 +90,9 @@ export function CustomerRow({
         <span className="debt-owed">{money(customer.owed)}</span>
       ) : (
         <span
-          className={only?.status === "SETTLED" ? "badge" : "badge neutral"}
+          className={
+            only?.status === "SETTLED" ? "badge paid" : "badge neutral"
+          }
         >
           {closed}
         </span>
