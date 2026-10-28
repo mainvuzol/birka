@@ -144,7 +144,7 @@ export function Customer({
                     className={
                       credit.status === "WRITTEN_OFF"
                         ? "badge neutral"
-                        : "badge"
+                        : "badge paid"
                     }
                   >
                     {statusLabels[credit.status]}

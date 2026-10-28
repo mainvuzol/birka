@@ -69,12 +69,62 @@ export function applyLaunchTheme(): void {
   if (telegramInitData()) launchTheme();
 }
 
-/** Notify the host after rendering; keep bridge calls out of business UI. */
+/**
+ * Telegram's header, background and bottom bar in the app's own colours
+ * (direction §6.1; «Усе на бірці» task list, P0-1): the header and the
+ * background the screen's paper, the bottom bar its card, so no stripe of
+ * Telegram's colour cuts the screen. Read from the theme just applied, and
+ * only where the version knows each: the header's own colour since 6.9, the
+ * bottom bar's since 7.10. Told once per change of colour: a theme Telegram
+ * sends again unchanged, or the app connecting twice, says nothing new.
+ */
+let painted: string | null = null;
+function paintTelegram(): void {
+  const version = launchParam("tgWebAppVersion");
+  if (!version) return;
+  const paper = colourOf("--paper");
+  const card = colourOf("--card");
+  if (painted === `${String(paper)} ${String(card)}`) return;
+  painted = `${String(paper)} ${String(card)}`;
+  try {
+    if (paper && supports("web_app_set_header_color", "color", version))
+      postEvent("web_app_set_header_color", { color: paper });
+    if (paper && supports("web_app_set_background_color", version))
+      postEvent("web_app_set_background_color", { color: paper });
+    if (card && supports("web_app_set_bottom_bar_color", version))
+      postEvent("web_app_set_bottom_bar_color", { color: card });
+  } catch {
+    /* No Telegram host to paint. */
+  }
+}
+
+/**
+ * A colour token as Telegram takes it, `#rrggbb`: read as the page draws it,
+ * since the build writes white as `#fff` (review of P0-1, 2026-10-28).
+ */
+function colourOf(token: string): `#${string}` | null {
+  const probe = document.createElement("span");
+  probe.style.color = `var(${token}, transparent)`;
+  document.documentElement.append(probe);
+  const drawn = getComputedStyle(probe).color;
+  probe.remove();
+  const rgb = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(drawn);
+  if (!rgb) return null;
+  return `#${rgb
+    .slice(1)
+    .map((part) => Number(part).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/** Notify the host after rendering; keep bridge calls out of business UI.
+ * Its colours go first, so Telegram shows the app in them when it is ready. */
 export function connectTelegram(): () => void {
   if (!telegramInitData()) return () => undefined;
   launchTheme();
+  paintTelegram();
   const unsubscribe = on("theme_changed", ({ theme_params }) => {
     applyTheme(theme_params);
+    paintTelegram();
   });
   try {
     postEvent("web_app_ready");

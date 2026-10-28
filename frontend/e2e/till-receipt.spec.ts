@@ -468,7 +468,7 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expect(
     page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/ · 1\s300,00 грн$/)).toBeVisible();
+  await expect(page.getByText(/ · 1\s300,00\sгрн$/)).toBeVisible();
   await expect(
     page.getByRole("heading", { name: new RegExp(`^${coat.name}.* · M$`) }),
   ).toBeVisible();

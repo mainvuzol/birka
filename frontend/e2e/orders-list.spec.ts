@@ -298,6 +298,7 @@ test("what is to be sent and what is on its way on top, newest first, a row a pa
     .getByRole("list", { name: "Завершені" })
     .getByRole("button");
   await expect(done.locator(".badge")).toHaveText("Клієнт забрав");
+  await expect(done.locator(".badge")).toHaveClass("badge paid");
   await expect(page.getByRole("heading", { name: "Завершені" })).toBeVisible();
   await page.getByRole("button", { name: "Сховати завершені" }).click();
   await expect(page.getByRole("list", { name: "Завершені" })).toHaveCount(0);
@@ -775,7 +776,7 @@ for (const [name, theme] of [
     await expect(pill("В дорозі", 0)).toHaveClass("badge transit");
     await expect(pill("В дорозі", 1)).toHaveText("Відправлено");
     await expect(pill("В дорозі", 1)).toHaveClass("badge transit");
-    await expect(pill("Завершені", 0)).toHaveClass("badge");
+    await expect(pill("Завершені", 0)).toHaveClass("badge paid");
     await expect(pill("Завершені", 1)).toHaveClass("badge neutral");
     // «В дорозі» in the direction's own colours, «в пути» (§4).
     expect(

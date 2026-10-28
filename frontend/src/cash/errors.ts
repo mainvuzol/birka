@@ -128,7 +128,7 @@ function namedText(error: ApiError, closeNow: boolean): string | null {
     // Nothing to explain: no difference, an opening count, or a difference
     // under 1,00 грн (owner decision, 2026-10-04, G41).
     case "NO_DIFFERENCE":
-      return "Причина не потрібна: різниці немає або вона менша за 1,00 грн.";
+      return "Причина не потрібна: різниці немає або вона менша за 1,00\u00a0грн.";
     case "REASON_GIVEN":
       return "Причину вже записано.";
     // A seller fixes their own operation only before the close (owner

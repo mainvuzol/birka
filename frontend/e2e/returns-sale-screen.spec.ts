@@ -292,7 +292,7 @@ test("before a tap: nine things to see, nothing to type and nothing to press; a 
   await opened(page);
   // «Продаж 17.10, 14:32 · 6 000,00 грн»: one sale's sum (G33).
   await expect(
-    page.getByText(/^Продаж \d\d\.\d\d, \d\d:\d\d · 6\s000,00 грн$/),
+    page.getByText(/^Продаж \d\d\.\d\d, \d\d:\d\d · 6\s000,00\sгрн$/),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),

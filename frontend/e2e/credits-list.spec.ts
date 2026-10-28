@@ -715,7 +715,7 @@ test("the paid and written off are asked for under the list, each saying how it 
     "Відкрити борг: Марта Бойко, сплачено",
   );
   await expect(settled.getByText("Сплачено", { exact: true })).toHaveClass(
-    "badge",
+    "badge paid",
   );
   await expect(
     page
@@ -1021,10 +1021,11 @@ for (const [name, theme, scheme] of [
       .getByRole("button", { name: "Показати сплачені й списані" })
       .click();
     await expect(rows(page)).toHaveCount(5);
-    // By what it means (credits task list, P2-4): paid off is the accent's;
-    // written off, nothing owed and another store say nothing to do.
+    // By what it means (credits task list, P2-4): paid off is the accent's
+    // green, the design's paid (P0-1); written off, nothing owed and another
+    // store say nothing to do.
     const accent = page.getByText("Сплачено", { exact: true });
-    await expect(accent).toHaveClass("badge");
+    await expect(accent).toHaveClass("badge paid");
     for (const pill of [
       page.getByText("Списано", { exact: true }),
       page.getByText("Нічого не винні", { exact: true }),

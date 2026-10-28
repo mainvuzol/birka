@@ -187,7 +187,7 @@ test("the list shows no sum and no way, the sale opened shows its sum; a row ope
   await page
     .getByRole("button", { name: /^Оформити повернення: Лоран шоколад · M, / })
     .click();
-  await expect(page.getByText(/^Продаж .* · 3\s000,00 грн$/)).toBeVisible();
+  await expect(page.getByText(/^Продаж .* · 3\s000,00\sгрн$/)).toBeVisible();
 });
 
 test("the search runs as it is typed, from two letters; Enter at once; one letter lists every sale", async ({

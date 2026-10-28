@@ -264,7 +264,7 @@ test("«Закриття»: a row a close — its day and who, what was counted 
     /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s000,00$/,
   );
   await expect(same.locator(".badge")).toHaveText("Збіглося");
-  await expect(same.locator(".badge")).not.toHaveClass(/\b(warn|neutral)\b/);
+  await expect(same.locator(".badge")).toHaveClass("badge match");
   // The pills one column down the list, under each day.
   const lefts = await list
     .locator(".close-row .badge, .close-unclosed .badge")

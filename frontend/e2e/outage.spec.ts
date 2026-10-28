@@ -1083,7 +1083,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
       "Разом 3 000,00 грн карткою. Якщо картку ще не провели — проведіть на терміналі 3 000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
     await expect(confirmed).not.toContainText(
-      /Проведіть на терміналі 3\s000,00 грн\./,
+      /Проведіть на терміналі 3\s000,00\sгрн\./,
     );
     expect(server.sales).toHaveLength(1);
   });

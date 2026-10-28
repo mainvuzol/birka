@@ -43,7 +43,7 @@ export function PriceHint({
       {price === "0.00" && (
         // A gift is allowed, a slip is not caught (owner, В3 (а)).
         <span className="hint price-warn">
-          Ціна 0,00 грн. Це справді подарунок? Перевірте ціну.
+          {`Ціна 0,00\u00a0грн. Це справді подарунок? Перевірте ціну.`}
         </span>
       )}
     </>

@@ -1121,7 +1121,7 @@ test("«Клієнт забрав» in parts: terms not taken said over the pane
   expect(server.sent).toEqual([]);
   await page.getByLabel("Сплачує зараз, грн").fill("500");
   await expect(panel(page).locator(".pay-total")).toHaveText(
-    /^Зараз 500,00 грн · винен 2\s500,00 грн$/,
+    /^Зараз 500,00\sгрн · винен 2\s500,00\sгрн$/,
   );
   await cash.click();
   await expect(
@@ -1133,7 +1133,7 @@ test("«Клієнт забрав» in parts: terms not taken said over the pane
   );
   await expect(page.locator(".order-total")).toHaveCount(0);
   await expect(page.locator(".order-collected .paid-owed")).toHaveText(
-    /^Покупець винен 2\s500,00 грн\. Наступні внески — у «Боргах»\.$/,
+    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Боргах»\.$/,
   );
   expect(server.sent).toEqual([
     {

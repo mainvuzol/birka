@@ -227,7 +227,7 @@ test("a debt says who and what in one line, what is owed first and large, how mu
     /^12\.10, \d\d:\d\d · Ганна · прийняв магазин «Центр»$/,
   );
   await expect(rows.nth(2).locator(".history-meta")).toHaveText(
-    /^13\.10, \d\d:\d\d · Оля · повернено 500,00 грн на картку$/,
+    /^13\.10, \d\d:\d\d · Оля · повернено 500,00\sгрн на картку$/,
   );
   await expect(rows.locator(".history-sum")).toHaveText([
     "1 000,00 грн",
@@ -717,7 +717,7 @@ test("a closed debt says how it closed and when, and takes no payment", async ({
   await opened(page);
   const closed = page.locator(".debt-closed");
   await expect(closed.locator(".badge")).toHaveText("Сплачено");
-  await expect(closed.locator(".badge")).toHaveClass("badge");
+  await expect(closed.locator(".badge")).toHaveClass("badge paid");
   await expect(closed).toContainText("Закрито 14.10");
   await expect(closed).toContainText("Сплачено 2 500,00 грн з 3 000,00 грн");
   await expect(page.getByRole("group", { name: "Скільки винні" })).toHaveCount(
