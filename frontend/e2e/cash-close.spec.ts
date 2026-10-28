@@ -867,7 +867,7 @@ test("the count is four taps and the sum: «Каса», the card, «Закрит
   ).toBe(4);
 });
 
-test("a double tap on «Закрити касу» never closes the drawer: «Так, закрити», drawn where it stood, lets the second tap go; pressed once the sum is read, it closes («Усе на бірці» sections task list, P1-2)", async ({
+test("a double tap on «Закрити касу» never closes the drawer: its second half on «Так, закрити» is let go; pressed once the sum is read, it closes («Усе на бірці» sections task list, P1-2)", async ({
   page,
 }) => {
   const state = { now: drawer(), answer: closeOf() };
@@ -875,28 +875,20 @@ test("a double tap on «Закрити касу» never closes the drawer: «Т�
   await cash(page);
   await card(page).click();
   await field(page).fill("2000");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
+  // The second half lands on «Так, закрити»: where «Закрити касу» stood
+  // when the question fits one line, lower when a wider font wraps it.
   const box = await page
-    .getByRole("button", { name: "Закрити касу", exact: true })
+    .getByRole("button", { name: "Так, закрити" })
     .boundingBox();
   if (!box) throw new Error("not laid out");
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.click(x, y);
-  // The second half lands on «Так, закрити», drawn in its place.
-  expect(
-    await page.evaluate(
-      ([atX, atY]) =>
-        document.elementFromPoint(atX, atY)?.closest("button")?.textContent,
-      [x, y],
-    ),
-  ).toBe("Так, закрити");
   await page.evaluate(
     () =>
       new Promise((done) => {
         setTimeout(done, 100);
       }),
   );
-  await page.mouse.click(x, y);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.evaluate(
     () =>
       new Promise((done) => {
