@@ -21,6 +21,8 @@ import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
+import { Eyelet } from "@/shared/Eyelet";
+import { SendingLine } from "@/shared/Sending";
 import {
   PaperFields,
   paperRefusal,
@@ -528,7 +530,7 @@ function ReturnForm({
   back: () => void;
 }): JSX.Element {
   const ids = useId();
-  const { busy, pending } = useReturnCommand();
+  const { busy, pending, firstSend } = useReturnCommand();
   // Paper mode: the till's switch (`@/sales/paper`); the paper's time is
   // this return's own.
   const mark = usePaperMark(store, token, journalKey, "refund");
@@ -600,6 +602,10 @@ function ReturnForm({
   }
   const units = picked.reduce((n, line) => n + line.units, 0);
   const working = busy || pending !== null;
+  // Its button, while the return is sent for the first time (spec §6.5;
+  // «Усе на бірці» task list, P0-2): its ring turns, and «Ще надсилаємо…»
+  // past 3 s. A kept one checked again is its stub's to say.
+  const pressing = busy && firstSend;
   const ready = !over && !unplaced && parts.length > 0;
 
   // The panel shows once a unit is counted, and its height is kept clear;
@@ -910,9 +916,10 @@ function ReturnForm({
               </label>
             ))}
           </fieldset>
+          <SendingLine busy={pressing} />
           <button
             type="button"
-            className="return-go"
+            className={pressing ? "return-go pressed" : "return-go"}
             disabled={
               blocked ||
               working ||
@@ -924,6 +931,7 @@ function ReturnForm({
               void send();
             }}
           >
+            {pressing && <Eyelet state="spin" size={20} />}
             {unplaced
               ? "Оберіть склад для цілого товару"
               : !mark.ready

@@ -1,4 +1,11 @@
-import { test, expect, openStore, returnUnits, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectStub,
+  openStore,
+  returnUnits,
+  section,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -238,10 +245,11 @@ test("goods bought at another store come back here, and this store hands the mon
       "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
     ),
   ).toBeVisible();
-  await expect(
-    page.getByText("Картка · Поверніть на картку через термінал"),
-  ).toBeVisible();
-  await expect(page.locator(".hand-back-sum")).toHaveText("6 000,00 грн");
+  await expectStub(page, {
+    way: "Картка",
+    say: "Поверніть на картку через термінал",
+    sum: "6 000,00 грн",
+  });
   await expect(
     page.getByText("Поверніть 6 000,00 грн на картку покупця через термінал.", {
       exact: true,
@@ -566,7 +574,7 @@ test("a sale of this store is returned as before, with no store named", async ({
       exact: true,
     })
     .click();
-  await expect(page.getByText("Готівка · Поверніть покупцю")).toBeVisible();
+  await expectStub(page, { way: "Готівка", say: "Поверніть покупцю" });
   await expect(
     page.getByText("Поверніть покупцю 3 000,00 грн готівкою.", { exact: true }),
   ).toHaveCount(1);

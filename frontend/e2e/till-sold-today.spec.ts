@@ -1,4 +1,4 @@
-import { test, expect, openStore, tapSize } from "./fixtures";
+import { test, expect, expectStub, openStore, tapSize } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -193,7 +193,11 @@ test("a figure the server does not give leaves the receipt as it is", async ({
   );
   await sell(page);
   await refused;
-  await expect(page.getByText("Готівка · Разом 1 850,00 грн")).toBeVisible();
+  await expectStub(page, {
+    way: "Готівка",
+    say: "У касу",
+    sum: "1 850,00 грн",
+  });
   await expect(soldToday(page)).toHaveText("");
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(

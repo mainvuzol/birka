@@ -3,17 +3,20 @@ import type { JSX } from "react";
 import { money } from "@/orders/types";
 import { paperText } from "@/sales/paperMark";
 import type { PaperView } from "@/sales/paperMark";
-import { methodHow, methodLabels } from "@/shared/payment";
+import { methodHow } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
+import { RecordedMark } from "@/shared/Eyelet";
+import { Stub, WaySticker } from "@/shared/Stub";
 import type { Credit } from "./types";
 
-/** Over the sum taken: the way, and what to do with it (credits task list,
- * P0-5; owner decision, 2026-10-18, В1 (а)), as the till's receipt says. */
-const wayPills: Record<TillMethod, string> = {
-  CASH: "Готівка",
-  CARD: "Картка · Проведіть на терміналі",
-  TRANSFER: "Переказ · Перевірте, що переказ надійшов",
+/** Under the way's sticker: what to do with the money (credits task list,
+ * P0-5; owner decision, 2026-10-18, В1 (а); spec S22), as the till's
+ * receipt says. */
+const waySays: Record<TillMethod, string> = {
+  CASH: "У касу",
+  CARD: "Проведіть на терміналі",
+  TRANSFER: "Перевірте, що переказ надійшов",
 };
 
 /**
@@ -70,58 +73,87 @@ export function Paid({
   // Seen in the sentence already, from paper and once confirmed later.
   const shown = kept || (payment && paper !== null);
   const firstDays = paper?.first_days === true;
+  const title = payment
+    ? kept
+      ? "Внесок записано один раз"
+      : "Внесок записано"
+    : kept
+      ? "Списання записано один раз"
+      : "Борг списано";
+  const handBack = (
+    <div className="hand-back">
+      {payment &&
+        (paper ? (
+          <>
+            <p className="badge warn" aria-hidden="true">
+              {paperText("payment", paper)}
+            </p>
+            <p className="hand-back-what" aria-hidden="true">
+              {firstDays ? "Уже взяли раніше" : "Уже взяли під час збою"}
+            </p>
+          </>
+        ) : (
+          way && (
+            // Confirmed later, the way alone: «Проведіть» only under «Якщо
+            // картку ще не провели» (owner decision, 2026-10-07).
+            <>
+              <p className="stub-head">
+                <WaySticker way={way} hidden />
+              </p>
+              {!kept && (
+                <p className="stub-say" aria-hidden="true">
+                  {waySays[way]}
+                </p>
+              )}
+            </>
+          )
+        ))}
+      <p className="hand-back-sum stub-sum" aria-hidden="true">
+        <Sum value={money(amount)} />
+      </p>
+      <p id={sentence} className={shown ? undefined : "visually-hidden"}>
+        {kept && (
+          // The pill and the sum, heard (review, 2026-10-18).
+          <span className="visually-hidden">
+            {payment
+              ? `Внесок${paper ? " з паперу" : ""} ${money(amount)}${way ? ` ${methodHow[way]}` : ""}. `
+              : `Списано ${money(amount)}. `}
+          </span>
+        )}
+        {said}
+      </p>
+    </div>
+  );
+  const owed = !shown && payment && (
+    <p className="paid-owed stub-line" aria-hidden="true">
+      {credit.status === "SETTLED"
+        ? "Борг сплачено повністю."
+        : `Залишок боргу ${money(credit.owed)}`}
+    </p>
+  );
   return (
     <div className={`paid-result${kept ? " kept" : ""}`}>
-      <h3 ref={heading} tabIndex={-1} aria-describedby={sentence}>
-        {payment
-          ? kept
-            ? "Внесок записано один раз"
-            : "Внесок записано"
-          : kept
-            ? "Списання записано один раз"
-            : "Борг списано"}
+      <h3
+        ref={heading}
+        tabIndex={-1}
+        aria-describedby={sentence}
+        className={kept ? undefined : "result-title"}
+      >
+        {!kept && <RecordedMark />}
+        {title}
       </h3>
-      <div className="hand-back">
-        {payment &&
-          (paper ? (
-            <>
-              <p className="badge warn" aria-hidden="true">
-                {paperText("payment", paper)}
-              </p>
-              <p className="hand-back-what" aria-hidden="true">
-                {firstDays ? "Уже взяли раніше" : "Уже взяли під час збою"}
-              </p>
-            </>
-          ) : (
-            way && (
-              // Confirmed later, the way alone: «Проведіть» only under «Якщо
-              // картку ще не провели» (owner decision, 2026-10-07).
-              <p className="badge way-pill" aria-hidden="true">
-                {kept ? methodLabels[way] : wayPills[way]}
-              </p>
-            )
-          ))}
-        <p className="hand-back-sum" aria-hidden="true">
-          <Sum value={money(amount)} />
-        </p>
-        <p id={sentence} className={shown ? undefined : "visually-hidden"}>
-          {kept && (
-            // The pill and the sum, heard (review, 2026-10-18).
-            <span className="visually-hidden">
-              {payment
-                ? `Внесок${paper ? " з паперу" : ""} ${money(amount)}${way ? ` ${methodHow[way]}` : ""}. `
-                : `Списано ${money(amount)}. `}
-            </span>
-          )}
-          {said}
-        </p>
-      </div>
-      {!shown && payment && (
-        <p className="paid-owed" aria-hidden="true">
-          {credit.status === "SETTLED"
-            ? "Борг сплачено повністю."
-            : `Залишок боргу ${money(credit.owed)}`}
-        </p>
+      {kept ? (
+        <>
+          {handBack}
+          {owed}
+        </>
+      ) : (
+        // Its stub (spec S22; «Усе на бірці» task list, P0-2): knotted once
+        // nothing is left on the debt.
+        <Stub state={credit.status === "SETTLED" ? "settled" : "recorded"}>
+          {handBack}
+          {owed}
+        </Stub>
       )}
       {next && (
         <div className="result-next">

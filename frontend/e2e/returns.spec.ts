@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectStub,
   more,
   openStore,
   returnUnits,
@@ -236,8 +237,11 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
   await expect(
     page.getByRole("heading", { name: "Повернення записано" }),
   ).toBeVisible();
-  await expect(page.getByText("Готівка · Поверніть покупцю")).toBeVisible();
-  await expect(page.locator(".hand-back-sum")).toHaveText("6 000,00 грн");
+  await expectStub(page, {
+    way: "Готівка",
+    say: "Поверніть покупцю",
+    sum: "6 000,00 грн",
+  });
   await expect(
     page.getByText("Поверніть покупцю 6 000,00 грн готівкою.", { exact: true }),
   ).toHaveCount(1);
@@ -413,10 +417,11 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
     .click();
   // Answered at once: the money goes back now, said plainly (owner
   // decision, 2026-10-08: only a kept return confirmed later hedges it).
-  await expect(
-    page.getByText("Картка · Поверніть на картку через термінал"),
-  ).toBeVisible();
-  await expect(page.locator(".hand-back-sum")).toHaveText("3 000,00 грн");
+  await expectStub(page, {
+    way: "Картка",
+    say: "Поверніть на картку через термінал",
+    sum: "3 000,00 грн",
+  });
   await expect(
     page.getByText("Поверніть 3 000,00 грн на картку покупця через термінал.", {
       exact: true,
@@ -460,9 +465,7 @@ test("money back on a card goes through the terminal, and a transfer is sent", a
       exact: true,
     })
     .click();
-  await expect(
-    page.getByText("Переказ · Надішліть покупцю переказом"),
-  ).toBeVisible();
+  await expectStub(page, { way: "Переказ", say: "Надішліть покупцю переказом" });
   await expect(
     page.getByText("Надішліть покупцю 3 000,00 грн переказом.", {
       exact: true,
@@ -552,4 +555,39 @@ test("the «Брак» takes no deliveries, and is named in the stock", async ({
   await expect(
     page.locator(`option[value="${fixture.bin_location_id}"]`),
   ).toContainText("брак, не продається");
+});
+
+test("a return sent: its button turns its ring and nothing kept is shown until an answer is lost; answered, its stub torn off («Усе на бірці» task list, P0-2)", async ({
+  page,
+}) => {
+  const { model } = await sold(page, 1);
+  let answer: (() => void) | undefined;
+  const held = new Promise<void>((done) => {
+    answer = done;
+  });
+  await page.route("**/api/v1/sales/*/refunds", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await find(page, model);
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await returnUnits(page, { intact: 1 });
+  const go = page.getByRole("button", {
+    name: "Повернути покупцю 3 000,00 грн готівкою",
+  });
+  await go.click();
+  await expect(go).toHaveClass(/\bpressed\b/);
+  await expect(go.locator(".eyelet-spin")).toHaveCount(1);
+  await expect(page.locator(".eyelet-spin")).toHaveCount(1);
+  // Its first send is the dock's to say: no stub, no banner of a kept one.
+  await expect(page.locator(".stub-kept, .banner-kept")).toHaveCount(0);
+  await expect(page.getByText("Повернення ще не підтверджено")).toHaveCount(0);
+  answer?.();
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeVisible();
+  await expect(page.locator(".receipt .stub")).toHaveClass(
+    /\bstub-recorded\b/,
+  );
+  await expect(page.locator(".eyelet-spin")).toHaveCount(0);
 });

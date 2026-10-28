@@ -27,6 +27,8 @@ import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
 import { buzz } from "@/shared/telegram";
 import { Sum } from "@/shared/Sum";
+import { Eyelet } from "@/shared/Eyelet";
+import { SendingLine } from "@/shared/Sending";
 import {
   PaperFields,
   paperRefusal,
@@ -165,7 +167,7 @@ export function Debt({
   /** Where «←» leads: the list, or the customer's card it was opened from. */
   backTo?: string;
 }): JSX.Element {
-  const { busy, pending } = useCreditCommand();
+  const { busy, pending, firstSend } = useCreditCommand();
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [amount, setAmount] = useState("");
   const [asking, setAsking] = useState(false);
@@ -192,6 +194,14 @@ export function Debt({
       : networkOwner;
   const owed = kopecks(credit.owed) ?? 0n;
   const working = busy || pending !== null;
+  // What is sent for the first time (spec §6.5; «Усе на бірці» task list,
+  // P0-2): the payment's way turns its ring, the others step back; a
+  // write-off, its own button. A kept one checked again is its stub's to
+  // say, not the dock's.
+  const sending = busy && firstSend ? pending : null;
+  const pressing =
+    sending?.body.kind === "payment" ? sending.body.payment_method : null;
+  const writingOff = sending?.body.kind === "write-off";
   // Paper mode: the till's switch (`@/sales/paper`); the paper's time is
   // this payment's own (owner decision, 2026-10-10; ADR-0021).
   const paperMark = usePaperMark(store, token, journalKey, "credit");
@@ -631,16 +641,25 @@ export function Debt({
                   "Впишіть суму внеску"
                 )}
               </p>
+              <SendingLine busy={pressing !== null} />
               <div className="pay-ways">
                 {tillMethods.map((way) => (
                   <button
                     key={way}
                     type="button"
+                    className={
+                      pressing === null
+                        ? undefined
+                        : pressing === way
+                          ? "pressed"
+                          : "stepped-back"
+                    }
                     disabled={blocked || working || !paperMark.ready || !typed}
                     onClick={() => {
                       pay(way);
                     }}
                   >
+                    {pressing === way && <Eyelet state="spin" size={20} />}
                     {paperMark.paper
                       ? `З паперу · ${methodLabels[way]}`
                       : methodLabels[way]}
@@ -675,14 +694,17 @@ export function Debt({
                     />
                     <NoCustomerData id={hint} />
                   </label>
+                  <SendingLine busy={writingOff} />
                   <div className="actions">
                     <button
                       type="button"
-                      disabled={reason.trim() === ""}
+                      className={writingOff ? "pressed" : undefined}
+                      disabled={reason.trim() === "" || working}
                       onClick={() => {
                         void send({ kind: "write-off", reason: reason.trim() });
                       }}
                     >
+                      {writingOff && <Eyelet state="spin" size={20} />}
                       Так, списати {money(credit.owed)}
                     </button>
                     <button

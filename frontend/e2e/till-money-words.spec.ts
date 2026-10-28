@@ -171,7 +171,7 @@ test("sums read «12 950,00 грн», thousands kept together, in even digits, a
   await expect(page.locator(".line span")).toHaveText(
     /^7 × 1\u00a0850,50\u00a0грн$/,
   );
-  await expect(page.locator("p.total")).toHaveText(/12\u00a0953,50\u00a0грн/);
+  await expect(page.locator(".stub-sum")).toHaveText(/12\u00a0953,50\u00a0грн/);
 });
 
 test("where motion is reduced a changed sum shows no fold behind it (spec §5.8; P0-1)", async ({

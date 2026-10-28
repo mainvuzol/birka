@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  expectStub,
+  fillLine,
+  openStore,
+  tapSize,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -172,7 +179,11 @@ test("a line with nothing on the shelf is dropped, and the rest is sold", async 
   await expect(
     page.getByText(`Не продано — на полиці не було: ${empty.name} сірий · M.`),
   ).toBeVisible();
-  await expect(page.getByText("Готівка · Разом 2 000,00 грн")).toBeVisible();
+  await expectStub(page, {
+    way: "Готівка",
+    say: "У касу",
+    sum: "2 000,00 грн",
+  });
   expect(sent[1]?.missing_in_store).toEqual([{ line_index: 0, quantity: 0 }]);
   // The two the ledger believed in were taken off; the one there was sold.
   expect(await held(page, empty)).toBe(0);

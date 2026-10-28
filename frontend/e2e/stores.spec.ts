@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectStub,
   more,
   openStore,
   refuseOnce,
@@ -491,9 +492,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
       .getByRole("button", { name: "Картка" })
       .click();
     const paid = page.locator(".paid-result");
-    await expect(paid.locator(".way-pill")).toHaveText(
-      "Картка · Проведіть на терміналі",
-    );
+    await expectStub(paid, { way: "Картка", say: "Проведіть на терміналі" });
     await expect(paid.locator(".paid-owed")).toHaveText(
       "Залишок боргу 1 500,00 грн",
     );

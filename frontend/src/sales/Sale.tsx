@@ -10,8 +10,12 @@ import { asInput } from "@/prices/SuggestedPrice";
 import { sizeLabel } from "@/returns/types";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
-import { methodHow, methodLabels, tillMethods } from "@/shared/payment";
-import type { TillMethod } from "@/shared/payment";
+import { methodLabels, tillMethods } from "@/shared/payment";
+import type { PaymentMethod, TillMethod } from "@/shared/payment";
+import { Eyelet, RecordedMark } from "@/shared/Eyelet";
+import { SendingLine } from "@/shared/Sending";
+import { Banner } from "@/shared/Banner";
+import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { backNoted, useReach } from "@/shared/reach";
 import { buzz } from "@/shared/telegram";
 import { usePanelRoom } from "@/shared/panel";
@@ -274,7 +278,7 @@ export function Sale({
   // a shortage. Said once, until answered or the next time it comes back;
   // never with the paper mode on, which answers it (`./paper`).
   const back = useReach((state) => state.back);
-  const { busy, pending } = useSaleCommand();
+  const { busy, pending, firstSend } = useSaleCommand();
   const cache = useQueryClient();
 
   const mayCorrect = store.permissions.includes(
@@ -778,6 +782,10 @@ export function Sale({
           item.available_quantity > 0,
       ));
   const working = busy || pending !== null;
+  // The way of the sale sent for the first time (spec §6.5; «Усе на бірці»
+  // task list, P0-2): its ring turns, the others step back. A kept sale
+  // checked again is its stub's to say, not the dock's.
+  const pressing = busy && firstSend ? method : null;
   // The server's answer to a shortage opens above the panel, in view and
   // focused, so it is never past the edge of the screen (redesign P0-4).
   const shortRef = useRef<HTMLElement>(null);
@@ -860,7 +868,7 @@ export function Sale({
       <h2>Продаж</h2>
       {mode}
       {back && (
-        <section className="notice" aria-label="Сервер знову відповідає">
+        <Banner kind="back" label="Сервер знову відповідає">
           <p>
             Сервер знову відповідає: продажі з паперу можна вносити. Внесіть їх
             до закриття каси.
@@ -880,10 +888,10 @@ export function Sale({
               Пізніше
             </button>
           </div>
-        </section>
+        </Banner>
       )}
       {paper && (
-        <section className="notice" aria-label="Режим: продаж з паперу">
+        <Banner kind="paper" label="Режим: продаж з паперу">
           <h3>Режим: продаж з паперу</h3>
           {/* The seller does not see «Звіт» (owner decision, 2026-10-15, В5). */}
           {firstDays !== null && (
@@ -893,7 +901,7 @@ export function Sale({
                 : "Продаж позначать «продано під час збою». Він увійде в сьогоднішні продажі й у касу до наступного закриття."}
             </p>
           )}
-        </section>
+        </Banner>
       )}
       <fieldset disabled={blocked || working}>
         <label className="check">
@@ -1488,11 +1496,19 @@ export function Sale({
               </>
             )}
           </p>
+          <SendingLine busy={pressing !== null} />
           <div className="pay-ways">
             {tillMethods.map((way) => (
               <button
                 key={way}
                 type="button"
+                className={
+                  pressing === null
+                    ? undefined
+                    : pressing === way
+                      ? "pressed"
+                      : "stepped-back"
+                }
                 disabled={
                   blocked ||
                   working ||
@@ -1504,6 +1520,7 @@ export function Sale({
                   void send(way, found, missing, clarified);
                 }}
               >
+                {pressing === way && <Eyelet state="spin" size={20} />}
                 {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
               </button>
             ))}
@@ -1556,6 +1573,13 @@ function SoldToday({
   );
 }
 
+/** What the stub says to do with the money, by its way (spec S11). */
+const waySays: Partial<Record<PaymentMethod, string>> = {
+  CASH: "У касу",
+  CARD: "Проведіть на терміналі",
+  TRANSFER: "Перевірте, що переказ надійшов, перш ніж віддати товар",
+};
+
 function Receipt({
   receipt,
   placeOf,
@@ -1590,9 +1614,22 @@ function Receipt({
     mark !== null && way !== null
       ? paidDuringOutage(way, mark.first_days === true)
       : null;
+  // What to do with the money (spec S11; «Усе на бірці» task list, P0-2):
+  // the terminal for a card, the drawer for cash, a transfer checked before
+  // the goods go (ADR-0012 G38). Typed from paper, the money was taken
+  // already: only what the paper says of it, and nothing of cash.
+  const say =
+    way === null
+      ? null
+      : mark !== null
+        ? paid && `${paid.charAt(0).toUpperCase()}${paid.slice(1)}.`
+        : (waySays[way] ?? null);
   return (
-    <section>
-      <h2>Продаж записано</h2>
+    <section className="receipt">
+      <h2 className="result-title t-sheet">
+        <RecordedMark />
+        Продаж записано
+      </h2>
       {/* A sale typed from paper for someone else is theirs, and says
           nothing of the seller's own day (owner decision, 2026-10-17). */}
       {(mark === null ||
@@ -1600,94 +1637,66 @@ function Receipt({
         mark.sold_by_user_id === userId) && (
         <SoldToday storeId={storeId} token={token} saleId={receipt.id} />
       )}
-      {mark && <p className="badge">{markText(mark)}</p>}
-      {receipt.credit ? (
-        // Paid in parts, the terminal takes only what is paid now: the sum
-        // first, and how (redesign P0-6). From the answer, never worked out.
-        <p className="total">
-          <span>
-            {way !== null && `${methodLabels[way]} · `}
-            {way === "CARD" && paid === null
-              ? "Проведіть на терміналі"
-              : "Зараз"}{" "}
-            <strong>{money(receipt.credit.paid_now)}</strong>
-            {paid !== null
-              ? ` — ${paid}`
-              : way === "TRANSFER" &&
-                " — перевірте, що переказ надійшов, перш ніж віддати товар"}
-          </span>
-        </p>
-      ) : way === null ? (
-        <p className="total">
-          Разом <strong>{money(receipt.total)}</strong>
-        </p>
-      ) : paid !== null ? (
-        <p className="total">
-          <span>
-            {methodLabels[way]} · Разом <strong>{money(receipt.total)}</strong>{" "}
-            — {paid}
-          </span>
-        </p>
-      ) : way === "TRANSFER" ? (
-        // Checked before the goods are handed over (ADR-0012 G38). One
-        // sentence, so it wraps as one rather than splitting the total's row.
-        <p className="total">
-          <span>
-            {methodLabels[way]} · Разом <strong>{money(receipt.total)}</strong>{" "}
-            — перевірте, що переказ надійшов, перш ніж віддати товар
-          </span>
-        </p>
-      ) : (
-        // The terminal is charged after the press, for the sum the receipt
-        // shows (owner decision, 2026-10-04).
-        <p className="total">
-          {methodLabels[way]} ·{" "}
-          {way === "CARD" ? "Проведіть на терміналі" : "Разом"}{" "}
-          <strong>{money(receipt.total)}</strong>
-        </p>
-      )}
-      {receipt.credit && (
-        <div className="section-block">
-          <h3>Оплата частинами</h3>
-          <p>
-            Разом за товар <strong>{money(receipt.total)}</strong>
+      <Stub state="recorded">
+        {(way !== null || mark) && (
+          <p className="stub-head">
+            {way !== null && <WaySticker way={way} />}
+            {mark && <span className="badge warn">{markText(mark)}</span>}
           </p>
-          <p>
-            Сплачено зараз <strong>{money(receipt.credit.paid_now)}</strong>
-            {way !== null && ` ${methodHow[way]}`}
-            {paid !== null && ` — ${paid}`}
-          </p>
-          <p>
-            Покупець винен <strong>{money(receipt.credit.owed)}</strong>
-          </p>
-          {/* The row's button, opened on the debts for whoever sells in
-              parts (owner decision after #141, 2026-10-26). */}
-          <p className="hint">Наступні внески — у розділі «Клієнти».</p>
-        </div>
-      )}
-      {/* Each line as a tag: the model, its size, how many at what price
-          (redesign P1-1). */}
-      {receipt.items.map((item) => {
-        const sent = sizes[stockKey(item)];
-        const size =
-          item.size !== undefined && item.size !== null
-            ? sizeLabel(item.size)
-            : sent !== undefined
-              ? visible(sent)
-              : null;
-        return (
-          <div className="line" key={item.id}>
-            <strong>
-              {visible(item.display_name)}
-              {size !== null && ` · ${size}`}
-              {placeOf(item.source_location_id)}
-            </strong>
-            <span>
-              {item.quantity} × {money(item.final_unit_price)}
+        )}
+        {say !== null && <p className="stub-say">{say}</p>}
+        {/* Paid in parts, the terminal takes only what is paid now: that
+            sum first (redesign P0-6). From the answer, never worked out. */}
+        <p className="stub-sum">
+          {(receipt.credit || way === null) && (
+            <span className="stub-sum-what">
+              {receipt.credit ? "Зараз" : "Разом"}{" "}
             </span>
-          </div>
-        );
-      })}
+          )}
+          <Sum
+            value={money(
+              receipt.credit ? receipt.credit.paid_now : receipt.total,
+            )}
+          />
+        </p>
+        {receipt.credit && (
+          <>
+            <p className="stub-line">
+              Разом за товар <strong>{money(receipt.total)}</strong>
+            </p>
+            <p className="stub-line">
+              Покупець винен <strong>{money(receipt.credit.owed)}</strong>
+            </p>
+            {/* The row's button, opened on the debts for whoever sells in
+                parts (owner decision after #141, 2026-10-26). */}
+            <p className="stub-line">Наступні внески — у розділі «Клієнти».</p>
+          </>
+        )}
+        <Perforation />
+        {/* Each line: the model, its size, how many at what price
+            (redesign P1-1), and its warehouse where they differ. */}
+        {receipt.items.map((item) => {
+          const sent = sizes[stockKey(item)];
+          const size =
+            item.size !== undefined && item.size !== null
+              ? sizeLabel(item.size)
+              : sent !== undefined
+                ? visible(sent)
+                : null;
+          return (
+            <div className="line" key={item.id}>
+              <strong>
+                {visible(item.display_name)}
+                {size !== null && ` · ${size}`}
+                {placeOf(item.source_location_id)}
+              </strong>
+              <span>
+                {item.quantity} × {money(item.final_unit_price)}
+              </span>
+            </div>
+          );
+        })}
+      </Stub>
       {/* What the sale did to the books, in coats, as the server counted
           them; an answer stored before it counted says it without. */}
       {(receipt.found_quantity ?? receipt.corrections.length) > 0 && (
@@ -1731,9 +1740,6 @@ function Receipt({
           Змінити спосіб оплати
         </button>
       )}
-      <button type="button" onClick={next}>
-        Новий продаж
-      </button>
       {returnSale && (
         // A sale is never changed: a mistake is returned, then sold again
         // (I8; redesign P1-2).
@@ -1750,6 +1756,12 @@ function Receipt({
           </button>
         </p>
       )}
+      {/* Under the thumb, as the pay ways were (spec §6.5). */}
+      <div className="result-dock">
+        <button type="button" onClick={next}>
+          Новий продаж
+        </button>
+      </div>
     </section>
   );
 }

@@ -12,18 +12,24 @@ import { visible } from "@/shared/visible";
  * `since` is when it went down, kept from the first failure until an answer.
  * `back` is that this phone saw it come back, until the till's reminder is
  * answered or it goes down again (redesign P1-7).
+ * `checked` is when the phone last asked about what it keeps — the probe,
+ * or a kept attempt resent — for the kept stub's «остання перевірка»
+ * («Усе на бірці» task list, P0-2); none before the first time since the
+ * server went down, so an older outage's never shows.
  * Only in memory: a reopened app starts by asking.
  */
 export interface Reach {
   down: boolean;
   since: string | null;
   back: boolean;
+  checked: string | null;
 }
 
 export const useReach = create<Reach>(() => ({
   down: false,
   since: null,
   back: false,
+  checked: null,
 }));
 
 /** No answer: the server is down from now, or still since the first one. */
@@ -33,6 +39,7 @@ export function noteUnreachable(): void {
       down: true,
       since: new Date().toISOString(),
       back: false,
+      checked: null,
     });
 }
 
@@ -40,6 +47,11 @@ export function noteUnreachable(): void {
 export function noteAnswered(): void {
   if (useReach.getState().down)
     useReach.setState({ down: false, since: null, back: true });
+}
+
+/** The phone asks about what it keeps, now. */
+export function noteChecked(): void {
+  useReach.setState({ checked: new Date().toISOString() });
 }
 
 /** The till's reminder answered: not shown again until the next return. */
@@ -99,7 +111,10 @@ export function useAutoCheck(checks: readonly Check[]): void {
       useReach.subscribe((state, previous) => {
         if (!previous.down || state.down) return;
         for (const check of latest.current)
-          if (check.pending && !check.busy) check.run();
+          if (check.pending && !check.busy) {
+            noteChecked();
+            check.run();
+          }
       }),
     [],
   );
@@ -112,6 +127,7 @@ export function useAutoCheck(checks: readonly Check[]): void {
       if (check.busy) checked.current[index] = true;
       else if (check.pending) {
         checked.current[index] = true;
+        noteChecked();
         check.run();
       }
     });
@@ -155,6 +171,7 @@ async function probe(): Promise<void> {
   if (probing || holders === 0 || !useReach.getState().down) return;
   probing = true;
   stopProbing();
+  noteChecked();
   let ready = false;
   try {
     const response = await fetch("/api/v1/ready", {
@@ -208,6 +225,15 @@ function clockOf(iso: string): string {
   return new Date(iso).toLocaleTimeString("uk-UA", {
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+/** «11:42:20»: a check's moment, to the second, as checks come every 20 s. */
+export function secondsOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
 }
 

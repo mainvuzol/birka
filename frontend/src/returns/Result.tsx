@@ -2,9 +2,11 @@ import { useEffect, useRef } from "react";
 import type { JSX } from "react";
 import { kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { methodLabels, refundHow } from "@/shared/payment";
+import { refundHow } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
+import { RecordedMark } from "@/shared/Eyelet";
+import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { paperText } from "@/sales/paperMark";
 import { isRecord } from "@/shared/journal";
@@ -130,11 +132,12 @@ function mistakeText(
   return `Помилилися з поверненням? ${sell}${first}.`;
 }
 
-/** Over the sum to hand back: the way, and what to do with it (P0-5). */
-const wayPills: Record<TillMethod, string> = {
-  CASH: "Готівка · Поверніть покупцю",
-  CARD: "Картка · Поверніть на картку через термінал",
-  TRANSFER: "Переказ · Надішліть покупцю переказом",
+/** Under the way's sticker: what to do with the money (P0-5; «Усе на
+ * бірці» task list, P0-2). */
+const refundSays: Record<TillMethod, string> = {
+  CASH: "Поверніть покупцю",
+  CARD: "Поверніть на картку через термінал",
+  TRANSFER: "Надішліть покупцю переказом",
 };
 
 /**
@@ -246,138 +249,156 @@ export function Result({
     (item) => item.condition === "INTACT" && chose.has(item.sale_item_id),
   );
   const damaged = units((item) => item.condition === "DAMAGED");
-  const body = (
+  // The money, large: its way's sticker and what to do with it over the sum
+  // (spec §6.30). Confirmed later, the way alone, and «Поверніть» said only
+  // under «Якщо гроші ще не повернули» (owner decision, 2026-10-08; review,
+  // 2026-10-18).
+  const handed = nothingBack ? (
     <>
-      {kept ? (
-        <h3>Повернення записано один раз</h3>
-      ) : (
-        <h2 ref={heading} tabIndex={-1}>
-          Повернення записано
-        </h2>
-      )}
-      {paper && <p className="badge warn">{paperText("return", paper)}</p>}
-      {elsewhere && (
-        <p>
-          {paper
-            ? "Товар куплено в іншому магазині мережі — гроші віддавав ваш магазин."
-            : "Товар куплено в іншому магазині мережі — гроші віддаєте ви."}
-        </p>
-      )}
-      <div className="hand-back">
-        {nothingBack ? (
-          <>
-            <p className="hand-back-sum" aria-hidden="true">
-              <Sum value={money("0.00")} />
-            </p>
-            <p>Грошей покупцю не повертаємо.</p>
-          </>
-        ) : paper ? (
-          // Handed back already: what went, and the paper's words.
-          <>
-            <p className="hand-back-what" aria-hidden="true">
-              {firstDays
-                ? "Уже повернули раніше"
-                : "Уже повернули під час збою"}
-            </p>
-            <p className="hand-back-sum" aria-hidden="true">
-              <Sum value={money(amount)} />
-            </p>
-            <p>{handedBack(amount, way, firstDays)}</p>
-          </>
-        ) : (
-          // Seen as the way and the sum; heard as the one sentence.
-          <>
-            {/* Confirmed later, the way alone: «Поверніть» is said only
-                under «Якщо гроші ще не повернули» (owner decision,
-                2026-10-08; review, 2026-10-18). */}
-            {(!kept || way) && (
-              <p className="badge way-pill" aria-hidden="true">
-                {kept && way
-                  ? methodLabels[way]
-                  : way
-                    ? wayPills[way]
-                    : "Поверніть покупцю"}
-              </p>
-            )}
-            <p className="hand-back-sum" aria-hidden="true">
-              <Sum value={money(amount)} />
-            </p>
-            {kept ? (
-              // Confirmed later: said whole, and only if nobody did.
-              <p>{handBackOnce(amount, way)}</p>
-            ) : (
-              <p className="visually-hidden">{handBack(amount, way)}</p>
-            )}
-          </>
-        )}
-      </div>
-      {credit && (
-        <>
-          {(kopecks(credit.debt_reduced) ?? 0n) > 0n && (
-            <p>Борг покупця зменшено на {money(credit.debt_reduced)}.</p>
-          )}
-          <p>
-            {(kopecks(credit.owed_after) ?? 0n) > 0n
-              ? `Покупець ще винен ${money(credit.owed_after)}.`
-              : "Покупець більше нічого не винен."}
-          </p>
-        </>
-      )}
-      <div className="return-goods">
-        {soldFrom > 0 && (
-          <p>Цілі: {soldFrom} шт. — на склад, з якого продали.</p>
-        )}
-        {here > 0 && (
-          <p>
-            Цілі: {here} шт. — на склад {chosen ? `«${chosen}» ` : ""}вашого
-            магазину.
-          </p>
-        )}
-        {damaged > 0 && (
-          // «Брак» is opened by whoever handles damaged goods.
-          <p className="damaged-line">
-            Пошкоджені: {damaged} шт. — у «Брак».
-            {store.permissions.includes("damaged:handle") &&
-              " Перевірити можна в розділі «Брак»."}
-          </p>
-        )}
-      </div>
+      <p className="hand-back-sum stub-sum" aria-hidden="true">
+        <Sum value={money("0.00")} />
+      </p>
+      <p>Грошей покупцю не повертаємо.</p>
+    </>
+  ) : paper ? (
+    // Handed back already: what went, and the paper's words.
+    <>
+      <p className="hand-back-what" aria-hidden="true">
+        {firstDays ? "Уже повернули раніше" : "Уже повернули під час збою"}
+      </p>
+      <p className="hand-back-sum stub-sum" aria-hidden="true">
+        <Sum value={money(amount)} />
+      </p>
+      <p>{handedBack(amount, way, firstDays)}</p>
+    </>
+  ) : (
+    // Seen as the way and the sum; heard as the one sentence.
+    <>
       {!kept && (
-        // How a mistaken return is mended (owner decision, 2026-10-17,
-        // В2 (а); returns task list, P1-5): sold again at the till, damaged
-        // goods first put back on sale in «Брак»; a sale in parts, by the
-        // owner. What this person cannot open is said, never offered.
-        <p className="hint return-mistake">
-          {mistakeText(
-            !!credit,
-            damaged > 0,
-            store.permissions.includes("sale:create"),
-            store.permissions.includes("damaged:handle"),
-          )}
+        <p className="stub-say" aria-hidden="true">
+          {way ? refundSays[way] : "Поверніть покупцю"}
         </p>
+      )}
+      <p className="hand-back-sum stub-sum" aria-hidden="true">
+        <Sum value={money(amount)} />
+      </p>
+      {kept ? (
+        // Confirmed later: said whole, and only if nobody did.
+        <p>{handBackOnce(amount, way)}</p>
+      ) : (
+        <p className="visually-hidden">{handBack(amount, way)}</p>
       )}
     </>
   );
-  if (next.kept) return <div className="return-result kept">{body}</div>;
+  const stickers = (paper || (way && !nothingBack)) && (
+    <p className="stub-head">
+      {way && !paper && !nothingBack && <WaySticker way={way} hidden />}
+      {paper && (
+        <span className="badge warn">{paperText("return", paper)}</span>
+      )}
+    </p>
+  );
+  const debt = credit && (
+    <>
+      {(kopecks(credit.debt_reduced) ?? 0n) > 0n && (
+        <p className="stub-line">
+          Борг покупця зменшено на {money(credit.debt_reduced)}.
+        </p>
+      )}
+      <p className="stub-line">
+        {(kopecks(credit.owed_after) ?? 0n) > 0n
+          ? `Покупець ще винен ${money(credit.owed_after)}.`
+          : "Покупець більше нічого не винен."}
+      </p>
+    </>
+  );
+  const goods = (
+    <div className="return-goods">
+      {soldFrom > 0 && (
+        <p className="stub-line">
+          Цілі: {soldFrom} шт. — на склад, з якого продали.
+        </p>
+      )}
+      {here > 0 && (
+        <p className="stub-line">
+          Цілі: {here} шт. — на склад {chosen ? `«${chosen}» ` : ""}вашого
+          магазину.
+        </p>
+      )}
+      {damaged > 0 && (
+        // «Брак» is opened by whoever handles damaged goods.
+        <p className="stub-line damaged-line">
+          Пошкоджені: {damaged} шт. — у «Брак».
+          {store.permissions.includes("damaged:handle") &&
+            " Перевірити можна в розділі «Брак»."}
+        </p>
+      )}
+    </div>
+  );
+  const elsewhereLine = elsewhere && (
+    <p>
+      {paper
+        ? "Товар куплено в іншому магазині мережі — гроші віддавав ваш магазин."
+        : "Товар куплено в іншому магазині мережі — гроші віддаєте ви."}
+    </p>
+  );
+  // A kept return confirmed later, compact, in its own stub (`App.tsx`).
+  if (next.kept)
+    return (
+      <div className="return-result kept">
+        <h3>Повернення записано один раз</h3>
+        {paper && <p className="badge warn">{paperText("return", paper)}</p>}
+        {elsewhereLine}
+        <div className="hand-back">
+          {way && !paper && !nothingBack && (
+            <p className="stub-head">
+              <WaySticker way={way} hidden />
+            </p>
+          )}
+          {handed}
+        </div>
+        {debt}
+        {goods}
+      </div>
+    );
   return (
-    <section className="return-result">
-      {body}
-      {next.sell ? (
-        <div className="result-next">
+    <section className="return-result receipt">
+      <h2 ref={heading} tabIndex={-1} className="result-title t-sheet">
+        <RecordedMark />
+        Повернення записано
+      </h2>
+      {elsewhereLine}
+      <Stub state="recorded">
+        {stickers}
+        <div className="hand-back">{handed}</div>
+        {debt}
+        <Perforation />
+        {goods}
+      </Stub>
+      {/* How a mistaken return is mended (owner decision, 2026-10-17,
+          В2 (а); returns task list, P1-5): sold again at the till, damaged
+          goods first put back on sale in «Брак»; a sale in parts, by the
+          owner. What this person cannot open is said, never offered. */}
+      <p className="hint return-mistake">
+        {mistakeText(
+          !!credit,
+          damaged > 0,
+          store.permissions.includes("sale:create"),
+          store.permissions.includes("damaged:handle"),
+        )}
+      </p>
+      {/* «Новий продаж» under the thumb; another return and the list,
+          quiet (spec §6.5). */}
+      <div className="result-next">
+        {next.sell && (
           <button type="button" disabled={next.blocked} onClick={next.sell}>
             Новий продаж
           </button>
-          <button type="button" className="quiet" onClick={next.more}>
-            Ще повернення
-          </button>
-        </div>
-      ) : (
-        <div className="result-next">
-          <button type="button" onClick={next.more}>
-            До списку
-          </button>
-        </div>
-      )}
+        )}
+        <button type="button" className="quiet" onClick={next.more}>
+          {next.sell ? "Ще повернення" : "До списку"}
+        </button>
+      </div>
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, expectStub, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -414,10 +414,11 @@ test("a payment's result says what was done, how, the sum large and what is owed
   await expect(heading).toHaveAccessibleDescription(
     "Внесок 400,00 грн прийнято переказом. Залишок боргу 777,00 грн.",
   );
-  await expect(paid.locator(".way-pill")).toHaveText(
-    "Переказ · Перевірте, що переказ надійшов",
-  );
-  await expect(paid.locator(".hand-back-sum")).toHaveText("400,00 грн");
+  await expectStub(paid, {
+    way: "Переказ",
+    say: "Перевірте, що переказ надійшов",
+    sum: "400,00 грн",
+  });
   // Seen on its own line, not only inside the sentence a screen reader hears.
   await expect(
     paid.getByText("Залишок боргу 777,00 грн", { exact: true }),
@@ -852,3 +853,75 @@ for (const [name, theme] of [
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `test-results/credits-paid-${name}.png` });
   });
+
+test("a payment and a write-off sent: the pressed one turns its ring, the payment's other ways step back, past 3 s «Ще надсилаємо…» over them, and nothing kept is shown («Усе на бірці» task list, P0-2)", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const one = debt();
+  await serve(page, one);
+  let answer: (() => void) | undefined;
+  const held = new Promise<void>((done) => {
+    answer = done;
+  });
+  await page.route(`**/api/v1/credits/${one.id}/payments`, async (route) => {
+    const body = route.request().postDataJSON() as { amount: string };
+    await held;
+    await route.fulfill({
+      status: 201,
+      json: {
+        ...one,
+        paid: (Number(one.paid) + Number(body.amount)).toFixed(2),
+      },
+    });
+  });
+  await opened(page);
+  await page.getByLabel("Сума внеску, грн").fill("400");
+  const card = panel(page).getByRole("button", { name: "Картка", exact: true });
+  await card.click();
+  await expect(card).toHaveClass(/\bpressed\b/);
+  await expect(card.locator(".eyelet-spin")).toHaveCount(1);
+  for (const way of ["Готівка", "Переказ"])
+    await expect(
+      panel(page).getByRole("button", { name: way, exact: true }),
+    ).toHaveClass(/\bstepped-back\b/);
+  await page.clock.runFor(2_900);
+  await expect(page.getByText("Ще надсилаємо…")).toHaveCount(0);
+  await page.clock.runFor(200);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Ще надсилаємо…" }),
+  ).toBeVisible();
+  await expect(page.locator(".stub-kept, .banner-kept")).toHaveCount(0);
+  answer?.();
+  const paid = page.locator(".paid-result");
+  await expect(
+    paid.getByRole("heading", { name: "Внесок записано" }),
+  ).toBeVisible();
+  await expect(paid.locator(".stub")).toHaveClass(/\bstub-recorded\b/);
+  await expect(page.locator(".eyelet-spin, .sending-line")).toHaveCount(0);
+
+  // The write-off: its own button turns its ring.
+  let written: (() => void) | undefined;
+  const writing = new Promise<void>((done) => {
+    written = done;
+  });
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    await writing;
+    await route.fulfill({
+      json: { ...one, status: "WRITTEN_OFF", owed: "0.00" },
+    });
+  });
+  await paid.getByRole("button", { name: "Відкрити борг" }).click();
+  await page.getByRole("button", { name: "Списати борг" }).click();
+  await page.getByLabel("Чому списуємо").fill("виїхала");
+  const writeOff = page.getByRole("button", { name: /^Так, списати / });
+  await writeOff.click();
+  await expect(writeOff).toHaveClass(/\bpressed\b/);
+  await expect(writeOff.locator(".eyelet-spin")).toHaveCount(1);
+  await expect(page.locator(".stub-kept, .banner-kept")).toHaveCount(0);
+  written?.();
+  await expect(
+    page.locator(".paid-result").getByRole("heading", { name: "Борг списано" }),
+  ).toBeVisible();
+  await expect(page.locator(".eyelet-spin")).toHaveCount(0);
+});
