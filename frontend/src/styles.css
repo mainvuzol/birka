@@ -957,6 +957,169 @@ html {
   font-size: 26px;
   font-weight: 800;
 }
+/* The till's tray (spec §6.15; «Усе на бірці» task list, P0-5): the
+   perforation along its top, the basket in one row that opens its sheet,
+   «Разом» at 32, the three ways; over the search where they meet. */
+.till-tray {
+  z-index: var(--z-tray);
+  padding-top: 14px;
+}
+.till-tray::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 16px;
+  right: 16px;
+  height: 3px;
+  background: radial-gradient(
+      circle at 3.5px 1.5px,
+      var(--perforation) 1.5px,
+      transparent 1.6px
+    )
+    0 0 / 7px 3px repeat-x;
+}
+.tray-basket {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--touch);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-m);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+}
+.tray-count {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tray-what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tray-open {
+  flex: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--pencil);
+}
+.till-tray .pay-total .sum {
+  font-size: 32px;
+  line-height: 34px;
+}
+/* Its three ways at 56, as the till's dock's (spec §6.15); dimmed while a
+   line waits, a press taking the seller to it. */
+.till-tray .pay-ways button {
+  min-height: var(--h-pay);
+}
+.till-tray .pay-ways button[aria-disabled="true"] {
+  opacity: 0.45;
+}
+
+/* A sheet over the screen (spec §6.29; P0-5): the card rising from the
+   bottom over the menu, its handle, the scrim behind; 560 px at most, as
+   the page, and 92 % of Telegram's stable height — never more than the
+   screen a keyboard leaves — its inside scrolling. */
+.sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  /* The screen behind does not scroll under a finger on it. */
+  touch-action: none;
+}
+.sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(
+    calc(var(--tg-viewport-stable-height, 100dvh) * 0.92),
+    100%
+  );
+  margin: 0 auto;
+  padding: 0 16px;
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+  animation: sheet-in var(--dur-sheetIn) var(--ease-standard);
+}
+.sheet:focus {
+  outline: none;
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+/* The handle, pulled down, closes it; nothing else moves with the finger. */
+.sheet-grip {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 12px;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--edge);
+}
+.sheet-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 26px;
+}
+.sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sheet-body > fieldset {
+  margin: 0;
+}
+.sheet > :last-child {
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+.sheet-foot {
+  padding-top: 12px;
+}
+.sheet-done {
+  width: 100%;
+  min-height: 52px;
+}
 /* A sum in one piece (spec §6.17): its figures in the display face, the
    kopecks at 0.55 and «грн» at 0.6 of it, in pencil (P0-1). */
 .sum {

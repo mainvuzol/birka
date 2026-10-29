@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   fromPaper,
   openStore,
   storeLine,
@@ -237,12 +239,15 @@ test("a model past the first hundred is found by three letters and sold in three
   await expect(tag).toContainText("1 850,00 грн");
   await expect(page.getByRole("group", { name: "Альпака 001" })).toHaveCount(0);
   await chip(page, "Лоран шоколад", "M, вільно 2").click();
-  const line = page.locator(".line");
+  // The line, looked at in the basket's sheet: no tap of the sale's
+  // («Усе на бірці» task list, P0-5).
+  const line = (await basketSheet(page)).locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("1850,00");
   await expect(
     line.getByText("Ціна продажу 1 850,00 грн. Домовилися про іншу — змініть."),
   ).toBeVisible();
+  await basketDone(page);
   await expect(page.getByText("Разом 1 850,00 грн")).toBeInViewport();
   expect(
     await page.evaluate(
@@ -318,9 +323,9 @@ test("a size whose every coat an order holds offers nothing, and its cell says s
   await expect(held).toHaveAttribute("aria-label", "M, вільно 0, у резерві 2");
   await expect(held.locator(".size-free")).toHaveText("у резерві");
   await expect(held.locator(".size-held")).toHaveText("2");
-  // Tapped, nothing is put in the basket.
+  // Tapped, nothing is put in the basket: no tray (P0-5).
   await held.click({ force: true });
-  await expect(page.locator(".line")).toHaveCount(0);
+  await expect(page.locator(".till-tray")).toHaveCount(0);
   // Partly held: what is free under the letter, the held on its pin.
   const part = chip(page, "Лоран шоколад", "L, вільно 2");
   await expect(part).toBeEnabled();
@@ -345,16 +350,20 @@ test("the same size twice is one line of two, and «Менше» never takes a l
   await onTheTill(page);
   await chip(page, "Лоран шоколад", "M, вільно 2").click();
   await chip(page, "Лоран шоколад", "M, вільно 2").click();
-  const line = page.locator(".line");
+  // The tray counts two coats of one line (spec §6.15; P0-5).
+  await expect(page.locator(".till-tray .tray-basket")).toHaveAccessibleName(
+    "Кошик · 2 · Лоран шоколад · M",
+  );
+  await expect(page.getByText("Разом 3 700,00 грн")).toBeVisible();
+  const line = (await basketSheet(page)).locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line.locator("output")).toHaveText("2");
-  await expect(page.getByText("Лоран шоколад · M × 2")).toBeVisible();
-  await expect(page.getByText("Разом 3 700,00 грн")).toBeVisible();
   await line.getByRole("button", { name: "Менше" }).click();
   await expect(line.locator("output")).toHaveText("1");
   await expect(line.getByRole("button", { name: "Менше" })).toBeDisabled();
   await line.getByRole("button", { name: "Більше" }).click();
   await line.getByLabel("Ціна, грн").fill("1700");
+  await basketDone(page);
   await expect(page.getByText("Разом 3 400,00 грн")).toBeVisible();
   await pay(page, "Готівка").click();
   await expect(
@@ -372,7 +381,11 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
   const sent = await stubSale(page);
   await onTheTill(page);
   await chip(page, "Лоран шоколад", "M, вільно 2").click();
-  const price = page.locator(".line").getByLabel("Ціна, грн");
+  // The basket's sheet opens by itself, its price in focus (P0-5).
+  const price = page
+    .getByRole("dialog", { name: "Кошик" })
+    .locator(".line")
+    .getByLabel("Ціна, грн");
   await expect(price).toBeFocused();
   await expect(price).toHaveValue("");
   await expect(
@@ -390,6 +403,7 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
   ).toBeVisible();
   await expect(pay(page, "Готівка")).toBeDisabled();
   await price.fill("1500,50");
+  await basketDone(page);
   await pay(page, "Готівка").click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -406,9 +420,10 @@ test("a line changed after the server's shortage answer is a new sale, its answe
   const sent = await stubSale(page, { requested: 3, available: 2 }, 2);
   await onTheTill(page);
   await chip(page, "Лоран шоколад", "M, вільно 2").click();
-  const line = page.locator(".line");
+  const line = (await basketSheet(page)).locator(".line");
   await line.getByRole("button", { name: "Більше" }).click();
   await line.getByRole("button", { name: "Більше" }).click();
+  await basketDone(page);
   await pay(page, "Готівка").click();
   const short = page.getByRole("alert", { name: "Залишку не вистачає" });
   await short
@@ -419,7 +434,9 @@ test("a line changed after the server's shortage answer is a new sale, its answe
   expect(sent[1]?.command_id).toBe(sent[0]?.command_id);
   await expect(short).toBeVisible();
   // The price agreed again: another sale, the answer gone with the old one.
+  await basketSheet(page);
   await line.getByLabel("Ціна, грн").fill("1800");
+  await basketDone(page);
   await expect(short).toHaveCount(0);
   await pay(page, "Готівка").click();
   await expect(
@@ -447,19 +464,23 @@ test("a size read off a label holds the ways once the sale is from paper", async
   await stubSale(page);
   await onTheTill(page);
   await chip(page, "Лоран шоколад", "розмір невідомий, вільно 3").click();
-  const label = page.locator(".line").getByLabel("Розмір з етикетки");
+  // Read off the label in the basket's sheet (P0-5).
+  const sheet = await basketSheet(page);
+  const label = sheet.locator(".line").getByLabel("Розмір з етикетки");
   await label.selectOption({ index: 1 });
   await expect(
-    page.getByText("Розмір з етикетки; в обліку — «розмір невідомий»"),
+    sheet.getByText("Розмір з етикетки; в обліку — «розмір невідомий»"),
   ).toBeVisible();
+  await basketDone(page);
   await expect(pay(page, "Готівка")).toBeEnabled();
   // From paper no size is read off a label (G3).
   await fromPaper(page);
-  await expect(
-    page.getByText("Товар з невідомим розміром вносьте як «розмір невідомий»."),
-  ).toBeVisible();
   await expect(pay(page, "З паперу · Готівка")).toBeDisabled();
-  await page
+  await basketSheet(page);
+  await expect(
+    sheet.getByText("Товар з невідомим розміром вносьте як «розмір невідомий»."),
+  ).toBeVisible();
+  await sheet
     .locator(".line")
     .getByRole("button", { name: /^Прибрати/ })
     .click();
@@ -538,7 +559,9 @@ test("a warehouse that stops selling is not the till's any more: its cells go, n
   await expect(left).toBeVisible();
   await expect(page.locator("button.size-cell")).toHaveCount(1);
   await left.click();
-  await expect(page.locator(".line .line-place")).toHaveText("Склад: Свій");
+  await expect(
+    (await basketSheet(page)).locator(".line .line-place"),
+  ).toHaveText("Склад: Свій");
 });
 
 test("a line keeps knowing its model is held with no size, whatever is searched after", async ({
@@ -559,7 +582,9 @@ test("a line keeps knowing its model is held with no size, whatever is searched 
   await search(page).fill("лор");
   await expect(page.getByRole("group", { name: "Мілан бордо" })).toHaveCount(0);
   await chip(page, "Лоран шоколад", "M, вільно 1").click();
-  await page.locator(".line").getByRole("button", { name: "Більше" }).click();
+  const sheet = await basketSheet(page);
+  await sheet.locator(".line").getByRole("button", { name: "Більше" }).click();
+  await basketDone(page);
   await search(page).fill("міл");
   await expect(
     page.getByRole("group", { name: "Лоран шоколад", exact: true }),

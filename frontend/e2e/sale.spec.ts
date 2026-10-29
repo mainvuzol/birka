@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   expectStub,
   fillLine,
   grn,
@@ -122,10 +124,12 @@ test("a seller sells stock the ledger agrees with, and the sale is recorded once
   await enter(page);
   await pickFirstProduct(page);
   await addToBasket(page, 2);
-  // How many and at what price, in the line itself (redesign P0-3).
-  const line = page.locator(".line");
+  // How many and at what price, in the line itself (redesign P0-3), in the
+  // basket's sheet («Усе на бірці» task list, P0-5).
+  const line = (await basketSheet(page)).locator(".line");
   await expect(line.locator("output")).toHaveText("2");
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("150.00");
+  await basketDone(page);
   await expect(page.getByText("Разом 300,00 грн")).toBeVisible();
   // «Продати» is the way the customer pays (owner decision, 2026-10-04): the
   // press comes first, then the terminal, for the sum the receipt shows.
@@ -609,9 +613,10 @@ test("a store that reaches one sellable warehouse does not ask which", async ({
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeVisible();
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  await expect(page.locator(".line")).toHaveCount(1);
-  // The line says it, under its name.
-  await expect(page.locator(".line .line-place")).toHaveText(
+  // The line says it, under its name, in the basket's sheet (P0-5).
+  const sheet = await basketSheet(page);
+  await expect(sheet.locator(".line")).toHaveCount(1);
+  await expect(sheet.locator(".line .line-place")).toHaveText(
     "Склад: Каса-склад",
   );
 });

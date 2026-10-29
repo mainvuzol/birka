@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   openStore,
   readsOf,
   refuseOnce,
@@ -181,9 +183,10 @@ test("a store's price set on the stock screen is what its till suggests", async 
   });
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   const search = page.getByRole("searchbox", { name: "Знайти модель" });
-  const lines = page.locator(".line");
-  // A model with none: the line's price is empty and takes the cursor, and
-  // the ways wait for it (redesign P0-3).
+  const lines = page.getByRole("dialog", { name: "Кошик" }).locator(".line");
+  // A model with none: the basket's sheet opens by itself («Усе на бірці»
+  // task list, P0-5), the line's price empty and in focus, and the ways wait
+  // for it (redesign P0-3).
   await search.fill(unpriced.name);
   await page
     .locator(`button.size-cell[data-stock="${unpriced.option}"]`)
@@ -194,6 +197,7 @@ test("a store's price set on the stock screen is what its till suggests", async 
   await expect(
     lines.first().getByText("Ціни продажу ще немає — впишіть домовлену."),
   ).toBeVisible();
+  await basketDone(page);
   await expect(
     page.getByRole("button", { name: "Готівка", exact: true }),
   ).toBeDisabled();
@@ -203,6 +207,7 @@ test("a store's price set on the stock screen is what its till suggests", async 
     page.getByRole("group", { name: new RegExp(priced.name) }),
   ).toContainText("1 850,50 грн");
   await page.locator(`button.size-cell[data-stock="${priced.option}"]`).click();
+  await basketSheet(page);
   await expect(lines.nth(1).getByLabel("Ціна, грн")).toHaveValue("1850,50");
   await expect(
     lines
@@ -215,6 +220,7 @@ test("a store's price set on the stock screen is what its till suggests", async 
     .getByRole("button", { name: `Прибрати ${unpriced.name}` })
     .click();
   await expect(lines).toHaveCount(1);
+  await basketDone(page);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),

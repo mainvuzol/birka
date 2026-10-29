@@ -331,7 +331,17 @@ export async function tapSize(
     await expect(page.getByText("Завантажуємо товари…")).toHaveCount(0);
     if (await chip.isVisible()) break;
     if (!(await more.isVisible())) break;
-    await more.click();
+    // A search typed just before is answered under it: the list before it
+    // stays, «Ще товари» held, and the answer takes the button away — even
+    // between two looks. Looked at again once it is not held, never waited
+    // on for good.
+    const held = await more.isDisabled({ timeout: 1000 }).catch(() => null);
+    if (held !== false) {
+      await expect(more.and(page.locator("button:disabled"))).toHaveCount(0);
+      continue;
+    }
+    if (!(await more.click({ timeout: 2000 }).then(() => true, () => false)))
+      continue;
     // The next page read: the chip, or «Ще товари» again.
     await expect(
       chip.or(more.and(page.locator("button:enabled"))).first(),
@@ -341,18 +351,45 @@ export async function tapSize(
 }
 
 /**
+ * The basket's sheet over the till (spec §6.16; «Усе на бірці» task list,
+ * P0-5), opened from the tray's row unless it is open already — once it
+ * takes taps: a tap carried from what opened it is let go for a moment.
+ */
+export async function basketSheet(page: Page): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: "Кошик" });
+  if (!(await sheet.isVisible()))
+    await page.locator(".till-tray .tray-basket").click();
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** The basket's sheet closed by its «Готово», the tray under it again. */
+export async function basketDone(page: Page): Promise<void> {
+  const sheet = page.getByRole("dialog", { name: "Кошик" });
+  if (await sheet.isVisible()) {
+    await expect(sheet).toHaveAttribute("data-ready", "");
+    await sheet.getByRole("button", { name: "Готово", exact: true }).click();
+  }
+  await expect(sheet).toHaveCount(0);
+}
+
+/**
  * The basket's last line, as the seller sets it (redesign P0-3): «Більше»
  * until it holds as many, and the price typed over the one it started from.
+ * At the till in the basket's sheet (P0-5), closed again by «Готово»; in an
+ * order, on its form.
  */
 export async function fillLine(
   page: Page,
   { quantity = 1, price }: { quantity?: number; price?: string },
 ): Promise<void> {
-  const line = page.locator(".line").last();
+  const till = (await page.locator(".till-tray").count()) > 0;
+  const line = (till ? await basketSheet(page) : page).locator(".line").last();
   for (let held = 1; held < quantity; held += 1)
     await line.getByRole("button", { name: "Більше" }).click();
   await expect(line.locator("output")).toHaveText(String(quantity));
   if (price !== undefined) await line.getByLabel("Ціна, грн").fill(price);
+  if (till) await basketDone(page);
 }
 
 /**

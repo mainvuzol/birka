@@ -211,12 +211,16 @@ export function TermsFields({
   hint,
   storeId,
   token,
+  done,
 }: {
   value: TermsInput;
   change: (value: TermsInput) => void;
   /** What is being sold, to show what will be left owing. */
   total: bigint;
   hint: string;
+  /** The keyboard's «Готово» after the sum: the till's sheet closes, its
+   * tray's ways under the thumb (P0-5). */
+  done?: () => void;
   /** The store the debt is owed to, and who asks what its number owes. */
   storeId: string;
   token: string;
@@ -235,7 +239,10 @@ export function TermsFields({
       if (event.key !== "Enter") return;
       event.preventDefault();
       if (next) next.focus();
-      else event.currentTarget.blur();
+      else {
+        event.currentTarget.blur();
+        done?.();
+      }
     };
   const wasInParts = useRef(value.inParts);
   useEffect(() => {

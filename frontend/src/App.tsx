@@ -684,12 +684,13 @@ function Workspace({
   useEffect(() => {
     if (tab !== "returns") setReturnOf(null);
   }, [tab]);
-  // «Новий продаж» on a return's result opens the till with its cursor in
-  // the search (returns task list, P0-5). The till takes it as it mounts,
+  // The app opened on the till opens it with its cursor in the search (spec
+  // S08; «Усе на бірці» task list, P0-5), as «Новий продаж» on a return's
+  // result does (returns task list, P0-5). The till takes it as it mounts,
   // once: the next tab change clears it, so neither the till opened any
-  // other way nor one mounted afresh on that visit takes the cursor
-  // (review, 2026-10-17).
-  const [searchFirst, setSearchFirst] = useState(false);
+  // other way — «Продати», the menu — nor one mounted afresh on that visit
+  // takes the cursor (review, 2026-10-17).
+  const [searchFirst, setSearchFirst] = useState(tab === "sale");
   useEffect(() => {
     setSearchFirst(false);
   }, [tab]);

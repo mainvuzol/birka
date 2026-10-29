@@ -147,12 +147,13 @@ test("a search typed keeps the list where it was until the new one comes, and th
   await openStore(page, "Основний MAIN");
   await page.locator("button.size-cell").first().click();
   await expect(page.locator(".pay-panel")).toBeVisible();
-  // The basket's line stands under the list: where it is on the page says
-  // whether the list jumped, which the panel pinned to the screen's foot
+  // The terminal's hint stands under the list, the basket's lines in their
+  // sheet («Усе на бірці» task list, P0-5): where it is on the page says
+  // whether the list jumped, which the tray pinned to the screen's foot
   // would not (review, 2026-10-17).
-  const line = page.locator(".line").first();
+  const under = page.getByText(/^Спершу натисніть, як платить покупець/);
   const onPage = () =>
-    line.evaluate((node) => node.getBoundingClientRect().top + window.scrollY);
+    under.evaluate((node) => node.getBoundingClientRect().top + window.scrollY);
 
   const asked = page.waitForRequest((request) =>
     request.url().includes("query=%D0%BB%D0%BE%D1%80"),
