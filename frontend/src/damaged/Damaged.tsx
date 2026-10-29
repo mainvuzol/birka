@@ -16,6 +16,7 @@ import { useBackOnSale } from "@/returns/places";
 import { sizeLabel } from "@/returns/types";
 import { SupplierPicker } from "@/suppliers/Picker";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import type { DamagedUnit } from "./types";
 import { useDamagedUnits } from "./units";
 
@@ -110,65 +111,69 @@ export function Damaged({
   ];
 
   return (
-    <section className="goods-part">
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Брак</h2>
-        <button
-          className="quiet"
-          disabled={units.isFetching}
-          onClick={() => {
-            void units.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        {readOnly
-          ? "Пошкоджений товар із повернень. Магазин не торгує: тут лише перегляд."
-          : "Пошкоджений товар із повернень. Візьміть одиницю на перевірку, а потім поверніть її в продаж або підтвердьте брак."}
-      </p>
-      {problem && <p role="alert">{problem}</p>}
-      {units.isPending ? (
-        <p role="status">Завантажуємо «Брак»…</p>
-      ) : units.error ? (
-        <p role="alert">{errorText(units.error)}</p>
-      ) : units.data.units.length === 0 ? (
-        <p>У «Брак» зараз нічого немає.</p>
-      ) : (
-        groups.map(({ status, title }) => {
-          const here = units.data.units.filter((u) => u.status === status);
-          if (here.length === 0) return null;
-          return (
-            <div className="section-block" key={status} data-status={status}>
-              <h3>
-                {title} · {here.length}
-              </h3>
-              {here.map((unit) => (
-                <Unit
-                  key={unit.id}
-                  unit={unit}
-                  places={places.data ?? []}
-                  busy={blocked || busy !== null}
-                  readOnly={readOnly}
-                  supplier={
-                    // The owner and managers return a confirmed unit to its
-                    // supplier instead (owner decision, 2026-10-01).
-                    store.permissions.includes("supplier:return")
-                      ? { store, token }
-                      : null
-                  }
-                  act={(action, body) => {
-                    void act(unit, action, body);
-                  }}
-                />
-              ))}
-            </div>
-          );
-        })
-      )}
-    </section>
+    <>
+      <ScreenHeader
+        title="Брак"
+        back={back && <BackToMore back={back} />}
+        aside={
+          <button
+            className="quiet"
+            disabled={units.isFetching}
+            onClick={() => {
+              void units.refetch();
+            }}
+          >
+            Оновити
+          </button>
+        }
+      />
+      <section className="goods-part">
+        <p className="hint">
+          {readOnly
+            ? "Пошкоджений товар із повернень. Магазин не торгує: тут лише перегляд."
+            : "Пошкоджений товар із повернень. Візьміть одиницю на перевірку, а потім поверніть її в продаж або підтвердьте брак."}
+        </p>
+        {problem && <p role="alert">{problem}</p>}
+        {units.isPending ? (
+          <p role="status">Завантажуємо «Брак»…</p>
+        ) : units.error ? (
+          <p role="alert">{errorText(units.error)}</p>
+        ) : units.data.units.length === 0 ? (
+          <p>У «Брак» зараз нічого немає.</p>
+        ) : (
+          groups.map(({ status, title }) => {
+            const here = units.data.units.filter((u) => u.status === status);
+            if (here.length === 0) return null;
+            return (
+              <div className="section-block" key={status} data-status={status}>
+                <h3>
+                  {title} · {here.length}
+                </h3>
+                {here.map((unit) => (
+                  <Unit
+                    key={unit.id}
+                    unit={unit}
+                    places={places.data ?? []}
+                    busy={blocked || busy !== null}
+                    readOnly={readOnly}
+                    supplier={
+                      // The owner and managers return a confirmed unit to its
+                      // supplier instead (owner decision, 2026-10-01).
+                      store.permissions.includes("supplier:return")
+                        ? { store, token }
+                        : null
+                    }
+                    act={(action, body) => {
+                      void act(unit, action, body);
+                    }}
+                  />
+                ))}
+              </div>
+            );
+          })
+        )}
+      </section>
+    </>
   );
 }
 

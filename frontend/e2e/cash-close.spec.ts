@@ -263,8 +263,9 @@ test("«Каса» says where the drawer stands in one line, the count as one la
     await expect(
       page.getByRole("button", { name: gone, exact: true }),
     ).toHaveCount(0);
-  // Above the first row only the heading, the line and the card: the
-  // reminders are on the count's screen (owner decision, 2026-10-21, В1 (а)).
+  // Above the first row only the line and the card, the heading over them:
+  // the reminders are on the count's screen (owner decision, 2026-10-21, В1
+  // (а)).
   for (const reminder of [
     /Поки рахуєте/,
     /Перед підрахунком/,
@@ -280,7 +281,16 @@ test("«Каса» says where the drawer stands in one line, the count as one la
       .filter((child) => child.getBoundingClientRect().bottom <= top + 1)
       .map((child) => child.tagName.toLowerCase() + "." + child.className);
   });
-  expect(above).toEqual(["h2.", "p.cash-context", "button.cash-card"]);
+  expect(above).toEqual(["p.cash-context", "button.cash-card"]);
+  // The heading over the card, on the page (spec §6.2; «Усе на бірці» task
+  // list, P0-4).
+  const heading = await page
+    .getByRole("heading", { name: "Каса", exact: true, level: 1 })
+    .boundingBox();
+  const screen = await page.locator("section.cash").boundingBox();
+  expect((heading?.y ?? 0) + (heading?.height ?? 0)).toBeLessThan(
+    screen?.y ?? 0,
+  );
   // Blind: no sum is said before the count (G32).
   await expect(page.getByText(/Мало бути|грн/)).toHaveCount(0);
 });

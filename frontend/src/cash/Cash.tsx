@@ -11,6 +11,7 @@ import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Closed, CloseSummary } from "./Closed";
 import { Count } from "./Count";
 import { FixStep, WayCard } from "./Fix";
@@ -552,187 +553,191 @@ export function Cash({
   const opening =
     data !== undefined && (data.next_is_opening || data.last_close === null);
   return (
-    <section className="cash">
-      {back && <BackToMore back={back} />}
-      <h2>Каса</h2>
-      {data ? (
-        <p className="cash-context">{contextOf(data)}</p>
-      ) : (
-        // Its place while read, in its own slot: what stands under it never
-        // moves (review, 2026-10-22).
-        drawer.isPending && (
-          <ContextPlaceholder size="Каса відкрита · останнє закриття 00.00, 00:00 · Олена" />
-        )
-      )}
-      {kept}
-      {done && <p role="status">{done}</p>}
-      {problem && <p role="alert">{problem}</p>}
-      {drawer.isPending ? (
-        // The card's place only for whoever may close: no one else's
-        // screen has it (review, 2026-10-22).
-        <DrawerPlaceholder
-          card={store.permissions.includes("cash:close") || networkOwner}
-        />
-      ) : drawer.error ? (
-        // A warning's plate, as the direction draws a server that does not
-        // answer — still said at once (cash task list, P2-3).
-        <div className="notice" role="alert">
-          <p>{errorText(drawer.error)}</p>
-          {unreachable(drawer.error) && (
-            // No close while the server does not answer (owner decisions,
-            // 2026-10-04 and 2026-10-07; ADR-0013 §9, G26).
-            <p>
-              Касу зараз не закрити: сервер не відповідає. Перерахуйте гроші й
-              запишіть суму для себе. Якщо сервер відповість сьогодні — спершу
-              внесіть усе з паперу, потім закрийте касу; якщо ні — закриєте
-              наступного вечора.
-            </p>
-          )}
-          <button
-            onClick={() => {
-              void drawer.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
-      ) : data === undefined ? null : (
-        <>
-          {due ? (
-            // The day's one task, large (cash task list, P0-1): what the
-            // drawer should hold is said only after the count (G32).
+    <>
+      <ScreenHeader
+        title="Каса"
+        back={back && <BackToMore back={back} />}
+      />
+      <section className="cash">
+        {data ? (
+          <p className="cash-context">{contextOf(data)}</p>
+        ) : (
+          // Its place while read, in its own slot: what stands under it never
+          // moves (review, 2026-10-22).
+          drawer.isPending && (
+            <ContextPlaceholder size="Каса відкрита · останнє закриття 00.00, 00:00 · Олена" />
+          )
+        )}
+        {kept}
+        {done && <p role="status">{done}</p>}
+        {problem && <p role="alert">{problem}</p>}
+        {drawer.isPending ? (
+          // The card's place only for whoever may close: no one else's
+          // screen has it (review, 2026-10-22).
+          <DrawerPlaceholder
+            card={store.permissions.includes("cash:close") || networkOwner}
+          />
+        ) : drawer.error ? (
+          // A warning's plate, as the direction draws a server that does not
+          // answer — still said at once (cash task list, P2-3).
+          <div className="notice" role="alert">
+            <p>{errorText(drawer.error)}</p>
+            {unreachable(drawer.error) && (
+              // No close while the server does not answer (owner decisions,
+              // 2026-10-04 and 2026-10-07; ADR-0013 §9, G26).
+              <p>
+                Касу зараз не закрити: сервер не відповідає. Перерахуйте гроші й
+                запишіть суму для себе. Якщо сервер відповість сьогодні — спершу
+                внесіть усе з паперу, потім закрийте касу; якщо ні — закриєте
+                наступного вечора.
+              </p>
+            )}
             <button
-              type="button"
-              className="cash-card"
-              aria-label={opening ? "Перший підрахунок" : "Закрити касу"}
-              aria-describedby={cardHint}
-              disabled={working || reading}
               onClick={() => {
-                setDone(null);
-                setProblem(null);
-                setReading(true);
-                // Read again: the newest close is the one the count names.
-                // Opened on that read alone, while the count is still due:
-                // never while the server does not answer (G26).
-                void drawer.refetch().then((read) => {
-                  setReading(false);
-                  if (read.isSuccess && isDue(read.data))
-                    setStep({ name: "count" });
-                });
+                void drawer.refetch();
               }}
             >
-              <span className="cash-card-title" aria-hidden="true">
-                {opening ? "Перший підрахунок" : "Закрити касу"}
-              </span>
-              <span className="cash-card-hint" id={cardHint}>
-                {opening
-                  ? "Запишемо, скільки в касі зараз"
-                  : "Скільки мало бути — покажемо після підрахунку"}
-              </span>
+              Спробувати ще раз
             </button>
-          ) : (
-            owedId === null &&
-            data.closed_today &&
-            data.last_close?.mine &&
-            close &&
-            close.id === data.last_close.id && <CloseSummary close={close} />
-          )}
-          {owedId !== null && (
-            // A reason owed, from «Каса»'s main screen: its close, and the
-            // way back to it (G12).
-            <div className="cash-owed">
-              {close && close.id === owedId && <CloseSummary close={close} />}
-              <p className="hint">
-                Поки причину не записано, інші розділи недоступні.
-              </p>
+          </div>
+        ) : data === undefined ? null : (
+          <>
+            {due ? (
+              // The day's one task, large (cash task list, P0-1): what the
+              // drawer should hold is said only after the count (G32).
               <button
                 type="button"
+                className="cash-card"
+                aria-label={opening ? "Перший підрахунок" : "Закрити касу"}
+                aria-describedby={cardHint}
+                disabled={working || reading}
                 onClick={() => {
                   setDone(null);
                   setProblem(null);
-                  setStep({ name: "closed" });
+                  setReading(true);
+                  // Read again: the newest close is the one the count names.
+                  // Opened on that read alone, while the count is still due:
+                  // never while the server does not answer (G26).
+                  void drawer.refetch().then((read) => {
+                    setReading(false);
+                    if (read.isSuccess && isDue(read.data))
+                      setStep({ name: "count" });
+                  });
                 }}
               >
-                Записати причину
+                <span className="cash-card-title" aria-hidden="true">
+                  {opening ? "Перший підрахунок" : "Закрити касу"}
+                </span>
+                <span className="cash-card-hint" id={cardHint}>
+                  {opening
+                    ? "Запишемо, скільки в касі зараз"
+                    : "Скільки мало бути — покажемо після підрахунку"}
+                </span>
               </button>
-            </div>
-          )}
-          <div className="cash-rows">
-            {takesOut && (
-              <Row
-                title="Видати з каси"
-                hint={
-                  kinds.includes("OWNER")
-                    ? "Власнику, на витрати, кур’єру"
-                    : "Витрати, кур’єру постачальника"
-                }
-                disabled={working}
-                open={() => {
-                  setDone(null);
-                  void drawer.refetch();
-                  setStep({ name: "move", direction: "OUT" });
-                }}
-              />
-            )}
-            {putsIn && (
-              <Row
-                title="Внести в касу"
-                hint="Розмін"
-                disabled={working}
-                open={() => {
-                  setDone(null);
-                  void drawer.refetch();
-                  setStep({ name: "move", direction: "IN" });
-                }}
-              />
-            )}
-            {data.may_correct ? (
-              <Row
-                title="Змінити спосіб оплати"
-                hint="Будь-яка операція, будь-який день"
-                disabled={working}
-                open={() => {
-                  setDone(null);
-                  setStep({ name: "correct" });
-                }}
-              />
             ) : (
-              store.permissions.includes("sale:create") && (
+              owedId === null &&
+              data.closed_today &&
+              data.last_close?.mine &&
+              close &&
+              close.id === data.last_close.id && <CloseSummary close={close} />
+            )}
+            {owedId !== null && (
+              // A reason owed, from «Каса»'s main screen: its close, and the
+              // way back to it (G12).
+              <div className="cash-owed">
+                {close && close.id === owedId && <CloseSummary close={close} />}
+                <p className="hint">
+                  Поки причину не записано, інші розділи недоступні.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDone(null);
+                    setProblem(null);
+                    setStep({ name: "closed" });
+                  }}
+                >
+                  Записати причину
+                </button>
+              </div>
+            )}
+            <div className="cash-rows">
+              {takesOut && (
                 <Row
-                  title="Змінити спосіб оплати"
-                  hint="Ваші операції до закриття"
+                  title="Видати з каси"
+                  hint={
+                    kinds.includes("OWNER")
+                      ? "Власнику, на витрати, кур’єру"
+                      : "Витрати, кур’єру постачальника"
+                  }
                   disabled={working}
                   open={() => {
                     setDone(null);
-                    setStep({ name: "fix", chosen: null });
+                    void drawer.refetch();
+                    setStep({ name: "move", direction: "OUT" });
                   }}
                 />
-              )
+              )}
+              {putsIn && (
+                <Row
+                  title="Внести в касу"
+                  hint="Розмін"
+                  disabled={working}
+                  open={() => {
+                    setDone(null);
+                    void drawer.refetch();
+                    setStep({ name: "move", direction: "IN" });
+                  }}
+                />
+              )}
+              {data.may_correct ? (
+                <Row
+                  title="Змінити спосіб оплати"
+                  hint="Будь-яка операція, будь-який день"
+                  disabled={working}
+                  open={() => {
+                    setDone(null);
+                    setStep({ name: "correct" });
+                  }}
+                />
+              ) : (
+                store.permissions.includes("sale:create") && (
+                  <Row
+                    title="Змінити спосіб оплати"
+                    hint="Ваші операції до закриття"
+                    disabled={working}
+                    open={() => {
+                      setDone(null);
+                      setStep({ name: "fix", chosen: null });
+                    }}
+                  />
+                )
+              )}
+              {financial && (
+                <Row
+                  title="Закриття"
+                  hint="Усі закриття й різниці"
+                  open={() => {
+                    setDone(null);
+                    setStep({ name: "history" });
+                  }}
+                />
+              )}
+            </div>
+            {data.movements.length > 0 && (
+              <>
+                <h3 className="cash-subhead">Видано й внесено після закриття</h3>
+                <ul className="history" aria-label="Видано й внесено">
+                  {data.movements.map((movement) => (
+                    <MovementRow key={movement.id} movement={movement} />
+                  ))}
+                </ul>
+              </>
             )}
-            {financial && (
-              <Row
-                title="Закриття"
-                hint="Усі закриття й різниці"
-                open={() => {
-                  setDone(null);
-                  setStep({ name: "history" });
-                }}
-              />
-            )}
-          </div>
-          {data.movements.length > 0 && (
-            <>
-              <h3 className="cash-subhead">Видано й внесено після закриття</h3>
-              <ul className="history" aria-label="Видано й внесено">
-                {data.movements.map((movement) => (
-                  <MovementRow key={movement.id} movement={movement} />
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-    </section>
+          </>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -906,165 +911,171 @@ function CorrectStep({
     retry: false,
   });
   return (
-    <section className="cash-fix">
-      <button
-        type="button"
-        className="quiet back"
-        aria-label="Назад до каси"
-        onClick={() => {
-          back(null);
-        }}
-      >
-        <span aria-hidden="true">← </span>Каса
-      </button>
-      <h2>Змінити спосіб оплати</h2>
-      {kept}
-      {chosen ? (
-        <>
-          <WayCard
-            what={`${targetLabels[chosen.target]} · ${timeOf(chosen.at)} · ${visible(chosen.label)} · ${visible(chosen.by)}`}
-            amount={chosen.amount}
-            current={chosen.method}
-            corrected={chosen.corrected}
-            ways={waysFor(chosen.is_order)}
-            closedNote={
-              chosen.closed
-                ? chosen.close_day
-                  ? `Пояснить різницю закриття ${dayOf(chosen.close_day)}`
-                  : "Пояснить різницю закриття, у яке потрапила"
-                : null
-            }
-            aside={
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  setChosen(null);
-                }}
-              >
-                Інша операція
-              </button>
-            }
-            disabled={disabled}
-            send={async (to, note) => {
-              const outcome = await send({
-                command: "correction",
-                store_id: store.id,
-                command_id: crypto.randomUUID(),
-                target: chosen.target,
-                target_id: chosen.target_id,
-                from_method: chosen.method,
-                to_method: to,
-                note,
-              });
-              if (outcome.kind === "done") {
-                buzz("success");
-                back(correctionDone(outcome.result as Correction));
-              } else if (outcome.kind === "refused") {
-                buzz("error");
-                setChosen(null);
-                setProblem(cashErrorText(outcome.error, false, "correction"));
-                void events.refetch();
-              }
-              // Unknown: held here under «Каса»'s banner until it is known.
-              return null;
+    <>
+      <ScreenHeader
+        title="Змінити спосіб оплати"
+        back={
+          <button
+            type="button"
+            className="quiet back"
+            aria-label="Назад до каси"
+            onClick={() => {
+              back(null);
             }}
-          />
-        </>
-      ) : (
-        <>
-          <fieldset className="way-switch correct-days">
-            <legend className="visually-hidden">Який день</legend>
-            {(Object.keys(dayChoices) as (keyof typeof dayChoices)[]).map(
-              (option) => (
-                <label key={option}>
-                  <input
-                    type="radio"
-                    name="correct-day"
-                    checked={which === option}
-                    onChange={() => {
-                      setWhich(option);
-                      setProblem(null);
-                    }}
-                  />
-                  <span>{dayChoices[option]}</span>
-                </label>
-              ),
+          >
+            <span aria-hidden="true">← </span>Каса
+          </button>
+        }
+      />
+      <section className="cash-fix">
+        {kept}
+        {chosen ? (
+          <>
+            <WayCard
+              what={`${targetLabels[chosen.target]} · ${timeOf(chosen.at)} · ${visible(chosen.label)} · ${visible(chosen.by)}`}
+              amount={chosen.amount}
+              current={chosen.method}
+              corrected={chosen.corrected}
+              ways={waysFor(chosen.is_order)}
+              closedNote={
+                chosen.closed
+                  ? chosen.close_day
+                    ? `Пояснить різницю закриття ${dayOf(chosen.close_day)}`
+                    : "Пояснить різницю закриття, у яке потрапила"
+                  : null
+              }
+              aside={
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => {
+                    setChosen(null);
+                  }}
+                >
+                  Інша операція
+                </button>
+              }
+              disabled={disabled}
+              send={async (to, note) => {
+                const outcome = await send({
+                  command: "correction",
+                  store_id: store.id,
+                  command_id: crypto.randomUUID(),
+                  target: chosen.target,
+                  target_id: chosen.target_id,
+                  from_method: chosen.method,
+                  to_method: to,
+                  note,
+                });
+                if (outcome.kind === "done") {
+                  buzz("success");
+                  back(correctionDone(outcome.result as Correction));
+                } else if (outcome.kind === "refused") {
+                  buzz("error");
+                  setChosen(null);
+                  setProblem(cashErrorText(outcome.error, false, "correction"));
+                  void events.refetch();
+                }
+                // Unknown: held here under «Каса»'s banner until it is known.
+                return null;
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <fieldset className="way-switch correct-days">
+              <legend className="visually-hidden">Який день</legend>
+              {(Object.keys(dayChoices) as (keyof typeof dayChoices)[]).map(
+                (option) => (
+                  <label key={option}>
+                    <input
+                      type="radio"
+                      name="correct-day"
+                      checked={which === option}
+                      onChange={() => {
+                        setWhich(option);
+                        setProblem(null);
+                      }}
+                    />
+                    <span>{dayChoices[option]}</span>
+                  </label>
+                ),
+              )}
+            </fieldset>
+            {which === "other" && (
+              <label>
+                День
+                <input
+                  type="date"
+                  value={other}
+                  max={cashDay(0)}
+                  onChange={(event) => {
+                    setOther(event.target.value);
+                    setProblem(null);
+                  }}
+                />
+              </label>
             )}
-          </fieldset>
-          {which === "other" && (
-            <label>
-              День
-              <input
-                type="date"
-                value={other}
-                max={cashDay(0)}
-                onChange={(event) => {
-                  setOther(event.target.value);
-                  setProblem(null);
-                }}
-              />
-            </label>
-          )}
-          {problem && <p role="alert">{problem}</p>}
-          {!valid ? (
-            <p>Оберіть день.</p>
-          ) : events.isPending ? (
-            <Placeholder said="Завантажуємо операції…" rows={3} day={false} />
-          ) : events.error ? (
-            <p role="alert">{errorText(events.error)}</p>
-          ) : events.data.items.length === 0 ? (
-            <p>Цього дня грошових операцій не було.</p>
-          ) : (
-            <ul className="fix-list" aria-label="Операції дня">
-              {events.data.items.map((event) => (
-                <li key={`${event.target}:${event.target_id}`}>
-                  {/* What, when and who, its sum beside them; the goods,
-                      the close it fell in and why it may not be changed,
-                      its way under them, the row's whole width (cash task
-                      list, P2-4; review, 2026-10-23). */}
-                  <button
-                    type="button"
-                    className="sale-row correct-row"
-                    disabled={!event.may_change}
-                    onClick={() => {
-                      setProblem(null);
-                      setChosen(event);
-                    }}
-                  >
-                    <span className="sale-main">
-                      <span className="correct-head">
-                        <span className="cash-row-title">
-                          {targetLabels[event.target]} · {timeOf(event.at)} ·{" "}
-                          {visible(event.by)}
+            {problem && <p role="alert">{problem}</p>}
+            {!valid ? (
+              <p>Оберіть день.</p>
+            ) : events.isPending ? (
+              <Placeholder said="Завантажуємо операції…" rows={3} day={false} />
+            ) : events.error ? (
+              <p role="alert">{errorText(events.error)}</p>
+            ) : events.data.items.length === 0 ? (
+              <p>Цього дня грошових операцій не було.</p>
+            ) : (
+              <ul className="fix-list" aria-label="Операції дня">
+                {events.data.items.map((event) => (
+                  <li key={`${event.target}:${event.target_id}`}>
+                    {/* What, when and who, its sum beside them; the goods,
+                        the close it fell in and why it may not be changed,
+                        its way under them, the row's whole width (cash task
+                        list, P2-4; review, 2026-10-23). */}
+                    <button
+                      type="button"
+                      className="sale-row correct-row"
+                      disabled={!event.may_change}
+                      onClick={() => {
+                        setProblem(null);
+                        setChosen(event);
+                      }}
+                    >
+                      <span className="sale-main">
+                        <span className="correct-head">
+                          <span className="cash-row-title">
+                            {targetLabels[event.target]} · {timeOf(event.at)} ·{" "}
+                            {visible(event.by)}
+                          </span>
+                          <span className="history-sum">
+                            {money(event.amount)}
+                          </span>
                         </span>
-                        <span className="history-sum">
-                          {money(event.amount)}
+                        <span className="sale-meta">
+                          {[
+                            visible(event.label),
+                            event.close_day
+                              ? `закриття ${dayOf(event.close_day)}`
+                              : null,
+                            event.may_change ? null : "змінити не можна",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                        <span className="badge neutral">
+                          {wayName(event.method)}
+                          {event.corrected ? " · виправлено" : ""}
                         </span>
                       </span>
-                      <span className="sale-meta">
-                        {[
-                          visible(event.label),
-                          event.close_day
-                            ? `закриття ${dayOf(event.close_day)}`
-                            : null,
-                          event.may_change ? null : "змінити не можна",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                      <span className="badge neutral">
-                        {wayName(event.method)}
-                        {event.corrected ? " · виправлено" : ""}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-    </section>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }

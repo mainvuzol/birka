@@ -6,6 +6,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { asInput } from "@/prices/SuggestedPrice";
 import { PriceHint } from "@/sales/PriceHint";
 import { StockSearch, useSettled, useStock } from "@/sales/StockSearch";
@@ -281,224 +282,230 @@ export function NewOrder({
       : `У замовленні: ${String(units)} шт.`;
 
   return (
-    <section className="order-new">
-      <button type="button" className="quiet" onClick={back}>
-        ← До замовлень
-      </button>
-      <h2>Нове замовлення</h2>
-      <fieldset disabled={blocked}>
-        {locations.isPending ? (
-          <Placeholder said="Завантажуємо склади…" field />
-        ) : locations.error ? (
-          <Unread
-            error={locations.error}
-            retry={() => {
-              void locations.refetch();
-            }}
-          />
-        ) : sellable.length === 0 ? (
-          <p className="empty">
-            Доступних складів немає. Зверніться до менеджера.
-          </p>
-        ) : (
-          <>
-            {onlyWarehouse && (
-              // One warehouse: named, not chosen (P0-5).
-              <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
-            )}
-            <StockSearch
-              text={text}
-              type={setText}
-              query={query}
-              stock={stock}
-              warehouse={onlyWarehouse?.name ?? ""}
-              places={places}
-              pick={put}
-              canAdd={(item) => {
-                const held = draft.find(
-                  (d) =>
-                    stockKey(d.line) ===
-                    stockKey({
-                      source_location_id: item.location_id,
-                      product_variant_id: item.product_variant_id,
-                      size_id: item.size_id,
-                    }),
-                );
-                // A chip of no warehouse — a server from before every one
-                // was listed — puts nothing in: none is guessed.
-                if (!item.location_id) return false;
-                return held
-                  ? held.line.quantity < most(held)
-                  : draft.length < 100;
+    <>
+      <ScreenHeader
+        title="Нове замовлення"
+        back={
+          <button type="button" className="quiet" onClick={back}>
+            ← До замовлень
+          </button>
+        }
+      />
+      <section className="order-new">
+        <fieldset disabled={blocked}>
+          {locations.isPending ? (
+            <Placeholder said="Завантажуємо склади…" field />
+          ) : locations.error ? (
+            <Unread
+              error={locations.error}
+              retry={() => {
+                void locations.refetch();
               }}
-              offerHeld={false}
-              searchRef={searchRef}
-              failure={
-                stock.error ? (
-                  <Unread
-                    error={stock.error}
-                    retry={() => {
-                      void stock.refetch();
-                    }}
-                  />
-                ) : null
-              }
-              offer={null}
             />
-          </>
-        )}
-        {draft.length > 0 && (
-          <div
-            className="order-lines"
-            role="group"
-            aria-labelledby={linesHeading}
-          >
-            <h3 id={linesHeading}>У замовленні</h3>
-            {draft.map((d, index) => (
-              <div
-                className={index === shortIndex ? "line short" : "line"}
-                key={d.id}
-              >
-                <strong>
-                  {visible(d.name)} · {visible(d.size)}
-                  {placeOf(d.line.source_location_id)}
-                </strong>
-                <div className="line-edit">
-                  <div
-                    className="stepper"
-                    role="group"
-                    aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
-                  >
-                    <button
-                      type="button"
-                      aria-label="Менше"
-                      disabled={d.line.quantity <= 1}
-                      onClick={() => {
-                        change(index, { quantity: d.line.quantity - 1 });
-                      }}
-                    >
-                      −
-                    </button>
-                    <output>{d.line.quantity}</output>
-                    <button
-                      type="button"
-                      aria-label="Більше"
-                      disabled={d.line.quantity >= most(d)}
-                      onClick={() => {
-                        change(index, { quantity: d.line.quantity + 1 });
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <label>
-                    Ціна, грн
-                    <input
-                      ref={(input) => {
-                        if (input) priceRefs.current.set(d.id, input);
-                        else priceRefs.current.delete(d.id);
-                      }}
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      value={d.price}
-                      onChange={(event) => {
-                        change(index, { price: event.target.value });
+          ) : sellable.length === 0 ? (
+            <p className="empty">
+              Доступних складів немає. Зверніться до менеджера.
+            </p>
+          ) : (
+            <>
+              {onlyWarehouse && (
+                // One warehouse: named, not chosen (P0-5).
+                <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
+              )}
+              <StockSearch
+                text={text}
+                type={setText}
+                query={query}
+                stock={stock}
+                warehouse={onlyWarehouse?.name ?? ""}
+                places={places}
+                pick={put}
+                canAdd={(item) => {
+                  const held = draft.find(
+                    (d) =>
+                      stockKey(d.line) ===
+                      stockKey({
+                        source_location_id: item.location_id,
+                        product_variant_id: item.product_variant_id,
+                        size_id: item.size_id,
+                      }),
+                  );
+                  // A chip of no warehouse — a server from before every one
+                  // was listed — puts nothing in: none is guessed.
+                  if (!item.location_id) return false;
+                  return held
+                    ? held.line.quantity < most(held)
+                    : draft.length < 100;
+                }}
+                offerHeld={false}
+                searchRef={searchRef}
+                failure={
+                  stock.error ? (
+                    <Unread
+                      error={stock.error}
+                      retry={() => {
+                        void stock.refetch();
                       }}
                     />
-                  </label>
-                </div>
-                <PriceHint
-                  typed={d.price}
-                  price={d.line.unit_price}
-                  suggested={d.suggested}
-                />
-                {index === shortIndex && short && (
-                  <p
-                    className="line-short"
-                    role="alert"
-                    tabIndex={-1}
-                    ref={shortRef}
-                  >
-                    {shortText(short)}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    setDraft(draft.filter((_, i) => i !== index));
-                    if (index === shortIndex) setShort(null);
-                  }}
+                  ) : null
+                }
+                offer={null}
+              />
+            </>
+          )}
+          {draft.length > 0 && (
+            <div
+              className="order-lines"
+              role="group"
+              aria-labelledby={linesHeading}
+            >
+              <h3 id={linesHeading}>У замовленні</h3>
+              {draft.map((d, index) => (
+                <div
+                  className={index === shortIndex ? "line short" : "line"}
+                  key={d.id}
                 >
-                  Прибрати {visible(d.name)} · {visible(d.size)}
-                  {placeOf(d.line.source_location_id)}
-                </button>
-              </div>
-            ))}
+                  <strong>
+                    {visible(d.name)} · {visible(d.size)}
+                    {placeOf(d.line.source_location_id)}
+                  </strong>
+                  <div className="line-edit">
+                    <div
+                      className="stepper"
+                      role="group"
+                      aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Менше"
+                        disabled={d.line.quantity <= 1}
+                        onClick={() => {
+                          change(index, { quantity: d.line.quantity - 1 });
+                        }}
+                      >
+                        −
+                      </button>
+                      <output>{d.line.quantity}</output>
+                      <button
+                        type="button"
+                        aria-label="Більше"
+                        disabled={d.line.quantity >= most(d)}
+                        onClick={() => {
+                          change(index, { quantity: d.line.quantity + 1 });
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <label>
+                      Ціна, грн
+                      <input
+                        ref={(input) => {
+                          if (input) priceRefs.current.set(d.id, input);
+                          else priceRefs.current.delete(d.id);
+                        }}
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={d.price}
+                        onChange={(event) => {
+                          change(index, { price: event.target.value });
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <PriceHint
+                    typed={d.price}
+                    price={d.line.unit_price}
+                    suggested={d.suggested}
+                  />
+                  {index === shortIndex && short && (
+                    <p
+                      className="line-short"
+                      role="alert"
+                      tabIndex={-1}
+                      ref={shortRef}
+                    >
+                      {shortText(short)}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      setDraft(draft.filter((_, i) => i !== index));
+                      if (index === shortIndex) setShort(null);
+                    }}
+                  >
+                    Прибрати {visible(d.name)} · {visible(d.size)}
+                    {placeOf(d.line.source_location_id)}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {short && shortIndex < 0 && (
+            // Short of a line no longer here: the server's words.
+            <p role="alert">{errorText(refused)}</p>
+          )}
+          <WhereTo
+            destination={destination}
+            carrier={carrier}
+            disabled={blocked}
+            change={(nextDestination, nextCarrier) => {
+              setDestination(nextDestination);
+              setCarrier(nextCarrier);
+            }}
+          />
+          <p className="hint">
+            {destination === "ABROAD"
+              ? "Куди і як відправили — впишете, коли відправите."
+              : "ТТН впишете, коли відправите."}
+          </p>
+        </fieldset>
+        {/* Under the thumb (P0-5): what is ordered, its sum, and the one
+            press, which says the carrier first when none is chosen — as
+            «Каса»'s «Оберіть новий спосіб». */}
+        {draft.length > 0 && (
+          <div className="pay-panel" ref={panelRef}>
+            <p className="pay-what">{what}</p>
+            <p className="pay-total">
+              Разом{" "}
+              {priced ? (
+                <Sum value={money(decimal(total))} />
+              ) : (
+                // A sum without a line's price is no sum to say.
+                <strong className="sum">—</strong>
+              )}
+            </p>
+            <button
+              type="button"
+              className="cash-panel-button"
+              disabled={blocked || !priced || noCarrier}
+              onClick={() => {
+                submit(
+                  draft.map((d) => d.line),
+                  destination,
+                  destination === "UKRAINE" && carrier !== "" ? carrier : null,
+                  [
+                    first
+                      ? `${visible(first.name)} · ${visible(first.size)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}${draft.length > 1 ? ` + ще ${String(draft.length - 1)}` : ""}`
+                      : what,
+                    destination === "ABROAD"
+                      ? "За кордон"
+                      : carrier !== ""
+                        ? carrierLabels[carrier]
+                        : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                );
+              }}
+            >
+              {noCarrier ? "Оберіть перевізника" : "Замовити та зарезервувати"}
+            </button>
           </div>
         )}
-        {short && shortIndex < 0 && (
-          // Short of a line no longer here: the server's words.
-          <p role="alert">{errorText(refused)}</p>
-        )}
-        <WhereTo
-          destination={destination}
-          carrier={carrier}
-          disabled={blocked}
-          change={(nextDestination, nextCarrier) => {
-            setDestination(nextDestination);
-            setCarrier(nextCarrier);
-          }}
-        />
-        <p className="hint">
-          {destination === "ABROAD"
-            ? "Куди і як відправили — впишете, коли відправите."
-            : "ТТН впишете, коли відправите."}
-        </p>
-      </fieldset>
-      {/* Under the thumb (P0-5): what is ordered, its sum, and the one
-          press, which says the carrier first when none is chosen — as
-          «Каса»'s «Оберіть новий спосіб». */}
-      {draft.length > 0 && (
-        <div className="pay-panel" ref={panelRef}>
-          <p className="pay-what">{what}</p>
-          <p className="pay-total">
-            Разом{" "}
-            {priced ? (
-              <Sum value={money(decimal(total))} />
-            ) : (
-              // A sum without a line's price is no sum to say.
-              <strong className="sum">—</strong>
-            )}
-          </p>
-          <button
-            type="button"
-            className="cash-panel-button"
-            disabled={blocked || !priced || noCarrier}
-            onClick={() => {
-              submit(
-                draft.map((d) => d.line),
-                destination,
-                destination === "UKRAINE" && carrier !== "" ? carrier : null,
-                [
-                  first
-                    ? `${visible(first.name)} · ${visible(first.size)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}${draft.length > 1 ? ` + ще ${String(draft.length - 1)}` : ""}`
-                    : what,
-                  destination === "ABROAD"
-                    ? "За кордон"
-                    : carrier !== ""
-                      ? carrierLabels[carrier]
-                      : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · "),
-              );
-            }}
-          >
-            {noCarrier ? "Оберіть перевізника" : "Замовити та зарезервувати"}
-          </button>
-        </div>
-      )}
-    </section>
+      </section>
+    </>
   );
 }

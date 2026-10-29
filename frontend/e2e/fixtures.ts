@@ -90,11 +90,12 @@ export async function openStore(
       .first(),
   ).toBeVisible();
   if (!(await choice.isVisible())) return;
-  // The store chosen is the store opened: its name heads the workspace's
-  // line, «{Магазин} · {Ім’я}» (redesign P1-6).
+  // The store chosen is the store opened: its name heads the line under
+  // the screen's title, «{Магазин} · {Ім’я}» (redesign P1-6; «Усе на
+  // бірці» task list, P0-4).
   const label = (await choice.innerText()).split("\n")[0]?.trim() ?? "";
   await choice.click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+  await expect(storeLine(page)).toHaveText(
     new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} · `),
   );
 }
@@ -116,6 +117,13 @@ const rows: Record<string, string | RegExp> = {
 /** «Товар і каталог»'s screens: a list of their own for whoever has two of
  * them or more. */
 const catalogue = ["Перевірка каталогу", "Моделі", "Початкові залишки"];
+
+/** The line under a store's screen's title, «{Магазин} · {Ім’я}» (spec
+ * §6.2; «Усе на бірці» task list, P0-4): the shown screen's — an order's
+ * card is kept, hidden, under its step's screen. */
+export function storeLine(page: Page): Locator {
+  return page.locator(".store-line > p").filter({ visible: true });
+}
 
 /** The bottom menu (spec §6.2; «Усе на бірці» task list, P0-4). */
 export function menu(page: Page): Locator {
@@ -206,10 +214,10 @@ export async function section(page: Page, name: string): Promise<void> {
     return;
   }
   if (name === "+ Нове замовлення") {
-    // «+» in «Замовлення»'s heading (P0-2).
+    // «+» beside «Замовлення»'s title (P0-2).
     await section(page, "Замовлення");
     await page
-      .locator(".orders-head")
+      .locator(".screen-title")
       .getByRole("button", { name: "Нове замовлення" })
       .click();
     return;

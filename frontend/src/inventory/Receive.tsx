@@ -5,6 +5,7 @@ import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText, inOwnWords } from "@/shared/api";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
 import { SuggestedPrice } from "@/prices/SuggestedPrice";
@@ -242,292 +243,298 @@ export function Receive({
 
   if (received)
     return (
-      <section>
-        <h2>Товар прийнято</h2>
-        <p>
-          {visible(received.warehouse)} · позицій:{" "}
-          {received.receipt.lines.length} · одиниць:{" "}
-          {received.receipt.lines.reduce((s, l) => s + l.quantity_received, 0)}
-        </p>
-        {received.receipt.lines.map((line, index) => (
-          <div className="line" key={line.stock_lot_id}>
-            <strong>
-              {visible(received.names[index]?.name ?? "Товар")} ·{" "}
-              {visible(received.names[index]?.size ?? "")}
-            </strong>
-            <span>
-              +{line.quantity_received} · тепер на складі {line.quantity_after}
-              {line.unit_cost !== null && ` · ${money(line.unit_cost)} за од.`}
-            </span>
-          </div>
-        ))}
-        {received.receipt.lines.some((line) => line.unit_cost !== null) && (
-          <p className="total">
-            Закупівельна вартість{" "}
-            <strong>
-              {money(
-                decimal(
-                  purchaseValue(
-                    received.receipt.lines.map((line) => ({
-                      quantity: line.quantity_received,
-                      unit_cost: line.unit_cost,
-                    })),
-                  ),
-                ),
-              )}
-            </strong>
+      <>
+        <ScreenHeader pushed title="Товар прийнято" />
+        <section>
+          <p>
+            {visible(received.warehouse)} · позицій:{" "}
+            {received.receipt.lines.length} · одиниць:{" "}
+            {received.receipt.lines.reduce((s, l) => s + l.quantity_received, 0)}
           </p>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            setReceived(null);
-          }}
-        >
-          Прийняти ще
-        </button>
-      </section>
+          {received.receipt.lines.map((line, index) => (
+            <div className="line" key={line.stock_lot_id}>
+              <strong>
+                {visible(received.names[index]?.name ?? "Товар")} ·{" "}
+                {visible(received.names[index]?.size ?? "")}
+              </strong>
+              <span>
+                +{line.quantity_received} · тепер на складі {line.quantity_after}
+                {line.unit_cost !== null && ` · ${money(line.unit_cost)} за од.`}
+              </span>
+            </div>
+          ))}
+          {received.receipt.lines.some((line) => line.unit_cost !== null) && (
+            <p className="total">
+              Закупівельна вартість{" "}
+              <strong>
+                {money(
+                  decimal(
+                    purchaseValue(
+                      received.receipt.lines.map((line) => ({
+                        quantity: line.quantity_received,
+                        unit_cost: line.unit_cost,
+                      })),
+                    ),
+                  ),
+                )}
+              </strong>
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setReceived(null);
+            }}
+          >
+            Прийняти ще
+          </button>
+        </section>
+      </>
     );
 
   return (
-    <section className="goods-part">
-      {back && <BackToMore back={back} />}
-      <h2>Приймання товару</h2>
-      <p className="hint">
-        Оберіть склад, куди фізично надійшов товар. Шукайте в каталозі — зокрема
-        те, чого зараз немає на складі.
-      </p>
-      <fieldset disabled={blocked || working}>
-        <legend>Поставка</legend>
-        {locations.isPending ? (
-          <p role="status">Завантажуємо склади…</p>
-        ) : locations.error ? (
-          <Failure
-            error={locations.error}
-            retry={() => {
-              void locations.refetch();
-            }}
-          />
-        ) : (
-          <label>
-            Склад
-            <select
-              value={locationId}
-              onChange={(event) => {
-                setLocationId(event.target.value);
-              }}
-            >
-              {!onlyWarehouse && <option value="">Оберіть склад явно</option>}
-              {locations.data.map((location) => (
-                <option
-                  key={location.id}
-                  value={location.id}
-                  disabled={
-                    !location.is_active ||
-                    !location.can_receive ||
-                    location.damaged_returns
-                  }
-                >
-                  {visible(location.name)}
-                  {!location.is_active
-                    ? " — на паузі"
-                    : location.damaged_returns
-                      ? " — брак, лише для повернень"
-                      : !location.can_receive
-                        ? " — без права приймання"
-                        : ""}
-                </option>
-              ))}
-            </select>
-            {receivable.length === 0 && (
-              <span>
-                Немає складу, куди цей магазин може приймати товар. Зверніться
-                до менеджера.
-              </span>
-            )}
-          </label>
-        )}
-        <CatalogPicker
-          store={store}
-          token={token}
-          scopeKey={journalKey}
-          variant={variant}
-          onVariant={(picked) => {
-            setVariant(picked);
-            // A new model starts without the previous one's price.
-            setCost("");
-          }}
-        />
-        <label>
-          Розмір
-          <select
-            value={sizeId}
-            onChange={(event) => {
-              setSizeId(event.target.value);
-            }}
-          >
-            <option value="">Оберіть розмір</option>
-            {(sizes.data ?? []).map((size) => (
-              <option key={size.size_id} value={size.size_id}>
-                {visible(size.code)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="fields">
-          <label>
-            Кількість
-            <input
-              inputMode="numeric"
-              value={quantity}
-              onChange={(event) => {
-                setQuantity(event.target.value);
+    <>
+      <ScreenHeader
+        title="Приймання товару"
+        back={back && <BackToMore back={back} />}
+      />
+      <section className="goods-part">
+        <p className="hint">
+          Оберіть склад, куди фізично надійшов товар. Шукайте в каталозі — зокрема
+          те, чого зараз немає на складі.
+        </p>
+        <fieldset disabled={blocked || working}>
+          <legend>Поставка</legend>
+          {locations.isPending ? (
+            <p role="status">Завантажуємо склади…</p>
+          ) : locations.error ? (
+            <Failure
+              error={locations.error}
+              retry={() => {
+                void locations.refetch();
               }}
             />
-          </label>
-          <label>
-            {paidWhenSold(acquisition)
-              ? "Домовлена ціна за од., грн"
-              : "Закупівельна ціна за од., грн"}
-            <input
-              inputMode="decimal"
-              placeholder={
-                paidWhenSold(acquisition) ? "обов’язково" : "не обов’язково"
-              }
-              value={cost}
-              onChange={(event) => {
-                setCost(event.target.value);
-              }}
-            />
-          </label>
-        </div>
-        {variant && (
-          <SuggestedPrice
-            key={variant.product_variant_id}
+          ) : (
+            <label>
+              Склад
+              <select
+                value={locationId}
+                onChange={(event) => {
+                  setLocationId(event.target.value);
+                }}
+              >
+                {!onlyWarehouse && <option value="">Оберіть склад явно</option>}
+                {locations.data.map((location) => (
+                  <option
+                    key={location.id}
+                    value={location.id}
+                    disabled={
+                      !location.is_active ||
+                      !location.can_receive ||
+                      location.damaged_returns
+                    }
+                  >
+                    {visible(location.name)}
+                    {!location.is_active
+                      ? " — на паузі"
+                      : location.damaged_returns
+                        ? " — брак, лише для повернень"
+                        : !location.can_receive
+                          ? " — без права приймання"
+                          : ""}
+                  </option>
+                ))}
+              </select>
+              {receivable.length === 0 && (
+                <span>
+                  Немає складу, куди цей магазин може приймати товар. Зверніться
+                  до менеджера.
+                </span>
+              )}
+            </label>
+          )}
+          <CatalogPicker
             store={store}
             token={token}
             scopeKey={journalKey}
-            variantId={variant.product_variant_id}
-            blocked={blocked}
+            variant={variant}
+            onVariant={(picked) => {
+              setVariant(picked);
+              // A new model starts without the previous one's price.
+              setCost("");
+            }}
           />
-        )}
-        {keepsSuppliers && (
           <label>
-            Як надійшов
+            Розмір
             <select
-              value={acquisition}
+              value={sizeId}
               onChange={(event) => {
-                setAcquisition(event.target.value as Acquisition);
+                setSizeId(event.target.value);
               }}
             >
-              {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
-                <option key={key} value={key}>
-                  {acquisitionLabels[key]}
+              <option value="">Оберіть розмір</option>
+              {(sizes.data ?? []).map((size) => (
+                <option key={size.size_id} value={size.size_id}>
+                  {visible(size.code)}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        {(paidWhenSold(acquisition) ||
-          draft.some((d) => paidWhenSold(d.line.acquisition_type))) && (
-          <>
-            <SupplierPicker
+          <div className="fields">
+            <label>
+              Кількість
+              <input
+                inputMode="numeric"
+                value={quantity}
+                onChange={(event) => {
+                  setQuantity(event.target.value);
+                }}
+              />
+            </label>
+            <label>
+              {paidWhenSold(acquisition)
+                ? "Домовлена ціна за од., грн"
+                : "Закупівельна ціна за од., грн"}
+              <input
+                inputMode="decimal"
+                placeholder={
+                  paidWhenSold(acquisition) ? "обов’язково" : "не обов’язково"
+                }
+                value={cost}
+                onChange={(event) => {
+                  setCost(event.target.value);
+                }}
+              />
+            </label>
+          </div>
+          {variant && (
+            <SuggestedPrice
+              key={variant.product_variant_id}
               store={store}
               token={token}
-              value={supplierId}
-              change={(next) => {
-                setSupplierId(next);
-                // Another supplier's goods are another delivery.
-                setCommandId(crypto.randomUUID());
-              }}
-              disabled={blocked || working}
+              scopeKey={journalKey}
+              variantId={variant.product_variant_id}
+              blocked={blocked}
             />
-            <p className="hint">
-              Позичене й під реалізацію сплачують, лише коли продадуть, за
-              домовленою ціною. Продане чи непродане позначають у
-              «Постачальникам».
-            </p>
-          </>
-        )}
-        {sizes.error && (
-          <Failure
-            error={sizes.error}
-            retry={() => {
-              void sizes.refetch();
-            }}
-          />
-        )}
-        <button
-          type="button"
-          className="quiet"
-          disabled={!variant || !sizeId || draft.length >= 200}
-          onClick={add}
-        >
-          Додати до поставки
-        </button>
-        {validation && <p role="alert">{validation}</p>}
-        {draft.map((d, index) => (
-          <div
-            className="line"
-            key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
-          >
-            <strong>
-              {visible(d.name)} · {visible(d.size)}
-            </strong>
-            <span>
-              {d.line.quantity} од. ·{" "}
-              {acquisitionLabels[d.line.acquisition_type]}
-              {d.line.unit_cost !== null &&
-                ` · ${money(d.line.unit_cost)} за од.`}
-            </span>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                replaceDraft(draft.filter((_, i) => i !== index));
+          )}
+          {keepsSuppliers && (
+            <label>
+              Як надійшов
+              <select
+                value={acquisition}
+                onChange={(event) => {
+                  setAcquisition(event.target.value as Acquisition);
+                }}
+              >
+                {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
+                  <option key={key} value={key}>
+                    {acquisitionLabels[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {(paidWhenSold(acquisition) ||
+            draft.some((d) => paidWhenSold(d.line.acquisition_type))) && (
+            <>
+              <SupplierPicker
+                store={store}
+                token={token}
+                value={supplierId}
+                change={(next) => {
+                  setSupplierId(next);
+                  // Another supplier's goods are another delivery.
+                  setCommandId(crypto.randomUUID());
+                }}
+                disabled={blocked || working}
+              />
+              <p className="hint">
+                Позичене й під реалізацію сплачують, лише коли продадуть, за
+                домовленою ціною. Продане чи непродане позначають у
+                «Постачальникам».
+              </p>
+            </>
+          )}
+          {sizes.error && (
+            <Failure
+              error={sizes.error}
+              retry={() => {
+                void sizes.refetch();
               }}
+            />
+          )}
+          <button
+            type="button"
+            className="quiet"
+            disabled={!variant || !sizeId || draft.length >= 200}
+            onClick={add}
+          >
+            Додати до поставки
+          </button>
+          {validation && <p role="alert">{validation}</p>}
+          {draft.map((d, index) => (
+            <div
+              className="line"
+              key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
             >
-              Прибрати {visible(d.name)}
-            </button>
-          </div>
-        ))}
-        <label>
-          Примітка (накладна, постачальник)
-          <input
-            value={notes}
-            maxLength={1000}
-            onChange={(event) => {
-              setNotes(event.target.value);
-            }}
-          />
-        </label>
-        <p className="total">
-          Разом <strong>{units} од.</strong>
-        </p>
-        {costed.length > 0 && (
+              <strong>
+                {visible(d.name)} · {visible(d.size)}
+              </strong>
+              <span>
+                {d.line.quantity} од. ·{" "}
+                {acquisitionLabels[d.line.acquisition_type]}
+                {d.line.unit_cost !== null &&
+                  ` · ${money(d.line.unit_cost)} за од.`}
+              </span>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  replaceDraft(draft.filter((_, i) => i !== index));
+                }}
+              >
+                Прибрати {visible(d.name)}
+              </button>
+            </div>
+          ))}
+          <label>
+            Примітка (накладна, постачальник)
+            <input
+              value={notes}
+              maxLength={1000}
+              onChange={(event) => {
+                setNotes(event.target.value);
+              }}
+            />
+          </label>
           <p className="total">
-            Закупівельна вартість{" "}
-            <strong>{money(decimal(purchaseValue(costed)))}</strong>
+            Разом <strong>{units} од.</strong>
           </p>
-        )}
-        {costed.length > 0 && costed.length < draft.length && (
-          <p className="hint">
-            Рядків без ціни: {draft.length - costed.length}. Їх вартість не
-            враховано.
-          </p>
-        )}
-        <button
-          type="button"
-          disabled={draft.length === 0 || !locationId}
-          onClick={() => {
-            void send();
-          }}
-        >
-          Прийняти на склад
-        </button>
-      </fieldset>
-      {refusal !== null && <p role="alert">{receiptRefusal(refusal)}</p>}
-    </section>
+          {costed.length > 0 && (
+            <p className="total">
+              Закупівельна вартість{" "}
+              <strong>{money(decimal(purchaseValue(costed)))}</strong>
+            </p>
+          )}
+          {costed.length > 0 && costed.length < draft.length && (
+            <p className="hint">
+              Рядків без ціни: {draft.length - costed.length}. Їх вартість не
+              враховано.
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={draft.length === 0 || !locationId}
+            onClick={() => {
+              void send();
+            }}
+          >
+            Прийняти на склад
+          </button>
+        </fieldset>
+        {refusal !== null && <p role="alert">{receiptRefusal(refusal)}</p>}
+      </section>
+    </>
   );
 }
 

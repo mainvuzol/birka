@@ -7,6 +7,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { dayOf } from "./errors";
 import {
   cardParts,
@@ -413,60 +414,69 @@ export function Closed({
     heading.current?.focus();
   }, []);
   return (
-    <section className="cash-closed">
-      {owedId !== null && (
-        <button
-          type="button"
-          className="quiet back"
-          aria-label="Назад до каси"
-          onClick={leave}
-        >
-          <span aria-hidden="true">← </span>Каса
-        </button>
-      )}
-      <h2 ref={heading} tabIndex={-1}>
-        {close && isOpening(close)
-          ? "Перший підрахунок записано"
-          : "Касу закрито"}
-      </h2>
-      {close ? (
-        // Which close: its day, and its store when it is another's — a
-        // reason owed is the closer's in any store (review, 2026-10-21).
-        <p className="cash-context">
-          Закриття {dayOf(close.business_day)}
-          {close.store_id !== storeId &&
-            ` · магазин «${visible(close.store_name)}»`}
-        </p>
-      ) : (
-        // Its place while read, in its own slot (review, 2026-10-22).
-        !failed && <ContextPlaceholder size="Закриття 00.00" />
-      )}
-      {kept}
-      {close === null ? (
-        failed ? (
-          <div role="alert">
-            <p>{errorText(failed)}</p>
-            <button type="button" onClick={retry}>
-              Спробувати ще раз
+    <>
+      <ScreenHeader
+        ref={heading}
+        focusable
+        pushed
+        title={
+          close && isOpening(close)
+            ? "Перший підрахунок записано"
+            : "Касу закрито"
+        }
+        back={
+          owedId !== null && (
+            <button
+              type="button"
+              className="quiet back"
+              aria-label="Назад до каси"
+              onClick={leave}
+            >
+              <span aria-hidden="true">← </span>Каса
+            </button>
+          )
+        }
+      />
+      <section className="cash-closed">
+        {close ? (
+          // Which close: its day, and its store when it is another's — a
+          // reason owed is the closer's in any store (review, 2026-10-21).
+          <p className="cash-context">
+            Закриття {dayOf(close.business_day)}
+            {close.store_id !== storeId &&
+              ` · магазин «${visible(close.store_name)}»`}
+          </p>
+        ) : (
+          // Its place while read, in its own slot (review, 2026-10-22).
+          !failed && <ContextPlaceholder size="Закриття 00.00" />
+        )}
+        {kept}
+        {close === null ? (
+          failed ? (
+            <div role="alert">
+              <p>{errorText(failed)}</p>
+              <button type="button" onClick={retry}>
+                Спробувати ще раз
+              </button>
+            </div>
+          ) : (
+            <ClosePlaceholder />
+          )
+        ) : (
+          <CloseBody close={close} reason={owedId === null} />
+        )}
+        {done && <p role="status">{done}</p>}
+        {problem && <p role="alert">{problem}</p>}
+        {owedId !== null ? (
+          <ReasonForm key={owedId} disabled={disabled} send={sendReason} />
+        ) : (
+          <div className="result-next">
+            <button type="button" onClick={finish}>
+              Готово
             </button>
           </div>
-        ) : (
-          <ClosePlaceholder />
-        )
-      ) : (
-        <CloseBody close={close} reason={owedId === null} />
-      )}
-      {done && <p role="status">{done}</p>}
-      {problem && <p role="alert">{problem}</p>}
-      {owedId !== null ? (
-        <ReasonForm key={owedId} disabled={disabled} send={sendReason} />
-      ) : (
-        <div className="result-next">
-          <button type="button" onClick={finish}>
-            Готово
-          </button>
-        </div>
-      )}
-    </section>
+        )}
+      </section>
+    </>
   );
 }

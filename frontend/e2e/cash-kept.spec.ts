@@ -531,7 +531,7 @@ async function recordHeadings(page: Page): Promise<() => Promise<string[]>> {
     const drawn: string[] = [];
     (window as unknown as { drawn: string[] }).drawn = drawn;
     new MutationObserver(() => {
-      for (const heading of document.querySelectorAll("h2, h3")) {
+      for (const heading of document.querySelectorAll("h1, h2, h3")) {
         const text = heading.textContent;
         if (!drawn.includes(text)) drawn.push(text);
       }

@@ -32,6 +32,7 @@ import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { Keypad } from "@/shared/Keypad";
 import { SendingLine } from "@/shared/Sending";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import {
   PaperFields,
   paperRefusal,
@@ -592,50 +593,257 @@ export function Debt({
     // where under it; what is owed large; the history on a tap; the sum on
     // the app's keypad and the three ways under the thumb.
     return (
-      <section className="credits debt-detail debt-till">
-        <button
-          type="button"
-          className="quiet back"
-          disabled={working}
-          onClick={back}
-        >
-          <span aria-hidden="true">← </span>
-          {backTo}
-        </button>
-        <h2 ref={name} tabIndex={-1}>
-          {firstGood ?? customerName}
-          {goodsOpener}
-        </h2>
-        {goods}
+      <>
+        <ScreenHeader
+          ref={name}
+          focusable
+          className="debt-title"
+          title={
+            <>
+              {firstGood ?? customerName}
+              {goodsOpener}
+            </>
+          }
+          back={
+            <button
+              type="button"
+              className="quiet back"
+              disabled={working}
+              onClick={back}
+            >
+              <span aria-hidden="true">← </span>
+              {backTo}
+            </button>
+          }
+        />
+        <section className="credits debt-detail debt-till">
+          {goods}
+          <p className="hint debt-context">
+            {customerName} · «{visible(credit.store_name)}» · з{" "}
+            {shortDay(credit.opened_at)}
+          </p>
+          {paidResult || (
+            <>
+              {elsewhere && (
+                <p className="notice">
+                  Продано в «{visible(credit.store_name)}» (
+                  {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
+                  ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+                </p>
+              )}
+              {credit.status === "OPEN" ? (
+                <div className="owed-card" role="group" aria-label="Скільки винні">
+                  <p className="owed-what">
+                    <Icon name="owed" size={20} />
+                    Винні
+                  </p>
+                  <p className="owed-sum">
+                    <Sum value={money(credit.owed)} />
+                  </p>
+                  <div className="debt-bar" aria-hidden="true">
+                    <span style={{ width: `${String(closedShare(credit))}%` }} />
+                  </div>
+                  <p className="owed-count">
+                    {paidText(credit)}
+                    {lastPaid(credit)}
+                  </p>
+                </div>
+              ) : (
+                <div className="debt-closed">
+                  <p>
+                    <span
+                      className={
+                        credit.status === "WRITTEN_OFF"
+                          ? "badge neutral"
+                          : "badge paid"
+                      }
+                    >
+                      {statusLabels[credit.status]}
+                    </span>
+                    {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
+                  </p>
+                  <p className="hint">{paidText(credit)}</p>
+                </div>
+              )}
+              {credit.entries.length > 0 && (
+                // In place, on a tap: it never pushes the ways down (spec
+                // S21).
+                <button
+                  type="button"
+                  className="quiet history-toggle"
+                  aria-expanded={history}
+                  aria-controls={history ? historyList : undefined}
+                  onClick={() => {
+                    setHistory(!history);
+                  }}
+                >
+                  Історія · {number(credit.entries.length)}{" "}
+                  <span aria-hidden="true">›</span>
+                </button>
+              )}
+              {history && <History credit={credit} id={historyList} />}
+              {takes && (
+                // From paper, over the keypad, as on the debt.
+                <fieldset className="pay-in" disabled={blocked || working}>
+                  <legend className="visually-hidden">Внесок з паперу</legend>
+                  <PaperFields
+                    mark={paperMark}
+                    what="payment"
+                    storeId={store.id}
+                  />
+                </fieldset>
+              )}
+              {problem && (
+                <p role="alert" ref={said}>
+                  {problem}
+                </p>
+              )}
+              {takes && (
+                <div
+                  className="pay-panel till-dock"
+                  role="group"
+                  aria-label="Внесок"
+                  ref={panelRef}
+                >
+                  <Keypad
+                    label="Сума, грн"
+                    value={amount}
+                    change={(sum) => {
+                      setAmount(sum);
+                      setProblem(null);
+                    }}
+                    disabled={blocked || working}
+                    invalid={over}
+                    {...(overSaid ? { describedBy: overLine } : {})}
+                    aside={
+                      <button
+                        type="button"
+                        className="quiet keypad-all"
+                        disabled={blocked || working}
+                        onClick={() => {
+                          setAmount(asInput(credit.owed));
+                          setProblem(null);
+                        }}
+                      >
+                        Увесь залишок {money(credit.owed)}
+                      </button>
+                    }
+                  />
+                  {overSaid && (
+                    <p id={overLine} className="pay-over" role="alert">
+                      {overText(credit.owed)}
+                    </p>
+                  )}
+                  <SendingLine busy={pressing !== null} />
+                  <div className="pay-ways">
+                    {tillMethods.map((way) => (
+                      <button
+                        key={way}
+                        type="button"
+                        className={
+                          pressing === null
+                            ? undefined
+                            : pressing === way
+                              ? "pressed"
+                              : "stepped-back"
+                        }
+                        disabled={
+                          blocked ||
+                          working ||
+                          !paperMark.ready ||
+                          !typed ||
+                          over
+                        }
+                        onClick={() => {
+                          pay(way);
+                        }}
+                      >
+                        {pressing === way && <Eyelet state="spin" size={20} />}
+                        {paperMark.paper
+                          ? `З паперу · ${methodLabels[way]}`
+                          : methodLabels[way]}
+                      </button>
+                    ))}
+                  </div>
+                  {paperMark.paper && (
+                    <p className="pay-seller">{takenBy(paperMark)}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </>
+    );
+
+  return (
+    <>
+      <ScreenHeader
+        ref={name}
+        focusable
+        title={customerName}
+        back={
+          <button
+            type="button"
+            className="quiet back"
+            disabled={working || erasing === "sending"}
+            onClick={back}
+          >
+            <span aria-hidden="true">← </span>
+            {backTo}
+          </button>
+        }
+      />
+      <section className="credits debt-detail">
+        {credit.customer_phone === null && credit.customer_erased_at && (
+          <p className="hint">
+            Ім’я й телефон стерто {shortDay(credit.customer_erased_at)}. Суми
+            лишаються.
+          </p>
+        )}
+        {/* Who, what they took, since when: one line (P0-3). */}
         <p className="hint debt-context">
-          {customerName} · «{visible(credit.store_name)}» · з{" "}
-          {shortDay(credit.opened_at)}
+          {credit.customer_phone && (
+            <>
+              <a
+                className="debt-phone"
+                href={`tel:${credit.customer_phone.replace(/[^\d+]/g, "")}`}
+              >
+                {visible(credit.customer_phone)}
+              </a>
+              {" · "}
+            </>
+          )}
+          {firstGood && (
+            <>
+              {firstGood}
+              {goodsOpener}
+              {" · "}
+            </>
+          )}
+          з {shortDay(credit.opened_at)}
         </p>
+        {goods}
         {paidResult || (
           <>
             {elsewhere && (
               <p className="notice">
                 Продано в «{visible(credit.store_name)}» (
-                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
-                ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}).
+                Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
               </p>
             )}
             {credit.status === "OPEN" ? (
+              // What they owe, first and large (P0-3): «скільки я ще винна?».
               <div className="owed-card" role="group" aria-label="Скільки винні">
-                <p className="owed-what">
-                  <Icon name="owed" size={20} />
-                  Винні
-                </p>
+                <p className="owed-what">Винні</p>
                 <p className="owed-sum">
                   <Sum value={money(credit.owed)} />
                 </p>
                 <div className="debt-bar" aria-hidden="true">
                   <span style={{ width: `${String(closedShare(credit))}%` }} />
                 </div>
-                <p className="owed-count">
-                  {paidText(credit)}
-                  {lastPaid(credit)}
-                </p>
+                <p className="owed-count">{paidText(credit)}</p>
               </div>
             ) : (
               <div className="debt-closed">
@@ -654,75 +862,80 @@ export function Debt({
                 <p className="hint">{paidText(credit)}</p>
               </div>
             )}
-            {credit.entries.length > 0 && (
-              // In place, on a tap: it never pushes the ways down (spec
-              // S21).
-              <button
-                type="button"
-                className="quiet history-toggle"
-                aria-expanded={history}
-                aria-controls={history ? historyList : undefined}
-                onClick={() => {
-                  setHistory(!history);
-                }}
-              >
-                Історія · {number(credit.entries.length)}{" "}
-                <span aria-hidden="true">›</span>
-              </button>
-            )}
-            {history && <History credit={credit} id={historyList} />}
             {takes && (
-              // From paper, over the keypad, as on the debt.
+              // The payment's sum under what is owed; its ways under the thumb
+              // (P0-4).
+              <fieldset className="pay-in" disabled={blocked || working}>
+                <legend className="visually-hidden">Сума внеску</legend>
+                <div className="pay-amount">
+                  <label>
+                    {/* Named in the field; the panel says the sum typed. */}
+                    <span className="visually-hidden">Сума внеску, грн</span>
+                    <input
+                      inputMode="decimal"
+                      enterKeyHint="done"
+                      placeholder="Сума, грн"
+                      value={amount}
+                      onChange={(event) => {
+                        setAmount(event.target.value);
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      setAmount(asInput(credit.owed));
+                    }}
+                  >
+                    Увесь залишок
+                  </button>
+                </div>
+              </fieldset>
+            )}
+            {takes && (
+              // A mode, not the first thing: under the sum (P0-4), a group of its
+              // own.
               <fieldset className="pay-in" disabled={blocked || working}>
                 <legend className="visually-hidden">Внесок з паперу</legend>
-                <PaperFields
-                  mark={paperMark}
-                  what="payment"
-                  storeId={store.id}
-                />
+                <PaperFields mark={paperMark} what="payment" storeId={store.id} />
               </fieldset>
+            )}
+            {done && (
+              <p role="status" ref={result}>
+                {done}
+              </p>
             )}
             {problem && (
               <p role="alert" ref={said}>
                 {problem}
               </p>
             )}
+            <h3>Історія</h3>
+            <History credit={credit} />
             {takes && (
+              // Under the thumb (P0-4): the sum to take, and the three ways that
+              // take it — none chosen beforehand, none pressable without a sum.
+              // Before the owner's rare ones, so the keyboard reaches it first; it
+              // rests between them and the history at the end of the page.
               <div
-                className="pay-panel till-dock"
+                className="pay-panel"
                 role="group"
                 aria-label="Внесок"
                 ref={panelRef}
               >
-                <Keypad
-                  label="Сума, грн"
-                  value={amount}
-                  change={(sum) => {
-                    setAmount(sum);
-                    setProblem(null);
-                  }}
-                  disabled={blocked || working}
-                  invalid={over}
-                  {...(overSaid ? { describedBy: overLine } : {})}
-                  aside={
-                    <button
-                      type="button"
-                      className="quiet keypad-all"
-                      disabled={blocked || working}
-                      onClick={() => {
-                        setAmount(asInput(credit.owed));
-                        setProblem(null);
-                      }}
-                    >
-                      Увесь залишок {money(credit.owed)}
-                    </button>
-                  }
-                />
-                {overSaid && (
-                  <p id={overLine} className="pay-over" role="alert">
-                    {overText(credit.owed)}
-                  </p>
-                )}
+                <p className="pay-total">
+                  {typed ? (
+                    <>
+                      {paperMark.paper && "З паперу · "}Внесок{" "}
+                      <Sum value={money(decimal(cents))} />
+                    </>
+                  ) : unreadable ? (
+                    sumUnread
+                  ) : (
+                    "Впишіть суму внеску"
+                  )}
+                </p>
                 <SendingLine busy={pressing !== null} />
                 <div className="pay-ways">
                   {tillMethods.map((way) => (
@@ -736,13 +949,7 @@ export function Debt({
                             ? "pressed"
                             : "stepped-back"
                       }
-                      disabled={
-                        blocked ||
-                        working ||
-                        !paperMark.ready ||
-                        !typed ||
-                        over
-                      }
+                      disabled={blocked || working || !paperMark.ready || !typed}
                       onClick={() => {
                         pay(way);
                       }}
@@ -759,287 +966,47 @@ export function Debt({
                 )}
               </div>
             )}
-          </>
-        )}
-      </section>
-    );
-
-  return (
-    <section className="credits debt-detail">
-      <button
-        type="button"
-        className="quiet back"
-        disabled={working || erasing === "sending"}
-        onClick={back}
-      >
-        <span aria-hidden="true">← </span>
-        {backTo}
-      </button>
-      <h2 ref={name} tabIndex={-1}>
-        {customerName}
-      </h2>
-      {credit.customer_phone === null && credit.customer_erased_at && (
-        <p className="hint">
-          Ім’я й телефон стерто {shortDay(credit.customer_erased_at)}. Суми
-          лишаються.
-        </p>
-      )}
-      {/* Who, what they took, since when: one line (P0-3). */}
-      <p className="hint debt-context">
-        {credit.customer_phone && (
-          <>
-            <a
-              className="debt-phone"
-              href={`tel:${credit.customer_phone.replace(/[^\d+]/g, "")}`}
-            >
-              {visible(credit.customer_phone)}
-            </a>
-            {" · "}
-          </>
-        )}
-        {firstGood && (
-          <>
-            {firstGood}
-            {goodsOpener}
-            {" · "}
-          </>
-        )}
-        з {shortDay(credit.opened_at)}
-      </p>
-      {goods}
-      {paidResult || (
-        <>
-          {elsewhere && (
-            <p className="notice">
-              Продано в «{visible(credit.store_name)}» (
-              {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}).
-              Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
-            </p>
-          )}
-          {credit.status === "OPEN" ? (
-            // What they owe, first and large (P0-3): «скільки я ще винна?».
-            <div className="owed-card" role="group" aria-label="Скільки винні">
-              <p className="owed-what">Винні</p>
-              <p className="owed-sum">
-                <Sum value={money(credit.owed)} />
-              </p>
-              <div className="debt-bar" aria-hidden="true">
-                <span style={{ width: `${String(closedShare(credit))}%` }} />
-              </div>
-              <p className="owed-count">{paidText(credit)}</p>
-            </div>
-          ) : (
-            <div className="debt-closed">
-              <p>
-                <span
-                  className={
-                    credit.status === "WRITTEN_OFF"
-                      ? "badge neutral"
-                      : "badge paid"
-                  }
-                >
-                  {statusLabels[credit.status]}
-                </span>
-                {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
-              </p>
-              <p className="hint">{paidText(credit)}</p>
-            </div>
-          )}
-          {takes && (
-            // The payment's sum under what is owed; its ways under the thumb
-            // (P0-4).
-            <fieldset className="pay-in" disabled={blocked || working}>
-              <legend className="visually-hidden">Сума внеску</legend>
-              <div className="pay-amount">
-                <label>
-                  {/* Named in the field; the panel says the sum typed. */}
-                  <span className="visually-hidden">Сума внеску, грн</span>
-                  <input
-                    inputMode="decimal"
-                    enterKeyHint="done"
-                    placeholder="Сума, грн"
-                    value={amount}
-                    onChange={(event) => {
-                      setAmount(event.target.value);
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    setAmount(asInput(credit.owed));
-                  }}
-                >
-                  Увесь залишок
-                </button>
-              </div>
-            </fieldset>
-          )}
-          {takes && (
-            // A mode, not the first thing: under the sum (P0-4), a group of its
-            // own.
-            <fieldset className="pay-in" disabled={blocked || working}>
-              <legend className="visually-hidden">Внесок з паперу</legend>
-              <PaperFields mark={paperMark} what="payment" storeId={store.id} />
-            </fieldset>
-          )}
-          {done && (
-            <p role="status" ref={result}>
-              {done}
-            </p>
-          )}
-          {problem && (
-            <p role="alert" ref={said}>
-              {problem}
-            </p>
-          )}
-          <h3>Історія</h3>
-          <History credit={credit} />
-          {takes && (
-            // Under the thumb (P0-4): the sum to take, and the three ways that
-            // take it — none chosen beforehand, none pressable without a sum.
-            // Before the owner's rare ones, so the keyboard reaches it first; it
-            // rests between them and the history at the end of the page.
-            <div
-              className="pay-panel"
-              role="group"
-              aria-label="Внесок"
-              ref={panelRef}
-            >
-              <p className="pay-total">
-                {typed ? (
-                  <>
-                    {paperMark.paper && "З паперу · "}Внесок{" "}
-                    <Sum value={money(decimal(cents))} />
-                  </>
-                ) : unreadable ? (
-                  sumUnread
-                ) : (
-                  "Впишіть суму внеску"
-                )}
-              </p>
-              <SendingLine busy={pressing !== null} />
-              <div className="pay-ways">
-                {tillMethods.map((way) => (
-                  <button
-                    key={way}
-                    type="button"
-                    className={
-                      pressing === null
-                        ? undefined
-                        : pressing === way
-                          ? "pressed"
-                          : "stepped-back"
-                    }
-                    disabled={blocked || working || !paperMark.ready || !typed}
-                    onClick={() => {
-                      pay(way);
-                    }}
-                  >
-                    {pressing === way && <Eyelet state="spin" size={20} />}
-                    {paperMark.paper
-                      ? `З паперу · ${methodLabels[way]}`
-                      : methodLabels[way]}
-                  </button>
-                ))}
-              </div>
-              {paperMark.paper && (
-                <p className="pay-seller">{takenBy(paperMark)}</p>
-              )}
-            </div>
-          )}
-          {/* The owner's, and rare: after the history, never between what is
-          owed and the payment (P0-3). */}
-          {credit.status === "OPEN" && mayWriteOff && (
-            <fieldset className="rare" disabled={blocked || working}>
-              <legend className="visually-hidden">Списання</legend>
-              {asking ? (
-                <div className="notice">
-                  <p>
-                    Борг {money(credit.owed)} закриється без оплати. Скасувати
-                    це потім не можна.
-                  </p>
-                  <label>
-                    Чому списуємо
-                    <textarea
-                      value={reason}
-                      maxLength={1000}
-                      aria-describedby={hint}
-                      onChange={(event) => {
-                        setReason(event.target.value);
-                      }}
-                    />
-                    <NoCustomerData id={hint} />
-                  </label>
-                  <SendingLine busy={writingOff} />
-                  <div className="actions">
-                    <button
-                      type="button"
-                      className={writingOff ? "pressed" : undefined}
-                      disabled={reason.trim() === "" || working}
-                      onClick={() => {
-                        void send({ kind: "write-off", reason: reason.trim() });
-                      }}
-                    >
-                      {writingOff && <Eyelet state="spin" size={20} />}
-                      Так, списати {money(credit.owed)}
-                    </button>
-                    <button
-                      type="button"
-                      className="quiet"
-                      onClick={() => {
-                        setAsking(false);
-                      }}
-                    >
-                      Скасувати
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    setDone(null);
-                    setProblem(null);
-                    setAsking(true);
-                  }}
-                >
-                  Списати борг
-                </button>
-              )}
-            </fieldset>
-          )}
-          {(mayErase || erasesHere) &&
-            credit.status !== "OPEN" &&
-            credit.customer_erased_at === null && (
-              <fieldset
-                className="rare"
-                disabled={working || erasing === "sending"}
-              >
-                <legend className="visually-hidden">Дані покупця</legend>
-                {erasing ? (
+            {/* The owner's, and rare: after the history, never between what is
+            owed and the payment (P0-3). */}
+            {credit.status === "OPEN" && mayWriteOff && (
+              <fieldset className="rare" disabled={blocked || working}>
+                <legend className="visually-hidden">Списання</legend>
+                {asking ? (
                   <div className="notice">
                     <p>
-                      Ім’я й телефон покупця зникнуть з усіх закритих боргів{" "}
-                      {mayErase ? "мережі" : "цього магазину"} з цим телефоном.
-                      Суми лишаються. Скасувати це не можна.
+                      Борг {money(credit.owed)} закриється без оплати. Скасувати
+                      це потім не можна.
                     </p>
+                    <label>
+                      Чому списуємо
+                      <textarea
+                        value={reason}
+                        maxLength={1000}
+                        aria-describedby={hint}
+                        onChange={(event) => {
+                          setReason(event.target.value);
+                        }}
+                      />
+                      <NoCustomerData id={hint} />
+                    </label>
+                    <SendingLine busy={writingOff} />
                     <div className="actions">
                       <button
                         type="button"
+                        className={writingOff ? "pressed" : undefined}
+                        disabled={reason.trim() === "" || working}
                         onClick={() => {
-                          void erase();
+                          void send({ kind: "write-off", reason: reason.trim() });
                         }}
                       >
-                        Так, стерти дані покупця
+                        {writingOff && <Eyelet state="spin" size={20} />}
+                        Так, списати {money(credit.owed)}
                       </button>
                       <button
                         type="button"
                         className="quiet"
                         onClick={() => {
-                          setErasing(null);
+                          setAsking(false);
                         }}
                       >
                         Скасувати
@@ -1053,17 +1020,68 @@ export function Debt({
                     onClick={() => {
                       setDone(null);
                       setProblem(null);
-                      setErasing("ask");
+                      setAsking(true);
                     }}
                   >
-                    Стерти дані покупця
+                    Списати борг
                   </button>
                 )}
               </fieldset>
             )}
-        </>
-      )}
-    </section>
+            {(mayErase || erasesHere) &&
+              credit.status !== "OPEN" &&
+              credit.customer_erased_at === null && (
+                <fieldset
+                  className="rare"
+                  disabled={working || erasing === "sending"}
+                >
+                  <legend className="visually-hidden">Дані покупця</legend>
+                  {erasing ? (
+                    <div className="notice">
+                      <p>
+                        Ім’я й телефон покупця зникнуть з усіх закритих боргів{" "}
+                        {mayErase ? "мережі" : "цього магазину"} з цим телефоном.
+                        Суми лишаються. Скасувати це не можна.
+                      </p>
+                      <div className="actions">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void erase();
+                          }}
+                        >
+                          Так, стерти дані покупця
+                        </button>
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={() => {
+                            setErasing(null);
+                          }}
+                        >
+                          Скасувати
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="quiet"
+                      onClick={() => {
+                        setDone(null);
+                        setProblem(null);
+                        setErasing("ask");
+                      }}
+                    >
+                      Стерти дані покупця
+                    </button>
+                  )}
+                </fieldset>
+              )}
+          </>
+        )}
+      </section>
+    </>
   );
 }
 

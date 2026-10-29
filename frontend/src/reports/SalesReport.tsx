@@ -31,6 +31,7 @@ import {
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 type Range = { from: string; to: string };
 
@@ -186,121 +187,125 @@ export function SalesReport({
     ? { from: data.date_from, to: data.date_to }
     : range;
   return (
-    <section>
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Звіт про продажі</h2>
-        <button
-          className="quiet"
-          disabled={report.isFetching}
-          onClick={() => {
-            void report.refetch();
-            void models.refetch();
-            void entries.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        Продажі й повернення рахуються магазину, який продав, гроші — магазину,
-        через чию касу пройшли. Повернення — у день, коли його прийняли,
-        виправлення способу оплати — у день, коли його записали.
-      </p>
-      <div className="choices" aria-label="Період">
-        {shortcuts.map(([label, value]) => (
+    <>
+      <ScreenHeader
+        title="Звіт про продажі"
+        back={back && <BackToMore back={back} />}
+        aside={
           <button
-            key={label}
-            className={
-              shown?.from === value.from && shown.to === value.to
-                ? "active"
-                : "quiet"
-            }
+            className="quiet"
+            disabled={report.isFetching}
             onClick={() => {
-              choose(value);
+              void report.refetch();
+              void models.refetch();
+              void entries.refetch();
             }}
           >
-            {label}
+            Оновити
           </button>
-        ))}
-      </div>
-      {shown && (
-        <div className="fields period">
-          <label>
-            Від
-            <input
-              type="date"
-              value={shown.from}
-              onChange={(event) => {
-                if (event.target.value)
-                  choose({ from: event.target.value, to: shown.to });
+        }
+      />
+      <section>
+        <p className="hint">
+          Продажі й повернення рахуються магазину, який продав, гроші — магазину,
+          через чию касу пройшли. Повернення — у день, коли його прийняли,
+          виправлення способу оплати — у день, коли його записали.
+        </p>
+        <div className="choices" aria-label="Період">
+          {shortcuts.map(([label, value]) => (
+            <button
+              key={label}
+              className={
+                shown?.from === value.from && shown.to === value.to
+                  ? "active"
+                  : "quiet"
+              }
+              onClick={() => {
+                choose(value);
               }}
-            />
-          </label>
-          <label>
-            До
-            <input
-              type="date"
-              value={shown.to}
-              onChange={(event) => {
-                if (event.target.value)
-                  choose({ from: shown.from, to: event.target.value });
-              }}
-            />
-          </label>
-        </div>
-      )}
-      {report.isPending ? (
-        <p role="status">Рахуємо…</p>
-      ) : report.error ? (
-        <p role="alert">{errorText(report.error)}</p>
-      ) : (
-        <>
-          <h3>{periodText(report.data.date_from, report.data.date_to)}</h3>
-          {report.data.stores.map((store) => (
-            <Summary
-              key={store.store_id}
-              title={visible(store.store_name)}
-              state={stateLabels[store.store_state]}
-              figures={store}
-            />
+            >
+              {label}
+            </button>
           ))}
-          {report.data.total && (
-            <Summary
-              title="Усі магазини разом"
-              state=""
-              figures={report.data.total}
-            />
-          )}
-          {report.data.stores.length > 1 && (
+        </div>
+        {shown && (
+          <div className="fields period">
             <label>
-              Моделі й продажі
-              <select
-                value={storeId}
+              Від
+              <input
+                type="date"
+                value={shown.from}
                 onChange={(event) => {
-                  setStoreId(event.target.value);
-                  setOffset(0);
+                  if (event.target.value)
+                    choose({ from: event.target.value, to: shown.to });
                 }}
-              >
-                <option value="">Усі магазини</option>
-                {report.data.stores.map((store) => (
-                  <option key={store.store_id} value={store.store_id}>
-                    {visible(store.store_name)}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
-          )}
-          <ModelList models={models} />
-          <EntryList
-            entries={entries}
-            everyStore={storeId === "" && report.data.stores.length > 1}
-            offset={offset}
-            setOffset={setOffset}
-          />
-        </>
-      )}
-    </section>
+            <label>
+              До
+              <input
+                type="date"
+                value={shown.to}
+                onChange={(event) => {
+                  if (event.target.value)
+                    choose({ from: shown.from, to: event.target.value });
+                }}
+              />
+            </label>
+          </div>
+        )}
+        {report.isPending ? (
+          <p role="status">Рахуємо…</p>
+        ) : report.error ? (
+          <p role="alert">{errorText(report.error)}</p>
+        ) : (
+          <>
+            <h3>{periodText(report.data.date_from, report.data.date_to)}</h3>
+            {report.data.stores.map((store) => (
+              <Summary
+                key={store.store_id}
+                title={visible(store.store_name)}
+                state={stateLabels[store.store_state]}
+                figures={store}
+              />
+            ))}
+            {report.data.total && (
+              <Summary
+                title="Усі магазини разом"
+                state=""
+                figures={report.data.total}
+              />
+            )}
+            {report.data.stores.length > 1 && (
+              <label>
+                Моделі й продажі
+                <select
+                  value={storeId}
+                  onChange={(event) => {
+                    setStoreId(event.target.value);
+                    setOffset(0);
+                  }}
+                >
+                  <option value="">Усі магазини</option>
+                  {report.data.stores.map((store) => (
+                    <option key={store.store_id} value={store.store_id}>
+                      {visible(store.store_name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <ModelList models={models} />
+            <EntryList
+              entries={entries}
+              everyStore={storeId === "" && report.data.stores.length > 1}
+              offset={offset}
+              setOffset={setOffset}
+            />
+          </>
+        )}
+      </section>
+    </>
   );
 }
 

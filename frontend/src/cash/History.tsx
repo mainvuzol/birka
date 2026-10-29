@@ -6,6 +6,7 @@ import type { Store } from "@/orders/types";
 import { api, errorText } from "@/shared/api";
 import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { CloseBody, differenceOf, isOpening } from "./Closed";
 import { dayOf, timeOf } from "./errors";
 import { daysAgo, isoDay, moved, nothing } from "./format";
@@ -133,75 +134,91 @@ export function History({
   }, [tapped]);
   if (open)
     return (
-      <section className="cash-closed cash-history">
-        <button
-          type="button"
-          className="quiet back"
-          aria-label="Назад до закриттів"
-          onClick={() => {
-            setTapped(null);
-          }}
-        >
-          <span aria-hidden="true">← </span>Закриття
-        </button>
-        <h2 ref={heading} tabIndex={-1}>
-          {isOpening(open) ? "Перший підрахунок" : "Закриття"}{" "}
-          {dayOf(open.business_day)}
-        </h2>
-        <p className="cash-context">
-          {timeOf(open.closed_at)} · {visible(open.closed_by)}
-        </p>
-        <CloseBody close={open} now={false} />
-      </section>
-    );
-  return (
-    <section className="cash-history">
-      <button
-        type="button"
-        className="quiet back"
-        aria-label="Назад до каси"
-        onClick={back}
-      >
-        <span aria-hidden="true">← </span>Каса
-      </button>
-      <h2>Закриття</h2>
-      {closes.isPending ? (
-        <Placeholder said="Завантажуємо закриття…" rows={4} day={false} />
-      ) : closes.data === undefined ? (
-        <p role="alert">{errorText(closes.error)}</p>
-      ) : items.length === 0 ? (
-        <p>Касу цього магазину ще не закривали.</p>
-      ) : (
-        <>
-          <ul className="history close-list" aria-label="Закриття каси">
-            {items.map((close) => (
-              <HistoryRow
-                key={close.id}
-                close={close}
-                open={() => {
-                  place.current = window.scrollY;
-                  row.current = close.id;
-                  setTapped(close);
-                }}
-              />
-            ))}
-          </ul>
-          {/* A page that failed keeps the closes already read. */}
-          {closes.error && <p role="alert">{errorText(closes.error)}</p>}
-          {closes.hasNextPage && (
+      <>
+        <ScreenHeader
+          ref={heading}
+          focusable
+          title={
+            <>
+              {isOpening(open) ? "Перший підрахунок" : "Закриття"}{" "}
+              {dayOf(open.business_day)}
+            </>
+          }
+          back={
             <button
-              className="quiet"
-              disabled={closes.isFetching}
+              type="button"
+              className="quiet back"
+              aria-label="Назад до закриттів"
               onClick={() => {
-                void closes.fetchNextPage();
+                setTapped(null);
               }}
             >
-              Показати ще
+              <span aria-hidden="true">← </span>Закриття
             </button>
-          )}
-        </>
-      )}
-    </section>
+          }
+        />
+        <section className="cash-closed cash-history">
+          <p className="cash-context">
+            {timeOf(open.closed_at)} · {visible(open.closed_by)}
+          </p>
+          <CloseBody close={open} now={false} />
+        </section>
+      </>
+    );
+  return (
+    <>
+      <ScreenHeader
+        title="Закриття"
+        back={
+          <button
+            type="button"
+            className="quiet back"
+            aria-label="Назад до каси"
+            onClick={back}
+          >
+            <span aria-hidden="true">← </span>Каса
+          </button>
+        }
+      />
+      <section className="cash-history">
+        {closes.isPending ? (
+          <Placeholder said="Завантажуємо закриття…" rows={4} day={false} />
+        ) : closes.data === undefined ? (
+          <p role="alert">{errorText(closes.error)}</p>
+        ) : items.length === 0 ? (
+          <p>Касу цього магазину ще не закривали.</p>
+        ) : (
+          <>
+            <ul className="history close-list" aria-label="Закриття каси">
+              {items.map((close) => (
+                <HistoryRow
+                  key={close.id}
+                  close={close}
+                  open={() => {
+                    place.current = window.scrollY;
+                    row.current = close.id;
+                    setTapped(close);
+                  }}
+                />
+              ))}
+            </ul>
+            {/* A page that failed keeps the closes already read. */}
+            {closes.error && <p role="alert">{errorText(closes.error)}</p>}
+            {closes.hasNextPage && (
+              <button
+                className="quiet"
+                disabled={closes.isFetching}
+                onClick={() => {
+                  void closes.fetchNextPage();
+                }}
+              >
+                Показати ще
+              </button>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }
 

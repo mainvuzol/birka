@@ -13,6 +13,7 @@ import { stateLabels } from "./types";
 import type { Leftover, StoreRecord } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 /**
  * The network's stores and their states (owner decisions, 2026-10-01).
@@ -61,93 +62,97 @@ export function Stores({
   }
 
   return (
-    <section>
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Магазини</h2>
-        <button
-          className="quiet"
-          disabled={stores.isFetching}
-          onClick={() => {
-            void stores.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        Заблокований чи закритий магазин нічого не робить: ні продажів, ні
-        приймання, ні повернень, ні оплат. Ви й менеджери мережі його бачите;
-        його люди бачать лише, що магазин заблоковано чи закрито, без причини.
-        Борги його покупців приймає будь-який магазин, що працює.
-      </p>
-      {pending && (
-        <section className="notice">
-          <h3>
-            {busy ? "Перевіряємо зміну стану…" : "Незавершена зміна стану"}
-          </h3>
-          <p>
-            Невідомо, чи змінено стан магазину. Перевірте результат — та сама
-            зміна не виконається двічі.
-          </p>
+    <>
+      <ScreenHeader
+        title="Магазини"
+        back={back && <BackToMore back={back} />}
+        aside={
           <button
-            disabled={busy}
+            className="quiet"
+            disabled={stores.isFetching}
             onClick={() => {
-              void resolveStateCommand(journalKey, token, pending).then(
-                (outcome) => {
-                  if (outcome.kind === "done") void settled(outcome.result);
-                  else if (outcome.kind === "refused")
-                    setDone(refusalText(outcome.error));
-                },
-              );
+              void stores.refetch();
             }}
           >
-            Перевірити результат
+            Оновити
           </button>
-        </section>
-      )}
-      {done && <p role="status">{done}</p>}
-      {error instanceof Error && !(error instanceof ApiError) && (
-        <p role="alert">{error.message}</p>
-      )}
-      {stores.isPending ? (
-        <p role="status">Завантажуємо магазини…</p>
-      ) : stores.error ? (
-        <p role="alert">{errorText(stores.error)}</p>
-      ) : (
-        stores.data.map((store) => (
-          <StoreCard
-            key={store.id}
-            store={store}
-            disabled={blocked || busy || pending !== null}
-            change={async (state, reason) => {
-              setDone(null);
-              const outcome = await submitStateCommand(journalKey, token, {
-                // A new transport key per attempt; the change's identity is
-                // `command_id`, which is what makes a late retry safe.
-                key: crypto.randomUUID(),
-                body: {
-                  store_id: storeId,
-                  target_id: store.id,
-                  command_id: crypto.randomUUID(),
-                  state,
-                  reason,
-                },
-              });
-              if (outcome.kind === "done") {
-                await settled(outcome.result);
+        }
+      />
+      <section>
+        <p className="hint">
+          Заблокований чи закритий магазин нічого не робить: ні продажів, ні
+          приймання, ні повернень, ні оплат. Ви й менеджери мережі його бачите;
+          його люди бачать лише, що магазин заблоковано чи закрито, без причини.
+          Борги його покупців приймає будь-який магазин, що працює.
+        </p>
+        {pending && (
+          <section className="notice">
+            <h3>
+              {busy ? "Перевіряємо зміну стану…" : "Незавершена зміна стану"}
+            </h3>
+            <p>
+              Невідомо, чи змінено стан магазину. Перевірте результат — та сама
+              зміна не виконається двічі.
+            </p>
+            <button
+              disabled={busy}
+              onClick={() => {
+                void resolveStateCommand(journalKey, token, pending).then(
+                  (outcome) => {
+                    if (outcome.kind === "done") void settled(outcome.result);
+                    else if (outcome.kind === "refused")
+                      setDone(refusalText(outcome.error));
+                  },
+                );
+              }}
+            >
+              Перевірити результат
+            </button>
+          </section>
+        )}
+        {done && <p role="status">{done}</p>}
+        {error instanceof Error && !(error instanceof ApiError) && (
+          <p role="alert">{error.message}</p>
+        )}
+        {stores.isPending ? (
+          <p role="status">Завантажуємо магазини…</p>
+        ) : stores.error ? (
+          <p role="alert">{errorText(stores.error)}</p>
+        ) : (
+          stores.data.map((store) => (
+            <StoreCard
+              key={store.id}
+              store={store}
+              disabled={blocked || busy || pending !== null}
+              change={async (state, reason) => {
+                setDone(null);
+                const outcome = await submitStateCommand(journalKey, token, {
+                  // A new transport key per attempt; the change's identity is
+                  // `command_id`, which is what makes a late retry safe.
+                  key: crypto.randomUUID(),
+                  body: {
+                    store_id: storeId,
+                    target_id: store.id,
+                    command_id: crypto.randomUUID(),
+                    state,
+                    reason,
+                  },
+                });
+                if (outcome.kind === "done") {
+                  await settled(outcome.result);
+                  return null;
+                }
+                if (outcome.kind === "refused") {
+                  await cache.invalidateQueries({ queryKey: ["stores"] });
+                  return outcome.error;
+                }
                 return null;
-              }
-              if (outcome.kind === "refused") {
-                await cache.invalidateQueries({ queryKey: ["stores"] });
-                return outcome.error;
-              }
-              return null;
-            }}
-          />
-        ))
-      )}
-    </section>
+              }}
+            />
+          ))
+        )}
+      </section>
+    </>
   );
 }
 

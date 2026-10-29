@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 const pageSize = 20;
 
@@ -208,187 +209,191 @@ export function Invoices({
     );
 
   return (
-    <section>
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Накладні</h2>
-        <button
-          className="quiet"
-          disabled={invoices.isFetching}
-          onClick={() => {
-            void invoices.refetch();
-            void summary.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        {readOnly
-          ? "Магазин не торгує: його накладні тут лише для перегляду. Сплачує будь-який магазин мережі, що працює."
-          : "Що магазин винен постачальникам. Кожна накладна — окремий борг: сплачують частинами, без графіка, а повернений постачальнику товар зараховують заліком."}
-      </p>
-      {notice}
-      {error instanceof Error && !(error instanceof ApiError) && (
-        <p role="alert">{error.message}</p>
-      )}
-      {done && <p role="status">{done}</p>}
-      {!readOnly && (
+    <>
+      <ScreenHeader
+        title="Накладні"
+        back={back && <BackToMore back={back} />}
+        aside={
+          <button
+            className="quiet"
+            disabled={invoices.isFetching}
+            onClick={() => {
+              void invoices.refetch();
+              void summary.refetch();
+            }}
+          >
+            Оновити
+          </button>
+        }
+      />
+      <section>
+        <p className="hint">
+          {readOnly
+            ? "Магазин не торгує: його накладні тут лише для перегляду. Сплачує будь-який магазин мережі, що працює."
+            : "Що магазин винен постачальникам. Кожна накладна — окремий борг: сплачують частинами, без графіка, а повернений постачальнику товар зараховують заліком."}
+        </p>
+        {notice}
+        {error instanceof Error && !(error instanceof ApiError) && (
+          <p role="alert">{error.message}</p>
+        )}
+        {done && <p role="status">{done}</p>}
+        {!readOnly && (
+          <label>
+            Чиї накладні
+            <select
+              value={elsewhere ? "ELSEWHERE" : "HERE"}
+              onChange={(event) => {
+                setElsewhere(event.target.value === "ELSEWHERE");
+                setShown(pageSize);
+              }}
+            >
+              <option value="HERE">Цього магазину</option>
+              <option value="ELSEWHERE">
+                Магазинів, що заблоковані чи закриті
+              </option>
+            </select>
+          </label>
+        )}
+        {!elsewhere && summary.data && (
+          <div
+            className="section-block"
+            aria-label="Скільки магазин винен постачальникам"
+          >
+            <p className="total">
+              Магазин винен постачальникам{" "}
+              <strong>{money(summary.data.owed)}</strong>
+            </p>
+            {summary.data.suppliers.length > 0 && (
+              <ul aria-label="Борги за постачальниками">
+                {summary.data.suppliers.map((debt) => (
+                  <li key={debt.supplier.id}>
+                    {visible(debt.supplier.name)} — {money(debt.owed)}
+                    {debt.invoices > 1 &&
+                      ` · накладних: ${String(debt.invoices)}`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {!readOnly &&
+          !elsewhere &&
+          (making ? (
+            <NewInvoice
+              store={store}
+              token={token}
+              disabled={blocked || working}
+              cancel={() => {
+                setMaking(false);
+              }}
+              send={send}
+            />
+          ) : (
+            <button
+              disabled={blocked || working}
+              onClick={() => {
+                setDone(null);
+                setMaking(true);
+              }}
+            >
+              + Записати накладну
+            </button>
+          ))}
         <label>
-          Чиї накладні
+          Постачальник
           <select
-            value={elsewhere ? "ELSEWHERE" : "HERE"}
+            value={supplierId}
             onChange={(event) => {
-              setElsewhere(event.target.value === "ELSEWHERE");
+              setSupplierId(event.target.value);
               setShown(pageSize);
             }}
           >
-            <option value="HERE">Цього магазину</option>
-            <option value="ELSEWHERE">
-              Магазинів, що заблоковані чи закриті
-            </option>
+            <option value="">Усі постачальники</option>
+            {(suppliers.data ?? []).map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {visible(supplier.name)}
+              </option>
+            ))}
           </select>
         </label>
-      )}
-      {!elsewhere && summary.data && (
-        <div
-          className="section-block"
-          aria-label="Скільки магазин винен постачальникам"
-        >
-          <p className="total">
-            Магазин винен постачальникам{" "}
-            <strong>{money(summary.data.owed)}</strong>
-          </p>
-          {summary.data.suppliers.length > 0 && (
-            <ul aria-label="Борги за постачальниками">
-              {summary.data.suppliers.map((debt) => (
-                <li key={debt.supplier.id}>
-                  {visible(debt.supplier.name)} — {money(debt.owed)}
-                  {debt.invoices > 1 &&
-                    ` · накладних: ${String(debt.invoices)}`}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      {!readOnly &&
-        !elsewhere &&
-        (making ? (
-          <NewInvoice
-            store={store}
-            token={token}
-            disabled={blocked || working}
-            cancel={() => {
-              setMaking(false);
-            }}
-            send={send}
-          />
-        ) : (
-          <button
-            disabled={blocked || working}
-            onClick={() => {
-              setDone(null);
-              setMaking(true);
+        <label>
+          Показати
+          <select
+            value={owedOnly ? "OPEN" : "ALL"}
+            onChange={(event) => {
+              setOwedOnly(event.target.value === "OPEN");
+              setShown(pageSize);
             }}
           >
-            + Записати накладну
-          </button>
-        ))}
-      <label>
-        Постачальник
-        <select
-          value={supplierId}
-          onChange={(event) => {
-            setSupplierId(event.target.value);
-            setShown(pageSize);
-          }}
-        >
-          <option value="">Усі постачальники</option>
-          {(suppliers.data ?? []).map((supplier) => (
-            <option key={supplier.id} value={supplier.id}>
-              {visible(supplier.name)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Показати
-        <select
-          value={owedOnly ? "OPEN" : "ALL"}
-          onChange={(event) => {
-            setOwedOnly(event.target.value === "OPEN");
-            setShown(pageSize);
-          }}
-        >
-          <option value="OPEN">Ще не сплачені</option>
-          <option value="ALL">Усі, разом зі сплаченими й скасованими</option>
-        </select>
-      </label>
-      {invoices.isPending ? (
-        <p role="status">Завантажуємо накладні…</p>
-      ) : invoices.error ? (
-        <p role="alert">{errorText(invoices.error)}</p>
-      ) : invoices.data.items.length === 0 ? (
-        <p>
-          {elsewhere
-            ? "Магазини, що не працюють, нічого не винні постачальникам."
-            : owedOnly
-              ? "Зараз магазин нічого не винен постачальникам."
-              : "У цьому магазині ще не записували накладних."}
-        </p>
-      ) : (
-        <>
-          {invoices.data.items.map((invoice) => (
-            <article
-              className="order-card"
-              key={invoice.id}
-              aria-label={`Накладна ${visible(invoice.supplier.name)} від ${when(invoice.at)}`}
-            >
-              <strong>{visible(invoice.supplier.name)}</strong>
-              <small>
-                {when(invoice.at)} · {visible(invoice.by)}
-                {invoice.store_id !== store.id &&
-                  ` · магазин «${visible(invoice.store_name)}»`}
-              </small>
-              <p>
-                {invoice.status === "OPEN"
-                  ? `Винні ${money(invoice.owed)} з ${money(invoice.amount)}`
-                  : `${statusLabels[invoice.status]} · ${money(invoice.amount)}`}
-              </p>
-              {invoice.note && <p className="hint">{visible(invoice.note)}</p>}
-              {invoice.sold && (
-                <p className="hint">
-                  За продане позичене: {visible(invoice.sold.label)} ×{" "}
-                  {invoice.sold.quantity}
+            <option value="OPEN">Ще не сплачені</option>
+            <option value="ALL">Усі, разом зі сплаченими й скасованими</option>
+          </select>
+        </label>
+        {invoices.isPending ? (
+          <p role="status">Завантажуємо накладні…</p>
+        ) : invoices.error ? (
+          <p role="alert">{errorText(invoices.error)}</p>
+        ) : invoices.data.items.length === 0 ? (
+          <p>
+            {elsewhere
+              ? "Магазини, що не працюють, нічого не винні постачальникам."
+              : owedOnly
+                ? "Зараз магазин нічого не винен постачальникам."
+                : "У цьому магазині ще не записували накладних."}
+          </p>
+        ) : (
+          <>
+            {invoices.data.items.map((invoice) => (
+              <article
+                className="order-card"
+                key={invoice.id}
+                aria-label={`Накладна ${visible(invoice.supplier.name)} від ${when(invoice.at)}`}
+              >
+                <strong>{visible(invoice.supplier.name)}</strong>
+                <small>
+                  {when(invoice.at)} · {visible(invoice.by)}
+                  {invoice.store_id !== store.id &&
+                    ` · магазин «${visible(invoice.store_name)}»`}
+                </small>
+                <p>
+                  {invoice.status === "OPEN"
+                    ? `Винні ${money(invoice.owed)} з ${money(invoice.amount)}`
+                    : `${statusLabels[invoice.status]} · ${money(invoice.amount)}`}
                 </p>
-              )}
+                {invoice.note && <p className="hint">{visible(invoice.note)}</p>}
+                {invoice.sold && (
+                  <p className="hint">
+                    За продане позичене: {visible(invoice.sold.label)} ×{" "}
+                    {invoice.sold.quantity}
+                  </p>
+                )}
+                <button
+                  className="quiet"
+                  onClick={() => {
+                    setDone(null);
+                    setSelected(invoice);
+                  }}
+                >
+                  Відкрити накладну {visible(invoice.supplier.name)} від{" "}
+                  {when(invoice.at)}
+                </button>
+              </article>
+            ))}
+            {invoices.data.has_more && (
               <button
                 className="quiet"
+                disabled={invoices.isFetching}
                 onClick={() => {
-                  setDone(null);
-                  setSelected(invoice);
+                  setShown(shown + pageSize);
                 }}
               >
-                Відкрити накладну {visible(invoice.supplier.name)} від{" "}
-                {when(invoice.at)}
+                Показати ще
               </button>
-            </article>
-          ))}
-          {invoices.data.has_more && (
-            <button
-              className="quiet"
-              disabled={invoices.isFetching}
-              onClick={() => {
-                setShown(shown + pageSize);
-              }}
-            >
-              Показати ще
-            </button>
-          )}
-        </>
-      )}
-    </section>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -582,226 +587,231 @@ function InvoiceDetail({
   }
 
   return (
-    <section>
-      <div className="toolbar">
-        <h2>Накладна</h2>
-        <button className="quiet" onClick={back}>
-          До списку накладних
-        </button>
-      </div>
-      <h3>{visible(invoice.supplier.name)}</h3>
-      <p className="hint">
-        Записано {when(invoice.at)} · {visible(invoice.by)}
-        {invoice.note && ` · ${visible(invoice.note)}`}
-      </p>
-      {invoice.sold && (
-        <p>
-          За продане позичене: {visible(invoice.sold.label)} ×{" "}
-          {invoice.sold.quantity}. Якщо позначили помилково — скасуйте накладну,
-          і товар знову буде «на руках».
+    <>
+      <ScreenHeader
+        pushed
+        title="Накладна"
+        aside={
+          <button className="quiet" onClick={back}>
+            До списку накладних
+          </button>
+        }
+      />
+      <section>
+        <h3>{visible(invoice.supplier.name)}</h3>
+        <p className="hint">
+          Записано {when(invoice.at)} · {visible(invoice.by)}
+          {invoice.note && ` · ${visible(invoice.note)}`}
         </p>
-      )}
-      {elsewhere && (
-        <p className="notice">
-          Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
-          {invoice.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
-          Сплачує цей магазин; борг лишається за «{visible(invoice.store_name)}
-          ».
-        </p>
-      )}
-      <dl className="debt">
-        <dt>Сума за накладною</dt>
-        <dd>{money(invoice.amount)}</dd>
-        <dt>Сплачено</dt>
-        <dd>{money(invoice.paid)}</dd>
-        {(kopecks(invoice.set_off) ?? 0n) > 0n && (
-          <>
-            <dt>Зараховано за повернений товар</dt>
-            <dd>{money(invoice.set_off)}</dd>
-          </>
+        {invoice.sold && (
+          <p>
+            За продане позичене: {visible(invoice.sold.label)} ×{" "}
+            {invoice.sold.quantity}. Якщо позначили помилково — скасуйте накладну,
+            і товар знову буде «на руках».
+          </p>
         )}
-        {(kopecks(invoice.written_off) ?? 0n) > 0n && (
-          <>
-            <dt>Списано</dt>
-            <dd>{money(invoice.written_off)}</dd>
-          </>
+        {elsewhere && (
+          <p className="notice">
+            Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
+            {invoice.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
+            Сплачує цей магазин; борг лишається за «{visible(invoice.store_name)}
+            ».
+          </p>
         )}
-        <dt>Залишок</dt>
-        <dd>
-          <strong>{money(invoice.owed)}</strong>
-        </dd>
-      </dl>
-      {!open && (
-        <p className="badge">
-          {statusLabels[invoice.status]}
-          {invoice.cancelled &&
-            ` ${when(invoice.cancelled.at)} · ${visible(invoice.cancelled.reason)} · ${visible(invoice.cancelled.by)}`}
-        </p>
-      )}
-      {done && <p role="status">{done}</p>}
-      {problem && <p role="alert">{problem}</p>}
-      {open && !readOnly && (
-        <fieldset disabled={blocked}>
-          <legend>Оплата</legend>
-          <label>
-            Сума оплати, грн
-            <input
-              inputMode="decimal"
-              placeholder="0,00"
-              value={amount}
-              onChange={(event) => {
-                setAmount(event.target.value);
-              }}
-            />
-          </label>
-          <div className="actions">
-            <button type="button" onClick={pay}>
-              Сплатити
-            </button>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setAmount(asInput(invoice.owed));
-              }}
-            >
-              Увесь залишок
-            </button>
-          </div>
-        </fieldset>
-      )}
-      {open && !readOnly && !elsewhere && (
-        <SetOffForm
-          store={store}
-          token={token}
-          invoice={invoice}
-          disabled={blocked}
-          send={(supplierReturnId, cents) => {
-            setProblem(null);
-            return send({
-              kind: "set-off",
-              invoice_id: invoice.id,
-              supplier_return_id: supplierReturnId,
-              amount: decimal(cents),
-            }).then((refusal) => {
-              void refusedThen(refusal);
-              return refusal;
-            });
-          }}
-        />
-      )}
-      {open && mayWriteOff && (
-        <fieldset disabled={blocked}>
-          <legend>Списання</legend>
-          {asking ? (
-            <div className="notice">
-              <p>
-                Залишок {money(invoice.owed)} закриється без оплати. Скасувати
-                це потім не можна.
-              </p>
-              <label>
-                Чому списуємо
-                <textarea
-                  value={reason}
-                  maxLength={1000}
-                  onChange={(event) => {
-                    setReason(event.target.value);
-                  }}
-                />
-              </label>
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={reason.trim() === ""}
-                  onClick={() => {
-                    setProblem(null);
-                    void send({
-                      kind: "write-off",
-                      invoice_id: invoice.id,
-                      reason: reason.trim(),
-                    }).then((refusal) => {
-                      setAsking(false);
-                      setReason("");
-                      void refusedThen(refusal);
-                    });
-                  }}
-                >
-                  Так, списати {money(invoice.owed)}
-                </button>
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    setAsking(false);
-                  }}
-                >
-                  Скасувати
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setProblem(null);
-                setAsking(true);
-              }}
-            >
-              Списати залишок
-            </button>
+        <dl className="debt">
+          <dt>Сума за накладною</dt>
+          <dd>{money(invoice.amount)}</dd>
+          <dt>Сплачено</dt>
+          <dd>{money(invoice.paid)}</dd>
+          {(kopecks(invoice.set_off) ?? 0n) > 0n && (
+            <>
+              <dt>Зараховано за повернений товар</dt>
+              <dd>{money(invoice.set_off)}</dd>
+            </>
           )}
-        </fieldset>
-      )}
-      <h3>Історія</h3>
-      {invoice.entries.length === 0 ? (
-        <p>Оплат і заліків ще не було.</p>
-      ) : (
-        <ul aria-label="Історія накладної">
-          {invoice.entries.map((entry) => (
-            <EntryRow
-              key={entry.id}
-              store={store}
-              token={token}
-              invoice={invoice}
-              entry={entry}
-              // A payment is cancelled where it may be made now; a set-off
-              // in the store that owes. A write-off is final.
-              cancellable={
-                !readOnly &&
-                entry.cancelled === null &&
-                (invoice.status === "OPEN" || invoice.status === "SETTLED") &&
-                (entry.kind === "PAYMENT" ||
-                  (entry.kind === "SET_OFF" && !elsewhere))
-              }
+          {(kopecks(invoice.written_off) ?? 0n) > 0n && (
+            <>
+              <dt>Списано</dt>
+              <dd>{money(invoice.written_off)}</dd>
+            </>
+          )}
+          <dt>Залишок</dt>
+          <dd>
+            <strong>{money(invoice.owed)}</strong>
+          </dd>
+        </dl>
+        {!open && (
+          <p className="badge">
+            {statusLabels[invoice.status]}
+            {invoice.cancelled &&
+              ` ${when(invoice.cancelled.at)} · ${visible(invoice.cancelled.reason)} · ${visible(invoice.cancelled.by)}`}
+          </p>
+        )}
+        {done && <p role="status">{done}</p>}
+        {problem && <p role="alert">{problem}</p>}
+        {open && !readOnly && (
+          <fieldset disabled={blocked}>
+            <legend>Оплата</legend>
+            <label>
+              Сума оплати, грн
+              <input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={amount}
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                }}
+              />
+            </label>
+            <div className="actions">
+              <button type="button" onClick={pay}>
+                Сплатити
+              </button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setAmount(asInput(invoice.owed));
+                }}
+              >
+                Увесь залишок
+              </button>
+            </div>
+          </fieldset>
+        )}
+        {open && !readOnly && !elsewhere && (
+          <SetOffForm
+            store={store}
+            token={token}
+            invoice={invoice}
+            disabled={blocked}
+            send={(supplierReturnId, cents) => {
+              setProblem(null);
+              return send({
+                kind: "set-off",
+                invoice_id: invoice.id,
+                supplier_return_id: supplierReturnId,
+                amount: decimal(cents),
+              }).then((refusal) => {
+                void refusedThen(refusal);
+                return refusal;
+              });
+            }}
+          />
+        )}
+        {open && mayWriteOff && (
+          <fieldset disabled={blocked}>
+            <legend>Списання</legend>
+            {asking ? (
+              <div className="notice">
+                <p>
+                  Залишок {money(invoice.owed)} закриється без оплати. Скасувати
+                  це потім не можна.
+                </p>
+                <label>
+                  Чому списуємо
+                  <textarea
+                    value={reason}
+                    maxLength={1000}
+                    onChange={(event) => {
+                      setReason(event.target.value);
+                    }}
+                  />
+                </label>
+                <div className="actions">
+                  <button
+                    type="button"
+                    disabled={reason.trim() === ""}
+                    onClick={() => {
+                      setProblem(null);
+                      void send({
+                        kind: "write-off",
+                        invoice_id: invoice.id,
+                        reason: reason.trim(),
+                      }).then((refusal) => {
+                        setAsking(false);
+                        setReason("");
+                        void refusedThen(refusal);
+                      });
+                    }}
+                  >
+                    Так, списати {money(invoice.owed)}
+                  </button>
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      setAsking(false);
+                    }}
+                  >
+                    Скасувати
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setProblem(null);
+                  setAsking(true);
+                }}
+              >
+                Списати залишок
+              </button>
+            )}
+          </fieldset>
+        )}
+        <h3>Історія</h3>
+        {invoice.entries.length === 0 ? (
+          <p>Оплат і заліків ще не було.</p>
+        ) : (
+          <ul aria-label="Історія накладної">
+            {invoice.entries.map((entry) => (
+              <EntryRow
+                key={entry.id}
+                store={store}
+                token={token}
+                invoice={invoice}
+                entry={entry}
+                // A payment is cancelled where it may be made now; a set-off
+                // in the store that owes. A write-off is final.
+                cancellable={
+                  !readOnly &&
+                  entry.cancelled === null &&
+                  (invoice.status === "OPEN" || invoice.status === "SETTLED") &&
+                  (entry.kind === "PAYMENT" ||
+                    (entry.kind === "SET_OFF" && !elsewhere))
+                }
+                disabled={blocked}
+                changed={changed}
+              />
+            ))}
+          </ul>
+        )}
+        {open &&
+          !readOnly &&
+          !elsewhere &&
+          (standing.length > 0 ? (
+            <p className="hint">
+              Щоб скасувати накладну, спершу скасуйте її оплати й заліки.
+            </p>
+          ) : (
+            <Reasoned
+              label="Скасувати накладну"
+              question="Накладну записано помилково? Вона лишиться в історії як скасована."
+              confirm="Так, скасувати накладну"
               disabled={blocked}
+              run={(why) =>
+                api<Invoice>(`/supplier-invoices/${invoice.id}/cancel`, token, {
+                  reason: why,
+                })
+              }
               changed={changed}
             />
           ))}
-        </ul>
-      )}
-      {open &&
-        !readOnly &&
-        !elsewhere &&
-        (standing.length > 0 ? (
-          <p className="hint">
-            Щоб скасувати накладну, спершу скасуйте її оплати й заліки.
-          </p>
-        ) : (
-          <Reasoned
-            label="Скасувати накладну"
-            question="Накладну записано помилково? Вона лишиться в історії як скасована."
-            confirm="Так, скасувати накладну"
-            disabled={blocked}
-            run={(why) =>
-              api<Invoice>(`/supplier-invoices/${invoice.id}/cancel`, token, {
-                reason: why,
-              })
-            }
-            changed={changed}
-          />
-        ))}
-    </section>
+      </section>
+    </>
   );
 }
 

@@ -17,6 +17,7 @@ import type { Decision } from "./types";
 import { CreateProduct } from "./CreateProduct";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 const base = "/catalog/match-decisions";
 function message(error: unknown): string {
   // Correcting the catalogue (owner decision, 2026-10-03) says its own.
@@ -169,21 +170,23 @@ export function Catalog({
         </p>
       )}
       {success && <p role="status">{success}</p>}
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Перевірка каталогу</h2>
-        <button
-          disabled={blocked}
-          onClick={() => {
-            forgetCatalogRefusal();
-            setCreating(true);
-            setSelected(null);
-            setSuccess("");
-          }}
-        >
-          + Нова пропозиція
-        </button>
-      </div>
+      <ScreenHeader
+        title="Перевірка каталогу"
+        back={back && <BackToMore back={back} />}
+        aside={
+          <button
+            disabled={blocked}
+            onClick={() => {
+              forgetCatalogRefusal();
+              setCreating(true);
+              setSelected(null);
+              setSuccess("");
+            }}
+          >
+            + Нова пропозиція
+          </button>
+        }
+      />
       <p className="hint">
         Підказки допомагають знайти товар. Перевірка не змінює залишки та не
         об’єднує товари.

@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from "react";
+import { ScreenHeader } from "./ScreenHeader";
 
 /** A section under «Ще»: its label, held by its own section's rule. */
 export interface MoreRow {
@@ -45,60 +46,64 @@ export function More({
 }): JSX.Element {
   const shown = groups.filter((group) => group.rows.length > 0);
   return (
-    <section className="more-screen">
-      {back && <BackToMore back={back} />}
-      <h2>{title}</h2>
-      {/* Not a row of buttons, as other navs are: a list of rows. */}
-      {shown.length > 0 && (
-        <nav aria-label={title} className="more-list">
-          {shown.map((group) => (
-            <div className="more-group" key={group.title}>
-              {group.title !== "" && <h3>{group.title}</h3>}
-              {group.rows.map((row) =>
-                row.on === undefined ? (
-                  <button
-                    key={row.key}
-                    type="button"
-                    className="sale-row"
-                    disabled={row.disabled}
-                    onClick={row.open}
-                  >
-                    <span className="more-label">
-                      {row.label}
-                      {/* Read as two words, not run together. */}
-                      {row.meta !== undefined && " "}
-                      {typeof row.meta === "string" ? (
-                        <span className="more-meta">{row.meta}</span>
-                      ) : (
-                        row.meta
-                      )}
-                    </span>
-                    <span className="sale-open" aria-hidden="true">
-                      ›
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    key={row.key}
-                    type="button"
-                    role="switch"
-                    aria-checked={row.on}
-                    className="sale-row more-switch"
-                    disabled={row.disabled}
-                    onClick={row.open}
-                  >
-                    <span className="more-label">{row.label}</span>
-                    <span className="switch-track" aria-hidden="true">
-                      <span className="switch-knob" />
-                    </span>
-                  </button>
-                ),
-              )}
-            </div>
-          ))}
-        </nav>
-      )}
-    </section>
+    <>
+      <ScreenHeader
+        title={title}
+        back={back && <BackToMore back={back} />}
+      />
+      <section className="more-screen">
+        {/* Not a row of buttons, as other navs are: a list of rows. */}
+        {shown.length > 0 && (
+          <nav aria-label={title} className="more-list">
+            {shown.map((group) => (
+              <div className="more-group" key={group.title}>
+                {group.title !== "" && <h3>{group.title}</h3>}
+                {group.rows.map((row) =>
+                  row.on === undefined ? (
+                    <button
+                      key={row.key}
+                      type="button"
+                      className="sale-row"
+                      disabled={row.disabled}
+                      onClick={row.open}
+                    >
+                      <span className="more-label">
+                        {row.label}
+                        {/* Read as two words, not run together. */}
+                        {row.meta !== undefined && " "}
+                        {typeof row.meta === "string" ? (
+                          <span className="more-meta">{row.meta}</span>
+                        ) : (
+                          row.meta
+                        )}
+                      </span>
+                      <span className="sale-open" aria-hidden="true">
+                        ›
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      key={row.key}
+                      type="button"
+                      role="switch"
+                      aria-checked={row.on}
+                      className="sale-row more-switch"
+                      disabled={row.disabled}
+                      onClick={row.open}
+                    >
+                      <span className="more-label">{row.label}</span>
+                      <span className="switch-track" aria-hidden="true">
+                        <span className="switch-knob" />
+                      </span>
+                    </button>
+                  ),
+                )}
+              </div>
+            ))}
+          </nav>
+        )}
+      </section>
+    </>
   );
 }
 

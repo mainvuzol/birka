@@ -361,9 +361,10 @@ header {
   padding-bottom: 26px;
   border-bottom: 1px solid var(--line);
 }
-/* The text's roles (direction §4, «Ролі»; spec §5.5). A first heading is
-   the tab's title, a second the screen's, in the display face; the rest
-   wait for their screens' tasks, each with its own pictures (P0-1). */
+/* The text's roles (direction §4, «Ролі»; spec §5.5). The page's heading is
+   the screen's title — a tab's first screen in `title-xl`, one opened from
+   another in `title-l` — in the display face; the rest wait for their
+   screens' tasks, each with its own pictures (P0-1). */
 h1,
 .t-title-xl {
   font-family: var(--font-display);
@@ -372,12 +373,6 @@ h1,
   line-height: 36px;
   letter-spacing: -0.005em;
   margin: 6px 0;
-}
-h1 span {
-  font-family: var(--font-text);
-  font-size: 17px;
-  font-weight: 400;
-  letter-spacing: 0;
 }
 h2,
 .t-title-l {
@@ -443,30 +438,70 @@ h2,
 h3 {
   margin-top: 0;
 }
-/* The workspace's one line (redesign P1-6): the store and who works in it,
-   small, so the screen's own heading is the one that stands out. */
-header.store-line {
-  padding-bottom: 10px;
-  align-items: center;
+/* A screen's head (spec §6.2; «Усе на бірці» task list, P0-4, part 2): the
+   screen's own title on the page, not in its card — a tab's first screen
+   34/800, one opened from another 28/800 under its «←» — and one line of
+   context under it, «{Магазин} · {Ім’я}», 14/500 in pencil, «Змінити
+   магазин» at its right. It scrolls away with the page. */
+header.screen-header {
+  display: block;
+  padding: 4px 0 0;
+  border-bottom: 0;
 }
-.store-line h1 {
-  font-family: var(--font-text);
-  font-size: 17px;
-  font-weight: 700;
-  line-height: normal;
-  letter-spacing: 0;
+.screen-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.screen-title h1 {
   margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
-.store-line h1 span {
-  font-size: 15px;
-  color: var(--text-2);
+/* Given the focus as its screen opens, for a reader to start there. */
+.screen-title h1:focus {
+  outline: none;
+}
+/* Its «←» — «← Ще», «← Каса», «← До боргів» — a quiet line over the
+   title, not a button. */
+.screen-header .back {
+  min-height: 44px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  font-weight: 650;
+}
+/* The card under the head starts at its own edge: its first line no longer
+   sits under a heading. */
+.screen-header + section > :first-child {
+  margin-top: 0;
+}
+.screen-title > :not(h1) {
+  flex: none;
+}
+.store-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+.store-line p {
+  margin: 0;
+  min-width: 0;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
 }
 .store-line button {
   flex: none;
   min-height: 44px;
-  padding: 8px 12px;
-  font-size: 14px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--link);
 }
 section {
   background: var(--surface);
@@ -575,9 +610,6 @@ nav:not(.tab-bar, .more-list),
 }
 .toolbar {
   margin: 18px 0;
-}
-.toolbar h2 {
-  margin: 0;
 }
 nav {
   margin-top: 20px;
@@ -693,9 +725,6 @@ button.active {
   header > span {
     font-size: 12px;
   }
-  h1 span {
-    font-size: 14px;
-  }
   section {
     padding: 17px;
   }
@@ -735,8 +764,7 @@ nav:not(.tab-bar, .more-list) {
 .openings .hint,
 .openings p,
 .openings [role="alert"],
-.openings [role="status"],
-.openings h2 {
+.openings [role="status"] {
   overflow-wrap: anywhere;
 }
 /* A file taken out of its list: kept as history, muted (ADR-0014 §15). */
@@ -1260,16 +1288,6 @@ html {
   font-variant-numeric: tabular-nums;
   color: var(--debt);
 }
-.credits .back {
-  min-height: 44px;
-  margin: 0;
-  padding: 0 4px;
-  border: 0;
-  font-weight: 650;
-}
-.credits .back + h2 {
-  margin-top: 4px;
-}
 .elsewhere-ask,
 .owed-mode {
   margin-top: 12px;
@@ -1310,14 +1328,7 @@ html {
    took for a title, who and where under it, what is owed in money-xl with
    the debt's glyph, the history on a tap, and the dock — the sum over the
    app's keypad, the three ways under the thumb. */
-.debt-till h2 {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 30px;
-  overflow-wrap: anywhere;
-}
-.debt-till h2 .more-goods {
+.debt-title .more-goods {
   font-family: var(--font-text);
   font-size: 16px;
   font-weight: 600;
@@ -1522,9 +1533,7 @@ html {
   margin-top: 18px;
 }
 .paid-result h3:focus,
-.debt-detail h2:focus,
 .debt-goods:focus,
-.credits h2:focus,
 .elsewhere-head h3:focus {
   outline: none;
 }
@@ -1767,9 +1776,6 @@ html {
 }
 /* A return's result (P0-5): what to hand back, large, the way a pill over
    it, then where the goods went. */
-.return-result h2:focus {
-  outline: none;
-}
 .hand-back {
   margin: 18px 0;
 }
@@ -1958,26 +1964,8 @@ html {
   font-weight: 700;
   color: var(--text-2);
 }
-/* Quiet lines, not buttons: «← Каса», and cash out first, so the field,
-   the reminders and the panel stand together on a small screen. */
-.cash-count .back,
-.cash-closed .back,
-.cash-move .back,
-.cash-fix .back,
-.cash-history .back {
-  min-height: 44px;
-  margin: 0;
-  padding: 0 4px;
-  border: 0;
-  font-weight: 650;
-}
-.cash-count .back + h2,
-.cash-closed .back + h2,
-.cash-move .back + h2,
-.cash-fix .back + h2,
-.cash-history .back + h2 {
-  margin-top: 4px;
-}
+/* A quiet line, not a button: cash out first, so the field, the reminders
+   and the panel stand together on a small screen. */
 .cash-first {
   min-height: 44px;
   margin: 0;
@@ -2098,9 +2086,6 @@ html {
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 15px;
-}
-.cash-closed h2:focus {
-  outline: none;
 }
 /* A reason owed, on «Каса»'s main screen: its close, and the way to it. */
 .cash-owed {
@@ -2279,15 +2264,6 @@ html {
 /* «Замовлення» (orders task list, P0-1): the heading and «+» on one line,
    the waybill's field under them; a row a parcel's tag, its pill under the
    goods as «Закриття»'s; a cancel asked first at the card's foot (P0-4). */
-.orders-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.orders-head h2 {
-  margin: 0;
-}
 .orders-add {
   flex: 0 0 auto;
   width: 44px;
@@ -2332,12 +2308,6 @@ html {
    button in the panel; the rare quiet at the foot. A waybill pasted whole
    breaks where it must (review, 2026-10-23). */
 .order {
-  overflow-wrap: anywhere;
-}
-.order-title {
-  margin: 0 0 4px;
-  font-size: 23px;
-  font-weight: 800;
   overflow-wrap: anywhere;
 }
 .order-context {
@@ -2418,6 +2388,10 @@ html {
 .skeleton-title {
   width: 70%;
   height: 28px;
+}
+/* In a screen's head, the title's line: the line under it stays put. */
+.screen-title .skeleton-title {
+  height: 30px;
 }
 /* Where an order goes (orders task list, P1-3): its own step, a switch and
    chips as a new order's; its history a row a version, how it went on the
@@ -2594,18 +2568,6 @@ html {
   height: 13px;
   margin-top: 4px;
 }
-/* «← Ще» over «Прийшов товар» and «Брак», a quiet line, as «← Каса». */
-.goods-part .back {
-  min-height: 44px;
-  margin: 0;
-  padding: 0 4px;
-  border: 0;
-  font-weight: 650;
-}
-.goods-part .back + h2,
-.goods-part .back + .toolbar {
-  margin-top: 4px;
-}
 /* «Ще», a screen of its own (spec S07; «Усе на бірці» task list, P0-4):
    groups under a 13 px label, a row each in the lists' rhythm —
    `.sale-row`, 56 px, a chevron — this phone's switch with its track. */
@@ -2619,8 +2581,11 @@ html {
   text-transform: uppercase;
   color: var(--text-2);
 }
-.more-screen h2 + nav .more-group:first-child h3 {
-  margin-top: 6px;
+.more-screen > nav:first-child {
+  margin-top: 0;
+}
+.more-screen > nav:first-child .more-group:first-child h3 {
+  margin-top: 0;
 }
 .more-label {
   flex: 1;
@@ -2668,17 +2633,6 @@ html {
   .switch-knob {
     transition: none;
   }
-}
-/* «← Ще», a quiet line over a section's heading, as «← Каса». */
-.back.to-more {
-  min-height: 44px;
-  margin: 0;
-  padding: 0 4px;
-  border: 0;
-  font-weight: 650;
-}
-.back.to-more + .toolbar {
-  margin-top: 4px;
 }
 /* The eyelet (spec §1.4, §6.0; «Усе на бірці» task list, P0-2): filled
    once recorded, dashed while kept, knotted once settled, a ring turning

@@ -17,6 +17,7 @@ import { SupplierPicker, useSuppliers } from "./Picker";
 import type { ReturnPage, Supplier, SupplierReturn } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 const pageSize = 20;
 
@@ -83,160 +84,164 @@ export function Suppliers({
   }
 
   return (
-    <section>
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Постачальникам</h2>
-        <button
-          className="quiet"
-          disabled={returns.isFetching}
-          onClick={() => {
-            void returns.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        Товар, повернений постачальнику: непроданий зі складу або брак із
-        розділу «Брак». Скільки постачальник за нього зарахував, записують
-        заліком у «Накладних».
-      </p>
-      {pending && (
-        <section className="notice">
-          <h3>{busy ? "Перевіряємо повернення…" : "Незавершене повернення"}</h3>
-          <p>
-            Невідомо, чи записано повернення постачальнику. Перевірте результат
-            — те саме повернення не запишеться двічі.
-          </p>
+    <>
+      <ScreenHeader
+        title="Постачальникам"
+        back={back && <BackToMore back={back} />}
+        aside={
           <button
-            disabled={busy}
+            className="quiet"
+            disabled={returns.isFetching}
             onClick={() => {
-              void resolveReturnToSupplier(journalKey, token, pending).then(
-                (outcome) => {
-                  if (outcome.kind === "done") void settled(outcome.result);
-                  else if (outcome.kind === "refused")
-                    setDone(refusalText(outcome.error));
-                },
-              );
+              void returns.refetch();
             }}
           >
-            Перевірити результат повернення
+            Оновити
           </button>
-        </section>
-      )}
-      {error instanceof Error && !(error instanceof ApiError) && (
-        <p role="alert">{error.message}</p>
-      )}
-      {done && <p role="status">{done}</p>}
-      {making ? (
-        <NewReturn
-          store={store}
-          token={token}
-          disabled={blocked || working}
-          cancel={() => {
-            setMaking(false);
-          }}
-          send={async (body) => {
-            setDone(null);
-            const outcome = await submitReturnToSupplier(journalKey, token, {
-              // A new transport key per attempt; the return's identity is
-              // `command_id`, which is what makes a late retry safe.
-              key: crypto.randomUUID(),
-              body,
-            });
-            if (outcome.kind === "done") await settled(outcome.result);
-            else if (outcome.kind === "refused") {
-              if (isConflict(outcome.error))
-                await cache.invalidateQueries({
-                  queryKey: ["supplier-returns", store.id],
-                });
-              return refusalText(outcome.error);
-            }
-            return null;
-          }}
-        />
-      ) : (
-        <button
-          disabled={blocked || working}
-          onClick={() => {
-            setDone(null);
-            setMaking(true);
-          }}
-        >
-          + Повернути товар постачальнику
-        </button>
-      )}
-      <label>
-        Постачальник у списку
-        <select
-          value={supplierId}
-          onChange={(event) => {
-            setSupplierId(event.target.value);
-            setShown(pageSize);
-          }}
-        >
-          <option value="">Усі постачальники</option>
-          {(suppliers.data ?? []).map((supplier) => (
-            <option key={supplier.id} value={supplier.id}>
-              {visible(supplier.name)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {returns.isPending ? (
-        <p role="status">Завантажуємо повернення…</p>
-      ) : returns.error ? (
-        <p role="alert">{errorText(returns.error)}</p>
-      ) : returns.data.items.length === 0 ? (
-        <p>Цей магазин ще нічого не повертав постачальникам.</p>
-      ) : (
-        <>
-          {returns.data.items.map((item) => (
-            <ReturnCard
-              key={item.id}
-              item={item}
-              token={token}
-              disabled={blocked || working}
-              changed={() => {
-                void Promise.all([
-                  cache.invalidateQueries({
-                    queryKey: ["supplier-returns", store.id],
-                  }),
-                  cache.invalidateQueries({ queryKey: ["sale-stock"] }),
-                  cache.invalidateQueries({
-                    queryKey: ["damaged-units", store.id],
-                  }),
-                ]);
-              }}
-            />
-          ))}
-          {returns.data.has_more && (
+        }
+      />
+      <section>
+        <p className="hint">
+          Товар, повернений постачальнику: непроданий зі складу або брак із
+          розділу «Брак». Скільки постачальник за нього зарахував, записують
+          заліком у «Накладних».
+        </p>
+        {pending && (
+          <section className="notice">
+            <h3>{busy ? "Перевіряємо повернення…" : "Незавершене повернення"}</h3>
+            <p>
+              Невідомо, чи записано повернення постачальнику. Перевірте результат
+              — те саме повернення не запишеться двічі.
+            </p>
             <button
-              className="quiet"
-              disabled={returns.isFetching}
+              disabled={busy}
               onClick={() => {
-                setShown(shown + pageSize);
+                void resolveReturnToSupplier(journalKey, token, pending).then(
+                  (outcome) => {
+                    if (outcome.kind === "done") void settled(outcome.result);
+                    else if (outcome.kind === "refused")
+                      setDone(refusalText(outcome.error));
+                  },
+                );
               }}
             >
-              Показати ще
+              Перевірити результат повернення
             </button>
-          )}
-        </>
-      )}
-      <Borrowed
-        store={store}
-        token={token}
-        journalKey={journalKey}
-        invoiceJournalKey={invoiceJournalKey}
-        blocked={blocked || working}
-      />
-      <SupplierList
-        store={store}
-        token={token}
-        suppliers={suppliers.data ?? []}
-      />
-    </section>
+          </section>
+        )}
+        {error instanceof Error && !(error instanceof ApiError) && (
+          <p role="alert">{error.message}</p>
+        )}
+        {done && <p role="status">{done}</p>}
+        {making ? (
+          <NewReturn
+            store={store}
+            token={token}
+            disabled={blocked || working}
+            cancel={() => {
+              setMaking(false);
+            }}
+            send={async (body) => {
+              setDone(null);
+              const outcome = await submitReturnToSupplier(journalKey, token, {
+                // A new transport key per attempt; the return's identity is
+                // `command_id`, which is what makes a late retry safe.
+                key: crypto.randomUUID(),
+                body,
+              });
+              if (outcome.kind === "done") await settled(outcome.result);
+              else if (outcome.kind === "refused") {
+                if (isConflict(outcome.error))
+                  await cache.invalidateQueries({
+                    queryKey: ["supplier-returns", store.id],
+                  });
+                return refusalText(outcome.error);
+              }
+              return null;
+            }}
+          />
+        ) : (
+          <button
+            disabled={blocked || working}
+            onClick={() => {
+              setDone(null);
+              setMaking(true);
+            }}
+          >
+            + Повернути товар постачальнику
+          </button>
+        )}
+        <label>
+          Постачальник у списку
+          <select
+            value={supplierId}
+            onChange={(event) => {
+              setSupplierId(event.target.value);
+              setShown(pageSize);
+            }}
+          >
+            <option value="">Усі постачальники</option>
+            {(suppliers.data ?? []).map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {visible(supplier.name)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {returns.isPending ? (
+          <p role="status">Завантажуємо повернення…</p>
+        ) : returns.error ? (
+          <p role="alert">{errorText(returns.error)}</p>
+        ) : returns.data.items.length === 0 ? (
+          <p>Цей магазин ще нічого не повертав постачальникам.</p>
+        ) : (
+          <>
+            {returns.data.items.map((item) => (
+              <ReturnCard
+                key={item.id}
+                item={item}
+                token={token}
+                disabled={blocked || working}
+                changed={() => {
+                  void Promise.all([
+                    cache.invalidateQueries({
+                      queryKey: ["supplier-returns", store.id],
+                    }),
+                    cache.invalidateQueries({ queryKey: ["sale-stock"] }),
+                    cache.invalidateQueries({
+                      queryKey: ["damaged-units", store.id],
+                    }),
+                  ]);
+                }}
+              />
+            ))}
+            {returns.data.has_more && (
+              <button
+                className="quiet"
+                disabled={returns.isFetching}
+                onClick={() => {
+                  setShown(shown + pageSize);
+                }}
+              >
+                Показати ще
+              </button>
+            )}
+          </>
+        )}
+        <Borrowed
+          store={store}
+          token={token}
+          journalKey={journalKey}
+          invoiceJournalKey={invoiceJournalKey}
+          blocked={blocked || working}
+        />
+        <SupplierList
+          store={store}
+          token={token}
+          suppliers={suppliers.data ?? []}
+        />
+      </section>
+    </>
   );
 }
 

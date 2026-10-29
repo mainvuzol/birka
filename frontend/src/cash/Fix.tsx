@@ -13,6 +13,7 @@ import type { PaymentMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { cashErrorText, timeOf } from "./errors";
 import { correctionDone, wayName, whenOf } from "./format";
 import { OperationPlaceholder } from "./Placeholders";
@@ -111,104 +112,106 @@ export function FixStep({
   const answer = method.data;
   if (chosen)
     return (
-      <section className="cash-fix">
-        {leave}
-        <h2>Змінити спосіб оплати</h2>
-        {kept}
-        {method.error ? (
-          // A read, never a command: no «Не записано» (review, 2026-10-22).
-          <p role="alert">{errorText(method.error)}</p>
-        ) : answer === undefined ? (
-          <OperationPlaceholder />
-        ) : answer.may_change ? (
-          <WayCard
-            what={`${targetLabels[answer.target]}${
-              chosen.at === undefined ? "" : ` · ${momentOf(chosen.at)}`
-            }`}
-            amount={answer.amount_taken}
-            current={answer.method}
-            corrected={answer.corrected}
-            ways={waysFor(answer.is_order)}
-            closedNote={null}
-            disabled={disabled}
-            send={async (to, note) => {
-              const outcome = await send({
-                command: "correction",
-                store_id: store.id,
-                command_id: crypto.randomUUID(),
-                target: answer.target,
-                target_id: answer.target_id,
-                from_method: answer.method,
-                to_method: to,
-                note,
-              });
-              if (outcome.kind === "done") {
-                buzz("success");
-                back(correctionDone(outcome.result as Correction));
-              } else if (outcome.kind === "refused") {
-                buzz("error");
-                // A way changed meanwhile is read again (B6.1).
-                void method.refetch();
-                return cashErrorText(outcome.error, false, "correction");
-              }
-              // Unknown: held here under «Каса»'s banner until it is known;
-              // confirmed, «Каса» leaves it (review, 2026-10-22).
-              return null;
-            }}
-          />
-        ) : (
-          <p>
-            {targetLabels[answer.target]}: {money(answer.amount_taken)} ·{" "}
-            {wayName(answer.method)}. Змінити спосіб оплати тепер може лише
-            менеджер або власник.
-          </p>
-        )}
-      </section>
+      <>
+        <ScreenHeader title="Змінити спосіб оплати" back={leave} />
+        <section className="cash-fix">
+          {kept}
+          {method.error ? (
+            // A read, never a command: no «Не записано» (review, 2026-10-22).
+            <p role="alert">{errorText(method.error)}</p>
+          ) : answer === undefined ? (
+            <OperationPlaceholder />
+          ) : answer.may_change ? (
+            <WayCard
+              what={`${targetLabels[answer.target]}${
+                chosen.at === undefined ? "" : ` · ${momentOf(chosen.at)}`
+              }`}
+              amount={answer.amount_taken}
+              current={answer.method}
+              corrected={answer.corrected}
+              ways={waysFor(answer.is_order)}
+              closedNote={null}
+              disabled={disabled}
+              send={async (to, note) => {
+                const outcome = await send({
+                  command: "correction",
+                  store_id: store.id,
+                  command_id: crypto.randomUUID(),
+                  target: answer.target,
+                  target_id: answer.target_id,
+                  from_method: answer.method,
+                  to_method: to,
+                  note,
+                });
+                if (outcome.kind === "done") {
+                  buzz("success");
+                  back(correctionDone(outcome.result as Correction));
+                } else if (outcome.kind === "refused") {
+                  buzz("error");
+                  // A way changed meanwhile is read again (B6.1).
+                  void method.refetch();
+                  return cashErrorText(outcome.error, false, "correction");
+                }
+                // Unknown: held here under «Каса»'s banner until it is known;
+                // confirmed, «Каса» leaves it (review, 2026-10-22).
+                return null;
+              }}
+            />
+          ) : (
+            <p>
+              {targetLabels[answer.target]}: {money(answer.amount_taken)} ·{" "}
+              {wayName(answer.method)}. Змінити спосіб оплати тепер може лише
+              менеджер або власник.
+            </p>
+          )}
+        </section>
+      </>
     );
   return (
-    <section className="cash-fix">
-      {leave}
-      <h2>Змінити спосіб оплати</h2>
-      {kept}
-      <p className="cash-context">Ваші операції після останнього закриття</p>
-      {mine.isPending ? (
-        <Placeholder said="Завантажуємо…" rows={3} day={false} />
-      ) : mine.error ? (
-        <p role="alert">{errorText(mine.error)}</p>
-      ) : mine.data.items.length === 0 ? (
-        <p>Після останнього закриття ви ще нічого не провели.</p>
-      ) : (
-        <ul className="fix-list" aria-label="Ваші операції">
-          {mine.data.items.map((event) => (
-            <li key={event.target_id}>
-              <button
-                type="button"
-                className="sale-row fix-row"
-                disabled={disabled}
-                onClick={() => {
-                  setChosen({
-                    target: event.target,
-                    id: event.target_id,
-                    at: event.at,
-                  });
-                }}
-              >
-                <span className="fix-time">{momentOf(event.at)}</span>
-                <span className="sale-main">
-                  <span className="cash-row-title">
-                    {targetLabels[event.target]}
+    <>
+      <ScreenHeader title="Змінити спосіб оплати" back={leave} />
+      <section className="cash-fix">
+        {kept}
+        <p className="cash-context">Ваші операції після останнього закриття</p>
+        {mine.isPending ? (
+          <Placeholder said="Завантажуємо…" rows={3} day={false} />
+        ) : mine.error ? (
+          <p role="alert">{errorText(mine.error)}</p>
+        ) : mine.data.items.length === 0 ? (
+          <p>Після останнього закриття ви ще нічого не провели.</p>
+        ) : (
+          <ul className="fix-list" aria-label="Ваші операції">
+            {mine.data.items.map((event) => (
+              <li key={event.target_id}>
+                <button
+                  type="button"
+                  className="sale-row fix-row"
+                  disabled={disabled}
+                  onClick={() => {
+                    setChosen({
+                      target: event.target,
+                      id: event.target_id,
+                      at: event.at,
+                    });
+                  }}
+                >
+                  <span className="fix-time">{momentOf(event.at)}</span>
+                  <span className="sale-main">
+                    <span className="cash-row-title">
+                      {targetLabels[event.target]}
+                    </span>
+                    <span className="sale-meta">{visible(event.label)}</span>
                   </span>
-                  <span className="sale-meta">{visible(event.label)}</span>
-                </span>
-                <span className="sale-open" aria-hidden="true">
-                  ›
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+                  <span className="sale-open" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   );
 }
 

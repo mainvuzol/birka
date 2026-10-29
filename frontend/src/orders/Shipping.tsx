@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { WhereTo } from "./WhereTo";
 import type { Carrier, Destination, Order } from "./types";
 
@@ -53,76 +54,82 @@ export function Shipping({
   const [shownAt] = useState(() => performance.now());
   const noCarrier = destination === "UKRAINE" && carrier === "";
   return (
-    <section className="order-shipping">
-      <button type="button" className="quiet" onClick={back}>
-        ← Замовлення
-      </button>
-      <h2 ref={heading} tabIndex={-1}>
-        Доставка
-      </h2>
-      <fieldset disabled={blocked}>
-        <WhereTo
-          destination={destination}
-          carrier={carrier}
-          disabled={blocked}
-          change={(nextDestination, nextCarrier) => {
-            setDestination(nextDestination);
-            setCarrier(nextCarrier);
-          }}
-        />
-        {destination === "UKRAINE" ? (
-          <label>
-            Номер ТТН
-            <input
-              ref={field}
-              value={waybill}
-              maxLength={64}
-              onChange={(event) => {
-                setWaybill(event.target.value);
-              }}
-            />
-          </label>
-        ) : (
-          <label>
-            Куди і як відправили: місто, країна, спосіб
-            <textarea
-              value={note}
-              maxLength={1000}
-              aria-describedby={hint}
-              onChange={(event) => {
-                setNote(event.target.value);
-              }}
-            />
-            <NoCustomerData id={hint} />
-          </label>
-        )}
-      </fieldset>
-      {/* Under the thumb: which order, and the one press, which says the
-          carrier first when none is chosen — as a new order's. */}
-      <div className="pay-panel order-panel" ref={panel}>
-        <p className="pay-what">{title}</p>
-        <button
-          type="button"
-          disabled={blocked || noCarrier}
-          onClick={(event) => {
-            if (event.timeStamp - shownAt < CARRIED_TAP) return;
-            save(
-              destination === "UKRAINE"
-                ? {
-                    destination,
-                    carrier,
-                    ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
-                  }
-                : {
-                    destination,
-                    ...(note.trim() ? { abroad_note: note.trim() } : {}),
-                  },
-            );
-          }}
-        >
-          {noCarrier ? "Оберіть перевізника" : "Зберегти доставку"}
-        </button>
-      </div>
-    </section>
+    <>
+      <ScreenHeader
+        ref={heading}
+        focusable
+        title="Доставка"
+        back={
+          <button type="button" className="quiet" onClick={back}>
+            ← Замовлення
+          </button>
+        }
+      />
+      <section className="order-shipping">
+        <fieldset disabled={blocked}>
+          <WhereTo
+            destination={destination}
+            carrier={carrier}
+            disabled={blocked}
+            change={(nextDestination, nextCarrier) => {
+              setDestination(nextDestination);
+              setCarrier(nextCarrier);
+            }}
+          />
+          {destination === "UKRAINE" ? (
+            <label>
+              Номер ТТН
+              <input
+                ref={field}
+                value={waybill}
+                maxLength={64}
+                onChange={(event) => {
+                  setWaybill(event.target.value);
+                }}
+              />
+            </label>
+          ) : (
+            <label>
+              Куди і як відправили: місто, країна, спосіб
+              <textarea
+                value={note}
+                maxLength={1000}
+                aria-describedby={hint}
+                onChange={(event) => {
+                  setNote(event.target.value);
+                }}
+              />
+              <NoCustomerData id={hint} />
+            </label>
+          )}
+        </fieldset>
+        {/* Under the thumb: which order, and the one press, which says the
+            carrier first when none is chosen — as a new order's. */}
+        <div className="pay-panel order-panel" ref={panel}>
+          <p className="pay-what">{title}</p>
+          <button
+            type="button"
+            disabled={blocked || noCarrier}
+            onClick={(event) => {
+              if (event.timeStamp - shownAt < CARRIED_TAP) return;
+              save(
+                destination === "UKRAINE"
+                  ? {
+                      destination,
+                      carrier,
+                      ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
+                    }
+                  : {
+                      destination,
+                      ...(note.trim() ? { abroad_note: note.trim() } : {}),
+                    },
+              );
+            }}
+          >
+            {noCarrier ? "Оберіть перевізника" : "Зберегти доставку"}
+          </button>
+        </div>
+      </section>
+    </>
   );
 }
