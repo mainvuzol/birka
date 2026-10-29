@@ -1,4 +1,4 @@
-import { test, expect, fromPaper, openStore } from "./fixtures";
+import { test, expect, fromPaper, openStore, storeLine } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -202,11 +202,11 @@ test("a model past the first hundred is found by three letters and sold in three
   const asked = await stubList(page, [...alpacas, laurent]);
   const sent = await stubSale(page);
   await onTheTill(page);
-  // The header is one line, the store and who works in it (redesign P1-6);
-  // the app's name is on the screens before a store opens (owner, В4).
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    /^Основний · Оля$/,
-  );
+  // The screen's title heads the page, the store and who works in it the
+  // line under it (redesign P1-6; «Усе на бірці» task list, P0-4); the
+  // app's name is on the screens before a store opens (owner, В4).
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Продаж");
+  await expect(storeLine(page)).toHaveText("Основний · Оля");
   await expect(
     page.getByText("Кошик порожній — знайдіть модель угорі."),
   ).toBeVisible();

@@ -5,6 +5,7 @@ import { api, errorText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { useSettled } from "@/sales/StockSearch";
 import { Placeholder } from "@/shared/Placeholder";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { shippingText, statusLabels, statusPills } from "./types";
 import type { Order, OrderItem, Store } from "./types";
 
@@ -300,194 +301,198 @@ export function Orders({
   }
 
   return (
-    <section className="orders">
-      <div className="orders-head">
-        <h2>Замовлення</h2>
-        {mayCreate && (
-          <button
-            type="button"
-            className="orders-add"
-            aria-label="Нове замовлення"
-            disabled={blocked}
-            onClick={create}
-          >
-            +
-          </button>
-        )}
-      </div>
-      {mode}
-      {/* Never opened without the right (orders task list, P2-1): nothing
-          is said of the rule. */}
-      {!mayRead ? null : (
-        <>
-          <form
-            className="search"
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              change({
-                ...view,
-                pressed: query.trim().length >= 2 ? query.trim() : "",
-              });
-            }}
-          >
-            <label className="till-search">
-              Номер ТТН
-              <input
-                type="search"
-                enterKeyHint="search"
-                autoComplete="off"
-                ref={field}
-                maxLength={64}
-                value={query}
-                onChange={(event) => {
-                  change({ ...view, query: event.target.value });
-                }}
-              />
-            </label>
-          </form>
-          {search !== "" ? (
-            // What was typed before stands until the answer: «not found» is
-            // said of this search only (review, 2026-10-23).
-            found.pages.isPending ||
-            (found.pages.isPlaceholderData && found.orders.length === 0) ? (
-              <Placeholder said="Шукаємо…" rows={3} day={false} />
-            ) : (
-              <>
-                {found.pages.error && (
-                  <Unread
-                    error={found.pages.error}
-                    retry={() => {
-                      void found.pages.refetch();
-                    }}
-                  />
-                )}
-                {found.pages.data && found.orders.length === 0 ? (
-                  <div className="orders-empty">
-                    <p>
-                      За «{visible(search)}» замовлень не знайдено. Перевірте
-                      номер ТТН.
-                    </p>
-                    <button
-                      type="button"
-                      className="quiet"
-                      onClick={() => {
-                        change({ ...view, query: "", pressed: "" });
-                        field.current?.focus();
-                      }}
-                    >
-                      Очистити
-                    </button>
-                  </div>
-                ) : (
-                  <ul className="order-rows" aria-label="Знайдені замовлення">
-                    {found.orders.map((order) => (
-                      <li key={order.id}>
-                        <OrderRow
-                          order={order}
-                          open={() => {
-                            open(order);
-                          }}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {more(found.pages)}
-              </>
-            )
-          ) : opened.pages.isPending ? (
-            // A group's heading and its rows' places (orders task list,
-            // P2-2).
-            <Placeholder said="Завантажуємо замовлення…" rows={3} />
-          ) : (
-            <>
-              {opened.pages.error && (
-                <Unread
-                  error={opened.pages.error}
-                  retry={() => {
-                    void opened.pages.refetch();
+    <>
+      <ScreenHeader
+        title="Замовлення"
+        aside={
+          mayCreate && (
+            <button
+              type="button"
+              className="orders-add"
+              aria-label="Нове замовлення"
+              disabled={blocked}
+              onClick={create}
+            >
+              +
+            </button>
+          )
+        }
+      />
+      <section className="orders">
+        {mode}
+        {/* Never opened without the right (orders task list, P2-1): nothing
+            is said of the rule. */}
+        {!mayRead ? null : (
+          <>
+            <form
+              className="search"
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                change({
+                  ...view,
+                  pressed: query.trim().length >= 2 ? query.trim() : "",
+                });
+              }}
+            >
+              <label className="till-search">
+                Номер ТТН
+                <input
+                  type="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  ref={field}
+                  maxLength={64}
+                  value={query}
+                  onChange={(event) => {
+                    change({ ...view, query: event.target.value });
                   }}
                 />
-              )}
-              {group("Потрібно відправити", toSend, counted)}
-              {group("В дорозі", onWay, counted)}
-              {more(opened.pages)}
-              {nothingOpen &&
-                (closed.pages.isPending ? (
-                  <Placeholder said="Завантажуємо замовлення…" rows={3} />
-                ) : closed.pages.error ? (
+              </label>
+            </form>
+            {search !== "" ? (
+              // What was typed before stands until the answer: «not found» is
+              // said of this search only (review, 2026-10-23).
+              found.pages.isPending ||
+              (found.pages.isPlaceholderData && found.orders.length === 0) ? (
+                <Placeholder said="Шукаємо…" rows={3} day={false} />
+              ) : (
+                <>
+                  {found.pages.error && (
+                    <Unread
+                      error={found.pages.error}
+                      retry={() => {
+                        void found.pages.refetch();
+                      }}
+                    />
+                  )}
+                  {found.pages.data && found.orders.length === 0 ? (
+                    <div className="orders-empty">
+                      <p>
+                        За «{visible(search)}» замовлень не знайдено. Перевірте
+                        номер ТТН.
+                      </p>
+                      <button
+                        type="button"
+                        className="quiet"
+                        onClick={() => {
+                          change({ ...view, query: "", pressed: "" });
+                          field.current?.focus();
+                        }}
+                      >
+                        Очистити
+                      </button>
+                    </div>
+                  ) : (
+                    <ul className="order-rows" aria-label="Знайдені замовлення">
+                      {found.orders.map((order) => (
+                        <li key={order.id}>
+                          <OrderRow
+                            order={order}
+                            open={() => {
+                              open(order);
+                            }}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {more(found.pages)}
+                </>
+              )
+            ) : opened.pages.isPending ? (
+              // A group's heading and its rows' places (orders task list,
+              // P2-2).
+              <Placeholder said="Завантажуємо замовлення…" rows={3} />
+            ) : (
+              <>
+                {opened.pages.error && (
                   <Unread
-                    error={closed.pages.error}
+                    error={opened.pages.error}
                     retry={() => {
-                      void closed.pages.refetch();
+                      void opened.pages.refetch();
                     }}
                   />
-                ) : closed.orders.length === 0 ? (
-                  <div className="orders-empty">
-                    <p>
-                      Замовлень ще немає. Замовлення тримає товар у резерві,
-                      поки його не відправили.
-                    </p>
-                    {mayCreate && (
-                      <button type="button" disabled={blocked} onClick={create}>
-                        Нове замовлення
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  !closedShown && <p>Зараз нічого не треба відправляти.</p>
-                ))}
-              {closedShown ? (
-                <>
-                  {closed.pages.error && !nothingOpen && (
+                )}
+                {group("Потрібно відправити", toSend, counted)}
+                {group("В дорозі", onWay, counted)}
+                {more(opened.pages)}
+                {nothingOpen &&
+                  (closed.pages.isPending ? (
+                    <Placeholder said="Завантажуємо замовлення…" rows={3} />
+                  ) : closed.pages.error ? (
                     <Unread
                       error={closed.pages.error}
                       retry={() => {
                         void closed.pages.refetch();
                       }}
                     />
-                  )}
-                  {closed.pages.isPending
-                    ? // Nothing open: its places stand above already.
-                      !nothingOpen && (
-                        <Placeholder said="Завантажуємо замовлення…" rows={3} />
-                      )
-                    : !closed.pages.error &&
-                      closed.orders.length === 0 && (
-                        <p>Завершених замовлень немає.</p>
+                  ) : closed.orders.length === 0 ? (
+                    <div className="orders-empty">
+                      <p>
+                        Замовлень ще немає. Замовлення тримає товар у резерві,
+                        поки його не відправили.
+                      </p>
+                      {mayCreate && (
+                        <button type="button" disabled={blocked} onClick={create}>
+                          Нове замовлення
+                        </button>
                       )}
-                  {group("Завершені", closed.orders, false, closedHeading)}
-                  {more(closed.pages)}
-                  <button
-                    type="button"
-                    className="quiet"
-                    ref={hideClosed}
-                    onClick={() => {
-                      setClosedShown(false);
-                    }}
-                  >
-                    Сховати завершені
-                  </button>
-                </>
-              ) : (
-                (!nothingOpen || closed.orders.length > 0) && (
-                  <button
-                    type="button"
-                    className="quiet"
-                    ref={showClosed}
-                    onClick={() => {
-                      setClosedShown(true);
-                    }}
-                  >
-                    Показати завершені
-                  </button>
-                )
-              )}
-            </>
-          )}
-        </>
-      )}
-    </section>
+                    </div>
+                  ) : (
+                    !closedShown && <p>Зараз нічого не треба відправляти.</p>
+                  ))}
+                {closedShown ? (
+                  <>
+                    {closed.pages.error && !nothingOpen && (
+                      <Unread
+                        error={closed.pages.error}
+                        retry={() => {
+                          void closed.pages.refetch();
+                        }}
+                      />
+                    )}
+                    {closed.pages.isPending
+                      ? // Nothing open: its places stand above already.
+                        !nothingOpen && (
+                          <Placeholder said="Завантажуємо замовлення…" rows={3} />
+                        )
+                      : !closed.pages.error &&
+                        closed.orders.length === 0 && (
+                          <p>Завершених замовлень немає.</p>
+                        )}
+                    {group("Завершені", closed.orders, false, closedHeading)}
+                    {more(closed.pages)}
+                    <button
+                      type="button"
+                      className="quiet"
+                      ref={hideClosed}
+                      onClick={() => {
+                        setClosedShown(false);
+                      }}
+                    >
+                      Сховати завершені
+                    </button>
+                  </>
+                ) : (
+                  (!nothingOpen || closed.orders.length > 0) && (
+                    <button
+                      type="button"
+                      className="quiet"
+                      ref={showClosed}
+                      onClick={() => {
+                        setClosedShown(true);
+                      }}
+                    >
+                      Показати завершені
+                    </button>
+                  )
+                )}
+              </>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }

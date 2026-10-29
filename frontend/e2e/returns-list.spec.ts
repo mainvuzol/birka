@@ -164,9 +164,7 @@ test("the list shows no sum and no way, the sale opened shows its sum; a row ope
     sale("Деінде беж", ago(0, 2), { refunded: 1 }),
   ]);
   await returns(page);
-  const list = page.locator("section").filter({
-    has: page.getByRole("heading", { name: "Повернення" }),
-  });
+  const list = page.locator("section.returns");
   await expect(page.getByRole("article")).toHaveCount(3);
   await expect(list).not.toContainText(/грн|готів|картк|переказ/i);
   await expect(page.getByRole("article").nth(1)).toContainText(

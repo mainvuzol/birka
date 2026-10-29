@@ -22,6 +22,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
 import { PriceHint, priceText } from "./PriceHint";
@@ -864,679 +865,681 @@ export function Sale({
     );
 
   return (
-    <section>
-      <h2>Продаж</h2>
-      {mode}
-      {back && (
-        <Banner kind="back" label="Сервер знову відповідає">
-          <p>
-            Сервер знову відповідає: продажі з паперу можна вносити. Внесіть їх
-            до закриття каси.
-          </p>
-          <div className="actions">
-            <button
-              disabled={blocked || working}
-              onClick={() => {
-                // The paper of an outage the phone saw: said so, and still
-                // changeable below (owner decision, 2026-10-16).
-                turnPaper(true, false);
-              }}
-            >
-              Вношу продаж з паперу
-            </button>
-            <button className="quiet" onClick={backNoted}>
-              Пізніше
-            </button>
-          </div>
-        </Banner>
-      )}
-      {paper && (
-        <Banner kind="paper" label="Режим: продаж з паперу">
-          <h3>Режим: продаж з паперу</h3>
-          {/* The seller does not see «Звіт» (owner decision, 2026-10-15, В5). */}
-          {firstDays !== null && (
+    <>
+      <ScreenHeader title="Продаж" />
+      <section>
+        {mode}
+        {back && (
+          <Banner kind="back" label="Сервер знову відповідає">
             <p>
-              {firstDays
-                ? "Продаж позначать «з паперу». Він увійде в сьогоднішні продажі й у касу до наступного закриття."
-                : "Продаж позначать «продано під час збою». Він увійде в сьогоднішні продажі й у касу до наступного закриття."}
+              Сервер знову відповідає: продажі з паперу можна вносити. Внесіть їх
+              до закриття каси.
             </p>
-          )}
-        </Banner>
-      )}
-      <fieldset disabled={blocked || working}>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={paper}
-            onChange={(event) => {
-              turnPaper(event.target.checked);
-            }}
-          />
-          Вношу продаж з паперу
-        </label>
-        {paper && (
-          <>
-            <PaperKind storeId={store.id} firstDays={firstDays} />
-            <label>
-              Хто продав
-              <select
-                value={named?.user_id ?? ""}
-                onChange={(event) => {
-                  setSoldBy(store.id, event.target.value || null);
-                }}
-              >
-                <option value="">Не вказано</option>
-                {(sellers.data?.sellers ?? []).map((seller) => (
-                  <option key={seller.user_id} value={seller.user_id}>
-                    {visible(seller.display_name)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {sellers.error && (
-              <Failure
-                error={sellers.error}
-                retry={() => {
-                  void sellers.refetch();
-                }}
-              />
-            )}
-            <PaperWhen
-              firstDays={firstDays}
-              day={paperDate}
-              time={paperTime}
-              yesterday={yesterday}
-              onDay={setPaperDate}
-              onTime={(value) => {
-                setPaperTime(value);
-                if (!value) setYesterday(false);
-              }}
-              onYesterday={setYesterday}
-            />
-          </>
-        )}
-        {locations.isPending ? (
-          <Placeholder said="Завантажуємо склади…" field />
-        ) : locations.error ? (
-          <Failure
-            error={locations.error}
-            retry={() => {
-              void locations.refetch();
-            }}
-          />
-        ) : onlyWarehouse ? (
-          // One warehouse to sell from: nothing to choose (redesign P0-2).
-          <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
-        ) : (
-          <label>
-            Склад
-            <select
-              value={locationId}
-              onChange={(event) => {
-                setLocationId(event.target.value);
-                setFromCatalog(false);
-              }}
-            >
-              <option value="">
-                {sellable.length >= 2
-                  ? "Усі склади"
-                  : "З якого складу віддаєте?"}
-              </option>
-              {locations.data.map((location) => (
-                <option
-                  key={location.id}
-                  value={location.id}
-                  disabled={!location.is_active || !location.can_sell}
-                >
-                  {visible(location.name)}
-                  {!location.is_active
-                    ? " — на паузі"
-                    : !location.can_sell
-                      ? " — без права продажу"
-                      : ""}
-                </option>
-              ))}
-            </select>
-            {locations.data.length === 0 && (
-              <span>Доступних складів немає. Зверніться до менеджера.</span>
-            )}
-          </label>
-        )}
-        {locationId && waiting ? (
-          // Nothing is sold there until the list is approved (owner
-          // decision, 2026-10-02): the shop sells on paper meanwhile, and
-          // the paper is typed in once it is (redesign P1-5).
-          <p className="empty">
-            На складі «{visible(warehouse)}» зараз немає товару в обліку. Поки
-            власник не затвердить початкові залишки, продавайте на папері.
-          </p>
-        ) : searchAll && ready.length === 0 ? (
-          <p className="empty">
-            На складах магазину зараз немає товару в обліку. Поки власник не
-            затвердить початкові залишки, продавайте на папері.
-          </p>
-        ) : fromCatalog && searchAll ? (
-          <>
-            <label>
-              З якого складу віддаєте?
-              <select
-                value={catalogAt}
-                onChange={(event) => {
-                  setCatalogAt(event.target.value);
-                }}
-              >
-                <option value="">Оберіть склад</option>
-                {ready.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {visible(location.name)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {catalogPlace ? (
-              <FromCatalog
-                store={store}
-                token={token}
-                scopeKey={journalKey}
-                warehouse={catalogPlace.name}
-                locationId={catalogPlace.id}
-                pick={put}
-                close={() => {
-                  setFromCatalog(false);
-                }}
-              />
-            ) : (
+            <div className="actions">
               <button
-                type="button"
-                className="quiet"
+                disabled={blocked || working}
                 onClick={() => {
-                  setFromCatalog(false);
+                  // The paper of an outage the phone saw: said so, and still
+                  // changeable below (owner decision, 2026-10-16).
+                  turnPaper(true, false);
                 }}
               >
-                Назад до списку
+                Вношу продаж з паперу
               </button>
+              <button className="quiet" onClick={backNoted}>
+                Пізніше
+              </button>
+            </div>
+          </Banner>
+        )}
+        {paper && (
+          <Banner kind="paper" label="Режим: продаж з паперу">
+            <h3>Режим: продаж з паперу</h3>
+            {/* The seller does not see «Звіт» (owner decision, 2026-10-15, В5). */}
+            {firstDays !== null && (
+              <p>
+                {firstDays
+                  ? "Продаж позначать «з паперу». Він увійде в сьогоднішні продажі й у касу до наступного закриття."
+                  : "Продаж позначать «продано під час збою». Він увійде в сьогоднішні продажі й у касу до наступного закриття."}
+              </p>
             )}
-          </>
-        ) : locationId && fromCatalog ? (
-          <FromCatalog
-            store={store}
-            token={token}
-            scopeKey={journalKey}
-            warehouse={warehouse}
-            locationId={locationId}
-            pick={put}
-            close={() => {
-              setFromCatalog(false);
-            }}
-          />
-        ) : (
-          (locationId || searchAll) && (
+          </Banner>
+        )}
+        <fieldset disabled={blocked || working}>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={paper}
+              onChange={(event) => {
+                turnPaper(event.target.checked);
+              }}
+            />
+            Вношу продаж з паперу
+          </label>
+          {paper && (
             <>
-              {searchAll && stillWaiting.length > 0 && (
-                // Owner decision, 2026-10-17: the others listed, these on
-                // paper meanwhile (P1-5).
-                <p className="hint">
-                  {stillWaiting.length === 1
-                    ? `Склад «${visible(stillWaiting[0]?.name ?? "")}» ще чекає початкових залишків: його товар продавайте на папері.`
-                    : `Склади ${stillWaiting.map((location) => `«${visible(location.name)}»`).join(", ")} ще чекають початкових залишків: їхній товар продавайте на папері.`}
-                </p>
+              <PaperKind storeId={store.id} firstDays={firstDays} />
+              <label>
+                Хто продав
+                <select
+                  value={named?.user_id ?? ""}
+                  onChange={(event) => {
+                    setSoldBy(store.id, event.target.value || null);
+                  }}
+                >
+                  <option value="">Не вказано</option>
+                  {(sellers.data?.sellers ?? []).map((seller) => (
+                    <option key={seller.user_id} value={seller.user_id}>
+                      {visible(seller.display_name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {sellers.error && (
+                <Failure
+                  error={sellers.error}
+                  retry={() => {
+                    void sellers.refetch();
+                  }}
+                />
               )}
-              <StockSearch
-                text={text}
-                type={setText}
-                query={query}
-                stock={stock}
-                warehouse={warehouse}
-                places={places}
-                pick={put}
-                canAdd={(item) =>
-                  draft.length < 100 ||
-                  draft.some(
-                    (d) =>
-                      stockKey(d.line) ===
-                      stockKey({
-                        source_location_id: item.location_id || locationId,
-                        product_variant_id: item.product_variant_id,
-                        size_id: item.size_id,
-                      }),
-                  )
-                }
-                offerHeld={paper}
-                searchRef={searchRef}
-                failure={
-                  stock.error ? (
-                    <Failure
-                      error={stock.error}
-                      retry={() => {
-                        void stock.refetch();
-                      }}
-                    />
-                  ) : null
-                }
-                offer={
-                  mayFindInCatalog ? (
-                    <p className="hint">
-                      Товар у руках, а в списку його немає?{" "}
-                      <button
-                        type="button"
-                        className="quiet"
-                        onClick={() => {
-                          setCatalogAt("");
-                          setFromCatalog(true);
-                        }}
-                      >
-                        Знайти в каталозі
-                      </button>
-                    </p>
-                  ) : null
-                }
+              <PaperWhen
+                firstDays={firstDays}
+                day={paperDate}
+                time={paperTime}
+                yesterday={yesterday}
+                onDay={setPaperDate}
+                onTime={(value) => {
+                  setPaperTime(value);
+                  if (!value) setYesterday(false);
+                }}
+                onYesterday={setYesterday}
               />
             </>
-          )
-        )}
-        {validation && <p role="alert">{validation}</p>}
-        {draft.length === 0 &&
-          (locationId || (searchAll && ready.length > 0)) &&
-          !waiting &&
-          !fromCatalog && (
-            <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
           )}
-        {draft.length > 0 && (
-          // «Кошик» names the lines to pay, and nothing else (P2-2).
-          <div role="group" aria-label="Кошик">
-            {draft.map((d, index) => (
-              <div
-                className={index === shortIndex ? "line short" : "line"}
-                key={d.id}
+          {locations.isPending ? (
+            <Placeholder said="Завантажуємо склади…" field />
+          ) : locations.error ? (
+            <Failure
+              error={locations.error}
+              retry={() => {
+                void locations.refetch();
+              }}
+            />
+          ) : onlyWarehouse ? (
+            // One warehouse to sell from: nothing to choose (redesign P0-2).
+            <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
+          ) : (
+            <label>
+              Склад
+              <select
+                value={locationId}
+                onChange={(event) => {
+                  setLocationId(event.target.value);
+                  setFromCatalog(false);
+                }}
               >
-                <strong>
-                  {visible(d.name)} · {visible(d.size)}
-                  {placeOf(d.line.source_location_id)}
-                </strong>
-                <div className="line-edit">
-                  <div
-                    className="stepper"
-                    role="group"
-                    aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
+                <option value="">
+                  {sellable.length >= 2
+                    ? "Усі склади"
+                    : "З якого складу віддаєте?"}
+                </option>
+                {locations.data.map((location) => (
+                  <option
+                    key={location.id}
+                    value={location.id}
+                    disabled={!location.is_active || !location.can_sell}
                   >
-                    <button
-                      type="button"
-                      aria-label="Менше"
-                      disabled={d.line.quantity <= 1}
-                      onClick={() => {
-                        change(index, { quantity: d.line.quantity - 1 });
-                      }}
-                    >
-                      −
-                    </button>
-                    <output>{d.line.quantity}</output>
-                    <button
-                      type="button"
-                      aria-label="Більше"
-                      disabled={d.line.quantity >= 1000}
-                      onClick={() => {
-                        change(index, { quantity: d.line.quantity + 1 });
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <label>
-                    Ціна, грн
-                    <input
-                      ref={(input) => {
-                        if (input) priceRefs.current.set(d.id, input);
-                        else priceRefs.current.delete(d.id);
-                      }}
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      value={d.price}
-                      onChange={(event) => {
-                        change(index, { price: event.target.value });
-                      }}
-                    />
-                  </label>
-                </div>
-                <PriceHint
-                  typed={d.price}
-                  price={d.line.unit_price}
-                  suggested={d.suggested}
+                    {visible(location.name)}
+                    {!location.is_active
+                      ? " — на паузі"
+                      : !location.can_sell
+                        ? " — без права продажу"
+                        : ""}
+                  </option>
+                ))}
+              </select>
+              {locations.data.length === 0 && (
+                <span>Доступних складів немає. Зверніться до менеджера.</span>
+              )}
+            </label>
+          )}
+          {locationId && waiting ? (
+            // Nothing is sold there until the list is approved (owner
+            // decision, 2026-10-02): the shop sells on paper meanwhile, and
+            // the paper is typed in once it is (redesign P1-5).
+            <p className="empty">
+              На складі «{visible(warehouse)}» зараз немає товару в обліку. Поки
+              власник не затвердить початкові залишки, продавайте на папері.
+            </p>
+          ) : searchAll && ready.length === 0 ? (
+            <p className="empty">
+              На складах магазину зараз немає товару в обліку. Поки власник не
+              затвердить початкові залишки, продавайте на папері.
+            </p>
+          ) : fromCatalog && searchAll ? (
+            <>
+              <label>
+                З якого складу віддаєте?
+                <select
+                  value={catalogAt}
+                  onChange={(event) => {
+                    setCatalogAt(event.target.value);
+                  }}
+                >
+                  <option value="">Оберіть склад</option>
+                  {ready.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {visible(location.name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {catalogPlace ? (
+                <FromCatalog
+                  store={store}
+                  token={token}
+                  scopeKey={journalKey}
+                  warehouse={catalogPlace.name}
+                  locationId={catalogPlace.id}
+                  pick={put}
+                  close={() => {
+                    setFromCatalog(false);
+                  }}
                 />
-                {found[index] !== undefined && (
-                  <span>Підтверджено на місці: +{found[index]}</span>
-                )}
-                {missing[index] === 0 ? (
-                  <span>На полиці немає — не продається</span>
-                ) : (
-                  missing[index] !== undefined && (
-                    <span>На місці лише {missing[index]}</span>
-                  )
-                )}
-                {d.unknownStock && paper && (
-                  // A size read off a coat in hand: on paper nobody holds it (G3;
-                  // owner decision, 2026-10-15, В5).
-                  <span className="hint">
-                    Товар з невідомим розміром вносьте як «розмір невідомий».
-                  </span>
-                )}
-                {d.unknownStock && mayReadLabel && !paper && (
-                  <label>
-                    Розмір з етикетки
-                    <select
-                      value={d.fromUnknown ? d.line.size_id : ""}
-                      onChange={(event) => {
-                        relabel(index, event.target.value);
-                      }}
-                    >
-                      <option value="">
-                        Не читали — продати як «розмір невідомий»
-                      </option>
-                      {(sizes.data ?? []).map((size) => (
-                        <option key={size.size_id} value={size.size_id}>
-                          {visible(size.code)}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="hint">
-                      Прочитали розмір на етикетці — оберіть його, і товар
-                      продасться з цим розміром.
-                    </span>
-                  </label>
-                )}
-                {d.fromUnknown && (
-                  <span className="hint">
-                    Розмір з етикетки; в обліку — «розмір невідомий»
-                  </span>
-                )}
-                {clarified[index] !== undefined && (
-                  <span>
-                    Розмір уточнено: {clarified[index]} шт. з «розмір невідомий»
-                  </span>
-                )}
+              ) : (
                 <button
                   type="button"
                   className="quiet"
                   onClick={() => {
-                    replaceDraft(draft.filter((_, i) => i !== index));
+                    setFromCatalog(false);
                   }}
                 >
-                  Прибрати {visible(d.name)}
-                  {placeOf(d.line.source_location_id)}
+                  Назад до списку
                 </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {sizes.error && (
-          <Failure
-            error={sizes.error}
-            retry={() => {
-              void sizes.refetch();
-            }}
-          />
-        )}
-        {mayCredit && (
-          <TermsFields
-            value={credit}
-            change={setCredit}
-            total={total}
-            // One line at 360 px (credits task list, P1-5): the task list's
-            // «Решту покупець доплачує в «Боргах» цього магазину.» takes two.
-            hint="Решту — у «Боргах» цього магазину."
-            storeId={store.id}
-            token={token}
-          />
-        )}
-        <p className="hint">
-          {paper
-            ? firstDays === null
-              ? "Оберіть угорі, що вносите з паперу."
-              : firstDays
-                ? // The card was charged before the app (owner, 2026-10-16).
-                  "Оплату вже взяли: натисніть, як оплатили. На терміналі нічого не проводьте."
-                : // The card was charged during the outage (G19).
-                  "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
-            : "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці."}
-        </p>
-      </fieldset>
-      {refusal !== null && (
-        <p role="alert">
-          {refusalText(refusal)} Кошик збережено — нічого не продано.
-        </p>
-      )}
-      {shortfall && (
-        <section
-          className="notice"
-          role="alert"
-          ref={shortRef}
-          tabIndex={-1}
-          aria-label="Залишку не вистачає"
-        >
-          <h3>Залишку не вистачає</h3>
-          {shortDraft === undefined || shortIndex < 0 ? (
-            <p>
-              Сервер відмовив через товар, якого немає в цьому кошику. Оновіть
-              залишки й складіть кошик заново.
-            </p>
+              )}
+            </>
+          ) : locationId && fromCatalog ? (
+            <FromCatalog
+              store={store}
+              token={token}
+              scopeKey={journalKey}
+              warehouse={warehouse}
+              locationId={locationId}
+              pick={put}
+              close={() => {
+                setFromCatalog(false);
+              }}
+            />
           ) : (
-            <>
-              <p>
-                {visible(shortDraft.name)} · {visible(shortDraft.size)}
-                {placeOf(shortDraft.line.source_location_id)}: у кошику{" "}
-                {shortfall.requested} шт., в обліку {shortfall.available} шт.
-                {shortfall.reserved === true && " поза резервом замовлення."}
-              </p>
-              {paper ? (
-                // Nothing that describes the shelf now (§6, §7).
-                <p>{shortfall.reserved === true ? paperReserved : paperGone}</p>
-              ) : !shortfall.correctable ? (
-                <p>
-                  Цей залишок неможливо виправити під час продажу — частина
-                  одиниць у резерві замовлення. Зменшіть кількість або продайте
-                  інший товар.
-                </p>
-              ) : (
-                <>
-                  {mayCorrect && unknownHere && (
-                    <>
-                      <p>
-                        Ця модель є на складі з невідомим розміром. Якщо у вас
-                        одна з тих одиниць, уточніть її розмір — вона продасться
-                        як {visible(shortDraft.size)}.
+            (locationId || searchAll) && (
+              <>
+                {searchAll && stillWaiting.length > 0 && (
+                  // Owner decision, 2026-10-17: the others listed, these on
+                  // paper meanwhile (P1-5).
+                  <p className="hint">
+                    {stillWaiting.length === 1
+                      ? `Склад «${visible(stillWaiting[0]?.name ?? "")}» ще чекає початкових залишків: його товар продавайте на папері.`
+                      : `Склади ${stillWaiting.map((location) => `«${visible(location.name)}»`).join(", ")} ще чекають початкових залишків: їхній товар продавайте на папері.`}
+                  </p>
+                )}
+                <StockSearch
+                  text={text}
+                  type={setText}
+                  query={query}
+                  stock={stock}
+                  warehouse={warehouse}
+                  places={places}
+                  pick={put}
+                  canAdd={(item) =>
+                    draft.length < 100 ||
+                    draft.some(
+                      (d) =>
+                        stockKey(d.line) ===
+                        stockKey({
+                          source_location_id: item.location_id || locationId,
+                          product_variant_id: item.product_variant_id,
+                          size_id: item.size_id,
+                        }),
+                    )
+                  }
+                  offerHeld={paper}
+                  searchRef={searchRef}
+                  failure={
+                    stock.error ? (
+                      <Failure
+                        error={stock.error}
+                        retry={() => {
+                          void stock.refetch();
+                        }}
+                      />
+                    ) : null
+                  }
+                  offer={
+                    mayFindInCatalog ? (
+                      <p className="hint">
+                        Товар у руках, а в списку його немає?{" "}
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={() => {
+                            setCatalogAt("");
+                            setFromCatalog(true);
+                          }}
+                        >
+                          Знайти в каталозі
+                        </button>
                       </p>
+                    ) : null
+                  }
+                />
+              </>
+            )
+          )}
+          {validation && <p role="alert">{validation}</p>}
+          {draft.length === 0 &&
+            (locationId || (searchAll && ready.length > 0)) &&
+            !waiting &&
+            !fromCatalog && (
+              <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
+            )}
+          {draft.length > 0 && (
+            // «Кошик» names the lines to pay, and nothing else (P2-2).
+            <div role="group" aria-label="Кошик">
+              {draft.map((d, index) => (
+                <div
+                  className={index === shortIndex ? "line short" : "line"}
+                  key={d.id}
+                >
+                  <strong>
+                    {visible(d.name)} · {visible(d.size)}
+                    {placeOf(d.line.source_location_id)}
+                  </strong>
+                  <div className="line-edit">
+                    <div
+                      className="stepper"
+                      role="group"
+                      aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Менше"
+                        disabled={d.line.quantity <= 1}
+                        onClick={() => {
+                          change(index, { quantity: d.line.quantity - 1 });
+                        }}
+                      >
+                        −
+                      </button>
+                      <output>{d.line.quantity}</output>
+                      <button
+                        type="button"
+                        aria-label="Більше"
+                        disabled={d.line.quantity >= 1000}
+                        onClick={() => {
+                          change(index, { quantity: d.line.quantity + 1 });
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <label>
+                      Ціна, грн
+                      <input
+                        ref={(input) => {
+                          if (input) priceRefs.current.set(d.id, input);
+                          else priceRefs.current.delete(d.id);
+                        }}
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={d.price}
+                        onChange={(event) => {
+                          change(index, { price: event.target.value });
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <PriceHint
+                    typed={d.price}
+                    price={d.line.unit_price}
+                    suggested={d.suggested}
+                  />
+                  {found[index] !== undefined && (
+                    <span>Підтверджено на місці: +{found[index]}</span>
+                  )}
+                  {missing[index] === 0 ? (
+                    <span>На полиці немає — не продається</span>
+                  ) : (
+                    missing[index] !== undefined && (
+                      <span>На місці лише {missing[index]}</span>
+                    )
+                  )}
+                  {d.unknownStock && paper && (
+                    // A size read off a coat in hand: on paper nobody holds it (G3;
+                    // owner decision, 2026-10-15, В5).
+                    <span className="hint">
+                      Товар з невідомим розміром вносьте як «розмір невідомий».
+                    </span>
+                  )}
+                  {d.unknownStock && mayReadLabel && !paper && (
+                    <label>
+                      Розмір з етикетки
+                      <select
+                        value={d.fromUnknown ? d.line.size_id : ""}
+                        onChange={(event) => {
+                          relabel(index, event.target.value);
+                        }}
+                      >
+                        <option value="">
+                          Не читали — продати як «розмір невідомий»
+                        </option>
+                        {(sizes.data ?? []).map((size) => (
+                          <option key={size.size_id} value={size.size_id}>
+                            {visible(size.code)}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="hint">
+                        Прочитали розмір на етикетці — оберіть його, і товар
+                        продасться з цим розміром.
+                      </span>
+                    </label>
+                  )}
+                  {d.fromUnknown && (
+                    <span className="hint">
+                      Розмір з етикетки; в обліку — «розмір невідомий»
+                    </span>
+                  )}
+                  {clarified[index] !== undefined && (
+                    <span>
+                      Розмір уточнено: {clarified[index]} шт. з «розмір невідомий»
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      replaceDraft(draft.filter((_, i) => i !== index));
+                    }}
+                  >
+                    Прибрати {visible(d.name)}
+                    {placeOf(d.line.source_location_id)}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {sizes.error && (
+            <Failure
+              error={sizes.error}
+              retry={() => {
+                void sizes.refetch();
+              }}
+            />
+          )}
+          {mayCredit && (
+            <TermsFields
+              value={credit}
+              change={setCredit}
+              total={total}
+              // One line at 360 px (credits task list, P1-5): the task list's
+              // «Решту покупець доплачує в «Боргах» цього магазину.» takes two.
+              hint="Решту — у «Боргах» цього магазину."
+              storeId={store.id}
+              token={token}
+            />
+          )}
+          <p className="hint">
+            {paper
+              ? firstDays === null
+                ? "Оберіть угорі, що вносите з паперу."
+                : firstDays
+                  ? // The card was charged before the app (owner, 2026-10-16).
+                    "Оплату вже взяли: натисніть, як оплатили. На терміналі нічого не проводьте."
+                  : // The card was charged during the outage (G19).
+                    "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
+              : "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці."}
+          </p>
+        </fieldset>
+        {refusal !== null && (
+          <p role="alert">
+            {refusalText(refusal)} Кошик збережено — нічого не продано.
+          </p>
+        )}
+        {shortfall && (
+          <section
+            className="notice"
+            role="alert"
+            ref={shortRef}
+            tabIndex={-1}
+            aria-label="Залишку не вистачає"
+          >
+            <h3>Залишку не вистачає</h3>
+            {shortDraft === undefined || shortIndex < 0 ? (
+              <p>
+                Сервер відмовив через товар, якого немає в цьому кошику. Оновіть
+                залишки й складіть кошик заново.
+              </p>
+            ) : (
+              <>
+                <p>
+                  {visible(shortDraft.name)} · {visible(shortDraft.size)}
+                  {placeOf(shortDraft.line.source_location_id)}: у кошику{" "}
+                  {shortfall.requested} шт., в обліку {shortfall.available} шт.
+                  {shortfall.reserved === true && " поза резервом замовлення."}
+                </p>
+                {paper ? (
+                  // Nothing that describes the shelf now (§6, §7).
+                  <p>{shortfall.reserved === true ? paperReserved : paperGone}</p>
+                ) : !shortfall.correctable ? (
+                  <p>
+                    Цей залишок неможливо виправити під час продажу — частина
+                    одиниць у резерві замовлення. Зменшіть кількість або продайте
+                    інший товар.
+                  </p>
+                ) : (
+                  <>
+                    {mayCorrect && unknownHere && (
+                      <>
+                        <p>
+                          Ця модель є на складі з невідомим розміром. Якщо у вас
+                          одна з тих одиниць, уточніть її розмір — вона продасться
+                          як {visible(shortDraft.size)}.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={working}
+                          onClick={() => {
+                            const next = {
+                              ...clarified,
+                              [shortIndex]:
+                                shortfall.requested - shortfall.available,
+                            };
+                            setClarified(next);
+                            answer(found, missing, next);
+                          }}
+                        >
+                          Розмір з етикетки — продати як{" "}
+                          {visible(shortDraft.size)}
+                          {how}
+                        </button>
+                      </>
+                    )}
+                    {mayCorrect && !unknownHere && !shortDraft.unknownSize && (
                       <button
                         type="button"
                         disabled={working}
                         onClick={() => {
                           const next = {
-                            ...clarified,
+                            ...found,
                             [shortIndex]:
                               shortfall.requested - shortfall.available,
                           };
-                          setClarified(next);
-                          answer(found, missing, next);
+                          setFound(next);
+                          answer(next, missing, clarified);
                         }}
                       >
-                        Розмір з етикетки — продати як{" "}
-                        {visible(shortDraft.size)}
+                        Товар на місці — продати {shortfall.requested}
                         {how}
                       </button>
-                    </>
-                  )}
-                  {mayCorrect && !unknownHere && !shortDraft.unknownSize && (
-                    <button
-                      type="button"
-                      disabled={working}
-                      onClick={() => {
-                        const next = {
-                          ...found,
-                          [shortIndex]:
-                            shortfall.requested - shortfall.available,
-                        };
-                        setFound(next);
-                        answer(next, missing, clarified);
-                      }}
-                    >
-                      Товар на місці — продати {shortfall.requested}
-                      {how}
-                    </button>
-                  )}
-                  {mayReportMissing && (
-                    <button
-                      type="button"
-                      disabled={working}
-                      onClick={() => {
-                        const next = { ...missing, [shortIndex]: 0 };
-                        setMissing(next);
-                        answer(found, next, clarified);
-                      }}
-                    >
-                      {/* Recording an empty shelf takes no money: no way. */}
-                      {draft.every(
-                        (_, index) =>
-                          index === shortIndex || missing[index] === 0,
-                      )
-                        ? "На полиці немає жодної — записати нестачу"
-                        : `На полиці немає жодної — продати решту${how}`}
-                    </button>
-                  )}
-                  {mayReportMissing && shortfall.requested > 1 && (
-                    <>
-                      <label>
-                        На місці фактично є, шт.
-                        <input
-                          inputMode="numeric"
-                          value={present}
-                          onChange={(event) => {
-                            setPresent(event.target.value);
-                          }}
-                        />
-                      </label>
+                    )}
+                    {mayReportMissing && (
                       <button
                         type="button"
                         disabled={working}
                         onClick={() => {
-                          const count = Number(present);
-                          if (
-                            !/^\d+$/.test(present) ||
-                            count < 1 ||
-                            count >= shortfall.requested
-                          ) {
-                            setValidation(
-                              `Вкажіть від 1 до ${String(shortfall.requested - 1)} шт. Якщо немає жодної — натисніть «На полиці немає жодної».`,
-                            );
-                            return;
-                          }
-                          const next = { ...missing, [shortIndex]: count };
+                          const next = { ...missing, [shortIndex]: 0 };
                           setMissing(next);
                           answer(found, next, clarified);
                         }}
                       >
-                        Продати стільки, скільки є{how}
+                        {/* Recording an empty shelf takes no money: no way. */}
+                        {draft.every(
+                          (_, index) =>
+                            index === shortIndex || missing[index] === 0,
+                        )
+                          ? "На полиці немає жодної — записати нестачу"
+                          : `На полиці немає жодної — продати решту${how}`}
                       </button>
-                    </>
-                  )}
-                  {/* The next step alone, never the rule («Усе на бірці»
-                      task list, P2-1). */}
-                  {!mayCorrect && !mayReportMissing && (
-                    <p>Покличте менеджера або зменшіть кількість.</p>
-                  )}
-                  {mayCorrect && !mayReportMissing && (
-                    <p>
-                      Немає на полиці? Приберіть рядок і попросіть менеджера
-                      виправити залишок.
-                    </p>
-                  )}
-                </>
-              )}
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  replaceDraft(draft.filter((_, i) => i !== shortIndex));
-                }}
-              >
-                Прибрати з кошика
-              </button>
-            </>
-          )}
-        </section>
-      )}
-      {/* Under the thumb (redesign P0-4): what is sold and what is paid,
-          and the three ways, which sell when pressed (owner decision,
-          2026-10-04). It shows once the basket holds something (direction
-          §5). */}
-      {draft.length > 0 && (
-        <div
-          className="pay-panel"
-          role="group"
-          aria-label="Продати — як платить покупець"
-          ref={panelRef}
-        >
-          <p className="pay-what">
-            {draft.length === 1 && draft[0]
-              ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${placeOf(draft[0].line.source_location_id)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
-              : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} шт.`}
-          </p>
-          <p className="pay-total">
-            {!priced ? (
-              // A sum without a line's price is no sum to say (review,
-              // 2026-10-15).
-              <>
-                Разом <strong className="sum">—</strong>
-              </>
-            ) : owing ? (
-              <>
-                Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
-                <Sum value={money(decimal(owing.left))} />
-              </>
-            ) : (
-              <>
-                Разом <Sum value={money(decimal(total))} />
+                    )}
+                    {mayReportMissing && shortfall.requested > 1 && (
+                      <>
+                        <label>
+                          На місці фактично є, шт.
+                          <input
+                            inputMode="numeric"
+                            value={present}
+                            onChange={(event) => {
+                              setPresent(event.target.value);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={working}
+                          onClick={() => {
+                            const count = Number(present);
+                            if (
+                              !/^\d+$/.test(present) ||
+                              count < 1 ||
+                              count >= shortfall.requested
+                            ) {
+                              setValidation(
+                                `Вкажіть від 1 до ${String(shortfall.requested - 1)} шт. Якщо немає жодної — натисніть «На полиці немає жодної».`,
+                              );
+                              return;
+                            }
+                            const next = { ...missing, [shortIndex]: count };
+                            setMissing(next);
+                            answer(found, next, clarified);
+                          }}
+                        >
+                          Продати стільки, скільки є{how}
+                        </button>
+                      </>
+                    )}
+                    {/* The next step alone, never the rule («Усе на бірці»
+                        task list, P2-1). */}
+                    {!mayCorrect && !mayReportMissing && (
+                      <p>Покличте менеджера або зменшіть кількість.</p>
+                    )}
+                    {mayCorrect && !mayReportMissing && (
+                      <p>
+                        Немає на полиці? Приберіть рядок і попросіть менеджера
+                        виправити залишок.
+                      </p>
+                    )}
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => {
+                    replaceDraft(draft.filter((_, i) => i !== shortIndex));
+                  }}
+                >
+                  Прибрати з кошика
+                </button>
               </>
             )}
-          </p>
-          <SendingLine busy={pressing !== null} />
-          <div className="pay-ways">
-            {tillMethods.map((way) => (
-              <button
-                key={way}
-                type="button"
-                className={
-                  pressing === null
-                    ? undefined
-                    : pressing === way
-                      ? "pressed"
-                      : "stepped-back"
-                }
-                disabled={
-                  blocked ||
-                  working ||
-                  !priced ||
-                  labelledOnPaper ||
-                  (paper && (firstDays === null || paperProblem !== null))
-                }
-                onClick={() => {
-                  void send(way, found, missing, clarified);
-                }}
-              >
-                {pressing === way && <Eyelet state="spin" size={20} />}
-                {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
-              </button>
-            ))}
-          </div>
-          {paper && (
-            // Seen before the press: a forgotten switch marks a live sale for
-            // good, with a colleague's name (G6).
-            <p className="pay-seller">
-              Продавець: {named ? visible(named.display_name) : "не вказано"}
-              {from.length > 0 &&
-                ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+          </section>
+        )}
+        {/* Under the thumb (redesign P0-4): what is sold and what is paid,
+            and the three ways, which sell when pressed (owner decision,
+            2026-10-04). It shows once the basket holds something (direction
+            §5). */}
+        {draft.length > 0 && (
+          <div
+            className="pay-panel"
+            role="group"
+            aria-label="Продати — як платить покупець"
+            ref={panelRef}
+          >
+            <p className="pay-what">
+              {draft.length === 1 && draft[0]
+                ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${placeOf(draft[0].line.source_location_id)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
+                : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} шт.`}
             </p>
-          )}
-        </div>
-      )}
-    </section>
+            <p className="pay-total">
+              {!priced ? (
+                // A sum without a line's price is no sum to say (review,
+                // 2026-10-15).
+                <>
+                  Разом <strong className="sum">—</strong>
+                </>
+              ) : owing ? (
+                <>
+                  Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
+                  <Sum value={money(decimal(owing.left))} />
+                </>
+              ) : (
+                <>
+                  Разом <Sum value={money(decimal(total))} />
+                </>
+              )}
+            </p>
+            <SendingLine busy={pressing !== null} />
+            <div className="pay-ways">
+              {tillMethods.map((way) => (
+                <button
+                  key={way}
+                  type="button"
+                  className={
+                    pressing === null
+                      ? undefined
+                      : pressing === way
+                        ? "pressed"
+                        : "stepped-back"
+                  }
+                  disabled={
+                    blocked ||
+                    working ||
+                    !priced ||
+                    labelledOnPaper ||
+                    (paper && (firstDays === null || paperProblem !== null))
+                  }
+                  onClick={() => {
+                    void send(way, found, missing, clarified);
+                  }}
+                >
+                  {pressing === way && <Eyelet state="spin" size={20} />}
+                  {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
+                </button>
+              ))}
+            </div>
+            {paper && (
+              // Seen before the press: a forgotten switch marks a live sale for
+              // good, with a colleague's name (G6).
+              <p className="pay-seller">
+                Продавець: {named ? visible(named.display_name) : "не вказано"}
+                {from.length > 0 &&
+                  ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -1626,10 +1629,15 @@ function Receipt({
         : (waySays[way] ?? null);
   return (
     <section className="receipt">
-      <h2 className="result-title t-sheet">
-        <RecordedMark />
-        Продаж записано
-      </h2>
+      <ScreenHeader
+        className="result-title t-sheet"
+        title={
+          <>
+            <RecordedMark />
+            Продаж записано
+          </>
+        }
+      />
       {/* A sale typed from paper for someone else is theirs, and says
           nothing of the seller's own day (owner decision, 2026-10-17). */}
       {(mark === null ||
@@ -1776,29 +1784,31 @@ function NothingSold({
   next: () => void;
 }): JSX.Element {
   return (
-    <section>
-      <h2>Продажу немає</h2>
-      <p>Нічого з кошика не було на полиці. Нестачу записано.</p>
-      {shelf.lines.map((line) => (
-        <div
-          className="line"
-          key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
-        >
-          <strong>
-            {visible(line.display_name)} · {sizeLabel(line.size)}
-          </strong>
-          <span>
-            {line.removed > 0
-              ? `Знято з обліку: ${String(line.removed)} шт.`
-              : "Облік і так не мав цих одиниць — нічого не знято."}
-          </span>
-        </div>
-      ))}
-      <p className="hint">Перевірте склад із менеджером.</p>
-      <button type="button" onClick={next}>
-        Новий продаж
-      </button>
-    </section>
+    <>
+      <ScreenHeader pushed title="Продажу немає" />
+      <section>
+        <p>Нічого з кошика не було на полиці. Нестачу записано.</p>
+        {shelf.lines.map((line) => (
+          <div
+            className="line"
+            key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
+          >
+            <strong>
+              {visible(line.display_name)} · {sizeLabel(line.size)}
+            </strong>
+            <span>
+              {line.removed > 0
+                ? `Знято з обліку: ${String(line.removed)} шт.`
+                : "Облік і так не мав цих одиниць — нічого не знято."}
+            </span>
+          </div>
+        ))}
+        <p className="hint">Перевірте склад із менеджером.</p>
+        <button type="button" onClick={next}>
+          Новий продаж
+        </button>
+      </section>
+    </>
   );
 }
 

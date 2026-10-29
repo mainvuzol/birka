@@ -5,6 +5,7 @@ import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
 import { visible } from "@/shared/visible";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import { PriceEditor } from "@/prices/SuggestedPrice";
@@ -152,325 +153,329 @@ export function Stock({
   if (!allowed) return null;
 
   return (
-    <section>
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Залишки</h2>
-        <button
-          className="quiet"
-          disabled={refreshing || locations.isFetching || stock.isFetching}
-          onClick={() => {
-            void refresh();
-          }}
-        >
-          Оновити залишки
-        </button>
-      </div>
-      <p className="hint">
-        Оберіть один склад. «Доступно» — залишок після віднімання резервів
-        замовлень.
-      </p>
-      {selectionLost && (
-        <p role="status">
-          Обраний склад більше не доступний. Оберіть інший склад зі списку.
+    <>
+      <ScreenHeader
+        title="Залишки"
+        back={back && <BackToMore back={back} />}
+        aside={
+          <button
+            className="quiet"
+            disabled={refreshing || locations.isFetching || stock.isFetching}
+            onClick={() => {
+              void refresh();
+            }}
+          >
+            Оновити залишки
+          </button>
+        }
+      />
+      <section>
+        <p className="hint">
+          Оберіть один склад. «Доступно» — залишок після віднімання резервів
+          замовлень.
         </p>
-      )}
-      {locations.isPending ? (
-        <p role="status">Завантажуємо склади…</p>
-      ) : locations.error ? (
-        <Failure
-          error={locations.error}
-          retry={() => {
-            void refresh();
-          }}
-        />
-      ) : (
-        <>
-          <label>
-            Склад для перегляду
-            <select
-              value={selected?.id ?? ""}
-              disabled={refreshing}
-              onChange={(event) => {
-                setLocationId(event.target.value);
-                setOffset(0);
-                setSelectionLost(false);
-                setEditing(null);
-                setFinding(false);
-                setCorrected(null);
-                setPricing(null);
-                setPriced(null);
-                setCounting(null);
-              }}
-            >
-              <option value="">Оберіть склад</option>
-              {locations.data.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {visible(location.name)}
-                  {location.damaged_returns ? " — брак, не продається" : ""}
-                  {!location.is_active ? " — на паузі" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {locations.data.length === 0 && (
-            <p>Доступних складів немає. Зверніться до менеджера.</p>
-          )}
-          {selected && (
-            <>
-              <h3>{visible(selected.name)}</h3>
-              {!selected.is_active && (
-                <p className="notice">
-                  Склад на паузі. Залишки доступні для перегляду.
-                </p>
-              )}
-              {selected.damaged_returns && (
-                <p className="hint">
-                  Це склад «Брак»: тут лежить пошкоджений товар із повернень.
-                  Він змінюється лише через розділ «Брак».
-                </p>
-              )}
-              {canAdjust && selected.is_active && !selected.can_receive && (
-                <p className="hint">
-                  Цей магазин не може виправляти залишки на цьому складі.
-                </p>
-              )}
-              {counting && (
-                <Stocktake
-                  store={store}
-                  token={token}
-                  scopeKey={scopeKey}
-                  journalKey={countKey}
-                  blocked={countingBlocked}
-                  location={selected}
-                  record={counting}
-                  onLeave={() => {
-                    setCounting(null);
-                    void stock.refetch();
-                  }}
-                />
-              )}
-              {!counting && !selected.damaged_returns && (
-                <Stocktakes
-                  store={store}
-                  token={token}
-                  scopeKey={scopeKey}
-                  blocked={countingBlocked}
-                  location={selected}
-                  canCount={adjustable}
-                  onCount={(record) => {
-                    setCounting(record);
-                    setEditing(null);
-                    setFinding(false);
-                    setCorrected(null);
-                  }}
-                />
-              )}
-              {!counting && corrected && (
-                <p role="status">
-                  Коригування записано: {visible(corrected.target.name)} ·{" "}
-                  {visible(corrected.target.size)} —{" "}
-                  {reasonLabels[corrected.reason]}, облік{" "}
-                  {corrected.adjustment.quantity_before} →{" "}
-                  {corrected.adjustment.quantity_after}.
-                </p>
-              )}
-              {!counting && priced && (
-                <p role="status">Ціну продажу збережено: {visible(priced)}.</p>
-              )}
-              {counting ? null : refreshing || stock.isPending ? (
-                <p role="status">Завантажуємо залишки…</p>
-              ) : stock.error ? (
-                <Failure
-                  error={stock.error}
-                  retry={() => {
-                    void refresh();
-                  }}
-                />
-              ) : (
-                <>
-                  {stock.data.items.length === 0 && (
-                    <p>
-                      {offset === 0
-                        ? "На цьому складі немає товарів із додатним залишком."
-                        : "На цій сторінці більше немає товарів. Поверніться до попередньої сторінки."}
-                    </p>
-                  )}
-                  {stock.data.items.map((item) => (
-                    <article
-                      className="line"
-                      key={`${item.product_variant_id}:${item.size_id}`}
-                      aria-label={`${visible(item.display_name)} · ${item.size_is_unknown ? "розмір невідомий" : visible(item.size_label)}`}
-                      style={{ overflowWrap: "anywhere" }}
-                    >
-                      <strong>{visible(item.display_name)}</strong>
-                      <span>
-                        {item.size_is_unknown
-                          ? "Розмір невідомий"
-                          : `Розмір: ${visible(item.size_label)}`}
-                      </span>
-                      <span>
-                        На складі: <strong>{item.quantity}</strong>
-                      </span>
-                      <span>
-                        У резерві: <strong>{item.reserved_quantity}</strong>
-                      </span>
-                      <span>
-                        Доступно: <strong>{item.available_quantity}</strong>
-                      </span>
-                      {/* «Брак» is not for sale, so it suggests no price. */}
-                      {!selected.damaged_returns && (
+        {selectionLost && (
+          <p role="status">
+            Обраний склад більше не доступний. Оберіть інший склад зі списку.
+          </p>
+        )}
+        {locations.isPending ? (
+          <p role="status">Завантажуємо склади…</p>
+        ) : locations.error ? (
+          <Failure
+            error={locations.error}
+            retry={() => {
+              void refresh();
+            }}
+          />
+        ) : (
+          <>
+            <label>
+              Склад для перегляду
+              <select
+                value={selected?.id ?? ""}
+                disabled={refreshing}
+                onChange={(event) => {
+                  setLocationId(event.target.value);
+                  setOffset(0);
+                  setSelectionLost(false);
+                  setEditing(null);
+                  setFinding(false);
+                  setCorrected(null);
+                  setPricing(null);
+                  setPriced(null);
+                  setCounting(null);
+                }}
+              >
+                <option value="">Оберіть склад</option>
+                {locations.data.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {visible(location.name)}
+                    {location.damaged_returns ? " — брак, не продається" : ""}
+                    {!location.is_active ? " — на паузі" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {locations.data.length === 0 && (
+              <p>Доступних складів немає. Зверніться до менеджера.</p>
+            )}
+            {selected && (
+              <>
+                <h3>{visible(selected.name)}</h3>
+                {!selected.is_active && (
+                  <p className="notice">
+                    Склад на паузі. Залишки доступні для перегляду.
+                  </p>
+                )}
+                {selected.damaged_returns && (
+                  <p className="hint">
+                    Це склад «Брак»: тут лежить пошкоджений товар із повернень.
+                    Він змінюється лише через розділ «Брак».
+                  </p>
+                )}
+                {canAdjust && selected.is_active && !selected.can_receive && (
+                  <p className="hint">
+                    Цей магазин не може виправляти залишки на цьому складі.
+                  </p>
+                )}
+                {counting && (
+                  <Stocktake
+                    store={store}
+                    token={token}
+                    scopeKey={scopeKey}
+                    journalKey={countKey}
+                    blocked={countingBlocked}
+                    location={selected}
+                    record={counting}
+                    onLeave={() => {
+                      setCounting(null);
+                      void stock.refetch();
+                    }}
+                  />
+                )}
+                {!counting && !selected.damaged_returns && (
+                  <Stocktakes
+                    store={store}
+                    token={token}
+                    scopeKey={scopeKey}
+                    blocked={countingBlocked}
+                    location={selected}
+                    canCount={adjustable}
+                    onCount={(record) => {
+                      setCounting(record);
+                      setEditing(null);
+                      setFinding(false);
+                      setCorrected(null);
+                    }}
+                  />
+                )}
+                {!counting && corrected && (
+                  <p role="status">
+                    Коригування записано: {visible(corrected.target.name)} ·{" "}
+                    {visible(corrected.target.size)} —{" "}
+                    {reasonLabels[corrected.reason]}, облік{" "}
+                    {corrected.adjustment.quantity_before} →{" "}
+                    {corrected.adjustment.quantity_after}.
+                  </p>
+                )}
+                {!counting && priced && (
+                  <p role="status">Ціну продажу збережено: {visible(priced)}.</p>
+                )}
+                {counting ? null : refreshing || stock.isPending ? (
+                  <p role="status">Завантажуємо залишки…</p>
+                ) : stock.error ? (
+                  <Failure
+                    error={stock.error}
+                    retry={() => {
+                      void refresh();
+                    }}
+                  />
+                ) : (
+                  <>
+                    {stock.data.items.length === 0 && (
+                      <p>
+                        {offset === 0
+                          ? "На цьому складі немає товарів із додатним залишком."
+                          : "На цій сторінці більше немає товарів. Поверніться до попередньої сторінки."}
+                      </p>
+                    )}
+                    {stock.data.items.map((item) => (
+                      <article
+                        className="line"
+                        key={`${item.product_variant_id}:${item.size_id}`}
+                        aria-label={`${visible(item.display_name)} · ${item.size_is_unknown ? "розмір невідомий" : visible(item.size_label)}`}
+                        style={{ overflowWrap: "anywhere" }}
+                      >
+                        <strong>{visible(item.display_name)}</strong>
                         <span>
-                          Ціна продажу:{" "}
-                          <strong>
-                            {item.suggested_price
-                              ? money(item.suggested_price)
-                              : "не задана"}
-                          </strong>
+                          {item.size_is_unknown
+                            ? "Розмір невідомий"
+                            : `Розмір: ${visible(item.size_label)}`}
                         </span>
-                      )}
-                      {canPrice &&
-                        !selected.damaged_returns &&
-                        (pricing ===
-                        `${item.product_variant_id}:${item.size_id}` ? (
-                          <PriceEditor
-                            store={store}
-                            token={token}
-                            scopeKey={scopeKey}
-                            variantId={item.product_variant_id}
-                            blocked={blocked}
-                            onDone={() => {
-                              setPricing(null);
-                              setPriced(item.display_name);
-                            }}
-                            onCancel={() => {
-                              setPricing(null);
-                            }}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="quiet"
-                            disabled={blocked}
-                            onClick={() => {
-                              setPricing(
-                                `${item.product_variant_id}:${item.size_id}`,
-                              );
-                              setPriced(null);
-                            }}
-                          >
-                            Змінити ціну продажу
-                          </button>
-                        ))}
-                      {adjustable &&
-                        (item.reserved_quantity > 0 ? (
-                          <span className="hint">
-                            Є резерв замовлення — виправити залишок можна після
-                            його видачі або скасування.
+                        <span>
+                          На складі: <strong>{item.quantity}</strong>
+                        </span>
+                        <span>
+                          У резерві: <strong>{item.reserved_quantity}</strong>
+                        </span>
+                        <span>
+                          Доступно: <strong>{item.available_quantity}</strong>
+                        </span>
+                        {/* «Брак» is not for sale, so it suggests no price. */}
+                        {!selected.damaged_returns && (
+                          <span>
+                            Ціна продажу:{" "}
+                            <strong>
+                              {item.suggested_price
+                                ? money(item.suggested_price)
+                                : "не задана"}
+                            </strong>
                           </span>
-                        ) : editing ===
+                        )}
+                        {canPrice &&
+                          !selected.damaged_returns &&
+                          (pricing ===
                           `${item.product_variant_id}:${item.size_id}` ? (
-                          <Correction
-                            store={store}
-                            token={token}
-                            journalKey={journalKey}
-                            blocked={correcting}
-                            locationId={selected.id}
-                            target={{
-                              product_variant_id: item.product_variant_id,
-                              size_id: item.size_id,
-                              name: item.display_name,
-                              size: item.size_is_unknown
-                                ? "розмір невідомий"
-                                : item.size_label,
-                              sizeIsUnknown: item.size_is_unknown,
-                              quantity: item.quantity,
-                            }}
-                            onDone={done}
-                            onCancel={() => {
-                              setEditing(null);
-                            }}
-                            onRefused={() => {
-                              void stock.refetch();
-                            }}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="quiet"
-                            disabled={blocked}
-                            onClick={() => {
-                              setEditing(
-                                `${item.product_variant_id}:${item.size_id}`,
-                              );
-                              setFinding(false);
-                              setCorrected(null);
-                            }}
-                          >
-                            Виправити залишок
-                          </button>
-                        ))}
-                    </article>
-                  ))}
-                  <div className="toolbar">
-                    <button
-                      className="quiet"
-                      disabled={offset === 0 || stock.isFetching}
-                      onClick={() => {
-                        setOffset(Math.max(0, offset - pageSize));
-                      }}
-                    >
-                      Попередні товари
-                    </button>
-                    <button
-                      className="quiet"
-                      disabled={!stock.data.has_more || stock.isFetching}
-                      onClick={() => {
-                        setOffset(offset + pageSize);
-                      }}
-                    >
-                      Наступні товари
-                    </button>
-                  </div>
-                  {adjustable &&
-                    store.permissions.includes("inventory:receive") &&
-                    (finding ? (
-                      <FoundGoods
-                        store={store}
-                        token={token}
-                        scopeKey={scopeKey}
-                        journalKey={journalKey}
-                        blocked={correcting}
-                        locationId={selected.id}
-                        onDone={done}
-                        onCancel={() => {
-                          setFinding(false);
-                        }}
-                        onRefused={() => {
-                          void stock.refetch();
-                        }}
-                      />
-                    ) : (
+                            <PriceEditor
+                              store={store}
+                              token={token}
+                              scopeKey={scopeKey}
+                              variantId={item.product_variant_id}
+                              blocked={blocked}
+                              onDone={() => {
+                                setPricing(null);
+                                setPriced(item.display_name);
+                              }}
+                              onCancel={() => {
+                                setPricing(null);
+                              }}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="quiet"
+                              disabled={blocked}
+                              onClick={() => {
+                                setPricing(
+                                  `${item.product_variant_id}:${item.size_id}`,
+                                );
+                                setPriced(null);
+                              }}
+                            >
+                              Змінити ціну продажу
+                            </button>
+                          ))}
+                        {adjustable &&
+                          (item.reserved_quantity > 0 ? (
+                            <span className="hint">
+                              Є резерв замовлення — виправити залишок можна після
+                              його видачі або скасування.
+                            </span>
+                          ) : editing ===
+                            `${item.product_variant_id}:${item.size_id}` ? (
+                            <Correction
+                              store={store}
+                              token={token}
+                              journalKey={journalKey}
+                              blocked={correcting}
+                              locationId={selected.id}
+                              target={{
+                                product_variant_id: item.product_variant_id,
+                                size_id: item.size_id,
+                                name: item.display_name,
+                                size: item.size_is_unknown
+                                  ? "розмір невідомий"
+                                  : item.size_label,
+                                sizeIsUnknown: item.size_is_unknown,
+                                quantity: item.quantity,
+                              }}
+                              onDone={done}
+                              onCancel={() => {
+                                setEditing(null);
+                              }}
+                              onRefused={() => {
+                                void stock.refetch();
+                              }}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="quiet"
+                              disabled={blocked}
+                              onClick={() => {
+                                setEditing(
+                                  `${item.product_variant_id}:${item.size_id}`,
+                                );
+                                setFinding(false);
+                                setCorrected(null);
+                              }}
+                            >
+                              Виправити залишок
+                            </button>
+                          ))}
+                      </article>
+                    ))}
+                    <div className="toolbar">
                       <button
-                        type="button"
                         className="quiet"
-                        disabled={blocked}
+                        disabled={offset === 0 || stock.isFetching}
                         onClick={() => {
-                          setFinding(true);
-                          setEditing(null);
-                          setCorrected(null);
+                          setOffset(Math.max(0, offset - pageSize));
                         }}
                       >
-                        Знайшли товар, якого немає в списку
+                        Попередні товари
                       </button>
-                    ))}
-                </>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </section>
+                      <button
+                        className="quiet"
+                        disabled={!stock.data.has_more || stock.isFetching}
+                        onClick={() => {
+                          setOffset(offset + pageSize);
+                        }}
+                      >
+                        Наступні товари
+                      </button>
+                    </div>
+                    {adjustable &&
+                      store.permissions.includes("inventory:receive") &&
+                      (finding ? (
+                        <FoundGoods
+                          store={store}
+                          token={token}
+                          scopeKey={scopeKey}
+                          journalKey={journalKey}
+                          blocked={correcting}
+                          locationId={selected.id}
+                          onDone={done}
+                          onCancel={() => {
+                            setFinding(false);
+                          }}
+                          onRefused={() => {
+                            void stock.refetch();
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="quiet"
+                          disabled={blocked}
+                          onClick={() => {
+                            setFinding(true);
+                            setEditing(null);
+                            setCorrected(null);
+                          }}
+                        >
+                          Знайшли товар, якого немає в списку
+                        </button>
+                      ))}
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }
 

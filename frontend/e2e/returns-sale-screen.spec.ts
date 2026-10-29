@@ -225,7 +225,7 @@ async function shown(page: Page): Promise<number> {
   return page
     .locator(
       [
-        ".toolbar > *",
+        ".screen-title > *",
         "section > p",
         "fieldset > label.check",
         ".line-return > h3",

@@ -6,6 +6,7 @@ import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { Sum } from "@/shared/Sum";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { refusalText } from "./Debt";
 import { goodsOf, shortDay } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
@@ -72,92 +73,98 @@ export function Customer({
   const here = store.id;
   const name = visible(customer.customer_name ?? erasedCustomer);
   return (
-    <section className="credits">
-      <button type="button" className="quiet back" onClick={back}>
-        <span aria-hidden="true">← </span>До боргів
-      </button>
-      <h2>{name}</h2>
-      {customer.customer_phone && (
-        <p className="hint">
-          <a href={`tel:${customer.customer_phone.replace(/[^\d+]/g, "")}`}>
-            {visible(customer.customer_phone)}
-          </a>
-        </p>
-      )}
-      {read.isError && (
-        // Read again and refused: what is shown is as it was, and said.
-        <div role="alert">
-          <p>{refusalText(read.error)}</p>
-          <button
-            type="button"
-            disabled={read.isFetching}
-            onClick={() => {
-              void read.refetch();
-            }}
-          >
-            Спробувати ще раз
+    <>
+      <ScreenHeader
+        title={name}
+        back={
+          <button type="button" className="quiet back" onClick={back}>
+            <span aria-hidden="true">← </span>До боргів
           </button>
-        </div>
-      )}
-      {customer.open_debts > 0 && (
-        <div className="owed-card">
-          <p className="owed-what">Винні всього</p>
-          <p className="owed-sum">
-            <Sum value={money(customer.owed)} />
+        }
+      />
+      <section className="credits">
+        {customer.customer_phone && (
+          <p className="hint">
+            <a href={`tel:${customer.customer_phone.replace(/[^\d+]/g, "")}`}>
+              {visible(customer.customer_phone)}
+            </a>
           </p>
+        )}
+        {read.isError && (
+          // Read again and refused: what is shown is as it was, and said.
+          <div role="alert">
+            <p>{refusalText(read.error)}</p>
+            <button
+              type="button"
+              disabled={read.isFetching}
+              onClick={() => {
+                void read.refetch();
+              }}
+            >
+              Спробувати ще раз
+            </button>
+          </div>
+        )}
+        {customer.open_debts > 0 && (
+          <div className="owed-card">
+            <p className="owed-what">Винні всього</p>
+            <p className="owed-sum">
+              <Sum value={money(customer.owed)} />
+            </p>
+          </div>
+        )}
+        <div role="list" aria-label={`Борги: ${name}`}>
+          {customer.credits.map((credit) => {
+            const goods = goodsOf(credit);
+            const since = sinceText(credit);
+            const open = credit.status === "OPEN";
+            return (
+              <div role="listitem" key={credit.id}>
+                <button
+                  type="button"
+                  className="sale-row debt-row"
+                  aria-label={`Відкрити борг: ${goods}, ${since}, ${
+                    open
+                      ? `винні ${money(credit.owed)}`
+                      : statusLabels[credit.status].toLowerCase()
+                  }`}
+                  onClick={() => {
+                    choose(credit);
+                  }}
+                >
+                  <span className="sale-main">
+                    <span className="debt-name">{goods}</span>
+                    <span className="sale-meta">
+                      {since}
+                      {credit.store_id !== here && (
+                        <span className="badge neutral">
+                          Магазин «{visible(credit.store_name)}»
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  {open ? (
+                    <span className="debt-owed">{money(credit.owed)}</span>
+                  ) : (
+                    <span
+                      className={
+                        credit.status === "WRITTEN_OFF"
+                          ? "badge neutral"
+                          : "badge paid"
+                      }
+                    >
+                      {statusLabels[credit.status]}
+                    </span>
+                  )}
+                  <span className="sale-open" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+              </div>
+            );
+          })}
         </div>
-      )}
-      <div role="list" aria-label={`Борги: ${name}`}>
-        {customer.credits.map((credit) => {
-          const goods = goodsOf(credit);
-          const since = sinceText(credit);
-          const open = credit.status === "OPEN";
-          return (
-            <div role="listitem" key={credit.id}>
-              <button
-                type="button"
-                className="sale-row debt-row"
-                aria-label={`Відкрити борг: ${goods}, ${since}, ${
-                  open
-                    ? `винні ${money(credit.owed)}`
-                    : statusLabels[credit.status].toLowerCase()
-                }`}
-                onClick={() => {
-                  choose(credit);
-                }}
-              >
-                <span className="sale-main">
-                  <span className="debt-name">{goods}</span>
-                  <span className="sale-meta">
-                    {since}
-                    {credit.store_id !== here && (
-                      <span className="badge neutral">
-                        Магазин «{visible(credit.store_name)}»
-                      </span>
-                    )}
-                  </span>
-                </span>
-                {open ? (
-                  <span className="debt-owed">{money(credit.owed)}</span>
-                ) : (
-                  <span
-                    className={
-                      credit.status === "WRITTEN_OFF"
-                        ? "badge neutral"
-                        : "badge paid"
-                    }
-                  >
-                    {statusLabels[credit.status]}
-                  </span>
-                )}
-                <span className="sale-open" aria-hidden="true">
-                  ›
-                </span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

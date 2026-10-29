@@ -45,6 +45,7 @@ import type {
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 /**
  * «Початкові залишки»: the goods already in a shop, entered as a list.
@@ -129,104 +130,108 @@ export function Openings({
       />
     );
   return (
-    <section className="openings">
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Початкові залишки</h2>
-        <button
-          className="quiet"
-          disabled={lists.isFetching}
-          onClick={() => {
-            void lists.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        Товар, що вже лежить у магазині, вноситься списком — рядок за рядком, як
-        у зошиті: текстом або файлом від парсера. Кожен рядок розбирає людина,
-        потім власник затверджує список, і він стає початковим залишком складу.
-        Склад має бути без жодного руху товару: поки список чекає рішення, на
-        такому складі нічого не приймають, не продають і не виправляють.
-      </p>
-      {canImport &&
-        (creating ? (
-          <NewList
-            store={store}
-            token={token}
-            scopeKey={scopeKey}
-            locations={(locations.data ?? []).filter(
-              (l) => l.is_active && l.can_receive && !l.damaged_returns,
-            )}
-            blocked={blocked}
-            done={(list) => {
-              setCreating(false);
-              void lists.refetch().then(() => {
-                setOpenId(list.snapshot_id);
-              });
-            }}
-            openList={(id) => {
-              setCreating(false);
-              void lists.refetch().then(() => {
-                setOpenId(id);
-              });
-            }}
-            cancel={() => {
-              setCreating(false);
-            }}
-          />
-        ) : (
+    <>
+      <ScreenHeader
+        title="Початкові залишки"
+        back={back && <BackToMore back={back} />}
+        aside={
           <button
-            disabled={blocked}
+            className="quiet"
+            disabled={lists.isFetching}
             onClick={() => {
-              setCreating(true);
+              void lists.refetch();
             }}
           >
-            Новий список
+            Оновити
           </button>
-        ))}
-      {lists.isPending ? (
-        <p role="status">Завантажуємо списки…</p>
-      ) : lists.error ? (
-        <p role="alert">{errorText(lists.error)}</p>
-      ) : lists.data.items.length === 0 ? (
-        <p>Списків ще немає.</p>
-      ) : (
-        lists.data.items.map((list) => (
-          <article
-            className="line catalog-card"
-            key={list.snapshot_id}
-            aria-label={`Список ${visible(list.source_document_ref ?? "")}`.trim()}
-          >
-            <strong>
-              {listName(list)} · склад «{warehouse(list.location_id)}»
-            </strong>
-            <span className="badge">{listStatusLabels[list.status]}</span>
-            {list.store_id !== store.id && (
-              <small>Веде магазин «{visible(list.store_name ?? "—")}»</small>
-            )}
-            <small>
-              Рядків: {list.summary.lines} · розібрано{" "}
-              {list.summary.resolved + list.summary.skipped} · одиниць{" "}
-              {list.summary.units}
-            </small>
+        }
+      />
+      <section className="openings">
+        <p className="hint">
+          Товар, що вже лежить у магазині, вноситься списком — рядок за рядком, як
+          у зошиті: текстом або файлом від парсера. Кожен рядок розбирає людина,
+          потім власник затверджує список, і він стає початковим залишком складу.
+          Склад має бути без жодного руху товару: поки список чекає рішення, на
+          такому складі нічого не приймають, не продають і не виправляють.
+        </p>
+        {canImport &&
+          (creating ? (
+            <NewList
+              store={store}
+              token={token}
+              scopeKey={scopeKey}
+              locations={(locations.data ?? []).filter(
+                (l) => l.is_active && l.can_receive && !l.damaged_returns,
+              )}
+              blocked={blocked}
+              done={(list) => {
+                setCreating(false);
+                void lists.refetch().then(() => {
+                  setOpenId(list.snapshot_id);
+                });
+              }}
+              openList={(id) => {
+                setCreating(false);
+                void lists.refetch().then(() => {
+                  setOpenId(id);
+                });
+              }}
+              cancel={() => {
+                setCreating(false);
+              }}
+            />
+          ) : (
             <button
-              className="quiet"
+              disabled={blocked}
               onClick={() => {
-                // The list a draft's command made, its answer lost, found
-                // here: made, so nothing of the draft is sent again (review,
-                // fourth round, 2026-10-09).
-                forgetDraftOf(store, list);
-                setOpenId(list.snapshot_id);
+                setCreating(true);
               }}
             >
-              Відкрити
+              Новий список
             </button>
-          </article>
-        ))
-      )}
-    </section>
+          ))}
+        {lists.isPending ? (
+          <p role="status">Завантажуємо списки…</p>
+        ) : lists.error ? (
+          <p role="alert">{errorText(lists.error)}</p>
+        ) : lists.data.items.length === 0 ? (
+          <p>Списків ще немає.</p>
+        ) : (
+          lists.data.items.map((list) => (
+            <article
+              className="line catalog-card"
+              key={list.snapshot_id}
+              aria-label={`Список ${visible(list.source_document_ref ?? "")}`.trim()}
+            >
+              <strong>
+                {listName(list)} · склад «{warehouse(list.location_id)}»
+              </strong>
+              <span className="badge">{listStatusLabels[list.status]}</span>
+              {list.store_id !== store.id && (
+                <small>Веде магазин «{visible(list.store_name ?? "—")}»</small>
+              )}
+              <small>
+                Рядків: {list.summary.lines} · розібрано{" "}
+                {list.summary.resolved + list.summary.skipped} · одиниць{" "}
+                {list.summary.units}
+              </small>
+              <button
+                className="quiet"
+                onClick={() => {
+                  // The list a draft's command made, its answer lost, found
+                  // here: made, so nothing of the draft is sent again (review,
+                  // fourth round, 2026-10-09).
+                  forgetDraftOf(store, list);
+                  setOpenId(list.snapshot_id);
+                }}
+              >
+                Відкрити
+              </button>
+            </article>
+          ))
+        )}
+      </section>
+    </>
   );
 }
 
@@ -886,253 +891,258 @@ function ListView({
   }
 
   return (
-    <section className="openings">
-      <div className="toolbar">
-        <h2>{listName(list)}</h2>
-        <button className="quiet" onClick={close}>
-          До списків
-        </button>
-      </div>
-      <p>
-        Склад «{warehouse}» · {listStatusLabels[list.status]}
-        {list.captured_at ? ` · перелічено ${visible(list.captured_at)}` : ""}
-      </p>
-      {list.store_id !== store.id && (
-        <p className="hint">Веде магазин «{visible(list.store_name ?? "—")}»</p>
-      )}
-      {list.status === "IN_REVIEW" && !trading && (
-        <p className="notice" role="status">
-          {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
+    <>
+      <ScreenHeader
+        pushed
+        title={listName(list)}
+        aside={
+          <button className="quiet" onClick={close}>
+            До списків
+          </button>
+        }
+      />
+      <section className="openings">
+        <p>
+          Склад «{warehouse}» · {listStatusLabels[list.status]}
+          {list.captured_at ? ` · перелічено ${visible(list.captured_at)}` : ""}
         </p>
-      )}
-      <p className="hint">
-        Рядків: {list.summary.lines} · розібрано {list.summary.resolved} · не
-        товар {list.summary.skipped} · чекають{" "}
-        {list.summary.pending + list.summary.needs_review} · одиниць{" "}
-        {list.summary.units}
-      </p>
-      {list.status === "IN_REVIEW" && (
+        {list.store_id !== store.id && (
+          <p className="hint">Веде магазин «{visible(list.store_name ?? "—")}»</p>
+        )}
+        {list.status === "IN_REVIEW" && !trading && (
+          <p className="notice" role="status">
+            {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
+          </p>
+        )}
         <p className="hint">
-          {`Місце у списку: рядків ${number(list.summary.lines)} з ${number(list.summary.limits.lines)} · відповідей ${number(list.summary.allocations)} з ${number(list.summary.limits.allocations)}`}
+          Рядків: {list.summary.lines} · розібрано {list.summary.resolved} · не
+          товар {list.summary.skipped} · чекають{" "}
+          {list.summary.pending + list.summary.needs_review} · одиниць{" "}
+          {list.summary.units}
         </p>
-      )}
-      {list.status === "APPLIED" && (
-        <p role="status">
-          Затверджено: {list.application?.units ?? list.summary.units} од. стали
-          початковим залишком складу «{warehouse}».
-        </p>
-      )}
-      {list.status === "REJECTED" && (
-        <p role="status">
-          Відхилено
-          {list.rejection_reason ? `: ${visible(list.rejection_reason)}` : ""}.
-          Залишків цей список не змінив.
-        </p>
-      )}
-      {list.status === "IN_REVIEW" && (
-        <p className="notice">
-          Поки список чекає рішення, на складі «{warehouse}», де ще не було руху
-          товару, нічого не приймають, не продають і не виправляють.
-          {decisionText(trading, canApprove, canImport)}
-        </p>
-      )}
-      {/* Whoever may add or remove a file may reject the list too: a list
-          whose last file is wrong is rejected (owner, 2026-10-08), so the
-          button the hint names is there. Approving takes its own right. */}
-      {list.status === "IN_REVIEW" && (canApprove || canImport) && (
-        <Approval
-          list={list}
-          store={store}
-          token={token}
-          warehouse={warehouse}
-          approvable={trading && canApprove}
-          blocked={blocked}
-          refresh={refresh}
-        />
-      )}
-      {list.status === "IN_REVIEW" && trading && canImport && !canPick && (
-        <p role="alert">
-          Щоб розбирати рядки, потрібне право приймати товар у цьому магазині.
-        </p>
-      )}
-      {parts.error ? (
-        <p role="alert">{errorText(parts.error)}</p>
-      ) : (
-        // A list typed in one go is one part: nothing to tell apart.
-        (allParts.length > 1 || allParts[0]?.kind === "FILE") && (
-          <PartsSection
-            list={list}
-            store={store}
-            token={token}
-            parts={allParts}
-            editable={editable}
-            blocked={blocked || editing !== null}
-            show={(part) => {
-              showPart(part.part_id);
-            }}
-            refresh={refresh}
-          />
-        )
-      )}
-      {editable &&
-        (adding === "file" ? (
-          <AddFile
+        {list.status === "IN_REVIEW" && (
+          <p className="hint">
+            {`Місце у списку: рядків ${number(list.summary.lines)} з ${number(list.summary.limits.lines)} · відповідей ${number(list.summary.allocations)} з ${number(list.summary.limits.allocations)}`}
+          </p>
+        )}
+        {list.status === "APPLIED" && (
+          <p role="status">
+            Затверджено: {list.application?.units ?? list.summary.units} од. стали
+            початковим залишком складу «{warehouse}».
+          </p>
+        )}
+        {list.status === "REJECTED" && (
+          <p role="status">
+            Відхилено
+            {list.rejection_reason ? `: ${visible(list.rejection_reason)}` : ""}.
+            Залишків цей список не змінив.
+          </p>
+        )}
+        {list.status === "IN_REVIEW" && (
+          <p className="notice">
+            Поки список чекає рішення, на складі «{warehouse}», де ще не було руху
+            товару, нічого не приймають, не продають і не виправляють.
+            {decisionText(trading, canApprove, canImport)}
+          </p>
+        )}
+        {/* Whoever may add or remove a file may reject the list too: a list
+            whose last file is wrong is rejected (owner, 2026-10-08), so the
+            button the hint names is there. Approving takes its own right. */}
+        {list.status === "IN_REVIEW" && (canApprove || canImport) && (
+          <Approval
             list={list}
             store={store}
             token={token}
             warehouse={warehouse}
+            approvable={trading && canApprove}
             blocked={blocked}
-            done={async () => {
-              setAdding(null);
-              await refresh();
-            }}
             refresh={refresh}
-            cancel={() => {
-              setAdding(null);
-            }}
           />
-        ) : adding === "lines" ? (
-          <AddLines
-            list={list}
-            store={store}
-            token={token}
-            blocked={blocked}
-            done={async () => {
-              setAdding(null);
-              await refresh();
-            }}
-            refresh={refresh}
-            cancel={() => {
-              setAdding(null);
-            }}
-          />
+        )}
+        {list.status === "IN_REVIEW" && trading && canImport && !canPick && (
+          <p role="alert">
+            Щоб розбирати рядки, потрібне право приймати товар у цьому магазині.
+          </p>
+        )}
+        {parts.error ? (
+          <p role="alert">{errorText(parts.error)}</p>
         ) : (
-          <div className="actions">
-            <button
-              className="quiet"
-              disabled={blocked}
-              onClick={() => {
-                setAdding("file");
+          // A list typed in one go is one part: nothing to tell apart.
+          (allParts.length > 1 || allParts[0]?.kind === "FILE") && (
+            <PartsSection
+              list={list}
+              store={store}
+              token={token}
+              parts={allParts}
+              editable={editable}
+              blocked={blocked || editing !== null}
+              show={(part) => {
+                showPart(part.part_id);
               }}
-            >
-              Додати файл
-            </button>
-            <button
-              className="quiet"
-              disabled={blocked}
-              onClick={() => {
-                setAdding("lines");
+              refresh={refresh}
+            />
+          )
+        )}
+        {editable &&
+          (adding === "file" ? (
+            <AddFile
+              list={list}
+              store={store}
+              token={token}
+              warehouse={warehouse}
+              blocked={blocked}
+              done={async () => {
+                setAdding(null);
+                await refresh();
               }}
-            >
-              Додати рядки вручну
-            </button>
-          </div>
-        ))}
-      <nav aria-label="Рядки списку">
-        {statusFilters.map(({ status, label }) => (
-          <button
-            key={label}
-            className={filter === status ? "active" : "quiet"}
-            onClick={() => {
-              setFilter(status);
-              setOffset(0);
-              setEditing(null);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      {allParts.length > 1 && (
-        <label>
-          Файл
-          <select
-            value={partFilter ?? ""}
-            onChange={(event) => {
-              showPart(event.target.value === "" ? null : event.target.value);
-            }}
-          >
-            <option value="">Усі файли</option>
-            {allParts.map((part) => (
-              <option key={part.part_id} value={part.part_id}>
-                {`${String(part.part_no)}. ${partName(part)}${part.removed_at === null ? "" : " (прибрано)"}`}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {lines.isPending ? (
-        <p role="status">Завантажуємо рядки…</p>
-      ) : lines.error ? (
-        <p role="alert">{errorText(lines.error)}</p>
-      ) : lines.data.items.length === 0 ? (
-        <p>Тут рядків немає.</p>
-      ) : (
-        <>
-          {lines.data.items.map((line) =>
-            editing === line.line_no ? (
-              <LineEditor
-                key={line.line_no}
-                line={line}
-                list={list}
-                store={store}
-                token={token}
-                scopeKey={scopeKey}
-                sizes={sizes.data ?? []}
-                listParts={allParts}
-                blocked={blocked}
-                done={() => {
-                  setEditing(null);
-                  void refresh();
+              refresh={refresh}
+              cancel={() => {
+                setAdding(null);
+              }}
+            />
+          ) : adding === "lines" ? (
+            <AddLines
+              list={list}
+              store={store}
+              token={token}
+              blocked={blocked}
+              done={async () => {
+                setAdding(null);
+                await refresh();
+              }}
+              refresh={refresh}
+              cancel={() => {
+                setAdding(null);
+              }}
+            />
+          ) : (
+            <div className="actions">
+              <button
+                className="quiet"
+                disabled={blocked}
+                onClick={() => {
+                  setAdding("file");
                 }}
-                cancel={() => {
-                  setEditing(null);
+              >
+                Додати файл
+              </button>
+              <button
+                className="quiet"
+                disabled={blocked}
+                onClick={() => {
+                  setAdding("lines");
                 }}
-                reread={() => {
-                  void cache.invalidateQueries({
-                    queryKey: ["stock-list-lines"],
-                  });
-                }}
-              />
-            ) : (
-              <LineCard
-                key={line.line_no}
-                line={line}
-                parts={allParts}
-                answer={
-                  editable && canPick && line.status !== "REMOVED"
-                    ? () => {
-                        setEditing(line.line_no);
-                      }
-                    : null
-                }
-                blocked={blocked || editing !== null}
-              />
-            ),
-          )}
-          <div className="toolbar">
+              >
+                Додати рядки вручну
+              </button>
+            </div>
+          ))}
+        <nav aria-label="Рядки списку">
+          {statusFilters.map(({ status, label }) => (
             <button
-              className="quiet"
-              disabled={offset === 0}
+              key={label}
+              className={filter === status ? "active" : "quiet"}
               onClick={() => {
-                setOffset(Math.max(0, offset - linesPerPage));
+                setFilter(status);
+                setOffset(0);
+                setEditing(null);
               }}
             >
-              Попередні
+              {label}
             </button>
-            <button
-              className="quiet"
-              disabled={!lines.data.has_more}
-              onClick={() => {
-                setOffset(offset + linesPerPage);
+          ))}
+        </nav>
+        {allParts.length > 1 && (
+          <label>
+            Файл
+            <select
+              value={partFilter ?? ""}
+              onChange={(event) => {
+                showPart(event.target.value === "" ? null : event.target.value);
               }}
             >
-              Ще рядки
-            </button>
-          </div>
-        </>
-      )}
-    </section>
+              <option value="">Усі файли</option>
+              {allParts.map((part) => (
+                <option key={part.part_id} value={part.part_id}>
+                  {`${String(part.part_no)}. ${partName(part)}${part.removed_at === null ? "" : " (прибрано)"}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {lines.isPending ? (
+          <p role="status">Завантажуємо рядки…</p>
+        ) : lines.error ? (
+          <p role="alert">{errorText(lines.error)}</p>
+        ) : lines.data.items.length === 0 ? (
+          <p>Тут рядків немає.</p>
+        ) : (
+          <>
+            {lines.data.items.map((line) =>
+              editing === line.line_no ? (
+                <LineEditor
+                  key={line.line_no}
+                  line={line}
+                  list={list}
+                  store={store}
+                  token={token}
+                  scopeKey={scopeKey}
+                  sizes={sizes.data ?? []}
+                  listParts={allParts}
+                  blocked={blocked}
+                  done={() => {
+                    setEditing(null);
+                    void refresh();
+                  }}
+                  cancel={() => {
+                    setEditing(null);
+                  }}
+                  reread={() => {
+                    void cache.invalidateQueries({
+                      queryKey: ["stock-list-lines"],
+                    });
+                  }}
+                />
+              ) : (
+                <LineCard
+                  key={line.line_no}
+                  line={line}
+                  parts={allParts}
+                  answer={
+                    editable && canPick && line.status !== "REMOVED"
+                      ? () => {
+                          setEditing(line.line_no);
+                        }
+                      : null
+                  }
+                  blocked={blocked || editing !== null}
+                />
+              ),
+            )}
+            <div className="toolbar">
+              <button
+                className="quiet"
+                disabled={offset === 0}
+                onClick={() => {
+                  setOffset(Math.max(0, offset - linesPerPage));
+                }}
+              >
+                Попередні
+              </button>
+              <button
+                className="quiet"
+                disabled={!lines.data.has_more}
+                onClick={() => {
+                  setOffset(offset + linesPerPage);
+                }}
+              >
+                Ще рядки
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    </>
   );
 }
 

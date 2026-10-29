@@ -643,7 +643,7 @@ test("one debt opens at once; more, the customer's debts to choose from, read by
 
   await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Ірина Коваль", level: 2 }),
+    page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),
   ).toBeVisible();
   await expect(page.locator(".owed-sum")).toHaveText("3 500,00 грн");
   const debts = page
@@ -663,7 +663,7 @@ test("one debt opens at once; more, the customer's debts to choose from, read by
   // None is chosen beforehand; the seller's choice opens.
   await older.click();
   await expect(
-    page.locator(".debt-detail h2", { hasText: "Ірина Коваль" }),
+    page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),
   ).toBeVisible();
   await expect(page.locator(".debt-context")).toHaveText(
     "050 765 43 21 · Лоран шоколад · M · з 01.10",
@@ -819,7 +819,7 @@ test("a closed store's customer of more debts is read among the closed stores", 
   await expect(field(page)).toHaveValue("050 765 43 21");
   await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Ірина Коваль", level: 2 }),
+    page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),
   ).toBeVisible();
   await expect(
     page

@@ -10,6 +10,7 @@ import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { paperText } from "@/sales/paperMark";
 import { isRecord } from "@/shared/journal";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { useBackOnSale } from "./places";
 import { sizeLabel } from "./types";
 import type { Refund, ReturnBody, ReturnPart } from "./types";
@@ -363,10 +364,17 @@ export function Result({
     );
   return (
     <section className="return-result receipt">
-      <h2 ref={heading} tabIndex={-1} className="result-title t-sheet">
-        <RecordedMark />
-        Повернення записано
-      </h2>
+      <ScreenHeader
+        ref={heading}
+        focusable
+        className="result-title t-sheet"
+        title={
+          <>
+            <RecordedMark />
+            Повернення записано
+          </>
+        }
+      />
       {elsewhereLine}
       <Stub state="recorded">
         {stickers}

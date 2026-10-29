@@ -24,6 +24,7 @@ import type {
 } from "./modelTypes";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 const pageSize = 20;
 type Field =
@@ -719,23 +720,25 @@ export function Models({
   return (
     <>
       {notice}
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Моделі</h2>
-        {selected && (
-          <button
-            className="quiet"
-            disabled={working}
-            onClick={() => {
-              setSelected(null);
-              setMode(null);
-              setDone(null);
-            }}
-          >
-            До пошуку
-          </button>
-        )}
-      </div>
+      <ScreenHeader
+        title="Моделі"
+        back={back && <BackToMore back={back} />}
+        aside={
+          selected && (
+            <button
+              className="quiet"
+              disabled={working}
+              onClick={() => {
+                setSelected(null);
+                setMode(null);
+                setDone(null);
+              }}
+            >
+              До пошуку
+            </button>
+          )
+        }
+      />
       <p className="hint">
         Виправлення каталогу: перейменувати модель, об’єднати дублікат, прибрати
         модель чи повернути її.

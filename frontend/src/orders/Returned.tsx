@@ -7,6 +7,7 @@ import { visible } from "@/shared/visible";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { Placeholder } from "@/shared/Placeholder";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { tagOf } from "./Orders";
 import type { Location, Order, OrderItem, Store } from "./types";
 
@@ -98,71 +99,77 @@ export function Returned({
   // landing on it is let go (review, 2026-10-25).
   const [shownAt] = useState(() => performance.now());
   return (
-    <section className="order-returned">
-      <button type="button" className="quiet" onClick={back}>
-        ← Замовлення
-      </button>
-      <h2 ref={heading} tabIndex={-1}>
-        Товар повернувся на склад
-      </h2>
-      {places.isPending ? (
-        <Placeholder
-          said="Завантажуємо склади…"
-          rows={lines.length}
-          day={false}
-        />
-      ) : named ? (
-        <ul className="returned-places" aria-label="Куди повернеться товар">
-          {lines.map(([id, items]) => (
-            <li key={id}>
-              Повернеться на склад «{visible(names.get(id) ?? "")}»:{" "}
-              {items.map((item) => tagOf(item)).join(", ")}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>Товар повернеться на ті склади, звідки його відправили.</p>
-      )}
-      <fieldset disabled={blocked}>
-        <legend>Фізичне повернення всього замовлення</legend>
-        <label>
-          Причина повернення
-          <textarea
-            maxLength={1000}
-            value={reason}
-            aria-describedby={hint}
-            onChange={(event) => {
-              setReason(event.target.value);
-            }}
+    <>
+      <ScreenHeader
+        ref={heading}
+        focusable
+        title="Товар повернувся на склад"
+        back={
+          <button type="button" className="quiet" onClick={back}>
+            ← Замовлення
+          </button>
+        }
+      />
+      <section className="order-returned">
+        {places.isPending ? (
+          <Placeholder
+            said="Завантажуємо склади…"
+            rows={lines.length}
+            day={false}
           />
-          <NoCustomerData id={hint} />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={received}
-            onChange={(event) => {
-              if (event.timeStamp - shownAt < CARRIED_TAP) return;
-              setReceived(event.target.checked);
+        ) : named ? (
+          <ul className="returned-places" aria-label="Куди повернеться товар">
+            {lines.map(([id, items]) => (
+              <li key={id}>
+                Повернеться на склад «{visible(names.get(id) ?? "")}»:{" "}
+                {items.map((item) => tagOf(item)).join(", ")}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Товар повернеться на ті склади, звідки його відправили.</p>
+        )}
+        <fieldset disabled={blocked}>
+          <legend>Фізичне повернення всього замовлення</legend>
+          <label>
+            Причина повернення
+            <textarea
+              maxLength={1000}
+              value={reason}
+              aria-describedby={hint}
+              onChange={(event) => {
+                setReason(event.target.value);
+              }}
+            />
+            <NoCustomerData id={hint} />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={received}
+              onChange={(event) => {
+                if (event.timeStamp - shownAt < CARRIED_TAP) return;
+                setReceived(event.target.checked);
+              }}
+            />
+            Усі товари фізично отримані на складах відправлення
+          </label>
+        </fieldset>
+        <div className="pay-panel order-panel" ref={panel}>
+          <p className="pay-what">{title}</p>
+          <button
+            type="button"
+            disabled={blocked || !received || !reason.trim()}
+            // Held until the reason and the tick: no tap carried from the
+            // row can take it.
+            onClick={() => {
+              take({ reason: reason.trim(), physically_received: true });
             }}
-          />
-          Усі товари фізично отримані на складах відправлення
-        </label>
-      </fieldset>
-      <div className="pay-panel order-panel" ref={panel}>
-        <p className="pay-what">{title}</p>
-        <button
-          type="button"
-          disabled={blocked || !received || !reason.trim()}
-          // Held until the reason and the tick: no tap carried from the
-          // row can take it.
-          onClick={() => {
-            take({ reason: reason.trim(), physically_received: true });
-          }}
-        >
-          Прийняти повернення
-        </button>
-      </div>
-    </section>
+          >
+            Прийняти повернення
+          </button>
+        </div>
+      </section>
+    </>
   );
 }

@@ -1618,7 +1618,7 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   // «Скасувати» changes nothing.
   await page.getByRole("button", { name: "Стерти дані покупця" }).click();
   await page.getByRole("button", { name: "Скасувати" }).click();
-  await expect(page.locator(".debt-detail h2")).toHaveText(name);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);
   await page.getByRole("button", { name: "Стерти дані покупця" }).click();
   await expect(
     page.getByText(
@@ -1647,7 +1647,9 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   await expect(page.getByRole("status")).toHaveText(
     "Дані покупця стерто із закритих боргів: 1. Відкритих боргів цього покупця: 1. З них дані не стирають; коли їх закриють, стерти можна так само.",
   );
-  await expect(page.locator(".debt-detail h2")).toHaveText("Покупця стерто");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Покупця стерто",
+  );
   await expect(page.getByText(/^Ім’я й телефон стерто /)).toBeVisible();
   await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
   await expect(page.locator(".debt-closed")).toContainText("з 3 000,00 грн");
@@ -1842,7 +1844,7 @@ async function atTheTill(page: Page): Promise<void> {
     .getByRole("button", { name: "Внесок", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Продаж", level: 2 }),
+    page.getByRole("heading", { name: "Продаж", level: 1 }),
   ).toBeVisible();
 }
 

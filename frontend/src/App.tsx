@@ -37,6 +37,8 @@ import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { DamagedMeta } from "@/inventory/Goods";
 import { TabBar } from "@/shared/TabBar";
+import { ScreenHeader, WorkspaceLineContext } from "@/shared/ScreenHeader";
+import type { WorkspaceLine } from "@/shared/ScreenHeader";
 import type { TabItem } from "@/shared/TabBar";
 import { More } from "@/shared/More";
 import type { MoreBack, MoreGroup, MoreRow } from "@/shared/More";
@@ -151,39 +153,6 @@ type Tab =
   /** «Ще» › «Товар» › «Товар і каталог», for whoever has two of its
    * screens or more («Усе на бірці» task list, P0-4). */
   | "catalogue";
-
-/**
- * The workspace's one line (redesign P1-6): the store and who works in it,
- * and «Змінити магазин» for whoever has two stores or more — one tap from
- * any screen of a store («Усе на бірці» task list, P0-4), held as the menu
- * is. The app's name stands on the screens before a store opens, and in
- * the title.
- */
-function StoreLine({
-  store,
-  person,
-  changeStore,
-  changeHeld = false,
-}: {
-  store: string;
-  person: string;
-  changeStore?: (() => void) | undefined;
-  changeHeld?: boolean;
-}): JSX.Element {
-  return (
-    <header className="store-line">
-      <h1>
-        {visible(store)}
-        <span> · {visible(person)}</span>
-      </h1>
-      {changeStore && (
-        <button className="quiet" disabled={changeHeld} onClick={changeStore}>
-          Змінити магазин
-        </button>
-      )}
-    </header>
-  );
-}
 
 /**
  * Signs in with the launch data Telegram signed, once. The token it gives is
@@ -356,20 +325,11 @@ export function App(): JSX.Element {
       : undefined;
   return (
     <main>
-      {!store ? (
+      {!store && (
         <header>
           <h1>Бірка</h1>
           <span>{visible(me.data.display_name)}</span>
         </header>
-      ) : (
-        store.state !== "ACTIVE" &&
-        store.permissions.length === 0 && (
-          <StoreLine
-            store={store.name}
-            person={me.data.display_name}
-            changeStore={changeStore}
-          />
-        )
       )}
       {!store ? (
         <section>
@@ -396,14 +356,23 @@ export function App(): JSX.Element {
       ) : store.state !== "ACTIVE" && store.permissions.length === 0 ? (
         // Its own people learn the state and since when, never why (owner
         // decision, 2026-10-01).
-        <section>
-          <h2>{stateText(store)}</h2>
-          <p role="alert">
-            Роботу в цьому магазині зупинено: продажі, приймання, повернення й
-            оплати в ньому не проводяться. Зверніться до власника.
-          </p>
-          <button onClick={readAgain}>Оновити</button>
-        </section>
+        <WorkspaceLineContext.Provider
+          value={{
+            store: store.name,
+            person: me.data.display_name,
+            changeStore,
+            changeHeld: false,
+          }}
+        >
+          <ScreenHeader title={stateText(store)} />
+          <section>
+            <p role="alert">
+              Роботу в цьому магазині зупинено: продажі, приймання, повернення
+              й оплати в ньому не проводяться. Зверніться до власника.
+            </p>
+            <button onClick={readAgain}>Оновити</button>
+          </section>
+        </WorkspaceLineContext.Provider>
       ) : (
         <Workspace
           key={store.id}
@@ -1734,17 +1703,18 @@ function Workspace({
     creditCommand.busy && creditCommand.firstSend
       ? null
       : creditCommand.pending;
+  // The line under every screen's title: «Змінити магазин» held, too, while
+  // a payment's form stands at the till: «←» is its only way out (spec
+  // S21; review, 2026-10-29).
+  const line: WorkspaceLine = {
+    store: store.name,
+    person: me.display_name,
+    changeStore,
+    changeHeld: blocked || (tab === "deposit" && depositTask),
+  };
   setScreen(tab);
   return (
-    <>
-      <StoreLine
-        store={store.name}
-        person={me.display_name}
-        changeStore={changeStore}
-        // Held, too, while a payment's form stands at the till: «←» is its
-        // only way out (spec S21; review, 2026-10-29).
-        changeHeld={blocked || (tab === "deposit" && depositTask)}
-      />
+    <WorkspaceLineContext.Provider value={line}>
       {!trading && (
         <Banner kind="blocked" role="status" as="div">
           <p>
@@ -2581,31 +2551,40 @@ function Workspace({
         />
       ) : !canSeeOrders ? null : selectedId ? (
         detail.data === undefined ? (
-          // In the card's own frame, its way back where the card's will
-          // stand: nothing moves when it comes (orders task list, P2-2).
-          <section className="order">
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setSelectedId(null);
-                setOrderDone(null);
-                setCollected(null);
-              }}
-            >
-              ← До замовлень
-            </button>
-            {detail.isPending ? (
-              <CardPlaceholder />
-            ) : (
-              <Unread
-                error={detail.error}
-                retry={() => {
-                  void detail.refetch();
-                }}
-              />
-            )}
-          </section>
+          // In the card's own frame, its way back and its title's place
+          // where the card's will stand: nothing moves when it comes
+          // (orders task list, P2-2).
+          <>
+            <ScreenHeader
+              pushed
+              waiting={detail.isPending}
+              back={
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => {
+                    setSelectedId(null);
+                    setOrderDone(null);
+                    setCollected(null);
+                  }}
+                >
+                  ← До замовлень
+                </button>
+              }
+            />
+            <section className="order">
+              {detail.isPending ? (
+                <CardPlaceholder />
+              ) : (
+                <Unread
+                  error={detail.error}
+                  retry={() => {
+                    void detail.refetch();
+                  }}
+                />
+              )}
+            </section>
+          </>
         ) : (
           // «← До замовлень» its own: where it goes is a step with its own
           // way back (orders task list, P1-3). Read again and failed — the
@@ -2707,7 +2686,7 @@ function Workspace({
           }}
         />
       )}
-    </>
+    </WorkspaceLineContext.Provider>
   );
 }
 /**

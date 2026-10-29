@@ -5,6 +5,7 @@ import {
   more,
   openStore,
   section,
+  storeLine,
   tapSize,
   tillWays,
 } from "./fixtures";
@@ -22,8 +23,9 @@ import { readFileSync } from "node:fs";
  * whoever may open it; «Повернення» and «Внесок» are «Продаж»'s other ways
  * (navigation task list, P0-1; «Усе на бірці» task list, P0-3) — and every
  * other place under «Ще», by the design's groups and the same rights as
- * before. The header is one line, «{Магазин} · {Ім’я}», with «Змінити
- * магазин» on it for whoever has two stores.
+ * before. Each screen's own title heads the page, the line «{Магазин} ·
+ * {Ім’я}» under it with «Змінити магазин» at its right for whoever has two
+ * stores (P0-4, part 2).
  */
 
 interface Fixture {
@@ -222,10 +224,8 @@ test("a seller's menu is «Продаж · Замовлення · Каса · �
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Центр · Ліда",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Продаж");
+  await expect(storeLine(page)).toHaveText("Центр · Ліда");
   await expect(page.getByText("РОБОЧЕ МІСЦЕ ПРОДАВЦЯ")).toHaveCount(0);
   await expect(tabs(page)).toHaveText(["Продаж", "Замовлення", "Каса", "Ще"]);
   await expect(tabs(page).first()).toHaveAttribute("aria-current", "page");
@@ -350,7 +350,7 @@ test("«Замовлення» is a tab of its own and «Борги» a row of �
   ).toHaveCount(0);
   // A new order: «+» in the heading, the second tap, «Замовлення» marked.
   await page
-    .locator(".orders-head")
+    .locator(".screen-title")
     .getByRole("button", { name: "Нове замовлення" })
     .click();
   await expect(
@@ -545,7 +545,7 @@ test("whoever takes returns and payments but does not sell has «Поверну�
   await expect(ways.getByRole("button")).toHaveText(["Повернути", "Внесок"]);
   await ways.getByRole("button", { name: "Внесок", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Продаж", level: 2 }),
+    page.getByRole("heading", { name: "Продаж", level: 1 }),
   ).toBeVisible();
   await expect(page.getByLabel("Ім’я або телефон")).toBeVisible();
 });
@@ -558,7 +558,7 @@ test("whoever only takes payments has «Продаж» open «Внесок», wi
   await openStore(page, "Центр CENTRE");
   await tabs(page).filter({ hasText: "Продаж" }).click();
   await expect(
-    page.getByRole("heading", { name: "Продаж", level: 2 }),
+    page.getByRole("heading", { name: "Продаж", level: 1 }),
   ).toBeVisible();
   await expect(page.getByLabel("Ім’я або телефон")).toBeVisible();
   await expect(tabs(page).filter({ hasText: "Продаж" })).toHaveAttribute(
@@ -861,6 +861,15 @@ test("«Змінити магазин» is one tap from the line over any screen
   const choice = page.getByRole("heading", { name: "Оберіть магазин" });
   // From the till.
   await openStore(page, "Основний MAIN");
+  // On the line under the screen's title, at its right (spec §6.2).
+  const words = await storeLine(page).boundingBox();
+  const button = await line.boundingBox();
+  expect(button?.x ?? 0).toBeGreaterThanOrEqual(
+    (words?.x ?? 0) + (words?.width ?? 0),
+  );
+  const middle = (box: typeof words): number =>
+    (box?.y ?? 0) + (box?.height ?? 0) / 2;
+  expect(Math.abs(middle(button) - middle(words))).toBeLessThanOrEqual(2);
   const { taps } = await counting(page);
   await line.click();
   await expect(choice).toBeVisible();
@@ -987,6 +996,47 @@ test("on a computer's wide window the screen is 560 px at most, the menu's tabs 
   expect(row?.width ?? 0).toBeLessThanOrEqual(560);
   // Centred, as the screen is.
   expect(Math.abs((row?.x ?? 0) - (main?.x ?? 0))).toBeLessThanOrEqual(1);
+});
+
+test("every screen of a store is headed by its own title, the store and who works in it on the line under it: a tab's first screen at 34, one opened from another at 28 under its «←», each over its card («Усе на бірці» task list, P0-4, part 2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  const title = page.getByRole("heading", { level: 1 });
+  const headed = async (name: string, size: string): Promise<void> => {
+    // The page's one heading is the screen's own title.
+    await expect(title).toHaveCount(1);
+    await expect(title).toHaveText(name);
+    await expect(title).toHaveCSS("font-size", size);
+    await expect(storeLine(page)).toHaveText("Центр · Ліда");
+    // The line under the title, the screen's card under both.
+    const head = await title.boundingBox();
+    const line = await storeLine(page).boundingBox();
+    const card = await page.locator("main > section").first().boundingBox();
+    expect(line?.y ?? 0).toBeGreaterThanOrEqual(
+      (head?.y ?? 0) + (head?.height ?? 0) - 1,
+    );
+    expect(card?.y ?? 0).toBeGreaterThan((line?.y ?? 0) + (line?.height ?? 0));
+  };
+  await headed("Продаж", "34px");
+  await tabs(page).filter({ hasText: "Замовлення" }).click();
+  await headed("Замовлення", "34px");
+  await tabs(page).filter({ hasText: "Каса" }).click();
+  await headed("Каса", "34px");
+  await more(page);
+  await headed("Ще", "34px");
+  await moreRow(page, "Залишки").click();
+  await headed("Залишки", "28px");
+  // Its «←» over it.
+  const back = await page
+    .getByRole("button", { name: "Назад до «Ще»" })
+    .boundingBox();
+  const head = await title.boundingBox();
+  expect((back?.y ?? 0) + (back?.height ?? 0)).toBeLessThanOrEqual(
+    (head?.y ?? 0) + 1,
+  );
 });
 
 /** The till's warehouses, read while the server does not answer. */

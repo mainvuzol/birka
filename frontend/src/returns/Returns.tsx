@@ -30,6 +30,7 @@ import {
   usePaperMark,
 } from "@/sales/paperMark";
 import { buzz } from "@/shared/telegram";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
 import { SaleRow, dayOf, dayTitle } from "./SaleRow";
@@ -235,185 +236,187 @@ export function Returns({
     );
 
   return (
-    <section className="returns">
-      <h2>Повернення</h2>
-      {mode}
-      <form
-        className="search"
-        role="search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setPressed(query.trim().length >= 2 ? query.trim() : "");
-        }}
-      >
-        <label className="till-search">
-          Що повертають?
-          <input
-            type="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            placeholder="Модель або колір"
-            ref={field}
-            maxLength={100}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-            }}
-          />
-        </label>
-      </form>
-      {away && (
-        // Never mixed with this store's: headed, and left in one tap.
-        <div className="toolbar elsewhere-head">
-          <h3>В інших магазинах мережі</h3>
-          <button
-            type="button"
-            className="quiet"
-            onClick={() => {
-              setElsewhere(false);
-            }}
-          >
-            <span aria-hidden="true">← </span>У своєму магазині
-          </button>
-        </div>
-      )}
-      {!searching ? null : sales.isPending ||
-        (sales.isPlaceholderData && listed.length === 0) ? (
-        // The rows' places while they are read (returns task list, P2-3).
-        <Placeholder said="Завантажуємо продажі…" rows={3} />
-      ) : !sales.data ? (
-        <div role="alert">
-          <p>{refusalText(sales.error)}</p>
-          <button
-            type="button"
-            onClick={() => {
-              void sales.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
-      ) : listed.length === 0 ? (
-        search ? (
-          <div className="empty">
-            <p>
-              {away
-                ? `В інших магазинах мережі за «${visible(search)}» продажів не знайдено.`
-                : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`}
-            </p>
-
+    <>
+      <ScreenHeader title="Повернення" />
+      <section className="returns">
+        {mode}
+        <form
+          className="search"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setPressed(query.trim().length >= 2 ? query.trim() : "");
+          }}
+        >
+          <label className="till-search">
+            Що повертають?
+            <input
+              type="search"
+              enterKeyHint="search"
+              autoComplete="off"
+              placeholder="Модель або колір"
+              ref={field}
+              maxLength={100}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+            />
+          </label>
+        </form>
+        {away && (
+          // Never mixed with this store's: headed, and left in one tap.
+          <div className="toolbar elsewhere-head">
+            <h3>В інших магазинах мережі</h3>
             <button
               type="button"
               className="quiet"
               onClick={() => {
-                setQuery("");
-                setPressed("");
-                field.current?.focus();
+                setElsewhere(false);
               }}
             >
-              Очистити
+              <span aria-hidden="true">← </span>У своєму магазині
             </button>
           </div>
-        ) : (
-          <p>Продажів у магазині ще немає.</p>
-        )
-      ) : (
-        <>
-          {sales.isError && !sales.isFetchNextPageError && (
-            // Read again and refused: the rows below are as they were, and
-            // that is said (ADR-0011; review, 2026-10-17).
-            <div role="alert">
-              <p>{refusalText(sales.error)}</p>
-              <button
-                type="button"
-                disabled={sales.isFetching}
-                onClick={() => {
-                  void sales.refetch();
-                }}
-              >
-                Спробувати ще раз
-              </button>
-            </div>
-          )}
-          {listed.map((sale, index) => (
-            <div key={sale.id}>
-              {(index === 0 ||
-                dayOf(listed[index - 1]?.sold_at ?? "") !==
-                  dayOf(sale.sold_at)) && (
-                <h3 className="sale-day">{dayTitle(sale.sold_at)}</h3>
-              )}
-              <SaleRow
-                sale={sale}
-                here={sale.store_id === store.id}
-                choose={() => {
-                  setSelected(sale);
-                }}
-                blocked={blocked}
-              />
-            </div>
-          ))}
-          {sales.isFetchNextPageError ? (
-            // The next page could not be read: those read stay.
-            <div role="alert">
-              <p>{refusalText(sales.error)}</p>
-              <button
-                type="button"
-                disabled={sales.isFetching}
-                onClick={() => {
-                  void sales.fetchNextPage();
-                }}
-              >
-                Спробувати ще раз
-              </button>
-            </div>
-          ) : (
-            sales.hasNextPage && (
+        )}
+        {!searching ? null : sales.isPending ||
+          (sales.isPlaceholderData && listed.length === 0) ? (
+          // The rows' places while they are read (returns task list, P2-3).
+          <Placeholder said="Завантажуємо продажі…" rows={3} />
+        ) : !sales.data ? (
+          <div role="alert">
+            <p>{refusalText(sales.error)}</p>
+            <button
+              type="button"
+              onClick={() => {
+                void sales.refetch();
+              }}
+            >
+              Спробувати ще раз
+            </button>
+          </div>
+        ) : listed.length === 0 ? (
+          search ? (
+            <div className="empty">
+              <p>
+                {away
+                  ? `В інших магазинах мережі за «${visible(search)}» продажів не знайдено.`
+                  : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`}
+              </p>
+
               <button
                 type="button"
                 className="quiet"
-                disabled={sales.isFetching}
                 onClick={() => {
-                  void sales.fetchNextPage();
+                  setQuery("");
+                  setPressed("");
+                  field.current?.focus();
                 }}
               >
-                Показати ще
+                Очистити
               </button>
-            )
-          )}
-        </>
-      )}
-      {offerElsewhere && (
-        // Under the results, what was typed kept (owner decision,
-        // 2026-10-17, В3 (а)).
-        <p className="hint elsewhere-offer">
-          <span id={offerId}>Купили в іншому магазині мережі?</span>{" "}
-          <button
-            type="button"
-            className="quiet"
-            aria-describedby={offerId}
-            onClick={() => {
-              setElsewhere(true);
-            }}
-          >
-            Шукати там
-          </button>
-        </p>
-      )}
-      {!away &&
-        search !== "" &&
-        !!sales.data &&
-        !sales.isPlaceholderData &&
-        listed.length === 0 && (
-          // Found in neither store, a coat sold from the notebook, before
-          // Бірка: the manager decides (owner decision, 2026-10-17, В5 (а);
-          // returns task list, P1-6). Said after the other stores' offer,
-          // which comes first.
-          <p className="hint">
-            Продали ще до Бірки? Покличте менеджера — таке повернення вирішує
-            він.
+            </div>
+          ) : (
+            <p>Продажів у магазині ще немає.</p>
+          )
+        ) : (
+          <>
+            {sales.isError && !sales.isFetchNextPageError && (
+              // Read again and refused: the rows below are as they were, and
+              // that is said (ADR-0011; review, 2026-10-17).
+              <div role="alert">
+                <p>{refusalText(sales.error)}</p>
+                <button
+                  type="button"
+                  disabled={sales.isFetching}
+                  onClick={() => {
+                    void sales.refetch();
+                  }}
+                >
+                  Спробувати ще раз
+                </button>
+              </div>
+            )}
+            {listed.map((sale, index) => (
+              <div key={sale.id}>
+                {(index === 0 ||
+                  dayOf(listed[index - 1]?.sold_at ?? "") !==
+                    dayOf(sale.sold_at)) && (
+                  <h3 className="sale-day">{dayTitle(sale.sold_at)}</h3>
+                )}
+                <SaleRow
+                  sale={sale}
+                  here={sale.store_id === store.id}
+                  choose={() => {
+                    setSelected(sale);
+                  }}
+                  blocked={blocked}
+                />
+              </div>
+            ))}
+            {sales.isFetchNextPageError ? (
+              // The next page could not be read: those read stay.
+              <div role="alert">
+                <p>{refusalText(sales.error)}</p>
+                <button
+                  type="button"
+                  disabled={sales.isFetching}
+                  onClick={() => {
+                    void sales.fetchNextPage();
+                  }}
+                >
+                  Спробувати ще раз
+                </button>
+              </div>
+            ) : (
+              sales.hasNextPage && (
+                <button
+                  type="button"
+                  className="quiet"
+                  disabled={sales.isFetching}
+                  onClick={() => {
+                    void sales.fetchNextPage();
+                  }}
+                >
+                  Показати ще
+                </button>
+              )
+            )}
+          </>
+        )}
+        {offerElsewhere && (
+          // Under the results, what was typed kept (owner decision,
+          // 2026-10-17, В3 (а)).
+          <p className="hint elsewhere-offer">
+            <span id={offerId}>Купили в іншому магазині мережі?</span>{" "}
+            <button
+              type="button"
+              className="quiet"
+              aria-describedby={offerId}
+              onClick={() => {
+                setElsewhere(true);
+              }}
+            >
+              Шукати там
+            </button>
           </p>
         )}
-    </section>
+        {!away &&
+          search !== "" &&
+          !!sales.data &&
+          !sales.isPlaceholderData &&
+          listed.length === 0 && (
+            // Found in neither store, a coat sold from the notebook, before
+            // Бірка: the manager decides (owner decision, 2026-10-17, В5 (а);
+            // returns task list, P1-6). Said after the other stores' offer,
+            // which comes first.
+            <p className="hint">
+              Продали ще до Бірки? Покличте менеджера — таке повернення вирішує
+              він.
+            </p>
+          )}
+      </section>
+    </>
   );
 }
 
@@ -696,258 +699,263 @@ function ReturnForm({
   const sum = money(decimal(total));
   const one = picked.length === 1 ? picked[0] : undefined;
   return (
-    <section className="returns">
-      <div className="toolbar">
-        <h2>Повернення</h2>
-        <button className="quiet" disabled={working} onClick={back}>
-          <span aria-hidden="true">← </span>До списку
-        </button>
-      </div>
-      {/* One sale's sum, once it is opened (G33). */}
-      <p className="sale-context">
-        Продаж {when(sale.sold_at)} · {money(sale.total)}
-        {elsewhere && ` · магазин «${visible(sale.store_name)}»`}
-      </p>
-      {(sale.paid_in_parts || sale.outage) && (
-        <p className="sale-marks">
-          {sale.paid_in_parts && (
-            <span className="badge debt">Оплата частинами</span>
-          )}
-          {sale.outage && (
-            <span className="badge warn">
-              {sale.outage.first_days === true
-                ? "Продано з паперу"
-                : "Продано під час збою"}
-            </span>
-          )}
-        </p>
-      )}
-      {elsewhere && (
-        <p className="hint">
-          Куплено в іншому магазині: гроші віддаєте ви, пошкоджене лишається у
-          вашому «Браку».
-        </p>
-      )}
-      <fieldset disabled={blocked || working}>
-        <legend className="visually-hidden">Що повертають</legend>
-        <PaperFields mark={mark} what="return" storeId={store.id} />
-        {lines.map((item) => {
-          const left = item.quantity - item.refunded;
-          const entered = counts[item.id] ?? none;
-          const room = entered.intact + entered.damaged < left;
-          const heading = `${ids}-${item.id}`;
-          return (
-            <div
-              className="line-return"
-              role="group"
-              aria-labelledby={heading}
-              key={item.id}
-            >
-              <h3 id={heading}>
-                {visible(item.display_name)} · {sizeLabel(item.size)}
-              </h3>
-              <p className="hint">
-                {money(item.final_unit_price)} за 1 шт. · можна повернути {left}{" "}
-                шт.
-                {item.refunded > 0 &&
-                  ` · уже повернено ${String(item.refunded)} шт.`}
-              </p>
-              <div className="return-steps">
-                <Step
-                  name="Цілі"
-                  value={entered.intact}
-                  room={room}
-                  set={(value, from) => {
-                    set(item.id, "intact", value, from);
-                  }}
-                />
-                <Step
-                  name="Пошкоджені"
-                  value={entered.damaged}
-                  room={room}
-                  damaged
-                  set={(value, from) => {
-                    set(item.id, "damaged", value, from);
-                  }}
-                />
-              </div>
-              {!item.back_to_sold_from && entered.intact > 0 && (
-                // Which of this store's warehouses takes the intact ones: a
-                // chip each, one tap, none chosen beforehand (owner
-                // decision, 2026-10-01; returns task list, P1-1).
-                <div
-                  className="return-place"
-                  role="group"
-                  aria-labelledby={`${heading}-place`}
-                >
-                  <p className="return-place-ask" id={`${heading}-place`}>
-                    Цілі — на який склад?
-                  </p>
-                  <div className="chips">
-                    {ownPlaces.isPending && (
-                      // Their places while they are read, so nothing moves.
-                      <>
-                        <span className="visually-hidden" role="status">
-                          Завантажуємо склади…
-                        </span>
-                        <span className="chip skeleton" aria-hidden="true" />
-                        <span className="chip skeleton" aria-hidden="true" />
-                      </>
-                    )}
-                    {(ownPlaces.data ?? []).map((location) => (
-                      <button
-                        type="button"
-                        className="chip"
-                        key={location.id}
-                        data-location={location.id}
-                        aria-pressed={places[item.id] === location.id}
-                        onClick={() => {
-                          setPlaces({ ...places, [item.id]: location.id });
-                        }}
-                      >
-                        {visible(location.name)}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="hint">
-                    Продали з власного складу іншого магазину.
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {asking ? (
-          <label>
-            Причина повернення (необов’язково)
-            <textarea
-              ref={reasonRef}
-              value={reason}
-              maxLength={1000}
-              aria-describedby={`${ids}-reason`}
-              onChange={(event) => {
-                setReason(event.target.value);
-              }}
-            />
-            <NoCustomerData id={`${ids}-reason`} />
-          </label>
-        ) : (
-          <button
-            type="button"
-            className="quiet add-reason"
-            onClick={() => {
-              setAsking(true);
-            }}
-          >
-            Додати причину
+    <>
+      <ScreenHeader
+        pushed
+        title="Повернення"
+        aside={
+          <button className="quiet" disabled={working} onClick={back}>
+            <span aria-hidden="true">← </span>До списку
           </button>
+        }
+      />
+      <section className="returns">
+        {/* One sale's sum, once it is opened (G33). */}
+        <p className="sale-context">
+          Продаж {when(sale.sold_at)} · {money(sale.total)}
+          {elsewhere && ` · магазин «${visible(sale.store_name)}»`}
+        </p>
+        {(sale.paid_in_parts || sale.outage) && (
+          <p className="sale-marks">
+            {sale.paid_in_parts && (
+              <span className="badge debt">Оплата частинами</span>
+            )}
+            {sale.outage && (
+              <span className="badge warn">
+                {sale.outage.first_days === true
+                  ? "Продано з паперу"
+                  : "Продано під час збою"}
+              </span>
+            )}
+          </p>
         )}
-      </fieldset>
-      {ownPlaces.error && <p role="alert">{errorText(ownPlaces.error)}</p>}
-      {refusal !== null && (
-        <p role="alert" ref={refusalRef}>
-          {refusalText(refusal)}{" "}
-          {mark.paper ? "Нічого не записано." : "Нічого не повернено."}
-        </p>
-      )}
-      {/* Under the thumb (P0-4): what comes back, its sum large, and the
-          way, the sale's own offered; one button, which hands the money
-          back, its sum and way in its name. */}
-      {shown && (
-        <div
-          className="pay-panel return-panel"
-          role="group"
-          aria-label="Повернення: сума і спосіб"
-          ref={panelRef}
-        >
-          <p className="pay-what">
-            {one
-              ? `${visible(one.item.display_name)} · ${sizeLabel(one.item.size)} × ${String(one.units)}`
-              : `Повертають ${String(units)} шт.`}
+        {elsewhere && (
+          <p className="hint">
+            Куплено в іншому магазині: гроші віддаєте ви, пошкоджене лишається у
+            вашому «Браку».
           </p>
-          <p className="pay-total">
-            {/* From paper, the money went back already: the large line
-                carries the button's «З паперу · » (review, 2026-10-17). */}
-            {mark.paper && "З паперу · "}
-            {sale.paid_in_parts ? "Товар на " : "Повернути "}
-            <Sum value={sum} />
+        )}
+        <fieldset disabled={blocked || working}>
+          <legend className="visually-hidden">Що повертають</legend>
+          <PaperFields mark={mark} what="return" storeId={store.id} />
+          {lines.map((item) => {
+            const left = item.quantity - item.refunded;
+            const entered = counts[item.id] ?? none;
+            const room = entered.intact + entered.damaged < left;
+            const heading = `${ids}-${item.id}`;
+            return (
+              <div
+                className="line-return"
+                role="group"
+                aria-labelledby={heading}
+                key={item.id}
+              >
+                <h3 id={heading}>
+                  {visible(item.display_name)} · {sizeLabel(item.size)}
+                </h3>
+                <p className="hint">
+                  {money(item.final_unit_price)} за 1 шт. · можна повернути {left}{" "}
+                  шт.
+                  {item.refunded > 0 &&
+                    ` · уже повернено ${String(item.refunded)} шт.`}
+                </p>
+                <div className="return-steps">
+                  <Step
+                    name="Цілі"
+                    value={entered.intact}
+                    room={room}
+                    set={(value, from) => {
+                      set(item.id, "intact", value, from);
+                    }}
+                  />
+                  <Step
+                    name="Пошкоджені"
+                    value={entered.damaged}
+                    room={room}
+                    damaged
+                    set={(value, from) => {
+                      set(item.id, "damaged", value, from);
+                    }}
+                  />
+                </div>
+                {!item.back_to_sold_from && entered.intact > 0 && (
+                  // Which of this store's warehouses takes the intact ones: a
+                  // chip each, one tap, none chosen beforehand (owner
+                  // decision, 2026-10-01; returns task list, P1-1).
+                  <div
+                    className="return-place"
+                    role="group"
+                    aria-labelledby={`${heading}-place`}
+                  >
+                    <p className="return-place-ask" id={`${heading}-place`}>
+                      Цілі — на який склад?
+                    </p>
+                    <div className="chips">
+                      {ownPlaces.isPending && (
+                        // Their places while they are read, so nothing moves.
+                        <>
+                          <span className="visually-hidden" role="status">
+                            Завантажуємо склади…
+                          </span>
+                          <span className="chip skeleton" aria-hidden="true" />
+                          <span className="chip skeleton" aria-hidden="true" />
+                        </>
+                      )}
+                      {(ownPlaces.data ?? []).map((location) => (
+                        <button
+                          type="button"
+                          className="chip"
+                          key={location.id}
+                          data-location={location.id}
+                          aria-pressed={places[item.id] === location.id}
+                          onClick={() => {
+                            setPlaces({ ...places, [item.id]: location.id });
+                          }}
+                        >
+                          {visible(location.name)}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="hint">
+                      Продали з власного складу іншого магазину.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {asking ? (
+            <label>
+              Причина повернення (необов’язково)
+              <textarea
+                ref={reasonRef}
+                value={reason}
+                maxLength={1000}
+                aria-describedby={`${ids}-reason`}
+                onChange={(event) => {
+                  setReason(event.target.value);
+                }}
+              />
+              <NoCustomerData id={`${ids}-reason`} />
+            </label>
+          ) : (
+            <button
+              type="button"
+              className="quiet add-reason"
+              onClick={() => {
+                setAsking(true);
+              }}
+            >
+              Додати причину
+            </button>
+          )}
+        </fieldset>
+        {ownPlaces.error && <p role="alert">{errorText(ownPlaces.error)}</p>}
+        {refusal !== null && (
+          <p role="alert" ref={refusalRef}>
+            {refusalText(refusal)}{" "}
+            {mark.paper ? "Нічого не записано." : "Нічого не повернено."}
           </p>
-          {sale.paid_in_parts && !mark.paper && (
-            // How far the debt falls is said after the press (owner
-            // decision, 2026-10-17, В6 (а)).
-            <p className="pay-note">
-              Спершу зменшимо борг; скільки віддати — покажемо після.
-            </p>
-          )}
-          {paid.isError && (
-            <p className="pay-note">
-              {/* In parts, a way only if money goes back (G35; owner,
-                  2026-10-18). */}
-              {sale.paid_in_parts
-                ? "Не вдалося прочитати, як платили. Якщо буде що повертати — оберіть, як."
-                : "Не вдалося прочитати, як платили. Оберіть, як повертаєте."}
-            </p>
-          )}
-          <fieldset className="way-switch" disabled={blocked || working}>
-            <legend className="visually-hidden">
-              {mark.paper
-                ? sale.paid_in_parts
-                  ? mark.firstDays === false
-                    ? "Як повертали гроші під час збою (якщо повертали)"
-                    : "Як повертали гроші (якщо повертали)"
-                  : mark.firstDays === false
-                    ? "Як повернули гроші під час збою"
-                    : "Як повернули гроші"
-                : sale.paid_in_parts
-                  ? "Як повертаємо гроші (якщо буде що повертати)"
-                  : "Як повертаємо гроші"}
-            </legend>
-            {tillMethods.map((option) => (
-              <label key={option}>
-                <input
-                  type="radio"
-                  name="refund-method"
-                  checked={way === option}
-                  onChange={() => {
-                    setChosenWay(option);
-                  }}
-                />
-                <span>{refundLabels[option]}</span>
-              </label>
-            ))}
-          </fieldset>
-          <SendingLine busy={pressing} />
-          <button
-            type="button"
-            className={pressing ? "return-go pressed" : "return-go"}
-            disabled={
-              blocked ||
-              working ||
-              !ready ||
-              !mark.ready ||
-              (!sale.paid_in_parts && way === null)
-            }
-            onClick={() => {
-              void send();
-            }}
+        )}
+        {/* Under the thumb (P0-4): what comes back, its sum large, and the
+            way, the sale's own offered; one button, which hands the money
+            back, its sum and way in its name. */}
+        {shown && (
+          <div
+            className="pay-panel return-panel"
+            role="group"
+            aria-label="Повернення: сума і спосіб"
+            ref={panelRef}
           >
-            {pressing && <Eyelet state="spin" size={20} />}
-            {unplaced
-              ? "Оберіть склад для цілого товару"
-              : !mark.ready
-                ? "Оберіть, що вносите з паперу"
-                : `${mark.paper ? "З паперу · " : ""}${
-                    sale.paid_in_parts
-                      ? `Повернути товар на ${sum}`
-                      : way === null
-                        ? "Оберіть, як повертаєте гроші"
-                        : `Повернути покупцю ${sum} ${refundHow[way]}`
-                  }`}
-          </button>
-          {mark.paper && <p className="pay-seller">{takenBy(mark)}</p>}
-        </div>
-      )}
-    </section>
+            <p className="pay-what">
+              {one
+                ? `${visible(one.item.display_name)} · ${sizeLabel(one.item.size)} × ${String(one.units)}`
+                : `Повертають ${String(units)} шт.`}
+            </p>
+            <p className="pay-total">
+              {/* From paper, the money went back already: the large line
+                  carries the button's «З паперу · » (review, 2026-10-17). */}
+              {mark.paper && "З паперу · "}
+              {sale.paid_in_parts ? "Товар на " : "Повернути "}
+              <Sum value={sum} />
+            </p>
+            {sale.paid_in_parts && !mark.paper && (
+              // How far the debt falls is said after the press (owner
+              // decision, 2026-10-17, В6 (а)).
+              <p className="pay-note">
+                Спершу зменшимо борг; скільки віддати — покажемо після.
+              </p>
+            )}
+            {paid.isError && (
+              <p className="pay-note">
+                {/* In parts, a way only if money goes back (G35; owner,
+                    2026-10-18). */}
+                {sale.paid_in_parts
+                  ? "Не вдалося прочитати, як платили. Якщо буде що повертати — оберіть, як."
+                  : "Не вдалося прочитати, як платили. Оберіть, як повертаєте."}
+              </p>
+            )}
+            <fieldset className="way-switch" disabled={blocked || working}>
+              <legend className="visually-hidden">
+                {mark.paper
+                  ? sale.paid_in_parts
+                    ? mark.firstDays === false
+                      ? "Як повертали гроші під час збою (якщо повертали)"
+                      : "Як повертали гроші (якщо повертали)"
+                    : mark.firstDays === false
+                      ? "Як повернули гроші під час збою"
+                      : "Як повернули гроші"
+                  : sale.paid_in_parts
+                    ? "Як повертаємо гроші (якщо буде що повертати)"
+                    : "Як повертаємо гроші"}
+              </legend>
+              {tillMethods.map((option) => (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="refund-method"
+                    checked={way === option}
+                    onChange={() => {
+                      setChosenWay(option);
+                    }}
+                  />
+                  <span>{refundLabels[option]}</span>
+                </label>
+              ))}
+            </fieldset>
+            <SendingLine busy={pressing} />
+            <button
+              type="button"
+              className={pressing ? "return-go pressed" : "return-go"}
+              disabled={
+                blocked ||
+                working ||
+                !ready ||
+                !mark.ready ||
+                (!sale.paid_in_parts && way === null)
+              }
+              onClick={() => {
+                void send();
+              }}
+            >
+              {pressing && <Eyelet state="spin" size={20} />}
+              {unplaced
+                ? "Оберіть склад для цілого товару"
+                : !mark.ready
+                  ? "Оберіть, що вносите з паперу"
+                  : `${mark.paper ? "З паперу · " : ""}${
+                      sale.paid_in_parts
+                        ? `Повернути товар на ${sum}`
+                        : way === null
+                          ? "Оберіть, як повертаєте гроші"
+                          : `Повернути покупцю ${sum} ${refundHow[way]}`
+                    }`}
+            </button>
+            {mark.paper && <p className="pay-seller">{takenBy(mark)}</p>}
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 

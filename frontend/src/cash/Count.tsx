@@ -3,6 +3,7 @@ import type { JSX, ReactNode } from "react";
 import { decimal, kopecks, money } from "@/orders/types";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 /**
  * The blind count, on a screen of its own (cash task list, P0-2): one large
@@ -67,134 +68,140 @@ export function Count({
     if (asking !== null) yes.current?.focus();
   }, [asking]);
   return (
-    <section className="cash-count">
-      <button
-        type="button"
-        className="quiet back"
-        aria-label="Назад до каси"
-        onClick={back}
-      >
-        <span aria-hidden="true">← </span>Каса
-      </button>
-      <h2>Підрахунок каси</h2>
-      {kept}
-      {done && <p role="status">{done}</p>}
-      {takeOut && (
-        <button type="button" className="quiet cash-first" onClick={takeOut}>
-          Спершу запишіть видане з каси<span aria-hidden="true"> ›</span>
-        </button>
-      )}
-      <label className="count-label" htmlFor={id}>
-        Скільки готівки в касі зараз
-      </label>
-      <div className="count-field">
-        <input
-          id={id}
-          ref={field}
-          inputMode="decimal"
-          enterKeyHint="done"
-          autoComplete="off"
-          placeholder="0"
-          value={typed}
-          disabled={disabled}
-          aria-invalid={unread}
-          aria-describedby={unread ? wrong : undefined}
-          onChange={(event) => {
-            setTyped(event.target.value);
-            setAsking(null);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            event.currentTarget.blur();
-          }}
-        />
-        <span aria-hidden="true">грн</span>
-      </div>
-      {unread && (
-        <p className="hint" role="alert" id={wrong}>
-          Вкажіть суму з точністю до копійок.
+    <>
+      <ScreenHeader
+        title="Підрахунок каси"
+        back={
+          <button
+            type="button"
+            className="quiet back"
+            aria-label="Назад до каси"
+            onClick={back}
+          >
+            <span aria-hidden="true">← </span>Каса
+          </button>
+        }
+      />
+      <section className="cash-count">
+        {kept}
+        {done && <p role="status">{done}</p>}
+        {takeOut && (
+          <button type="button" className="quiet cash-first" onClick={takeOut}>
+            Спершу запишіть видане з каси<span aria-hidden="true"> ›</span>
+          </button>
+        )}
+        <label className="count-label" htmlFor={id}>
+          Скільки готівки в касі зараз
+        </label>
+        <div className="count-field">
+          <input
+            id={id}
+            ref={field}
+            inputMode="decimal"
+            enterKeyHint="done"
+            autoComplete="off"
+            placeholder="0"
+            value={typed}
+            disabled={disabled}
+            aria-invalid={unread}
+            aria-describedby={unread ? wrong : undefined}
+            onChange={(event) => {
+              setTyped(event.target.value);
+              setAsking(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              event.currentTarget.blur();
+            }}
+          />
+          <span aria-hidden="true">грн</span>
+        </div>
+        {unread && (
+          <p className="hint" role="alert" id={wrong}>
+            Вкажіть суму з точністю до копійок.
+          </p>
+        )}
+        <p className="hint">Поки рахуєте, не продавайте.</p>
+        {/* Shown always: another phone may have seen the server down (owner
+            decisions, 2026-10-04 and 2026-10-21; ADR-0013 §9, G7). */}
+        <p className="hint">
+          Спершу внесіть усе з паперу й перевірте, чи нічого не чекає на інших
+          телефонах.
         </p>
-      )}
-      <p className="hint">Поки рахуєте, не продавайте.</p>
-      {/* Shown always: another phone may have seen the server down (owner
-          decisions, 2026-10-04 and 2026-10-21; ADR-0013 §9, G7). */}
-      <p className="hint">
-        Спершу внесіть усе з паперу й перевірте, чи нічого не чекає на інших
-        телефонах.
-      </p>
-      {problem && <p role="alert">{problem}</p>}
-      <div className="pay-panel" ref={panel}>
-        {asking === null ? (
-          <>
-            <p className="pay-total">
-              {cents === null ? (
-                "Впишіть суму"
-              ) : (
-                <>
-                  У касі <Sum value={money(decimal(cents))} />
-                </>
-              )}
-            </p>
-            <button
-              ref={closeButton}
-              type="button"
-              className="cash-panel-button"
-              disabled={disabled || reading || cents === null}
-              onClick={(event) => {
-                if (cents === null) return;
-                askedAt.current = event.timeStamp;
-                setAsking(decimal(cents));
-              }}
-            >
-              Закрити касу
-            </button>
-          </>
-        ) : (
-          <>
-            {/* The sum confirmed as large as it was typed. */}
-            <p className="pay-total">
-              Закрити касу: у касі <Sum value={money(asking)} />?
-            </p>
-            <p className="pay-what">Змінити потім не можна.</p>
-            <div className="pay-confirm">
+        {problem && <p role="alert">{problem}</p>}
+        <div className="pay-panel" ref={panel}>
+          {asking === null ? (
+            <>
+              <p className="pay-total">
+                {cents === null ? (
+                  "Впишіть суму"
+                ) : (
+                  <>
+                    У касі <Sum value={money(decimal(cents))} />
+                  </>
+                )}
+              </p>
               <button
-                ref={yes}
+                ref={closeButton}
                 type="button"
                 className="cash-panel-button"
-                disabled={disabled || reading}
-                onKeyDown={(event) => {
-                  // A key held from «Закрити касу» repeats onto it: only a
-                  // fresh press closes.
-                  if (event.repeat) event.preventDefault();
-                }}
+                disabled={disabled || reading || cents === null}
                 onClick={(event) => {
-                  if (event.timeStamp - askedAt.current < CARRIED_TAP) return;
-                  void close(asking).then((settled) => {
-                    if (settled === "done") return;
+                  if (cents === null) return;
+                  askedAt.current = event.timeStamp;
+                  setAsking(decimal(cents));
+                }}
+              >
+                Закрити касу
+              </button>
+            </>
+          ) : (
+            <>
+              {/* The sum confirmed as large as it was typed. */}
+              <p className="pay-total">
+                Закрити касу: у касі <Sum value={money(asking)} />?
+              </p>
+              <p className="pay-what">Змінити потім не можна.</p>
+              <div className="pay-confirm">
+                <button
+                  ref={yes}
+                  type="button"
+                  className="cash-panel-button"
+                  disabled={disabled || reading}
+                  onKeyDown={(event) => {
+                    // A key held from «Закрити касу» repeats onto it: only a
+                    // fresh press closes.
+                    if (event.repeat) event.preventDefault();
+                  }}
+                  onClick={(event) => {
+                    if (event.timeStamp - askedAt.current < CARRIED_TAP) return;
+                    void close(asking).then((settled) => {
+                      if (settled === "done") return;
+                      setAsking(null);
+                      // Refused: back on the button, the sum kept.
+                      requestAnimationFrame(() => closeButton.current?.focus());
+                    });
+                  }}
+                >
+                  Так, закрити
+                </button>
+                <button
+                  type="button"
+                  className="quiet"
+                  disabled={disabled}
+                  onClick={() => {
                     setAsking(null);
-                    // Refused: back on the button, the sum kept.
                     requestAnimationFrame(() => closeButton.current?.focus());
-                  });
-                }}
-              >
-                Так, закрити
-              </button>
-              <button
-                type="button"
-                className="quiet"
-                disabled={disabled}
-                onClick={() => {
-                  setAsking(null);
-                  requestAnimationFrame(() => closeButton.current?.focus());
-                }}
-              >
-                Скасувати
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </section>
+                  }}
+                >
+                  Скасувати
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+    </>
   );
 }

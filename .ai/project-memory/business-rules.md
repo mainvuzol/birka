@@ -4754,3 +4754,30 @@ Every other word stays as it was.
   - the receipt's next payments are built as the sections' task list's В5
     (а); to ask the owner;
   - expand and the swipe are asked once a launch.
+
+## Chosen in chat — 2026-10-29 (the frame of «Усе на бірці», part 2)
+
+Chosen in chat on 2026-10-29 («go further»), after #150: the frame's P0-4,
+part 2 (`all-on-the-tag-frame-2-report.md`). Each screen of a store is
+headed by its own title, the page's heading, with «{Магазин} · {Ім’я}» on
+the line under it and «Змінити магазин» at that line's right for whoever
+has two stores or more. No right, rule, figure or word changes.
+- **Decided here:**
+  - the title and its line stand on the page, over the screen's card, as
+    the design draws them;
+  - a tab's first screen is 34 — the till on each of its ways («Продаж»,
+    «Повернення»), «Замовлення», a seller's «Каса», «Ще»; every other
+    screen 28, as its heading was:
+    «Каса» opened from «Ще», the results without a stub, the order's card
+    (23 before);
+  - the results with a stub — the receipt, a return's — keep their title's
+    size and its check, and the line under it with «Змінити магазин»,
+    though the design draws S11 without it: the task list asks for it one
+    tap from any screen of a store;
+  - what stood beside a title stands beside it still: «Оновити», «До
+    списку», «До пошуку», orders' «+»;
+  - the screens before a store opens keep «Бірка» as their heading until
+    the sign-in's task (P1-4);
+  - the headings inside a screen keep their levels: a third level follows
+    the page's heading where a second stood before.
+

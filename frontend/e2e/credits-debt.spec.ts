@@ -201,7 +201,7 @@ test("a debt says who and what in one line, what is owed first and large, how mu
   await opened(page);
 
   await expect(
-    page.getByRole("heading", { name: "Оксана Петренко", level: 2 }),
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
   ).toBeVisible();
   await expect(page.locator(".debt-context")).toHaveText(
     "067 123 45 67 · Лоран шоколад · M + ще 1 · з 01.10",
@@ -272,7 +272,7 @@ test("a usual debt at 360 × 640 shows who, what is owed, and the payment's sum 
   await opened(page);
   const owed = page.getByRole("group", { name: "Скільки винні" });
   for (const part of [
-    page.getByRole("heading", { level: 2 }),
+    page.getByRole("heading", { level: 1 }),
     page.locator(".debt-context"),
     owed.locator(".owed-sum"),
     page.getByLabel("Сума внеску, грн"),
@@ -444,7 +444,7 @@ test("a payment's result says what was done, how, the sum large and what is owed
     .click();
   await expect(page.locator(".owed-sum")).toHaveText("777,00 грн");
   await expect(
-    page.getByRole("heading", { name: "Оксана Петренко", level: 2 }),
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
   ).toBeFocused();
   await page.getByLabel("Сума внеску, грн").fill("100");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
@@ -944,7 +944,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       .getByRole("button", { name: "Внесок", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Продаж", level: 2 }),
+      page.getByRole("heading", { name: "Продаж", level: 1 }),
     ).toBeVisible();
   }
 
@@ -1015,7 +1015,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
 
     // S21: what she took for a title, who and where under it; the menu out
     // of the way.
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText(
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Лоран шоколад · M",
     );
     await expect(page.locator(".debt-context")).toHaveText(
@@ -1331,7 +1331,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     ).toBeFocused();
     await section(page, "Борги");
     await expect(
-      page.getByRole("heading", { name: "Борги", level: 2 }),
+      page.getByRole("heading", { name: "Борги", level: 1 }),
     ).toBeVisible();
     await expect(page.locator(".paid-result")).toHaveCount(0);
     await expect(
@@ -1347,7 +1347,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       .getByRole("button", { name: "Внесок", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Продаж", level: 2 }),
+      page.getByRole("heading", { name: "Продаж", level: 1 }),
     ).toBeVisible();
     await expect(panel(page)).toHaveCount(0);
     await expect(
@@ -1376,7 +1376,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await page.goto(launch());
     await openStore(page, "Основний MAIN");
     await expect(
-      page.getByRole("heading", { name: "Продаж", level: 2 }),
+      page.getByRole("heading", { name: "Продаж", level: 1 }),
     ).toBeVisible();
     await expect(
       tillWays(page).getByRole("button", { name: "Внесок", exact: true }),

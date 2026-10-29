@@ -323,7 +323,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await section(page, "Замовлення");
   await expect(
     page
-      .locator(".orders-head")
+      .locator(".screen-title")
       .getByRole("button", { name: "Нове замовлення" }),
   ).toHaveCount(0);
   // «Брак» is shown as it stands, with nothing to press.

@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ScreenHeader } from "@/shared/ScreenHeader";
 
 /**
  * The server's backups, read for whoever holds `backup:view`
@@ -84,42 +85,46 @@ export function Backups({
 }): JSX.Element {
   const backups = useBackups(token, scopeKey, true);
   return (
-    <section>
-      {back && <BackToMore back={back} />}
-      <div className="toolbar">
-        <h2>Резервні копії</h2>
-        <button
-          className="quiet"
-          disabled={backups.isFetching}
-          onClick={() => {
-            void backups.refetch();
-          }}
-        >
-          Оновити
-        </button>
-      </div>
-      <p className="hint">
-        Щоночі сервер робить копію бази, перевіряє її відновленням і шифрує
-        вашим ключем. Цей розділ бачить лише власник.
-      </p>
-      {backups.isPending ? (
-        <p role="status">Завантажуємо стан копій…</p>
-      ) : backups.error ? (
-        <p role="alert">{errorText(backups.error)}</p>
-      ) : (
-        <>
-          <Verdict backups={backups.data} />
-          {backups.data.server && (
-            <Server
-              server={backups.data.server}
-              now={backups.data.checked_at}
-            />
-          )}
-          <Telegram message={backups.data.your_last_message} />
-          <Nights nights={backups.data.nights} />
-        </>
-      )}
-    </section>
+    <>
+      <ScreenHeader
+        title="Резервні копії"
+        back={back && <BackToMore back={back} />}
+        aside={
+          <button
+            className="quiet"
+            disabled={backups.isFetching}
+            onClick={() => {
+              void backups.refetch();
+            }}
+          >
+            Оновити
+          </button>
+        }
+      />
+      <section>
+        <p className="hint">
+          Щоночі сервер робить копію бази, перевіряє її відновленням і шифрує
+          вашим ключем. Цей розділ бачить лише власник.
+        </p>
+        {backups.isPending ? (
+          <p role="status">Завантажуємо стан копій…</p>
+        ) : backups.error ? (
+          <p role="alert">{errorText(backups.error)}</p>
+        ) : (
+          <>
+            <Verdict backups={backups.data} />
+            {backups.data.server && (
+              <Server
+                server={backups.data.server}
+                now={backups.data.checked_at}
+              />
+            )}
+            <Telegram message={backups.data.your_last_message} />
+            <Nights nights={backups.data.nights} />
+          </>
+        )}
+      </section>
+    </>
   );
 }
 
