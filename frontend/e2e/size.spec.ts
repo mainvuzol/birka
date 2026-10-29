@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  openStore,
+  tapSize,
+  sellsFrom,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -69,19 +76,18 @@ function launch(): string {
 
 /** Open the till at «Старі залишки» and return the balances it listed. */
 async function enter(page: Page): Promise<Option[]> {
-  await page.goto(launch());
-  await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  // That warehouse's list, not every warehouse's (P2-5).
+  // A store that sells from it alone («Усе на бірці» task list, P0-5), and
+  // that warehouse's list, not every warehouse's (P2-5).
+  await sellsFrom(page, fixture.legacy_location_id);
   const listed = page.waitForResponse(
     (r) =>
       r.url().includes("/catalog/stock-options?") &&
       r.url().includes(`location_id=${fixture.legacy_location_id}`) &&
       r.status() === 200,
   );
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.legacy_location_id);
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
   return ((await (await listed).json()) as { items: Option[] }).items;
 }
 
@@ -208,9 +214,12 @@ test("a coat held with its size not known is sold with the size on its label", a
   await page.getByRole("button", { name: "Новий продаж" }).click();
   await expect(
     page.locator(
-      `button.chip[data-stock="${unknown.product_variant_id}:${unknown.size_id}"]`,
+      `button.size-cell[data-stock="${unknown.product_variant_id}:${unknown.size_id}"]`,
     ),
-  ).toHaveText(`Розмір невідомий · ${String(unknown.available_quantity - 1)}`);
+  ).toHaveAttribute(
+    "aria-label",
+    `розмір невідомий, вільно ${String(unknown.available_quantity - 1)}`,
+  );
 });
 
 test("a sized line short of stock is answered from the coats without a size", async ({

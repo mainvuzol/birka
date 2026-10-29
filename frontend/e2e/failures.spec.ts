@@ -931,7 +931,7 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     ).toBeEnabled();
     await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
     await expect(
-      page.getByRole("combobox", { name: "Склад", exact: true }),
+      page.getByRole("searchbox", { name: "Знайти модель" }),
     ).toBeEnabled();
   });
 

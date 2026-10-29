@@ -5,6 +5,7 @@ import {
   readsOf,
   refuseOnce,
   section,
+  sellsFrom,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -142,6 +143,8 @@ test("a store's price set on the stock screen is what its till suggests", async 
   const bearer = await token(page);
   const priced = await model(page, bearer);
   const unpriced = await model(page, bearer);
+  // Its till sells from the warehouse the models are in (P0-5).
+  await sellsFrom(page, fixture.returns_location_id);
   await enter(page, seller, "Залишки");
   await stockOf(page);
   await expect(row(page, priced.name)).toContainText("Ціна продажу: не задана");
@@ -177,15 +180,14 @@ test("a store's price set on the stock screen is what its till suggests", async 
       sent.push(request.postDataJSON() as { lines: { unit_price: string }[] });
   });
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
   const search = page.getByRole("searchbox", { name: "Знайти модель" });
   const lines = page.locator(".line");
   // A model with none: the line's price is empty and takes the cursor, and
   // the ways wait for it (redesign P0-3).
   await search.fill(unpriced.name);
-  await page.locator(`button.chip[data-stock="${unpriced.option}"]`).click();
+  await page
+    .locator(`button.size-cell[data-stock="${unpriced.option}"]`)
+    .click();
   const unpricedPrice = lines.first().getByLabel("Ціна, грн");
   await expect(unpricedPrice).toHaveValue("");
   await expect(unpricedPrice).toBeFocused();
@@ -200,7 +202,7 @@ test("a store's price set on the stock screen is what its till suggests", async 
   await expect(
     page.getByRole("group", { name: new RegExp(priced.name) }),
   ).toContainText("1 850,50 грн");
-  await page.locator(`button.chip[data-stock="${priced.option}"]`).click();
+  await page.locator(`button.size-cell[data-stock="${priced.option}"]`).click();
   await expect(lines.nth(1).getByLabel("Ціна, грн")).toHaveValue("1850,50");
   await expect(
     lines

@@ -5,6 +5,7 @@ import {
   openStore,
   section,
   tapSize,
+  sellsFrom,
 } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -85,12 +86,10 @@ async function basket(page: Page): Promise<void> {
       },
     });
   });
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await fillLine(page, { price: "150.00" });
 }

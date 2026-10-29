@@ -7,6 +7,7 @@ import {
   openStore,
   tapSize,
   tillWays,
+  sellsFrom,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -107,36 +108,31 @@ async function stubStock(page: Page, available: number): Promise<void> {
 }
 
 async function onTheTill(page: Page, theme?: Record<string, string>) {
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch(theme));
   await openStore(page, "Основний MAIN");
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 
 async function oneLine(page: Page, quantity = 1): Promise<void> {
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await fillLine(page, { quantity });
 }
 
-test("under «Продати | Повернути», the till's search and its first tag's name are still in view on a phone of 360 × 640, with no scroll — in a store of two warehouses its sizes begin at the fold (navigation task list, P0-1)", async ({
+test("under «Продати | Повернути», the till's search and its first tag's name are still in view on a phone of 360 × 640, with no scroll, and its sizes begin there — no warehouse is chosen above the search (navigation task list, P0-1; «Усе на бірці» task list, P0-5)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await stubStock(page, 3);
   await onTheTill(page);
   await expect(tillWays(page)).toBeInViewport({ ratio: 1 });
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await expect(
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeInViewport({ ratio: 1 });
   const tag = page.getByRole("group", { name: "Лоран шоколад" });
-  await expect(tag.locator(".tag-head")).toBeInViewport({ ratio: 1 });
-  // Its sizes begin in view: the warehouse's choice of two takes their
-  // place (to be seen on a phone, navigation task list С1).
+  await expect(tag.locator(".model-head")).toBeInViewport({ ratio: 1 });
+  // Its sizes begin in view (to be seen on a phone, navigation task list
+  // С1).
   await expect(tag.getByRole("button").first()).toBeInViewport();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
@@ -474,7 +470,7 @@ test("an unreadable kept invoice holds the till, as it holds the other tabs", as
   ).toBeVisible();
   // Nothing can be put in the basket, so nothing can be sold.
   await expect(
-    page.getByRole("combobox", { name: "Склад", exact: true }),
+    page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeDisabled();
   await expect(page.getByLabel("Вношу продаж з паперу")).toBeDisabled();
 });

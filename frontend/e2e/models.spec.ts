@@ -10,6 +10,7 @@ import {
   sections,
   tapSize,
   waitsFor,
+  sellsFrom,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -525,13 +526,11 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
     if (attempts === 1) await route.abort("connectionfailed");
     else await route.continue();
   });
-  await enter(page, "Продаж");
+  await sellsFrom(page, fixture.returns_location_id);
   const options = page.waitForResponse(
     (r) => r.url().includes("/catalog/stock-options?") && r.status() === 200,
   );
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
+  await enter(page, "Продаж");
   await options;
   await tapSize(page, typo.variant, typo.size);
   await fillLine(page, { price: "150.00" });

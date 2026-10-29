@@ -6,8 +6,9 @@ import {
   grn,
   openStore,
   tapSize,
+  sellsFrom,
 } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Page, Response } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -43,24 +44,31 @@ function launch(): string {
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
 
-async function enter(page: Page): Promise<void> {
-  await page.goto(launch());
-  await openStore(page, "Основний MAIN");
-  await page.getByRole("button", { name: "Продаж", exact: true }).click();
-}
+/** The till's list as it opened, by page: read by `pickFirstProduct`. */
+const listed = new WeakMap<Page, Promise<Response>>();
 
-/** Pick the warehouse and the seeded product, returning what the ledger holds. */
-async function pickFirstProduct(page: Page): Promise<number> {
-  // The till's own warehouse's list, not every warehouse's (P2-5).
+/** The till of a store that sells from its own warehouse alone (P0-5). */
+async function enter(page: Page): Promise<void> {
+  await sellsFrom(page, fixture.till_location_id);
+  // That warehouse's list, not every warehouse's (P2-5).
   const options = page.waitForResponse(
     (r) =>
       r.url().includes("/catalog/stock-options?") &&
       r.url().includes(`location_id=${fixture.till_location_id}`) &&
       r.status() === 200,
   );
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
+  // A journey that never reads it lets it go with the page.
+  options.catch(() => undefined);
+  listed.set(page, options);
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+}
+
+/** The seeded product in the basket, returning what the ledger holds. */
+async function pickFirstProduct(page: Page): Promise<number> {
+  const options = listed.get(page);
+  if (!options) throw new Error("The till was not entered");
   const body = (await (await options).json()) as {
     items: {
       product_variant_id: string;
@@ -591,14 +599,19 @@ test("a store that reaches one sellable warehouse does not ask which", async ({
   });
   await stubStock(page, 4);
   await enter(page);
-  // Named, not asked: there is no choice to make (redesign P0-2).
-  await expect(page.getByText(/^Склад: /)).toBeVisible();
+  // Nothing asked, nor said above the search: there is no choice to make
+  // (redesign P0-2; «Усе на бірці» task list, P0-5).
   await expect(
     page.getByRole("combobox", { name: "Склад", exact: true }),
   ).toHaveCount(0);
+  await expect(page.getByText(/^Склад: /)).toHaveCount(0);
   await expect(
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeVisible();
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await expect(page.locator(".line")).toHaveCount(1);
+  // The line says it, under its name.
+  await expect(page.locator(".line .line-place")).toHaveText(
+    "Склад: Каса-склад",
+  );
 });

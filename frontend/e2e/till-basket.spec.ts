@@ -8,6 +8,7 @@ import {
   section,
   tapSize,
   tillWays,
+  sellsFrom,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -205,11 +206,9 @@ async function oneSaleToReturn(page: Page): Promise<void> {
 }
 
 async function onTheTill(page: Page): Promise<void> {
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
 }
 
 /** Two coats of «Лоран шоколад · M» at 1 700,00 грн each. */
@@ -237,14 +236,13 @@ async function asItWas(
   await expect(
     page.getByRole("heading", { name: "Продаж", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("combobox", { name: "Склад", exact: true }),
-  ).toHaveValue(fixture.till_location_id);
   const line = basket(page).locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line).toContainText("Лоран шоколад");
   await expect(line.locator("output")).toHaveText("2");
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("1700");
+  // Where it leaves from, under the line («Усе на бірці» task list, P0-5).
+  await expect(line.locator(".line-place")).toHaveText("Склад: Каса-склад");
   await expect(page.locator(".pay-total")).toContainText(total);
 }
 
@@ -333,17 +331,11 @@ test("«Новий продаж» and another store leave the till empty, as bef
   await page.getByRole("button", { name: "Новий продаж" }).click();
   await empty(page);
   // A basket, then another store and back: none.
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await twoCoats(page);
   await changeStore(page);
   await openStore(page, "Основний MAIN");
   await empty(page);
   // A basket, then the app opened again: none — nothing is on the disk.
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await twoCoats(page);
   await page.reload();
   await openStore(page, "Основний MAIN");
@@ -411,9 +403,6 @@ test("a basket built from paper is gone once the paper is unticked on another sc
   // From paper again; unticked and ticked again elsewhere: gone too — the
   // till's own switch would have dropped it at the untick (review,
   // 2026-10-27).
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await fromPaper(page);
   await twoCoats(page);
   await aReturnsScreen(page);
@@ -531,9 +520,6 @@ test("an emptied basket keeps nothing: paying in parts was the last customer's (
   await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await empty(page);
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await twoCoats(page);
   await expect(page.getByLabel("Оплата частинами")).not.toBeChecked();
 });

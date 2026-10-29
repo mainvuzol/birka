@@ -1,4 +1,11 @@
-import { test, expect, fillLine, fromPaper, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  fromPaper,
+  openStore,
+  sellsFrom,
+} from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -239,7 +246,9 @@ async function openTill(page: Page): Promise<void> {
 }
 
 function chip(page: Page): ReturnType<Page["locator"]> {
-  return page.locator(`button.chip[data-stock="${ids.variant}:${ids.size}"]`);
+  return page.locator(
+    `button.size-cell[data-stock="${ids.variant}:${ids.size}"]`,
+  );
 }
 
 function pay(page: Page, way: string): ReturnType<Page["getByRole"]> {
@@ -632,13 +641,11 @@ test("against the real API: a coat the books hold none of, found in the catalogu
   });
   expect(created.status()).toBe(201);
 
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(name);
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
   const panel = page.getByRole("region", { name: "Товар з каталогу" });

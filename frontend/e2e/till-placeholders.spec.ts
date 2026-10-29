@@ -86,7 +86,7 @@ test("signing in keeps the till's places, and says «Входимо в мага�
   await page.goto(launch());
   await expect(said(page)).toHaveText("Входимо в магазин…");
   await expect(page.locator(".skeleton-field")).toBeVisible();
-  await expect(page.locator(".placeholder .tag")).toHaveCount(3);
+  await expect(page.locator(".placeholder .model-tag")).toHaveCount(3);
   me.release();
   await openStore(page, "Основний MAIN");
   await expect(page.locator(".placeholder")).toHaveCount(0);
@@ -102,7 +102,7 @@ test("the warehouses being read keep the field's and the tags' places, and say s
     said(page).filter({ hasText: "Завантажуємо склади…" }),
   ).toBeAttached();
   await expect(page.locator(".placeholder .skeleton-field")).toBeVisible();
-  await expect(page.locator(".placeholder .tag")).toHaveCount(3);
+  await expect(page.locator(".placeholder .model-tag")).toHaveCount(3);
   places.release();
   await expect(
     page.getByRole("searchbox", { name: "Знайти модель" }),
@@ -125,10 +125,10 @@ test("the goods being read keep three tags' places, and say «Завантажу
   await expect(
     said(page).filter({ hasText: "Завантажуємо товари…" }),
   ).toBeAttached();
-  await expect(page.locator(".placeholder .tag")).toHaveCount(3);
-  await expect(page.locator("button.chip")).toHaveCount(0);
+  await expect(page.locator(".placeholder .model-tag")).toHaveCount(3);
+  await expect(page.locator("button.size-cell")).toHaveCount(0);
   goods.release();
-  await expect(page.locator("button.chip").first()).toBeVisible();
+  await expect(page.locator("button.size-cell").first()).toBeVisible();
   await expect(page.locator(".placeholder")).toHaveCount(0);
 });
 
@@ -145,7 +145,7 @@ test("a search typed keeps the list where it was until the new one comes, and th
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page.locator("button.chip").first().click();
+  await page.locator("button.size-cell").first().click();
   await expect(page.locator(".pay-panel")).toBeVisible();
   // The basket's line stands under the list: where it is on the page says
   // whether the list jumped, which the panel pinned to the screen's foot
@@ -161,7 +161,7 @@ test("a search typed keeps the list where it was until the new one comes, and th
   await asked;
   // The new search not answered yet: the list as it was, and no places.
   // (The way to the catalogue comes under any search, and is under it now.)
-  await expect(page.locator("button.chip").first()).toBeVisible();
+  await expect(page.locator("button.size-cell").first()).toBeVisible();
   await expect(page.locator(".placeholder")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Знайти в каталозі" }),
@@ -172,7 +172,7 @@ test("a search typed keeps the list where it was until the new one comes, and th
   );
   release();
   await answered;
-  await expect(page.locator("button.chip").first()).toBeVisible();
+  await expect(page.locator("button.size-cell").first()).toBeVisible();
   expect(await onPage()).toBe(before);
 });
 

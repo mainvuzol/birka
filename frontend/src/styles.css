@@ -938,6 +938,7 @@ nav:not(.tab-bar, .more-list) {
 /* The panel's height, kept clear wherever the page scrolls to
    (`shared/panel.ts`), and the menu's under it. */
 html {
+  scroll-padding-top: var(--find-h, 0px);
   scroll-padding-bottom: calc(
     var(--pay-panel-h, 0px) + var(--menu-h, 0px) + 12px
   );
@@ -1031,22 +1032,239 @@ html {
   min-height: 52px;
   border-radius: 14px;
 }
-.tag {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
+/* The search field (spec §6.6; «Усе на бірці» task list, P0-5): 52 high,
+   card on the page, the magnifier left and «×» right, 44 to the touch. */
+.search-field {
+  position: relative;
 }
-.tag-head {
+.search-field label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+}
+.search-field label .icon {
+  position: absolute;
+  left: 12px;
+  color: var(--pencil);
+  pointer-events: none;
+}
+.search-field input {
+  min-height: var(--h-search);
+  padding: 0 48px 0 44px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 400;
+}
+.search-field input::placeholder {
+  color: var(--pencil);
+}
+.search-field input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.search-clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch);
+  min-height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-l);
+  background: transparent;
+  color: var(--pencil);
+}
+/* The search over the tags; at the till it stays at the top while they
+   scroll under it, and its height is kept clear (`shared/panel.ts`). */
+.find {
+  margin: 16px 0 4px;
+  padding: 8px 0;
+}
+.find.sticky {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-stickyHeader);
+  background: var(--surface);
+}
+/* A model's tag (spec §6.12): a row tag, its hole punched where the
+   eyelet of a row tag sits, its name and price, then its cells. */
+.tags {
+  display: grid;
+  /* Never wider than the screen, whatever a cell says. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-8);
+  margin: 8px 0 0;
+}
+.model-tag-in {
+  position: relative;
+  padding: 12px 16px 12px 30px;
+}
+.model-tag-in::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  box-sizing: border-box;
+  width: var(--eyelet);
+  height: var(--eyelet);
+  border: 1.5px solid var(--edge);
+  border-radius: var(--r-round);
+  background: var(--paper);
+}
+.model-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 12px;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
+  line-height: 24px;
   overflow-wrap: anywhere;
 }
-.tag-price {
+.model-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.005em;
+}
+.model-price {
   flex-shrink: 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* A size cell (spec §6.13): 60 × 60 at least, its letter large and what
+   is free under it; wider where it names its warehouse. The badges sit on
+   its top corners, out of the way of the letter: the pin of what orders
+   hold right, or left once «×N» takes the right. */
+.cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px var(--sp-8);
+  padding-top: 6px;
+}
+.size-cell {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--size-cell);
+  max-width: 100%;
+  min-height: var(--size-cell);
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-m);
+  background: var(--fold);
+  color: var(--ink);
+  font-weight: 600;
+}
+.size-cell:active:not([aria-disabled="true"]) {
+  background: var(--hairline);
+}
+.size-letter {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 28px;
+}
+.size-free {
+  display: flex;
+  max-width: 100%;
   font-size: 14px;
-  color: var(--text-2);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--pencil);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+.size-place {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.size-held,
+.size-in {
+  position: absolute;
+  top: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-round);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.size-held {
+  right: -7px;
+  gap: 1px;
+  min-width: var(--badge);
+  height: var(--badge);
+  padding: 0 4px 0 3px;
+  background: var(--online);
+  color: var(--on-online);
+}
+.size-in {
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
+}
+.size-cell.chosen {
+  border-color: var(--chosen);
+  background: var(--chosen);
+  color: var(--on-chosen);
+}
+.size-cell.chosen .size-free {
+  color: var(--on-chosen);
+}
+.size-cell.chosen .size-held {
+  right: auto;
+  left: -7px;
+}
+.size-cell.held-only {
+  border-style: dashed;
+}
+.size-cell.held-only:not(.chosen) .size-letter {
+  color: var(--pencil);
+}
+.size-cell.held-only:not(.chosen) .size-free {
+  font-size: 13px;
+  color: var(--online);
+}
+.size-cell[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+/* No room for it in the basket: as a button that cannot be pressed. */
+.size-cell.no-room {
+  opacity: 0.45;
+}
+.size-cell.skeleton {
+  border-color: transparent;
+  background: var(--skeleton);
+}
+.cell-note,
+.line-place {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+}
+.line-place {
+  display: block;
+  margin: 2px 0 0;
 }
 .chips {
   display: flex;
@@ -1061,7 +1279,6 @@ html {
   background: var(--accent-soft);
   color: var(--accent-text);
 }
-.tag .hint,
 .empty p {
   margin: 8px 0 0;
 }
@@ -3098,7 +3315,8 @@ section:not(.receipt):not(.stub-notice) .stub {
 /* The bottom menu («Усе на бірці» task list, P0-4; spec §6.2): 64 px over
    the home indicator, on the card; a glyph of 24 over a 13 px word, the
    open tab's glyph on a 56 × 30 pill. Its height is every dock's floor
-   (`--menu-h`), the home indicator its own (`--dock-safe`). */
+   (`--menu-h`), the home indicator its own (`--dock-safe`); its layer is
+   over whatever sticks, the till's search among them (§5.7). */
 nav.tab-bar {
   margin-top: 0;
 }
@@ -3107,7 +3325,7 @@ nav.tab-bar {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 3;
+  z-index: var(--z-tabBar);
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--card);
   border-top: 1px solid var(--hairline);

@@ -1,4 +1,11 @@
-import { test, expect, fillLine, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  fillLine,
+  openStore,
+  tapSize,
+  sellsFrom,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -67,13 +74,11 @@ async function onTheTill(page: Page): Promise<void> {
       },
     });
   });
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
 }
 
 function pay(page: Page, way: string) {

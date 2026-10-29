@@ -5,6 +5,7 @@ import {
   fillLine,
   openStore,
   tapSize,
+  sellsFrom,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -109,14 +110,12 @@ async function model(page: Page, held: number): Promise<Model> {
 }
 
 async function till(page: Page): Promise<void> {
+  await sellsFrom(page, fixture.returns_location_id);
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
 }
 
 async function add(page: Page, coat: Model, quantity: number): Promise<void> {

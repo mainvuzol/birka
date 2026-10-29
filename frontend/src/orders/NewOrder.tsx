@@ -329,14 +329,27 @@ export function NewOrder({
                         size_id: item.size_id,
                       }),
                   );
-                  // A chip of no warehouse — a server from before every one
+                  // A cell of no warehouse — a server from before every one
                   // was listed — puts nothing in: none is guessed.
                   if (!item.location_id) return false;
                   return held
                     ? held.line.quantity < most(held)
                     : draft.length < 100;
                 }}
+                chosen={(item) =>
+                  draft.find(
+                    (d) =>
+                      stockKey(d.line) ===
+                      stockKey({
+                        source_location_id: item.location_id,
+                        product_variant_id: item.product_variant_id,
+                        size_id: item.size_id,
+                      }),
+                  )?.line.quantity ?? 0
+                }
+                chosenIn="у замовленні"
                 offerHeld={false}
+                sticky={false}
                 searchRef={searchRef}
                 failure={
                   stock.error ? (

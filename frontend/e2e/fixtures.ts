@@ -290,10 +290,31 @@ export function readsOf(page: Page, path: RegExp): () => number {
 }
 
 /**
+ * The till of a store that sells from `locationId` alone («Усе на бірці»
+ * task list, P0-5): the store the specs share sells from many, and the till
+ * now lists every one at once, a cell each, with no warehouse to choose.
+ * The warehouses as the server lists them, every other one marked not sold
+ * from — what the till and a new order read of them, and nothing else
+ * does. Before the till is opened.
+ */
+export async function sellsFrom(page: Page, locationId: string): Promise<void> {
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    const response = await route.fetch();
+    const rows = (await response.json()) as { id: string }[];
+    await route.fulfill({
+      response,
+      json: rows.map((row) =>
+        row.id === locationId ? row : { ...row, can_sell: false },
+      ),
+    });
+  });
+}
+
+/**
  * A coat into the till's basket as a seller puts it (redesign P0-3): a tap
- * on its size chip, under its model's tag — of `locationId`'s, when every
+ * on its size cell, under its model's tag — of `locationId`'s, when every
  * warehouse is listed (a new order's, orders task list, P0-5). «Ще товари»
- * is read until the chip is listed: a warehouse the specs share holds more
+ * is read until the cell is listed: a warehouse the specs share holds more
  * than a page.
  */
 export async function tapSize(
@@ -303,7 +324,7 @@ export async function tapSize(
   locationId?: string,
 ): Promise<void> {
   const chip = page.locator(
-    `button.chip[data-stock="${variantId}:${sizeId}"]${locationId ? `[data-location="${locationId}"]` : ""}`,
+    `button.size-cell[data-stock="${variantId}:${sizeId}"]${locationId ? `[data-location="${locationId}"]` : ""}`,
   );
   const more = page.getByRole("button", { name: "Ще товари" });
   for (;;) {

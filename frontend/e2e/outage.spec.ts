@@ -972,21 +972,13 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     page,
   }) => {
     await page.clock.install();
-    const server = await serve(page, [
-      warehouse(ids.own, "Свій"),
-      warehouse(ids.shared, "Спільний"),
-    ]);
+    const server = await serve(page);
     await openTill(page);
-    const warehouses = page.getByRole("combobox", {
-      name: "Склад",
-      exact: true,
-    });
-    await warehouses.selectOption(ids.own);
     await basket(page);
-    // The server goes before the press: a read of the other warehouse gets
-    // no answer.
+    // The server goes before the press: a search typed reads the goods
+    // anew, and gets no answer.
     server.stock = "lost";
-    await warehouses.selectOption(ids.shared);
+    await page.getByRole("searchbox", { name: "Знайти модель" }).fill("ко");
     await expect(page.getByRole("alert")).toContainText(UNREACHABLE);
     expect(server.readies).toBe(0);
 
@@ -1256,8 +1248,7 @@ test("4. an offline phone never leaves «Спробувати ще раз» wait
     warehouse(ids.shared, "Спільний"),
   ]);
   await openTill(page);
-  const warehouses = page.getByRole("combobox", { name: "Склад", exact: true });
-  await warehouses.selectOption(ids.own);
+  // Both warehouses at once, nothing chosen (P0-5).
   const goods = page.getByRole("searchbox", { name: "Знайти модель" });
   await expect(goods).toBeVisible();
   // Vite's development client reloads the whole page when its socket comes
@@ -1268,7 +1259,8 @@ test("4. an offline phone never leaves «Спробувати ще раз» wait
   // stubs answer whatever the browser's state, so they are told too.
   await context.setOffline(true);
   server.stock = "lost";
-  await warehouses.selectOption(ids.shared);
+  // A search typed: the goods read anew.
+  await goods.fill("ко");
   const failed = page.getByRole("alert");
   await expect(failed).toContainText(UNREACHABLE, { timeout: 3000 });
   await failed.getByRole("button", { name: "Спробувати ще раз" }).click();
@@ -1462,25 +1454,37 @@ test("6c. a paper time with no «вчора» is today's, and «вчора» goe
   ).toEqual({ sold_by_user_id: null, sold_at: `${today}T00:05` });
 });
 
-test("6d. the pay buttons name the basket's warehouses, not the one chosen to look at", async ({
+test("6d. the pay buttons name the basket's warehouses: the one its coat leaves from, then both", async ({
   page,
 }) => {
   const server = await serve(page, [
     warehouse(ids.own, "Свій"),
     warehouse(ids.shared, "Спільний"),
   ]);
+  // The coat at each, a cell each (P0-5).
+  await on(page, "/catalog/stock-options", async (route) => {
+    const [first] = stockItems;
+    await route.fulfill({
+      json: {
+        items: [
+          { ...first, location_id: ids.own },
+          { ...first, location_id: ids.shared },
+        ],
+        has_more: false,
+      },
+    });
+  });
   await openTill(page);
-  const warehouses = page.getByRole("combobox", { name: "Склад", exact: true });
-  await warehouses.selectOption(ids.own);
   await fromPaper(page);
-  await basket(page);
-  // Another warehouse looked at: the coat still leaves from «Свій».
-  await warehouses.selectOption(ids.shared);
+  await tapSize(page, ids.variant, ids.size, ids.own);
+  await fillLine(page, { price: "3000" });
+  // Both listed: the coat leaves from «Свій».
   await expect(
     page.getByText("Продавець: не вказано · склад: Свій", { exact: true }),
   ).toBeVisible();
-  // A second coat from there: both named.
-  await basket(page);
+  // A second coat from the other: both named.
+  await tapSize(page, ids.variant, ids.size, ids.shared);
+  await fillLine(page, { price: "3000" });
   await expect(
     page.getByText("Продавець: не вказано · склади: Свій, Спільний", {
       exact: true,
