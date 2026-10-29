@@ -116,8 +116,28 @@ function colourOf(token: string): `#${string}` | null {
     .join("")}`;
 }
 
+/**
+ * Telegram's own height for the app once it stops moving: the keyboard and
+ * the sheet being dragged leave it as it was, so nothing jumps
+ * (`--tg-viewport-stable-height`, read by `styles.css`; direction §6.3).
+ */
+function keepStableHeight(height: number, stable: boolean): void {
+  if (!stable || height <= 0) return;
+  document.documentElement.style.setProperty(
+    "--tg-viewport-stable-height",
+    `${String(height)}px`,
+  );
+}
+
+/** Whether the whole height and the swipe were asked for: once a launch,
+ * however often the app connects. */
+let expanded = false;
+
 /** Notify the host after rendering; keep bridge calls out of business UI.
- * Its colours go first, so Telegram shows the app in them when it is ready. */
+ * Its colours go first, so Telegram shows the app in them when it is ready.
+ * Once ready the app asks for the whole height and keeps a downward swipe
+ * from closing it (direction §6.1; «Усе на бірці» task list, P0-4), where
+ * the version knows it. */
 export function connectTelegram(): () => void {
   if (!telegramInitData()) return () => undefined;
   launchTheme();
@@ -126,13 +146,29 @@ export function connectTelegram(): () => void {
     applyTheme(theme_params);
     paintTelegram();
   });
+  const unwatch = on("viewport_changed", ({ height, is_state_stable }) => {
+    keepStableHeight(height, is_state_stable);
+  });
+  const version = launchParam("tgWebAppVersion");
   try {
     postEvent("web_app_ready");
     postEvent("web_app_request_theme");
+    if (!expanded) {
+      expanded = true;
+      postEvent("web_app_expand");
+      if (version && supports("web_app_setup_swipe_behavior", version))
+        postEvent("web_app_setup_swipe_behavior", {
+          allow_vertical_swipe: false,
+        });
+    }
+    postEvent("web_app_request_viewport");
   } catch {
     /* A browser test can supply signed launch data without a Telegram host. */
   }
-  return unsubscribe;
+  return () => {
+    unsubscribe();
+    unwatch();
+  };
 }
 
 /**

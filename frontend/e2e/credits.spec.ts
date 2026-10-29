@@ -5,6 +5,7 @@ import {
   fillLine,
   fromPaper,
   grn,
+  more,
   openStore,
   readsOf,
   refuseOnce,
@@ -294,7 +295,7 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   // Where the next payments go: the row's button (owner decision after
   // #141, 2026-10-26).
   await expect(
-    page.getByText("Наступні внески — у розділі «Клієнти».", { exact: true }),
+    page.getByText("Наступні внески — у «Продажі» › «Внесок».", { exact: true }),
   ).toBeVisible();
   expect(sales.bodies).toHaveLength(1);
   // The way travels at the top of the body; the terms are as they were.
@@ -1529,15 +1530,16 @@ test("paying in parts needs its own permission", async ({ page }) => {
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
-  // «Клієнти» opens the orders alone: no «Борги», nor a switch
-  // (navigation task list, P0-2).
-  await page.getByRole("button", { name: "Клієнти", exact: true }).click();
+  // «Замовлення» opens the orders, with no switch to debts; «Ще» has no
+  // «Борги» (navigation task list, P0-2; «Усе на бірці» task list, P0-4).
+  await section(page, "Замовлення");
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("group", { name: "Борги або замовлення" }),
   ).toHaveCount(0);
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Борги", exact: true }),
   ).toHaveCount(0);

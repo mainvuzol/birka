@@ -1,4 +1,9 @@
-import { test, expect, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -294,7 +299,7 @@ async function open(page: Page, theme?: Record<string, string>): Promise<void> {
 }
 
 async function correct(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await page
     .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
     .click();
@@ -304,7 +309,7 @@ function rows(page: Page): Locator {
   return page.getByRole("list", { name: "Операції дня" });
 }
 
-test("yesterday's operation is changed in six taps, without a calendar; its row says its close, and its card the close it explains (cash task list, P2-4)", async ({
+test("yesterday's operation is changed in seven taps, without a calendar — «Каса» under «Ще» for whoever reads the report, one more; its row says its close, and its card the close it explains (cash task list, P2-4; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -355,10 +360,10 @@ test("yesterday's operation is changed in six taps, without a calendar; its row 
       to_method: "CASH",
     },
   ]);
-  expect(await taps()).toBe(6);
+  expect(await taps()).toBe(7);
 });
 
-test("today's operation is changed in five taps (cash task list, P2-4)", async ({
+test("today's operation is changed in six taps — «Каса» under «Ще» for whoever reads the report, one more (cash task list, P2-4; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   const server = await stub(page);
@@ -375,7 +380,7 @@ test("today's operation is changed in five taps (cash task list, P2-4)", async (
     page.getByText(/^Спосіб оплати змінено: Картка → Готівка\./),
   ).toBeVisible();
   expect(server.days[0]).toBe(dayOf(0));
-  expect(await taps()).toBe(5);
+  expect(await taps()).toBe(6);
 });
 
 test("another day is chosen on the calendar: nothing is read until one is, and a day long ago names its own close (cash task list, P2-4)", async ({

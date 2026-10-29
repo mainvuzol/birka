@@ -279,17 +279,18 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   await expect(reopened.getByRole("heading", { name: "Продаж" })).toHaveCount(
     0,
   );
-  // «Клієнти» marked, held (navigation task list, P0-2).
-  const customers = reopened
+  // «Замовлення» marked, held (navigation task list, P0-2; «Усе на бірці»
+  // task list, P0-4).
+  const orders = reopened
     .getByRole("navigation", { name: "Розділи" })
-    .getByRole("button", { name: "Клієнти", exact: true });
-  await expect(customers).toHaveAttribute("aria-current", "page");
-  await expect(customers).toBeDisabled();
+    .getByRole("button", { name: "Замовлення", exact: true });
+  await expect(orders).toHaveAttribute("aria-current", "page");
+  await expect(orders).toBeDisabled();
   answered = true;
   await retry.click();
   await expect(reopened.locator(".order-context")).toBeVisible();
-  // Its card, «Клієнти» marked still.
-  await expect(customers).toHaveAttribute("aria-current", "page");
+  // Its card, «Замовлення» marked still.
+  await expect(orders).toHaveAttribute("aria-current", "page");
   expect(new Set(commands).size).toBe(1);
   // Asked first (orders task list, P0-4).
   await reopened
@@ -413,9 +414,10 @@ test("uncertain command stays blocked after access denial, then reconciles", asy
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
-  // Every other section held, «Клієнти» too (navigation task list, P0-2).
+  // Every other section held, «Замовлення» too (navigation task list,
+  // P0-2; «Усе на бірці» task list, P0-4).
   await expect(
-    page.getByRole("button", { name: "Клієнти", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
   await expect(retry).toBeEnabled();
   await retry.click();
@@ -650,7 +652,7 @@ test("a «Клієнт забрав» saved before the way was asked is refused 
   );
   await expect(resend).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Клієнти", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeEnabled();
   expect(await page.evaluate((name) => localStorage.getItem(name), key)).toBe(
     null,

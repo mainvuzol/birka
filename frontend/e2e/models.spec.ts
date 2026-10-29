@@ -295,14 +295,21 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
-  // Its own section stays free on «Ще», every other is held (P1-6; navigation
-  // task list, P0-4).
+  // Its own section stays free under «Ще» › «Товар і каталог», every other
+  // is held (P1-6; navigation task list, P0-4; «Усе на бірці» task list,
+  // P0-4).
   await more(page);
   await expect(
-    sections(page).getByRole("button", { name: "Моделі", exact: true }),
-  ).toBeEnabled();
+    sections(page).getByRole("button", { name: "Залишки", exact: true }),
+  ).toBeDisabled();
+  await sections(page)
+    .getByRole("button", { name: /^Товар і каталог/ })
+    .click();
   await expect(
-    sections(page).getByRole("button", { name: "Товар", exact: true }),
+    sections(page).getByRole("button", {
+      name: "Перевірка каталогу",
+      exact: true,
+    }),
   ).toBeDisabled();
   await sections(page)
     .getByRole("button", { name: "Моделі", exact: true })
@@ -559,7 +566,7 @@ test("a sale whose answer was lost settles when its model was merged meanwhile",
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Товар", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeEnabled();
   expect(attempts).toBe(2);
   expect(await held(page, bearer, stays.variant)).toBe(5);
@@ -645,7 +652,19 @@ test("«Моделі» is the owner's and managers' alone", async ({ page }) => 
     await route.fulfill({ response, json: body });
   });
   await enter(page, "Продаж");
+  // «Ще» › «Товар і каталог» without «Моделі»: its line says so, and its
+  // own list holds none («Усе на бірці» task list, P0-4).
   await more(page);
+  const catalogue = page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("button", { name: /^Товар і каталог/ });
+  await expect(catalogue.locator(".more-meta")).toHaveText(
+    "перевірка, початкові залишки",
+  );
+  await catalogue.click();
+  await expect(
+    page.getByRole("button", { name: "Перевірка каталогу", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Моделі", exact: true }),
   ).toHaveCount(0);

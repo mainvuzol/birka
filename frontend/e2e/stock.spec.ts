@@ -99,7 +99,7 @@ test("stock screen explicitly selects warehouse and shows real API balances with
   });
 });
 
-test("without the right to read the stock, «Товар» is its tiles alone, and nothing is said of the rule (navigation task list, P0-3)", async ({
+test("without the right to read the stock, «Ще» › «Товар» has no «Залишки», its other rows stay, and nothing is said of the rule (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await page.route("**/api/v1/me", async (route) => {
@@ -115,17 +115,17 @@ test("without the right to read the stock, «Товар» is its tiles alone, an
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  // «Товар» is its tiles alone: no stock, and nothing said of the rule
-  // (navigation task list, P0-3).
-  await section(page, "Залишки");
+  // «Ще» › «Товар» without «Залишки»: no stock, and nothing said of the rule
+  // (navigation task list, P0-3; «Усе на бірці» task list, P0-4).
+  await more(page);
+  const goods = page.getByRole("navigation", { name: "Ще" });
   await expect(
-    page
-      .locator(".goods-tiles")
-      .getByRole("button", { name: /^Прийшов товар/ }),
+    goods.getByRole("button", { name: "Прийшов товар", exact: true }),
   ).toBeVisible();
+  await expect(goods.getByRole("button", { name: /^Брак( |$)/ })).toBeVisible();
   await expect(
-    page.locator(".goods-tiles").getByRole("button", { name: /^Брак/ }),
-  ).toBeVisible();
+    goods.getByRole("button", { name: "Залишки", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Оновити залишки" }),
   ).toHaveCount(0);
@@ -133,7 +133,7 @@ test("without the right to read the stock, «Товар» is its tiles alone, an
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("without the stock, receiving and «Брак», no «Товар» (navigation task list, P0-3)", async ({
+test("without the stock, receiving and «Брак», no «Товар» in the menu and «Ще» › «Товар» holds the catalogue alone (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   const goods = ["inventory:view", "inventory:receive", "damaged:handle"];
@@ -156,10 +156,17 @@ test("without the stock, receiving and «Брак», no «Товар» (navigati
     sections.getByRole("button", { name: "Товар", exact: true }),
   ).toHaveCount(0);
   await more(page);
-  for (const name of ["Залишки", "Приймання", "Брак"])
+  const under = page.getByRole("navigation", { name: "Ще" });
+  for (const name of ["Залишки", "Прийшов товар", /^Брак( |$)/])
     await expect(
-      sections.getByRole("button", { name, exact: true }),
+      under.getByRole(
+        "button",
+        typeof name === "string" ? { name, exact: true } : { name },
+      ),
     ).toHaveCount(0);
+  await expect(
+    under.getByRole("button", { name: /^Товар і каталог/ }),
+  ).toBeVisible();
 });
 
 test("stock access denial hides stale balances and offers retry", async ({

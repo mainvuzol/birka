@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, unreachable } from "@/shared/api";
 import type { JournalOutcome } from "@/shared/journal";
@@ -112,6 +114,7 @@ export function Cash({
   networkOwner,
   fix,
   fixSeen,
+  back,
 }: {
   store: Store;
   token: string;
@@ -123,6 +126,9 @@ export function Cash({
   /** The receipt's «Змінити спосіб оплати»: straight to that sale. */
   fix: FixTarget | null;
   fixSeen: () => void;
+  /** «← Ще» over the heading, for whoever reads the report: «Ще» › «Гроші»
+   * › «Каса» until «Гроші» (S29; «Усе на бірці» task list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error, misses } = useCashCommand();
@@ -547,6 +553,7 @@ export function Cash({
     data !== undefined && (data.next_is_opening || data.last_close === null);
   return (
     <section className="cash">
+      {back && <BackToMore back={back} />}
       <h2>Каса</h2>
       {data ? (
         <p className="cash-context">{contextOf(data)}</p>

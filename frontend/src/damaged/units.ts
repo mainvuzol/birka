@@ -5,9 +5,9 @@ import type { Store } from "@/orders/types";
 import type { DamagedUnit } from "./types";
 
 /**
- * The store's «Брак», read once for its screen and for «Товар»'s tile
- * (navigation task list, P0-3): one read, so the tile's count is the
- * screen's own.
+ * The store's «Брак», read once for its screen and for its row of «Ще»
+ * (navigation task list, P0-3; «Усе на бірці» task list, P0-4): one read,
+ * so the row's count is the screen's own.
  */
 export function useDamagedUnits(
   store: Store,

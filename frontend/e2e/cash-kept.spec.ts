@@ -1,4 +1,11 @@
-import { confirmClose, test, expect, grn, openStore } from "./fixtures";
+import {
+  confirmClose,
+  test,
+  expect,
+  grn,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -193,7 +200,7 @@ async function cash(page: Page, main = true): Promise<void> {
     `/#${new URLSearchParams({ tgWebAppData: initData(olya) }).toString()}`,
   );
   await openStore(page, /^Каса CASH/);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   if (main)
     await expect(
       page.getByRole("heading", { name: "Каса", exact: true }),
@@ -610,7 +617,7 @@ for (const [name, now, counted] of [
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
     // What «Каса» reads when opened again: a row to know the read has come.
     state.now = drawer({ movements: [seen] });
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     await expect(page.getByText("після відмови")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Підрахунок каси" }),

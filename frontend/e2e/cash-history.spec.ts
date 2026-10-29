@@ -1,4 +1,9 @@
-import { test, expect, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -221,7 +226,7 @@ async function history(
   await page.goto("about:blank");
   await page.goto(launch(theme));
   await openStore(page, /^Каса CASH/);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await page.getByRole("button", { name: "Закриття", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Закриття", exact: true }),

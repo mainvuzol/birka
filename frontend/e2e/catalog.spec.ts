@@ -198,7 +198,19 @@ test("catalog navigation requires catalog permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  // «Ще» › «Товар і каталог» without the check: its line says so, and its
+  // own list holds none («Усе на бірці» task list, P0-4).
   await more(page);
+  const catalogue = page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("button", { name: /^Товар і каталог/ });
+  await expect(catalogue.locator(".more-meta")).toHaveText(
+    "моделі, початкові залишки",
+  );
+  await catalogue.click();
+  await expect(
+    page.getByRole("button", { name: "Моделі", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toHaveCount(0);

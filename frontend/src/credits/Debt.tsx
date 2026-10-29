@@ -223,7 +223,7 @@ export function Debt({
   /**
    * Opened from the till's «Внесок» (spec S21; «Усе на бірці» task list,
    * P0-3): the payment alone, its sum on the app's own keypad; writing off
-   * and erasing stay on the debt opened from «Клієнти». `task` is told while
+   * and erasing stay on the debt opened from «Ще» › «Борги». `task` is told while
    * the payment's form stands, so the menu steps aside.
    */
   till?: { task: (shown: boolean) => void };

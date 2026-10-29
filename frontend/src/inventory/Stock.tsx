@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText } from "@/shared/api";
@@ -40,7 +42,7 @@ export function Stock({
   journalKey,
   countKey,
   blocked,
-  tiles = null,
+  back,
 }: {
   store: Store;
   token: string;
@@ -49,9 +51,9 @@ export function Stock({
   /** Where a stocktake's count is kept until it is settled. */
   countKey: string;
   blocked: boolean;
-  /** «Прийшов товар» and «Брак» under the heading, for whoever may open
-   * them (navigation task list, P0-3). */
-  tiles?: JSX.Element | null;
+  /** «← Ще» over the heading: «Ще» › «Товар» › «Залишки» until the model's
+   * own screen («Усе на бірці» task list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element | null {
   const [locationId, setLocationId] = useState("");
   const [offset, setOffset] = useState(0);
@@ -151,8 +153,9 @@ export function Stock({
 
   return (
     <section>
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
-        <h2>Товар</h2>
+        <h2>Залишки</h2>
         <button
           className="quiet"
           disabled={refreshing || locations.isFetching || stock.isFetching}
@@ -163,7 +166,6 @@ export function Stock({
           Оновити залишки
         </button>
       </div>
-      {tiles}
       <p className="hint">
         Оберіть один склад. «Доступно» — залишок після віднімання резервів
         замовлень.

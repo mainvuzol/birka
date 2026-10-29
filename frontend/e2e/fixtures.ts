@@ -99,16 +99,36 @@ export async function openStore(
   );
 }
 
-/** The counter's work, in the row of sections; every other is under «Ще».
- * «Повернення» is «Продаж»'s other way (navigation task list, P0-1); «Борги»
- * and «Замовлення» are «Клієнти»'s two (P0-2); «Залишки» are «Товар»'s own
- * screen, «Приймання» and «Брак» its tiles (P0-3). */
-const counter = ["Продаж", "Товар", "Клієнти", "Каса"];
+/** The bottom menu's tabs, each for whoever may open it; every other place
+ * is under «Ще» («Усе на бірці» task list, P0-4). «Повернення» is
+ * «Продаж»'s other way (navigation task list, P0-1); «Каса» is a tab for
+ * whoever reads no report, a row of «Ще» › «Гроші» for whoever does. */
+const tabs = ["Продаж", "Замовлення", "Каса"];
 
-/** The workspace's sections (redesign P1-6): the row, and «Ще»'s own
- * screen while it is open (navigation task list, P0-4). */
+/** «Ще»'s rows by the screen they open, where the row's word is not the
+ * screen's: «Приймання товару» is «Прийшов товар», «Брак» says how many
+ * wait under it. */
+const rows: Record<string, string | RegExp> = {
+  Приймання: "Прийшов товар",
+  Брак: /^Брак( |$)/,
+};
+
+/** «Товар і каталог»'s screens: a list of their own for whoever has two of
+ * them or more. */
+const catalogue = ["Перевірка каталогу", "Моделі", "Початкові залишки"];
+
+/** The bottom menu (spec §6.2; «Усе на бірці» task list, P0-4). */
+export function menu(page: Page): Locator {
+  return page.getByRole("navigation", { name: "Розділи" });
+}
+
+/** The workspace's sections (redesign P1-6): the menu, and «Ще»'s own
+ * screen — or «Товар і каталог»'s — while it is open (navigation task
+ * list, P0-4). */
 export function sections(page: Page): Locator {
-  return page.getByRole("navigation", { name: /^(Розділи|Ще)$/ });
+  return page.getByRole("navigation", {
+    name: /^(Розділи|Ще|Товар і каталог)$/,
+  });
 }
 
 /**
@@ -120,23 +140,21 @@ export function sections(page: Page): Locator {
 export async function more(page: Page): Promise<void> {
   const screen = page.getByRole("heading", { name: "Ще", exact: true });
   if (!(await screen.isVisible()))
-    await page
-      .getByRole("navigation", { name: "Розділи" })
+    await menu(page)
       .getByRole("button", { name: /^Ще( ⚠)?$/ })
       .click();
   await expect(screen).toBeVisible();
 }
 
-/** «Змінити магазин», at the bottom of «Ще» (navigation task list, P0-4). */
+/** «Змінити магазин», on the workspace's line of any screen of a store
+ * («Усе на бірці» task list, P0-4). */
 export async function changeStore(page: Page): Promise<void> {
-  await more(page);
-  await page.getByRole("button", { name: "Змінити магазин" }).click();
+  await page
+    .locator(".store-line")
+    .getByRole("button", { name: "Змінити магазин" })
+    .click();
 }
 
-/**
- * A section opened as a person opens it: one of the counter's from the
- * row — and its way or tile under it — any other from «Ще».
- */
 /**
  * The till's ways under its heading, «Продати · Повернути · Внесок», by
  * whichever of them this person has (navigation task list, P0-1; «Усе на
@@ -148,6 +166,10 @@ export function tillWays(page: Page): Locator {
   });
 }
 
+/**
+ * A section opened as a person opens it: a tab of the menu — and its way
+ * under it — any other from «Ще», by its row, or «Товар і каталог»'s.
+ */
 export async function section(page: Page, name: string): Promise<void> {
   if (name === "Повернення") {
     // «Продаж», then «Повернути» — for whoever only takes returns,
@@ -168,46 +190,16 @@ export async function section(page: Page, name: string): Promise<void> {
     ).toBeVisible();
     return;
   }
-  if (name === "Борги" || name === "Замовлення") {
-    // «Клієнти», then the way asked for — for whoever has one of them,
-    // «Клієнти» opens it, with no switch.
-    await sections(page)
-      .getByRole("button", { name: "Клієнти", exact: true })
-      .click();
-    await expect(
-      page.getByRole("heading", { name: /^(Борги|Замовлення)$/ }),
-    ).toBeVisible();
-    const way = page
-      .getByRole("group", { name: "Борги або замовлення" })
-      .getByRole("button", { name, exact: true });
-    if (
-      (await way.count()) > 0 &&
-      (await way.getAttribute("aria-current")) !== "page"
-    )
-      await way.click();
-    await expect(
-      page.getByRole("heading", { name, exact: true }),
-    ).toBeVisible();
-    return;
-  }
   if (name === "Залишки" || name === "Приймання" || name === "Брак") {
-    // «Товар», then the tile asked for (P0-3).
-    await sections(page)
-      .getByRole("button", { name: "Товар", exact: true })
-      .click();
-    await expect(
-      page.getByRole("heading", { name: "Товар", exact: true }),
-    ).toBeVisible();
-    if (name === "Залишки") return;
+    // «Ще» › «Товар», then the row asked for (P0-4).
+    await more(page);
     await page
-      .locator(".goods-tiles")
-      .getByRole("button", {
-        name: name === "Приймання" ? /^Прийшов товар/ : /^Брак/,
-      })
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button", { name: rows[name] ?? name, exact: true })
       .click();
     await expect(
       page.getByRole("heading", {
-        name: name === "Приймання" ? "Приймання товару" : "Брак",
+        name: name === "Приймання" ? "Приймання товару" : name,
         exact: true,
       }),
     ).toBeVisible();
@@ -222,8 +214,22 @@ export async function section(page: Page, name: string): Promise<void> {
       .click();
     return;
   }
-  if (!counter.includes(name)) await more(page);
-  await sections(page).getByRole("button", { name, exact: true }).click();
+  const tab = menu(page).getByRole("button", { name, exact: true });
+  if (tabs.includes(name) && (await tab.count()) > 0) {
+    await tab.click();
+    return;
+  }
+  await more(page);
+  if (catalogue.includes(name)) {
+    const group = page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button", { name: /^Товар і каталог/ });
+    if ((await group.count()) > 0) await group.click();
+  }
+  await page
+    .getByRole("navigation", { name: /^(Ще|Товар і каталог)$/ })
+    .getByRole("button", { name, exact: true })
+    .click();
 }
 
 /**

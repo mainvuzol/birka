@@ -582,7 +582,7 @@ test("a split the list does not state asks who counted, and a warehouse with his
   // after #142, 2026-10-26).
   await expect(
     approval.getByText(
-      /Відхиліть цей список, а відсутній товар прийміть через «Товар» › «Прийшов товар»\.$/,
+      /Відхиліть цей список, а відсутній товар прийміть через «Ще» › «Прийшов товар»\.$/,
     ),
   ).toBeVisible();
 
@@ -674,7 +674,14 @@ test("approving is for whoever may approve, and the section for whoever handles 
   drop = ["snapshot:approve", "snapshot:import"];
   await page.reload();
   await openStore(page, "Основний MAIN");
+  // «Ще» › «Товар і каталог» without the lists: its line says so, and its
+  // own list holds none («Усе на бірці» task list, P0-4).
   await more(page);
+  const catalogue = page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("button", { name: /^Товар і каталог/ });
+  await expect(catalogue.locator(".more-meta")).toHaveText("перевірка, моделі");
+  await catalogue.click();
   await expect(
     page.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toBeVisible();

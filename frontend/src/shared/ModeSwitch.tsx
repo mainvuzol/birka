@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import type { JSX } from "react";
 
 /**
- * Two ways of one section, as segments on a grey field (redesign direction
- * §5, «Переключатель режима»): «Продати | Повернути» on the till
- * (navigation task list, P0-1), «Борги | Замовлення» under «Клієнти»
- * (P0-2). Each a button, the way open marked for a reader as the page. A way
+ * Ways of one section, as segments on a grey field (redesign direction §5,
+ * «Переключатель режима»): «Продати · Повернути · Внесок» on the till
+ * (navigation task list, P0-1; «Усе на бірці» task list, P0-3). Each a
+ * button, the way open marked for a reader as the page. A way
  * chosen opens another screen: its switch takes the focus on the way now
  * open, never lost to the page (review, 2026-10-26).
  */

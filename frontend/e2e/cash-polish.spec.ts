@@ -1,4 +1,9 @@
-import { test, expect, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -150,7 +155,7 @@ test("«Каса» read keeps the card where it will stand, and still says «З�
   await stub(page);
   const read = await hold(page, "**/api/v1/cash/drawer?**");
   await open(page);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(said(page)).toHaveText("Завантажуємо касу…");
   const place = page.locator(".cash-card-skeleton");
   await expect(place).toBeVisible();
@@ -174,7 +179,7 @@ test("the seller's operations, one of them, and the closes read keep their place
 }) => {
   await stub(page);
   await open(page);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   const mine = await hold(page, "**/api/v1/cash/events?**");
   await page
     .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
@@ -201,7 +206,7 @@ test("«Закриття» read keeps four rows' places, and says «Завант
 }) => {
   await stub(page, drawer({ may_correct: true }));
   await open(page, owner);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   const closes = await hold(page, "**/api/v1/cash/closes?**");
   await page.getByRole("button", { name: "Закриття", exact: true }).click();
   await expect(said(page)).toHaveText("Завантажуємо закриття…");
@@ -244,7 +249,7 @@ for (const [path, name, notTaken] of [
       });
     });
     await open(page);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     let press: Locator;
     if (path === "movements") {
       await page
@@ -305,7 +310,7 @@ test("a note the server cannot keep says so in «Каса»'s words, what was ty
     });
   });
   await open(page);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await page
     .getByRole("button", { name: "Видати з каси", exact: true })
     .click();
@@ -375,7 +380,7 @@ test("a kept take-out the server says changed is still unconfirmed, by its own n
     });
   });
   await open(page);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(page.getByRole("alert")).toHaveText(
     "Видачу ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі цю операцію не запишуть.",
   );
@@ -470,7 +475,7 @@ test("whoever may not close never sees the card's place while «Каса» is re
   });
   const read = await hold(page, "**/api/v1/cash/drawer?**");
   await open(page);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(said(page)).toHaveText("Завантажуємо касу…");
   await expect(page.locator(".placeholder .cash-row")).toHaveCount(2);
   await expect(page.locator(".cash-card-skeleton")).toHaveCount(0);
@@ -525,7 +530,7 @@ for (const [name, theme] of [
     await page.goto("about:blank");
     await page.goto(launch(olya, theme));
     await openStore(page, /^Каса CASH/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     const plate = page.locator(".cash .notice[role='alert']");
     await expect(plate).toContainText(
       "Касу зараз не закрити: сервер не відповідає.",

@@ -927,7 +927,7 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
     // The till is the seller's again; its three ways come with a basket
     // (redesign direction §5).
     await expect(
-      page.getByRole("button", { name: "Товар", exact: true }),
+      page.getByRole("button", { name: "Замовлення", exact: true }),
     ).toBeEnabled();
     await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
     await expect(

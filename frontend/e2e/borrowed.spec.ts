@@ -381,7 +381,7 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Клієнти", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();

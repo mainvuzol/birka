@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText, inOwnWords } from "@/shared/api";
@@ -67,17 +69,14 @@ export function Receive({
   journalKey,
   blocked,
   back,
-  backHeld = false,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   blocked: boolean;
-  /** «← Товар» over the heading: the screen is one of «Товар»'s tiles
-   * (navigation task list, P0-3). */
-  back?: (() => void) | undefined;
-  /** Held as the row is: a kept delivery keeps its screen (P0-3). */
-  backHeld?: boolean;
+  /** «← Ще» over the heading: «Ще» › «Товар» › «Прийшов товар» («Усе на
+   * бірці» task list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [variant, setVariant] = useState<ReceivableVariant | null>(null);
@@ -292,17 +291,7 @@ export function Receive({
 
   return (
     <section className="goods-part">
-      {back && (
-        <button
-          type="button"
-          className="quiet back"
-          aria-label="Назад до товару"
-          disabled={backHeld}
-          onClick={back}
-        >
-          <span aria-hidden="true">← </span>Товар
-        </button>
-      )}
+      {back && <BackToMore back={back} />}
       <h2>Приймання товару</h2>
       <p className="hint">
         Оберіть склад, куди фізично надійшов товар. Шукайте в каталозі — зокрема

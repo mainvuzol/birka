@@ -1667,9 +1667,10 @@ function Receipt({
             <p className="stub-line">
               Покупець винен <strong>{money(receipt.credit.owed)}</strong>
             </p>
-            {/* The row's button, opened on the debts for whoever sells in
-                parts (owner decision after #141, 2026-10-26). */}
-            <p className="stub-line">Наступні внески — у розділі «Клієнти».</p>
+            {/* Where the next payments are taken: the sections' task list's
+                В5 (а), one word with it («Усе на бірці» task list, P0-4),
+                to ask the owner. */}
+            <p className="stub-line">Наступні внески — у «Продажі» › «Внесок».</p>
           </>
         )}
         <Perforation />

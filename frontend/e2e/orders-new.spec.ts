@@ -547,7 +547,7 @@ test("a model with no price: its field empty and focused, the panel's sum a dash
   await expect(price).toBeFocused();
   await expect(
     line.getByText(
-      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у «Товарі».",
+      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер у «Залишках».",
     ),
   ).toBeVisible();
   await carrier(page, "Міст");
@@ -828,7 +828,7 @@ test("a new order answered whose reading failed: «Оновити результ
   expect(stubbed.made).toHaveLength(1);
 });
 
-test("a new order is six taps, the search typed: «Клієнти», «Замовлення», «+», the size, the carrier and the press (orders task list, P0-5; navigation task list, P0-2: one more than from «Ще», 2 → 3 to the form)", async ({
+test("a new order is five taps, the search typed: «Замовлення», «+», the size, the carrier and the press (orders task list, P0-5; «Усе на бірці» task list, P0-4: «Замовлення» a tab, 2 to the form)", async ({
   page,
 }) => {
   const stubbed = server();
@@ -858,7 +858,7 @@ test("a new order is six taps, the search typed: «Клієнти», «Замо�
   await expect(page.getByText(/^Зарезервовано: 1 шт\./)).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(6);
+  ).toBe(5);
 });
 
 /** Clicks the card's «Відправлено» the moment it is drawn, as a double
