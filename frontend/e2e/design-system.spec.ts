@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openStore } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -7,7 +7,9 @@ import { readFileSync } from "node:fs";
  * The design system of «Усе на бірці» (the frame's task list, P0-1): its
  * colours read in both themes, its one face ships with the app, Telegram's
  * header, background and bottom bar take the app's colours before it is
- * ready, and a sum keeps its «грн» on its line.
+ * ready, and a sum keeps its «грн» on its line. Once ready, Telegram is
+ * asked once for the whole height and to keep a downward swipe from
+ * closing the app (P0-4).
  */
 
 interface Fixture {
@@ -198,6 +200,46 @@ test("outside Telegram nothing is painted, nor anything told (P0-1)", async ({
   await expect(page.getByRole("heading", { name: "Бірка" })).toBeVisible();
   expect(await told(page)).toEqual([]);
 });
+
+for (const [version, swipe] of [
+  ["8.0", true],
+  ["6.0", false],
+] as const)
+  test(`once ready, a Telegram of ${version} is asked once for the whole height${swipe ? " and to keep a downward swipe from closing the app" : ", and of the swipe nothing it does not know"} (direction §6.1; «Усе на бірці» task list, P0-4)`, async ({
+    page,
+  }) => {
+    await hearTelegram(page);
+    await page.goto(launch(version, light));
+    await expect
+      .poll(async () => (await told(page)).map(({ event }) => event))
+      .toContain("web_app_ready");
+    // Whatever else is said afterwards, a store opened, nothing is asked
+    // twice.
+    await openStore(page, "Основний MAIN");
+    await expect(
+      page.getByRole("navigation", { name: "Розділи" }),
+    ).toBeVisible();
+    const events = await told(page);
+    const ready = events.findIndex(({ event }) => event === "web_app_ready");
+    const asked = events.filter(({ event }) =>
+      ["web_app_expand", "web_app_setup_swipe_behavior"].includes(event),
+    );
+    expect(asked).toEqual([
+      { event: "web_app_expand", data: null },
+      ...(swipe
+        ? [
+            {
+              event: "web_app_setup_swipe_behavior",
+              data: { allow_vertical_swipe: false },
+            },
+          ]
+        : []),
+    ]);
+    for (const { event } of asked)
+      expect(events.findIndex((told) => told.event === event)).toBeGreaterThan(
+        ready,
+      );
+  });
 
 /** The WCAG contrast of two `#rrggbb` colours. */
 function ratio(a: string, b: string): number {

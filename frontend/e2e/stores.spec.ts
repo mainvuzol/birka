@@ -295,11 +295,13 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
       0,
     );
-  // «Товар» without «Прийшов товар»: nothing is received here; «Брак» read
-  // (navigation task list, P0-3).
-  await section(page, "Залишки");
+  // «Ще» › «Товар» without «Прийшов товар»: nothing is received here;
+  // «Брак» and «Залишки» read (navigation task list, P0-3; «Усе на бірці»
+  // task list, P0-4).
+  const goods = page.getByRole("navigation", { name: "Ще" });
+  await expect(goods.getByRole("button", { name: /^Брак( |$)/ })).toBeVisible();
   await expect(
-    page.locator(".goods-tiles").getByRole("button", { name: /^Брак/ }),
+    goods.getByRole("button", { name: "Залишки", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /^Прийшов товар/ }),
@@ -650,7 +652,7 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
       .click();
     await expect(page.getByText("Незавершена зміна стану")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Клієнти", exact: true }),
+      page.getByRole("button", { name: "Замовлення", exact: true }),
     ).toBeDisabled();
     // Its own section stays open under «Ще», every other is held (P1-6).
     await more(page);
@@ -658,7 +660,7 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
       sections(page).getByRole("button", { name: "Магазини", exact: true }),
     ).toBeEnabled();
     await expect(
-      sections(page).getByRole("button", { name: "Товар", exact: true }),
+      sections(page).getByRole("button", { name: "Залишки", exact: true }),
     ).toBeDisabled();
     // Written down before it was sent: a reload still knows what to ask about.
     await page.reload();
@@ -667,7 +669,7 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     await page.getByRole("button", { name: "Перевірити результат" }).click();
     await expect(page.getByText("«Ринок»: заблоковано.")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Клієнти", exact: true }),
+      page.getByRole("button", { name: "Замовлення", exact: true }),
     ).toBeEnabled();
     expect(changes.bodies).toHaveLength(2);
     expect(changes.bodies[1]).toEqual(changes.bodies[0]);

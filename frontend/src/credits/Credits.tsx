@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 import {
   useInfiniteQuery,
   useQueries,
@@ -59,6 +61,7 @@ export function Credits({
   mayErase = false,
   sell,
   mode = null,
+  back,
   till,
 }: {
   store: Store;
@@ -85,6 +88,9 @@ export function Credits({
    * «Продати · Повернути · Внесок».
    */
   mode?: JSX.Element | null;
+  /** «← Ще» over the heading: «Ще» › «Люди» › «Борги» until «Покупці»
+   * (S19; «Усе на бірці» task list, P0-4). */
+  back?: MoreBack | undefined;
   /**
    * The till's «Внесок» (spec S08, S21; «Усе на бірці» task list, P0-3):
    * under «Продаж», those who owe this store, and a debt opened for its
@@ -271,6 +277,7 @@ export function Credits({
 
   return (
     <section className="credits">
+      {back && <BackToMore back={back} />}
       <h2 ref={heading} tabIndex={-1}>
         {till ? "Продаж" : "Борги"}
       </h2>

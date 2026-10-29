@@ -35,9 +35,11 @@ import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
-import { GoodsTiles } from "@/inventory/Goods";
+import { DamagedMeta } from "@/inventory/Goods";
+import { TabBar } from "@/shared/TabBar";
+import type { TabItem } from "@/shared/TabBar";
 import { More } from "@/shared/More";
-import type { MoreBack, MoreGroup } from "@/shared/More";
+import type { MoreBack, MoreGroup, MoreRow } from "@/shared/More";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
@@ -48,7 +50,7 @@ import {
   useSaleCommand,
 } from "@/sales/commands";
 import type { SaleAttempt } from "@/sales/commands";
-import { clearPaper } from "@/sales/paper";
+import { clearPaper, setPaper, usePaper } from "@/sales/paper";
 import { forgetBasket } from "@/sales/basket";
 import type { PaperView } from "@/sales/paperMark";
 import { markText, paidDuringOutage } from "@/sales/types";
@@ -145,41 +147,28 @@ type Tab =
   | "models"
   | "cash"
   /** «Ще»'s own screen, its groups (navigation task list, P0-4). */
-  | "more";
+  | "more"
+  /** «Ще» › «Товар» › «Товар і каталог», for whoever has two of its
+   * screens or more («Усе на бірці» task list, P0-4). */
+  | "catalogue";
 
 /**
- * The counter's work (redesign P1-6): these sections stand in the row,
- * each for whoever may do it, or under its button — a way of «Продаж» or
- * «Клієнти», a tile of «Товар» (navigation task list, P0-1…P0-3); every
- * other is under «Ще».
- */
-const counter: ReadonlySet<Tab> = new Set([
-  "sale",
-  "returns",
-  "deposit",
-  "stock",
-  "receive",
-  "damaged",
-  "credits",
-  "list",
-  "new",
-  "cash",
-]);
-
-/**
- * The workspace's one line (redesign P1-6): the store and who works in it.
- * «Змінити магазин» is at the bottom of «Ще» (navigation task list, P0-4);
- * here only over a store that cannot be worked in, which has no «Ще». The
- * app's name stands on the screens before a store opens, and in the title.
+ * The workspace's one line (redesign P1-6): the store and who works in it,
+ * and «Змінити магазин» for whoever has two stores or more — one tap from
+ * any screen of a store («Усе на бірці» task list, P0-4), held as the menu
+ * is. The app's name stands on the screens before a store opens, and in
+ * the title.
  */
 function StoreLine({
   store,
   person,
   changeStore,
+  changeHeld = false,
 }: {
   store: string;
   person: string;
   changeStore?: (() => void) | undefined;
+  changeHeld?: boolean;
 }): JSX.Element {
   return (
     <header className="store-line">
@@ -188,7 +177,7 @@ function StoreLine({
         <span> · {visible(person)}</span>
       </h1>
       {changeStore && (
-        <button className="quiet" onClick={changeStore}>
+        <button className="quiet" disabled={changeHeld} onClick={changeStore}>
           Змінити магазин
         </button>
       )}
@@ -594,12 +583,11 @@ function Workspace({
   const saleKey = `birka:sale-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [catalogStorageError, setCatalogStorageError] = useState(false);
   const [saleStorageError, setSaleStorageError] = useState(false);
-  // «Товар»: the stock, «Прийшов товар» and «Брак», each by its own right
-  // (navigation task list, P0-3).
+  // «Ще» › «Товар»: «Залишки», «Прийшов товар» and «Брак», each by its own
+  // right («Усе на бірці» task list, P0-4).
   const canSeeStock = store.permissions.includes("inventory:view");
   const canReceive = store.permissions.includes("inventory:receive");
   const canSeeDamaged = store.permissions.includes("damaged:handle");
-  const canSeeGoods = canSeeStock || canReceive || canSeeDamaged;
   // Read, not watched, as `canReturnNow`: a kept delivery, correction or
   // count turns to its screen only for whoever may open it; anyone else's
   // banner stands over any tab («Усе на бірці» task list, P2-1).
@@ -1254,7 +1242,11 @@ function Workspace({
     correctionStorageError ||
     correctionCommand.busy ||
     correctionCommand.pending !== null;
-  const othersExceptCorrectionsAndCash =
+  const receiptUnsettled =
+    receiptStorageError ||
+    receiptCommand.busy ||
+    receiptCommand.pending !== null;
+  const othersExceptReceiptAndCredit =
     busy ||
     pending !== null ||
     storageError ||
@@ -1264,11 +1256,9 @@ function Workspace({
     catalogCommand.pending !== null ||
     saleCommand.busy ||
     saleCommand.pending !== null ||
-    receiptStorageError ||
-    receiptCommand.busy ||
-    receiptCommand.pending !== null ||
-    returnUnsettled ||
-    creditUnsettled;
+    returnUnsettled;
+  const othersExceptCorrectionsAndCash =
+    othersExceptReceiptAndCredit || receiptUnsettled || creditUnsettled;
   const othersExceptCorrections =
     othersExceptCorrectionsAndCash || cashUnsettled;
   const othersUnsettled = othersExceptCorrections || correctionUnsettled;
@@ -1312,6 +1302,24 @@ function Workspace({
     supplierUnsettled ||
     invoiceUnsettled;
   const blocked = otherThanAdjustment || adjustmentUnsettled;
+  // «Ще»'s rows to a screen that keeps a journal of its own are held by
+  // every journal but that one, as «Каса» and «Моделі» are: a kept receipt
+  // or write-off never shuts its own screen once it is left (review,
+  // 2026-10-29).
+  const elsewhereUnsettled =
+    cashUnsettled ||
+    correctionUnsettled ||
+    adjustmentUnsettled ||
+    storesUnsettled ||
+    supplierUnsettled ||
+    invoiceUnsettled;
+  const otherThanReceipt =
+    othersExceptReceiptAndCredit ||
+    receiptStorageError ||
+    creditUnsettled ||
+    elsewhereUnsettled;
+  const otherThanCredit =
+    othersExceptReceiptAndCredit || receiptUnsettled || elsewhereUnsettled;
   // A first send in flight: whatever answers it is said on its own screen,
   // so nothing leaves it until then — «Ще» and «← Ще» too, free otherwise
   // (navigation task list, P0-4; review, 2026-10-26).
@@ -1384,9 +1392,15 @@ function Workspace({
           settled.outage.first_days === true,
         )
       : null;
+  // «Каса» is a tab for whoever counts the drawer and reads no report; for
+  // whoever reads one it is «Ще» › «Гроші» › «Каса» until «Гроші» is built
+  // (S29; the frame's В2 (а)). Over a store that does not trade, a tab for
+  // whoever the network's rights open it to, to close the day (§4а).
+  const cashTab = canSeeCash && (!trading || !canSeeReport);
   // The sections (redesign P1-6), each by the same right as before: the
-  // counter's work in the row, and every other under «Ще», two taps away.
-  // An order left open is forgotten by the sections that always were.
+  // menu's tabs (spec §6.2; «Усе на бірці» task list, P0-4), and every other
+  // under «Ще», two taps away. An order left open is forgotten by the
+  // sections that always were.
   const sections: {
     tab: Tab;
     label: string;
@@ -1397,6 +1411,8 @@ function Workspace({
     also?: readonly Tab[];
     /** Pressed again where it stands: its first screen. */
     again?: () => void;
+    /** A tab of the menu, never a row of «Ще». */
+    tabbed?: true;
   }[] = [
     // «Продаж» holds the returns and the payments on debts too, by
     // «Продати · Повернути · Внесок» under its heading (navigation task
@@ -1418,34 +1434,23 @@ function Workspace({
         ? { forgetsOrder: true as const }
         : {}),
       also: ["returns", "deposit"],
+      tabbed: true,
     },
-    // «Товар»: the stock, «Прийшов товар» and «Брак» as tiles over it
-    // (navigation task list, P0-3, the minimal one) — marked on each.
+    // «Замовлення», a tab of its own: its list, its card and «+ Нове
+    // замовлення» as before; pressed again, its first screen.
     {
-      tab: "stock",
-      label: "Товар",
-      shown: canSeeGoods,
-      disabled: blocked,
-      also: ["receive", "damaged"],
-    },
-    // «Клієнти»: «Борги» and «Замовлення», by «Борги | Замовлення» under
-    // their headings (navigation task list, P0-2) — opened on the debts,
-    // or the one of them this person has; pressed again, its first screen.
-    {
-      tab: canSeeCredits ? "credits" : "list",
-      label: "Клієнти",
-      shown: canSeeCredits || canSeeOrders,
+      tab: "list",
+      label: "Замовлення",
+      shown: canSeeOrders,
       disabled: blocked,
       forgetsOrder: true,
-      also: ["credits", "list", "new"],
+      also: ["new"],
       again: () => {
-        if (tab === "credits") setCreditEpoch((epoch) => epoch + 1);
-        else {
-          setTab("list");
-          setSelectedId(null);
-          setOrdersView(freshOrdersView);
-        }
+        setTab("list");
+        setSelectedId(null);
+        setOrdersView(freshOrdersView);
       },
+      tabbed: true,
     },
     {
       tab: "cash",
@@ -1453,6 +1458,33 @@ function Workspace({
       shown: canSeeCash,
       disabled: otherThanCash,
       forgetsOrder: true,
+      ...(cashTab ? { tabbed: true as const } : {}),
+    },
+    // «Ще» › «Люди» › «Борги», named as its screen until «Покупці» (S19).
+    {
+      tab: "credits",
+      label: "Борги",
+      shown: canSeeCredits,
+      disabled: otherThanCredit,
+    },
+    // «Ще» › «Товар»: «Залишки» until the model's own screen (S23).
+    {
+      tab: "receive",
+      label: "Прийшов товар",
+      shown: canReceive,
+      disabled: otherThanReceipt,
+    },
+    {
+      tab: "damaged",
+      label: "Брак",
+      shown: canSeeDamaged,
+      disabled: blocked,
+    },
+    {
+      tab: "stock",
+      label: "Залишки",
+      shown: canSeeStock,
+      disabled: otherThanAdjustment,
     },
     {
       tab: "catalog",
@@ -1505,81 +1537,38 @@ function Workspace({
   ];
   // Whatever section is open, «Ще» marks it when it is one of its own, and
   // on its own screen; the section's heading names it.
-  const inMore = !counter.has(tab);
+  const tabbed = new Set<Tab>(
+    sections
+      .filter((section) => section.tabbed && section.shown)
+      .flatMap((section) => [section.tab, ...(section.also ?? [])]),
+  );
+  const inMore = !tabbed.has(tab);
   const standsFor = (section: (typeof sections)[number]): boolean =>
     tab === section.tab || (section.also?.includes(tab) ?? false);
-  const sectionButton = (section: (typeof sections)[number]): JSX.Element => (
-    <button
-      key={section.tab}
-      className={standsFor(section) ? "active" : "quiet"}
-      aria-current={standsFor(section) ? "page" : undefined}
-      disabled={section.disabled}
-      onClick={() => {
-        if (section.again && standsFor(section)) {
-          section.again();
-          return;
-        }
-        setTab(section.tab);
-        if (section.forgetsOrder) {
-          setSelectedId(null);
-          setOrdersView(freshOrdersView);
-        }
-      }}
-    >
-      {section.label}
-    </button>
-  );
+  const tabOf = (section: (typeof sections)[number]): TabItem => ({
+    key: section.tab,
+    label: section.label,
+    icon:
+      section.tab === "list"
+        ? "tab-orders"
+        : section.tab === "cash"
+          ? "tab-drawer"
+          : "tab-sell",
+    current: standsFor(section),
+    disabled: section.disabled,
+    open: () => {
+      if (section.again && standsFor(section)) {
+        section.again();
+        return;
+      }
+      setTab(section.tab);
+      if (section.forgetsOrder) {
+        setSelectedId(null);
+        setOrdersView(freshOrdersView);
+      }
+    },
+  });
   const shown = sections.filter((section) => section.shown);
-  // «Товар»'s tiles and the way back to them (navigation task list, P0-3),
-  // held as the row is.
-  const toGoods = (): void => {
-    setTab("stock");
-  };
-  const goodsTiles = (
-    <GoodsTiles
-      store={store}
-      token={token}
-      disabled={blocked}
-      receive={
-        canReceive
-          ? () => {
-              setTab("receive");
-            }
-          : null
-      }
-      damaged={
-        canSeeDamaged
-          ? () => {
-              setTab("damaged");
-            }
-          : null
-      }
-    />
-  );
-  // Debts and orders, one section's two ways (navigation task list, P0-2):
-  // for whoever has both, under each list's heading, held as the row is.
-  const debtsOrOrders = (current: "credits" | "list"): JSX.Element | null =>
-    canSeeCredits && canSeeOrders ? (
-      <ModeSwitch
-        label="Борги або замовлення"
-        modes={[
-          { mode: "credits", label: "Борги" },
-          { mode: "list", label: "Замовлення" },
-        ]}
-        current={current}
-        disabled={blocked}
-        focus={modeChosen}
-        focused={modeFocused}
-        choose={(mode) => {
-          setModeChosen(true);
-          setTab(mode);
-          if (mode === "list") {
-            setSelectedId(null);
-            setOrdersView(freshOrdersView);
-          }
-        }}
-      />
-    ) : null;
   // Selling, taking back and taking a payment on a debt, one section's
   // ways (navigation task list, P0-1; «Усе на бірці» task list, P0-3): each
   // by its own right, the switch for whoever has two or more, under each
@@ -1622,35 +1611,95 @@ function Workspace({
       />
     );
   };
-  const rest = shown.filter((section) => !counter.has(section.tab));
-  // «Ще»'s groups, in the direction's order (navigation task list, P0-4):
-  // money, suppliers, goods and catalogue, the network. «Каса» joins
-  // «Гроші» once «Огляд» takes its place in the row (P1-1).
-  const moreOrder: readonly { title: string; tabs: readonly Tab[] }[] = [
-    { title: "Гроші", tabs: ["report"] },
-    { title: "Постачальники", tabs: ["invoices", "suppliers"] },
-    { title: "Товар і каталог", tabs: ["catalog", "models", "openings"] },
-    { title: "Мережа", tabs: ["stores", "backups"] },
-  ];
-  const moreGroups: MoreGroup[] = moreOrder.map((group) => ({
-    title: group.title,
-    rows: group.tabs.flatMap((key) =>
-      rest
-        .filter((section) => section.tab === key)
-        .map((section) => ({
-          key: section.tab,
-          label: section.label,
-          disabled: section.disabled,
-          open: () => {
-            setTab(section.tab);
-            moreButton.current?.focus();
+  const rest = shown.filter((section) => !section.tabbed);
+  const rowOf = (section: (typeof sections)[number]): MoreRow => ({
+    key: section.tab,
+    label: section.label,
+    // «Брак»'s row says how many units wait, as its tile did.
+    ...(section.tab === "damaged"
+      ? { meta: <DamagedMeta store={store} token={token} /> }
+      : {}),
+    disabled: section.disabled,
+    open: () => {
+      setTab(section.tab);
+      moreButton.current?.focus();
+    },
+  });
+  const rowsOf = (tabs: readonly Tab[]): MoreRow[] =>
+    tabs.flatMap((key) =>
+      rest.filter((section) => section.tab === key).map(rowOf),
+    );
+  // «Товар і каталог»: a list of its own for whoever has two of its screens
+  // or more, the one itself for whoever has one; its line names what it
+  // holds.
+  const catalogueRows = rowsOf(["catalog", "models", "openings"]);
+  const catalogueWords: Partial<Record<string, string>> = {
+    catalog: "перевірка",
+    models: "моделі",
+    openings: "початкові залишки",
+  };
+  const catalogueRow: MoreRow[] =
+    catalogueRows.length < 2
+      ? catalogueRows
+      : [
+          {
+            key: "catalogue",
+            label: "Товар і каталог",
+            meta: catalogueRows
+              .map((row) => catalogueWords[row.key] ?? "")
+              .join(", "),
+            // Held only when all it holds is: «Моделі» stays reachable while
+            // its own correction waits.
+            disabled: catalogueRows.every((row) => row.disabled),
+            open: () => {
+              setTab("catalogue");
+              moreButton.current?.focus();
+            },
           },
-        })),
-    ),
-  }));
-  // «Ще» is shown when it holds anything: a section, or the stores to change
-  // to (navigation task list, §4).
-  const hasMore = rest.length > 0 || changeStore !== undefined;
+        ];
+  const paperOn = usePaper((state) => state.storeId === store.id);
+  // «Ще»'s groups, in the design's order (spec S07; «Усе на бірці» task
+  // list, P0-4): people, goods, money, the network, this phone.
+  const moreGroups: MoreGroup[] = [
+    { title: "Люди", rows: rowsOf(["credits"]) },
+    {
+      title: "Товар",
+      rows: [...rowsOf(["receive", "damaged", "stock"]), ...catalogueRow],
+    },
+    { title: "Гроші", rows: rowsOf(["cash", "report", "invoices", "suppliers"]) },
+    { title: "Мережа", rows: rowsOf(["stores", "backups"]) },
+    {
+      title: "Цей телефон",
+      rows: [
+        ...(changeStore
+          ? [
+              {
+                key: "change",
+                label: "Змінити магазин",
+                disabled: blocked,
+                open: changeStore,
+              },
+            ]
+          : []),
+        // The till's own switch, the same state (`sales/paper.ts`).
+        ...(trading && store.permissions.includes("sale:create")
+          ? [
+              {
+                key: "paper",
+                label: "Вношу продаж з паперу",
+                on: paperOn,
+                disabled: blocked,
+                open: () => {
+                  setPaper(store.id, !paperOn);
+                },
+              },
+            ]
+          : []),
+      ],
+    },
+  ];
+  // «Ще» is shown when it holds anything (§4а).
+  const hasMore = moreGroups.some((group) => group.rows.length > 0);
   // The focus stays on «Ще», never lost to the page, as the screen under it
   // goes (review, 2026-10-16 and 2026-10-26).
   const moreButton = useRef<HTMLButtonElement>(null);
@@ -1663,7 +1712,11 @@ function Workspace({
   // read them: the first section shown instead (orders task list, P2-1) —
   // unless a kept operation turned to its own tab meanwhile (review,
   // 2026-10-25).
-  const firstShown = shown[0]?.tab;
+  // Whoever may not read orders opens on the first tab shown — «Ще», for
+  // whoever has no other — never on a task's screen (§4а).
+  const firstShown: Tab | undefined =
+    shown.find((section) => section.tabbed)?.tab ??
+    (hasMore ? "more" : undefined);
   useEffect(() => {
     if (tab === "list" && !canSeeOrders && firstShown !== undefined)
       setTab((now) => (now === "list" ? firstShown : now));
@@ -1684,7 +1737,14 @@ function Workspace({
   setScreen(tab);
   return (
     <>
-      <StoreLine store={store.name} person={me.display_name} />
+      <StoreLine
+        store={store.name}
+        person={me.display_name}
+        changeStore={changeStore}
+        // Held, too, while a payment's form stands at the till: «←» is its
+        // only way out (spec S21; review, 2026-10-29).
+        changeHeld={blocked || (tab === "deposit" && depositTask)}
+      />
       {!trading && (
         <Banner kind="blocked" role="status" as="div">
           <p>
@@ -1693,28 +1753,29 @@ function Workspace({
           </p>
         </Banner>
       )}
-      {/* Out of the way while a payment's form stands at the till: a task
-          screen, left by «←» (spec S21; «Усе на бірці» task list, P0-3). */}
-      {!(tab === "deposit" && depositTask) && (
-        <nav aria-label="Розділи" className="sections">
-          <div className="row">
-            {shown
-              .filter((section) => counter.has(section.tab))
-              .map(sectionButton)}
-            {hasMore && (
-              <button
-                ref={moreButton}
-                className={inMore ? "active" : "quiet"}
-                aria-current={inMore ? "true" : undefined}
-                disabled={sending}
-                onClick={toMore}
-              >
-                Ще{backupsNeedYou ? " ⚠" : ""}
-              </button>
-            )}
-          </div>
-        </nav>
-      )}
+      {/* The menu at the bottom (spec §6.2; «Усе на бірці» task list,
+          P0-4); out of the way while a payment's form stands at the till,
+          a task's screen left by «←» (spec S21; P0-3). */}
+      <TabBar
+        away={tab === "deposit" && depositTask}
+        tabs={[
+          ...shown.filter((section) => section.tabbed).map(tabOf),
+          ...(hasMore
+            ? [
+                {
+                  key: "more",
+                  label: `Ще${backupsNeedYou ? " ⚠" : ""}`,
+                  icon: "tab-more" as const,
+                  current:
+                    tab === "more" ? true : inMore ? ("true" as const) : false,
+                  disabled: sending,
+                  open: toMore,
+                  ref: moreButton,
+                },
+              ]
+            : []),
+        ]}
+      />
       {catalogStorageError && (
         <p role="alert">
           Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
@@ -2195,8 +2256,7 @@ function Workspace({
             store={store}
             token={token}
             journalKey={receiptKey}
-            back={toGoods}
-            backHeld={blocked}
+            back={moreBack}
             blocked={
               storageError ||
               catalogStorageError ||
@@ -2228,16 +2288,8 @@ function Workspace({
             blocked={
               otherThanAdjustment || adjustmentStorageError || countStorageError
             }
-            tiles={goodsTiles}
+            back={moreBack}
           />
-        ) : canSeeGoods ? (
-          // The tiles alone, for whoever may not read the stock.
-          <section>
-            <div className="toolbar">
-              <h2>Товар</h2>
-            </div>
-            {goodsTiles}
-          </section>
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
         null
@@ -2332,7 +2384,7 @@ function Workspace({
         canSeeCredits ? (
           <Credits
             key={creditEpoch}
-            mode={debtsOrOrders("credits")}
+            back={moreBack}
             store={store}
             token={token}
             journalKey={creditKey}
@@ -2379,16 +2431,18 @@ function Workspace({
             token={token}
             blocked={blocked}
             readOnly={!trading}
-            back={toGoods}
+            back={moreBack}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
         null
       ) : tab === "more" ? (
+        <More groups={moreGroups} />
+      ) : tab === "catalogue" ? (
         <More
-          groups={moreGroups}
-          changeStore={changeStore}
-          changeHeld={blocked}
+          title="Товар і каталог"
+          groups={[{ title: "", rows: catalogueRows }]}
+          back={moreBack}
         />
       ) : tab === "openings" ? (
         canSeeOpenings ? (
@@ -2459,6 +2513,7 @@ function Workspace({
             networkOwner={me.organization_permissions.includes("store:manage")}
             fix={cashFix}
             fixSeen={fixSeen}
+            back={cashTab ? undefined : moreBack}
           />
         ) : // The right gone while «Каса» was open: nothing is said of the
         // rule, as «Борги» (cash task list, P2-1).
@@ -2636,7 +2691,6 @@ function Workspace({
         )
       ) : (
         <Orders
-          mode={debtsOrOrders("list")}
           store={store}
           token={token}
           blocked={blocked}

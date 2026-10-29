@@ -6,6 +6,7 @@ import {
   expectStub,
   fillLine,
   fromPaper,
+  menu,
   more,
   openStore,
   section,
@@ -783,7 +784,7 @@ test.describe("1. the seller is told to sell on paper", () => {
     server.drawer = "lost";
     await page.goto(launch());
     await openStore(page, /Подільський/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     const failed = page.getByRole("alert");
     await expect(failed).toContainText(UNREACHABLE);
     await expect(failed).toContainText(
@@ -801,7 +802,7 @@ test.describe("1. the seller is told to sell on paper", () => {
     server.drawer = "error";
     await page.goto(launch());
     await openStore(page, /Подільський/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     const failed = page.getByRole("alert");
     await expect(failed).toContainText(
       "Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту: 7d1e5b20.",
@@ -1947,7 +1948,7 @@ test.describe("9. what to do with money after the outage", () => {
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     // On the count's screen, always (owner decision, 2026-10-21, В1 (а)).
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
@@ -1985,7 +1986,7 @@ test.describe("9. what to do with money after the outage", () => {
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
@@ -2849,20 +2850,19 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     expect(
       await page.evaluate((key) => localStorage.getItem(key), adjustmentKey),
     ).not.toBeNull();
-    // On «Товар», marked; its tile held as the row is (navigation task
-    // list, P0-3).
+    // On «Залишки», «Ще» marked; «Ще»'s rows held, its notice over it
+    // (navigation task list, P0-3; «Усе на бірці» task list, P0-4).
     await expect(
-      page.getByRole("heading", { name: "Товар", exact: true }),
+      page.getByRole("heading", { name: "Залишки", exact: true }),
     ).toBeVisible();
     await expect(
-      page
-        .getByRole("navigation", { name: "Розділи" })
-        .getByRole("button", { name: "Товар", exact: true }),
-    ).toHaveAttribute("aria-current", "page");
+      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+    ).toHaveAttribute("aria-current", "true");
+    await more(page);
     await expect(
       page
-        .locator(".goods-tiles")
-        .getByRole("button", { name: /^Прийшов товар/ }),
+        .getByRole("navigation", { name: "Ще" })
+        .getByRole("button", { name: "Прийшов товар", exact: true }),
     ).toBeDisabled();
     status = 404;
     await thriceNotFound(
@@ -2961,7 +2961,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       );
     });
 
-  test("a kept delivery of whoever may not read orders opens on «Приймання товару», never on the first section instead (orders task list, P2-1; review, 2026-10-25), «Товар» marked, it and «← Товар» held (navigation task list, P0-3)", async ({
+  test("a kept delivery of whoever may not read orders opens on «Приймання товару», never on the first section instead (orders task list, P2-1; review, 2026-10-25), «Ще» marked, its screen always come back to (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
     page,
   }) => {
     const key = `birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`;
@@ -2988,7 +2988,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       }),
     });
     await serve(page);
-    // No till, and «Товар» the first section shown: opened on
+    // No till, nor orders: every section under «Ще» — never opened on
     // «Замовлення», nothing of orders to read.
     await on(page, "/me", async (route) => {
       await route.fulfill({
@@ -3011,16 +3011,26 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Приймання товару" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Товар", exact: true }),
+      page.getByRole("heading", { name: "Ще", exact: true }),
     ).toHaveCount(0);
-    // «Товар» marked; it and «← Товар» held while the delivery waits
-    // (navigation task list, P0-3).
-    const goods = page
-      .getByRole("navigation", { name: "Розділи" })
-      .getByRole("button", { name: "Товар", exact: true });
-    await expect(goods).toHaveAttribute("aria-current", "page");
-    await expect(goods).toBeDisabled();
-    await expect(page.locator(".goods-part .back")).toBeDisabled();
+    // «Ще» marked. Left while the delivery waits, its screen is come back
+    // to: its row is held by every journal but its own, as «Каса»'s
+    // («Усе на бірці» task list, P0-4; review, 2026-10-29).
+    await expect(
+      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+    ).toHaveAttribute("aria-current", "true");
+    await page.getByRole("button", { name: "Назад до «Ще»" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Ще", exact: true }),
+    ).toBeVisible();
+    const row = page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button", { name: "Прийшов товар", exact: true });
+    await expect(row).toBeEnabled();
+    await row.click();
+    await expect(
+      page.getByRole("heading", { name: "Приймання товару" }),
+    ).toBeVisible();
   });
 
   for (const kept of [
@@ -3225,7 +3235,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toHaveCount(0);
   });
 
-  test("a kept stocktake's count of whoever may read the stock still opens on «Товар» («Усе на бірці» task list, P2-1)", async ({
+  test("a kept stocktake's count of whoever may read the stock still opens on «Залишки», «Ще» marked («Усе на бірці» task list, P2-1, P0-4)", async ({
     page,
   }) => {
     const key = `birka:stocktake-count-pending:${ids.organization}:${ids.user}:${ids.store}`;
@@ -3259,10 +3269,11 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("button", { name: "Перевірити результат підрахунку" }),
     ).toBeVisible();
     await expect(
-      page
-        .getByRole("navigation", { name: "Розділи" })
-        .getByRole("button", { name: "Товар", exact: true }),
-    ).toHaveAttribute("aria-current", "page");
+      page.getByRole("heading", { name: "Залишки", exact: true }),
+    ).toBeVisible();
+    await expect(
+      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+    ).toHaveAttribute("aria-current", "true");
     await expect(
       page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
     ).toHaveCount(0);
@@ -4827,10 +4838,10 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         await expect(
           page.getByRole("button", { name: "Борги", exact: true }),
         ).toHaveCount(0);
-        // Neither debts nor orders: no «Клієнти» (navigation task list,
-        // P0-2).
+        // Neither debts nor orders: no «Замовлення» in the menu (navigation
+        // task list, P0-2; «Усе на бірці» task list, P0-4).
         await expect(
-          page.getByRole("button", { name: "Клієнти", exact: true }),
+          menu(page).getByRole("button", { name: "Замовлення", exact: true }),
         ).toHaveCount(0);
         await expect(page.getByText(/Немає доступу/)).toHaveCount(0);
       });
@@ -5048,7 +5059,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("a kept write-off, never made at the till, turns to «Клієнти» › «Борги» on a phone whose person may take payments, never to «Продаж» › «Внесок» (review, 2026-10-29)", async ({
+  test("a kept write-off, never made at the till, turns to «Ще» › «Борги» on a phone whose person may take payments, never to «Продаж» › «Внесок» (review, 2026-10-29; «Усе на бірці» task list, P0-4)", async ({
     page,
   }) => {
     await seed(page, { [creditKey]: keptDebt("write-off") });
@@ -5068,8 +5079,8 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Борги", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Клієнти", exact: true }),
-    ).toHaveAttribute("aria-current", "page");
+      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+    ).toHaveAttribute("aria-current", "true");
     await expect(tillWays(page)).toHaveCount(0);
   });
 
@@ -5102,7 +5113,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       ways.getByRole("button", { name: "Продати", exact: true }),
     ).toBeDisabled();
     await expect(
-      page.getByRole("button", { name: "Клієнти", exact: true }),
+      page.getByRole("button", { name: "Замовлення", exact: true }),
     ).toBeDisabled();
   });
 

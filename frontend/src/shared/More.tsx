@@ -1,11 +1,16 @@
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 
 /** A section under «Ще»: its label, held by its own section's rule. */
 export interface MoreRow {
   key: string;
   label: string;
+  /** Under the label: what waits, or what the row holds — its words, or a
+   * line that reads them itself and draws its own `.more-meta`. */
+  meta?: ReactNode;
   disabled: boolean;
   open: () => void;
+  /** A switch of this phone's, not a screen: on or off. */
+  on?: boolean;
 }
 
 export interface MoreGroup {
@@ -21,60 +26,77 @@ export interface MoreBack {
 }
 
 /**
- * «Ще», a screen of its own (navigation task list, P0-4; the owner's answers
- * after #142, 2026-10-26): every section that is not the row's, by groups in
- * the direction's order — a group with nothing in it not shown — a row each,
- * named as its screen's heading, with its chevron; «Змінити магазин» last,
- * for whoever has two stores or more, held as the row is.
+ * «Ще», a screen of its own (spec S07; «Усе на бірці» task list, P0-4):
+ * every place that is not a tab, by the design's groups in its order — a
+ * group with nothing in it not shown — a row each, named as its screen's
+ * heading, with its chevron; this phone's switches as switches. A group's
+ * own list, «Товар і каталог», is the same screen under its own name, with
+ * «← Ще».
  */
 export function More({
+  title = "Ще",
   groups,
-  changeStore,
-  changeHeld,
+  back,
 }: {
+  title?: string;
   groups: readonly MoreGroup[];
-  /** Absent when the person has one store: there is nothing to change to. */
-  changeStore: (() => void) | undefined;
-  changeHeld: boolean;
+  /** A group's own list: back to «Ще». */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const shown = groups.filter((group) => group.rows.length > 0);
   return (
     <section className="more-screen">
-      <h2>Ще</h2>
-      {/* Not a row of buttons, as other navs are: a list of rows; none
-          when «Ще» holds only «Змінити магазин» (review, 2026-10-26). */}
+      {back && <BackToMore back={back} />}
+      <h2>{title}</h2>
+      {/* Not a row of buttons, as other navs are: a list of rows. */}
       {shown.length > 0 && (
-        <nav aria-label="Ще" className="more-list">
+        <nav aria-label={title} className="more-list">
           {shown.map((group) => (
             <div className="more-group" key={group.title}>
-              <h3>{group.title}</h3>
-              {group.rows.map((row) => (
-                <button
-                  key={row.key}
-                  type="button"
-                  className="sale-row"
-                  disabled={row.disabled}
-                  onClick={row.open}
-                >
-                  <span className="more-label">{row.label}</span>
-                  <span className="sale-open" aria-hidden="true">
-                    ›
-                  </span>
-                </button>
-              ))}
+              {group.title !== "" && <h3>{group.title}</h3>}
+              {group.rows.map((row) =>
+                row.on === undefined ? (
+                  <button
+                    key={row.key}
+                    type="button"
+                    className="sale-row"
+                    disabled={row.disabled}
+                    onClick={row.open}
+                  >
+                    <span className="more-label">
+                      {row.label}
+                      {/* Read as two words, not run together. */}
+                      {row.meta !== undefined && " "}
+                      {typeof row.meta === "string" ? (
+                        <span className="more-meta">{row.meta}</span>
+                      ) : (
+                        row.meta
+                      )}
+                    </span>
+                    <span className="sale-open" aria-hidden="true">
+                      ›
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    key={row.key}
+                    type="button"
+                    role="switch"
+                    aria-checked={row.on}
+                    className="sale-row more-switch"
+                    disabled={row.disabled}
+                    onClick={row.open}
+                  >
+                    <span className="more-label">{row.label}</span>
+                    <span className="switch-track" aria-hidden="true">
+                      <span className="switch-knob" />
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
           ))}
         </nav>
-      )}
-      {changeStore && (
-        <button
-          type="button"
-          className="quiet more-change"
-          disabled={changeHeld}
-          onClick={changeStore}
-        >
-          Змінити магазин
-        </button>
       )}
     </section>
   );

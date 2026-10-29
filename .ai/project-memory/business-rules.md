@@ -4724,3 +4724,33 @@ Every other word stays as it was.
     payments; a kept write-off, never made at the till, to «Борги»;
   - «Клієнти»'s debt keeps its field, the write-off and erasing until
     P0-4.
+
+## Chosen in chat — 2026-10-29 (the frame of «Усе на бірці», part 1)
+
+Chosen in chat on 2026-10-29, after #149: the frame's P0-4 next, built in
+two parts (`all-on-the-tag-frame-1-report.md`); the screen's own title as
+the page's heading is part 2. No right, rule or figure changes: every tab
+and row of «Ще» is shown by the right that showed its section before. New
+words: the groups «Люди», «Товар», «Гроші», «Мережа», «Цей телефон»
+(capitals by style); «Товар і каталог» with its line «перевірка, моделі,
+початкові залишки» (what is open); «Залишки» for «Товар»; «← Ще» for «←
+Товар»; «Ціну для всіх задає менеджер у «Залишках».», «…прийміть через
+«Ще» › «Прийшов товар».», «Наступні внески — у «Продажі» › «Внесок».».
+Every other word stays as it was.
+- **Decided here:**
+  - the menu steps aside only while the keyboard is really up — a field
+    it opens for in focus and the visible part shorter by more than 150 px
+    — never on a cursor the till puts in its search;
+  - «Брак»'s row keeps its tile's «N очікують перевірки» until P1-5;
+  - «Прийшов товар» is the row's word, as the tile's;
+  - «← Ще» is held only while a first send is in flight, as «Ще»; a row to
+    a screen with its own journal is held by every journal but its own;
+  - «Змінити магазин» on the store's line, held on S21 as the menu steps
+    aside there;
+  - «Вношу продаж з паперу» in «Ще» only for whoever sells in a store that
+    trades;
+  - whoever may not read orders opens on the first tab shown, «Ще» when it
+    is the only one;
+  - the receipt's next payments are built as the sections' task list's В5
+    (а); to ask the owner;
+  - expand and the swipe are asked once a launch.

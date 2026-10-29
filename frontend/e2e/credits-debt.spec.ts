@@ -179,16 +179,13 @@ function panel(page: Page): Locator {
   return page.getByRole("group", { name: "Внесок", exact: true });
 }
 
-test("«Клієнти» pressed again on a debt brings the debts' first screen (navigation task list, P0-2)", async ({
+test("«Ще» › «Борги» opened again on a debt brings the debts' first screen («Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await serve(page, debt());
   await opened(page);
   await expect(panel(page)).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "Розділи" })
-    .getByRole("button", { name: "Клієнти", exact: true })
-    .click();
+  await section(page, "Борги");
   await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
   await expect(
@@ -1027,6 +1024,13 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       page.getByRole("navigation", { name: "Розділи" }),
     ).toHaveCount(0);
+    // Nor another store from the header: «←» is S21's only way out (review,
+    // 2026-10-29).
+    await expect(
+      page
+        .locator(".store-line")
+        .getByRole("button", { name: "Змінити магазин" }),
+    ).toBeDisabled();
     const owed = page.getByRole("group", { name: "Скільки винні" });
     await expect(owed.locator(".owed-what")).toHaveText("Винні");
     await expect(owed.locator(".owed-what svg")).toHaveCount(1);
@@ -1034,7 +1038,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(owed.locator(".owed-count")).toHaveText(
       "Сплачено 1 000,00 грн з 3 000,00 грн · останній внесок 12.10",
     );
-    // No write-off nor erasing here: they are the debt's from «Клієнти».
+    // No write-off nor erasing here: they are the debt's from «Борги».
     await expect(
       page.getByRole("button", { name: "Списати борг" }),
     ).toHaveCount(0);
@@ -1314,7 +1318,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     expect(asked).not.toContain(fixture.second_store_id);
   });
 
-  test("the till's «Внесок» and «Клієнти» are two screens: a stub left at the till is never «Клієнти»'s, nor a debt opened there the till's (review, 2026-10-29)", async ({
+  test("the till's «Внесок» and «Ще» › «Борги» are two screens: a stub left at the till is never «Борги»'s, nor a debt opened there the till's (review, 2026-10-29; «Усе на бірці» task list, P0-4)", async ({
     page,
   }) => {
     await serve(page, coat());
@@ -1325,8 +1329,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       page.getByRole("heading", { name: "Внесок записано" }),
     ).toBeFocused();
-    const menu = page.getByRole("navigation", { name: "Розділи" });
-    await menu.getByRole("button", { name: "Клієнти", exact: true }).click();
+    await section(page, "Борги");
     await expect(
       page.getByRole("heading", { name: "Борги", level: 2 }),
     ).toBeVisible();
@@ -1335,11 +1338,11 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       page.getByRole("button", { name: /^Відкрити борг: / }),
     ).toBeVisible();
 
-    // And back: a debt opened in «Клієнти», with its sum typed, stays there.
+    // And back: a debt opened in «Борги», with its sum typed, stays there.
     await page.getByRole("button", { name: /^Відкрити борг: / }).click();
     await expect(panel(page)).toBeVisible();
     await page.getByLabel("Сума внеску, грн").fill("300");
-    await menu.getByRole("button", { name: "Продаж", exact: true }).click();
+    await section(page, "Продаж");
     await tillWays(page)
       .getByRole("button", { name: "Внесок", exact: true })
       .click();

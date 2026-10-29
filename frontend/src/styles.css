@@ -343,11 +343,15 @@
 body {
   margin: 0;
 }
+/* The content at most 560 px, centred — Telegram on a computer — and as
+   tall as Telegram's stable height, never `100vh`; its foot clear of the
+   menu, which keeps the home indicator («Усе на бірці» task list, P0-4). */
 main {
-  max-width: 780px;
+  max-width: 560px;
+  min-height: var(--tg-viewport-stable-height, 100dvh);
   margin: auto;
   padding: calc(24px + env(safe-area-inset-top)) 18px
-    calc(40px + env(safe-area-inset-bottom));
+    calc(40px + var(--menu-h, env(safe-area-inset-bottom)));
 }
 header {
   display: flex;
@@ -561,7 +565,7 @@ label .hint {
   font-weight: 400;
 }
 .toolbar,
-nav:not(.sections, .more-list),
+nav:not(.tab-bar, .more-list),
 .actions,
 .fields {
   display: flex;
@@ -578,25 +582,8 @@ nav:not(.sections, .more-list),
 nav {
   margin-top: 20px;
 }
-nav:not(.sections, .more-list) {
+nav:not(.tab-bar, .more-list) {
   justify-content: flex-start;
-}
-/* The sections (redesign P1-6): the counter's work and «Ще» in one row of
-   48 px targets, one line at 360 px; «Ще» opens its own screen of every
-   other (navigation task list, P0-4). On a narrower screen, or a larger
-   text, a label is cut short rather than push the page sideways (review,
-   2026-10-16). */
-nav.sections .row {
-  display: flex;
-  gap: 4px;
-}
-nav.sections .row button {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 12px 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .actions {
   flex-wrap: wrap;
@@ -719,19 +706,16 @@ button.active {
   .fields {
     gap: 10px;
   }
-  nav:not(.sections, .more-list) button {
+  nav:not(.tab-bar, .more-list) button {
     flex: 1;
     padding: 12px 8px;
-    font-size: 14px;
-  }
-  nav.sections button {
     font-size: 14px;
   }
   .actions button {
     width: 100%;
   }
 }
-nav:not(.sections, .more-list) {
+nav:not(.tab-bar, .more-list) {
   flex-wrap: wrap;
 }
 .catalog-raw {
@@ -924,9 +908,11 @@ nav:not(.sections, .more-list) {
   box-shadow: var(--shadow-2);
 }
 /* The panel's height, kept clear wherever the page scrolls to
-   (`shared/panel.ts`). */
+   (`shared/panel.ts`), and the menu's under it. */
 html {
-  scroll-padding-bottom: calc(var(--pay-panel-h, 0px) + 12px);
+  scroll-padding-bottom: calc(
+    var(--pay-panel-h, 0px) + var(--menu-h, 0px) + 12px
+  );
 }
 .pay-what {
   margin: 0 0 4px;
@@ -2539,30 +2525,6 @@ html {
   margin: 0;
   font-weight: 650;
 }
-/* «Товар»'s tiles (navigation task list, P0-3): two in a row, one alone
-   the whole width; each a target of 64 px or more — its icon, its word and,
-   on «Брак», how many wait, in 14 px, wrapped whole rather than cut. */
-.goods-tiles {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 8px;
-  margin: 0 0 18px;
-}
-.goods-tiles .tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-height: 64px;
-  margin: 0;
-  padding: 12px 14px;
-  border-color: var(--line-strong);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-}
 /* The tag's silhouette (spec §6.0; P0-1), for the tags to come: a row's
    two left corners cut 10 px, a hero's two top corners 14 px. In light a
    hairline goes round it: the cut shape filled with it, the card 1 px
@@ -2625,25 +2587,14 @@ html {
 .icon {
   flex: none;
 }
-.receive-icon {
-  color: var(--accent-text);
+/* «Брак»'s line on its row of «Ще», grey while its units are read. */
+.more-meta .skeleton-meta {
+  display: block;
+  width: 9em;
+  height: 13px;
+  margin-top: 4px;
 }
-.damaged-icon {
-  color: var(--damaged);
-}
-.tile-word {
-  font-size: 16px;
-}
-.tile-meta {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-2);
-}
-.goods-tiles .skeleton-meta {
-  width: 70%;
-  height: 14px;
-}
-/* «← Товар», a quiet line over a tile's screen, as «← Каса». */
+/* «← Ще» over «Прийшов товар» and «Брак», a quiet line, as «← Каса». */
 .goods-part .back {
   min-height: 44px;
   margin: 0;
@@ -2655,13 +2606,17 @@ html {
 .goods-part .back + .toolbar {
   margin-top: 4px;
 }
-/* «Ще», a screen of its own (navigation task list, P0-4): groups under a
-   13 px label, a row each in the lists' rhythm — `.sale-row`, 56 px, a
-   chevron — and «Змінити магазин» last, a quiet line. */
+/* «Ще», a screen of its own (spec S07; «Усе на бірці» task list, P0-4):
+   groups under a 13 px label, a row each in the lists' rhythm —
+   `.sale-row`, 56 px, a chevron — this phone's switch with its track. */
+/* A group's label in capitals, «ЛЮДИ», «ТОВАР» (spec S07): by style, so a
+   reader says the word. */
 .more-group h3 {
   margin: 18px 0 2px;
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-2);
 }
 .more-screen h2 + nav .more-group:first-child h3 {
@@ -2672,11 +2627,49 @@ html {
   min-width: 0;
   font-weight: 600;
 }
-.more-change {
-  width: 100%;
-  margin-top: 22px;
+.more-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pencil);
 }
-/* «← Ще», a quiet line over a section's heading, as «← Товар». */
+/* This phone's switch, «Вношу продаж з паперу»: the till's state. */
+.more-switch {
+  text-align: left;
+}
+.switch-track {
+  flex: none;
+  width: 44px;
+  height: 26px;
+  padding: 3px;
+  border-radius: 13px;
+  background: var(--hairline);
+  transition: background-color 120ms ease-out;
+}
+.switch-knob {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-1, 0 1px 2px rgb(0 0 0 / 20%));
+  transition: transform 120ms ease-out;
+}
+.more-switch[aria-checked="true"] .switch-track {
+  background: var(--primary);
+}
+.more-switch[aria-checked="true"] .switch-knob {
+  transform: translateX(18px);
+  background: var(--on-primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-knob {
+    transition: none;
+  }
+}
+/* «← Ще», a quiet line over a section's heading, as «← Каса». */
 .back.to-more {
   min-height: 44px;
   margin: 0;
@@ -3146,4 +3139,76 @@ section:not(.receipt):not(.stub-notice) .stub {
 }
 .stub .return-goods p {
   margin: 4px 0;
+}
+
+/* The bottom menu («Усе на бірці» task list, P0-4; spec §6.2): 64 px over
+   the home indicator, on the card; a glyph of 24 over a 13 px word, the
+   open tab's glyph on a 56 × 30 pill. Its height is every dock's floor
+   (`--menu-h`), the home indicator its own (`--dock-safe`). */
+nav.tab-bar {
+  margin-top: 0;
+}
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--card);
+  border-top: 1px solid var(--hairline);
+}
+.tab-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  max-width: 560px;
+  margin: 0 auto;
+}
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--pencil);
+}
+.tab-pill {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 30px;
+  border-radius: 15px;
+}
+.tab-pill .icon {
+  width: 24px;
+  height: 24px;
+}
+.tab-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.tab[aria-current] {
+  color: var(--ink);
+}
+.tab[aria-current] .tab-pill {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.tab:focus-visible {
+  outline-offset: -3px;
+}
+/* A dock stands over the menu, the menu keeping the home indicator; with
+   the menu out of the way, over the home indicator itself. */
+.pay-panel,
+.result-dock {
+  bottom: var(--menu-h, 0px);
+  padding-bottom: calc(12px + var(--dock-safe, env(safe-area-inset-bottom)));
 }

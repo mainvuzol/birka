@@ -1,4 +1,9 @@
-import { test, expect, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -317,7 +322,7 @@ async function open(
 }
 
 async function cash(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(
     page.getByRole("heading", { name: "Каса", exact: true }),
   ).toBeVisible();

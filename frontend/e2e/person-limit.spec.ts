@@ -155,7 +155,7 @@ test("a new sale refused for too many requests is not done, says how long to wai
   // Nothing is kept: the till is the seller's at once, nothing blocked.
   await expect(page.getByText("Продаж ще не підтверджено")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Товар", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeEnabled();
 
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
@@ -190,7 +190,7 @@ test("a sale kept on the phone, refused for too many requests when checked, stay
   await expect(page.getByText(WAIT)).toBeVisible();
   await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Товар", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
 
   await page

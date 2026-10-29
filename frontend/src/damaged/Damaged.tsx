@@ -1,4 +1,6 @@
 import { useId, useState } from "react";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,9 +46,9 @@ export function Damaged({
   blocked: boolean;
   /** The store does not trade: its «Брак» is read, and nothing is done in it. */
   readOnly?: boolean;
-  /** «← Товар» over the heading: the screen is one of «Товар»'s tiles
-   * (navigation task list, P0-3). */
-  back?: (() => void) | undefined;
+  /** «← Ще» over the heading: «Ще» › «Товар» › «Брак» («Усе на бірці»
+   * task list, P0-4). */
+  back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
@@ -109,17 +111,7 @@ export function Damaged({
 
   return (
     <section className="goods-part">
-      {back && (
-        <button
-          type="button"
-          className="quiet back"
-          aria-label="Назад до товару"
-          disabled={blocked}
-          onClick={back}
-        >
-          <span aria-hidden="true">← </span>Товар
-        </button>
-      )}
+      {back && <BackToMore back={back} />}
       <div className="toolbar">
         <h2>Брак</h2>
         <button

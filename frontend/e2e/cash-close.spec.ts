@@ -1,4 +1,11 @@
-import { confirmClose, test, expect, openStore } from "./fixtures";
+import {
+  confirmClose,
+  test,
+  expect,
+  menu,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -217,7 +224,7 @@ async function cash(
   await page.goto("about:blank");
   await page.goto(launch(who, options));
   await openStore(page, /^Каса CASH/);
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(
     page.getByRole("heading", { name: "Каса", exact: true }),
   ).toBeVisible();
@@ -355,10 +362,13 @@ test("the count: the card reads the drawer again, the cursor is in the field, an
   await expect(field(page)).toHaveValue("2000");
   await expect(close).toBeFocused();
   expect(server.closes).toHaveLength(0);
-  // Under the thumb: the panel's button at the bottom of the screen.
+  // Under the thumb: the panel's button at the bottom of the screen, the
+  // dock standing on the menu («Усе на бірці» task list, P0-4).
   const box = await close.boundingBox();
-  if (!box) throw new Error("not laid out");
-  expect(box.y + box.height).toBeGreaterThan(640 - 120);
+  const bar = await menu(page).boundingBox();
+  if (!box || !bar) throw new Error("not laid out");
+  expect(bar.y + bar.height).toBeCloseTo(640, 0);
+  expect(box.y + box.height).toBeGreaterThan(bar.y - 120);
   expect(box.height).toBeGreaterThanOrEqual(54);
   await close.click();
   await confirmClose(page);
@@ -856,7 +866,7 @@ test("the count is four taps and the sum: «Каса», the card, «Закрит
       true,
     );
   });
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await card(page).click();
   await field(page).fill("2000");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();

@@ -202,18 +202,18 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
   await page.getByRole("button", { name: "Основний MAIN" }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  // The header is the store and the person alone; «Змінити магазин» is at
-  // the bottom of «Ще», after its groups (navigation task list, P0-4).
-  await expect(page.locator(".store-line").getByRole("button")).toHaveCount(0);
-  await more(page);
-  const change = page.getByRole("button", { name: "Змінити магазин" });
+  // «Змінити магазин» is one tap, on the store's line, and a row of «Ще» ›
+  // «Цей телефон» («Усе на бірці» task list, P0-4).
+  const change = page
+    .locator(".store-line")
+    .getByRole("button", { name: "Змінити магазин" });
   await expect(change).toBeVisible();
-  const last = await page
-    .locator(".more-screen")
-    .getByRole("button")
-    .last()
-    .textContent();
-  expect(last).toBe("Змінити магазин");
+  await more(page);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button", { name: "Змінити магазин", exact: true }),
+  ).toBeVisible();
   await change.click();
   await expect(
     page.getByRole("heading", { name: "Оберіть магазин" }),
@@ -229,17 +229,12 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
 });
 
-test("«Ще» only when it holds something: nothing under it and one store, no «Ще»; two stores, «Ще» holds «Змінити магазин» alone (navigation task list, P0-4)", async ({
+test("«Ще» only when it holds something: nothing under it and one store, no «Ще»; two stores, «Ще» holds «Цей телефон» › «Змінити магазин» alone (navigation task list, P0-4; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
-  // The counter's work alone: nothing of «Ще»'s.
-  const counterOnly = [
-    "sale:create",
-    "sale:view",
-    "sale:credit",
-    "inventory:view",
-    "cash:close",
-  ];
+  // The orders and the drawer alone: nothing of «Ще»'s — whoever sells has
+  // «Вношу продаж з паперу» there.
+  const tabsOnly = ["sale:view", "cash:close"];
   let stores = 1;
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();
@@ -253,7 +248,7 @@ test("«Ще» only when it holds something: nothing under it and one store, no 
       .slice(0, stores)
       .map((s) => ({
         ...s,
-        permissions: s.permissions.filter((p) => counterOnly.includes(p)),
+        permissions: s.permissions.filter((p) => tabsOnly.includes(p)),
       }));
     await route.fulfill({ response, json: body });
   });
@@ -261,19 +256,21 @@ test("«Ще» only when it holds something: nothing under it and one store, no 
     .getByRole("navigation", { name: "Розділи" })
     .getByRole("button");
   await page.goto(launch());
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  await expect(row).toHaveText(["Продаж", "Товар", "Клієнти", "Каса"]);
-  // Two stores: «Ще», for «Змінити магазин» alone — no group.
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
+  await expect(row).toHaveText(["Замовлення", "Каса"]);
+  // Two stores: «Ще», for «Змінити магазин» alone, under «Цей телефон».
   stores = 2;
   await page.goto("about:blank");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await expect(row).toHaveText(["Продаж", "Товар", "Клієнти", "Каса", "Ще"]);
+  await expect(row).toHaveText(["Замовлення", "Каса", "Ще"]);
   await more(page);
-  await expect(page.locator(".more-group")).toHaveCount(0);
+  await expect(page.locator(".more-group h3")).toHaveText(["Цей телефон"]);
   await expect(
-    page.getByRole("button", { name: "Змінити магазин" }),
-  ).toBeVisible();
+    page.getByRole("navigation", { name: "Ще" }).getByRole("button"),
+  ).toHaveText([/^Змінити магазин/]);
 });
 
 test("whoever does not sell opens on the orders, as before", async ({

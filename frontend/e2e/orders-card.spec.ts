@@ -974,7 +974,7 @@ test("«Клієнт забрав»: five ways in two rows, each the step itself
   await expect(page.locator(".order-collected")).toHaveCount(0);
 });
 
-test("«Клієнт забрав» is four taps from «Ще» (orders task list, P0-3)", async ({
+test("«Клієнт забрав» is three taps from the menu: «Замовлення», the order and its way (orders task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   const server: Server = { order: order({ status: "ARRIVED" }), sent: [] };
@@ -1004,7 +1004,7 @@ test("«Клієнт забрав» is four taps from «Ще» (orders task list
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(4);
+  ).toBe(3);
 });
 
 /** Clicks `name` in the panel the moment it is drawn, as a double tap's
@@ -1426,7 +1426,7 @@ test("a tap carried from «Змінити доставку» onto «Зберег
   await expect(page.locator(".order-row").first()).toBeVisible();
 });
 
-test("a waybill written later on a stubbed parcel: five taps from «Ще» with the typing, the cursor in its field, back on the card with a buzz (orders task list, P1-3)", async ({
+test("a waybill written later on a stubbed parcel: four taps from the menu with the typing, the cursor in its field, back on the card with a buzz (orders task list, P1-3; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1480,7 +1480,7 @@ test("a waybill written later on a stubbed parcel: five taps from «Ще» with 
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(5);
+  ).toBe(4);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -1549,7 +1549,7 @@ function cameBack(): Stubbed {
   });
 }
 
-test("goods come back as their own step: each warehouse they go back to named, seven taps from «Ще» with the typing, the result a sentence a warehouse with a buzz (orders task list, P2-4)", async ({
+test("goods come back as their own step: each warehouse they go back to named, six taps from the menu with the typing, the result a sentence a warehouse with a buzz (orders task list, P2-4; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1622,7 +1622,7 @@ test("goods come back as their own step: each warehouse they go back to named, s
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(7);
+  ).toBe(6);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -1896,14 +1896,14 @@ test("while an order is read, its title, context, pill and two lines hold their 
   expect(colours.plate).toBe(colours.notice);
 });
 
-test("«Клієнти» pressed again on an order's card brings the orders' first screen (navigation task list, P0-2)", async ({
+test("«Замовлення» pressed again on an order's card brings the orders' first screen (navigation task list, P0-2; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await open(page, { order: order(), sent: [] });
   await expect(page.locator(".order-title")).toBeVisible();
   await page
     .getByRole("navigation", { name: "Розділи" })
-    .getByRole("button", { name: "Клієнти", exact: true })
+    .getByRole("button", { name: "Замовлення", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),

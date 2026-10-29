@@ -1,4 +1,11 @@
-import { test, expect, openStore, refuseOnce, section } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  refuseOnce,
+  section,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -288,16 +295,16 @@ test("the «Брак» section needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  // «Товар» without its tile (navigation task list, P0-3): the other alone,
-  // the whole width.
-  await section(page, "Залишки");
-  const alone = page
-    .locator(".goods-tiles")
-    .getByRole("button", { name: /^Прийшов товар/ });
-  await expect(alone).toBeVisible();
-  const tile = await alone.boundingBox();
-  const tiles = await page.locator(".goods-tiles").boundingBox();
-  expect(Math.round(tile?.width ?? -1)).toBe(Math.round(tiles?.width ?? -2));
+  // «Ще» › «Товар» without its row, the others as they are (navigation task
+  // list, P0-3; «Усе на бірці» task list, P0-4).
+  await more(page);
+  const goods = page.getByRole("navigation", { name: "Ще" });
+  await expect(
+    goods.getByRole("button", { name: "Прийшов товар", exact: true }),
+  ).toBeVisible();
+  await expect(
+    goods.getByRole("button", { name: "Залишки", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: /^Брак/ })).toHaveCount(0);
 });
 

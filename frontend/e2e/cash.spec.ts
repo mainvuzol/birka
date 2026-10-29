@@ -4,9 +4,11 @@ import {
   test,
   expect,
   fillLine,
+  menu,
   more,
   openStore,
   tapSize,
+  section,
 } from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -200,7 +202,7 @@ function dayOf(day: string): string {
 }
 
 /** Every tab but «Каса», as a phone held for a reason shows them. */
-const otherTabs = ["Продаж", "Товар", "Клієнти"];
+const otherTabs = ["Продаж", "Замовлення"];
 
 test.describe("«Оля»'s day at «Каса»", () => {
   // One day, in order: what they sell is what they count, and what they
@@ -378,7 +380,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // Four taps from anywhere and the sum: «Каса», «Закрити касу», the
     // sum, «Закрити касу», «Так, закрити» (cash task list, P0-2).
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     // The card reads the drawer again: the newest close is the one the
     // count names. Shown once «Каса»'s own read has come.
     await expect(
@@ -481,7 +483,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(rows).not.toHaveCount(0);
     for (const row of await rows.all()) await expect(row).toBeDisabled();
     await expect(
-      page.getByRole("button", { name: "Змінити магазин" }),
+      page.locator(".store-line").getByRole("button", { name: "Змінити магазин" }),
     ).toBeDisabled();
 
     // Read from the server: reopening the app does not lose it.
@@ -616,7 +618,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // Their list holds the open period only, and nothing was sold since.
     await openAs(page, olya, "Оля");
     await openStore(page, /^Каса CASH/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
     await expect(
       page.getByText("Після останнього закриття ви ще нічого не провели."),
@@ -628,7 +630,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
   }) => {
     await openAs(page, owner);
     await openStore(page, /^Каса CASH/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     await expect(
       page.getByRole("button", { name: "Внести в касу" }),
     ).toBeVisible();
@@ -779,7 +781,7 @@ test("a kept fix of a way refused on its resend still says what was not recorded
   // not the count.
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(page.getByRole("alert")).toHaveText(said);
 });
 
@@ -870,7 +872,7 @@ for (const kept of [
     });
     await openAs(page, olya, "Оля");
     await openStore(page, /^Каса CASH/);
-    await page.getByRole("button", { name: "Каса", exact: true }).click();
+    await section(page, "Каса");
     // Never «спробуйте ще раз»: it may be recorded already.
     // In «Каса»'s words (owner decision after #138, 2026-10-25).
     const unconfirmed = `${kept.what}: сервер не зміг відповісти. Перевірте результат ще раз — двічі цю операцію не запишуть.`;
@@ -946,7 +948,7 @@ test("a refusal read in one store's «Каса» does not follow into another st
   await expect(
     page.getByText(/^Не вдалося прочитати збережену операцію каси/),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(page.getByRole("heading", { name: "Каса" })).toBeVisible();
   await expect(page.getByText(said)).toHaveCount(0);
 });
@@ -957,7 +959,7 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
   await openAs(page, owner);
   await openStore(page, /^Зупинений PAUSED/);
   await expect(page.getByText(/Лише перегляд/)).toBeVisible();
-  await page.getByRole("button", { name: "Каса", exact: true }).click();
+  await section(page, "Каса");
   await expect(page.locator(".cash-context")).toHaveText(
     "Каса ще не рахувалась",
   );
@@ -989,6 +991,9 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
   await expect(
     page.getByText(/Роботу в цьому магазині зупинено/),
   ).toBeVisible();
+  // No menu at all: neither «Каса» a tab nor «Ще» to hold it as a row
+  // («Усе на бірці» task list, P0-4).
+  await expect(menu(page)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Каса", exact: true }),
   ).toHaveCount(0);

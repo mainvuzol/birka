@@ -554,12 +554,10 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
       "Продаж на 150,00 грн · Готівка — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.",
     ),
   ).toBeVisible();
-  // Everything else is locked while one sale's outcome is unknown.
+  // Everything else is locked while one sale's outcome is unknown: the
+  // menu's other tabs («Усе на бірці» task list, P0-4).
   await expect(
-    page.getByRole("button", { name: "Клієнти", exact: true }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Товар", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
@@ -574,7 +572,7 @@ test("a sale whose outcome is unknown blocks the till until it is settled", asyn
   // The journal replays the attempt it wrote down, under its own key.
   expect(keys[0]).toBe(keys[1]);
   await expect(
-    page.getByRole("button", { name: "Товар", exact: true }),
+    page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeEnabled();
 });
 

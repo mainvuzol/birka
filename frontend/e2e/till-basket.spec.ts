@@ -267,7 +267,7 @@ async function stored(page: Page): Promise<string[]> {
   return page.evaluate(() => Object.keys(localStorage).sort());
 }
 
-test("the basket stays while the till is left — «Повернути», «Клієнти», «Ще» — and comes back as it was; pressed again, the same lines under the same command; nothing new on the phone (navigation task list, P0-5)", async ({
+test("the basket stays while the till is left — «Повернути», «Замовлення», «Ще» — and comes back as it was; pressed again, the same lines under the same command; nothing new on the phone (navigation task list, P0-5)", async ({
   page,
 }) => {
   await stubList(page);
@@ -287,9 +287,11 @@ test("the basket stays while the till is left — «Повернути», «Кл
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
   await ways.getByRole("button", { name: "Продати", exact: true }).click();
   await asItWas(page);
-  // «Клієнти», and back by «Продаж».
-  await row(page, "Клієнти").click();
-  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  // «Замовлення», and back by «Продаж» («Усе на бірці» task list, P0-4).
+  await row(page, "Замовлення").click();
+  await expect(
+    page.getByRole("heading", { name: "Замовлення", exact: true }),
+  ).toBeVisible();
   await row(page, "Продаж").click();
   await asItWas(page);
   // «Ще», and back.
@@ -315,7 +317,7 @@ test("the basket stays while the till is left — «Повернути», «Кл
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await row(page, "Клієнти").click();
+  await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await empty(page);
 });
@@ -357,14 +359,10 @@ test("a kept sale settled while the till is left opens it empty: the basket neve
   await twoCoats(page);
   await pay(page, "Готівка").click();
   await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
-  // «Ще» is free while the sale is kept; the till is left.
+  // «Ще» is free while the sale is kept; the till is left. Opened, «Ще»
+  // reads «Брак»'s line: the server answers, and the kept sale is checked
+  // at once, as its button would (ADR-0013 §4.3).
   await row(page, "Ще").click();
-  await expect(
-    page.getByRole("heading", { name: "Ще", exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Перевірити результат продажу" })
-    .click();
   // Settled: the till, empty, as after any kept sale.
   await empty(page);
   expect(sent).toHaveLength(2);
@@ -379,7 +377,7 @@ test("a basket from paper comes back with the paper on, and is sent marked (navi
   await onTheTill(page);
   await fromPaper(page);
   await twoCoats(page);
-  await row(page, "Клієнти").click();
+  await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await asItWas(page);
   await expect(page.getByLabel("Вношу продаж з паперу")).toBeChecked();
@@ -437,7 +435,7 @@ test("an unmarked basket keeps its lines when the paper is ticked on another scr
   const question = page.getByRole("alert", { name: "Залишку не вистачає" });
   await expect(question).toBeVisible();
   // Away and back, unmarked still: the question stands.
-  await row(page, "Клієнти").click();
+  await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await expect(question).toBeVisible();
   // Ticked on a return's screen, the question open: the lines, no question.
@@ -486,7 +484,7 @@ test("paying in parts comes back with the basket: the customer, the number and t
   await page.getByLabel("Ім’я покупця").fill("Марія Кошикова");
   await page.getByLabel("Телефон покупця").fill("067 123 45 67");
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
-  await row(page, "Клієнти").click();
+  await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await asItWas(page, /^Зараз 1\s000,00\sгрн · винен 2\s400,00\sгрн$/);
   await expect(page.getByLabel("Оплата частинами")).toBeChecked();
@@ -509,7 +507,7 @@ test("an answer about the shelf already given comes back with the basket, and is
   ).toBeVisible();
   expect(sent).toHaveLength(2);
   expect(sent[1]?.found_in_store).not.toEqual([]);
-  await row(page, "Клієнти").click();
+  await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await asItWas(page);
   await pay(page, "Готівка").click();
@@ -530,7 +528,7 @@ test("an emptied basket keeps nothing: paying in parts was the last customer's (
     .getByRole("button", { name: /^Прибрати/ })
     .click();
   await expect(basket(page)).toHaveCount(0);
-  await row(page, "Клієнти").click();
+  await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await empty(page);
   await page
