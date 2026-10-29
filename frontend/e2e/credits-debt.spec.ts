@@ -1,4 +1,11 @@
-import { test, expect, expectStub, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectStub,
+  openStore,
+  section,
+  tillWays,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -14,6 +21,8 @@ import { readFileSync } from "node:fs";
 interface Fixture {
   telegram_user_id: string;
   store_id: string;
+  /** «Другий», where «Оля» works too. */
+  second_store_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -924,4 +933,512 @@ test("a payment and a write-off sent: the pressed one turns its ring, the paymen
     page.locator(".paid-result").getByRole("heading", { name: "Борг списано" }),
   ).toBeVisible();
   await expect(page.locator(".eyelet-spin")).toHaveCount(0);
+});
+
+test.describe("«Продаж» › «Внесок»: a payment on a debt from the till, its sum on the app's keypad («Усе на бірці» task list, P0-3; spec S08, S21, S22)", () => {
+  /** «Продаж», its «Внесок» way, and the store's debtors under «Продаж». */
+  async function atTheTill(
+    page: Page,
+    theme?: Record<string, string>,
+  ): Promise<void> {
+    await page.goto(launch(theme));
+    await openStore(page, "Основний MAIN");
+    await tillWays(page)
+      .getByRole("button", { name: "Внесок", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж", level: 2 }),
+    ).toBeVisible();
+  }
+
+  /** A key of the app's keypad: a digit, «Кома» or «Стерти». */
+  function key(page: Page, name: string): Locator {
+    return page
+      .locator(".keypad")
+      .getByRole("button", { name, exact: true });
+  }
+
+  async function keyIn(page: Page, keys: string): Promise<void> {
+    for (const one of keys) await key(page, one === "," ? "Кома" : one).click();
+  }
+
+  /** A debt of one coat: 3 000, 1 000 paid, 2 000 owed. */
+  function coat(extra: Record<string, unknown> = {}): Debt {
+    return debt({
+      goods: ["Лоран шоколад · M"],
+      paid: "1000.00",
+      returned: "0.00",
+      cash_back: "0.00",
+      owed: "2000.00",
+      entries: [],
+      ...extra,
+    });
+  }
+
+  /** The customer as `GET /credits/customers` answers them, owing `owed`
+   * the store in all. */
+  function customerOf(one: Debt, owed: string): Record<string, unknown> {
+    return {
+      phone_digits: "0671234567",
+      customer_name: one.customer_name,
+      customer_phone: one.customer_phone,
+      owed,
+      open_debts: 1,
+      credits: [one],
+    };
+  }
+
+  test("three taps from the till — «Внесок», the row, a way: S21 names the goods, the menu steps aside, the sum is keyed in, and S22's stub says what the customer owes the store in all", async ({
+    page,
+  }) => {
+    const one = coat();
+    // The customer's other debt here: 1 000 more, so the store's total is
+    // never this debt's own.
+    let inAll = "3000.00";
+    const sent = await serve(page, one, (body) => {
+      inAll = "1500.00";
+      return {
+        ...one,
+        paid: (Number(one.paid) + Number(body.amount)).toFixed(2),
+        owed: "500.00",
+      };
+    });
+    await page.route("**/api/v1/credits/customers?**", async (route) => {
+      await route.fulfill({
+        json: { items: [customerOf(one, inAll)], has_more: false },
+      });
+    });
+    await atTheTill(page);
+    await expect(
+      tillWays(page).getByRole("button", { name: "Внесок", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await page
+      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+      .click();
+
+    // S21: what she took for a title, who and where under it; the menu out
+    // of the way.
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText(
+      "Лоран шоколад · M",
+    );
+    await expect(page.locator(".debt-context")).toHaveText(
+      "Оксана Петренко · «Основний» · з 01.10",
+    );
+    await expect(
+      page.getByRole("navigation", { name: "Розділи" }),
+    ).toHaveCount(0);
+    const owed = page.getByRole("group", { name: "Скільки винні" });
+    await expect(owed.locator(".owed-what")).toHaveText("Винні");
+    await expect(owed.locator(".owed-what svg")).toHaveCount(1);
+    await expect(owed.locator(".owed-sum")).toHaveText("2 000,00 грн");
+    await expect(owed.locator(".owed-count")).toHaveText(
+      "Сплачено 1 000,00 грн з 3 000,00 грн · останній внесок 12.10",
+    );
+    // No write-off nor erasing here: they are the debt's from «Клієнти».
+    await expect(
+      page.getByRole("button", { name: "Списати борг" }),
+    ).toHaveCount(0);
+    // The phone's keyboard never opens over the ways.
+    const sum = page.getByLabel("Сума, грн");
+    await expect(sum).toHaveAttribute("inputmode", "none");
+    for (const way of ["Готівка", "Картка", "Переказ"])
+      await expect(panel(page).getByRole("button", { name: way })).toBeDisabled();
+    await keyIn(page, "1500");
+    await expect(sum).toHaveValue(/^1\s500$/);
+    await panel(page).getByRole("button", { name: "Готівка" }).click();
+
+    // S22: the stub torn off, what is left on this debt, and on them all.
+    const paid = page.locator(".paid-result");
+    await expect(
+      paid.getByRole("heading", { name: "Внесок записано" }),
+    ).toBeFocused();
+    await expectStub(paid, {
+      way: "Готівка",
+      say: "У касу",
+      sum: "1 500,00 грн",
+    });
+    await expect(paid.locator(".stub")).toHaveClass(/\bstub-recorded\b/);
+    await expect(
+      paid.getByText("Залишок боргу 500,00 грн", { exact: true }),
+    ).toBeVisible();
+    await expect(paid.locator(".paid-total")).toHaveText(
+      "Усього винні магазину «Основний» 1 500,00 грн",
+    );
+    // The task done, the menu is back.
+    await expect(
+      page.getByRole("navigation", { name: "Розділи" }),
+    ).toBeVisible();
+    expect(sent).toEqual([
+      expect.objectContaining({ amount: "1500.00", payment_method: "CASH" }),
+    ]);
+
+    // «Відкрити борг»: S21 again, with what is left, the menu aside again.
+    await page
+      .getByRole("button", { name: "Відкрити борг", exact: true })
+      .click();
+    await expect(page.locator(".owed-sum")).toHaveText("500,00 грн");
+    await expect(page.getByLabel("Сума, грн")).toHaveValue("");
+    await expect(
+      page.getByRole("navigation", { name: "Розділи" }),
+    ).toHaveCount(0);
+  });
+
+  test("more than is owed darkens the ways and says so in the error's colour, and nothing is sent; the keypad keeps a sum to the kopeck", async ({
+    page,
+  }) => {
+    const sent = await serve(page, coat());
+    await atTheTill(page);
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    const sum = page.getByLabel("Сума, грн");
+    await keyIn(page, "2500");
+    const over = page.getByRole("alert");
+    await expect(over).toHaveText(
+      "Це більше, ніж винні: залишок боргу 2 000,00 грн.",
+    );
+    await expect(over).toHaveCSS(
+      "color",
+      await page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--danger)";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      }),
+    );
+    await expect(sum).toHaveAttribute("aria-invalid", "true");
+    for (const way of ["Готівка", "Картка", "Переказ"])
+      await expect(panel(page).getByRole("button", { name: way })).toBeDisabled();
+    // One figure off: under the debt, the ways back, the line gone.
+    await key(page, "Стерти").click();
+    await expect(sum).toHaveValue("250");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(
+      panel(page).getByRole("button", { name: "Картка" }),
+    ).toBeEnabled();
+    // At most two figures after the comma; a leading zero dropped; a comma
+    // first is «0,».
+    await key(page, "Стерти").click();
+    await key(page, "Стерти").click();
+    await key(page, "Стерти").click();
+    await keyIn(page, "05,505");
+    await expect(sum).toHaveValue("5,50");
+    // ⌫ held clears the sum.
+    await key(page, "Стерти").hover();
+    await page.mouse.down();
+    await page.waitForTimeout(800);
+    await page.mouse.up();
+    await expect(sum).toHaveValue("");
+    // A touch held to its end often sends no click: a later press of
+    // «Стерти», from a keyboard, still deletes (review, 2026-10-29).
+    const erase = key(page, "Стерти");
+    await erase.dispatchEvent("pointerdown");
+    await page.waitForTimeout(800);
+    await erase.dispatchEvent("pointerup");
+    await expect(sum).toHaveValue("");
+    await sum.pressSequentially("12");
+    await page.waitForTimeout(600);
+    await erase.focus();
+    await page.keyboard.press("Enter");
+    await expect(sum).toHaveValue("1");
+    // What a key made of the sum is said: the key keeps the focus.
+    await expect(page.locator(".keypad [aria-live]")).toHaveText(
+      "Сума, грн: 1",
+    );
+    await erase.click();
+    await keyIn(page, ",5");
+    await expect(sum).toHaveValue("0,5");
+    // The whole debt in one tap.
+    await page
+      .getByRole("button", { name: "Увесь залишок 2 000,00 грн" })
+      .click();
+    await expect(sum).toHaveValue(/^2\s000,00$/);
+    // A computer's keyboard still types into the sum, in the keypad's
+    // terms.
+    await sum.fill("");
+    await sum.pressSequentially("12a3,456");
+    await expect(sum).toHaveValue("123,45");
+    expect(sent).toHaveLength(0);
+  });
+
+  test("a debt lowered on another phone meanwhile: the server's refusal in the debt's words, and the debt read again", async ({
+    page,
+  }) => {
+    const one = coat();
+    await serve(page, one);
+    const now = { ...one, paid: "2500.00", owed: "500.00" };
+    await page.route(`**/api/v1/credits/${one.id}/payments`, async (route) => {
+      await route.fulfill({
+        status: 422,
+        json: {
+          code: "VALIDATION_ERROR",
+          message: "More than owed",
+          details: { reason: "MORE_THAN_OWED", owed: "500.00" },
+        },
+      });
+    });
+    await page.route(`**/api/v1/credits/${one.id}`, async (route) => {
+      await route.fulfill({ json: now });
+    });
+    await atTheTill(page);
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await keyIn(page, "1000");
+    await panel(page).getByRole("button", { name: "Картка" }).click();
+    // The server's words alone, in view above the dock: the sum still
+    // keyed in is over the debt read again, and said once.
+    const told = page.getByRole("alert");
+    await expect(told).toHaveText(
+      "Це більше, ніж винні: залишок боргу 500,00 грн. Прийміть 500,00 грн, а решту поверніть покупцю на картку через термінал.",
+    );
+    await expect(told).toBeInViewport();
+    await expect(page.locator(".owed-sum")).toHaveText("500,00 грн");
+    await expect(page.locator(".paid-result")).toHaveCount(0);
+    for (const way of ["Готівка", "Картка", "Переказ"])
+      await expect(panel(page).getByRole("button", { name: way })).toBeDisabled();
+    // The whole of what is left now: the refusal goes, and the ways are back.
+    await page
+      .getByRole("button", { name: "Увесь залишок 500,00 грн" })
+      .click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(
+      panel(page).getByRole("button", { name: "Картка" }),
+    ).toBeEnabled();
+  });
+
+  test("paid off in full, the stub is knotted and names no total the customer no longer owes", async ({
+    page,
+  }) => {
+    const one = coat();
+    let inAll = "2000.00";
+    await serve(page, one, () => {
+      inAll = "0.00";
+      return {
+        ...one,
+        status: "SETTLED",
+        paid: "3000.00",
+        owed: "0.00",
+        closed_at: `${String(thisYear)}-10-20T10:00:00Z`,
+      };
+    });
+    await page.route("**/api/v1/credits/customers?**", async (route) => {
+      await route.fulfill({
+        json: { items: [customerOf(one, inAll)], has_more: false },
+      });
+    });
+    await atTheTill(page);
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await page
+      .getByRole("button", { name: "Увесь залишок 2 000,00 грн" })
+      .click();
+    await panel(page).getByRole("button", { name: "Переказ" }).click();
+    const paid = page.locator(".paid-result");
+    await expect(paid.locator(".stub")).toHaveClass(/\bstub-settled\b/);
+    await expect(paid.locator(".stub > .eyelet")).toHaveClass(
+      /\beyelet-knot\b/,
+    );
+    await expect(
+      paid.getByText("Борг сплачено повністю.", { exact: true }),
+    ).toBeVisible();
+    // Read, and nothing owed: no line, and no place left for one.
+    await expect(paid.locator(".paid-total")).toHaveCount(0);
+  });
+
+  test("a whole number that owes nothing here is asked of this person's other store: found, its row says «Внесок приймає «Другий»» and opens nothing; with no right there, the words as before", async ({
+    page,
+  }) => {
+    const there = coat({
+      store_id: fixture.second_store_id,
+      store_name: "Другий",
+    });
+    const asked: string[] = [];
+    await page.route("**/api/v1/credits/customers?**", async (route) => {
+      const url = new URL(route.request().url());
+      const store = url.searchParams.get("store_id");
+      if (url.searchParams.get("query")) asked.push(store ?? "");
+      await route.fulfill({
+        json: {
+          items:
+            store === fixture.second_store_id && url.searchParams.get("query")
+              ? [customerOf(there, "2000.00")]
+              : [],
+          has_more: false,
+        },
+      });
+    });
+    await atTheTill(page);
+    await page.getByLabel("Ім’я або телефон").fill("067 123 45 67");
+    const row = page
+      .getByRole("list", { name: "Хто винен" })
+      .getByRole("listitem");
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText("Оксана Петренко");
+    await expect(row).toContainText("Внесок приймає «Другий»");
+    await expect(row).toContainText("2 000,00 грн");
+    await expect(row.getByRole("button")).toHaveCount(0);
+    expect(asked).toContain(fixture.second_store_id);
+
+    // This person no longer takes payments there: nothing asked of it.
+    await page.route("**/api/v1/me", async (route) => {
+      const response = await route.fetch();
+      const me = (await response.json()) as {
+        stores: { id: string; permissions: string[] }[];
+      };
+      await route.fulfill({
+        response,
+        json: {
+          ...me,
+          stores: me.stores.map((store) =>
+            store.id === fixture.store_id
+              ? store
+              : {
+                  ...store,
+                  permissions: store.permissions.filter(
+                    (permission) => permission !== "sale:credit",
+                  ),
+                },
+          ),
+        },
+      });
+    });
+    asked.length = 0;
+    await page.goto("about:blank");
+    await atTheTill(page);
+    await page.getByLabel("Ім’я або телефон").fill("067 123 45 67");
+    await expect(
+      page.getByText(
+        "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Внесок приймає «/)).toHaveCount(0);
+    expect(asked).not.toContain(fixture.second_store_id);
+  });
+
+  test("the till's «Внесок» and «Клієнти» are two screens: a stub left at the till is never «Клієнти»'s, nor a debt opened there the till's (review, 2026-10-29)", async ({
+    page,
+  }) => {
+    await serve(page, coat());
+    await atTheTill(page);
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await keyIn(page, "500");
+    await panel(page).getByRole("button", { name: "Картка" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Внесок записано" }),
+    ).toBeFocused();
+    const menu = page.getByRole("navigation", { name: "Розділи" });
+    await menu.getByRole("button", { name: "Клієнти", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Борги", level: 2 }),
+    ).toBeVisible();
+    await expect(page.locator(".paid-result")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /^Відкрити борг: / }),
+    ).toBeVisible();
+
+    // And back: a debt opened in «Клієнти», with its sum typed, stays there.
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await expect(panel(page)).toBeVisible();
+    await page.getByLabel("Сума внеску, грн").fill("300");
+    await menu.getByRole("button", { name: "Продаж", exact: true }).click();
+    await tillWays(page)
+      .getByRole("button", { name: "Внесок", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж", level: 2 }),
+    ).toBeVisible();
+    await expect(panel(page)).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /^Відкрити борг: / }),
+    ).toBeVisible();
+  });
+
+  test("a payment whose answer is lost is kept over «Продаж» › «Внесок», and after a reload the till opens there", async ({
+    page,
+  }) => {
+    const one = coat();
+    await serve(page, one);
+    await page.route(`**/api/v1/credits/${one.id}/payments`, async (route) => {
+      await route.abort("connectionfailed");
+    });
+    await atTheTill(page);
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await keyIn(page, "700");
+    await panel(page).getByRole("button", { name: "Готівка" }).click();
+    const kept = page.locator(".stub-notice .stub-kept");
+    await expect(
+      kept.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+    ).toBeVisible();
+
+    await page.goto("about:blank");
+    await page.goto(launch());
+    await openStore(page, "Основний MAIN");
+    await expect(
+      page.getByRole("heading", { name: "Продаж", level: 2 }),
+    ).toBeVisible();
+    await expect(
+      tillWays(page).getByRole("button", { name: "Внесок", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page
+        .locator(".stub-notice .stub-kept")
+        .getByRole("heading", { name: "Внесок ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(page.locator("section.banner-kept")).toHaveCount(0);
+  });
+
+  for (const [name, theme, scheme] of [
+    ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
+    ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
+  ] as const)
+    test(`at 360 × 640 in the ${name} theme, S21's keypad and its three ways are in view without scrolling, and read at 4.5:1`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 360, height: 640 });
+      await serve(page, coat());
+      await atTheTill(page, theme);
+      expect(
+        await page.evaluate(() => document.documentElement.dataset.theme),
+      ).toBe(scheme);
+      await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+      await keyIn(page, "2500");
+      for (const one of [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "Кома",
+        "0",
+        "Стерти",
+      ])
+        await expect(key(page, one)).toBeInViewport({ ratio: 1 });
+      for (const way of ["Готівка", "Картка", "Переказ"])
+        await expect(
+          panel(page).getByRole("button", { name: way }),
+        ).toBeInViewport({ ratio: 1 });
+      await expect(page.getByLabel("Сума, грн")).toBeInViewport({ ratio: 1 });
+      for (const part of [
+        key(page, "5"),
+        page.getByLabel("Сума, грн"),
+        page.locator(".keypad-label"),
+        page.getByRole("button", { name: /^Увесь залишок / }),
+        page.getByRole("alert"),
+      ])
+        expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+      await key(page, "Стерти").click();
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      for (const part of [
+        page.locator(".owed-sum"),
+        page.locator(".owed-what"),
+        page.locator(".debt-context"),
+      ])
+        expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+      await page.screenshot({ path: `test-results/debt-till-${name}.png` });
+    });
 });

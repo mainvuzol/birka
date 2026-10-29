@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
   CONFLICT_TEXT,
@@ -15,6 +15,7 @@ import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
+import { number } from "@/openings/types";
 import {
   isTillMethod,
   methodHow,
@@ -28,6 +29,8 @@ import { usePanelRoom } from "@/shared/panel";
 import { buzz } from "@/shared/telegram";
 import { Sum } from "@/shared/Sum";
 import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
+import { Keypad } from "@/shared/Keypad";
 import { SendingLine } from "@/shared/Sending";
 import {
   PaperFields,
@@ -42,7 +45,7 @@ import { submitCreditCommand, useCreditCommand } from "./commands";
 import { shortDay, shortWhen } from "./format";
 import { Paid } from "./Paid";
 import { askForPhone, erasedCustomer, statusLabels } from "./types";
-import type { Credit, CreditEntry, Erasure } from "./types";
+import type { Credit, CreditEntry, CustomerPage, Erasure } from "./types";
 
 /**
  * What the owner's erasure did: how many closed debts lost the customer, and
@@ -104,6 +107,49 @@ function entryMeta(entry: CreditEntry): { text: string; paper?: true }[] {
   return parts;
 }
 
+/** The debt's history, a line an entry, the newest first, as the server
+ * answers it. */
+function History({
+  credit,
+  id,
+}: {
+  credit: Credit;
+  id?: string;
+}): JSX.Element {
+  return (
+    <ul id={id} className="history" aria-label="Історія боргу">
+      {credit.entries.map((entry, index) => (
+        <li className="history-row" key={`${entry.at}:${String(index)}`}>
+          <span className="history-main">
+            <span className="history-what">{entryWhat(entry)}</span>
+            <span className="history-meta">
+              {entryMeta(entry).map((part, at) => (
+                <Fragment key={at}>
+                  {at > 0 && " · "}
+                  {part.paper ? (
+                    <span className="paper-meta">{part.text}</span>
+                  ) : (
+                    part.text
+                  )}
+                </Fragment>
+              ))}
+            </span>
+            {entry.note && (
+              <span className="history-meta">{visible(entry.note)}</span>
+            )}
+            {entry.kind === "WRITE_OFF" && entry.note === null && (
+              <span className="history-meta">
+                причину стерто разом з даними покупця
+              </span>
+            )}
+          </span>
+          <span className="history-sum">{money(entry.amount)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A sum that is not one to the kopeck. */
 const sumUnread = "Вкажіть суму внеску з точністю до копійок.";
 
@@ -124,6 +170,13 @@ function paidText(credit: Credit): string {
   if ((kopecks(credit.written_off) ?? 0n) > 0n)
     parts.push(`списано ${money(credit.written_off)}`);
   return parts.join(" · ");
+}
+
+/** «· останній внесок 19.10», after what is paid (spec S21). */
+function lastPaid(credit: Credit): string {
+  return credit.last_payment_at
+    ? ` · останній внесок ${shortDay(credit.last_payment_at)}`
+    : "";
 }
 
 /** How much of the debt is closed, for the bar under what is owed: a look,
@@ -153,6 +206,7 @@ export function Debt({
   changed,
   back,
   backTo = "До боргів",
+  till,
 }: {
   store: Store;
   token: string;
@@ -166,6 +220,13 @@ export function Debt({
   back: () => void;
   /** Where «←» leads: the list, or the customer's card it was opened from. */
   backTo?: string;
+  /**
+   * Opened from the till's «Внесок» (spec S21; «Усе на бірці» task list,
+   * P0-3): the payment alone, its sum on the app's own keypad; writing off
+   * and erasing stay on the debt opened from «Клієнти». `task` is told while
+   * the payment's form stands, so the menu steps aside.
+   */
+  till?: { task: (shown: boolean) => void };
 }): JSX.Element {
   const { busy, pending, firstSend } = useCreditCommand();
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
@@ -237,6 +298,50 @@ export function Debt({
   // Typed, but not a sum read to the kopeck: said in the panel, not left to
   // dead buttons (review, 2026-10-18).
   const unreadable = amount.trim() !== "" && cents === null;
+  // The till's: more than the debt shown is never pressed (spec S21; G9,
+  // which the server still checks). The ways are dark, and the line says
+  // why, with no request.
+  const over = till !== undefined && cents !== null && cents > owed;
+  // A refusal of the sum pressed says it all, the debt read again under it:
+  // the line waits until the sum is changed, which clears the refusal.
+  const overSaid = over && problem === null;
+  const overLine = useId();
+  const [history, setHistory] = useState(false);
+  const historyList = useId();
+  // The menu steps aside while the payment's form stands (spec S21).
+  const task = till?.task;
+  const tasking = takes && paid === null;
+  useEffect(() => {
+    task?.(tasking);
+  }, [task, tasking]);
+  useEffect(
+    () => () => {
+      task?.(false);
+    },
+    [task],
+  );
+  // What the customer owes this store in all once a payment is recorded,
+  // read again by their phone (spec S22): its place held until it is read.
+  // Another store's debt taken here is that store's, and says nothing.
+  const [recorded, setRecorded] = useState(0);
+  const phone = credit.customer_phone?.replace(/\D/g, "") ?? "";
+  const inAll = useQuery({
+    queryKey: ["credits", store.id, "owed-in-all", credit.id, recorded],
+    queryFn: () =>
+      api<CustomerPage>(
+        `/credits/customers?store_id=${store.id}&limit=5&query=${phone}`,
+        token,
+      ),
+    enabled:
+      till !== undefined &&
+      paid?.kind === "payment" &&
+      !elsewhere &&
+      phone !== "",
+    retry: false,
+  });
+  const whole = inAll.data?.items.find((each) =>
+    each.credits.some((debt) => debt.id === credit.id),
+  );
   // A refusal, or what was done, is seen where it is said, above the panel
   // (P0-4) — each time it is said, the same words again included.
   const said = useRef<HTMLParagraphElement>(null);
@@ -282,6 +387,7 @@ export function Debt({
     // «Повернення» (P0-5); a lost answer, and one confirmed later, none.
     if (outcome.kind === "done") {
       buzz("success");
+      setRecorded((count) => count + 1);
       setCommandId(crypto.randomUUID());
       setAmount("");
       setReason("");
@@ -420,6 +526,244 @@ export function Debt({
   }
 
   const [firstGood, ...moreGoods] = credit.goods.map(visible);
+  const goodsOpener = moreGoods.length > 0 && !allGoods && (
+    <>
+      {" "}
+      <button
+        type="button"
+        className="more-goods"
+        aria-expanded={false}
+        onClick={() => {
+          setAllGoods(true);
+        }}
+      >
+        + ще {moreGoods.length}
+      </button>
+    </>
+  );
+  const goods = allGoods && moreGoods.length > 0 && (
+    <ul
+      ref={goodsList}
+      className="debt-goods"
+      aria-label="Товари боргу"
+      tabIndex={-1}
+    >
+      {[firstGood, ...moreGoods].map((good, index) => (
+        <li key={index}>{good}</li>
+      ))}
+    </ul>
+  );
+  const customerName = visible(credit.customer_name ?? erasedCustomer);
+  const paidResult = paid && (
+    <Paid
+      {...paid}
+      {...(till && paid.kind === "payment" && !elsewhere && phone !== ""
+        ? {
+            total:
+              inAll.isPending && inAll.fetchStatus !== "idle" ? (
+                // Its place while it is read, so nothing moves when it
+                // comes.
+                <p className="paid-total" aria-hidden="true">
+                  <span className="skeleton-line">
+                    <span>Усього винні 0 000,00 грн</span>
+                  </span>
+                </p>
+              ) : whole && (kopecks(whole.owed) ?? 0n) > 0n ? (
+                <p className="paid-total">
+                  Усього винні магазину «{visible(store.name)}»{" "}
+                  {money(whole.owed)}
+                </p>
+              ) : null,
+          }
+        : {})}
+      next={{
+        back,
+        backTo,
+        debt: () => {
+          reopened.current = true;
+          setPaid(null);
+        },
+      }}
+    />
+  );
+
+  if (till)
+    // The till's payment (spec S21): what they took for a title, who and
+    // where under it; what is owed large; the history on a tap; the sum on
+    // the app's keypad and the three ways under the thumb.
+    return (
+      <section className="credits debt-detail debt-till">
+        <button
+          type="button"
+          className="quiet back"
+          disabled={working}
+          onClick={back}
+        >
+          <span aria-hidden="true">← </span>
+          {backTo}
+        </button>
+        <h2 ref={name} tabIndex={-1}>
+          {firstGood ?? customerName}
+          {goodsOpener}
+        </h2>
+        {goods}
+        <p className="hint debt-context">
+          {customerName} · «{visible(credit.store_name)}» · з{" "}
+          {shortDay(credit.opened_at)}
+        </p>
+        {paidResult || (
+          <>
+            {elsewhere && (
+              <p className="notice">
+                Продано в «{visible(credit.store_name)}» (
+                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
+                ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+              </p>
+            )}
+            {credit.status === "OPEN" ? (
+              <div className="owed-card" role="group" aria-label="Скільки винні">
+                <p className="owed-what">
+                  <Icon name="owed" size={20} />
+                  Винні
+                </p>
+                <p className="owed-sum">
+                  <Sum value={money(credit.owed)} />
+                </p>
+                <div className="debt-bar" aria-hidden="true">
+                  <span style={{ width: `${String(closedShare(credit))}%` }} />
+                </div>
+                <p className="owed-count">
+                  {paidText(credit)}
+                  {lastPaid(credit)}
+                </p>
+              </div>
+            ) : (
+              <div className="debt-closed">
+                <p>
+                  <span
+                    className={
+                      credit.status === "WRITTEN_OFF"
+                        ? "badge neutral"
+                        : "badge paid"
+                    }
+                  >
+                    {statusLabels[credit.status]}
+                  </span>
+                  {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
+                </p>
+                <p className="hint">{paidText(credit)}</p>
+              </div>
+            )}
+            {credit.entries.length > 0 && (
+              // In place, on a tap: it never pushes the ways down (spec
+              // S21).
+              <button
+                type="button"
+                className="quiet history-toggle"
+                aria-expanded={history}
+                aria-controls={history ? historyList : undefined}
+                onClick={() => {
+                  setHistory(!history);
+                }}
+              >
+                Історія · {number(credit.entries.length)}{" "}
+                <span aria-hidden="true">›</span>
+              </button>
+            )}
+            {history && <History credit={credit} id={historyList} />}
+            {takes && (
+              // From paper, over the keypad, as on the debt.
+              <fieldset className="pay-in" disabled={blocked || working}>
+                <legend className="visually-hidden">Внесок з паперу</legend>
+                <PaperFields
+                  mark={paperMark}
+                  what="payment"
+                  storeId={store.id}
+                />
+              </fieldset>
+            )}
+            {problem && (
+              <p role="alert" ref={said}>
+                {problem}
+              </p>
+            )}
+            {takes && (
+              <div
+                className="pay-panel till-dock"
+                role="group"
+                aria-label="Внесок"
+                ref={panelRef}
+              >
+                <Keypad
+                  label="Сума, грн"
+                  value={amount}
+                  change={(sum) => {
+                    setAmount(sum);
+                    setProblem(null);
+                  }}
+                  disabled={blocked || working}
+                  invalid={over}
+                  {...(overSaid ? { describedBy: overLine } : {})}
+                  aside={
+                    <button
+                      type="button"
+                      className="quiet keypad-all"
+                      disabled={blocked || working}
+                      onClick={() => {
+                        setAmount(asInput(credit.owed));
+                        setProblem(null);
+                      }}
+                    >
+                      Увесь залишок {money(credit.owed)}
+                    </button>
+                  }
+                />
+                {overSaid && (
+                  <p id={overLine} className="pay-over" role="alert">
+                    {overText(credit.owed)}
+                  </p>
+                )}
+                <SendingLine busy={pressing !== null} />
+                <div className="pay-ways">
+                  {tillMethods.map((way) => (
+                    <button
+                      key={way}
+                      type="button"
+                      className={
+                        pressing === null
+                          ? undefined
+                          : pressing === way
+                            ? "pressed"
+                            : "stepped-back"
+                      }
+                      disabled={
+                        blocked ||
+                        working ||
+                        !paperMark.ready ||
+                        !typed ||
+                        over
+                      }
+                      onClick={() => {
+                        pay(way);
+                      }}
+                    >
+                      {pressing === way && <Eyelet state="spin" size={20} />}
+                      {paperMark.paper
+                        ? `З паперу · ${methodLabels[way]}`
+                        : methodLabels[way]}
+                    </button>
+                  ))}
+                </div>
+                {paperMark.paper && (
+                  <p className="pay-seller">{takenBy(paperMark)}</p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    );
+
   return (
     <section className="credits debt-detail">
       <button
@@ -432,7 +776,7 @@ export function Debt({
         {backTo}
       </button>
       <h2 ref={name} tabIndex={-1}>
-        {visible(credit.customer_name ?? erasedCustomer)}
+        {customerName}
       </h2>
       {credit.customer_phone === null && credit.customer_erased_at && (
         <p className="hint">
@@ -456,51 +800,14 @@ export function Debt({
         {firstGood && (
           <>
             {firstGood}
-            {moreGoods.length > 0 && !allGoods && (
-              <>
-                {" "}
-                <button
-                  type="button"
-                  className="more-goods"
-                  aria-expanded={false}
-                  onClick={() => {
-                    setAllGoods(true);
-                  }}
-                >
-                  + ще {moreGoods.length}
-                </button>
-              </>
-            )}
+            {goodsOpener}
             {" · "}
           </>
         )}
         з {shortDay(credit.opened_at)}
       </p>
-      {allGoods && moreGoods.length > 0 && (
-        <ul
-          ref={goodsList}
-          className="debt-goods"
-          aria-label="Товари боргу"
-          tabIndex={-1}
-        >
-          {[firstGood, ...moreGoods].map((good, index) => (
-            <li key={index}>{good}</li>
-          ))}
-        </ul>
-      )}
-      {paid ? (
-        <Paid
-          {...paid}
-          next={{
-            back,
-            backTo,
-            debt: () => {
-              reopened.current = true;
-              setPaid(null);
-            },
-          }}
-        />
-      ) : (
+      {goods}
+      {paidResult || (
         <>
           {elsewhere && (
             <p className="notice">
@@ -588,36 +895,7 @@ export function Debt({
             </p>
           )}
           <h3>Історія</h3>
-          <ul className="history" aria-label="Історія боргу">
-            {credit.entries.map((entry, index) => (
-              <li className="history-row" key={`${entry.at}:${String(index)}`}>
-                <span className="history-main">
-                  <span className="history-what">{entryWhat(entry)}</span>
-                  <span className="history-meta">
-                    {entryMeta(entry).map((part, at) => (
-                      <Fragment key={at}>
-                        {at > 0 && " · "}
-                        {part.paper ? (
-                          <span className="paper-meta">{part.text}</span>
-                        ) : (
-                          part.text
-                        )}
-                      </Fragment>
-                    ))}
-                  </span>
-                  {entry.note && (
-                    <span className="history-meta">{visible(entry.note)}</span>
-                  )}
-                  {entry.kind === "WRITE_OFF" && entry.note === null && (
-                    <span className="history-meta">
-                      причину стерто разом з даними покупця
-                    </span>
-                  )}
-                </span>
-                <span className="history-sum">{money(entry.amount)}</span>
-              </li>
-            ))}
-          </ul>
+          <History credit={credit} />
           {takes && (
             // Under the thumb (P0-4): the sum to take, and the three ways that
             // take it — none chosen beforehand, none pressable without a sum.
@@ -821,6 +1099,12 @@ function backTo(way: TillMethod | null): string {
       : "";
 }
 
+/** More than is owed, as the debt shows it: «Це більше, ніж винні:
+ * залишок боргу 3 500,00 грн.» */
+function overText(owed: string): string {
+  return `Це більше, ніж винні: залишок боргу ${money(owed)}.`;
+}
+
 /**
  * More than is owed: what is still owed is taken, and the rest goes back the
  * way it came (G9).
@@ -865,7 +1149,7 @@ export function refusalText(error: unknown, way?: TillMethod | null): string {
     switch (error.details.reason) {
       case "MORE_THAN_OWED":
         return way === undefined
-          ? `Це більше, ніж винні: залишок боргу ${money(String(error.details.owed))}.`
+          ? overText(String(error.details.owed))
           : moreThanOwed(String(error.details.owed), way);
       case "NOT_OWED":
         if (way === undefined) return "За цим продажем уже нічого не винні.";

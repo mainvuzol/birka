@@ -4691,3 +4691,36 @@ are the task list's: «Готівка · Разом 1 850,00 грн» becomes th
   - a sale typed from paper says only what the paper says of its money,
     and nothing of cash, as before;
   - the toast waits for its first user (P0-6 or P1-4).
+
+## Chosen in chat — 2026-10-29 (the till's «Внесок» of «Усе на бірці»)
+
+Chosen in chat on 2026-10-29, after #148: the frame's P0-3 next
+(`all-on-the-tag-deposit-report.md`). No rule, figure or sum changes: the
+server still refuses more than is owed (G9), a payment is still taken in
+the store that sold, by `sale:credit`. The words are the task list's:
+new are «Внесок» (the segment), «Внесок приймає «X»», «Історія · N ›»,
+«Увесь залишок {сума}», «Сума, грн», and the reader names «Продаж,
+повернення або внесок», «Продаж або внесок», «Повернення або внесок».
+Every other word stays as it was.
+- **Decided here:**
+  - «Усього винні магазину «X» {сума}» for the task list's «Усього винні
+    «Центру» …»: a store's name cannot be put in the dative; to ask the
+    owner;
+  - the total is said only while the customer still owes the store, read
+    again by their phone once recorded; another store's debt names none;
+  - «Внесок» only in a store that trades; whoever only takes payments has
+    «Продаж» open on «Внесок», with no segment;
+  - the bottom menu steps aside on S21 only, while its form stands;
+  - another store's debt is asked only for a whole number this store
+    lists nobody for, and only of stores where this person takes
+    payments; its row opens nothing;
+  - no «Магазину винні» card and no «Показати сплачені й списані» at the
+    till;
+  - «Історія · N ›» is not drawn for a debt with no entries;
+  - a refusal of the sum pressed speaks alone until the sum is changed;
+  - the till's «Внесок» and «Клієнти» are two screens, nothing carried
+    between them;
+  - a kept payment turns to «Продаж» › «Внесок» for whoever may take
+    payments; a kept write-off, never made at the till, to «Борги»;
+  - «Клієнти»'s debt keeps its field, the write-off and erasing until
+    P0-4.

@@ -6,6 +6,7 @@ import {
   openStore,
   returnUnits,
   section,
+  tillWays,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -524,11 +525,12 @@ test("taking returns needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  // The till, with no way to take a return: no «Повернути», nor a switch
-  // (navigation task list, P0-1).
+  // The till, with no way to take a return: no «Повернути» (navigation
+  // task list, P0-1), the switch only selling and payments («Усе на бірці»
+  // task list, P0-3).
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(
-    page.getByRole("group", { name: "Продаж або повернення" }),
+    tillWays(page).getByRole("button", { name: "Повернути" }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Повернути", exact: true }),

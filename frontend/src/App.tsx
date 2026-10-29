@@ -134,6 +134,9 @@ type Tab =
   | "damaged"
   | "openings"
   | "credits"
+  /** «Продаж» › «Внесок»: a payment on a debt from the till (spec S08,
+   * S21; «Усе на бірці» task list, P0-3). */
+  | "deposit"
   | "backups"
   | "stores"
   | "suppliers"
@@ -153,6 +156,7 @@ type Tab =
 const counter: ReadonlySet<Tab> = new Set([
   "sale",
   "returns",
+  "deposit",
   "stock",
   "receive",
   "damaged",
@@ -742,6 +746,21 @@ function Workspace({
   // Read, not watched, as `canReturnNow` (credits task list, P2-1).
   const canSeeCreditsNow = useRef(canSeeCredits);
   canSeeCreditsNow.current = canSeeCredits;
+  // The till's «Внесок» (spec S08; «Усе на бірці» task list, P0-3): the
+  // same right, in a store that trades, where payments are taken.
+  const canDeposit = canSeeCredits && trading;
+  const canDepositNow = useRef(canDeposit);
+  canDepositNow.current = canDeposit;
+  // This person's other stores asked for a whole number that owes nothing
+  // here: those that trade, where they take payments too.
+  const depositOthers = me.stores.filter(
+    (other) =>
+      other.id !== store.id &&
+      other.state === "ACTIVE" &&
+      other.permissions.includes("sale:credit"),
+  );
+  // A payment's form open at the till: the menu steps aside (spec S21).
+  const [depositTask, setDepositTask] = useState(false);
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [creditStorageError, setCreditStorageError] = useState(false);
   const creditCommand = useCreditCommand();
@@ -781,10 +800,14 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        // Its banner shows over any tab; «Борги» is turned to only for
-        // whoever may take payments, never to say they may not (credits
-        // task list, P2-1).
-        if (canSeeCreditsNow.current) setTab("credits");
+        // Its banner shows over any tab; «Продаж» › «Внесок» is turned to
+        // only for whoever may take payments, never to say they may not
+        // (credits task list, P2-1; «Усе на бірці» task list, P0-3) — a
+        // payment's; a write-off, never made at the till, and a payment in
+        // a store that does not trade, «Борги».
+        if (saved.body.kind === "payment" && canDepositNow.current)
+          setTab("deposit");
+        else if (canSeeCreditsNow.current) setTab("credits");
         loadedFromDisk("credit");
       }
     } catch {
@@ -1375,20 +1398,26 @@ function Workspace({
     /** Pressed again where it stands: its first screen. */
     again?: () => void;
   }[] = [
-    // «Продаж» holds the returns too, by «Продати | Повернути» under its
-    // heading (navigation task list, P0-1): for whoever only takes
-    // returns, it opens them.
+    // «Продаж» holds the returns and the payments on debts too, by
+    // «Продати · Повернути · Внесок» under its heading (navigation task
+    // list, P0-1; «Усе на бірці» task list, P0-3): for whoever does one of
+    // them alone, it opens that one.
     {
-      tab: store.permissions.includes("sale:create") ? "sale" : "returns",
+      tab: store.permissions.includes("sale:create")
+        ? "sale"
+        : canReturn
+          ? "returns"
+          : "deposit",
       label: "Продаж",
-      shown: store.permissions.includes("sale:create") || canReturn,
+      shown:
+        store.permissions.includes("sale:create") || canReturn || canDeposit,
       disabled: blocked,
       // An order left open is kept by the returns, as before (review,
       // 2026-10-26).
       ...(store.permissions.includes("sale:create")
         ? { forgetsOrder: true as const }
         : {}),
-      also: ["returns"],
+      also: ["returns", "deposit"],
     },
     // «Товар»: the stock, «Прийшов товар» and «Брак» as tiles over it
     // (navigation task list, P0-3, the minimal one) — marked on each.
@@ -1551,17 +1580,33 @@ function Workspace({
         }}
       />
     ) : null;
-  // Selling and taking back, one section's two ways (navigation task list,
-  // P0-1): for whoever does both, under each screen's heading, held as the
-  // row is.
-  const saleOrReturn = (current: "sale" | "returns"): JSX.Element | null =>
-    store.permissions.includes("sale:create") && canReturn ? (
+  // Selling, taking back and taking a payment on a debt, one section's
+  // ways (navigation task list, P0-1; «Усе на бірці» task list, P0-3): each
+  // by its own right, the switch for whoever has two or more, under each
+  // screen's heading, held as the row is. Its name for a reader says the
+  // ways it holds.
+  const tillModes = (
+    current: "sale" | "returns" | "deposit",
+  ): JSX.Element | null => {
+    const open = [
+      ...(store.permissions.includes("sale:create")
+        ? [{ mode: "sale" as const, label: "Продати", named: "продаж" }]
+        : []),
+      ...(canReturn
+        ? [{ mode: "returns" as const, label: "Повернути", named: "повернення" }]
+        : []),
+      ...(canDeposit
+        ? [{ mode: "deposit" as const, label: "Внесок", named: "внесок" }]
+        : []),
+    ];
+    if (open.length < 2) return null;
+    const names = open.map((way) => way.named);
+    const last = names.pop() ?? "";
+    const label = `${names.join(", ")} або ${last}`;
+    return (
       <ModeSwitch
-        label="Продаж або повернення"
-        modes={[
-          { mode: "sale", label: "Продати" },
-          { mode: "returns", label: "Повернути" },
-        ]}
+        label={`${label.charAt(0).toUpperCase()}${label.slice(1)}`}
+        modes={open}
         current={current}
         disabled={blocked}
         focus={modeChosen}
@@ -1575,7 +1620,8 @@ function Workspace({
           }
         }}
       />
-    ) : null;
+    );
+  };
   const rest = shown.filter((section) => !counter.has(section.tab));
   // «Ще»'s groups, in the direction's order (navigation task list, P0-4):
   // money, suppliers, goods and catalogue, the network. «Каса» joins
@@ -1647,24 +1693,28 @@ function Workspace({
           </p>
         </Banner>
       )}
-      <nav aria-label="Розділи" className="sections">
-        <div className="row">
-          {shown
-            .filter((section) => counter.has(section.tab))
-            .map(sectionButton)}
-          {hasMore && (
-            <button
-              ref={moreButton}
-              className={inMore ? "active" : "quiet"}
-              aria-current={inMore ? "true" : undefined}
-              disabled={sending}
-              onClick={toMore}
-            >
-              Ще{backupsNeedYou ? " ⚠" : ""}
-            </button>
-          )}
-        </div>
-      </nav>
+      {/* Out of the way while a payment's form stands at the till: a task
+          screen, left by «←» (spec S21; «Усе на бірці» task list, P0-3). */}
+      {!(tab === "deposit" && depositTask) && (
+        <nav aria-label="Розділи" className="sections">
+          <div className="row">
+            {shown
+              .filter((section) => counter.has(section.tab))
+              .map(sectionButton)}
+            {hasMore && (
+              <button
+                ref={moreButton}
+                className={inMore ? "active" : "quiet"}
+                aria-current={inMore ? "true" : undefined}
+                disabled={sending}
+                onClick={toMore}
+              >
+                Ще{backupsNeedYou ? " ⚠" : ""}
+              </button>
+            )}
+          </div>
+        </nav>
+      )}
       {catalogStorageError && (
         <p role="alert">
           Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
@@ -1862,7 +1912,10 @@ function Workspace({
       )}
       {keptCredit && (
         <Kept
-          own={tab === "credits"}
+          own={
+            tab === "credits" ||
+            (tab === "deposit" && keptCredit.body.kind === "payment")
+          }
           title={
             keptCredit.body.kind === "payment"
               ? "Внесок ще не підтверджено"
@@ -1884,7 +1937,12 @@ function Workspace({
         </Kept>
       )}
       {creditSettled && (
-        <Settled own={tab === "credits"}>
+        <Settled
+          own={
+            tab === "credits" ||
+            (tab === "deposit" && creditSettled.kind === "payment")
+          }
+        >
           {/* The payment's result, compact (credits task list, P1-2): a card
               is charged only if nobody did while the server did not answer
               (owner decision, 2026-10-07). */}
@@ -2090,7 +2148,7 @@ function Workspace({
           <Sale
             key={saleEpoch}
             keptAt={`${store.id}:${String(saleEpoch)}`}
-            mode={saleOrReturn("sale")}
+            mode={tillModes("sale")}
             store={store}
             token={token}
             userId={me.user_id}
@@ -2187,7 +2245,7 @@ function Workspace({
         canReturn ? (
           <Returns
             key={returnsEpoch}
-            mode={saleOrReturn("returns")}
+            mode={tillModes("returns")}
             store={store}
             token={token}
             journalKey={returnKey}
@@ -2221,6 +2279,54 @@ function Workspace({
           />
         ) : // Never opened without the right: nothing is said of the rule
         // (returns task list, P2-1).
+        null
+      ) : tab === "deposit" ? (
+        canDeposit ? (
+          // The same list and debt as «Борги», a payment's alone (spec S08,
+          // S21; «Усе на бірці» task list, P0-3).
+          <Credits
+            // Its own, never «Борги»'s: a debt, a result or a search left
+            // here is not carried there, nor back (review, 2026-10-29).
+            key={`deposit:${String(creditEpoch)}`}
+            mode={tillModes("deposit")}
+            till={{ task: setDepositTask, others: depositOthers }}
+            store={store}
+            token={token}
+            journalKey={creditKey}
+            {...(store.permissions.includes("sale:create")
+              ? {
+                  sell: () => {
+                    setSearchFirst(true);
+                    setTab("sale");
+                  },
+                }
+              : {})}
+            blocked={
+              storageError ||
+              catalogStorageError ||
+              saleStorageError ||
+              receiptStorageError ||
+              busy ||
+              pending !== null ||
+              catalogCommand.busy ||
+              catalogCommand.pending !== null ||
+              saleCommand.busy ||
+              saleCommand.pending !== null ||
+              receiptCommand.busy ||
+              receiptCommand.pending !== null ||
+              adjustmentUnsettled ||
+              returnUnsettled ||
+              cashUnsettled ||
+              // At the till, as «Продати»: whatever holds every other tab
+              // holds it too.
+              storesUnsettled ||
+              supplierUnsettled ||
+              invoiceUnsettled ||
+              correctionUnsettled
+            }
+          />
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
         null
       ) : tab === "credits" ? (
         canSeeCredits ? (

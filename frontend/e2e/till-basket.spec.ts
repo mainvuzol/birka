@@ -7,6 +7,7 @@ import {
   openStore,
   section,
   tapSize,
+  tillWays,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -281,7 +282,7 @@ test("the basket stays while the till is left — «Повернути», «Кл
     page.getByText(/Кошик збережено — нічого не продано\.$/),
   ).toBeVisible();
   // «Повернути», and back by «Продати».
-  const ways = page.getByRole("group", { name: "Продаж або повернення" });
+  const ways = tillWays(page);
   await ways.getByRole("button", { name: "Повернути", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
   await ways.getByRole("button", { name: "Продати", exact: true }).click();
