@@ -7,6 +7,7 @@ import {
   returnUnits,
   sections,
   tapSize,
+  tillWays,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -452,9 +453,7 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   ).toBeVisible();
   await expect(page.getByText("Помилилися з товаром чи ціною?")).toBeVisible();
   // No «Продати | Повернути» on the receipt (navigation task list, P0-1).
-  await expect(
-    page.getByRole("group", { name: "Продаж або повернення" }),
-  ).toHaveCount(0);
+  await expect(tillWays(page)).toHaveCount(0);
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
@@ -462,9 +461,7 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expect(
     sections(page).getByRole("button", { name: "Продаж", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(
-    page.getByRole("group", { name: "Продаж або повернення" }),
-  ).toHaveCount(0);
+  await expect(tillWays(page)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();

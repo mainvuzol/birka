@@ -27,6 +27,10 @@ function initialOf(name: string | null): string {
  * summed it, in the debt's colour. Never a sale's sum or a payment's way.
  * The whole row opens the debt, or the customer's debts when there are more;
  * read while the till waits, as before, the debt's own commands held.
+ *
+ * Found at the till in another store of this person's, it opens nothing and
+ * says where the payment is taken (spec S08; «Усе на бірці» task list,
+ * P0-3).
  */
 export function CustomerRow({
   customer,
@@ -36,7 +40,8 @@ export function CustomerRow({
   customer: Customer;
   /** This store: another's debt is named by its store. */
   here: string;
-  open: () => void;
+  /** Opens the debt; or, for another store's, that store's name. */
+  open: (() => void) | { takenAt: string };
 }): JSX.Element {
   const meta = useId();
   const name = visible(customer.customer_name ?? erasedCustomer);
@@ -52,14 +57,9 @@ export function CustomerRow({
   const said = owes
     ? `винні ${money(customer.owed)}`
     : (closed ?? "").toLowerCase();
-  return (
-    <button
-      type="button"
-      className="sale-row debt-row"
-      aria-label={`Відкрити борг: ${name}, ${said}`}
-      aria-describedby={meta}
-      onClick={open}
-    >
+  const takenAt = typeof open === "function" ? null : open.takenAt;
+  const inside = (
+    <>
       <span className="debt-mark" aria-hidden="true">
         {initialOf(customer.customer_name)}
       </span>
@@ -79,10 +79,16 @@ export function CustomerRow({
             )}
             {only ? goodsOf(only) : debtsCount(customer.credits.length)}
           </span>
-          {away && (
+          {takenAt !== null ? (
             <span className="badge neutral">
-              Магазин «{visible(away.store_name)}»
+              Внесок приймає «{visible(takenAt)}»
             </span>
+          ) : (
+            away && (
+              <span className="badge neutral">
+                Магазин «{visible(away.store_name)}»
+              </span>
+            )
           )}
         </span>
       </span>
@@ -97,9 +103,24 @@ export function CustomerRow({
           {closed}
         </span>
       )}
-      <span className="sale-open" aria-hidden="true">
-        ›
-      </span>
+      {takenAt === null && (
+        <span className="sale-open" aria-hidden="true">
+          ›
+        </span>
+      )}
+    </>
+  );
+  return typeof open === "function" ? (
+    <button
+      type="button"
+      className="sale-row debt-row"
+      aria-label={`Відкрити борг: ${name}, ${said}`}
+      aria-describedby={meta}
+      onClick={open}
+    >
+      {inside}
     </button>
+  ) : (
+    <div className="sale-row debt-row taken-elsewhere">{inside}</div>
   );
 }

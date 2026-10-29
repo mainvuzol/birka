@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react";
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
 import { paperText } from "@/sales/paperMark";
 import type { PaperView } from "@/sales/paperMark";
@@ -39,6 +39,7 @@ export function Paid({
   credit,
   said,
   kept = false,
+  total,
   next,
 }: {
   kind: "payment" | "write-off";
@@ -55,6 +56,11 @@ export function Paid({
    */
   said: string;
   kept?: boolean;
+  /**
+   * The till's (spec S22): what the customer owes the store in all, read
+   * again once the payment is recorded, or its place while it is read.
+   */
+  total?: ReactNode;
   /**
    * Where to go from the result; none on a notice confirmed later. `back`
    * is named as the debt's «←» is: «До боргів», or the customer's name for
@@ -153,6 +159,7 @@ export function Paid({
         <Stub state={credit.status === "SETTLED" ? "settled" : "recorded"}>
           {handBack}
           {owed}
+          {total}
         </Stub>
       )}
       {next && (

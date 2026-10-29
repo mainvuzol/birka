@@ -6,6 +6,7 @@ import {
   fromPaper,
   openStore,
   tapSize,
+  tillWays,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -125,9 +126,7 @@ test("under «Продати | Повернути», the till's search and its f
   await page.setViewportSize({ width: 360, height: 640 });
   await stubStock(page, 3);
   await onTheTill(page);
-  await expect(
-    page.getByRole("group", { name: "Продаж або повернення" }),
-  ).toBeInViewport({ ratio: 1 });
+  await expect(tillWays(page)).toBeInViewport({ ratio: 1 });
   await page
     .getByRole("combobox", { name: "Склад", exact: true })
     .selectOption(fixture.till_location_id);

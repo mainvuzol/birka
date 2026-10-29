@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import {
   useInfiniteQuery,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -58,6 +59,7 @@ export function Credits({
   mayErase = false,
   sell,
   mode = null,
+  till,
 }: {
   store: Store;
   token: string;
@@ -79,9 +81,18 @@ export function Credits({
   sell?: (() => void) | undefined;
   /**
    * «Борги | Замовлення» under the heading, for whoever has both
-   * (navigation task list, P0-2); none for anyone else.
+   * (navigation task list, P0-2); none for anyone else. At the till,
+   * «Продати · Повернути · Внесок».
    */
   mode?: JSX.Element | null;
+  /**
+   * The till's «Внесок» (spec S08, S21; «Усе на бірці» task list, P0-3):
+   * under «Продаж», those who owe this store, and a debt opened for its
+   * payment alone. `others` are this person's other stores that trade and
+   * where they take payments, asked for a whole number that owes nothing
+   * here; `task` is told while a payment's form stands.
+   */
+  till?: { task: (shown: boolean) => void; others: readonly Store[] };
 }): JSX.Element {
   const cache = useQueryClient();
   // What the seller types, searched once they pause, from two letters, as
@@ -167,10 +178,47 @@ export function Credits({
         .map((customer) => [keyOf(customer), customer]),
     ).values(),
   ];
+  // A whole number that owes nothing here, at the till: the same question
+  // to each other store of this person's that trades and where they take
+  // payments. Found, its row says where the payment is taken, and opens
+  // nothing (spec S08; «Усе на бірці» task list, P0-3).
+  const others = till?.others ?? [];
+  const asksOthers =
+    till !== undefined &&
+    others.length > 0 &&
+    !elsewhere &&
+    wholePhone(search) &&
+    search === query.trim() &&
+    customers.isSuccess &&
+    !customers.isPlaceholderData &&
+    listed.length === 0;
+  const othersRead = useQueries({
+    queries: others.map((other) => ({
+      queryKey: ["credits", store.id, "taken-at", other.id, search],
+      queryFn: () =>
+        api<CustomerPage>(
+          `/credits/customers?store_id=${other.id}&limit=5&status=OPEN&query=${encodeURIComponent(search)}`,
+          token,
+        ),
+      enabled: asksOthers,
+      retry: false,
+    })),
+  });
+  const othersPending =
+    asksOthers && othersRead.some((read) => read.isPending);
+  const takenElsewhere = asksOthers
+    ? others.flatMap((other, at) =>
+        (othersRead[at]?.data?.items ?? [])
+          .filter((customer) => customer.open_debts > 0)
+          .map((customer) => ({ other, customer })),
+      )
+    : [];
+  // The till names no store's total: what is owed is on each row.
   const summary = useQuery({
     queryKey: ["credits", store.id, "summary"],
     queryFn: () =>
       api<StoreDebts>(`/credits/summary?store_id=${store.id}`, token),
+    enabled: till === undefined,
     retry: false,
   });
   // Refused, and not read since: said so, and held so while read again —
@@ -202,6 +250,7 @@ export function Credits({
         {...(chosen
           ? { backTo: visible(chosen.customer_name ?? erasedCustomer) }
           : {})}
+        {...(till ? { till: { task: till.task } } : {})}
       />
     );
 
@@ -223,7 +272,7 @@ export function Credits({
   return (
     <section className="credits">
       <h2 ref={heading} tabIndex={-1}>
-        Борги
+        {till ? "Продаж" : "Борги"}
       </h2>
       {mode}
       {readOnly && (
@@ -233,7 +282,7 @@ export function Credits({
           Внески приймає будь-який магазин мережі, що працює.
         </p>
       )}
-      {!elsewhere && summary.data ? (
+      {till ? null : !elsewhere && summary.data ? (
         <div
           className="owed-card"
           role="group"
@@ -363,6 +412,20 @@ export function Credits({
             За цим номером боргів магазинів, що не працюють, не знайдено.
             Перевірте номер або зверніться до менеджера.
           </p>
+        ) : search && othersPending ? (
+          <Placeholder said="Завантажуємо борги…" rows={1} debts />
+        ) : search && takenElsewhere.length > 0 ? (
+          <div role="list" aria-label="Хто винен">
+            {takenElsewhere.map(({ other, customer }) => (
+              <div role="listitem" key={`${other.id}:${keyOf(customer)}`}>
+                <CustomerRow
+                  customer={customer}
+                  here={other.id}
+                  open={{ takenAt: other.name }}
+                />
+              </div>
+            ))}
+          </div>
         ) : search ? (
           <div className="empty">
             <p>
@@ -492,7 +555,7 @@ export function Credits({
           Борг магазину, що зараз не працює? Шукати за цим номером
         </button>
       )}
-      {!elsewhere && (
+      {!elsewhere && !till && (
         // Under the list, and under an empty one: the paid and written off
         // are asked for, never shown first (credits task list, P0-1).
         <button

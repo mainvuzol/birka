@@ -137,6 +137,17 @@ export async function changeStore(page: Page): Promise<void> {
  * A section opened as a person opens it: one of the counter's from the
  * row — and its way or tile under it — any other from «Ще».
  */
+/**
+ * The till's ways under its heading, «Продати · Повернути · Внесок», by
+ * whichever of them this person has (navigation task list, P0-1; «Усе на
+ * бірці» task list, P0-3): named for a reader by the ways it holds.
+ */
+export function tillWays(page: Page): Locator {
+  return page.getByRole("group", {
+    name: /^(Продаж|Повернення)(, повернення)? або (повернення|внесок)$/,
+  });
+}
+
 export async function section(page: Page, name: string): Promise<void> {
   if (name === "Повернення") {
     // «Продаж», then «Повернути» — for whoever only takes returns,
@@ -147,9 +158,10 @@ export async function section(page: Page, name: string): Promise<void> {
     await expect(
       page.getByRole("heading", { name: /^(Продаж|Повернення)$/ }),
     ).toBeVisible();
-    const back = page
-      .getByRole("group", { name: "Продаж або повернення" })
-      .getByRole("button", { name: "Повернути", exact: true });
+    const back = tillWays(page).getByRole("button", {
+      name: "Повернути",
+      exact: true,
+    });
     if ((await back.count()) > 0) await back.click();
     await expect(
       page.getByRole("heading", { name: "Повернення" }),

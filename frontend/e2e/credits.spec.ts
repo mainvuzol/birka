@@ -12,6 +12,7 @@ import {
   section,
   tapSize,
   waitsFor,
+  tillWays,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
@@ -35,6 +36,9 @@ interface Fixture {
   owner_telegram_user_id: string;
   store_id: string;
   returns_location_id: string;
+  /** «Другий», where «Оля» works too, and its own warehouse. */
+  second_store_id: string;
+  second_location_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -1823,4 +1827,190 @@ test("paid in parts by card typed from paper, the receipt says the card was char
     sum: "Зараз 1 000,00 грн",
   });
   await expect(page.getByText("Проведіть на терміналі")).toHaveCount(0);
+});
+
+/** «Продаж» › «Внесок», the store's debtors under «Продаж» («Усе на бірці»
+ * task list, P0-3). */
+async function atTheTill(page: Page): Promise<void> {
+  // A launch link that differs only in its hash would not reload the app.
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await tillWays(page)
+    .getByRole("button", { name: "Внесок", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж", level: 2 }),
+  ).toBeVisible();
+}
+
+/** The keypad's keys, pressed one by one: «1500», «,5». */
+async function keyIn(page: Page, keys: string): Promise<void> {
+  for (const one of keys)
+    await page
+      .locator(".keypad")
+      .getByRole("button", { name: one === "," ? "Кома" : one, exact: true })
+      .click();
+}
+
+/** Two coats at 1500 sold in parts at «Другий» by the owner: 1000 now, 2000
+ * owed there. */
+async function onCreditAtTheOther(
+  page: Page,
+  name: string,
+  phone: string,
+): Promise<void> {
+  const auth = await page.request.post("/api/v1/auth/telegram", {
+    data: { init_data: initData(fixture.owner_telegram_user_id) },
+  });
+  const { access_token: token } = (await auth.json()) as {
+    access_token: string;
+  };
+  const headers = { Authorization: `Bearer ${token}` };
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: fixture.second_store_id,
+      concept: `Деінде частинами ${randomUUID().slice(0, 8)}`,
+      variant: { color: "графіт" },
+      sizes: [{ system: "ALPHA", code: "M" }],
+    },
+  });
+  expect(created.status()).toBe(201);
+  const product = (await created.json()) as {
+    product_variant_id: string;
+    sizes: { size_id: string }[];
+  };
+  const variant = product.product_variant_id;
+  const size = product.sizes[0]?.size_id ?? "";
+  const received = await page.request.post("/api/v1/inventory/receipts", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: fixture.second_store_id,
+      location_id: fixture.second_location_id,
+      command_id: randomUUID(),
+      lines: [
+        {
+          product_variant_id: variant,
+          size_id: size,
+          quantity: 2,
+          acquisition_type: "PURCHASE",
+          unit_cost: null,
+        },
+      ],
+      notes: null,
+    },
+  });
+  expect(received.status()).toBe(201);
+  const sale = await page.request.post("/api/v1/sales", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: fixture.second_store_id,
+      command_id: randomUUID(),
+      lines: [
+        {
+          product_variant_id: variant,
+          size_id: size,
+          source_location_id: fixture.second_location_id,
+          quantity: 2,
+          unit_price: "1500.00",
+        },
+      ],
+      credit: { customer_name: name, customer_phone: phone, paid_now: "1000.00" },
+      payment_method: "CASH",
+    },
+  });
+  expect(sale.status()).toBe(201);
+}
+
+test.describe("«Продаж» › «Внесок»: payments on debts from the till, against the server («Усе на бірці» task list, P0-3)", () => {
+  test("a payment keyed in at the till is recorded once, and S22 says what is left and what the customer owes the store in all, both the server's", async ({
+    page,
+  }) => {
+    const name = customer();
+    const { sale, token } = await onCredit(page, name);
+    const payments = posts(page, "/payments");
+    await atTheTill(page);
+    await searchField(page).fill(name);
+    await expect(rows(page)).toHaveCount(1);
+    await customerRow(page, name).click();
+    await expect(
+      page.getByRole("navigation", { name: "Розділи" }),
+    ).toHaveCount(0);
+    await keyIn(page, "500");
+    await paying(page).getByRole("button", { name: "Картка" }).click();
+    const paid = page.locator(".paid-result");
+    await expect(
+      paid.getByRole("heading", { name: "Внесок записано" }),
+    ).toBeFocused();
+    await expectStub(paid, {
+      way: "Картка",
+      say: "Проведіть на терміналі",
+      sum: "500,00 грн",
+    });
+    await expect(
+      paid.getByText("Залишок боргу 1 500,00 грн", { exact: true }),
+    ).toBeVisible();
+    await expect(paid.locator(".paid-total")).toHaveText(
+      "Усього винні магазину «Основний» 1 500,00 грн",
+    );
+    expect(payments.bodies).toEqual([
+      expect.objectContaining({ amount: "500.00", payment_method: "CARD" }),
+    ]);
+    expect(await owed(page, token, sale.credit.credit_id)).toBe("1500.00");
+  });
+
+  test("a debt lowered on another phone while S21 is open: within what it shows, the server refuses, and the debt is shown as it is now", async ({
+    page,
+  }) => {
+    const name = customer();
+    const { sale, token } = await onCredit(page, name);
+    await atTheTill(page);
+    await searchField(page).fill(name);
+    await customerRow(page, name).click();
+    await expect(
+      page.getByRole("group", { name: "Скільки винні" }).locator(".owed-sum"),
+    ).toHaveText("2 000,00 грн");
+    // Another seller takes 1500 meanwhile; this screen still shows 2000.
+    const elsewhere = await page.request.post(
+      `/api/v1/credits/${sale.credit.credit_id}/payments`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        data: {
+          command_id: randomUUID(),
+          amount: "1500.00",
+          payment_method: "CASH",
+        },
+      },
+    );
+    expect(elsewhere.status()).toBe(201);
+    await keyIn(page, "1000");
+    await paying(page).getByRole("button", { name: "Переказ" }).click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "Це більше, ніж винні: залишок боргу 500,00 грн. Прийміть 500,00 грн, а решту поверніть покупцю переказом.",
+    );
+    await expect(
+      page.getByRole("group", { name: "Скільки винні" }).locator(".owed-sum"),
+    ).toHaveText("500,00 грн");
+    await expect(
+      page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+    ).toHaveCount(0);
+    expect(await owed(page, token, sale.credit.credit_id)).toBe("500.00");
+  });
+
+  test("a number that owes «Другий», where this person takes payments too, says «Внесок приймає «Другий»» at «Основний»'s till", async ({
+    page,
+  }) => {
+    const name = customer();
+    const phone = newPhone();
+    await onCreditAtTheOther(page, name, phone);
+    await atTheTill(page);
+    await searchField(page).fill(phone);
+    const row = rows(page);
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(name);
+    await expect(row).toContainText("Внесок приймає «Другий»");
+    await expect(row).toContainText("2 000,00 грн");
+    await expect(row.getByRole("button")).toHaveCount(0);
+  });
 });

@@ -11,6 +11,7 @@ import {
   section,
   tapSize,
   waitsFor,
+  tillWays,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -4066,7 +4067,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         .getByRole("navigation", { name: "Розділи" })
         .getByRole("button", { name: "Продаж", exact: true }),
     ).toHaveAttribute("aria-current", "page");
-    const switchOf = page.getByRole("group", { name: "Продаж або повернення" });
+    const switchOf = tillWays(page);
     await expect(
       switchOf.getByRole("button", { name: "Повернути", exact: true }),
     ).toHaveAttribute("aria-current", "page");
@@ -4479,7 +4480,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
     ).toBeEnabled();
     await expect(
-      page.getByRole("group", { name: "Продаж або повернення" }),
+      tillWays(page).getByRole("button", { name: "Повернути" }),
     ).toHaveCount(0);
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
     expect(sent).toHaveLength(1);
@@ -5018,7 +5019,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     );
   });
 
-  test("a kept payment on a phone whose person may take payments still turns to «Борги»", async ({
+  test("a kept payment on a phone whose person may take payments still turns to its screen, now «Продаж» › «Внесок» («Усе на бірці» task list, P0-3)", async ({
     page,
   }) => {
     await seed(page, { [creditKey]: keptDebt("payment") });
@@ -5032,7 +5033,36 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
-      page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+      page
+        .locator(".stub-notice .stub-kept")
+        .getByRole("heading", { name: "Внесок ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Продаж", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Продаж", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      tillWays(page).getByRole("button", { name: "Внесок", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("a kept write-off, never made at the till, turns to «Клієнти» › «Борги» on a phone whose person may take payments, never to «Продаж» › «Внесок» (review, 2026-10-29)", async ({
+    page,
+  }) => {
+    await seed(page, { [creditKey]: keptDebt("write-off") });
+    await serve(page);
+    await on(page, `/credits/${ids.credit}/write-off`, async (route) => {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Списання ще не підтверджено" }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Борги", exact: true }),
@@ -5040,9 +5070,10 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(
       page.getByRole("button", { name: "Клієнти", exact: true }),
     ).toHaveAttribute("aria-current", "page");
+    await expect(tillWays(page)).toHaveCount(0);
   });
 
-  test("a kept payment on a phone whose person also reads orders turns to «Клієнти» on «Борги», marked in «Борги | Замовлення», the switch held (navigation task list, P0-2)", async ({
+  test("a kept payment on a phone whose person also reads orders turns to «Продаж» › «Внесок» all the same, the till's switch held till it is settled (navigation task list, P0-2; «Усе на бірці» task list, P0-3)", async ({
     page,
   }) => {
     await seed(page, { [creditKey]: keptDebt("payment") });
@@ -5060,18 +5091,18 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Борги", exact: true }),
+      page.getByRole("heading", { name: "Продаж", exact: true }),
     ).toBeVisible();
+    const ways = tillWays(page);
     await expect(
-      page.getByRole("button", { name: "Клієнти", exact: true }),
-    ).toHaveAttribute("aria-current", "page");
-    const ways = page.getByRole("group", { name: "Борги або замовлення" });
-    await expect(
-      ways.getByRole("button", { name: "Борги", exact: true }),
+      ways.getByRole("button", { name: "Внесок", exact: true }),
     ).toHaveAttribute("aria-current", "page");
     // Held as the row is, till the payment is settled.
     await expect(
-      ways.getByRole("button", { name: "Замовлення", exact: true }),
+      ways.getByRole("button", { name: "Продати", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Клієнти", exact: true }),
     ).toBeDisabled();
   });
 

@@ -1,4 +1,12 @@
-import { test, expect, more, openStore, sections, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  sections,
+  tapSize,
+  tillWays,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -54,7 +62,7 @@ function launch(
 
 /** «Продати | Повернути» (navigation task list, P0-1). */
 function saleOrReturn(page: Page): Locator {
-  return page.getByRole("group", { name: "Продаж або повернення" });
+  return tillWays(page);
 }
 
 /** The WCAG contrast of an element's text against what it is drawn on. */
@@ -505,9 +513,8 @@ test("«Брак»'s tile says how many units wait to be inspected, as its scree
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P0-1)", async ({
-  page,
-}) => {
+/** This person's rights in every store, less `without`. */
+async function holdingNone(page: Page, without: string[]): Promise<void> {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as {
@@ -515,14 +522,55 @@ test("whoever only takes returns has «Продаж» open them, with no switch 
     };
     for (const store of body.stores)
       store.permissions = store.permissions.filter(
-        (permission) => permission !== "sale:create",
+        (permission) => !without.includes(permission),
       );
     await route.fulfill({ response, json: body });
   });
+}
+
+test("whoever only takes returns has «Продаж» open them, with no switch (navigation task list, P0-1)", async ({
+  page,
+}) => {
+  await holdingNone(page, ["sale:create", "sale:credit"]);
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
   await row(page).filter({ hasText: "Продаж" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(row(page).filter({ hasText: "Продаж" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(saleOrReturn(page)).toHaveCount(0);
+});
+
+test("whoever takes returns and payments but does not sell has «Повернути · Внесок» under «Продаж» («Усе на бірці» task list, P0-3)", async ({
+  page,
+}) => {
+  await holdingNone(page, ["sale:create"]);
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Продаж" }).click();
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  const ways = page.getByRole("group", { name: "Повернення або внесок" });
+  await expect(ways.getByRole("button")).toHaveText(["Повернути", "Внесок"]);
+  await ways.getByRole("button", { name: "Внесок", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж", level: 2 }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Ім’я або телефон")).toBeVisible();
+});
+
+test("whoever only takes payments has «Продаж» open «Внесок», with no switch («Усе на бірці» task list, P0-3)", async ({
+  page,
+}) => {
+  await holdingNone(page, ["sale:create", "sale:refund"]);
+  await page.goto(launch(lida, "Ліда"));
+  await openStore(page, "Центр CENTRE");
+  await row(page).filter({ hasText: "Продаж" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж", level: 2 }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Ім’я або телефон")).toBeVisible();
   await expect(row(page).filter({ hasText: "Продаж" })).toHaveAttribute(
     "aria-current",
     "page",

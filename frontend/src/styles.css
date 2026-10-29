@@ -1320,6 +1320,148 @@ html {
 .debt-closed p {
   margin: 0 0 6px;
 }
+/* The till's payment (spec S21; «Усе на бірці» task list, P0-3): what they
+   took for a title, who and where under it, what is owed in money-xl with
+   the debt's glyph, the history on a tap, and the dock — the sum over the
+   app's keypad, the three ways under the thumb. */
+.debt-till h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 30px;
+  overflow-wrap: anywhere;
+}
+.debt-till h2 .more-goods {
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.debt-till .owed-what {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--debt);
+}
+.debt-till .owed-sum .sum {
+  font-size: 56px;
+  line-height: 56px;
+  letter-spacing: -0.01em;
+}
+.history-toggle {
+  min-height: var(--touch);
+  margin: 0 0 8px;
+  padding: 0 4px;
+  border: 0;
+  font-weight: 600;
+}
+.history-toggle span {
+  display: inline-block;
+}
+.history-toggle[aria-expanded="true"] span {
+  transform: rotate(90deg);
+}
+.till-dock {
+  margin-top: 12px;
+}
+.till-dock .pay-ways button {
+  min-height: var(--h-pay);
+}
+/* More than is owed: said in the error's colour, the ways dark (spec S21). */
+.pay-over {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+}
+/* The app's own keypad (spec §6.25): the sum 56 to the right in a 72 box,
+   twelve keys 60 high under it, in the display face. The phone's keyboard
+   never opens over the dock. */
+.keypad-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.keypad-label {
+  display: block;
+  flex: none;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pencil);
+}
+/* The whole debt in one tap; a long sum wraps inside it, never under the
+   label. */
+.keypad-all {
+  min-width: 0;
+  min-height: var(--touch);
+  padding: 4px 10px;
+  border-radius: var(--r-l);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: right;
+}
+.keypad-sum {
+  box-sizing: border-box;
+  width: 100%;
+  height: 72px;
+  margin: 8px 0;
+  padding: 0 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.keypad-sum::placeholder {
+  color: var(--pencil);
+}
+.keypad-sum[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.keypad-keys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.keypad-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--h-key);
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-m);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* What the customer owes the store in all, under what is left on this
+   debt (spec S22). */
+.paid-total {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+}
+/* Another store's debt, found at the till: read, never opened (spec S08). */
+.taken-elsewhere {
+  cursor: default;
+}
 .pay-in {
   margin: 0;
   padding: 0;
@@ -1606,9 +1748,12 @@ html {
    navigation task list, P0-1): segments on a grey field, as the way's
    switch, the way open marked. Under the screen's heading, on one line at
    360 px. */
+/* As many equal ways as are open: «Продати · Повернути · Внесок» (spec
+   §6.7; «Усе на бірці» task list, P0-3). */
 .mode-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 4px;
   margin: 0 0 12px;
   padding: 4px;
