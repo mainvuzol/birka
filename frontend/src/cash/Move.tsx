@@ -6,6 +6,7 @@ import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
 import { usePanelRoom } from "@/shared/panel";
 import { buzz } from "@/shared/telegram";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { cashErrorText, dayOf } from "./errors";
 import { movementDone } from "./format";
@@ -118,17 +119,15 @@ export function Move({
       <ScreenHeader
         title={direction === "OUT" ? "Видати з каси" : "Внести в касу"}
         back={
-          <button
-            type="button"
-            className="quiet back"
-            aria-label={from === "count" ? "Назад до підрахунку" : "Назад до каси"}
-            onClick={() => {
+          <Back
+            go={() => {
               back(null);
             }}
+            label={from === "count" ? "Назад до підрахунку" : "Назад до каси"}
           >
             <span aria-hidden="true">← </span>
             {from === "count" ? "Підрахунок" : "Каса"}
-          </button>
+          </Back>
         }
       />
       <section className="cash-move">

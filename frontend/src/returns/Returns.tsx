@@ -30,6 +30,7 @@ import {
   usePaperMark,
 } from "@/sales/paperMark";
 import { buzz } from "@/shared/telegram";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
@@ -704,9 +705,9 @@ function ReturnForm({
         pushed
         title="Повернення"
         aside={
-          <button className="quiet" disabled={working} onClick={back}>
+          <Back go={back} held={working} className="quiet">
             <span aria-hidden="true">← </span>До списку
-          </button>
+          </Back>
         }
       />
       <section className="returns">

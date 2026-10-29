@@ -37,6 +37,7 @@ import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { DamagedMeta } from "@/inventory/Goods";
 import { TabBar } from "@/shared/TabBar";
+import { Back } from "@/shared/Back";
 import { ScreenHeader, WorkspaceLineContext } from "@/shared/ScreenHeader";
 import type { WorkspaceLine } from "@/shared/ScreenHeader";
 import type { TabItem } from "@/shared/TabBar";
@@ -2559,17 +2560,15 @@ function Workspace({
               pushed
               waiting={detail.isPending}
               back={
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
+                <Back
+                  go={() => {
                     setSelectedId(null);
                     setOrderDone(null);
                     setCollected(null);
                   }}
                 >
                   ← До замовлень
-                </button>
+                </Back>
               }
             />
             <section className="order">

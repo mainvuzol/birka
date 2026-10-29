@@ -11,6 +11,7 @@ import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Closed, CloseSummary } from "./Closed";
 import { Count } from "./Count";
@@ -915,16 +916,14 @@ function CorrectStep({
       <ScreenHeader
         title="Змінити спосіб оплати"
         back={
-          <button
-            type="button"
-            className="quiet back"
-            aria-label="Назад до каси"
-            onClick={() => {
+          <Back
+            go={() => {
               back(null);
             }}
+            label="Назад до каси"
           >
             <span aria-hidden="true">← </span>Каса
-          </button>
+          </Back>
         }
       />
       <section className="cash-fix">

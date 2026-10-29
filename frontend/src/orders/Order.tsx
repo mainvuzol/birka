@@ -6,6 +6,7 @@ import { visible } from "@/shared/visible";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
@@ -381,16 +382,14 @@ function Card({
         className="order-title"
         title={title}
         back={
-          <button
-            type="button"
-            className="quiet"
-            onClick={(event) => {
-              if (event.timeStamp - backAt.current < CARRIED_TAP) return;
-              back();
-            }}
+          <Back
+            go={back}
+            carried={(event) =>
+              event.timeStamp - backAt.current < CARRIED_TAP
+            }
           >
             ← До замовлень
-          </button>
+          </Back>
         }
       />
       <section className="order">

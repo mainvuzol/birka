@@ -24,6 +24,7 @@ import type {
 } from "./modelTypes";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 
 const pageSize = 20;
@@ -725,17 +726,17 @@ export function Models({
         back={back && <BackToMore back={back} />}
         aside={
           selected && (
-            <button
-              className="quiet"
-              disabled={working}
-              onClick={() => {
+            <Back
+              go={() => {
                 setSelected(null);
                 setMode(null);
                 setDone(null);
               }}
+              held={working}
+              className="quiet"
             >
               До пошуку
-            </button>
+            </Back>
           )
         }
       />

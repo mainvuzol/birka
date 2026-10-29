@@ -13,6 +13,7 @@ import type { PaymentMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { cashErrorText, timeOf } from "./errors";
 import { correctionDone, wayName, whenOf } from "./format";
@@ -45,16 +46,11 @@ function momentOf(at: string): string {
 }
 
 /** «← Каса», as on the count's screen. */
-function Back({ back }: { back: () => void }): JSX.Element {
+function ToCash({ back }: { back: () => void }): JSX.Element {
   return (
-    <button
-      type="button"
-      className="quiet back"
-      aria-label="Назад до каси"
-      onClick={back}
-    >
+    <Back go={back} label="Назад до каси">
       <span aria-hidden="true">← </span>Каса
-    </button>
+    </Back>
   );
 }
 
@@ -103,7 +99,7 @@ export function FixStep({
     retry: false,
   });
   const leave = (
-    <Back
+    <ToCash
       back={() => {
         back(null);
       }}

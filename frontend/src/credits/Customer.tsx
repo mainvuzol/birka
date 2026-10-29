@@ -6,6 +6,7 @@ import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { Sum } from "@/shared/Sum";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { refusalText } from "./Debt";
 import { goodsOf, shortDay } from "./format";
@@ -77,9 +78,9 @@ export function Customer({
       <ScreenHeader
         title={name}
         back={
-          <button type="button" className="quiet back" onClick={back}>
+          <Back go={back}>
             <span aria-hidden="true">← </span>До боргів
-          </button>
+          </Back>
         }
       />
       <section className="credits">

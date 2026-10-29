@@ -149,6 +149,7 @@ export function connectTelegram(): () => void {
   const unwatch = on("viewport_changed", ({ height, is_state_stable }) => {
     keepStableHeight(height, is_state_stable);
   });
+  const unpress = on("back_button_pressed", pressBack);
   const version = launchParam("tgWebAppVersion");
   try {
     postEvent("web_app_ready");
@@ -168,7 +169,81 @@ export function connectTelegram(): () => void {
   return () => {
     unsubscribe();
     unwatch();
+    unpress();
   };
+}
+
+/** A screen's «←», as Telegram's «Назад» knows it. */
+export interface BackWay {
+  /** What the «←» does. */
+  go: () => void;
+  /** Held while a send or a kept operation stands: no way out. */
+  held: boolean;
+  /** Drawn on the screen shown: an order's card stays mounted, hidden,
+   * under its step's screen. */
+  drawn: () => boolean;
+}
+
+/** The «←»s mounted, in the order they came: the last drawn is the screen's
+ * own, a step's over its card's, «До пошуку» over «← Ще». */
+const ways: BackWay[] = [];
+
+function wayOut(): BackWay | undefined {
+  return [...ways].reverse().find((way) => way.drawn());
+}
+
+/** Whether Telegram was last told to show its «Назад»: hidden as the app
+ * opens. */
+let backShown = false;
+let backAsked = false;
+
+/**
+ * Telegram's «Назад» (direction §6.8; «Усе на бірці» task list, P1-1):
+ * shown while a screen's «←» is drawn and free, hidden on a tab's first
+ * screen, where Telegram offers «Закрити» in its place, and while the «←» is
+ * held. Read once the screen has settled — a step's «←» comes as its card's
+ * is hidden, and Telegram's never blinks between them — and told only when
+ * it changes, only inside Telegram, and only where the version knows it.
+ */
+export function showBack(): void {
+  if (backAsked) return;
+  backAsked = true;
+  queueMicrotask(() => {
+    backAsked = false;
+    tellBack();
+  });
+}
+
+function tellBack(): void {
+  const way = wayOut();
+  const shown = way !== undefined && !way.held;
+  if (shown === backShown || !telegramInitData()) return;
+  const version = launchParam("tgWebAppVersion");
+  if (!version || !supports("web_app_setup_back_button", version)) return;
+  backShown = shown;
+  try {
+    postEvent("web_app_setup_back_button", { is_visible: shown });
+  } catch {
+    /* No Telegram host to tell. */
+  }
+}
+
+/** A «←» mounted: Telegram's «Назад» does what it does while it is the
+ * screen's. Unmounted by what this returns. */
+export function addBackWay(way: BackWay): () => void {
+  ways.push(way);
+  showBack();
+  return () => {
+    const at = ways.indexOf(way);
+    if (at >= 0) ways.splice(at, 1);
+    showBack();
+  };
+}
+
+/** Telegram's «Назад» pressed: the screen's «←», unless it is held. */
+function pressBack(): void {
+  const way = wayOut();
+  if (way && !way.held) way.go();
 }
 
 /**

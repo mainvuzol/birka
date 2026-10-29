@@ -6,6 +6,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { asInput } from "@/prices/SuggestedPrice";
 import { PriceHint } from "@/sales/PriceHint";
@@ -286,9 +287,7 @@ export function NewOrder({
       <ScreenHeader
         title="Нове замовлення"
         back={
-          <button type="button" className="quiet" onClick={back}>
-            ← До замовлень
-          </button>
+          <Back go={back}>← До замовлень</Back>
         }
       />
       <section className="order-new">

@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 
 const pageSize = 20;
@@ -592,9 +593,9 @@ function InvoiceDetail({
         pushed
         title="Накладна"
         aside={
-          <button className="quiet" onClick={back}>
+          <Back go={back} className="quiet">
             До списку накладних
-          </button>
+          </Back>
         }
       />
       <section>

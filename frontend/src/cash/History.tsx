@@ -6,6 +6,7 @@ import type { Store } from "@/orders/types";
 import { api, errorText } from "@/shared/api";
 import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { CloseBody, differenceOf, isOpening } from "./Closed";
 import { dayOf, timeOf } from "./errors";
@@ -145,16 +146,14 @@ export function History({
             </>
           }
           back={
-            <button
-              type="button"
-              className="quiet back"
-              aria-label="Назад до закриттів"
-              onClick={() => {
+            <Back
+              go={() => {
                 setTapped(null);
               }}
+              label="Назад до закриттів"
             >
               <span aria-hidden="true">← </span>Закриття
-            </button>
+            </Back>
           }
         />
         <section className="cash-closed cash-history">
@@ -170,14 +169,9 @@ export function History({
       <ScreenHeader
         title="Закриття"
         back={
-          <button
-            type="button"
-            className="quiet back"
-            aria-label="Назад до каси"
-            onClick={back}
-          >
+          <Back go={back} label="Назад до каси">
             <span aria-hidden="true">← </span>Каса
-          </button>
+          </Back>
         }
       />
       <section className="cash-history">

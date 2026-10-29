@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from "react";
+import { Back } from "./Back";
 import { ScreenHeader } from "./ScreenHeader";
 
 /** A section under «Ще»: its label, held by its own section's rule. */
@@ -114,14 +115,13 @@ export function More({
  */
 export function BackToMore({ back }: { back: MoreBack }): JSX.Element {
   return (
-    <button
-      type="button"
+    <Back
+      go={back.go}
+      held={back.held}
+      label="Назад до «Ще»"
       className="quiet back to-more"
-      aria-label="Назад до «Ще»"
-      disabled={back.held}
-      onClick={back.go}
     >
       <span aria-hidden="true">← </span>Ще
-    </button>
+    </Back>
   );
 }

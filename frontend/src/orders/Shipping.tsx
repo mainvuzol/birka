@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { WhereTo } from "./WhereTo";
 import type { Carrier, Destination, Order } from "./types";
@@ -60,9 +61,7 @@ export function Shipping({
         focusable
         title="Доставка"
         back={
-          <button type="button" className="quiet" onClick={back}>
-            ← Замовлення
-          </button>
+          <Back go={back}>← Замовлення</Back>
         }
       />
       <section className="order-shipping">
