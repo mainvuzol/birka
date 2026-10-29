@@ -40,7 +40,6 @@ export interface Basket {
   paper: boolean;
   /** The paper switch's moves when last kept (`usePaper`'s `moved`). */
   moved: number;
-  locationId: string;
   draft: Draft[];
   commandId: string;
   found: Record<number, number>;

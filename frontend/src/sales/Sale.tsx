@@ -176,7 +176,6 @@ export function Sale({
           method: null,
         };
   });
-  const [locationId, setLocationId] = useState(kept?.locationId ?? "");
   // What the seller types to find a model (redesign P0-2).
   const [text, setText] = useState("");
   const query = useSettled(text);
@@ -227,7 +226,6 @@ export function Sale({
     keepBasket(keptAt, {
       paper,
       moved,
-      locationId,
       draft,
       commandId,
       found,
@@ -243,7 +241,6 @@ export function Sale({
     keptAt,
     paper,
     moved,
-    locationId,
     draft,
     commandId,
     found,
@@ -304,20 +301,25 @@ export function Sale({
       api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
     retry: false,
   });
-  // The warehouse sold from, named, and whether nothing has been recorded
-  // there yet: nothing is sold or read there until its opening list or its
-  // first delivery (owner decisions, 2026-10-02 and 2026-10-16; P1-5).
-  const chosen = locations.data?.find((location) => location.id === locationId);
-  const warehouse = chosen?.name ?? "";
-  const waiting = chosen?.awaiting_first_stock === true;
   const sellable = (locations.data ?? []).filter(
     (location) => location.is_active && location.can_sell,
   );
   const onlyWarehouse = sellable.length === 1 ? sellable[0] : undefined;
-  // A store that sells from two or more lists them all at once, unless the
-  // seller narrows it to one; each chip says its warehouse and sells from
-  // there (sale-slice TZ, P2-5; owner decision, 2026-10-17).
-  const searchAll = sellable.length >= 2 && locationId === "";
+  // A store that sells from two or more lists them all at once: each cell
+  // says its warehouse and sells from there, and nothing is chosen above
+  // the search (sale-slice TZ, P2-5; owner decision, 2026-10-17; «Усе на
+  // бірці» task list, P0-5). One is the store's only warehouse, named in
+  // the basket: "the client may prefill it when the store reaches only one
+  // warehouse, but the server never chooses" (sale API, owner decision
+  // 2026-09-17). A warehouse paused or no longer sold from leaves the till
+  // as soon as it is read so (review, 2026-10-15).
+  const searchAll = sellable.length >= 2;
+  const locationId = onlyWarehouse?.id ?? "";
+  // The only warehouse, named, and whether nothing has been recorded there
+  // yet: nothing is sold or read there until its opening list or its first
+  // delivery (owner decisions, 2026-10-02 and 2026-10-16; P1-5).
+  const warehouse = onlyWarehouse?.name ?? "";
+  const waiting = onlyWarehouse?.awaiting_first_stock === true;
   // Those still waiting for their opening list sell on paper meanwhile;
   // the others are listed (owner decision, 2026-10-17).
   const ready = sellable.filter((location) => !location.awaiting_first_stock);
@@ -413,26 +415,14 @@ export function Sale({
     } else if (draft.length > 0) replaceDraft([]);
   }
 
-  useEffect(() => {
-    if (locationId && locations.isSuccess) {
-      // Paused, or no longer sold from: not the till's any more, though
-      // still listed (review, 2026-10-15).
-      const sellableHere = locations.data.some(
-        (location) =>
-          location.id === locationId && location.is_active && location.can_sell,
-      );
-      if (!sellableHere) setLocationId("");
-    }
-  }, [locationId, locations.isSuccess, locations.data]);
-
   // A line says its warehouse while every one is listed, or the basket holds
   // more than one (review, 2026-10-17): two «Лоран шоколад · M» are then
   // told apart, and a shortfall says which shelf to look at.
   const spans = new Set(draft.map((d) => d.line.source_location_id)).size > 1;
+  const nameOf = (id: string): string | undefined =>
+    locations.data?.find((location) => location.id === id)?.name;
   const placeOf = (id: string): string =>
-    searchAll || spans
-      ? ` · ${visible(locations.data?.find((location) => location.id === id)?.name ?? "")}`
-      : "";
+    searchAll || spans ? ` · ${visible(nameOf(id) ?? "")}` : "";
   // Where the goods leave from, named on a paper sale's press: a store may
   // sell from two warehouses, and the paper says which (G21).
   const from = [
@@ -448,24 +438,16 @@ export function Sale({
     ),
   ];
 
-  useEffect(() => {
-    // Explicitly permitted: "the client may prefill it when the store reaches
-    // only one warehouse, but the server never chooses" (sale API, owner
-    // decision 2026-09-17). Two taps out of a measured eight, and the seller
-    // is choosing nothing they had an alternative to.
-    if (!locationId && onlyWarehouse) setLocationId(onlyWarehouse.id);
-  }, [locationId, onlyWarehouse]);
-
   /**
-   * A size chip tapped (redesign P0-3): the coat goes in the basket at its
+   * A size cell tapped (redesign P0-3): the coat goes in the basket at its
    * price, or one more of it if it is there already. The agreed price is the
    * one sold at, so it stays editable in the line (owner decisions,
    * 2026-09-15 and 2026-10-01); a model with none leaves it empty, never a
    * previous one's, and its field takes the cursor.
    */
   function put(item: StockOption): void {
-    // A chip's own warehouse; an answer from a server before it said one
-    // is the warehouse chosen; and never none (the server never chooses).
+    // A cell's own warehouse; an answer from a server before it said one
+    // is the store's only one; and never none (the server never chooses).
     const place = item.location_id || locationId;
     if (!place) return;
     const line: SaleLine = {
@@ -839,15 +821,22 @@ export function Sale({
       />
     );
 
-  if (receipt)
+  if (receipt) {
+    // From one warehouse, it is named once under the lines; from two, each
+    // line says its own (spec S11; P0-5).
+    const soldFrom = [
+      ...new Set(receipt.items.map((item) => item.source_location_id)),
+    ];
     return (
       <Receipt
         receipt={receipt}
         placeOf={(id) =>
-          searchAll ||
-          new Set(receipt.items.map((item) => item.source_location_id)).size > 1
-            ? ` · ${visible(locations.data?.find((location) => location.id === id)?.name ?? "")}`
-            : ""
+          soldFrom.length > 1 ? ` · ${visible(nameOf(id) ?? "")}` : ""
+        }
+        place={
+          soldFrom.length === 1 && soldFrom[0] !== undefined
+            ? (nameOf(soldFrom[0]) ?? null)
+            : null
         }
         storeId={store.id}
         token={token}
@@ -863,6 +852,7 @@ export function Sale({
         sizes={sentSizes}
       />
     );
+  }
 
   return (
     <>
@@ -966,43 +956,15 @@ export function Sale({
                 void locations.refetch();
               }}
             />
-          ) : onlyWarehouse ? (
-            // One warehouse to sell from: nothing to choose (redesign P0-2).
-            <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
           ) : (
-            <label>
-              Склад
-              <select
-                value={locationId}
-                onChange={(event) => {
-                  setLocationId(event.target.value);
-                  setFromCatalog(false);
-                }}
-              >
-                <option value="">
-                  {sellable.length >= 2
-                    ? "Усі склади"
-                    : "З якого складу віддаєте?"}
-                </option>
-                {locations.data.map((location) => (
-                  <option
-                    key={location.id}
-                    value={location.id}
-                    disabled={!location.is_active || !location.can_sell}
-                  >
-                    {visible(location.name)}
-                    {!location.is_active
-                      ? " — на паузі"
-                      : !location.can_sell
-                        ? " — без права продажу"
-                        : ""}
-                  </option>
-                ))}
-              </select>
-              {locations.data.length === 0 && (
-                <span>Доступних складів немає. Зверніться до менеджера.</span>
-              )}
-            </label>
+            // Nothing to choose above the search: the store's only warehouse,
+            // or a cell per warehouse (P0-5). With none to sell from, a
+            // manager's to give.
+            sellable.length === 0 && (
+              <p className="empty">
+                Доступних складів немає. Зверніться до менеджера.
+              </p>
+            )
           )}
           {locationId && waiting ? (
             // Nothing is sold there until the list is approved (owner
@@ -1103,7 +1065,22 @@ export function Sale({
                         }),
                     )
                   }
+                  // The line a tap on this cell adds to, as `put` finds it:
+                  // a size read off a label is the cell of that size.
+                  chosen={(item) =>
+                    draft.find(
+                      (d) =>
+                        stockKey(d.line) ===
+                        stockKey({
+                          source_location_id: item.location_id || locationId,
+                          product_variant_id: item.product_variant_id,
+                          size_id: item.size_id,
+                        }),
+                    )?.line.quantity ?? 0
+                  }
+                  chosenIn="у кошику"
                   offerHeld={paper}
+                  sticky
                   searchRef={searchRef}
                   failure={
                     stock.error ? (
@@ -1153,8 +1130,14 @@ export function Sale({
                 >
                   <strong>
                     {visible(d.name)} · {visible(d.size)}
-                    {placeOf(d.line.source_location_id)}
                   </strong>
+                  {/* Where it leaves from, under it (spec §6.16; P0-5): the
+                      till no longer says it above the search. */}
+                  {nameOf(d.line.source_location_id) !== undefined && (
+                    <span className="line-place">
+                      Склад: {visible(nameOf(d.line.source_location_id) ?? "")}
+                    </span>
+                  )}
                   <div className="line-edit">
                     <div
                       className="stepper"
@@ -1586,6 +1569,7 @@ const waySays: Partial<Record<PaymentMethod, string>> = {
 function Receipt({
   receipt,
   placeOf,
+  place,
   storeId,
   token,
   userId,
@@ -1598,6 +1582,9 @@ function Receipt({
   receipt: SaleReceipt;
   /** « · Свій» after a line, where the sale's warehouses need telling apart. */
   placeOf: (id: string) => string;
+  /** The one warehouse the sale left from, named under its lines; null when
+   * the lines name theirs, or it is not known. */
+  place: string | null;
   storeId: string;
   token: string;
   userId: string;
@@ -1705,6 +1692,7 @@ function Receipt({
             </div>
           );
         })}
+        {place !== null && <p className="stub-line">Склад: {visible(place)}</p>}
       </Stub>
       {/* What the sale did to the books, in coats, as the server counted
           them; an answer stored before it counted says it without. */}

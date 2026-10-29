@@ -8,6 +8,7 @@ import {
   sections,
   tapSize,
   tillWays,
+  sellsFrom,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -130,11 +131,9 @@ function item(extra: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 async function onTheTill(page: Page, version?: string): Promise<void> {
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch(version));
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
 }
 
 function pay(page: Page, way: string) {
@@ -434,15 +433,13 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   page,
 }) => {
   const coat = await model(page);
+  await sellsFrom(page, fixture.returns_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // «Повернення» read before the sale: its page then is not the one opened.
   await section(page, "Повернення");
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(coat.name);
   const [variant = "", size = ""] = coat.option.split(":");
   await tapSize(page, variant, size);
@@ -573,11 +570,9 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
 /** One coat of a model of its own sold at the till, at 1300, its receipt on screen. */
 async function soldOne(page: Page): Promise<{ name: string }> {
   const coat = await model(page);
+  await sellsFrom(page, fixture.returns_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(coat.name);
   const [variant = "", size = ""] = coat.option.split(":");
   await tapSize(page, variant, size);

@@ -5,9 +5,10 @@ import type { IconName } from "./icons";
 
 /**
  * One icon of the set (spec §5.9; «Усе на бірці» task list, P0-1): 24 on
- * tabs and rows, 20 on buttons and stickers, 16 in a meta line. Never read
- * aloud: the word beside it says what it means. Its inside is the set's own
- * constant markup, never anything typed or answered.
+ * tabs and rows, 20 on buttons and stickers, 16 in a meta line, 12 on a size
+ * cell's badge (spec §6.13; P0-5). Never read aloud: the word beside it says
+ * what it means. Its inside is the set's own constant markup, never anything
+ * typed or answered.
  */
 export function Icon({
   name,
@@ -15,7 +16,7 @@ export function Icon({
   className,
 }: {
   name: IconName;
-  size?: 24 | 20 | 16;
+  size?: 24 | 20 | 16 | 12;
   className?: string;
 }): JSX.Element {
   return (

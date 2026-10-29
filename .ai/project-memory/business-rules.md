@@ -4802,3 +4802,59 @@ figure or word changes.
   - the orders' «← До замовлень» and «← Замовлення» take the quiet line of
     every other «←» over a title.
 
+
+## Chosen in chat — 2026-10-29 (the till's cells, «Усе на бірці» P0-5, part 1)
+
+Chosen in chat on 2026-10-29 («Start P0-5»), after #152: the first part of
+the frame's P0-5 (`all-on-the-tag-cells-report.md`). The till's search finds
+models as tags with a 60 × 60 cell per size, and the till chooses no
+warehouse above the search. No right, rule or figure changes; the words that
+change are the task list's.
+- **Decided here:**
+  - P0-5 goes in three parts: the cells, the model tags, the search and the
+    warehouse (this one); the pay tray and the basket sheet; the shortage
+    sheet, the paper switch row and the taps counted;
+  - a store that sells from two warehouses or more lists them all at once,
+    a cell each, as before with «Усі склади»; one warehouse may no longer
+    be listed alone;
+  - with no warehouse to sell from, the till says «Доступних складів немає.
+    Зверніться до менеджера.», the words its list said when it had none;
+  - a warehouse waiting for its opening list keeps the words it has: in a
+    store with two, «Склад «X» ще чекає початкових залишків: його товар
+    продавайте на папері.» (owner decision, 2026-10-17), for each one
+    waiting; alone, «На складі «X» зараз немає товару в обліку…»;
+  - a basket line says «Склад: X» under «{Модель} · {розмір}», whatever
+    the store; the warehouse leaves the line's title; a «Прибрати …» and
+    a line's quantity still name it, read aloud, where two are listed;
+  - the receipt says «Склад: X» under the lines when the sale left from
+    one warehouse; from two, each line its own, as before;
+  - a cell is read aloud «M, вільно 2, у резерві 1, у кошику 1» — its
+    warehouse after the size where the store has two («M, Свій, вільно 1»);
+    a size not known, «розмір невідомий, вільно 3»;
+  - in the basket, a cell's «×N» takes its top right corner and the pin of
+    what orders hold moves to the top left;
+  - a cell's «×N» is the line a tap on it adds to: a coat of a size not
+    known whose label was read as M counts on the M cell, not the «?»;
+  - a cell with no room left — a full basket, an order holding all that is
+    free — is dimmed as a button that cannot be pressed; held whole, it is
+    dashed instead;
+  - a long warehouse name in a cell gives way, cut short, never the count;
+    no cell is wider than the screen;
+  - in «Нове замовлення» a cell is read aloud «…, у замовленні N»;
+  - a cell of a size not known shows «?», and the tag says under its cells
+    «? — розмір невідомий»;
+  - the tag's line «{колір} · {вид}» is not drawn: the till's list names a
+    model in one string, and the colour is not told apart from the name
+    without the catalogue's own fields (no backend change in P0-5);
+  - a model's tag has the row tag's hole, punched, not an eyelet: it says
+    nothing of a record;
+  - the search field with its «×» is shared (`shared/SearchField.tsx`), and
+    used by the till and «Нове замовлення» now; «Повернути» and «Внесок»
+    take it with their tasks; it stays at the top at the till alone, where
+    a field the page scrolls to keeps clear of it — «Нове замовлення»'s
+    scrolls with its form;
+  - the light tap and the cell's `drop` to the tray wait for the tray (part
+    2) and Telegram's rules (P1-2); the search in focus when the till opens
+    waits for the tray, which must fit beside the keyboard (С1);
+  - the bottom menu is drawn over the till's search where they meet, on
+    the menu's layer of the design system (§5.7).

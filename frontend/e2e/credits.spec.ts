@@ -14,6 +14,7 @@ import {
   tapSize,
   waitsFor,
   tillWays,
+  sellsFrom,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
@@ -190,14 +191,12 @@ function newPhone(): string {
 
 /** Two coats in the till's basket, at 1500 each; typed from paper if said. */
 async function basket(page: Page, coat: Coat, paper = false): Promise<void> {
+  await sellsFrom(page, fixture.returns_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   // Ticked first: ticking it empties a basket (G20).
   if (paper) await fromPaper(page);
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
   // The warehouse holds every journey's own models: «Ще товари» is read
   // until this one is listed.
   await tapSize(page, coat.variant, coat.size);

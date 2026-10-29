@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, openStore, section, sellsFrom } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
@@ -246,11 +246,10 @@ test("text from outside is shown with its hidden characters marked, on every scr
   );
   expect(written.status(), await written.text()).toBe(200);
 
-  // The seller's own phone: their name at the top, the model at the till.
+  // The seller's own phone: their name at the top, the model at the till,
+  // which sells from the warehouse it is in (P0-5).
+  await sellsFrom(page, fixture.returns_location_id);
   await open(page, seller, sellerName, "Продаж");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
   await shownSafely(
     page,
     `Оксана ${tag}${marks[RLO]}`,

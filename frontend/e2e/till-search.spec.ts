@@ -1,4 +1,11 @@
-import { test, expect, fromPaper, openStore, storeLine } from "./fixtures";
+import {
+  test,
+  expect,
+  fromPaper,
+  openStore,
+  storeLine,
+  sellsFrom,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -171,22 +178,24 @@ async function stubSale(
 }
 
 async function onTheTill(page: Page): Promise<void> {
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
 }
 
 function search(page: Page) {
   return page.getByRole("searchbox", { name: "Знайти модель" });
 }
 
+/** A size's cell under a model's tag, by what it reads aloud first: «M,
+ * вільно 2» — then what orders hold and the basket has, if any (P0-5). */
 function chip(page: Page, model: string, text: string) {
   return page
     .getByRole("group", { name: model, exact: true })
-    .getByRole("button", { name: text, exact: true });
+    .locator(
+      `button.size-cell:is([aria-label="${text}"], [aria-label^="${text},"])`,
+    );
 }
 
 function pay(page: Page, way: string) {
@@ -211,7 +220,7 @@ test("a model past the first hundred is found by three letters and sold in three
     page.getByText("Кошик порожній — знайдіть модель угорі."),
   ).toBeVisible();
   // Without a search it is on the second page.
-  await expect(chip(page, "Альпака 001", "S · 1")).toBeVisible();
+  await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
   await expect(page.getByRole("group", { name: "Лоран шоколад" })).toHaveCount(
     0,
   );
@@ -222,12 +231,12 @@ test("a model past the first hundred is found by three letters and sold in three
   await search(page).pressSequentially("л");
   await page.waitForTimeout(600);
   expect(asked.filter((query) => query !== "")).toEqual([]);
-  await expect(chip(page, "Альпака 001", "S · 1")).toBeVisible();
+  await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
   await search(page).pressSequentially("ор", { delay: 40 });
   const tag = page.getByRole("group", { name: "Лоран шоколад", exact: true });
   await expect(tag).toContainText("1 850,00 грн");
   await expect(page.getByRole("group", { name: "Альпака 001" })).toHaveCount(0);
-  await chip(page, "Лоран шоколад", "M · 2").click();
+  await chip(page, "Лоран шоколад", "M, вільно 2").click();
   const line = page.locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("1850,00");
@@ -255,7 +264,7 @@ test("a model past the first hundred is found by three letters and sold in three
   await page.getByRole("button", { name: "Новий продаж" }).click();
   await expect(search(page)).toBeFocused();
   await expect(search(page)).toHaveValue("");
-  await chip(page, "Альпака 002", "S · 1").click();
+  await chip(page, "Альпака 002", "S, вільно 1").click();
   await pay(page, "Картка").click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -268,10 +277,10 @@ test("a model past the first hundred is found by three letters and sold in three
 test("«Ще товари» reads the next hundred under the first", async ({ page }) => {
   await stubList(page, [...alpacas, laurent]);
   await onTheTill(page);
-  await expect(chip(page, "Альпака 100", "S · 1")).toBeVisible();
+  await expect(chip(page, "Альпака 100", "S, вільно 1")).toBeVisible();
   await page.getByRole("button", { name: "Ще товари" }).click();
-  await expect(chip(page, "Лоран шоколад", "M · 2")).toBeVisible();
-  await expect(chip(page, "Альпака 001", "S · 1")).toBeVisible();
+  await expect(chip(page, "Лоран шоколад", "M, вільно 2")).toBeVisible();
+  await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
   await expect(page.getByRole("button", { name: "Ще товари" })).toHaveCount(0);
 });
 
@@ -286,13 +295,13 @@ test("nothing found says where, and «Очистити» brings the list back", 
       /^За «зима» на складі «.+» нічого немає\. Перевірте назву або очистіть пошук\.$/,
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Очистити" }).click();
+  await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(search(page)).toHaveValue("");
   await expect(search(page)).toBeFocused();
-  await expect(chip(page, "Лоран шоколад", "M · 2")).toBeVisible();
+  await expect(chip(page, "Лоран шоколад", "M, вільно 2")).toBeVisible();
 });
 
-test("a size whose every coat an order holds offers nothing, and the tag says so", async ({
+test("a size whose every coat an order holds offers nothing, and its cell says so: «у резерві» and the pin of the held (P0-5)", async ({
   page,
 }) => {
   await stubList(page, [
@@ -304,15 +313,28 @@ test("a size whose every coat an order holds offers nothing, and the tag says so
     }),
   ]);
   await onTheTill(page);
-  await expect(chip(page, "Лоран шоколад", "M · 0")).toBeDisabled();
-  await expect(chip(page, "Лоран шоколад", "L · 2")).toBeEnabled();
+  const held = chip(page, "Лоран шоколад", "M, вільно 0");
+  await expect(held).toBeDisabled();
+  await expect(held).toHaveAttribute("aria-label", "M, вільно 0, у резерві 2");
+  await expect(held.locator(".size-free")).toHaveText("у резерві");
+  await expect(held.locator(".size-held")).toHaveText("2");
+  // Tapped, nothing is put in the basket.
+  await held.click({ force: true });
+  await expect(page.locator(".line")).toHaveCount(0);
+  // Partly held: what is free under the letter, the held on its pin.
+  const part = chip(page, "Лоран шоколад", "L, вільно 2");
+  await expect(part).toBeEnabled();
+  await expect(part).toHaveAttribute("aria-label", "L, вільно 2, у резерві 1");
+  await expect(part.locator(".size-free")).toHaveText("2");
+  await expect(part.locator(".size-held")).toHaveText("1");
+  // No line of what is held under the tag any more.
   await expect(
     page.getByRole("group", { name: "Лоран шоколад" }),
-  ).toContainText("Ще 3 шт. у резерві замовлення");
+  ).not.toContainText("Ще 3 шт. у резерві замовлення");
   // From paper it is offered: the server's refusal says what to do then
   // (ADR-0013 §6), as before the chips.
   await fromPaper(page);
-  await expect(chip(page, "Лоран шоколад", "M · 0")).toBeEnabled();
+  await expect(chip(page, "Лоран шоколад", "M, вільно 0")).toBeEnabled();
 });
 
 test("the same size twice is one line of two, and «Менше» never takes a line away", async ({
@@ -321,8 +343,8 @@ test("the same size twice is one line of two, and «Менше» never takes a l
   await stubList(page, [laurent]);
   const sent = await stubSale(page);
   await onTheTill(page);
-  await chip(page, "Лоран шоколад", "M · 2").click();
-  await chip(page, "Лоран шоколад", "M · 2").click();
+  await chip(page, "Лоран шоколад", "M, вільно 2").click();
+  await chip(page, "Лоран шоколад", "M, вільно 2").click();
   const line = page.locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line.locator("output")).toHaveText("2");
@@ -349,7 +371,7 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
   await stubList(page, [{ ...laurent, suggested_price: null }]);
   const sent = await stubSale(page);
   await onTheTill(page);
-  await chip(page, "Лоран шоколад", "M · 2").click();
+  await chip(page, "Лоран шоколад", "M, вільно 2").click();
   const price = page.locator(".line").getByLabel("Ціна, грн");
   await expect(price).toBeFocused();
   await expect(price).toHaveValue("");
@@ -383,7 +405,7 @@ test("a line changed after the server's shortage answer is a new sale, its answe
   // stands on the basket when its price is changed.
   const sent = await stubSale(page, { requested: 3, available: 2 }, 2);
   await onTheTill(page);
-  await chip(page, "Лоран шоколад", "M · 2").click();
+  await chip(page, "Лоран шоколад", "M, вільно 2").click();
   const line = page.locator(".line");
   await line.getByRole("button", { name: "Більше" }).click();
   await line.getByRole("button", { name: "Більше" }).click();
@@ -424,7 +446,7 @@ test("a size read off a label holds the ways once the sale is from paper", async
   ]);
   await stubSale(page);
   await onTheTill(page);
-  await chip(page, "Лоран шоколад", "Розмір невідомий · 3").click();
+  await chip(page, "Лоран шоколад", "розмір невідомий, вільно 3").click();
   const label = page.locator(".line").getByLabel("Розмір з етикетки");
   await label.selectOption({ index: 1 });
   await expect(
@@ -441,11 +463,11 @@ test("a size read off a label holds the ways once the sale is from paper", async
     .locator(".line")
     .getByRole("button", { name: /^Прибрати/ })
     .click();
-  await chip(page, "Лоран шоколад", "Розмір невідомий · 3").click();
+  await chip(page, "Лоран шоколад", "розмір невідомий, вільно 3").click();
   await expect(pay(page, "З паперу · Готівка")).toBeEnabled();
 });
 
-test("a warehouse that stops selling is not the till's any more", async ({
+test("a warehouse that stops selling is not the till's any more: its cells go, never shown while the one left is read, and a tap sells from the one left", async ({
   page,
 }) => {
   const own = {
@@ -463,13 +485,38 @@ test("a warehouse that stops selling is not the till's any more", async ({
   await page.route("**/api/v1/stock-locations?**", async (route) => {
     await route.fulfill({ json: [own, shared] });
   });
-  await stubList(page, [laurent]);
+  // Each warehouse's own rows: M two at «Свій», one at «Спільний»; the
+  // list of «Свій» alone waits until let go.
+  let letGo = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    const alone = new URL(route.request().url()).searchParams.get(
+      "location_id",
+    );
+    const atOwn = { ...laurent, location_id: own.id };
+    const atShared = {
+      ...laurent,
+      location_id: shared.id,
+      quantity: 1,
+      available_quantity: 1,
+    };
+    if (alone !== null) await held;
+    await route.fulfill({
+      json: {
+        items: alone === null ? [atOwn, atShared] : [atOwn],
+        has_more: false,
+      },
+    });
+  });
+  // Both at once, none chosen (P0-5): a cell each.
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(shared.id);
-  await expect(chip(page, "Лоран шоколад", "M · 2")).toBeVisible();
+  await expect(chip(page, "Лоран шоколад", "M, Свій, вільно 2")).toBeVisible();
+  await expect(
+    chip(page, "Лоран шоколад", "M, Спільний, вільно 1"),
+  ).toBeVisible();
   // A manager stops «Спільний» selling; the till reads its warehouses again.
   shared.can_sell = false;
   const listed = page.waitForRequest((request) =>
@@ -479,10 +526,19 @@ test("a warehouse that stops selling is not the till's any more", async ({
   await page.evaluate(() => {
     window.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect(page.getByText("Склад: Свій")).toBeVisible();
-  // The till lists, and sells from, the warehouse it names.
   await listed;
-  await expect(chip(page, "Лоран шоколад", "M · 2")).toBeVisible();
+  // While the one left is read, the list of both is not kept on screen.
+  await expect(page.locator(".placeholder .model-tag").first()).toBeVisible();
+  await expect(
+    page.locator(`button.size-cell[data-location="${shared.id}"]`),
+  ).toHaveCount(0);
+  letGo();
+  // The till lists, and sells from, the one left.
+  const left = chip(page, "Лоран шоколад", "M, вільно 2");
+  await expect(left).toBeVisible();
+  await expect(page.locator("button.size-cell")).toHaveCount(1);
+  await left.click();
+  await expect(page.locator(".line .line-place")).toHaveText("Склад: Свій");
 });
 
 test("a line keeps knowing its model is held with no size, whatever is searched after", async ({
@@ -502,13 +558,13 @@ test("a line keeps knowing its model is held with no size, whatever is searched 
   // screen at the press is the one for «міл», with no Лоран in it.
   await search(page).fill("лор");
   await expect(page.getByRole("group", { name: "Мілан бордо" })).toHaveCount(0);
-  await chip(page, "Лоран шоколад", "M · 1").click();
+  await chip(page, "Лоран шоколад", "M, вільно 1").click();
   await page.locator(".line").getByRole("button", { name: "Більше" }).click();
   await search(page).fill("міл");
   await expect(
     page.getByRole("group", { name: "Лоран шоколад", exact: true }),
   ).toHaveCount(0);
-  await chip(page, "Мілан бордо", "S · 1").click();
+  await chip(page, "Мілан бордо", "S, вільно 1").click();
   await pay(page, "Готівка").click();
   // The coat in hand may be one held with no size: that answer, and not
   // «Товар на місці», which the server refuses for it.

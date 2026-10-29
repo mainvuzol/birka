@@ -316,7 +316,7 @@ function search(page: Page): Locator {
 
 function chip(page: Page, size: string, at = own): Locator {
   return page.locator(
-    `button.chip[data-stock="${size}"][data-location="${at}"]`,
+    `button.size-cell[data-stock="${size}"][data-location="${at}"]`,
   );
 }
 
@@ -361,6 +361,8 @@ test("a new order as a sale: the cursor in the search, two letters find the mode
   await expect(page.getByText("Склад: Свій", { exact: true })).toBeVisible();
   await expect(page.locator(".order-new").getByRole("combobox")).toHaveCount(0);
   await expect(search(page)).toBeFocused();
+  // The search scrolls with the form: only the till's stays at the top.
+  await expect(page.locator(".find")).toHaveCSS("position", "static");
   // Nothing of the old form.
   for (const gone of [
     /Оберіть склад і товар/,
@@ -382,10 +384,18 @@ test("a new order as a sale: the cursor in the search, two letters find the mode
     0,
   );
   const tag = page.getByRole("group", { name: "Лоран шоколад" });
-  await expect(tag.locator(".tag-price")).toHaveText("1 850,00 грн");
-  // L all held for other orders: no line of it, said under the tag.
+  await expect(tag.locator(".model-price")).toHaveText("1 850,00 грн");
+  // L all held for other orders: no line of it, said on its cell — «у
+  // резерві», and the pin of the two held («Усе на бірці» task list, P0-5).
   await expect(chip(page, `${loran}:${sizeL}`)).toBeDisabled();
-  await expect(tag.getByText("Ще 2 шт. у резерві замовлення")).toBeVisible();
+  await expect(chip(page, `${loran}:${sizeL}`)).toHaveAttribute(
+    "aria-label",
+    "L, вільно 0, у резерві 2",
+  );
+  await expect(chip(page, `${loran}:${sizeL}`)).toContainText("у резерві");
+  await expect(
+    chip(page, `${loran}:${sizeL}`).locator(".size-held"),
+  ).toHaveText("2");
   await page.screenshot({ path: "test-results/order-new-search.png" });
   await chip(page, `${loran}:${sizeM}`).click();
 
@@ -410,7 +420,7 @@ test("a new order as a sale: the cursor in the search, two letters find the mode
   await expect(press(page)).toBeDisabled();
   await expect(page.getByText("ТТН впишете, коли відправите.")).toBeVisible();
 
-  // «+» to what is free, three; its chip then takes no more.
+  // «+» to what is free, three; its cell then takes no more, and looks it.
   const more = line.getByRole("button", { name: "Більше" });
   await more.click();
   await expect(panel(page).locator(".pay-what")).toHaveText(
@@ -420,6 +430,11 @@ test("a new order as a sale: the cursor in the search, two letters find the mode
   await expect(line.locator("output")).toHaveText("3");
   await expect(more).toBeDisabled();
   await expect(chip(page, `${loran}:${sizeM}`)).toBeDisabled();
+  await expect(chip(page, `${loran}:${sizeM}`)).toHaveCSS("opacity", "0.45");
+  await expect(chip(page, `${loran}:${sizeM}`)).toHaveAttribute(
+    "aria-label",
+    "M, вільно 3, у замовленні 3",
+  );
   await expect(panel(page).locator(".pay-total")).toHaveText(
     "Разом 5 550,00 грн",
   );
@@ -502,7 +517,7 @@ test("a new order as a sale: the cursor in the search, two letters find the mode
   await page.screenshot({ path: "test-results/order-new-reserved.png" });
 });
 
-test("a store with two warehouses: each chip says its own, the line leaves from the chip's (orders task list, P0-5; owner decision, 2026-10-17)", async ({
+test("a store with two warehouses: each cell says its own, the line leaves from the cell's (orders task list, P0-5; owner decision, 2026-10-17)", async ({
   page,
 }) => {
   const stubbed = server({
@@ -512,9 +527,14 @@ test("a store with two warehouses: each chip says its own, the line leaves from 
   await open(page, stubbed);
   // Every warehouse at once, none chosen.
   await expect(page.getByText(/^Склад:/)).toHaveCount(0);
-  await expect(chip(page, `${loran}:${sizeM}`, own)).toHaveText("M · Свій 3");
-  await expect(chip(page, `${loran}:${sizeM}`, shared)).toHaveText(
-    "M · Спільний 2",
+  await expect(chip(page, `${loran}:${sizeM}`, own)).toHaveText("MСвій 3");
+  await expect(chip(page, `${loran}:${sizeM}`, own)).toHaveAttribute(
+    "aria-label",
+    "M, Свій, вільно 3",
+  );
+  await expect(chip(page, `${loran}:${sizeM}`, shared)).toHaveAttribute(
+    "aria-label",
+    "M, Спільний, вільно 2",
   );
   expect(stubbed.reads.every((q) => !q.includes("location_id"))).toBe(true);
   await chip(page, `${loran}:${sizeM}`, shared).click();
@@ -953,7 +973,7 @@ for (const [name, theme] of [
     const carriers = page.getByRole("group", { name: "Перевізник" });
     for (const part of [
       page.getByRole("heading", { name: "Нове замовлення" }),
-      page.locator(".tag-head strong").first(),
+      page.locator(".model-head strong").first(),
       chip(page, `${loran}:${sizeM}`),
       page.locator(".order-lines h3"),
       page.locator(".order-lines .line strong"),

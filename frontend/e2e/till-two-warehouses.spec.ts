@@ -5,12 +5,13 @@ import { readFileSync } from "node:fs";
 
 /**
  * A store that sells from two warehouses (sale-slice TZ, P2-5; owner
- * decisions, 2026-10-17): the till lists both at once, a chip per warehouse
- * — «M · Свій 1», «M · Спільний 2» — and the coat leaves from the chip's;
- * one may still be chosen alone. A warehouse waiting for its opening list
- * is said to sell on paper while the other's goods are listed; a coat in
- * hand from the catalogue is asked its warehouse. The stores' warehouses,
- * the goods and the sale's answer are stubbed.
+ * decisions, 2026-10-17): the till lists both at once, a cell per warehouse
+ * — «M» over «Свій 1», «M» over «Спільний 2» — and the coat leaves from the
+ * cell's; none is chosen above the search («Усе на бірці» task list, P0-5).
+ * A warehouse waiting for its opening list is said to sell on paper while
+ * the other's goods are listed; a coat in hand from the catalogue is asked
+ * its warehouse. The stores' warehouses, the goods and the sale's answer
+ * are stubbed.
  */
 
 interface Fixture {
@@ -52,6 +53,7 @@ function launch(): string {
 async function twoWarehouses(
   page: Page,
   waiting: { own?: boolean; shared?: boolean } = {},
+  sharedName = "Спільний",
 ): Promise<void> {
   await page.route("**/api/v1/stock-locations?**", async (route) => {
     const response = await route.fetch();
@@ -64,7 +66,7 @@ async function twoWarehouses(
         .sort((a, b) => Number(b.id === own) - Number(a.id === own))
         .map((row) => ({
           ...row,
-          name: row.id === own ? "Свій" : "Спільний",
+          name: row.id === own ? "Свій" : sharedName,
           is_active: true,
           can_sell: true,
           awaiting_first_stock:
@@ -127,9 +129,19 @@ async function onTheTill(page: Page): Promise<void> {
   await openStore(page, "Основний MAIN");
 }
 
+/** What a model's cells read aloud, in their order. */
+function said(page: Page, model: string): Promise<(string | null)[]> {
+  return page
+    .getByRole("group", { name: model })
+    .locator("button.size-cell")
+    .evaluateAll((cells) =>
+      cells.map((cell) => cell.getAttribute("aria-label")),
+    );
+}
+
 function chip(page: Page, at: string, sizeId = fixture.size_id) {
   return page.locator(
-    `button.chip[data-stock="${fixture.variant_id}:${sizeId}"][data-location="${at}"]`,
+    `button.size-cell[data-stock="${fixture.variant_id}:${sizeId}"][data-location="${at}"]`,
   );
 }
 
@@ -139,7 +151,7 @@ function pay(page: Page) {
     .getByRole("button", { name: "Готівка", exact: true });
 }
 
-test("both warehouses are listed at once, a chip each, and the coat leaves from the chip's", async ({
+test("both warehouses are listed at once, a cell each, none chosen above the search, and the coat leaves from the cell's", async ({
   page,
 }) => {
   const asked: string[] = [];
@@ -150,28 +162,34 @@ test("both warehouses are listed at once, a chip each, and the coat leaves from 
     await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
   });
   await onTheTill(page);
-  const choice = page.getByRole("combobox", { name: "Склад", exact: true });
-  await expect(choice).toHaveValue("");
-  await expect(choice.locator("option").first()).toHaveText("Усі склади");
-  // Nothing to choose first: the search is there, and asks for both.
+  // Nothing to choose, nor said, above the search: it is there, and asks
+  // for both.
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByText(/^Склад: /)).toHaveCount(0);
   await expect(
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeVisible();
-  await expect(chip(page, own)).toHaveText("M · Свій 1");
-  await expect(chip(page, shared)).toHaveText("M · Спільний 2");
-  await expect(chip(page, shared, sizeL)).toHaveText("L · Спільний 1");
-  // A size's chips stand together, the store's own order of warehouses.
-  await expect(
-    page.getByRole("group", { name: "Лоран шоколад" }).locator("button.chip"),
-  ).toHaveText(["M · Свій 1", "M · Спільний 2", "L · Спільний 1"]);
+  // Each cell: the size, under it its warehouse and what is free there.
+  await expect(chip(page, own)).toHaveText("MСвій 1");
+  await expect(chip(page, shared)).toHaveText("MСпільний 2");
+  // A size's cells stand together, the store's own order of warehouses.
+  expect(await said(page, "Лоран шоколад")).toEqual([
+    "M, Свій, вільно 1",
+    "M, Спільний, вільно 2",
+    "L, Спільний, вільно 1",
+  ]);
   expect(asked[0]).not.toContain("location_id");
 
   await chip(page, shared).click();
   await chip(page, own).click();
-  // Two «Лоран шоколад · M», told apart by their warehouses.
+  // Two «Лоран шоколад · M», told apart by their warehouses under them.
   await expect(page.locator(".line strong")).toHaveText([
-    "Лоран шоколад · M · Спільний",
-    "Лоран шоколад · M · Свій",
+    "Лоран шоколад · M",
+    "Лоран шоколад · M",
+  ]);
+  await expect(page.locator(".line .line-place")).toHaveText([
+    "Склад: Спільний",
+    "Склад: Свій",
   ]);
   await expect(
     page.getByRole("button", { name: "Прибрати Лоран шоколад · Свій" }),
@@ -184,20 +202,42 @@ test("both warehouses are listed at once, a chip each, and the coat leaves from 
   ]);
 });
 
-test("one warehouse chosen alone is listed alone, its chips as a one-warehouse store's", async ({
+test("on a 360 screen a long warehouse name gives way in its cell, never the count, and nothing runs past the screen", async ({
   page,
 }) => {
-  const asked: string[] = [];
-  await twoWarehouses(page);
-  await goods(page, asked);
+  await page.setViewportSize({ width: 360, height: 640 });
+  // Longer than a tag is wide.
+  const long = "Склад на вулиці Тараса Шевченка, будинок 12, другий поверх";
+  await twoWarehouses(page, {}, long);
+  await goods(page, []);
   await onTheTill(page);
-  await expect(chip(page, own)).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(shared);
-  await expect(chip(page, own)).toHaveCount(0);
-  await expect(chip(page, shared)).toHaveText("M · 2");
-  expect(asked.at(-1)).toContain(`location_id=${shared}`);
+  const cell = chip(page, shared);
+  await expect(cell).toHaveAttribute(
+    "aria-label",
+    `M, ${long}, вільно 2`,
+  );
+  const drawn = await cell.evaluate((button) => {
+    const free = button.querySelector(".size-free");
+    const place = button.querySelector(".size-place");
+    const count = free?.lastChild;
+    if (!free || !place || !count) return null;
+    const range = document.createRange();
+    range.selectNodeContents(count);
+    const box = button.getBoundingClientRect();
+    const said = range.getBoundingClientRect();
+    return {
+      count: count.textContent,
+      cut: place.scrollWidth > place.clientWidth,
+      inside:
+        said.width > 0 && said.left >= box.left && said.right <= box.right,
+    };
+  });
+  expect(drawn).toEqual({ count: " 2", cut: true, inside: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test("a warehouse waiting for its opening list is said to sell on paper, and the other's goods are listed", async ({
@@ -211,7 +251,10 @@ test("a warehouse waiting for its opening list is said to sell on paper, and the
       "Склад «Спільний» ще чекає початкових залишків: його товар продавайте на папері.",
     ),
   ).toBeVisible();
-  await expect(chip(page, own)).toHaveText("M · Свій 1");
+  await expect(chip(page, own)).toHaveAttribute(
+    "aria-label",
+    "M, Свій, вільно 1",
+  );
 });
 
 test("both waiting, the till says to sell on paper, and lists nothing", async ({
@@ -314,39 +357,6 @@ test("a coat in hand from the catalogue is asked its warehouse, and leaves from 
   ]);
 });
 
-test("another warehouse chosen shows its own list's places while it is read, never the one before", async ({
-  page,
-}) => {
-  let release: () => void = () => undefined;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await twoWarehouses(page);
-  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
-    const at = new URL(route.request().url()).searchParams.get("location_id");
-    if (at === shared) await held;
-    await route.fulfill({
-      json: {
-        items: [
-          coat(own, fixture.size_id, "M", 1),
-          coat(shared, fixture.size_id, "M", 2),
-        ].filter((row) => at === null || row.location_id === at),
-        has_more: false,
-      },
-    });
-  });
-  await onTheTill(page);
-  await expect(chip(page, own)).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(shared);
-  // Being read: its places, and no chip of «Свій» to tap by mistake.
-  await expect(page.locator(".placeholder .tag")).toHaveCount(3);
-  await expect(chip(page, own)).toHaveCount(0);
-  release();
-  await expect(chip(page, shared)).toHaveText("M · 2");
-});
-
 /** Each sale answered by `answers`, in turn; what each sent. */
 function answered(
   page: Page,
@@ -411,12 +421,15 @@ test("a model's sizes keep its own order, whatever another model lists first", a
     });
   });
   await onTheTill(page);
-  await expect(
-    page.getByRole("group", { name: "Лоран шоколад" }).locator("button.chip"),
-  ).toHaveText(["S · Свій 1", "M · Свій 1", "L · Свій 1"]);
+  await expect(chip(page, own)).toBeVisible();
+  expect(await said(page, "Лоран шоколад")).toEqual([
+    "S, Свій, вільно 1",
+    "M, Свій, вільно 1",
+    "L, Свій, вільно 1",
+  ]);
 });
 
-test("a shortfall says which warehouse's shelf to look at, and the receipt where each coat left from", async ({
+test("a shortfall says which warehouse's shelf to look at, and the receipt where the coat left from", async ({
   page,
 }) => {
   await twoWarehouses(page);
@@ -465,9 +478,11 @@ test("a shortfall says which warehouse's shelf to look at, and the receipt where
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
-  await expect(page.locator(".line strong")).toHaveText(
-    "Лоран шоколад · M · Спільний",
-  );
+  // One warehouse: named once, under the line (spec S11; P0-5).
+  await expect(page.locator(".line strong")).toHaveText("Лоран шоколад · M");
+  await expect(
+    page.locator(".stub").getByText("Склад: Спільний"),
+  ).toBeVisible();
 });
 
 test("a model held with its size not known in one warehouse is offered «Розмір з етикетки» only for a line from there", async ({

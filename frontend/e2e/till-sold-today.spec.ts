@@ -1,4 +1,11 @@
-import { test, expect, expectStub, openStore, tapSize } from "./fixtures";
+import {
+  test,
+  expect,
+  expectStub,
+  openStore,
+  tapSize,
+  sellsFrom,
+} from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -107,12 +114,10 @@ async function onTheTill(page: Page): Promise<string> {
   const me = page.waitForResponse(
     (r) => r.url().endsWith("/api/v1/me") && r.status() === 200,
   );
+  await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch());
   const userId = ((await (await me).json()) as { user_id: string }).user_id;
   await openStore(page, "Основний MAIN");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.till_location_id);
   return userId;
 }
 

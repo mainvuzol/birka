@@ -1074,12 +1074,9 @@ async function tillAfterOutage(page: Page): Promise<{ down: boolean }> {
   return server;
 }
 
-/** The till, its warehouses read: a choice of one, or the search. */
+/** The till, its warehouses read: the search (P0-5). */
 function till(page: Page): Locator {
-  return page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .or(page.getByRole("searchbox", { name: "Знайти модель" }))
-    .first();
+  return page.getByRole("searchbox", { name: "Знайти модель" });
 }
 
 /**

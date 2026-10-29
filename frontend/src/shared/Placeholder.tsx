@@ -61,16 +61,20 @@ export function Placeholder({
             <span className="skeleton skeleton-field" />
           </div>
         )}
+        {/* The model tags to come, their cells 60 × 60 (spec §6.27;
+            «Усе на бірці» task list, P0-5). */}
         <div className="tags">
           {Array.from({ length: tags }, (_, n) => (
-            <div className="tag" key={n}>
-              <p className="tag-head">
-                <span className="skeleton skeleton-name" />
-              </p>
-              <div className="chips">
-                <span className="chip skeleton" />
-                <span className="chip skeleton" />
-                <span className="chip skeleton" />
+            <div className="model-tag tag-row tag-outline" key={n}>
+              <div className="model-tag-in">
+                <p className="model-head">
+                  <span className="skeleton skeleton-name" />
+                </p>
+                <div className="cells">
+                  <span className="size-cell skeleton" />
+                  <span className="size-cell skeleton" />
+                  <span className="size-cell skeleton" />
+                </div>
               </div>
             </div>
           ))}
