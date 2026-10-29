@@ -7,6 +7,7 @@ import { visible } from "@/shared/visible";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { Placeholder } from "@/shared/Placeholder";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { tagOf } from "./Orders";
 import type { Location, Order, OrderItem, Store } from "./types";
@@ -105,9 +106,7 @@ export function Returned({
         focusable
         title="Товар повернувся на склад"
         back={
-          <button type="button" className="quiet" onClick={back}>
-            ← Замовлення
-          </button>
+          <Back go={back}>← Замовлення</Back>
         }
       />
       <section className="order-returned">

@@ -3,6 +3,7 @@ import type { JSX, ReactNode } from "react";
 import { decimal, kopecks, money } from "@/orders/types";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 
 /**
@@ -72,14 +73,9 @@ export function Count({
       <ScreenHeader
         title="Підрахунок каси"
         back={
-          <button
-            type="button"
-            className="quiet back"
-            aria-label="Назад до каси"
-            onClick={back}
-          >
+          <Back go={back} label="Назад до каси">
             <span aria-hidden="true">← </span>Каса
-          </button>
+          </Back>
         }
       />
       <section className="cash-count">

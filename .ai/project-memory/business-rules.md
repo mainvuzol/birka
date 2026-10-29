@@ -4781,3 +4781,24 @@ has two stores or more. No right, rule, figure or word changes.
   - the headings inside a screen keep their levels: a third level follows
     the page's heading where a second stood before.
 
+## Chosen in chat — 2026-10-29 (Telegram's «Назад», «Усе на бірці» P1-1)
+
+Chosen in chat on 2026-10-29 («go next»), after #151: the frame's P1-1
+(`all-on-the-tag-back-report.md`). Inside Telegram, a screen opened from
+another shows Telegram's «Назад», and pressed it does what the screen's
+«←» does; a tab's first screen keeps Telegram's «Закрити». No right, rule,
+figure or word changes.
+- **Decided here:**
+  - every screen's way back is connected, those the task list does not
+    name too: an invoice's «До списку накладних», an opening's «До
+    списків», a model's «До пошуку»;
+  - where two ways back stand on one screen, Telegram's is the innermost:
+    a model's «До пошуку» before «← Ще»;
+  - hidden whenever the screen's «←» is held, by what already held it —
+    a kept payment holds a debt's and S21's, a first send in flight «← Ще»;
+  - a result with no «←» (the receipt, S22's stub, «Продажу немає»,
+    «Товар прийнято», a return's) shows none: where it would lead is each
+    result's own question;
+  - the orders' «← До замовлень» and «← Замовлення» take the quiet line of
+    every other «←» over a title.
+

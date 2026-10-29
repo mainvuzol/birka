@@ -7,6 +7,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { dayOf } from "./errors";
 import {
@@ -426,14 +427,9 @@ export function Closed({
         }
         back={
           owedId !== null && (
-            <button
-              type="button"
-              className="quiet back"
-              aria-label="Назад до каси"
-              onClick={leave}
-            >
+            <Back go={leave} label="Назад до каси">
               <span aria-hidden="true">← </span>Каса
-            </button>
+            </Back>
           )
         }
       />

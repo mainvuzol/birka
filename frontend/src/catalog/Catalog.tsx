@@ -17,6 +17,7 @@ import type { Decision } from "./types";
 import { CreateProduct } from "./CreateProduct";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 const base = "/catalog/match-decisions";
 function message(error: unknown): string {
@@ -192,18 +193,18 @@ export function Catalog({
         об’єднує товари.
       </p>
       {(creating || selected) && (
-        <button
-          className="quiet"
-          disabled={blocked}
-          onClick={() => {
+        <Back
+          go={() => {
             forgetCatalogRefusal();
             setCreating(false);
             setSelected(null);
             setSuccess("");
           }}
+          held={blocked}
+          className="quiet"
         >
           ← До черги перевірки
-        </button>
+        </Back>
       )}
       {creating ? (
         <section>

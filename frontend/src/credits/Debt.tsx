@@ -32,6 +32,7 @@ import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { Keypad } from "@/shared/Keypad";
 import { SendingLine } from "@/shared/Sending";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import {
   PaperFields,
@@ -605,15 +606,10 @@ export function Debt({
             </>
           }
           back={
-            <button
-              type="button"
-              className="quiet back"
-              disabled={working}
-              onClick={back}
-            >
+            <Back go={back} held={working}>
               <span aria-hidden="true">← </span>
               {backTo}
-            </button>
+            </Back>
           }
         />
         <section className="credits debt-detail debt-till">
@@ -783,15 +779,10 @@ export function Debt({
         focusable
         title={customerName}
         back={
-          <button
-            type="button"
-            className="quiet back"
-            disabled={working || erasing === "sending"}
-            onClick={back}
-          >
+          <Back go={back} held={working || erasing === "sending"}>
             <span aria-hidden="true">← </span>
             {backTo}
-          </button>
+          </Back>
         }
       />
       <section className="credits debt-detail">

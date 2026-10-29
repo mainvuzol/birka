@@ -45,6 +45,7 @@ import type {
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 
 /**
@@ -896,9 +897,9 @@ function ListView({
         pushed
         title={listName(list)}
         aside={
-          <button className="quiet" onClick={close}>
+          <Back go={close} className="quiet">
             До списків
-          </button>
+          </Back>
         }
       />
       <section className="openings">
