@@ -25,6 +25,9 @@ export interface MoreBack {
   go: () => void;
   /** A first send in flight: leaving would lose what it answers. */
   held: boolean;
+  /** Where it goes back to, when not «Ще»: «Сьогодні», whose tag opened
+   * it («Усе на бірці» task list, P0-6). */
+  to?: string;
 }
 
 /**
@@ -114,14 +117,16 @@ export function More({
  * only while a first send is in flight (review, 2026-10-26).
  */
 export function BackToMore({ back }: { back: MoreBack }): JSX.Element {
+  const to = back.to ?? "Ще";
   return (
     <Back
       go={back.go}
       held={back.held}
-      label="Назад до «Ще»"
+      label={`Назад до «${to}»`}
       className="quiet back to-more"
     >
-      <span aria-hidden="true">← </span>Ще
+      <span aria-hidden="true">← </span>
+      {to}
     </Back>
   );
 }

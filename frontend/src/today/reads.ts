@@ -3,6 +3,9 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { api, unreachable } from "@/shared/api";
 import type { Drawer } from "@/cash/types";
 import type { StoreDebts } from "@/credits/types";
+import type { DamagedUnit } from "@/damaged/types";
+import type { StockList } from "@/openings/types";
+import type { Backups } from "@/backups/types";
 import type { Order, Store } from "@/orders/types";
 import type { SalesReport } from "@/reports/types";
 
@@ -129,13 +132,15 @@ export function useOpenOrders(
   token: string,
   scopeKey: string,
   stores: readonly Store[],
-): UseQueryResult<OpenOrders>[] {
+): Map<string, UseQueryResult<OpenOrders>> {
   const shown = stores.filter((store) =>
     store.permissions.includes("sale:view"),
   );
-  return useQueries({
+  const reads = useQueries({
     queries: shown.map((store) => ({
-      queryKey: ["today", scopeKey, "orders", store.id],
+      // Under «Замовлення»'s own prefix: a step of an order there reads
+      // it again at once, and the parcels' tag and the badge with it.
+      queryKey: ["orders", store.id, { today: scopeKey }],
       queryFn: () =>
         api<OpenOrders>(
           `/orders?store_id=${store.id}&status=open&limit=${String(OPEN_ORDERS)}`,
@@ -144,6 +149,71 @@ export function useOpenOrders(
       ...often,
     })),
   });
+  return byStore(shown, reads);
+}
+
+/** The network's backups, where this person may read them (`backup:view`
+ * of the network): the backups screen's own read, here as often as the
+ * rest. */
+export function useNetworkBackups(
+  token: string,
+  scopeKey: string,
+  enabled: boolean,
+): UseQueryResult<Backups> {
+  return useQuery({
+    queryKey: ["backups", scopeKey],
+    queryFn: () => api<Backups>("/backups", token),
+    enabled,
+    ...often,
+  });
+}
+
+/** Each store's «Брак», where this person inspects it (`damaged:handle`
+ * there): «Брак»'s own read, and its row's in «Ще». */
+export function useDamaged(
+  token: string,
+  stores: readonly Store[],
+): Map<string, UseQueryResult<{ units: DamagedUnit[] }>> {
+  const shown = stores.filter((store) =>
+    store.permissions.includes("damaged:handle"),
+  );
+  const reads = useQueries({
+    queries: shown.map((store) => ({
+      queryKey: ["damaged-units", store.id],
+      queryFn: () =>
+        api<{ units: DamagedUnit[] }>(
+          `/damaged-units?store_id=${store.id}`,
+          token,
+        ),
+      ...often,
+    })),
+  });
+  return byStore(shown, reads);
+}
+
+/** Each store's lists of existing stock, where this person approves them
+ * (`snapshot:approve` there): «Початкові залишки»'s own ask, under its
+ * prefix, so a list it approves or rejects is read again here at once. */
+export function useStockLists(
+  token: string,
+  scopeKey: string,
+  stores: readonly Store[],
+): Map<string, UseQueryResult<{ items: StockList[]; has_more: boolean }>> {
+  const shown = stores.filter((store) =>
+    store.permissions.includes("snapshot:approve"),
+  );
+  const reads = useQueries({
+    queries: shown.map((store) => ({
+      queryKey: ["stock-lists", { today: scopeKey }, store.id],
+      queryFn: () =>
+        api<{ items: StockList[]; has_more: boolean }>(
+          `/snapshots?store_id=${store.id}&limit=100`,
+          token,
+        ),
+      ...often,
+    })),
+  });
+  return byStore(shown, reads);
 }
 
 /** How old what a block shows is: the oldest of its reads' last answers,

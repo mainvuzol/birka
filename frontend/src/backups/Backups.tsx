@@ -30,6 +30,9 @@ export function useBackups(
     queryFn: () => api<State>("/backups", token),
     enabled,
     retry: false,
+    // Asked again as the app comes back at most once a minute, as
+    // «Сьогодні» reads them («Усе на бірці» task list, P0-6).
+    staleTime: 60_000,
     refetchInterval: 5 * 60 * 1000,
   });
 }
@@ -136,12 +139,32 @@ function LastGood({ night }: { night: Night | null }): JSX.Element {
   );
 }
 
+/**
+ * What the backups' state is called: this screen's heading for it, and
+ * «Сьогодні»'s tag's while it is not in order («Усе на бірці» task list,
+ * P0-6).
+ */
+export function verdictTitle(backups: State): string {
+  const { latest } = backups;
+  if (backups.state === "NOT_SET_UP" || latest === null)
+    return "Резервне копіювання ще не налаштоване";
+  if (backups.state === "OVERDUE") {
+    const hours = Math.floor(
+      (Date.parse(backups.checked_at) - Date.parse(latest.finished_at)) /
+        3_600_000,
+    );
+    return `Копія не робилася вже ${String(hours)} год`;
+  }
+  if (backups.state === "FAILED") return "Остання нічна копія не вдалася";
+  return "Копії в порядку";
+}
+
 function Verdict({ backups }: { backups: State }): JSX.Element {
   const { latest } = backups;
   if (backups.state === "NOT_SET_UP" || latest === null)
     return (
       <div className="section-block notice" data-state="NOT_SET_UP">
-        <h3>Резервне копіювання ще не налаштоване</h3>
+        <h3>{verdictTitle(backups)}</h3>
         <p>
           На сервері немає жодної копії бази. Якщо сервер зламається, дані
           магазину буде втрачено. Налаштування описане в інструкції з резервних
@@ -149,14 +172,10 @@ function Verdict({ backups }: { backups: State }): JSX.Element {
         </p>
       </div>
     );
-  if (backups.state === "OVERDUE") {
-    const hours = Math.floor(
-      (Date.parse(backups.checked_at) - Date.parse(latest.finished_at)) /
-        3_600_000,
-    );
+  if (backups.state === "OVERDUE")
     return (
       <div className="section-block notice" data-state="OVERDUE">
-        <h3>Копія не робилася вже {hours} год</h3>
+        <h3>{verdictTitle(backups)}</h3>
         <p>
           Остання спроба: {when(latest.finished_at)}. Ймовірно, на сервері
           зупинився нічний розклад — перевірте його за інструкцією.
@@ -164,11 +183,10 @@ function Verdict({ backups }: { backups: State }): JSX.Element {
         <LastGood night={backups.last_good} />
       </div>
     );
-  }
   if (backups.state === "FAILED")
     return (
       <div className="section-block notice" data-state="FAILED">
-        <h3>Остання нічна копія не вдалася</h3>
+        <h3>{verdictTitle(backups)}</h3>
         <p>{when(latest.finished_at)}:</p>
         <ul>
           {latest.reasons.map((reason) => (
@@ -181,7 +199,7 @@ function Verdict({ backups }: { backups: State }): JSX.Element {
     );
   return (
     <div className="section-block" data-state="OK">
-      <h3>Копії в порядку</h3>
+      <h3>{verdictTitle(backups)}</h3>
       <p>
         Остання копія: {when(latest.finished_at)}, перевірена відновленням
         {latest.restore_seconds === null
@@ -218,6 +236,20 @@ function label(words: Record<TroubleKind, string>, kind: TroubleKind): string {
   return (words as Partial<Record<string, string>>)[kind] ?? "Проблема";
 }
 
+/** What is wrong on the server now, as this screen says it. */
+export function troubleText(kind: TroubleKind): string {
+  return label(troubleNow, kind);
+}
+
+/** The server's block's heading: «Проблема на сервері», «Проблеми …». */
+export function serverTitle(open: number): string {
+  return open === 0
+    ? "Стан сервера"
+    : open === 1
+      ? "Проблема на сервері"
+      : "Проблеми на сервері";
+}
+
 /**
  * Trouble on the server, shown here as the backups are (owner decision,
  * 2026-10-03): what is wrong now and since when, what was wrong this week,
@@ -239,13 +271,7 @@ function Server({
       className={state === "OK" ? "section-block" : "section-block notice"}
       data-server={state}
     >
-      <h3>
-        {server.open.length === 0
-          ? "Стан сервера"
-          : server.open.length === 1
-            ? "Проблема на сервері"
-            : "Проблеми на сервері"}
-      </h3>
+      <h3>{serverTitle(server.open.length)}</h3>
       {server.open.length > 0 && (
         <ul className="troubles" data-troubles="open">
           {server.open.map((trouble: Trouble) => (

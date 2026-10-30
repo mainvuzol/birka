@@ -5025,3 +5025,47 @@ the right it already needs; debts stay a store's own.
   Ринок»: the concept's figures had no «,00», and its lines no words of
   their own. Part 2's two work tags over the menu at 390 × 741, with 64 px
   for the search, need some 70 px more: a reading for the owner.
+
+## Chosen in chat — 2026-10-30 («Сьогодні», part 2: what waits, «Усе на бірці» P0-6)
+
+Chosen in chat on 2026-10-30 («Merge, then part 2»), after #156: the
+frame's P0-6, part 2 of 3, every owner question of it as its (а) until
+answered (`all-on-the-tag-today-2-report.md`). No right, rule or figure
+changes: each tag is a read the server already answers, by the right it
+already needs, in the store it is of.
+- **«Чекає на вас · N»:** a tag a kind and a store, in the frame's order —
+  the network's backups while not in order or with trouble on the server,
+  the parcels to send, «Брак», the lists of existing stock to approve.
+  Each goes by itself once the work is done, at the next reading.
+- **Decided here:**
+  - the backups' tag says the backups screen's heading for the state, or
+    the server block's while the copies are fine; its meta, what is wrong
+    on the server now, in that screen's words;
+  - the parcels' goods as «{модель і колір} {розмір}», «× 2» for more than
+    one, the oldest order first, three and «+ ще N»;
+  - «Брак» counts the units awaiting inspection, as its row in «Ще»; one
+    being looked at waits on nobody here;
+  - the lists in review, a shared warehouse's in the store that keeps it;
+  - the lists' eyelet in ink: the frame gives them no colour;
+  - a store named in a tag's meta whenever the day holds two stores or
+    more; another store's tag has no verb (В-Т2 (а)); the open store's
+    tags first of their kind, the others by code;
+  - «+ ще N» from the eighth tag; tapped, the rest in place and the cursor
+    on the first of them;
+  - «Вас нічого не чекає.» alone, once every read has answered; a read not
+    answered holds a tag's place, and a failed one says so there;
+  - how old it is, the block's: the day-tag's stamp «дані на …» by
+    «Чекає на вас · N», or under «Вас нічого не чекає.», once any of its
+    reads is older than five minutes or failed at its last asking;
+  - «Копії в порядку · сьогодні о 03:15» — «учора о», or the date — under
+    it all, for whoever reads the backups, while nothing is wrong;
+  - the tab's badge, «9+» past nine, is its description, «Чекає на вас: N»,
+    never part of its name;
+  - a section a tag opened goes back with «← Сьогодні», held as the menu's
+    «Сьогодні» is; the cursor on the menu's «Сьогодні» after the verb and
+    after «←», on «Замовлення» after the parcels' verb;
+  - the backups' own read, for «Ще ⚠», asked again at most once a minute,
+    as «Сьогодні» reads;
+  - «Ще ⚠» stays until P1-5.
+- **Not met:** the frame's two tags over the menu at 390 × 741 — part 1's
+  open question of the day-tag's height; a reading for the owner.

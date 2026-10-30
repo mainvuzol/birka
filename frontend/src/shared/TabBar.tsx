@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX, Ref } from "react";
 import { Icon } from "./Icon";
 import type { IconName } from "./icons";
@@ -15,6 +15,46 @@ export interface TabItem {
   open: () => void;
   /** «Ще»'s, so the focus can come back to it from a row it opened. */
   ref?: Ref<HTMLButtonElement>;
+  /** «Сьогодні»'s open tags, «9+» past nine (spec §6.3), and what they are
+   * read as: the tab keeps its name. */
+  badge?: string;
+  badgeWords?: string;
+}
+
+/** A tab: its glyph on its pill, its badge on the glyph — drawn, never
+ * part of the tab's name or words — its word. What the badge says is read
+ * as the tab's description. */
+function TabButton({ tab }: { tab: TabItem }): JSX.Element {
+  const words = useId();
+  return (
+    <>
+      <button
+        ref={tab.ref}
+        type="button"
+        className="tab"
+        aria-current={
+          tab.current === true ? "page" : tab.current || undefined
+        }
+        aria-describedby={tab.badge ? words : undefined}
+        disabled={tab.disabled}
+        onClick={tab.open}
+      >
+        <span
+          className="tab-pill"
+          aria-hidden="true"
+          data-badge={tab.badge}
+        >
+          <Icon name={tab.icon} />
+        </span>
+        <span className="tab-label">{tab.label}</span>
+      </button>
+      {tab.badge && (
+        <span id={words} hidden>
+          {tab.badgeWords}
+        </span>
+      )}
+    </>
+  );
 }
 
 /** A field the phone's keyboard opens for. The app's keypad does not. */
@@ -127,22 +167,7 @@ export function TabBar({
     <nav ref={bar} aria-label="Розділи" className="tab-bar">
       <div className="tab-row">
         {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            ref={tab.ref}
-            type="button"
-            className="tab"
-            aria-current={
-              tab.current === true ? "page" : tab.current || undefined
-            }
-            disabled={tab.disabled}
-            onClick={tab.open}
-          >
-            <span className="tab-pill">
-              <Icon name={tab.icon} />
-            </span>
-            <span className="tab-label">{tab.label}</span>
-          </button>
+          <TabButton key={tab.key} tab={tab} />
         ))}
       </div>
     </nav>

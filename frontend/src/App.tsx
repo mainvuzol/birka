@@ -100,6 +100,7 @@ import {
 } from "@/catalog/modelCommands";
 import { SalesReport } from "@/reports/SalesReport";
 import { Today } from "@/today/Today";
+import { useWaiting } from "@/today/waiting";
 import {
   loadInvoiceCommand,
   useInvoiceCommand,
@@ -551,6 +552,17 @@ function Workspace({
     backups.data !== undefined &&
     (backups.data.state !== "OK" ||
       (backups.data.server?.open.length ?? 0) > 0);
+  // What waits on «Сьогодні», read here too for its tab's badge: the same
+  // reads, none where «Сьогодні» is not this person's.
+  const work = useWaiting({
+    token,
+    scopeKey: reportKey,
+    stores: canSeeReport ? me.stores : [],
+    open: store,
+    readsBackups: canSeeReport && canSeeBackups,
+  });
+  // A section a tag of «Сьогодні» opened goes back there: «← Сьогодні».
+  const [fromToday, setFromToday] = useState<Tab | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // «Замовлення» as it was left: what was typed, the closed shown (review,
   // 2026-10-23); afresh when «Замовлення» is chosen again.
@@ -1537,6 +1549,18 @@ function Workspace({
   const tabOf = (section: (typeof sections)[number]): TabItem => ({
     key: section.tab,
     label: section.label,
+    // The open tags of «Сьогодні», «9+» past nine (spec §6.3).
+    ...(section.tab === "today" && work.tags.length > 0
+      ? {
+          badge: work.tags.length > 9 ? "9+" : String(work.tags.length),
+          badgeWords: `Чекає на вас: ${String(work.tags.length)}`,
+        }
+      : {}),
+    ...(section.tab === "today"
+      ? { ref: todayButton }
+      : section.tab === "list"
+        ? { ref: ordersButton }
+        : {}),
     icon:
       section.tab === "today"
         ? "tab-today"
@@ -1699,6 +1723,39 @@ function Workspace({
     moreButton.current?.focus();
   };
   const moreBack: MoreBack = { go: toMore, held: sending };
+  // So on «Сьогодні», and on «Замовлення», for whoever leaves «Сьогодні» by
+  // a tag's verb or comes back to it.
+  const todayButton = useRef<HTMLButtonElement>(null);
+  const ordersButton = useRef<HTMLButtonElement>(null);
+  const todayBack: MoreBack = {
+    go: () => {
+      setTab("today");
+      todayButton.current?.focus();
+    },
+    // Held as «Сьогодні» in the menu is.
+    held: sending || blocked,
+    to: "Сьогодні",
+  };
+  /** The «←» of a section in «Ще»: back where it was opened from. */
+  const backOf = (section: Tab): MoreBack =>
+    fromToday === section ? todayBack : moreBack;
+  /** A tag's verb: its section, with «← Сьогодні». */
+  const fromTag = (section: Tab) => (): void => {
+    setTab(section);
+    setFromToday(section);
+    todayButton.current?.focus();
+  };
+  /** «Замовлення» afresh, from «Сьогодні»'s parcels. */
+  const ordersFromToday = (): void => {
+    setTab("list");
+    setSelectedId(null);
+    setOrdersView(freshOrdersView);
+    ordersButton.current?.focus();
+  };
+  // Back on «Сьогодні» or on «Ще», a section is opened afresh from there.
+  useEffect(() => {
+    if (tab === "today" || tab === "more") setFromToday(null);
+  }, [tab]);
   // Opened on «Замовлення» with no till to open first, by whoever may not
   // read them: the first section shown instead (orders task list, P2-1) —
   // unless a kept operation turned to its own tab meanwhile (review,
@@ -2205,15 +2262,18 @@ function Workspace({
             token={token}
             scopeKey={reportKey}
             stores={me.stores}
-            toOrders={
-              canSeeOrders && !blocked
-                ? () => {
-                    setTab("list");
-                    setSelectedId(null);
-                    setOrdersView(freshOrdersView);
-                  }
-                : undefined
-            }
+            open={store}
+            readsBackups={canSeeBackups}
+            held={blocked}
+            verbs={{
+              ...(canSeeBackups ? { backups: fromTag("backups") } : {}),
+              ...(canSeeOrders ? { parcels: ordersFromToday } : {}),
+              ...(canSeeDamaged ? { damaged: fromTag("damaged") } : {}),
+              ...(store.permissions.includes("snapshot:approve")
+                ? { openings: fromTag("openings") }
+                : {}),
+            }}
+            toOrders={canSeeOrders && !blocked ? ordersFromToday : undefined}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
@@ -2445,7 +2505,7 @@ function Workspace({
             token={token}
             blocked={blocked}
             readOnly={!trading}
-            back={moreBack}
+            back={backOf("damaged")}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
@@ -2465,14 +2525,18 @@ function Workspace({
             token={token}
             scopeKey={key}
             blocked={blocked}
-            back={moreBack}
+            back={backOf("openings")}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
         null
       ) : tab === "backups" ? (
         canSeeBackups ? (
-          <Backups token={token} scopeKey={backupsKey} back={moreBack} />
+          <Backups
+            token={token}
+            scopeKey={backupsKey}
+            back={backOf("backups")}
+          />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
         null

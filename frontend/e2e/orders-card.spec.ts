@@ -277,6 +277,10 @@ async function open(
   )
     await page.getByRole("button", { name: "Показати завершені" }).click();
   await page.locator(".order-row").first().click();
+  // Nothing in flight before a step is lost: an answer after it is the
+  // server back, and the step is checked by itself — «Сьогодні»'s reads at
+  // entry among them («Усе на бірці» task list, P0-6).
+  if (server.lose) await page.waitForLoadState("networkidle");
 }
 
 /** What a step did is read before the next is pressed: a tap within 0.7 s
