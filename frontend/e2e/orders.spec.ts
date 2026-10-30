@@ -67,7 +67,17 @@ async function reopen(page: Page): Promise<void> {
  * its price typed over the store's, and its carrier a chip. */
 async function draft(page: Page): Promise<void> {
   await section(page, "+ Нове замовлення");
+  // The search answered before anything is sent: an answer after a lost one
+  // is the server's return, and the phone would resend the order by itself
+  // before the journey looks (ADR-0013 §4.3).
+  const found = page.waitForResponse(
+    (r) =>
+      r.url().includes("/catalog/stock-options?") &&
+      r.url().includes("query=") &&
+      r.ok(),
+  );
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill("Лоран");
+  await found;
   await tapSize(page, fixture.variant_id, fixture.size_id, fixture.location_id);
   await fillLine(page, { price: "1200,15" });
   await page

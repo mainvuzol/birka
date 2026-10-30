@@ -293,6 +293,16 @@ Found after the review:
   checks the day's total in the tag too. The size of 24 from a million is
   no longer what the journey proves: it keeps a million on one line in the
   display face, which a journey cannot count on being drawn.
+- **On GitHub's CI, the next run:** `orders.spec.ts`'s «uncertain command
+  stays blocked after access denial…» found no «Немає доступу». The
+  draft's search for «Лоран» answered after the lost order. That answer is
+  the server's return, so the phone resent the order by itself and met the
+  403. The journey's own tap then sent a third attempt, which reconciled.
+  Now `draft()` waits for the search's answer before anything is sent, so
+  all three of `orders.spec.ts`'s journeys that lose an order's answer do.
+  Held until just after the loss, with the tap 300 ms later, the search
+  failed the journey 3 times of 3 as on CI, and passed 3 of 3 with the
+  wait. Nothing of «Сьогодні» was in it.
 
 ## Evidence
 
@@ -343,10 +353,10 @@ On the Mac, against the E2E API and PostgreSQL 17:
   «Продаж», and the search, which a tab does not put the cursor in. A
   seller's is as before. A reading for the owner, with the menu's own
   rule.
-- **Journeys that lose only the first answer** (13 besides `receive`, in
-  cash-kept, catalog, correct, openings, order-shipping, orders, shelf,
-  stocktake, sale and till-receipt): if a read answers after the lost one,
-  the phone resends by itself before the journey looks. None failed. Each
-  could wait for the network to settle first, as `till-sections.spec.ts`'s
-  reminders do.
+- **Journeys that lose only the first answer**, besides `receive` and
+  `orders` (above), in cash-kept, catalog, correct, openings,
+  order-shipping, shelf, stocktake, sale and till-receipt: if a read
+  answers after the lost one, the phone resends by itself before the
+  journey looks. None failed. Each could wait for the network to settle
+  first, as `till-sections.spec.ts`'s reminders do.
 - **The app's own file past 500 kB:** still to choose.
