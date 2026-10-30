@@ -7,6 +7,7 @@ import {
   openStore,
   storeLine,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -425,19 +426,23 @@ test("a line changed after the server's shortage answer is a new sale, its answe
   await line.getByRole("button", { name: "Більше" }).click();
   await basketDone(page);
   await pay(page, "Готівка").click();
-  const short = page.getByRole("alert", { name: "Залишку не вистачає" });
+  const short = page.getByRole("dialog", { name: "Залишку не вистачає" });
+  await shortage(page);
   await short
     .getByRole("button", { name: "Товар на місці — продати 3 · Готівка" })
     .click();
   await expect.poll(() => sent.length).toBe(2);
   expect(sent[1]?.found_in_store).toEqual([{ line_index: 0, quantity: 1 }]);
   expect(sent[1]?.command_id).toBe(sent[0]?.command_id);
-  await expect(short).toBeVisible();
-  // The price agreed again: another sale, the answer gone with the old one.
+  await shortage(page);
+  // Closed, the question sells nothing, and the answer stays with the sale
+  // («Усе на бірці» task list, P0-5). The price agreed again: another sale,
+  // the answer gone with the old one.
+  await page.keyboard.press("Escape");
+  await expect(short).toHaveCount(0);
   await basketSheet(page);
   await line.getByLabel("Ціна, грн").fill("1800");
   await basketDone(page);
-  await expect(short).toHaveCount(0);
   await pay(page, "Готівка").click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -593,7 +598,7 @@ test("a line keeps knowing its model is held with no size, whatever is searched 
   await pay(page, "Готівка").click();
   // The coat in hand may be one held with no size: that answer, and not
   // «Товар на місці», which the server refuses for it.
-  const short = page.getByRole("alert", { name: "Залишку не вистачає" });
+  const short = page.getByRole("dialog", { name: "Залишку не вистачає" });
   await expect(
     short.getByRole("button", {
       name: "Розмір з етикетки — продати як M · Готівка",

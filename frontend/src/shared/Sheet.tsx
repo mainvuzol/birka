@@ -16,19 +16,22 @@ const PULLED = 80;
  * as its own button does; what it shows is kept by the screen, never lost.
  * The screen behind is out of reach while it is open. The cursor goes into
  * it, and back where it was once it closes — or to `fallback` when that is
- * gone. `foot` stands under its scrolling inside, always in view.
+ * gone. `foot` stands under its scrolling inside, always in view; `said`,
+ * the id of what it is about, is read with its title.
  */
 export function Sheet({
   title,
   close,
   fallback,
   foot,
+  said,
   children,
 }: {
   title: string;
   close: () => void;
   fallback?: RefObject<HTMLElement>;
   foot?: ReactNode;
+  said?: string;
   children: ReactNode;
 }): JSX.Element {
   const titleId = useId();
@@ -73,8 +76,12 @@ export function Sheet({
       // StrictMode), the cursor left where it is.
       if (node?.isConnected) return;
       // Scrolled to: a cell tapped as the tray came is under it now, and the
-      // page's scroll padding keeps it clear.
-      const back = before?.isConnected ? before : fallback?.current;
+      // page's scroll padding keeps it clear. A way pressed waits while its
+      // answer is sent, and takes no cursor: `fallback` then.
+      const back =
+        before?.isConnected && !before.matches(":disabled")
+          ? before
+          : fallback?.current;
       if (back?.isConnected) back.focus();
     };
   }, [before, fallback]);
@@ -127,6 +134,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={said}
         tabIndex={-1}
         data-ready={ready ? "" : undefined}
         style={

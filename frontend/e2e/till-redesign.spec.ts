@@ -9,6 +9,7 @@ import {
   tapSize,
   tillWays,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -382,7 +383,7 @@ test("paid in parts, the panel says what is paid now and what is left", async ({
   ).toBeVisible();
 });
 
-test("the server's shortage opens above the panel, in view and focused; a seller who may not write a shelf off is told what to do", async ({
+test("the server's shortage opens as a sheet over the tray, whole in view and focused; a seller who may not write a shelf off is told what to do («Усе на бірці» task list, P0-5)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -415,28 +416,18 @@ test("the server's shortage opens above the panel, in view and focused; a seller
   await onTheTill(page);
   await oneLine(page, 3);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  const answer = page.getByRole("alert", { name: "Залишку не вистачає" });
-  await expect(answer).toBeInViewport();
+  const answer = page.getByRole("dialog", { name: "Залишку не вистачає" });
+  await expect(answer).toBeInViewport({ ratio: 1 });
   await expect(answer).toBeFocused();
   await expect(
     answer.getByText(
       "Немає на полиці? Приберіть рядок і попросіть менеджера виправити залишок.",
     ),
   ).toBeVisible();
-  // All of it above the panel, never under it (review, 2026-10-15).
-  const remove = answer.getByRole("button", { name: "Прибрати з кошика" });
-  await expect(remove).toBeVisible();
-  const removeBox = await remove.boundingBox();
-  const panelTop = (await page.locator(".till-tray").boundingBox())?.y;
-  expect(
-    removeBox !== null &&
-      panelTop !== undefined &&
-      removeBox.y + removeBox.height <= panelTop + 1,
-  ).toBe(true);
-  // The line marked short, in the basket's sheet (P0-5).
+  // All of it over the tray, never under it (review, 2026-10-15).
   await expect(
-    (await basketSheet(page)).locator(".line.short"),
-  ).toHaveCount(1);
+    answer.getByRole("button", { name: "Прибрати з кошика" }),
+  ).toBeInViewport({ ratio: 1 });
 });
 
 test("an unreadable kept invoice holds the till, as it holds the other tabs", async ({
@@ -604,7 +595,7 @@ test("in Telegram's dark theme the shortage answer and a paper sale's mark read 
   await onTheTill(page, DARK);
   await oneLine(page, 3);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  const short = page.getByRole("alert", { name: "Залишку не вистачає" });
+  const short = page.getByRole("dialog", { name: "Залишку не вистачає" });
   await expect(short).toBeVisible();
   expect(await contrast(short.locator("p").first())).toBeGreaterThanOrEqual(
     4.5,
@@ -613,6 +604,7 @@ test("in Telegram's dark theme the shortage answer and a paper sale's mark read 
     await contrast(short.getByRole("button", { name: "Прибрати з кошика" })),
   ).toBeGreaterThanOrEqual(4.5);
 
+  await shortage(page);
   await short.getByRole("button", { name: "Прибрати з кошика" }).click();
   answer = "sold";
   await fromPaper(page);

@@ -5,6 +5,7 @@ import {
   basketSheet,
   fromPaper,
   openStore,
+  shortage,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -481,7 +482,7 @@ test("a shortfall says which warehouse's shelf to look at, and the receipt where
   await onTheTill(page);
   await chip(page, shared).click();
   await pay(page).click();
-  const panel = page.getByRole("alert", { name: "Залишку не вистачає" });
+  const panel = await shortage(page);
   await expect(panel).toContainText(
     "Лоран шоколад · M · Спільний: у кошику 1 шт., в обліку 0 шт.",
   );
@@ -528,7 +529,7 @@ test("a model held with its size not known in one warehouse is offered «Роз�
   const offer = page.getByRole("button", {
     name: /^Розмір з етикетки — продати як M/,
   });
-  const panel = page.getByRole("alert", { name: "Залишку не вистачає" });
+  const panel = page.getByRole("dialog", { name: "Залишку не вистачає" });
 
   // From «Спільний», which holds none of no size: no label to read.
   await chip(page, shared).click();
@@ -539,10 +540,12 @@ test("a model held with its size not known in one warehouse is offered «Роз�
     panel.getByRole("button", { name: /^Товар на місці — продати 1/ }),
   ).toBeVisible();
 
-  // From «Свій», which does: the label may be read.
-  await (await basketSheet(page))
-    .getByRole("button", { name: /^Прибрати Лоран шоколад/ })
+  // From «Свій», which does: the label may be read. The line taken out by
+  // the question's own «Прибрати з кошика» (P0-5).
+  await (await shortage(page))
+    .getByRole("button", { name: "Прибрати з кошика" })
     .click();
+  await expect(panel).toHaveCount(0);
   at = own;
   await chip(page, own).click();
   await pay(page).click();

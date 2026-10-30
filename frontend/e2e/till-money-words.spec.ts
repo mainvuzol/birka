@@ -249,7 +249,7 @@ test("a shelf short of what an order holds says how many are free of it, in «ш
   await pay(page, "Готівка").click();
   await expect(
     page
-      .getByRole("alert", { name: "Залишку не вистачає" })
+      .getByRole("dialog", { name: "Залишку не вистачає" })
       .getByText("Лоран шоколад · M:"),
   ).toHaveText(
     "Лоран шоколад · M: у кошику 2 шт., в обліку 1 шт. поза резервом замовлення.",

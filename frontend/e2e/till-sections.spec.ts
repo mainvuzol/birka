@@ -897,7 +897,7 @@ test("«Вношу продаж з паперу» in «Ще» › «Цей те�
   await paper.click();
   await expect(paper).toHaveAttribute("aria-checked", "true");
   await tabs(page).filter({ hasText: "Продаж" }).click();
-  const tick = page.getByRole("checkbox", { name: "Вношу продаж з паперу" });
+  const tick = page.getByRole("switch", { name: "Вношу продаж з паперу" });
   await expect(tick).toBeChecked();
   await tick.uncheck();
   await more(page);

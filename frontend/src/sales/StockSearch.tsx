@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { JSX, RefObject } from "react";
+import type { JSX, ReactNode, RefObject } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { api } from "@/shared/api";
@@ -246,6 +246,7 @@ export function StockSearch({
   searchRef,
   failure,
   offer,
+  under,
 }: {
   text: string;
   type: (text: string) => void;
@@ -284,6 +285,9 @@ export function StockSearch({
    * not take it, and from paper.
    */
   offer: JSX.Element | null;
+  /** What stands under the search, over the list: the till's paper switch
+   * (spec S08; «Усе на бірці» task list, P0-5). */
+  under?: ReactNode;
 }): JSX.Element {
   const models = useMemo(
     () =>
@@ -309,6 +313,7 @@ export function StockSearch({
           inputRef={searchRef}
         />
       </div>
+      {under}
       {failure ??
         // Nothing found before, and the new search not read yet: never the
         // old «нічого немає» under the new words.

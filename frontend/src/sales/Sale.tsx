@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, CONFLICT_TEXT, errorText, INVALID_TEXT } from "@/shared/api";
@@ -792,22 +792,31 @@ export function Sale({
   // task list, P0-2): its ring turns, the others step back. A kept sale
   // checked again is its stub's to say, not the dock's.
   const pressing = busy && firstSend ? method : null;
-  // The server's answer to a shortage opens above the panel, in view and
-  // focused, so it is never past the edge of the screen (redesign P0-4).
-  const shortRef = useRef<HTMLElement>(null);
-  // The panel's height is kept clear wherever the page scrolls to — the
-  // shortage answer, a field in focus — so nothing ends under it (review,
-  // 2026-10-15).
+  // The panel's height is kept clear wherever the page scrolls to — a field
+  // in focus — so nothing ends under it (review, 2026-10-15).
   const panelRef = useRef<HTMLDivElement>(null);
   usePanelRoom(panelRef, draft.length > 0);
   // The tray's basket row: the cursor's way back from the sheet when what
   // opened it is gone.
   const rowRef = useRef<HTMLButtonElement>(null);
+  // What the shelf's question is about, read with its title.
+  const shortSaid = useId();
+  // Turned on by its row, the paper's fields come into view over the tray:
+  // the ways wait for them (screenshots, 2026-10-30).
+  const paperRef = useRef<HTMLDivElement>(null);
+  const paperAsked = useRef(false);
   useEffect(() => {
-    if (!shortfall) return;
-    shortRef.current?.scrollIntoView({ block: "nearest" });
-    shortRef.current?.focus({ preventScroll: true });
-  }, [shortfall]);
+    if (!paper || !paperAsked.current) return;
+    paperAsked.current = false;
+    paperRef.current?.scrollIntoView({ block: "nearest" });
+  }, [paper]);
+  // A refusal stands where the till's page ends, under a long list: brought
+  // into view, clear of the tray (review, 2026-10-30).
+  const refusalRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (refusal !== null)
+      refusalRef.current?.scrollIntoView({ block: "nearest" });
+  }, [refusal]);
   // An empty basket closes its sheet, and the next coat does not open it.
   // Emptied in the sheet, the cursor goes to the search, where the next
   // model is found: the tray goes with the basket.
@@ -836,6 +845,25 @@ export function Sale({
   const first = draft[0];
   const basketSaid = `Кошик · ${String(units)}${first ? ` · ${visible(first.name)} · ${visible(first.size)}` : ""}`;
   const sheetShown = basketOpen && draft.length > 0;
+  // The shelf's question waits under the basket's sheet, opened to mend
+  // the terms its answer changed.
+  const shortShown = shortfall !== null && !sheetShown;
+  // Closed over the question, the basket's sheet takes what the terms needed
+  // with it: an answer pressed again asks for it afresh, never in the
+  // question's words (review, 2026-10-30).
+  const closeBasket = (): void => {
+    setBasketOpen(false);
+    if (shortfall !== null) setValidation("");
+  };
+  // «На місці фактично є» asked: a count it refuses is said by that field,
+  // in view over the keyboard (review, 2026-10-30).
+  const countAsked =
+    shortfall !== null &&
+    shortDraft !== undefined &&
+    !paper &&
+    shortfall.correctable &&
+    mayReportMissing &&
+    shortfall.requested > 1;
   // From paper, no size is read off a label (G3): a line read so before
   // the switch was ticked holds the ways until it is taken out.
   const labelledOnPaper = paper && draft.some((d) => d.fromUnknown);
@@ -893,6 +921,76 @@ export function Sale({
     );
   }
 
+  // «Вношу продаж з паперу», a switch row under the search (spec S08;
+  // «Усе на бірці» task list, P0-5), «Ще»'s state; on, the paper's fields
+  // under it. Where the till shows no search — a warehouse waiting for its
+  // opening stock, the catalogue — it stands at the top, as before.
+  const paperRow = (
+    <>
+      <label className="switch-row">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={paper}
+          onChange={(event) => {
+            paperAsked.current = event.target.checked;
+            turnPaper(event.target.checked);
+          }}
+        />
+        <span className="switch-label">Вношу продаж з паперу</span>
+        <span className="switch-track" aria-hidden="true">
+          <span className="switch-knob" />
+        </span>
+      </label>
+      {paper && (
+        <div ref={paperRef}>
+          <PaperKind storeId={store.id} firstDays={firstDays} />
+          <label>
+            Хто продав
+            <select
+              value={named?.user_id ?? ""}
+              onChange={(event) => {
+                setSoldBy(store.id, event.target.value || null);
+              }}
+            >
+              <option value="">Не вказано</option>
+              {(sellers.data?.sellers ?? []).map((seller) => (
+                <option key={seller.user_id} value={seller.user_id}>
+                  {visible(seller.display_name)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {sellers.error && (
+            <Failure
+              error={sellers.error}
+              retry={() => {
+                void sellers.refetch();
+              }}
+            />
+          )}
+          <PaperWhen
+            firstDays={firstDays}
+            day={paperDate}
+            time={paperTime}
+            yesterday={yesterday}
+            onDay={setPaperDate}
+            onTime={(value) => {
+              setPaperTime(value);
+              if (!value) setYesterday(false);
+            }}
+            onYesterday={setYesterday}
+          />
+        </div>
+      )}
+    </>
+  );
+  const searchShown =
+    Boolean(locationId || searchAll) &&
+    !fromCatalog &&
+    !(locationId && waiting) &&
+    !(searchAll && ready.length === 0);
+
   return (
     <>
       <ScreenHeader title="Продаж" />
@@ -935,59 +1033,8 @@ export function Sale({
           </Banner>
         )}
         <fieldset disabled={blocked || working}>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={paper}
-              onChange={(event) => {
-                turnPaper(event.target.checked);
-              }}
-            />
-            Вношу продаж з паперу
-          </label>
-          {paper && (
-            <>
-              <PaperKind storeId={store.id} firstDays={firstDays} />
-              <label>
-                Хто продав
-                <select
-                  value={named?.user_id ?? ""}
-                  onChange={(event) => {
-                    setSoldBy(store.id, event.target.value || null);
-                  }}
-                >
-                  <option value="">Не вказано</option>
-                  {(sellers.data?.sellers ?? []).map((seller) => (
-                    <option key={seller.user_id} value={seller.user_id}>
-                      {visible(seller.display_name)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {sellers.error && (
-                <Failure
-                  error={sellers.error}
-                  retry={() => {
-                    void sellers.refetch();
-                  }}
-                />
-              )}
-              <PaperWhen
-                firstDays={firstDays}
-                day={paperDate}
-                time={paperTime}
-                yesterday={yesterday}
-                onDay={setPaperDate}
-                onTime={(value) => {
-                  setPaperTime(value);
-                  if (!value) setYesterday(false);
-                }}
-                onYesterday={setYesterday}
-              />
-            </>
-          )}
           {locations.isPending ? (
-            <Placeholder said="Завантажуємо склади…" field />
+            <Placeholder said="Завантажуємо склади…" field under={paperRow} />
           ) : locations.error ? (
             <Failure
               error={locations.error}
@@ -1005,6 +1052,8 @@ export function Sale({
               </p>
             )
           )}
+          {/* Where the till shows no search, in its place. */}
+          {!searchShown && !locations.isPending && paperRow}
           {locationId && waiting ? (
             // Nothing is sold there until the list is approved (owner
             // decision, 2026-10-02): the shop sells on paper meanwhile, and
@@ -1119,12 +1168,9 @@ export function Sale({
                   }
                   chosenIn="у кошику"
                   offerHeld={paper}
-                  // Held at the top, but while the shelf's answer stands:
-                  // at 360 × 640 it fits between the top and the tray only
-                  // with the search gone up with the page (С1; P0-5, until
-                  // the answer is a sheet of its own).
-                  sticky={!shortfall}
+                  sticky
                   searchRef={searchRef}
+                  under={paperRow}
                   failure={
                     stock.error ? (
                       <Failure
@@ -1156,7 +1202,9 @@ export function Sale({
               </>
             )
           )}
-          {validation && !sheetShown && <p role="alert">{validation}</p>}
+          {validation && !sheetShown && !shortShown && (
+            <p role="alert">{validation}</p>
+          )}
           {draft.length === 0 &&
             (locationId || (searchAll && ready.length > 0)) &&
             !waiting &&
@@ -1173,182 +1221,199 @@ export function Sale({
           )}
         </fieldset>
         {refusal !== null && (
-          <p role="alert">
+          <p role="alert" ref={refusalRef}>
             {refusalText(refusal)} Кошик збережено — нічого не продано.
           </p>
         )}
-        {shortfall && (
-          <section
-            className="notice"
-            role="alert"
-            ref={shortRef}
-            tabIndex={-1}
-            aria-label="Залишку не вистачає"
+        {shortShown && (
+          // The shelf's question as a sheet over the till (spec §4.3, S09;
+          // «Усе на бірці» task list, P0-5), in the same words. Closed,
+          // nothing is sold and the basket stays: a way pressed again asks
+          // the server afresh.
+          <Sheet
+            title="Залишку не вистачає"
+            close={() => {
+              setShortfall(null);
+              setPresent("");
+              setValidation("");
+            }}
+            fallback={rowRef}
+            said={shortSaid}
           >
-            <h3>Залишку не вистачає</h3>
-            {shortDraft === undefined || shortIndex < 0 ? (
-              <p>
-                Сервер відмовив через товар, якого немає в цьому кошику. Оновіть
-                залишки й складіть кошик заново.
-              </p>
-            ) : (
-              <>
-                <p>
-                  {visible(shortDraft.name)} · {visible(shortDraft.size)}
-                  {placeOf(shortDraft.line.source_location_id)}: у кошику{" "}
-                  {shortfall.requested} шт., в обліку {shortfall.available} шт.
-                  {shortfall.reserved === true && " поза резервом замовлення."}
+            <div className="short-sheet">
+              {validation && !countAsked && <p role="alert">{validation}</p>}
+              {shortDraft === undefined || shortIndex < 0 ? (
+                <p id={shortSaid}>
+                  Сервер відмовив через товар, якого немає в цьому кошику.
+                  Оновіть залишки й складіть кошик заново.
                 </p>
-                {paper ? (
-                  // Nothing that describes the shelf now (§6, §7).
-                  <p>{shortfall.reserved === true ? paperReserved : paperGone}</p>
-                ) : !shortfall.correctable ? (
-                  <p>
-                    Цей залишок неможливо виправити під час продажу — частина
-                    одиниць у резерві замовлення. Зменшіть кількість або продайте
-                    інший товар.
+              ) : (
+                <>
+                  <p id={shortSaid}>
+                    {visible(shortDraft.name)} · {visible(shortDraft.size)}
+                    {placeOf(shortDraft.line.source_location_id)}: у кошику{" "}
+                    {shortfall.requested} шт., в обліку{" "}
+                    {shortfall.available} шт.
+                    {shortfall.reserved === true &&
+                      " поза резервом замовлення."}
                   </p>
-                ) : (
-                  <>
-                    {mayCorrect && unknownHere && (
-                      <>
-                        <p>
-                          Ця модель є на складі з невідомим розміром. Якщо у вас
-                          одна з тих одиниць, уточніть її розмір — вона продасться
-                          як {visible(shortDraft.size)}.
-                        </p>
-                        <button
-                          type="button"
-                          disabled={working}
-                          onClick={() => {
-                            const next = {
-                              ...clarified,
-                              [shortIndex]:
-                                shortfall.requested - shortfall.available,
-                            };
-                            setClarified(next);
-                            answer(found, missing, next);
-                          }}
-                        >
-                          Розмір з етикетки — продати як{" "}
-                          {visible(shortDraft.size)}
-                          {how}
-                        </button>
-                      </>
-                    )}
-                    {mayCorrect && !unknownHere && !shortDraft.unknownSize && (
-                      <button
-                        type="button"
-                        disabled={working}
-                        onClick={() => {
-                          const next = {
-                            ...found,
-                            [shortIndex]:
-                              shortfall.requested - shortfall.available,
-                          };
-                          setFound(next);
-                          answer(next, missing, clarified);
-                        }}
-                      >
-                        Товар на місці — продати {shortfall.requested}
-                        {how}
-                      </button>
-                    )}
-                    {mayReportMissing && (
-                      <button
-                        type="button"
-                        disabled={working}
-                        onClick={() => {
-                          const next = { ...missing, [shortIndex]: 0 };
-                          setMissing(next);
-                          answer(found, next, clarified);
-                        }}
-                      >
-                        {/* Recording an empty shelf takes no money: no way. */}
-                        {draft.every(
-                          (_, index) =>
-                            index === shortIndex || missing[index] === 0,
-                        )
-                          ? "На полиці немає жодної — записати нестачу"
-                          : `На полиці немає жодної — продати решту${how}`}
-                      </button>
-                    )}
-                    {mayReportMissing && shortfall.requested > 1 && (
-                      <>
-                        <label>
-                          На місці фактично є, шт.
-                          <input
-                            inputMode="numeric"
-                            value={present}
-                            onChange={(event) => {
-                              setPresent(event.target.value);
+                  {paper ? (
+                    // Nothing that describes the shelf now (§6, §7).
+                    <p>
+                      {shortfall.reserved === true ? paperReserved : paperGone}
+                    </p>
+                  ) : !shortfall.correctable ? (
+                    <p>
+                      Цей залишок неможливо виправити під час продажу —
+                      частина одиниць у резерві замовлення. Зменшіть
+                      кількість або продайте інший товар.
+                    </p>
+                  ) : (
+                    <>
+                      {mayCorrect && unknownHere && (
+                        <>
+                          <p>
+                            Ця модель є на складі з невідомим розміром. Якщо
+                            у вас одна з тих одиниць, уточніть її розмір —
+                            вона продасться як {visible(shortDraft.size)}.
+                          </p>
+                          <button
+                            type="button"
+                            disabled={working}
+                            onClick={() => {
+                              const next = {
+                                ...clarified,
+                                [shortIndex]:
+                                  shortfall.requested - shortfall.available,
+                              };
+                              setClarified(next);
+                              answer(found, missing, next);
                             }}
-                          />
-                        </label>
+                          >
+                            Розмір з етикетки — продати як{" "}
+                            {visible(shortDraft.size)}
+                            {how}
+                          </button>
+                        </>
+                      )}
+                      {mayCorrect &&
+                        !unknownHere &&
+                        !shortDraft.unknownSize && (
+                          <button
+                            type="button"
+                            disabled={working}
+                            onClick={() => {
+                              const next = {
+                                ...found,
+                                [shortIndex]:
+                                  shortfall.requested - shortfall.available,
+                              };
+                              setFound(next);
+                              answer(next, missing, clarified);
+                            }}
+                          >
+                            Товар на місці — продати {shortfall.requested}
+                            {how}
+                          </button>
+                        )}
+                      {mayReportMissing && (
                         <button
                           type="button"
                           disabled={working}
                           onClick={() => {
-                            const count = Number(present);
-                            if (
-                              !/^\d+$/.test(present) ||
-                              count < 1 ||
-                              count >= shortfall.requested
-                            ) {
-                              setValidation(
-                                `Вкажіть від 1 до ${String(shortfall.requested - 1)} шт. Якщо немає жодної — натисніть «На полиці немає жодної».`,
-                              );
-                              return;
-                            }
-                            const next = { ...missing, [shortIndex]: count };
+                            const next = { ...missing, [shortIndex]: 0 };
                             setMissing(next);
                             answer(found, next, clarified);
                           }}
                         >
-                          Продати стільки, скільки є{how}
+                          {/* An empty shelf recorded takes no money. */}
+                          {draft.every(
+                            (_, index) =>
+                              index === shortIndex || missing[index] === 0,
+                          )
+                            ? "На полиці немає жодної — записати нестачу"
+                            : `На полиці немає жодної — продати решту${how}`}
                         </button>
-                      </>
-                    )}
-                    {/* The next step alone, never the rule («Усе на бірці»
-                        task list, P2-1). */}
-                    {!mayCorrect && !mayReportMissing && (
-                      <p>Покличте менеджера або зменшіть кількість.</p>
-                    )}
-                    {mayCorrect && !mayReportMissing && (
-                      <p>
-                        Немає на полиці? Приберіть рядок і попросіть менеджера
-                        виправити залишок.
-                      </p>
-                    )}
-                  </>
-                )}
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    replaceDraft(draft.filter((_, i) => i !== shortIndex));
-                  }}
-                >
-                  Прибрати з кошика
-                </button>
-              </>
-            )}
-          </section>
+                      )}
+                      {mayReportMissing && shortfall.requested > 1 && (
+                        <>
+                          <label>
+                            На місці фактично є, шт.
+                            <input
+                              inputMode="numeric"
+                              value={present}
+                              onChange={(event) => {
+                                setPresent(event.target.value);
+                              }}
+                            />
+                          </label>
+                          {validation && <p role="alert">{validation}</p>}
+                          <button
+                            type="button"
+                            disabled={working}
+                            onClick={() => {
+                              const count = Number(present);
+                              if (
+                                !/^\d+$/.test(present) ||
+                                count < 1 ||
+                                count >= shortfall.requested
+                              ) {
+                                setValidation(
+                                  `Вкажіть від 1 до ${String(shortfall.requested - 1)} шт. Якщо немає жодної — натисніть «На полиці немає жодної».`,
+                                );
+                                return;
+                              }
+                              const next = { ...missing, [shortIndex]: count };
+                              setMissing(next);
+                              answer(found, next, clarified);
+                            }}
+                          >
+                            Продати стільки, скільки є{how}
+                          </button>
+                        </>
+                      )}
+                      {/* The next step alone, never the rule («Усе на бірці»
+                          task list, P2-1). */}
+                      {!mayCorrect && !mayReportMissing && (
+                        <p>Покличте менеджера або зменшіть кількість.</p>
+                      )}
+                      {mayCorrect && !mayReportMissing && (
+                        <p>
+                          Немає на полиці? Приберіть рядок і попросіть менеджера
+                          виправити залишок.
+                        </p>
+                      )}
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      // A count's refusal goes with its line; the last line
+                      // gone, so is the tray, and the cursor goes to the
+                      // search (review, 2026-10-30).
+                      setValidation("");
+                      if (draft.length === 1) setFocusSearch(true);
+                      replaceDraft(draft.filter((_, i) => i !== shortIndex));
+                    }}
+                  >
+                    Прибрати з кошика
+                  </button>
+                </>
+              )}
+            </div>
+          </Sheet>
         )}
         {sheetShown && (
           <Sheet
             title="Кошик"
-            close={() => {
-              setBasketOpen(false);
-            }}
+            close={closeBasket}
             fallback={rowRef}
             foot={
               <button
                 type="button"
                 className="quiet sheet-done"
-                onClick={() => {
-                  setBasketOpen(false);
-                }}
+                onClick={closeBasket}
               >
                 Готово
               </button>
@@ -1418,7 +1483,7 @@ export function Sale({
                         onKeyDown={(event) => {
                           if (event.key !== "Enter") return;
                           event.preventDefault();
-                          setBasketOpen(false);
+                          closeBasket();
                         }}
                       />
                     </label>
@@ -1502,9 +1567,7 @@ export function Sale({
                   hint="Решту — у «Боргах» цього магазину."
                   storeId={store.id}
                   token={token}
-                  done={() => {
-                    setBasketOpen(false);
-                  }}
+                  done={closeBasket}
                 />
               )}
             </fieldset>

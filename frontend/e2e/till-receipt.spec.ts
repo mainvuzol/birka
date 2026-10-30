@@ -11,6 +11,7 @@ import {
   tapSize,
   tillWays,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -327,9 +328,10 @@ test("Telegram buzzes once the server has answered: success when sold, error whe
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await pay(page, "Готівка").click();
   await expect(
-    page.getByRole("alert", { name: "Залишку не вистачає" }),
+    page.getByRole("dialog", { name: "Залишку не вистачає" }),
   ).toBeVisible();
   expect(await buzzes()).toEqual([]);
+  await shortage(page);
   await page
     .getByRole("button", { name: "Товар на місці — продати 1 · Готівка" })
     .click();
@@ -542,7 +544,8 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
   await stubList(page);
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  const paper = page.locator("label.check", {
+  // A switch row now (P0-5).
+  const paper = page.locator(".switch-row", {
     hasText: "Вношу продаж з паперу",
   });
   expect((await paper.boundingBox())?.height).toBeGreaterThanOrEqual(44);

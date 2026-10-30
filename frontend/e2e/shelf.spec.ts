@@ -6,6 +6,7 @@ import {
   openStore,
   tapSize,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -162,7 +163,7 @@ test("a line with nothing on the shelf is dropped, and the rest is sold", async 
   await add(page, empty, 3);
   await add(page, there, 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
 
   await page
     .getByRole("button", {
@@ -201,6 +202,7 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   await till(page);
   await add(page, empty, 2);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await shortage(page);
   await page
     .getByRole("button", {
       // Records an empty shelf, takes no money: no way is named.
@@ -243,6 +245,7 @@ test("an empty shelf whose answer was lost is checked, and not recorded twice", 
   await till(page);
   await add(page, empty, 2);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await shortage(page);
   await page
     .getByRole("button", {
       // Records an empty shelf, takes no money: no way is named.
@@ -288,7 +291,7 @@ test("whoever may not report goods missing is not offered the empty shelf", asyn
   await till(page);
   await add(page, empty, 2);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
   await expect(
     page.getByRole("button", { name: /На полиці немає жодної/ }),
   ).toHaveCount(0);

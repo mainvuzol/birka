@@ -15,6 +15,7 @@ import {
   tapSize,
   waitsFor,
   tillWays,
+  shortage,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -1609,8 +1610,11 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     await fromPaper(page);
     await basket(page);
     await pay(page, "З паперу · Готівка").click();
-    await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+    await shortage(page);
 
+    // The question closed first: the switch is under its sheet («Усе на
+    // бірці» task list, P0-5).
+    await page.keyboard.press("Escape");
     await page.getByLabel("Вношу продаж з паперу").uncheck();
     await expect(page.getByText("Залишку не вистачає")).toHaveCount(0);
     await expect(
@@ -1624,7 +1628,7 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     expect(server.sales).toHaveLength(1);
   });
 
-  test("7c. ticking the switch drops a live sale's question about the shelf", async ({
+  test("7c. a live sale's question about the shelf closed, the switch ticked brings it back no more", async ({
     page,
   }) => {
     const server = await serve(page);
@@ -1650,10 +1654,12 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     await openTill(page);
     await basket(page);
     await pay(page, "Готівка").click();
-    await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+    await shortage(page);
 
-    // The seller turns to the paper instead: the question about the shelf
-    // goes, and nothing says a paper sale was refused.
+    // The seller turns to the paper instead, the question's sheet closed
+    // («Усе на бірці» task list, P0-5): it does not come back, and nothing
+    // says a paper sale was refused.
+    await page.keyboard.press("Escape");
     await fromPaper(page);
     await expect(page.getByText("Залишку не вистачає")).toHaveCount(0);
     await expect(page.getByText(/продаж з паперу не записано/)).toHaveCount(0);
@@ -3144,7 +3150,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         page.getByRole("heading", { name: "Продаж", exact: true }),
       ).toBeVisible();
       await expect(
-        page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+        page.getByRole("switch", { name: "Вношу продаж з паперу" }),
       ).toBeDisabled();
       // Nothing of a screen's rule; a server that answers says it refused
       // the command in its own words, as for a kept return (below).
@@ -3193,7 +3199,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         .locator("[aria-current=page]"),
     ).toHaveCount(1);
     await expect(
-      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
     ).toHaveCount(0);
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
   });
@@ -3241,7 +3247,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         .locator("[aria-current=page]"),
     ).toHaveCount(1);
     await expect(
-      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
     ).toHaveCount(0);
   });
 
@@ -3285,7 +3291,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
     ).toHaveAttribute("aria-current", "true");
     await expect(
-      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
     ).toHaveCount(0);
   });
 
@@ -4498,7 +4504,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Продаж", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
     ).toBeEnabled();
     await expect(
       tillWays(page).getByRole("button", { name: "Повернути" }),
@@ -4548,7 +4554,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Продаж", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
     ).toBeEnabled();
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
     expect(sent).toHaveLength(1);
@@ -4666,7 +4672,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Продаж", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("checkbox", { name: "Вношу продаж з паперу" }),
+      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
     ).toBeDisabled();
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
   });
@@ -4840,7 +4846,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         await expect(
           page.getByRole("heading", { name: "Продаж", exact: true }),
         ).toBeVisible();
-        const paper = page.getByRole("checkbox", {
+        const paper = page.getByRole("switch", {
           name: "Вношу продаж з паперу",
         });
         if (answer === "unproven") await expect(paper).toBeDisabled();

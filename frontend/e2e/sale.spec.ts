@@ -9,6 +9,7 @@ import {
   openStore,
   tapSize,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page, Response } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -200,7 +201,7 @@ test("«товар на місці» answers a real refusal and completes the sa
   );
   await page.getByRole("button", { name: "Картка", exact: true }).click();
   expect((await refused).status()).toBe(409);
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
   await expect(
     page.getByText(
       `у кошику ${String(available + 1)} шт., в обліку ${String(available)} шт.`,
@@ -315,7 +316,7 @@ test("«на місці лише стільки» sends the count present, not t
   await pickFirstProduct(page);
   await addToBasket(page, 3);
   await page.getByRole("button", { name: "Переказ", exact: true }).click();
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
 
   // Refuses a count that is not a shortage at all, and names the zero case.
   await page.getByLabel("На місці фактично є, шт.").fill("3");
@@ -465,7 +466,7 @@ test("a seller without the correction permissions is offered neither", async ({
   const available = await pickFirstProduct(page);
   await addToBasket(page, available + 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
   await expect(
     page.getByRole("button", { name: /Товар на місці/ }),
   ).toHaveCount(0);

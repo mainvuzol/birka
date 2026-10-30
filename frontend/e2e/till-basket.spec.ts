@@ -11,6 +11,7 @@ import {
   tapSize,
   tillWays,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -421,7 +422,7 @@ test("a basket built from paper is gone once the paper is unticked on another sc
   await empty(page);
 });
 
-test("an unmarked basket keeps its lines when the paper is ticked on another screen, not its shelf's open question (navigation task list, P0-5)", async ({
+test("an unmarked basket keeps its lines when the paper is ticked on another screen; its shelf's question, closed, comes back no more (navigation task list, P0-5; «Усе на бірці» task list, P0-5)", async ({
   page,
 }) => {
   await stubList(page);
@@ -430,13 +431,17 @@ test("an unmarked basket keeps its lines when the paper is ticked on another scr
   await onTheTill(page);
   await twoCoats(page);
   await pay(page, "Готівка").click();
-  const question = page.getByRole("alert", { name: "Залишку не вистачає" });
-  await expect(question).toBeVisible();
-  // Away and back, unmarked still: the question stands.
+  const question = await shortage(page);
+  // A sheet over the till: closed before the menu is in reach, nothing
+  // sold.
+  await page.keyboard.press("Escape");
+  await expect(question).toHaveCount(0);
+  // Away and back, unmarked still: the lines, and no question.
   await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
-  await expect(question).toBeVisible();
-  // Ticked on a return's screen, the question open: the lines, no question.
+  await asItWas(page);
+  await expect(question).toHaveCount(0);
+  // Ticked on a return's screen: the lines, no question.
   await aReturnsScreen(page);
   await fromPaper(page, "Вношу повернення з паперу");
   await row(page, "Продаж").click();
@@ -455,6 +460,7 @@ test("an answer about the shelf already given is never sent with the paper's mar
   await twoCoats(page);
   await pay(page, "Готівка").click();
   // Answered, and refused for another reason: the answer is kept.
+  await shortage(page);
   await page.getByRole("button", { name: /^Товар на місці — продати/ }).click();
   await expect(
     page.getByText(/Кошик збережено — нічого не продано\.$/),
@@ -502,6 +508,7 @@ test("an answer about the shelf already given comes back with the basket, and is
   await onTheTill(page);
   await twoCoats(page);
   await pay(page, "Готівка").click();
+  await shortage(page);
   await page.getByRole("button", { name: /^Товар на місці — продати/ }).click();
   await expect(
     page.getByText(/Кошик збережено — нічого не продано\.$/),

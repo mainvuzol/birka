@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 
 /**
  * What is being read, in its own place (sale-slice TZ, P2-6): grey blocks
@@ -13,6 +13,7 @@ export function Placeholder({
   rows = 0,
   debts = false,
   day = true,
+  under,
 }: {
   said: string;
   /** The search field's place, above the tags. */
@@ -27,6 +28,9 @@ export function Placeholder({
   /** A day's heading over the rows; «Каса»'s lists have none (cash task
    * list, P2-2). */
   day?: boolean;
+  /** What stands under the search field, over the tags, in its own place:
+   * the till's paper switch («Усе на бірці» task list, P0-5). */
+  under?: ReactNode;
 }): JSX.Element {
   if (rows > 0)
     return (
@@ -54,13 +58,14 @@ export function Placeholder({
       <p role="status" className="visually-hidden">
         {said}
       </p>
+      {field && (
+        <div className="placeholder" aria-hidden="true">
+          <span className="skeleton skeleton-label" />
+          <span className="skeleton skeleton-field" />
+        </div>
+      )}
+      {under}
       <div className="placeholder" aria-hidden="true">
-        {field && (
-          <div>
-            <span className="skeleton skeleton-label" />
-            <span className="skeleton skeleton-field" />
-          </div>
-        )}
         {/* The model tags to come, their cells 60 × 60 (spec §6.27;
             «Усе на бірці» task list, P0-5). */}
         <div className="tags">
