@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   fillLine,
   openStore,
   tapSize,
@@ -159,14 +161,18 @@ test("sums read «12 950,00 грн», thousands kept together, in even digits, a
       .locator(".sum")
       .evaluate((sum) => getComputedStyle(sum).fontVariantNumeric),
   ).toBe("tabular-nums");
+  // The line's own words, in the basket's sheet («Усе на бірці» task list,
+  // P0-5).
+  const sheet = await basketSheet(page);
   await expect(
-    page.getByText("Ціна продажу 1\u00a0850,00 грн. Домовилися про іншу"),
+    sheet.getByText("Ціна продажу 1\u00a0850,00 грн. Домовилися про іншу"),
   ).toBeVisible();
 
   // Typed as before, without a space.
-  const price = page.locator(".line").getByLabel("Ціна, грн");
+  const price = sheet.locator(".line").getByLabel("Ціна, грн");
   await price.fill("1850,50");
   await expect(price).toHaveValue("1850,50");
+  await basketDone(page);
   await expect(total).toHaveText(/^Разом 12\u00a0953,50\u00a0грн$/);
 
   await pay(page, "Готівка").click();
@@ -192,7 +198,7 @@ test("where motion is reduced a changed sum shows no fold behind it (spec §5.8;
   await expect(sum.locator(".sum-flash")).toBeHidden();
 });
 
-test("the basket of two lines counts «шт.», and «Кошик» names no more than the lines", async ({
+test("the basket of two lines counts its coats on the tray, and «Кошик» is the basket's own sheet, never the till around it", async ({
   page,
 }) => {
   await onTheTill(page);
@@ -202,12 +208,16 @@ test("the basket of two lines counts «шт.», and «Кошик» names no more
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await tapSize(page, fixture.variant_id, sizeL);
   await fillLine(page, { quantity: 2 });
-  await expect(page.locator(".pay-what")).toHaveText("У кошику: 3 шт.");
-  // «Кошик» names the lines to pay; the form around the warehouse, the
-  // search and the lines is not it.
-  await expect(
-    page.getByRole("group", { name: "Кошик", exact: true }).locator(".line"),
-  ).toHaveCount(2);
+  // The tray counts the coats and names the first line (spec §6.15;
+  // «Усе на бірці» task list, P0-5).
+  const row = page.locator(".till-tray .tray-basket");
+  await expect(row.locator(".tray-count")).toHaveText("Кошик · 3");
+  await expect(row).toHaveAccessibleName("Кошик · 3 · Лоран шоколад · M");
+  // «Кошик» names the sheet of the lines to pay and how they are paid;
+  // the search and the tags are not it.
+  const sheet = await basketSheet(page);
+  await expect(sheet.locator(".line")).toHaveCount(2);
+  await basketDone(page);
   await expect(page.getByText("Кошик", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/(^|\s)од\./)).toHaveCount(0);
 });
@@ -282,5 +292,8 @@ test("a conflict the till knows no more of says to try again, and a request it c
   );
   await expect(refused(page)).not.toContainText(/замовлен/);
   // The basket is kept as it was.
-  await expect(page.locator(".line")).toHaveCount(1);
+  await expect(page.locator(".till-tray .tray-basket")).toHaveAccessibleName(
+    "Кошик · 1 · Лоран шоколад · M",
+  );
+  await expect((await basketSheet(page)).locator(".line")).toHaveCount(1);
 });

@@ -19,6 +19,7 @@ import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { backNoted, useReach } from "@/shared/reach";
 import { buzz } from "@/shared/telegram";
 import { usePanelRoom } from "@/shared/panel";
+import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
@@ -132,8 +133,9 @@ export function Sale({
    */
   returnSale?: (sale: SaleReceipt) => void;
   /**
-   * Opened by a return's «Новий продаж»: the cursor goes to the search once
-   * it is there (returns task list, P0-5).
+   * Opened as the app opens, or by a return's «Новий продаж»: the cursor
+   * goes to the search once it is there (spec S08; returns task list, P0-5;
+   * «Усе на бірці» task list, P0-5).
    */
   searchFirst?: boolean;
   /**
@@ -186,6 +188,9 @@ export function Sale({
   const [focusPrice, setFocusPrice] = useState<string | null>(null);
   // «Новий продаж» puts the cursor in the search (P0-3).
   const [focusSearch, setFocusSearch] = useState(searchFirst);
+  // The basket's lines, their prices and «Оплата частинами» are in a sheet
+  // over the till, opened from the tray (spec §6.16, S10; P0-5).
+  const [basketOpen, setBasketOpen] = useState(false);
   const [draft, setDraft] = useState<Draft[]>(kept?.draft ?? []);
   const [commandId, setCommandId] = useState(
     () => kept?.commandId ?? crypto.randomUUID(),
@@ -490,7 +495,11 @@ export function Sale({
         fromUnknown: false,
       },
     ]);
-    if (!item.suggested_price) setFocusPrice(id);
+    // A model with no price: the sheet opens, the cursor in its price.
+    if (!item.suggested_price) {
+      setBasketOpen(true);
+      setFocusPrice(id);
+    }
   }
 
   /** A line's quantity or price changed: a different basket (`replaceDraft`). */
@@ -548,6 +557,17 @@ export function Sale({
     );
   }
 
+  /**
+   * A way pressed while a line waits — for its price, or, from paper, to be
+   * taken out after its size was read off a label (G3): the sheet opens at
+   * it, the cursor in the price missing (P0-5). Nothing is sent.
+   */
+  function toTheLine(): void {
+    setBasketOpen(true);
+    const unpriced = draft.find((d) => d.line.unit_price === "");
+    if (unpriced) setFocusPrice(unpriced.id);
+  }
+
   async function send(
     way: TillMethod,
     nextFound: Record<number, number>,
@@ -559,8 +579,10 @@ export function Sale({
     // 2026-10-16): the buttons wait, and so does this.
     if (paper && (firstDays === null || paperProblem !== null)) return;
     // The buttons wait for every price; a sale is never sent without one.
+    // What is missing is said in the basket's sheet, where it is typed.
     if (draft.some((d) => d.line.unit_price === "")) {
       setValidation(priceText);
+      setBasketOpen(true);
       return;
     }
     // Nothing on the shelf of a line drops it from the sale (owner decision,
@@ -580,6 +602,7 @@ export function Sale({
       credit.inParts && !emptyShelf ? checkTerms(credit, sold) : null;
     if (typeof terms === "string") {
       setValidation(terms);
+      setBasketOpen(true);
       return;
     }
     // The paper's time as its day and hour, the store's wall clock (G1);
@@ -777,11 +800,22 @@ export function Sale({
   // 2026-10-15).
   const panelRef = useRef<HTMLDivElement>(null);
   usePanelRoom(panelRef, draft.length > 0);
+  // The tray's basket row: the cursor's way back from the sheet when what
+  // opened it is gone.
+  const rowRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!shortfall) return;
     shortRef.current?.scrollIntoView({ block: "nearest" });
     shortRef.current?.focus({ preventScroll: true });
   }, [shortfall]);
+  // An empty basket closes its sheet, and the next coat does not open it.
+  // Emptied in the sheet, the cursor goes to the search, where the next
+  // model is found: the tray goes with the basket.
+  useEffect(() => {
+    if (draft.length > 0 || !basketOpen) return;
+    setBasketOpen(false);
+    setFocusSearch(true);
+  }, [draft.length, basketOpen]);
   useEffect(() => {
     if (focusPrice === null) return;
     priceRefs.current.get(focusPrice)?.focus();
@@ -797,6 +831,11 @@ export function Sale({
   }, [focusSearch, receipt, locations.isPending, locationId]);
   // The ways wait until every line has its price (redesign P0-3).
   const priced = draft.every((d) => d.line.unit_price !== "");
+  // The tray's basket row: how many coats, and the first line (§6.15).
+  const units = draft.reduce((n, d) => n + d.line.quantity, 0);
+  const first = draft[0];
+  const basketSaid = `Кошик · ${String(units)}${first ? ` · ${visible(first.name)} · ${visible(first.size)}` : ""}`;
+  const sheetShown = basketOpen && draft.length > 0;
   // From paper, no size is read off a label (G3): a line read so before
   // the switch was ticked holds the ways until it is taken out.
   const labelledOnPaper = paper && draft.some((d) => d.fromUnknown);
@@ -1080,7 +1119,11 @@ export function Sale({
                   }
                   chosenIn="у кошику"
                   offerHeld={paper}
-                  sticky
+                  // Held at the top, but while the shelf's answer stands:
+                  // at 360 × 640 it fits between the top and the tray only
+                  // with the search gone up with the page (С1; P0-5, until
+                  // the answer is a sheet of its own).
+                  sticky={!shortfall}
                   searchRef={searchRef}
                   failure={
                     stock.error ? (
@@ -1113,145 +1156,13 @@ export function Sale({
               </>
             )
           )}
-          {validation && <p role="alert">{validation}</p>}
+          {validation && !sheetShown && <p role="alert">{validation}</p>}
           {draft.length === 0 &&
             (locationId || (searchAll && ready.length > 0)) &&
             !waiting &&
             !fromCatalog && (
               <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
             )}
-          {draft.length > 0 && (
-            // «Кошик» names the lines to pay, and nothing else (P2-2).
-            <div role="group" aria-label="Кошик">
-              {draft.map((d, index) => (
-                <div
-                  className={index === shortIndex ? "line short" : "line"}
-                  key={d.id}
-                >
-                  <strong>
-                    {visible(d.name)} · {visible(d.size)}
-                  </strong>
-                  {/* Where it leaves from, under it (spec §6.16; P0-5): the
-                      till no longer says it above the search. */}
-                  {nameOf(d.line.source_location_id) !== undefined && (
-                    <span className="line-place">
-                      Склад: {visible(nameOf(d.line.source_location_id) ?? "")}
-                    </span>
-                  )}
-                  <div className="line-edit">
-                    <div
-                      className="stepper"
-                      role="group"
-                      aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
-                    >
-                      <button
-                        type="button"
-                        aria-label="Менше"
-                        disabled={d.line.quantity <= 1}
-                        onClick={() => {
-                          change(index, { quantity: d.line.quantity - 1 });
-                        }}
-                      >
-                        −
-                      </button>
-                      <output>{d.line.quantity}</output>
-                      <button
-                        type="button"
-                        aria-label="Більше"
-                        disabled={d.line.quantity >= 1000}
-                        onClick={() => {
-                          change(index, { quantity: d.line.quantity + 1 });
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <label>
-                      Ціна, грн
-                      <input
-                        ref={(input) => {
-                          if (input) priceRefs.current.set(d.id, input);
-                          else priceRefs.current.delete(d.id);
-                        }}
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        value={d.price}
-                        onChange={(event) => {
-                          change(index, { price: event.target.value });
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <PriceHint
-                    typed={d.price}
-                    price={d.line.unit_price}
-                    suggested={d.suggested}
-                  />
-                  {found[index] !== undefined && (
-                    <span>Підтверджено на місці: +{found[index]}</span>
-                  )}
-                  {missing[index] === 0 ? (
-                    <span>На полиці немає — не продається</span>
-                  ) : (
-                    missing[index] !== undefined && (
-                      <span>На місці лише {missing[index]}</span>
-                    )
-                  )}
-                  {d.unknownStock && paper && (
-                    // A size read off a coat in hand: on paper nobody holds it (G3;
-                    // owner decision, 2026-10-15, В5).
-                    <span className="hint">
-                      Товар з невідомим розміром вносьте як «розмір невідомий».
-                    </span>
-                  )}
-                  {d.unknownStock && mayReadLabel && !paper && (
-                    <label>
-                      Розмір з етикетки
-                      <select
-                        value={d.fromUnknown ? d.line.size_id : ""}
-                        onChange={(event) => {
-                          relabel(index, event.target.value);
-                        }}
-                      >
-                        <option value="">
-                          Не читали — продати як «розмір невідомий»
-                        </option>
-                        {(sizes.data ?? []).map((size) => (
-                          <option key={size.size_id} value={size.size_id}>
-                            {visible(size.code)}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="hint">
-                        Прочитали розмір на етикетці — оберіть його, і товар
-                        продасться з цим розміром.
-                      </span>
-                    </label>
-                  )}
-                  {d.fromUnknown && (
-                    <span className="hint">
-                      Розмір з етикетки; в обліку — «розмір невідомий»
-                    </span>
-                  )}
-                  {clarified[index] !== undefined && (
-                    <span>
-                      Розмір уточнено: {clarified[index]} шт. з «розмір невідомий»
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      replaceDraft(draft.filter((_, i) => i !== index));
-                    }}
-                  >
-                    Прибрати {visible(d.name)}
-                    {placeOf(d.line.source_location_id)}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
           {sizes.error && (
             <Failure
               error={sizes.error}
@@ -1260,29 +1171,6 @@ export function Sale({
               }}
             />
           )}
-          {mayCredit && (
-            <TermsFields
-              value={credit}
-              change={setCredit}
-              total={total}
-              // One line at 360 px (credits task list, P1-5): the task list's
-              // «Решту покупець доплачує в «Боргах» цього магазину.» takes two.
-              hint="Решту — у «Боргах» цього магазину."
-              storeId={store.id}
-              token={token}
-            />
-          )}
-          <p className="hint">
-            {paper
-              ? firstDays === null
-                ? "Оберіть угорі, що вносите з паперу."
-                : firstDays
-                  ? // The card was charged before the app (owner, 2026-10-16).
-                    "Оплату вже взяли: натисніть, як оплатили. На терміналі нічого не проводьте."
-                  : // The card was charged during the outage (G19).
-                    "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
-              : "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці."}
-          </p>
         </fieldset>
         {refusal !== null && (
           <p role="alert">
@@ -1447,78 +1335,287 @@ export function Sale({
             )}
           </section>
         )}
-        {/* Under the thumb (redesign P0-4): what is sold and what is paid,
-            and the three ways, which sell when pressed (owner decision,
-            2026-10-04). It shows once the basket holds something (direction
-            §5). */}
-        {draft.length > 0 && (
-          <div
-            className="pay-panel"
-            role="group"
-            aria-label="Продати — як платить покупець"
-            ref={panelRef}
+        {sheetShown && (
+          <Sheet
+            title="Кошик"
+            close={() => {
+              setBasketOpen(false);
+            }}
+            fallback={rowRef}
+            foot={
+              <button
+                type="button"
+                className="quiet sheet-done"
+                onClick={() => {
+                  setBasketOpen(false);
+                }}
+              >
+                Готово
+              </button>
+            }
           >
-            <p className="pay-what">
-              {draft.length === 1 && draft[0]
-                ? `${visible(draft[0].name)} · ${visible(draft[0].size)}${placeOf(draft[0].line.source_location_id)}${draft[0].line.quantity > 1 ? ` × ${String(draft[0].line.quantity)}` : ""}`
-                : `У кошику: ${String(draft.reduce((n, d) => n + d.line.quantity, 0))} шт.`}
-            </p>
-            <p className="pay-total">
-              {!priced ? (
-                // A sum without a line's price is no sum to say (review,
-                // 2026-10-15).
-                <>
-                  Разом <strong className="sum">—</strong>
-                </>
-              ) : owing ? (
-                <>
-                  Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
-                  <Sum value={money(decimal(owing.left))} />
-                </>
-              ) : (
-                <>
-                  Разом <Sum value={money(decimal(total))} />
-                </>
-              )}
-            </p>
-            <SendingLine busy={pressing !== null} />
-            <div className="pay-ways">
-              {tillMethods.map((way) => (
-                <button
-                  key={way}
-                  type="button"
-                  className={
-                    pressing === null
-                      ? undefined
-                      : pressing === way
-                        ? "pressed"
-                        : "stepped-back"
-                  }
-                  disabled={
-                    blocked ||
-                    working ||
-                    !priced ||
-                    labelledOnPaper ||
-                    (paper && (firstDays === null || paperProblem !== null))
-                  }
-                  onClick={() => {
-                    void send(way, found, missing, clarified);
-                  }}
+            <fieldset disabled={blocked || working}>
+              {validation && <p role="alert">{validation}</p>}
+              {draft.map((d, index) => (
+                <div
+                  className={index === shortIndex ? "line short" : "line"}
+                  key={d.id}
                 >
-                  {pressing === way && <Eyelet state="spin" size={20} />}
-                  {paper ? `З паперу · ${methodLabels[way]}` : methodLabels[way]}
-                </button>
+                  <strong>
+                    {visible(d.name)} · {visible(d.size)}
+                  </strong>
+                  {/* Where it leaves from, under it (spec §6.16; P0-5): the
+                      till no longer says it above the search. */}
+                  {nameOf(d.line.source_location_id) !== undefined && (
+                    <span className="line-place">
+                      Склад: {visible(nameOf(d.line.source_location_id) ?? "")}
+                    </span>
+                  )}
+                  <div className="line-edit">
+                    <div
+                      className="stepper"
+                      role="group"
+                      aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Менше"
+                        disabled={d.line.quantity <= 1}
+                        onClick={() => {
+                          change(index, { quantity: d.line.quantity - 1 });
+                        }}
+                      >
+                        −
+                      </button>
+                      <output>{d.line.quantity}</output>
+                      <button
+                        type="button"
+                        aria-label="Більше"
+                        disabled={d.line.quantity >= 1000}
+                        onClick={() => {
+                          change(index, { quantity: d.line.quantity + 1 });
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <label>
+                      Ціна, грн
+                      <input
+                        ref={(input) => {
+                          if (input) priceRefs.current.set(d.id, input);
+                          else priceRefs.current.delete(d.id);
+                        }}
+                        inputMode="decimal"
+                        enterKeyHint="done"
+                        placeholder="0,00"
+                        value={d.price}
+                        onChange={(event) => {
+                          change(index, { price: event.target.value });
+                        }}
+                        // The keyboard's «Готово» closes the sheet, as its
+                        // own button does.
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          event.preventDefault();
+                          setBasketOpen(false);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <PriceHint
+                    typed={d.price}
+                    price={d.line.unit_price}
+                    suggested={d.suggested}
+                  />
+                  {found[index] !== undefined && (
+                    <span>Підтверджено на місці: +{found[index]}</span>
+                  )}
+                  {missing[index] === 0 ? (
+                    <span>На полиці немає — не продається</span>
+                  ) : (
+                    missing[index] !== undefined && (
+                      <span>На місці лише {missing[index]}</span>
+                    )
+                  )}
+                  {d.unknownStock && paper && (
+                    // A size read off a coat in hand: on paper nobody holds it (G3;
+                    // owner decision, 2026-10-15, В5).
+                    <span className="hint">
+                      Товар з невідомим розміром вносьте як «розмір невідомий».
+                    </span>
+                  )}
+                  {d.unknownStock && mayReadLabel && !paper && (
+                    <label>
+                      Розмір з етикетки
+                      <select
+                        value={d.fromUnknown ? d.line.size_id : ""}
+                        onChange={(event) => {
+                          relabel(index, event.target.value);
+                        }}
+                      >
+                        <option value="">
+                          Не читали — продати як «розмір невідомий»
+                        </option>
+                        {(sizes.data ?? []).map((size) => (
+                          <option key={size.size_id} value={size.size_id}>
+                            {visible(size.code)}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="hint">
+                        Прочитали розмір на етикетці — оберіть його, і товар
+                        продасться з цим розміром.
+                      </span>
+                    </label>
+                  )}
+                  {d.fromUnknown && (
+                    <span className="hint">
+                      Розмір з етикетки; в обліку — «розмір невідомий»
+                    </span>
+                  )}
+                  {clarified[index] !== undefined && (
+                    <span>
+                      Розмір уточнено: {clarified[index]} шт. з «розмір невідомий»
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      replaceDraft(draft.filter((_, i) => i !== index));
+                    }}
+                  >
+                    Прибрати {visible(d.name)}
+                    {placeOf(d.line.source_location_id)}
+                  </button>
+                </div>
               ))}
-            </div>
-            {paper && (
-              // Seen before the press: a forgotten switch marks a live sale for
-              // good, with a colleague's name (G6).
-              <p className="pay-seller">
-                Продавець: {named ? visible(named.display_name) : "не вказано"}
-                {from.length > 0 &&
-                  ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+              {mayCredit && (
+                <TermsFields
+                  value={credit}
+                  change={setCredit}
+                  total={total}
+                  // One line at 360 px (credits task list, P1-5): the task
+                  // list's «Решту покупець доплачує в «Боргах» цього
+                  // магазину.» takes two.
+                  hint="Решту — у «Боргах» цього магазину."
+                  storeId={store.id}
+                  token={token}
+                  done={() => {
+                    setBasketOpen(false);
+                  }}
+                />
+              )}
+            </fieldset>
+          </Sheet>
+        )}
+        {/* What to do with the terminal, over the tray in the page's own
+            flow: the tray keeps to its rows (P0-5). */}
+        {draft.length > 0 && (
+          <p className="hint">
+            {paper
+              ? firstDays === null
+                ? "Оберіть угорі, що вносите з паперу."
+                : firstDays
+                  ? // The card was charged before the app (owner, 2026-10-16).
+                    "Оплату вже взяли: натисніть, як оплатили. На терміналі нічого не проводьте."
+                  : // The card was charged during the outage (G19).
+                    "Оплату взяли під час збою: натисніть, як оплатили. На терміналі нічого не проводьте."
+              : "Спершу натисніть, як платить покупець, потім проведіть на терміналі суму з чека: вона може змінитися, якщо товару не виявиться на полиці."}
+          </p>
+        )}
+        {/* The tray under the thumb (spec §6.15; «Усе на бірці» task list,
+            P0-5): the basket in one row that opens its sheet, what is paid,
+            and the three ways, which sell when pressed (owner decision,
+            2026-10-04). It shows once the basket holds something. */}
+        {draft.length > 0 && (
+          <div className="pay-panel till-tray" ref={panelRef}>
+            <button
+              ref={rowRef}
+              type="button"
+              className="tray-basket"
+              aria-haspopup="dialog"
+              aria-label={basketSaid}
+              onClick={() => {
+                // Not while a press is sent: its answer is said on the page.
+                if (!working) setBasketOpen(true);
+              }}
+            >
+              <span className="tray-count">Кошик · {units}</span>
+              {first && (
+                <span className="tray-what">
+                  {visible(first.name)} · {visible(first.size)}
+                </span>
+              )}
+              <span className="tray-open" aria-hidden="true">
+                ›
+              </span>
+            </button>
+            {/* What is paid and how: the basket's row is not of it. */}
+            <div role="group" aria-label="Продати — як платить покупець">
+              <p className="pay-total">
+                {!priced ? (
+                  // A sum without a line's price is no sum to say (review,
+                  // 2026-10-15).
+                  <>
+                    Разом <strong className="sum">—</strong>
+                  </>
+                ) : owing ? (
+                  <>
+                    Зараз <Sum value={money(decimal(owing.now))} /> ·
+                    винен <Sum value={money(decimal(owing.left))} />
+                  </>
+                ) : (
+                  <>
+                    Разом <Sum value={money(decimal(total))} />
+                  </>
+                )}
               </p>
-            )}
+              <SendingLine busy={pressing !== null} />
+              <div className="pay-ways">
+                {tillMethods.map((way) => (
+                  <button
+                    key={way}
+                    type="button"
+                    className={
+                      pressing === null
+                        ? undefined
+                        : pressing === way
+                          ? "pressed"
+                          : "stepped-back"
+                    }
+                    disabled={
+                      blocked ||
+                      working ||
+                      (paper && (firstDays === null || paperProblem !== null))
+                    }
+                    // Waiting for a line: dimmed, and a press opens the sheet
+                    // at it — what it waits for is said there.
+                    aria-disabled={!priced || labelledOnPaper || undefined}
+                    onClick={() => {
+                      if (!priced || labelledOnPaper) toTheLine();
+                      else void send(way, found, missing, clarified);
+                    }}
+                  >
+                    {pressing === way && <Eyelet state="spin" size={20} />}
+                    {paper
+                      ? `З паперу · ${methodLabels[way]}`
+                      : methodLabels[way]}
+                  </button>
+                ))}
+              </div>
+              {paper && (
+                // Seen before the press: a forgotten switch marks a live sale
+                // for good, with a colleague's name (G6).
+                <p className="pay-seller">
+                  Продавець:{" "}
+                  {named ? visible(named.display_name) : "не вказано"}
+                  {from.length > 0 &&
+                    ` · ${from.length > 1 ? "склади" : "склад"}: ${from.map((name) => visible(name)).join(", ")}`}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </section>

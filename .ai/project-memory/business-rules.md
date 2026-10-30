@@ -4858,3 +4858,52 @@ change are the task list's.
     waits for the tray, which must fit beside the keyboard (С1);
   - the bottom menu is drawn over the till's search where they meet, on
     the menu's layer of the design system (§5.7).
+
+## Chosen in chat — 2026-10-30 (the till's tray and basket sheet, «Усе на бірці» P0-5, part 2)
+
+Chosen in chat on 2026-10-29 («go next»), after #153: the second part of
+the frame's P0-5 (`all-on-the-tag-tray-report.md`). The basket's lines,
+their prices and «Оплата частинами» go into a sheet over the till, and the
+panel under the thumb becomes the tray: one row of the basket that opens
+the sheet, the sum, the three ways. No right, rule or figure changes: a way
+still sells when pressed, with no way chosen before it (owner decision,
+2026-10-04); every price, sum and term is as before. New words: «Кошик · N»
+on the tray, «Кошик» as the sheet's title, «Готово» at its foot.
+- **Decided here:**
+  - the terminal's hint, or its paper variants, stands over the tray in the
+    page's own flow, not inside it: inside, the tray grew to some 250 px at
+    360 and covered the till;
+  - the tray counts coats, not lines — «Кошик · 3» for a line of one and a
+    line of two, as «У кошику: 3 шт.» counted — and names the first line
+    only, «{Модель} · {розмір}», cut short where it is long;
+  - the tray has the perforation along its top edge and no notches: it
+    stands over the tags scrolling under it, and a notch would show them
+    through;
+  - the three ways keep their words with no icons: from paper «З паперу ·
+    Готівка» already fills a third of 360 px;
+  - the sheet opens from the tray's row, and by itself for a model with no
+    price (the cursor in its price) and for a way pressed with the terms in
+    parts not whole (what is missing said at its top); a tap on «?» does
+    not open it — unread, the coat sells as «розмір невідомий», as before;
+  - the sheet is closed by «Готово», Telegram's «Назад», Escape, a tap on
+    the dimmed till, its handle pulled down past 80 px, and the keyboard's
+    «Готово» after a price or after the sum paid now; closed, nothing of it
+    is lost; it rises when it opens and is gone at once when it closes;
+  - an emptied basket closes the sheet, and the next coat does not open it;
+    emptied in the sheet, the cursor goes to the search;
+  - while a line waits — for its price, or, from paper, to be taken out
+    after its size was read off a label (G3) — the ways are dimmed but
+    pressable: a press opens the sheet at that line, the cursor in the
+    missing price, and nothing is sent;
+  - for a moment after it opens, the sheet lets a tap go — the second of a
+    double tap — as the order's steps do (review, 2026-10-24); a key's
+    press is never let go;
+  - the screen behind is out of reach while the sheet is open;
+  - «Готово» is a quiet button at the sheet's foot, under its scrolling
+    inside;
+  - the till's search takes the cursor as the app opens on the till (S08)
+    and on «Новий продаж», as before; the till reached by «Продати» or the
+    menu leaves the cursor on what was pressed (review, 2026-10-17);
+  - the shortage answer stays on the page until part 3 puts it in a sheet;
+    while it stands, the till's search lets go of the top and goes up with
+    the page: at 360 × 640 the answer fits over the tray only so.

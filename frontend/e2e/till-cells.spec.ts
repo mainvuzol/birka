@@ -1,4 +1,12 @@
-import { test, expect, fromPaper, openStore, sellsFrom } from "./fixtures";
+import {
+  test,
+  expect,
+  basketDone,
+  basketSheet,
+  fromPaper,
+  openStore,
+  sellsFrom,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -140,12 +148,14 @@ test("every unit held: the cell dashed, «у резерві», and a tap puts no
   await expect(l).toHaveAttribute("aria-label", "L, вільно 0, у резерві 2");
   await expect(l).toHaveAttribute("aria-disabled", "true");
   await l.click({ force: true });
-  await expect(page.locator(".line")).toHaveCount(0);
+  // Nothing in the basket: no tray («Усе на бірці» task list, P0-5).
+  const tray = page.locator(".till-tray .tray-basket");
+  await expect(tray).toHaveCount(0);
   // From paper, the server's refusal says what to do (ADR-0013 §6).
   await fromPaper(page);
   await expect(l).not.toHaveAttribute("aria-disabled");
   await l.click();
-  await expect(page.locator(".line")).toHaveCount(1);
+  await expect(tray).toHaveAccessibleName("Кошик · 1 · Лоран шоколад · L");
 });
 
 test("a tap fills the cell and says «×1», the next «×2», and its name says what the basket has; the line names its warehouse under it", async ({
@@ -166,7 +176,7 @@ test("a tap fills the cell and says «×1», the next «×2», and its name says
     "aria-label",
     "M, вільно 2, у резерві 1, у кошику 2",
   );
-  const line = page.getByRole("group", { name: "Кошик" }).locator(".line");
+  const line = (await basketSheet(page)).locator(".line");
   await expect(line.locator("strong")).toHaveText("Лоран шоколад · M");
   await expect(line.locator(".line-place")).toHaveText("Склад: Каса-склад");
   // Out of the basket: the cell as it was.
@@ -184,14 +194,17 @@ test("a size read off a coat's label puts its «×1» on that size's cell, the o
   const m = cell(page, fixture.size_id);
   await what.click();
   await expect(what.locator(".size-in")).toHaveText("×1");
+  // Read off the label in the basket's sheet (P0-5).
+  await basketSheet(page);
   await page
     .getByRole("combobox", { name: "Розмір з етикетки" })
     .selectOption(fixture.size_id);
+  await basketDone(page);
   await expect(what.locator(".size-in")).toHaveCount(0);
   await expect(m.locator(".size-in")).toHaveText("×1");
   await m.click();
   await expect(m.locator(".size-in")).toHaveText("×2");
-  await expect(page.locator(".line")).toHaveCount(1);
+  await expect((await basketSheet(page)).locator(".line")).toHaveCount(1);
 });
 
 test("a size not known: «?» on its cell, and the tag says what «?» is", async ({
@@ -271,6 +284,10 @@ test("where the search meets the bottom menu, the menu is over it, and its tabs 
   await page.setViewportSize({ width: 360, height: 640 });
   await goods(page);
   await onTheTill(page);
+  // The search takes the cursor as the till opens (P0-5): let go, as with
+  // the phone's keyboard down, the menu stays where it is when the screen
+  // shortens.
+  await search(page).blur();
   // A screen just short enough for the menu to cover the search, where the
   // paper switch's panel leaves it on a phone's.
   const top = await search(page).evaluate(

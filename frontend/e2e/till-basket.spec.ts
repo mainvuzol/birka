@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   changeStore,
   fillLine,
   fromPaper,
@@ -223,12 +225,15 @@ function pay(page: Page, way: string) {
     .getByRole("button", { name: way, exact: true });
 }
 
+/** The basket's row on the tray (spec §6.15; «Усе на бірці» task list,
+ * P0-5). */
 function basket(page: Page) {
-  return page.getByRole("group", { name: "Кошик" });
+  return page.locator(".till-tray .tray-basket");
 }
 
-/** The basket as it was: its one line, two coats, its price, «Разом» — or,
- * paid in parts, what is paid now and what is owed. */
+/** The basket as it was: its one line, two coats, its price — read in its
+ * sheet, closed again — and «Разом» or, paid in parts, what is paid now and
+ * what is owed. */
 async function asItWas(
   page: Page,
   total: RegExp = /Разом\s*3\s400,00\sгрн/,
@@ -236,13 +241,17 @@ async function asItWas(
   await expect(
     page.getByRole("heading", { name: "Продаж", exact: true }),
   ).toBeVisible();
-  const line = basket(page).locator(".line");
+  await expect(basket(page)).toHaveAccessibleName(
+    /^Кошик · 2 · Лоран шоколад · \S+$/,
+  );
+  const line = (await basketSheet(page)).locator(".line");
   await expect(line).toHaveCount(1);
   await expect(line).toContainText("Лоран шоколад");
   await expect(line.locator("output")).toHaveText("2");
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("1700");
   // Where it leaves from, under the line («Усе на бірці» task list, P0-5).
   await expect(line.locator(".line-place")).toHaveText("Склад: Каса-склад");
+  await basketDone(page);
   await expect(page.locator(".pay-total")).toContainText(total);
 }
 
@@ -469,13 +478,16 @@ test("paying in parts comes back with the basket: the customer, the number and t
   await stubList(page);
   await onTheTill(page);
   await twoCoats(page);
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill("Марія Кошикова");
   await page.getByLabel("Телефон покупця").fill("067 123 45 67");
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await basketDone(page);
   await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await asItWas(page, /^Зараз 1\s000,00\sгрн · винен 2\s400,00\sгрн$/);
+  await basketSheet(page);
   await expect(page.getByLabel("Оплата частинами")).toBeChecked();
   await expect(page.getByLabel("Ім’я покупця")).toHaveValue("Марія Кошикова");
   await expect(page.getByLabel("Телефон покупця")).toHaveValue("067 123 45 67");
@@ -511,15 +523,17 @@ test("an emptied basket keeps nothing: paying in parts was the last customer's (
   await stubList(page);
   await onTheTill(page);
   await twoCoats(page);
+  const sheet = await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill("Марія Кошикова");
-  await basket(page)
-    .getByRole("button", { name: /^Прибрати/ })
-    .click();
+  await sheet.getByRole("button", { name: /^Прибрати/ }).click();
+  // Emptied, the sheet closes with the tray.
+  await expect(sheet).toHaveCount(0);
   await expect(basket(page)).toHaveCount(0);
   await row(page, "Замовлення").click();
   await row(page, "Продаж").click();
   await empty(page);
   await twoCoats(page);
+  await basketSheet(page);
   await expect(page.getByLabel("Оплата частинами")).not.toBeChecked();
 });

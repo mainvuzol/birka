@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   fillLine,
   openStore,
   section,
@@ -516,7 +518,8 @@ test("a price of nothing is said, never refused: a gift is allowed", async ({
   const sent = await stubSale(page, { items: [item({ size: "M" })] });
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  const line = page.locator(".line");
+  // In the basket's sheet («Усе на бірці» task list, P0-5).
+  const line = (await basketSheet(page)).locator(".line");
   await expect(
     line.getByText("Ціна 0,00 грн. Це справді подарунок?"),
   ).toHaveCount(0);
@@ -524,6 +527,7 @@ test("a price of nothing is said, never refused: a gift is allowed", async ({
   await expect(
     line.getByText("Ціна 0,00 грн. Це справді подарунок? Перевірте ціну."),
   ).toBeVisible();
+  await basketDone(page);
   await expect(pay(page, "Готівка")).toBeEnabled();
   await pay(page, "Готівка").click();
   await expect(
@@ -538,21 +542,17 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
   await stubList(page);
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  const parts = page.locator("label.check", { hasText: "Оплата частинами" });
   const paper = page.locator("label.check", {
     hasText: "Вношу продаж з паперу",
   });
-  for (const row of [parts, paper])
-    expect((await row.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  expect((await paper.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  // Paying in parts is in the basket's sheet («Усе на бірці» task list,
+  // P0-5).
+  const sheet = await basketSheet(page);
+  const parts = sheet.locator("label.check", { hasText: "Оплата частинами" });
+  expect((await parts.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   await parts.click();
   await expect(page.getByLabel("Ім’я покупця")).toBeFocused();
-  // The keyboard's action key moves on, and closes after the sum.
-  await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Телефон покупця")).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Сплачує зараз, грн")).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Сплачує зараз, грн")).not.toBeFocused();
   await expect(page.getByLabel("Ім’я покупця")).toHaveAttribute(
     "enterkeyhint",
     "next",
@@ -561,6 +561,13 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
     "enterkeyhint",
     "done",
   );
+  // The keyboard's action key moves on, and after the sum closes the sheet.
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Телефон покупця")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Сплачує зараз, грн")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(sheet).toHaveCount(0);
   await paper.click();
   await page.getByLabel("Час з паперу").fill("10:00");
   const yesterday = page.locator("label.check", { hasText: "Це було вчора" });

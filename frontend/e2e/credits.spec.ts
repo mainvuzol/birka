@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   expectStub,
   fillLine,
   fromPaper,
@@ -260,6 +262,8 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await basket(page, coat);
 
   await page.setViewportSize({ width: 360, height: 740 });
+  // In the basket's sheet (spec S10; «Усе на бірці» task list, P0-5).
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   // What paying in parts means, in one line at 360 px (credits task list,
   // P1-5).
@@ -277,6 +281,8 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   await expect(page.locator(".number-debt")).toHaveText("");
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
   await expect(page.getByText("Лишиться винен 2 000,00 грн")).toBeVisible();
+  // The keyboard's «Готово» after the sum closes the sheet (P0-5).
+  await page.getByLabel("Сплачує зараз, грн").press("Enter");
   // The way is for the part paid now.
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
 
@@ -306,9 +312,14 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
     customer_phone: written,
     paid_now: "1000.00",
   });
-  // The next customer starts without these terms.
+  // The next customer starts without these terms: the next coat's sheet
+  // has the box unticked.
   await page.getByRole("button", { name: "Новий продаж" }).click();
-  await expect(page.getByLabel("Оплата частинами")).not.toBeChecked();
+  await tapSize(page, coat.variant, coat.size);
+  await expect(
+    (await basketSheet(page)).getByLabel("Оплата частинами"),
+  ).not.toBeChecked();
+  await basketDone(page);
 
   await section(page, "Борги");
   // Pasted from the phone's contacts, between the two invisible direction
@@ -438,34 +449,41 @@ test("the till checks the customer's terms before anything is sent", async ({
   const coat = await stocked(page);
   const sales = posts(page, "/api/v1/sales");
   await basket(page, coat);
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   const sell = page.getByRole("button", { name: "Готівка", exact: true });
+  // Pressed with terms missing: the sheet opens again, what is missing said
+  // in it, over its fields (P0-5).
+  const said = page.getByRole("dialog", { name: "Кошик" }).getByRole("alert");
+  const pressed = async (): Promise<void> => {
+    await basketDone(page);
+    await sell.click();
+  };
 
-  await sell.click();
-  await expect(page.getByRole("alert")).toContainText(
+  await pressed();
+  await expect(said).toContainText(
     "Вкажіть ім’я покупця, який платить частинами.",
   );
   await page.getByLabel("Ім’я покупця").fill(customer());
   await page.getByLabel("Телефон покупця").fill("12345");
-  await sell.click();
-  await expect(page.getByRole("alert")).toContainText(
+  await pressed();
+  await expect(said).toContainText(
     "Телефон покупця має містити від 10 до 15 цифр.",
   );
   await page.getByLabel("Телефон покупця").fill("+380671234567");
-  await sell.click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Вкажіть, скільки покупець сплачує зараз",
-  );
+  await pressed();
+  await expect(said).toContainText("Вкажіть, скільки покупець сплачує зараз");
   await page.getByLabel("Сплачує зараз, грн").fill("3000");
-  await sell.click();
-  await expect(page.getByRole("alert")).toContainText(
+  await pressed();
+  await expect(said).toContainText(
     "Покупець сплачує все одразу (3 000,00 грн) — це звичайний продаж.",
   );
   expect(sales.bodies).toEqual([]);
 
-  // Unticked, the same basket is an ordinary sale.
-  await page.getByLabel("Оплата частинами").uncheck();
-  await sell.click();
+  // Unticked, the same basket is an ordinary sale: the sheet taken once it
+  // takes taps.
+  await (await basketSheet(page)).getByLabel("Оплата частинами").uncheck();
+  await pressed();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
@@ -487,10 +505,12 @@ test("a sale paid in parts whose answer is lost is resent with the same terms", 
     } else await route.continue();
   });
   await basket(page, coat);
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill(customer());
   await page.getByLabel("Телефон покупця").fill(newPhone());
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await basketDone(page);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
 
   await expect(page.getByText("Продаж ще не підтверджено")).toBeVisible();
@@ -833,6 +853,7 @@ test("the till says what a number already owes, and still sells in parts as the 
   const sales = posts(page, "/api/v1/sales");
   await page.setViewportSize({ width: 360, height: 740 });
   await basket(page, coat);
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill(name);
   // Written another way than the debt's: the same number (owner decision,
@@ -877,6 +898,7 @@ test("the till says what a number already owes, and still sells in parts as the 
   await expect(owes).toHaveText("За номером уже винні 2 000,00 грн");
   // Nothing refused: sold in parts as any sale.
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await basketDone(page);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -894,6 +916,7 @@ test("the till says what a number already owes, and still sells in parts as the 
   await page.getByRole("button", { name: "Новий продаж" }).click();
   await tapSize(page, more.variant, more.size);
   await fillLine(page, { quantity: 2, price: "1500" });
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill(name);
   // Every text the line takes, as it is drawn.
@@ -1020,6 +1043,7 @@ test("the till says a number's debt was written off, and says nothing when «Б�
   const sales = posts(page, "/api/v1/sales");
   await page.setViewportSize({ width: 360, height: 740 });
   await basket(page, coat);
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill("Оксана");
   await page.getByLabel("Телефон покупця").fill("067 123 45 67");
@@ -1203,6 +1227,7 @@ test("the till says a number's debt was written off, and says nothing when «Б�
   await page.waitForTimeout(300);
   await expect(said).toHaveText("");
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await basketDone(page);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -1793,10 +1818,12 @@ for (const [way, say] of [
   }) => {
     const coat = await stocked(page);
     await basket(page, coat);
+    await basketSheet(page);
     await page.getByLabel("Оплата частинами").check();
     await page.getByLabel("Ім’я покупця").fill(customer());
     await page.getByLabel("Телефон покупця").fill(newPhone());
     await page.getByLabel("Сплачує зараз, грн").fill("1000");
+    await basketDone(page);
     await page.getByRole("button", { name: way, exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Продаж записано" }),
@@ -1814,10 +1841,12 @@ test("paid in parts by card typed from paper, the receipt says the card was char
 }) => {
   const coat = await stocked(page);
   await basket(page, coat, true);
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Ім’я покупця").fill(customer());
   await page.getByLabel("Телефон покупця").fill(newPhone());
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await basketDone(page);
   await page
     .getByRole("button", { name: "З паперу · Картка", exact: true })
     .click();

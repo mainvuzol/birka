@@ -1,4 +1,11 @@
-import { test, expect, fromPaper, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  basketDone,
+  basketSheet,
+  fromPaper,
+  openStore,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -182,18 +189,21 @@ test("both warehouses are listed at once, a cell each, none chosen above the sea
 
   await chip(page, shared).click();
   await chip(page, own).click();
-  // Two «Лоран шоколад · M», told apart by their warehouses under them.
-  await expect(page.locator(".line strong")).toHaveText([
+  // Two «Лоран шоколад · M», told apart by their warehouses under them, in
+  // the basket's sheet («Усе на бірці» task list, P0-5).
+  const sheet = await basketSheet(page);
+  await expect(sheet.locator(".line strong")).toHaveText([
     "Лоран шоколад · M",
     "Лоран шоколад · M",
   ]);
-  await expect(page.locator(".line .line-place")).toHaveText([
+  await expect(sheet.locator(".line .line-place")).toHaveText([
     "Склад: Спільний",
     "Склад: Свій",
   ]);
   await expect(
-    page.getByRole("button", { name: "Прибрати Лоран шоколад · Свій" }),
+    sheet.getByRole("button", { name: "Прибрати Лоран шоколад · Свій" }),
   ).toBeVisible();
+  await basketDone(page);
   await pay(page).click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]?.lines.map((line) => line.source_location_id)).toEqual([
@@ -342,7 +352,10 @@ test("a coat in hand from the catalogue is asked its warehouse, and leaves from 
     .getByRole("group", { name: "Розмір: Лоран беж" })
     .getByRole("button", { name: "M", exact: true })
     .click();
-  await expect(page.locator(".line")).toContainText("Лоран беж · M");
+  await expect((await basketSheet(page)).locator(".line")).toContainText(
+    "Лоран беж · M",
+  );
+  await basketDone(page);
   // The next coat from the catalogue is asked its warehouse anew.
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
   await expect(page.getByLabel("З якого складу віддаєте?")).toHaveValue("");
@@ -527,7 +540,9 @@ test("a model held with its size not known in one warehouse is offered «Роз�
   ).toBeVisible();
 
   // From «Свій», which does: the label may be read.
-  await page.getByRole("button", { name: /^Прибрати Лоран шоколад/ }).click();
+  await (await basketSheet(page))
+    .getByRole("button", { name: /^Прибрати Лоран шоколад/ })
+    .click();
   at = own;
   await chip(page, own).click();
   await pay(page).click();

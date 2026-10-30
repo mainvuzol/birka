@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   fillLine,
   fromPaper,
   openStore,
@@ -344,9 +346,10 @@ test("an empty warehouse names itself, and a coat in hand is found in the catalo
     .click();
   // In the basket at its price; the panel gives the list back.
   await expect(panel).toHaveCount(0);
-  const line = page.locator(".line").last();
+  const line = (await basketSheet(page)).locator(".line").last();
   await expect(line).toContainText("Лоран беж · M");
   await expect(line.getByLabel("Ціна, грн")).toHaveValue("2400,00");
+  await basketDone(page);
 
   await pay(page, "Готівка").click();
   await page

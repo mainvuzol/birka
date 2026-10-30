@@ -2,6 +2,7 @@ import {
   more,
   test,
   expect,
+  basketSheet,
   fillLine,
   fromPaper,
   openStore,
@@ -326,7 +327,7 @@ test("a single store that does not trade shows its state, with nothing to change
 
 // --- P0-4: under the thumb -------------------------------------------------------
 
-test("the total and the three ways are in view on a small phone, below the basket", async ({
+test("the total and the three ways are in view on a small phone, below the till", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -337,17 +338,17 @@ test("the total and the three ways are in view on a small phone, below the baske
     page.getByRole("group", { name: "Продати — як платить покупець" }),
   ).toHaveCount(0);
   await oneLine(page);
-  const panel = page.getByRole("group", {
-    name: "Продати — як платить покупець",
-  });
+  // The tray: its basket row, what is paid and the ways (P0-5).
+  const panel = page.locator(".till-tray");
   await expect(panel.getByText("Лоран шоколад · M")).toBeInViewport();
   await expect(panel.getByText("Разом 1 850,00 грн")).toBeInViewport();
   for (const way of ["Готівка", "Картка", "Переказ"])
     await expect(
       panel.getByRole("button", { name: way, exact: true }),
     ).toBeInViewport();
-  // The basket's last line is not under the panel.
-  const line = page.locator(".line").last();
+  // What stands last over it, the terminal's hint, is not under the panel:
+  // the basket's lines are in its sheet («Усе на бірці» task list, P0-5).
+  const line = page.getByText(/^Спершу натисніть, як платить покупець/);
   await line.scrollIntoViewIfNeeded();
   const lineBox = await line.boundingBox();
   const panelBox = await panel.boundingBox();
@@ -368,8 +369,11 @@ test("paid in parts, the panel says what is paid now and what is left", async ({
   await stubStock(page, 3);
   await onTheTill(page);
   await oneLine(page);
+  // In the basket's sheet, closed by the keyboard's «Готово» (P0-5).
+  await basketSheet(page);
   await page.getByLabel("Оплата частинами").check();
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
+  await page.getByLabel("Сплачує зараз, грн").press("Enter");
   const panel = page.getByRole("group", {
     name: "Продати — як платить покупець",
   });
@@ -423,17 +427,16 @@ test("the server's shortage opens above the panel, in view and focused; a seller
   const remove = answer.getByRole("button", { name: "Прибрати з кошика" });
   await expect(remove).toBeVisible();
   const removeBox = await remove.boundingBox();
-  const panelTop = (
-    await page
-      .getByRole("group", { name: "Продати — як платить покупець" })
-      .boundingBox()
-  )?.y;
+  const panelTop = (await page.locator(".till-tray").boundingBox())?.y;
   expect(
     removeBox !== null &&
       panelTop !== undefined &&
       removeBox.y + removeBox.height <= panelTop + 1,
   ).toBe(true);
-  await expect(page.locator(".line.short")).toHaveCount(1);
+  // The line marked short, in the basket's sheet (P0-5).
+  await expect(
+    (await basketSheet(page)).locator(".line.short"),
+  ).toHaveCount(1);
 });
 
 test("an unreadable kept invoice holds the till, as it holds the other tabs", async ({
