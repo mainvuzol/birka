@@ -7,6 +7,7 @@ import {
   openStore,
   tapSize,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -183,7 +184,7 @@ test("a coat held with its size not known is sold with the size on its label", a
 
   // The system holds no L, so the server names the shortfall; the till knows
   // the coat came from the size-not-known balance and offers only that.
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
   await expect(
     page.getByRole("button", { name: /Товар на місці/ }),
   ).toHaveCount(0);
@@ -250,6 +251,7 @@ test("a sized line short of stock is answered from the coats without a size", as
   await expect(
     page.getByText(/є на складі з невідомим розміром/),
   ).toBeVisible();
+  await shortage(page);
   await page
     .getByRole("button", { name: "Розмір з етикетки — продати як M" })
     .click();
@@ -315,11 +317,12 @@ test("when the till cannot see the coats without a size, the server's refusal of
   // One more than the ledger holds.
   await addToBasket(page, held + 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await shortage(page);
   await page.getByRole("button", { name: /Товар на місці/ }).click();
 
   // Refused as UNKNOWN_SIZE_STOCK: the same shortfall stands, with the answer
   // the server will take.
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
   await expect(
     page.getByRole("button", { name: /Товар на місці/ }),
   ).toHaveCount(0);
@@ -381,7 +384,7 @@ test("a line sold as size not known is never offered «товар на місц�
     page.getByText("Лоран шоколад · розмір невідомий", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
-  await expect(page.getByText("Залишку не вистачає")).toBeVisible();
+  await shortage(page);
   await expect(
     page.getByRole("button", { name: /Товар на місці/ }),
   ).toHaveCount(0);
@@ -463,6 +466,7 @@ test("a clarification refused for its own reason is explained and withdrawn", as
   await pick(page, m);
   await addToBasket(page, 1);
   await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await shortage(page);
   await page
     .getByRole("button", { name: "Розмір з етикетки — продати як M" })
     .click();

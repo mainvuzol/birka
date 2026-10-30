@@ -1120,6 +1120,16 @@ html {
   width: 100%;
   min-height: 52px;
 }
+/* The shelf's question (P0-5): its answers one under another, the sheet's
+   whole width. */
+.short-sheet > p:first-child {
+  margin-top: 0;
+}
+.short-sheet button {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
 /* A sum in one piece (spec §6.17): its figures in the display face, the
    kopecks at 0.55 and «грн» at 0.6 of it, in pencil (P0-1). */
 .sum {
@@ -3007,6 +3017,53 @@ html {
 .more-switch[aria-checked="true"] .switch-knob {
   transform: translateX(18px);
   background: var(--on-primary);
+}
+/* The same switch at the till, under the search (spec S08; «Усе на бірці»
+   task list, P0-5): a 44 row, its words on the left, the whole row the
+   box's target — drawn on the track that follows the box, no `:has()`. */
+.switch-row {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.switch-label {
+  flex: 1;
+  min-width: 0;
+}
+.switch-row input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.switch-row input:checked ~ .switch-track {
+  background: var(--primary);
+}
+.switch-row input:checked ~ .switch-track .switch-knob {
+  transform: translateX(18px);
+  background: var(--on-primary);
+}
+.switch-row input:focus-visible ~ .switch-track {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.switch-row input:disabled {
+  cursor: not-allowed;
+}
+.switch-row input:disabled ~ span {
+  opacity: 0.45;
 }
 @media (prefers-reduced-motion: reduce) {
   .switch-track,

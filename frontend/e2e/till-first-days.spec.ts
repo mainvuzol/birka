@@ -7,6 +7,7 @@ import {
   fromPaper,
   openStore,
   sellsFrom,
+  shortage,
 } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -352,6 +353,7 @@ test("an empty warehouse names itself, and a coat in hand is found in the catalo
   await basketDone(page);
 
   await pay(page, "Готівка").click();
+  await shortage(page);
   await page
     .getByRole("button", { name: "Товар на місці — продати 1" })
     .click();
@@ -658,6 +660,7 @@ test("against the real API: a coat the books hold none of, found in the catalogu
   await panel.getByRole("button", { name: "M", exact: true }).click();
   await fillLine(page, { price: "1500" });
   await pay(page, "Готівка").click();
+  await shortage(page);
   await page
     .getByRole("button", { name: "Товар на місці — продати 1" })
     .click();

@@ -4907,3 +4907,52 @@ on the tray, «Кошик» as the sheet's title, «Готово» at its foot.
   - the shortage answer stays on the page until part 3 puts it in a sheet;
     while it stands, the till's search lets go of the top and goes up with
     the page: at 360 × 640 the answer fits over the tray only so.
+
+## Chosen in chat — 2026-10-30 (the till's shortage sheet, paper switch row and taps, «Усе на бірці» P0-5, part 3)
+
+Chosen in chat on 2026-10-30 («Start part 3»), after #154: the third and
+last part of the frame's P0-5 (`all-on-the-tag-shortage-report.md`). The
+shelf's question goes into a sheet over the till, «Вношу продаж з паперу»
+becomes a switch row under the search, and a sale's taps are counted. No
+right, rule or figure changes: every answer to the shelf's question is the
+one it was, with its words, rights and what it sends; the paper switch is
+the same state as before and as «Ще»'s.
+- **Decided here:**
+  - the shelf's question is closed by Telegram's «Назад», Escape or a tap on
+    the dimmed till, as any sheet; closed, it sells nothing and the basket
+    stays, its answers given so far with it; a way pressed again asks the
+    server afresh, under the same `command_id`;
+  - for a moment after it rises, the question lets a tap go, as the basket's
+    sheet does: the second tap of a double press on a way never lands on
+    «Товар на місці», which would record a coat found;
+  - an answer that leaves less to sell than the sum paid now opens the
+    basket's sheet with what the terms need, as a way pressed does; the
+    question waits under it and is back once it closes — one sheet at a
+    time;
+  - a count refused in «На місці фактично є» is said inside the question's
+    sheet, right under that field, not on the page under it; it goes with
+    the line when «Прибрати з кошика» takes it out;
+  - the basket's sheet closed over the question takes the terms' words with
+    it: the question never shows them; an answer pressed again asks afresh;
+  - a refusal of an answer, for a reason of its own, is brought into view
+    where it stands at the page's end, clear of the tray — as a way's;
+  - the question's sheet is read aloud with what it is about, its first
+    line, after its title;
+  - the till's search stays at the top again whatever stands: the question
+    no longer stands in the page;
+  - the paper switch row stands under the search, over the list, with the
+    paper's fields under it; where the till shows no search — a warehouse
+    waiting for its opening list, the catalogue, the warehouses being read —
+    it stands where the search would; while the warehouses are read, under
+    the grey field, about where it stays (6 px off: the grey field keeps the
+    label the other screens' fields have);
+  - the row is the box itself, read as a switch, the whole row its target;
+    turned on by it, the paper's fields are brought into view over the
+    tray, the ways waiting for them; turned on in «Ще», the till opens
+    where it opens;
+  - a sale's taps are counted from the till, typing not counted: three for a
+    coat with a price — the search, its size, a way — in a store with one
+    warehouse and with two; five paid in parts — and the tray's row and
+    «Оплата частинами» — the keyboard moving through the customer's fields
+    and closing the sheet. The app opened on the till has the cursor in the
+    search already: two taps then.

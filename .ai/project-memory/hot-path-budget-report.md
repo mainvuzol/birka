@@ -522,3 +522,39 @@ its search typed, is six taps where it was five (`orders-new.spec.ts`), the
 task list's own count. A sale is unchanged — three taps, the till the first
 screen — and no server request changed, so the hot path's cases stand as
 last measured.
+
+## Update — 2026-10-30: a sale's taps, counted at the till
+
+The frame's task list
+([redesign/2026-10-27-redesign-tz-all-on-the-tag.md](redesign/2026-10-27-redesign-tz-all-on-the-tag.md),
+P0-5) takes the taps as its acceptance: three for a coat with a price, in a
+store with one warehouse and in one with two; five paid in parts. Part 1
+drew each size as a cell of its warehouse, and part 2 put the basket in a
+sheet over the till ([tray](all-on-the-tag-tray-report.md),
+[shortage](all-on-the-tag-shortage-report.md)). The counter is the page's
+own, every `pointerdown` from the till, typing not counted
+(`till-taps.spec.ts`; the goods and the sale's answer stubbed):
+
+| | one warehouse | two warehouses | paid in parts |
+|---|---|---|---|
+| the search, and three letters typed | 1 | 1 | 1 |
+| the size's cell — in two warehouses, the cell of the one it leaves from | 1 | 1 | 1 |
+| the tray's row: the basket's sheet | — | — | 1 |
+| «Оплата частинами»: the cursor in the name | — | — | 1 |
+| the name, the phone and the sum paid now, each closed by the keyboard's key | — | — | 0 |
+| a way: «Готівка», «Картка» or «Переказ» | 1 | 1 | 1 |
+| **total** | **3** | **3** | **5** |
+
+- **Two warehouses add nothing now:** the cell says where the coat leaves
+  from, and the sale sends that warehouse with the line. Before part 1 a
+  store with two chose one first: 4.
+- **The app opened on the till** has the cursor in the search already
+  (part 2): two taps, or four paid in parts.
+- **Paid in parts:** the keyboard's key moves from the name to the phone
+  and to the sum, and after the sum closes the sheet; the way is the fifth
+  tap.
+- **The shelf's question** (a basket with more than the books hold) adds
+  one tap: its answer, which names the way and sells with it («Товар на
+  місці — продати 3 · Готівка»).
+
+No server request changed, so the hot path's cases stand as last measured.

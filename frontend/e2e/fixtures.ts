@@ -363,6 +363,17 @@ export async function basketSheet(page: Page): Promise<Locator> {
   return sheet;
 }
 
+/**
+ * The shelf's question over the till (spec §4.3; «Усе на бірці» task list,
+ * P0-5), once it takes taps: a tap carried from the way pressed is let go
+ * for a moment.
+ */
+export async function shortage(page: Page): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: "Залишку не вистачає" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
 /** The basket's sheet closed by its «Готово», the tray under it again. */
 export async function basketDone(page: Page): Promise<void> {
   const sheet = page.getByRole("dialog", { name: "Кошик" });
