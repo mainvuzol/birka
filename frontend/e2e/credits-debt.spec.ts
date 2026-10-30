@@ -3,6 +3,7 @@ import {
   expect,
   expectStub,
   openStore,
+  toTill,
   section,
   tillWays,
 } from "./fixtures";
@@ -171,6 +172,7 @@ async function opened(
 ): Promise<void> {
   await page.goto(launch(theme, version));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Борги");
   await page.getByRole("button", { name: /^Відкрити борг: / }).click();
 }
@@ -407,6 +409,7 @@ test("a payment's result says what was done, how, the sum large and what is owed
   }));
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Борги");
   await page.getByLabel("Ім’я або телефон").fill("Окс");
   await page.getByRole("button", { name: /^Відкрити борг: / }).click();
@@ -940,6 +943,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
   ): Promise<void> {
     await page.goto(launch(theme));
     await openStore(page, "Основний MAIN");
+    await toTill(page);
     await tillWays(page)
       .getByRole("button", { name: "Внесок", exact: true })
       .click();

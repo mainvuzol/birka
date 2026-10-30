@@ -6,6 +6,7 @@ import {
   fillLine,
   fromPaper,
   openStore,
+  toTill,
   tapSize,
   tillWays,
   sellsFrom,
@@ -113,6 +114,7 @@ async function onTheTill(page: Page, theme?: Record<string, string>) {
   await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch(theme));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 
@@ -170,13 +172,18 @@ async function contrast(element: Locator): Promise<number> {
 }
 
 // --- P0-1: the app opens on the till -------------------------------------------
+// Whoever reads the report opens on «Сьогодні» since «Усе на бірці»'s P0-6
+// (owner decision, 2026-10-26, В3); whoever sells and reads none, still on
+// the till.
 
-test("one store opens straight on the till, with nothing to change to", async ({
+test("one store opens straight on its first screen, with nothing to change to", async ({
   page,
 }) => {
   await stubMe(page, (stores) => stores.filter((s) => s.code === "MAIN"));
   await page.goto(launch());
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Оберіть магазин" }),
   ).toHaveCount(0);
@@ -187,7 +194,7 @@ test("one store opens straight on the till, with nothing to change to", async ({
   ).toHaveCount(0);
 });
 
-test("two stores are chosen each time, nothing chosen beforehand, and the till comes first", async ({
+test("two stores are chosen each time, nothing chosen beforehand, and the day comes first", async ({
   page,
 }) => {
   await page.goto(launch());
@@ -199,7 +206,9 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
   await page.getByRole("button", { name: "Основний MAIN" }).click();
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
   // «Змінити магазин» is one tap, on the store's line, and a row of «Ще» ›
   // «Цей телефон» («Усе на бірці» task list, P0-4).
   const change = page
@@ -217,7 +226,9 @@ test("two stores are chosen each time, nothing chosen beforehand, and the till c
     page.getByRole("heading", { name: "Оберіть магазин" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Основний MAIN" }).click();
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
   // Opened again, nothing is remembered: the choice again (owner, В6).
   await page.goto("about:blank");
   await page.goto(launch());
@@ -271,13 +282,15 @@ test("«Ще» only when it holds something: nothing under it and one store, no 
   ).toHaveText([/^Змінити магазин/]);
 });
 
-test("whoever does not sell opens on the orders, as before", async ({
+test("whoever neither sells nor reads the report opens on the orders, as before", async ({
   page,
 }) => {
   await stubMe(page, (stores) =>
     stores.map((s) => ({
       ...s,
-      permissions: s.permissions.filter((p) => p !== "sale:create"),
+      permissions: s.permissions.filter(
+        (p) => p !== "sale:create" && p !== "report:view_financial",
+      ),
     })),
   );
   await page.goto(launch());
@@ -441,9 +454,12 @@ test("an unreadable kept invoice holds the till, as it holds the other tabs", as
       user_id: string;
       stores: MeStore[];
     };
+    // Whoever reads no report, so that Бірка opens on the till.
     body.stores = body.stores.map((s) => ({
       ...s,
-      permissions: [...new Set([...s.permissions, "supplier:debt"])],
+      permissions: [
+        ...new Set([...s.permissions, "supplier:debt"]),
+      ].filter((p) => p !== "report:view_financial"),
     }));
     invoiceKey = `birka:supplier-invoice-pending:${body.organization_id}:${body.user_id}:${fixture.store_id}`;
     await route.fulfill({ response, json: body });

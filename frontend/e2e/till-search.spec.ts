@@ -5,6 +5,7 @@ import {
   basketSheet,
   fromPaper,
   openStore,
+  toTill,
   storeLine,
   sellsFrom,
   shortage,
@@ -184,6 +185,7 @@ async function onTheTill(page: Page): Promise<void> {
   await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 
@@ -539,6 +541,7 @@ test("a warehouse that stops selling is not the till's any more: its cells go, n
   // Both at once, none chosen (P0-5): a cell each.
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(chip(page, "Лоран шоколад", "M, Свій, вільно 2")).toBeVisible();
   await expect(
     chip(page, "Лоран шоколад", "M, Спільний, вільно 1"),

@@ -3,6 +3,7 @@ import {
   expect,
   expectStub,
   openStore,
+  toTill,
   tapSize,
   sellsFrom,
 } from "./fixtures";
@@ -118,6 +119,7 @@ async function onTheTill(page: Page): Promise<string> {
   await page.goto(launch());
   const userId = ((await (await me).json()) as { user_id: string }).user_id;
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   return userId;
 }
 

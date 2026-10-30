@@ -99,6 +99,7 @@ import {
   useCorrectionCommand,
 } from "@/catalog/modelCommands";
 import { SalesReport } from "@/reports/SalesReport";
+import { Today } from "@/today/Today";
 import {
   loadInvoiceCommand,
   useInvoiceCommand,
@@ -129,6 +130,9 @@ import {
 import "./styles.css";
 
 type Tab =
+  /** The day of every store, in one look: the first tab for whoever reads
+   * the report (spec S04; «Усе на бірці» task list, P0-6). */
+  | "today"
   | "list"
   | "new"
   | "catalog"
@@ -424,12 +428,16 @@ function Workspace({
     [],
   );
   const [tab, setTab] = useState<Tab>(
-    // The till first, for whoever sells there (redesign, P0-1): the book is
-    // opened at the page of the day's work. Kept operations still turn to
-    // their own tab, below.
-    store.state === "ACTIVE" && store.permissions.includes("sale:create")
-      ? "sale"
-      : "list",
+    // «Сьогодні» first for whoever reads the report there — the owner and
+    // managers (owner decision, 2026-10-26, В3; «Усе на бірці» task list,
+    // §4а) — and the till for whoever sells there (redesign, P0-1): the
+    // book is opened at the page of the day's work. Kept operations still
+    // turn to their own tab, below.
+    store.permissions.includes("report:view_financial")
+      ? "today"
+      : store.state === "ACTIVE" && store.permissions.includes("sale:create")
+        ? "sale"
+        : "list",
   );
   // A way of «Продаж» just chosen by its switch: the next screen's switch
   // takes the focus (navigation task list, P0-1; review, 2026-10-26).
@@ -1385,6 +1393,16 @@ function Workspace({
     /** A tab of the menu, never a row of «Ще». */
     tabbed?: true;
   }[] = [
+    // «Сьогодні», the first tab, by the report's right in this store
+    // («Усе на бірці» task list, P0-6, §4а).
+    {
+      tab: "today",
+      label: "Сьогодні",
+      shown: canSeeReport,
+      disabled: blocked,
+      forgetsOrder: true,
+      tabbed: true,
+    },
     // «Продаж» holds the returns and the payments on debts too, by
     // «Продати · Повернути · Внесок» under its heading (navigation task
     // list, P0-1; «Усе на бірці» task list, P0-3): for whoever does one of
@@ -1520,11 +1538,13 @@ function Workspace({
     key: section.tab,
     label: section.label,
     icon:
-      section.tab === "list"
-        ? "tab-orders"
-        : section.tab === "cash"
-          ? "tab-drawer"
-          : "tab-sell",
+      section.tab === "today"
+        ? "tab-today"
+        : section.tab === "list"
+          ? "tab-orders"
+          : section.tab === "cash"
+            ? "tab-drawer"
+            : "tab-sell",
     current: standsFor(section),
     disabled: section.disabled,
     open: () => {
@@ -1688,10 +1708,13 @@ function Workspace({
   const firstShown: Tab | undefined =
     shown.find((section) => section.tabbed)?.tab ??
     (hasMore ? "more" : undefined);
+  // So with «Сьогодні», once the report's right is gone while it is open.
   useEffect(() => {
     if (tab === "list" && !canSeeOrders && firstShown !== undefined)
       setTab((now) => (now === "list" ? firstShown : now));
-  }, [tab, canSeeOrders, firstShown]);
+    if (tab === "today" && !canSeeReport && firstShown !== undefined)
+      setTab((now) => (now === "today" ? firstShown : now));
+  }, [tab, canSeeOrders, canSeeReport, firstShown]);
   // A first send is its dock's to say: an attempt is shown as kept only
   // once its answer is lost, or while it is checked again («Усе на бірці»
   // task list, P0-2).
@@ -2176,7 +2199,26 @@ function Workspace({
             )}
           </p>
         )}
-      {tab === "sale" ? (
+      {tab === "today" ? (
+        canSeeReport ? (
+          <Today
+            token={token}
+            scopeKey={reportKey}
+            stores={me.stores}
+            toOrders={
+              canSeeOrders && !blocked
+                ? () => {
+                    setTab("list");
+                    setSelectedId(null);
+                    setOrdersView(freshOrdersView);
+                  }
+                : undefined
+            }
+          />
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
+      ) : tab === "sale" ? (
         store.permissions.includes("sale:create") ? (
           <Sale
             key={saleEpoch}

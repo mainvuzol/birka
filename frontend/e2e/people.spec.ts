@@ -77,8 +77,11 @@ test("someone the shop has not added sees their Telegram ID, and is let in once 
     ),
   ).toBe(`granted: ${String(stranger)} is E2E in MAIN\n`);
   await page.getByRole("button", { name: "Спробувати ще раз" }).click();
-  // One store: the app opens on it, at the till (redesign P0-1).
-  await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
+  // One store: the app opens on it (redesign P0-1) — on «Сьогодні», the
+  // role reading the report («Усе на бірці» task list, P0-6).
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
 
   // Turned off, they are told so on their next request, and not let back in.
   people(

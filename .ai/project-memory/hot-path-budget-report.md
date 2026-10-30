@@ -558,3 +558,14 @@ own, every `pointerdown` from the till, typing not counted
   місці — продати 3 · Готівка»).
 
 No server request changed, so the hot path's cases stand as last measured.
+
+## Update — 2026-10-30: «Сьогодні» first for whoever reads the report
+
+Since «Сьогодні» ([part 1](all-on-the-tag-today-1-report.md); the frame's
+P0-6, owner decision 2026-10-26, В3), whoever holds `report:view_financial`
+in the store opens there, not on the till. From the app's opening their sale
+with a price takes «Продаж», then the search, which a tab does not put the
+cursor in (review, 2026-10-17), then the size's cell and a way: four taps,
+where it was two. A seller still opens on the till with the cursor in the
+search: two. The frame's three are counted from the till, and stand.
+Whether the owner wants the two taps back is a reading for the owner.

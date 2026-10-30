@@ -72,6 +72,10 @@ export function grn(sum: string): string {
   return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction.padEnd(2, "0")}\u00a0грн`;
 }
 
+/** The day's first word on «Сьогодні»'s line: «Четвер, 22 жовтня». */
+const weekday =
+  "(Неділя|Понеділок|Вівторок|Середа|Четвер|П’ятниця|Субота)";
+
 /**
  * Into a store's workspace. A person with one store is taken into it as the
  * app opens (redesign P0-1); with two or more, the store is chosen, and this
@@ -92,11 +96,14 @@ export async function openStore(
   if (!(await choice.isVisible())) return;
   // The store chosen is the store opened: its name heads the line under
   // the screen's title, «{Магазин} · {Ім’я}» (redesign P1-6; «Усе на
-  // бірці» task list, P0-4).
+  // бірці» task list, P0-4) — on «Сьогодні», the day of every store, the
+  // day heads it (P0-6).
   const label = (await choice.innerText()).split("\n")[0]?.trim() ?? "";
   await choice.click();
   await expect(storeLine(page)).toHaveText(
-    new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} · `),
+    new RegExp(
+      `^(${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|${weekday}, \\d+ \\S+) · `,
+    ),
   );
 }
 
@@ -123,6 +130,28 @@ const catalogue = ["Перевірка каталогу", "Моделі", "По�
  * card is kept, hidden, under its step's screen. */
 export function storeLine(page: Page): Locator {
   return page.locator(".store-line > p").filter({ visible: true });
+}
+
+/**
+ * The till, as whoever reads the report reaches it as Бірка opens: on
+ * «Сьогодні» first (owner decision, 2026-10-26, В3; «Усе на бірці» task
+ * list, P0-6), then «Продаж». Whoever opened anywhere else stays there.
+ */
+export async function toTill(page: Page): Promise<void> {
+  const today = page.getByRole("heading", { name: "Сьогодні", exact: true });
+  await expect(today.or(menu(page)).first()).toBeVisible();
+  // A kept operation turns to its own tab after the first frame: the screen
+  // is read once it has.
+  await page.evaluate(
+    () =>
+      new Promise((done) =>
+        requestAnimationFrame(() => requestAnimationFrame(done)),
+      ),
+  );
+  if (await today.isVisible())
+    await menu(page)
+      .getByRole("button", { name: "Продаж", exact: true })
+      .click();
 }
 
 /** The bottom menu (spec §6.2; «Усе на бірці» task list, P0-4). */

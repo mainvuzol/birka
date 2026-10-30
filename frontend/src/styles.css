@@ -3604,3 +3604,256 @@ nav.tab-bar {
   bottom: var(--menu-h, 0px);
   padding-bottom: calc(12px + var(--dock-safe, env(safe-area-inset-bottom)));
 }
+/* «Сьогодні» (spec S04–S05, §6.10; «Усе на бірці» task list, P0-6): the
+   day-tag hangs from the title by its thread — the hero tag's cut top, its
+   eyelet in the middle — the total over the money's line, the stores in two
+   columns under a perforation, or a row each from three, and the parcels'
+   line under them. ≤ 240 px high at 390 px wide with two stores. */
+.today {
+  margin: 12px 0 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.day-hang {
+  position: relative;
+  padding-top: 12px;
+}
+/* The thread, from the title through the eyelet, over the tag's edge: it
+   ends at the eyelet's middle, drawn over its upper half. */
+.day-hang::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(50% - 0.75px);
+  z-index: 1;
+  width: 1.5px;
+  height: calc(12px + 20px);
+  background: var(--thread-line);
+}
+.day-tag {
+  position: relative;
+  padding: 26px 16px 12px;
+}
+.day-eyelet {
+  position: absolute;
+  top: 14px;
+  left: calc(50% - 6px);
+  box-sizing: border-box;
+  width: var(--eyelet-hero);
+  height: var(--eyelet-hero);
+  border: 1.5px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.day-head h2 {
+  margin: 0;
+  color: var(--pencil);
+}
+.day-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+}
+.day-stamp.stale {
+  color: var(--warning);
+}
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--paid);
+}
+.day-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 4px 0 0;
+}
+.day-total-words {
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--pencil);
+}
+.day-money {
+  margin: 2px 0 0;
+  color: var(--pencil);
+}
+.day-tag .perforation {
+  margin: 8px -16px;
+}
+.day-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+.day-rows {
+  display: grid;
+  gap: 8px;
+}
+.day-store h3 {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.day-store-sold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  margin: 2px 0 0;
+}
+.day-store-sum {
+  font-size: 32px;
+  line-height: 34px;
+}
+.day-rows .day-store-sum {
+  font-size: 20px;
+  line-height: 24px;
+}
+/* A million or more in a store's day: at 24, on one line in its column at
+   390 in the display face. */
+.day-columns .day-store-sum.long {
+  font-size: 24px;
+  line-height: 34px;
+}
+/* Whatever face draws it — the display face may come too late
+   (`font-display: optional`), and the device's is wider — a sum keeps to
+   the tag and to its column: it breaks before its kopecks or its unit, and
+   as a last resort inside its figures. */
+.day-total .t-money-hero,
+.day-columns .day-store-sum {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.day-total .sum-kop,
+.day-total .sum-unit,
+.day-columns .day-store-sum .sum-kop,
+.day-columns .day-store-sum .sum-unit {
+  display: inline-block;
+}
+/* Narrower than 390 px, a store's sum at 20, as under 360 in the spec:
+   with «,00 грн» at 32 its column has no room left for its lines. */
+@media (max-width: 389px) {
+  .day-store-sum {
+    font-size: 20px;
+    line-height: 24px;
+  }
+}
+.day-store-sold .t-meta,
+.day-drawer,
+.day-owed {
+  color: var(--pencil);
+}
+.day-drawer,
+.day-owed {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+}
+.day-owed .icon {
+  margin-top: 1px;
+}
+.day-owed.owes {
+  color: var(--owed);
+}
+.day-online {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+}
+.day-online .icon {
+  color: var(--online);
+}
+button.day-online {
+  width: 100%;
+  min-height: 44px;
+  margin: 2px 0 -10px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  text-align: left;
+}
+/* A part of a line kept whole where it fits, the line breaking between
+   parts; wider than its column, it wraps inside. */
+.day-part {
+  display: inline-block;
+}
+.day-wait {
+  display: inline-block;
+  height: 13px;
+  max-width: 100%;
+  vertical-align: middle;
+  border-radius: 4px;
+}
+.day-total-wait {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+.day-total-skeleton {
+  width: 60%;
+  height: 48px;
+  border-radius: var(--r-xs);
+}
+/* Under 700 px of Telegram's steady height: one line, opened in place. */
+button.day-folded {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 1px;
+  border: 0;
+  border-radius: 0;
+  background: var(--tag-outline);
+  color: var(--ink);
+  font-weight: 600;
+  text-align: left;
+}
+.day-folded-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 50px;
+  padding: 0 16px;
+}
+.day-folded-text {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+}
+.day-folded-line .t-label {
+  color: var(--pencil);
+}
+.day-folded-line .icon {
+  flex: none;
+  color: var(--pencil);
+}
+.day-folded-inner {
+  display: block;
+}
+/* Old, or not read: the stamp under the folded line, as in the tag. */
+.day-folded-inner .day-stamp {
+  display: flex;
+  margin-top: -8px;
+  padding: 0 16px 10px;
+}

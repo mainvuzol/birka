@@ -5,6 +5,7 @@ import {
   basketSheet,
   fillLine,
   openStore,
+  toTill,
   tapSize,
   sellsFrom,
 } from "./fixtures";
@@ -81,6 +82,7 @@ async function onTheTill(page: Page): Promise<void> {
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
+  await toTill(page);
 }
 
 function pay(page: Page, way: string) {

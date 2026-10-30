@@ -7,6 +7,7 @@ import {
   fillLine,
   fromPaper,
   openStore,
+  toTill,
   section,
   tapSize,
   tillWays,
@@ -212,6 +213,7 @@ async function onTheTill(page: Page): Promise<void> {
   await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
 }
 
 /** Two coats of «Лоран шоколад · M» at 1 700,00 грн each. */
@@ -344,11 +346,13 @@ test("«Новий продаж» and another store leave the till empty, as bef
   await twoCoats(page);
   await changeStore(page);
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await empty(page);
   // A basket, then the app opened again: none — nothing is on the disk.
   await twoCoats(page);
   await page.reload();
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await empty(page);
 });
 

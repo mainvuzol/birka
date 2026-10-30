@@ -5,6 +5,7 @@ import {
   basketSheet,
   fromPaper,
   openStore,
+  toTill,
   shortage,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
@@ -135,6 +136,7 @@ function sales(page: Page): { lines: { source_location_id: string }[] }[] {
 async function onTheTill(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
 }
 
 /** What a model's cells read aloud, in their order. */

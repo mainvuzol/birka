@@ -6,6 +6,7 @@ import {
   fillLine,
   fromPaper,
   openStore,
+  toTill,
   sellsFrom,
   shortage,
 } from "./fixtures";
@@ -651,6 +652,7 @@ test("against the real API: a coat the books hold none of, found in the catalogu
     `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(name);
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
   const panel = page.getByRole("region", { name: "Товар з каталогу" });

@@ -1,0 +1,169 @@
+import { useQueries, useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { api, unreachable } from "@/shared/api";
+import type { Drawer } from "@/cash/types";
+import type { StoreDebts } from "@/credits/types";
+import type { Order, Store } from "@/orders/types";
+import type { SalesReport } from "@/reports/types";
+
+/**
+ * What «Сьогодні» reads («Усе на бірці» task list, P0-6): only what the
+ * server already answers, each by its own right in its own store. A read is
+ * asked as the screen opens and as the app comes back, never more than once
+ * a minute; one that fails keeps what it read before. The report, a
+ * drawer and a store's debts are read under the keys their own screens read
+ * them by: one asking for both, and what «Каса» or «Борги» learns, «Сьогодні»
+ * shows.
+ */
+export const EVERY = 60_000;
+
+/** Older than this, the day-tag says how old: «дані на 11:32». */
+export const STALE_AFTER = 5 * 60_000;
+
+/** Kept while the person works elsewhere in Бірка: back on «Сьогодні», what
+ * was read stands, with its age, while it is read again. */
+const KEPT = 30 * 60_000;
+
+/** The open orders read of each store, as «Замовлення» reads them. */
+export const OPEN_ORDERS = 100;
+
+export interface OpenOrders {
+  orders: Order[];
+  has_more: boolean;
+}
+
+const often = { staleTime: EVERY, gcTime: KEPT, retry: false } as const;
+
+/** Today's sales of every store this person reads the report in, as «Звіт
+ * про продажі» reads today's. */
+export function useDayReport(
+  token: string,
+  scopeKey: string,
+): UseQueryResult<SalesReport> {
+  return useQuery({
+    queryKey: ["sales-report", scopeKey, null],
+    queryFn: () => api<SalesReport>("/reports/sales", token),
+    ...often,
+  });
+}
+
+/** Every store this person reads the report in, as the report orders
+ * them: by code. One that does not trade is among them; the server reads
+ * it too. */
+export function reportStores(stores: readonly Store[]): Store[] {
+  return stores
+    .filter((store) => store.permissions.includes("report:view_financial"))
+    .sort((a, b) =>
+      a.code === b.code
+        ? a.id.localeCompare(b.id)
+        : a.code < b.code
+          ? -1
+          : 1,
+    );
+}
+
+/** The stores of the day-tag: those of the report that trade, their rights
+ * with them, known from `/me` before the report is read, so nothing of
+ * theirs waits on it. */
+export function dayStores(stores: readonly Store[]): Store[] {
+  return reportStores(stores).filter((store) => store.state === "ACTIVE");
+}
+
+/** Each store's drawer, where this person may read it (`cash:close`,
+ * `cash:expense` or `report:view_financial` there). */
+export function useDrawers(
+  token: string,
+  stores: readonly Store[],
+): Map<string, UseQueryResult<Drawer>> {
+  const shown = stores.filter((store) =>
+    ["cash:close", "cash:expense", "report:view_financial"].some((right) =>
+      store.permissions.includes(right),
+    ),
+  );
+  const reads = useQueries({
+    queries: shown.map((store) => ({
+      queryKey: ["cash-drawer", store.id],
+      queryFn: () => api<Drawer>(`/cash/drawer?store_id=${store.id}`, token),
+      ...often,
+    })),
+  });
+  return byStore(shown, reads);
+}
+
+/** Each read by the store it is of, as `useQueries` gives them in order. */
+function byStore<T>(
+  stores: readonly Store[],
+  reads: readonly T[],
+): Map<string, T> {
+  return new Map(
+    stores.flatMap((store, at) => {
+      const read = reads[at];
+      return read === undefined ? [] : [[store.id, read] as const];
+    }),
+  );
+}
+
+/** What each store is owed, where this person takes payments on debts
+ * (`sale:credit` there): never summed across stores. */
+export function useDebts(
+  token: string,
+  stores: readonly Store[],
+): Map<string, UseQueryResult<StoreDebts>> {
+  const shown = stores.filter((store) =>
+    store.permissions.includes("sale:credit"),
+  );
+  const reads = useQueries({
+    queries: shown.map((store) => ({
+      queryKey: ["credits", store.id, "summary"],
+      queryFn: () =>
+        api<StoreDebts>(`/credits/summary?store_id=${store.id}`, token),
+      ...often,
+    })),
+  });
+  return byStore(shown, reads);
+}
+
+/** Each store's open orders, where this person reads them (`sale:view`
+ * there): the newest hundred, as «Замовлення» shows them. */
+export function useOpenOrders(
+  token: string,
+  scopeKey: string,
+  stores: readonly Store[],
+): UseQueryResult<OpenOrders>[] {
+  const shown = stores.filter((store) =>
+    store.permissions.includes("sale:view"),
+  );
+  return useQueries({
+    queries: shown.map((store) => ({
+      queryKey: ["today", scopeKey, "orders", store.id],
+      queryFn: () =>
+        api<OpenOrders>(
+          `/orders?store_id=${store.id}&status=open&limit=${String(OPEN_ORDERS)}`,
+          token,
+        ),
+      ...often,
+    })),
+  });
+}
+
+/** How old what a block shows is: the oldest of its reads' last answers,
+ * and whether the last asking of any of them failed — the server silent,
+ * or another refusal. */
+export interface Age {
+  /** When the oldest of its reads last answered; none before the first. */
+  at: number | undefined;
+  failed: boolean;
+  silent: boolean;
+}
+
+export function ageOf(reads: readonly UseQueryResult[]): Age {
+  const answered = reads
+    .filter((read) => read.data !== undefined)
+    .map((read) => read.dataUpdatedAt);
+  const failing = reads.filter((read) => read.isError);
+  return {
+    at: answered.length > 0 ? Math.min(...answered) : undefined,
+    failed: failing.length > 0,
+    silent: failing.some((read) => unreachable(read.error)),
+  };
+}
