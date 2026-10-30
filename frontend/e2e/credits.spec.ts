@@ -9,6 +9,7 @@ import {
   grn,
   more,
   openStore,
+  toTill,
   readsOf,
   refuseOnce,
   returnUnits,
@@ -196,6 +197,7 @@ async function basket(page: Page, coat: Coat, paper = false): Promise<void> {
   await sellsFrom(page, fixture.returns_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   // Ticked first: ticking it empties a basket (G20).
   if (paper) await fromPaper(page);
@@ -231,6 +233,7 @@ async function debt(page: Page, name: string): Promise<void> {
   await page.goto("about:blank");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Борги");
   await searchField(page).fill(name);
   await expect(rows(page)).toHaveCount(1);
@@ -707,6 +710,7 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   const { model, sale, token } = await onCredit(page, name);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
@@ -1258,6 +1262,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Борги");
   const total = page.getByLabel("Скільки винні магазину");
   await expect(total).toContainText("Магазину винні");
@@ -1362,6 +1367,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   const collected = posts(page, "/collect");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   // The till opens first (redesign P0-1); the order is in «Замовлення».
   await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
@@ -1468,6 +1474,7 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   const collected = posts(page, "/collect");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   // The till opens first (redesign P0-1); the order is in «Замовлення».
   await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
@@ -1551,6 +1558,7 @@ test("paying in parts needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
@@ -1584,6 +1592,7 @@ test("collecting an order in parts needs the same permission", async ({
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   // The till opens first (redesign P0-1); the order is in «Замовлення».
   await section(page, "Замовлення");
   await page.getByRole("button", { name: new RegExp(model) }).click();
@@ -1615,6 +1624,7 @@ async function everyDebtOf(
   await page.goto("about:blank");
   await page.goto(launch(telegramUserId));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Борги");
   await page
     .getByRole("button", { name: "Показати сплачені й списані" })
@@ -1868,6 +1878,7 @@ async function atTheTill(page: Page): Promise<void> {
   await page.goto("about:blank");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await tillWays(page)
     .getByRole("button", { name: "Внесок", exact: true })
     .click();

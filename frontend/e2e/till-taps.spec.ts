@@ -1,4 +1,4 @@
-import { test, expect, openStore, sellsFrom } from "./fixtures";
+import { test, expect, openStore, toTill, sellsFrom } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -144,6 +144,7 @@ async function stubSale(page: Page): Promise<Sent[]> {
 async function onTheTill(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 

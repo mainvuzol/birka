@@ -5,6 +5,7 @@ import {
   basketSheet,
   fillLine,
   openStore,
+  toTill,
   section,
   returnUnits,
   sections,
@@ -137,6 +138,7 @@ async function onTheTill(page: Page, version?: string): Promise<void> {
   await sellsFrom(page, fixture.till_location_id);
   await page.goto(launch(version));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
 }
 
 function pay(page: Page, way: string) {
@@ -440,6 +442,7 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await sellsFrom(page, fixture.returns_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   // «Повернення» read before the sale: its page then is not the one opened.
   await section(page, "Повернення");
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
@@ -583,6 +586,7 @@ async function soldOne(page: Page): Promise<{ name: string }> {
   await sellsFrom(page, fixture.returns_location_id);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(coat.name);
   const [variant = "", size = ""] = coat.option.split(":");
   await tapSize(page, variant, size);

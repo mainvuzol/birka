@@ -4956,3 +4956,72 @@ the same state as before and as «Ще»'s.
     «Оплата частинами» — the keyboard moving through the customer's fields
     and closing the sheet. The app opened on the till has the cursor in the
     search already: two taps then.
+
+## Chosen in chat — 2026-10-30 («Сьогодні», part 1: the tab and the day-tag, «Усе на бірці» P0-6)
+
+Chosen in chat on 2026-10-30 («go next»), after #155: the frame's P0-6,
+built in three parts, every owner question of it (В-Т1, В-Т2, В-Т3, В-Т5,
+В-Т6) as its (а) until answered (`all-on-the-tag-today-1-report.md`). This
+part: the tab, its head and the day-tag. No right, rule or figure changes:
+every figure on «Сьогодні» is a field the server already answers, read by
+the right it already needs; debts stay a store's own.
+- **The first tab:** whoever holds `report:view_financial` in the store
+  opened — the owner and managers — opens on «Сьогодні», the menu's first
+  tab (owner decision, 2026-10-26, В3; the frame's §4а); a seller opens on
+  the till as before. Kept operations still turn to their own tab.
+- **Decided here:**
+  - P0-6 in three parts: this one; the work tags of «Чекає на вас», the
+    empty state, the backups line and the tab's badge; the news tags with
+    «Бачу», the toast, what was seen kept on this phone and «Зроблено
+    сьогодні»;
+  - the day-tag reads the network (В-Т6 (а)): every store the report reads
+    that trades, known from `/me` with its rights, a column each for two, a
+    row each from three; one read alone has none, its drawer and debts
+    standing in the tag; one that trades beside one that does not, a named
+    row, the total holding both; a store that does not trade has no
+    column, though the report's total holds it;
+  - its drawer line, in the words «Каса» already has: «Каса відкрита»,
+    «Касу закрито о 20:06», «Каса ще не рахувалась»;
+  - a store nobody owes: «Ніхто не винен», in pencil, without the debt's
+    arrow — «Борги»'s «Зараз ніхто не винен», shortened;
+  - the money line: «Гроші» is the report's «Разом»; «поза касою:» names
+    cash on delivery and the transfer in advance, each only when not
+    nothing;
+  - the parcels' line counts the open orders of the day's stores where
+    this person reads orders, each state only when there is any, no line
+    when none; past a store's hundred, every count with «+»; its tap opens
+    «Замовлення» of the store open;
+  - the age stamp is the oldest of the tag's reads: «● наживо · 11:40»;
+    older than five minutes, or the last asking of any of them failed,
+    «дані на 11:32» in a warning's colour with its triangle, «— сервер не
+    відповідає» only when it went unanswered; nothing read yet and the
+    reading failed: «сервер не відповідає», or «не вдалося прочитати» for
+    another refusal;
+  - below 700 px of Telegram's steady height, one line «Сьогодні досі ·
+    12 050,00 грн · 6 шт.» — at 360 px two, broken after «Сьогодні досі ·»
+    — the stamp under it when old or unread; tapped, the tag opens in
+    place, the cursor on its heading, and stays open while the screen
+    stays;
+  - the day under the title is the stores' own once the report gives it,
+    the phone's before;
+  - a figure that waits holds its place in grey; a read that fails keeps
+    what it showed, and hides nothing else;
+  - the report, a drawer and a store's debts are read under the keys of
+    their own screens: one asking for both, and what «Каса» or «Борги»
+    learns shows on «Сьогодні»;
+  - narrower than 390 px, a store's sum at 20, as the spec has under 360;
+    a million a day or more in a column, at 24;
+  - read as the screen opens, on the tab and as the app comes back, never
+    more than once a minute — not while the screen stays open;
+  - the report's right gone while «Сьогодні» is open: the first tab shown;
+  - «Ще ⚠» stays in the menu until the backups tag (part 2) and «Ще»'s dot
+    (P1-5).
+- **The till further for whoever reads the report:** from the app's
+  opening, «Продаж» first, and the cursor stays on the tab (review,
+  2026-10-17): an owner's sale with a price is four taps from the opening,
+  two before; a seller's stays two. The frame's three are counted from the
+  till.
+- **Not met:** the frame's «≤ 240 px at 390» — 347 px with «Центр +
+  Ринок»: the concept's figures had no «,00», and its lines no words of
+  their own. Part 2's two work tags over the menu at 390 × 741, with 64 px
+  for the search, need some 70 px more: a reading for the owner.

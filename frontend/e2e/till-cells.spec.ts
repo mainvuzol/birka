@@ -5,6 +5,7 @@ import {
   basketSheet,
   fromPaper,
   openStore,
+  toTill,
   sellsFrom,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
@@ -96,6 +97,7 @@ async function onTheTill(page: Page): Promise<void> {
   await sellsFrom(page, till);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 
@@ -323,6 +325,7 @@ test("no warehouse to sell from: said so, and no search", async ({ page }) => {
   await sellsFrom(page, randomUUID());
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(
     page.getByText("Доступних складів немає. Зверніться до менеджера."),
   ).toBeVisible();

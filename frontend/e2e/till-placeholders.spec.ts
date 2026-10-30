@@ -1,4 +1,4 @@
-import { test, expect, openStore } from "./fixtures";
+import { test, expect, openStore, toTill } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -89,6 +89,7 @@ test("signing in keeps the till's places, and says «Входимо в мага�
   await expect(page.locator(".placeholder .model-tag")).toHaveCount(3);
   me.release();
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.locator(".placeholder")).toHaveCount(0);
 });
 
@@ -98,6 +99,7 @@ test("the warehouses being read keep the field's and the tags' places, and say s
   const places = await heldBack(page, "**/api/v1/stock-locations?**");
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(
     said(page).filter({ hasText: "Завантажуємо склади…" }),
   ).toBeAttached();
@@ -122,6 +124,7 @@ test("the goods being read keep three tags' places, and say «Завантажу
   );
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(
     said(page).filter({ hasText: "Завантажуємо товари…" }),
   ).toBeAttached();
@@ -145,6 +148,7 @@ test("a search typed keeps the list where it was until the new one comes, and th
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await page.locator("button.size-cell").first().click();
   await expect(page.locator(".pay-panel")).toBeVisible();
   // The terminal's hint stands under the list, the basket's lines in their
@@ -193,6 +197,7 @@ test("a search with nothing found, typed further, never says «нічого не
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   const search = page.getByRole("searchbox", { name: "Знайти модель" });
   await search.fill("аб");
   await expect(page.getByText(/^За «аб» .* нічого немає/)).toBeVisible();

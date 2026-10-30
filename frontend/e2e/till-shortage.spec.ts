@@ -3,6 +3,7 @@ import {
   expect,
   more,
   openStore,
+  toTill,
   sellsFrom,
   shortage,
 } from "./fixtures";
@@ -140,6 +141,7 @@ async function onTheTill(page: Page): Promise<void> {
   await sellsFrom(page, till);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 
@@ -414,6 +416,7 @@ test("while the warehouses are read, the switch row stands under the search's pl
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   const row = page.locator(".switch-row");
   const place = page.locator(".placeholder .skeleton-field");
   await expect(place).toBeVisible();

@@ -1,4 +1,4 @@
-import { test, expect, openStore, sellsFrom } from "./fixtures";
+import { test, expect, openStore, toTill, sellsFrom } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -94,6 +94,7 @@ async function onTheTill(page: Page, version?: string): Promise<void> {
   await sellsFrom(page, till);
   await page.goto(launch(version));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
 }
 
@@ -186,6 +187,19 @@ async function alpacas(page: Page): Promise<void> {
 }
 
 test("the till opens with the cursor in its search", async ({ page }) => {
+  // For whoever reads no report: whoever does opens on «Сьогодні», and
+  // «Продаж» leaves the cursor on the tab pressed (review, 2026-10-17).
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (right) => right !== "report:view_financial",
+      );
+    await route.fulfill({ response, json: body });
+  });
   await goods(page);
   await onTheTill(page);
   await expect(search(page)).toBeFocused();

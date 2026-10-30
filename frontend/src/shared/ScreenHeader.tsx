@@ -40,6 +40,9 @@ export const ScreenHeader = forwardRef<
     /** Its heading takes the focus as the screen opens. */
     focusable?: boolean;
     className?: string;
+    /** What the line names first, where it is not the store: «Сьогодні»'s
+     * day, for whoever reads the network there. */
+    lead?: string;
   }
 >(function ScreenHeader(
   {
@@ -50,6 +53,7 @@ export const ScreenHeader = forwardRef<
     aside,
     focusable = false,
     className,
+    lead,
   },
   ref,
 ) {
@@ -80,7 +84,7 @@ export const ScreenHeader = forwardRef<
       {line && (
         <div className="store-line">
           <p className="t-meta">
-            {visible(line.store)} · {visible(line.person)}
+            {lead ?? visible(line.store)} · {visible(line.person)}
           </p>
           {line.changeStore && (
             <button

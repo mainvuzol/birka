@@ -4,6 +4,7 @@ import {
   menu,
   more,
   openStore,
+  toTill,
   section,
   storeLine,
   tapSize,
@@ -710,13 +711,15 @@ test("whoever holds no right of the drawer has no «Каса»: no tab, no row, 
   expect(await groups(page).allTextContents()).not.toContain("Гроші");
 });
 
-test("the owner's menu is «Продаж · Замовлення · Ще» at 360 px; «Ще» holds five groups in the design's order, «Каса» among the money, «← Ще» back from each («Усе на бірці» task list, P0-4)", async ({
+test("the owner's menu is «Сьогодні · Продаж · Замовлення · Ще» at 360 px; «Ще» holds five groups in the design's order, «Каса» among the money, «← Ще» back from each («Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto(launch(fixture.owner_telegram_user_id, "Власник"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await expect(tabs(page)).toHaveText([
+    "Сьогодні",
     "Продаж",
     "Замовлення",
     /^Ще( ⚠)?$/,
@@ -823,7 +826,9 @@ test("a manager's «Ще» is people, goods, money and this phone, with no netwo
     launch(fixture.network_centre_manager_telegram_user_id, "Марта"),
   );
   await openStore(page, "Центр CENTRE");
+  await toTill(page);
   await expect(tabs(page)).toHaveText([
+    "Сьогодні",
     "Продаж",
     "Замовлення",
     /^Ще( ⚠)?$/,
@@ -846,6 +851,7 @@ test("whoever may not pay suppliers' invoices has no «Накладні» («У�
   await holdingNone(page, ["supplier:debt"]);
   await page.goto(launch(fixture.owner_telegram_user_id, "Власник"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await more(page);
   await expect(moreRow(page, "Накладні")).toHaveCount(0);
   await expect(moreRow(page, "Звіт про продажі")).toBeVisible();
@@ -861,6 +867,7 @@ test("«Змінити магазин» is one tap from the line over any screen
   const choice = page.getByRole("heading", { name: "Оберіть магазин" });
   // From the till.
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   // On the line under the screen's title, at its right (spec §6.2).
   const words = await storeLine(page).boundingBox();
   const button = await line.boundingBox();
@@ -876,11 +883,13 @@ test("«Змінити магазин» is one tap from the line over any screen
   expect(await taps()).toBe(1);
   // From a screen under «Ще».
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Залишки");
   await line.click();
   await expect(choice).toBeVisible();
   // From «Ще» › «Цей телефон».
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await more(page);
   await moreRow(page, "Змінити магазин").click();
   await expect(choice).toBeVisible();

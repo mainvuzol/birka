@@ -4,6 +4,7 @@ import {
   expectStub,
   more,
   openStore,
+  toTill,
   returnUnits,
   section,
   tillWays,
@@ -154,6 +155,7 @@ async function held(
 async function find(page: Page, model: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(model);
   await page.getByLabel("Що повертають?").press("Enter");
@@ -505,6 +507,7 @@ test("a store without a «Брак» is told so, and nothing is returned", async
 test("the search says when no sale has such goods", async ({ page }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Повернення");
   await page.getByLabel("Що повертають?").fill(`немає ${randomUUID()}`);
   await page.getByLabel("Що повертають?").press("Enter");
@@ -525,6 +528,7 @@ test("taking returns needs its own permission", async ({ page }) => {
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   // The till, with no way to take a return: no «Повернути» (navigation
   // task list, P0-1), the switch only selling and payments («Усе на бірці»
   // task list, P0-3).
@@ -551,6 +555,7 @@ test("the «Брак» takes no deliveries, and is named in the stock", async ({
 }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Приймання");
   const offered = page.locator(`option[value="${fixture.bin_location_id}"]`);
   await expect(offered).toHaveAttribute("disabled", "");

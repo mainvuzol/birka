@@ -1,4 +1,4 @@
-import { test, expect, openStore, section, tillWays } from "./fixtures";
+import { test, expect, openStore, toTill, section, tillWays } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -143,6 +143,7 @@ test("an order's card and the step over it show Telegram's «Назад»; press
   await oneOrder(page);
   await page.goto(launch("8.0"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Замовлення");
   await expect(page.locator(".order-row").first()).toBeVisible();
   // A tab's first screen: Telegram's own «Закрити», never told otherwise.
@@ -187,6 +188,7 @@ test("a screen of «Ще» shows Telegram's «Назад» and pressed it is «�
   await hearBack(page);
   await page.goto(launch("8.0"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Залишки");
   await expect(
     page.getByRole("heading", { name: "Залишки", level: 1 }),
@@ -255,6 +257,7 @@ async function toS21(
   await hearBack(page);
   await page.goto(launch("8.0"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await tillWays(page)
     .getByRole("button", { name: "Внесок", exact: true })
     .click();
@@ -355,6 +358,7 @@ test("two ways back on one screen: Telegram's «Назад» is the inner one, �
   await hearBack(page);
   await page.goto(launch("8.0"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Перевірка каталогу");
   await expect.poll(() => backs(page)).toEqual([true]);
   await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
@@ -383,6 +387,7 @@ test("a Telegram before 6.1 is told nothing of «Назад», on an order's car
   await oneOrder(page);
   await page.goto(launch("6.0"));
   await openStore(page, "Основний MAIN");
+  await toTill(page);
   await section(page, "Замовлення");
   await page.locator(".order-row").first().click();
   await expect(
