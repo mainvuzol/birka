@@ -3723,10 +3723,26 @@ nav.tab-bar {
   font-size: 20px;
   line-height: 24px;
 }
-/* A million or more in a store's day: at 24, inside its column at 390. */
+/* A million or more in a store's day: at 24, on one line in its column at
+   390 in the display face. */
 .day-columns .day-store-sum.long {
   font-size: 24px;
   line-height: 34px;
+}
+/* Whatever face draws it — the display face may come too late
+   (`font-display: optional`), and the device's is wider — a sum keeps to
+   the tag and to its column: it breaks before its kopecks or its unit, and
+   as a last resort inside its figures. */
+.day-total .t-money-hero,
+.day-columns .day-store-sum {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.day-total .sum-kop,
+.day-total .sum-unit,
+.day-columns .day-store-sum .sum-kop,
+.day-columns .day-store-sum .sum-unit {
+  display: inline-block;
 }
 /* Narrower than 390 px, a store's sum at 20, as under 360 in the spec:
    with «,00 грн» at 32 its column has no room left for its lines. */

@@ -83,7 +83,10 @@ P0-6 is split in three:
 - **A store's sum** is at 32 in two columns and at 20 in rows. Narrower
   than 390 px it is at 20, as the spec has it under 360 (at 32 «,00 грн»
   leaves no room for the lines). A million a day or more is at 24, so it
-  stays in its column at 390.
+  stays on one line in its column at 390. Drawn in a wider face — the
+  display face is `font-display: optional`, and the device's comes instead
+  when it is late — a sum breaks before its kopecks or its unit, and inside
+  its figures only as a last resort; so does the day's total in the tag.
 - **Its reads** (`today/reads.ts`):
   - what it reads: the report, each store's drawer, its debts and its open
     orders, each by its own right in its own store (the frame's §4);
@@ -128,7 +131,8 @@ Each owner question of P0-6 is built by its (а) until answered: В-Т1,
 - **The day under the title** is the report's `today`, the phone's before
   it comes.
 - **Keys shared** with «Звіт про продажі», «Каса» and «Борги».
-- **The sum's sizes** under 390 px and from a million (above).
+- **The sum's sizes** under 390 px and from a million, and where a sum
+  breaks in a wider face (above).
 - **«Ще ⚠» stays in the menu** until the backups tag (part 2) and «Ще»'s
   dot (P1-5).
 - **No reading while the screen stays open:** the frame names the times to
@@ -159,8 +163,9 @@ Each owner question of P0-6 is built by its (а) until answered: В-Т1,
   - under 700 px (360 × 640) the one line, `aria-expanded="false"`, no tag;
     tapped, the tag in place and the cursor on its heading;
   - under 700 px, six minutes on: «дані на …» under the line;
-  - a million in a store's day: each sum inside its column at 390, 360 and
-    430, and no page wider than the screen;
+  - a million in a store's day, the sums drawn in a wide face: each inside
+    its column and the day's inside the tag at 390, 360 and 430, and no
+    page wider than the screen;
   - Марко, one store: no columns, «Ніхто не винен» in pencil without the
     arrow, no parcels' line;
   - three trading stores: a row each, three «Винні», never one for the
@@ -227,7 +232,8 @@ Each owner question of P0-6 is built by its (а) until answered: В-Т1,
   - one store's lines unnamed beside a store that does not trade;
   - the cursor nowhere as the folded line opens;
   - the folded line silent about an old day;
-  - a million at 32 in its column (366.8 px of a 359.5 px column);
+  - a sum left unbroken in a wider face (the day's total out of the tag to
+    408 px of 375.5);
   - the stores waiting on the report;
   - a column's sold line with no place held.
 - **Journeys:** 780 — 765 on main, where #155's last journey came after its
@@ -278,6 +284,15 @@ Found after the review:
   «шт.». Now it breaks only after «Сьогодні досі ·».
 - **A kept operation turns to its own tab after the first frame:**
   `toTill` waits two frames before it reads the screen.
+- **On GitHub's CI the million left its column:** 342 px of 329.5. The
+  display face is `font-display: optional`; there it came too late, and
+  Linux's DejaVu Sans, drawn instead, is far wider than the condensed face.
+  A phone can miss the face the same way. Now a sum breaks before its
+  kopecks or its unit, in its column and in the tag. The journey draws the
+  sums in a wide face, Verdana on the Mac and DejaVu Sans on Linux, and
+  checks the day's total in the tag too. The size of 24 from a million is
+  no longer what the journey proves: it keeps a million on one line in the
+  display face, which a journey cannot count on being drawn.
 
 ## Evidence
 
@@ -312,6 +327,10 @@ On the Mac, against the E2E API and PostgreSQL 17:
   - folded at 360 × 640: 54 px, 75 with the stamp.
 - **Screenshots** (throwaway): 390 × 741 light and dark; 360 × 640 folded,
   live and old; 412 × 690 folded, in one line; a million at 390.
+- **After CI's failure:** `today.spec.ts`, `till-money-words.spec.ts` and
+  `till-sold-today.spec.ts`, 25 passed. With the display face blocked, and
+  in Verdana, every sum inside its column and the tag at 430, 390, 360 and
+  320, and no page wider than the screen. The tag is still 347 px.
 
 ## Not covered here
 

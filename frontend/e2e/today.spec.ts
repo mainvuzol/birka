@@ -407,7 +407,9 @@ test("under 700 px an old day says so in its one line", async ({ page }) => {
   await expect(line).toContainText("Сьогодні досі · 12 050,00 грн · 6 шт.");
 });
 
-test("a million in a store's day stays in its column", async ({ page }) => {
+test("a million in a store's day stays in its column, and the day's in the tag, whatever face draws them", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 741 });
   const big: Day = { sold: "123456.00", units: 40 };
   const bigger: Day = { sold: "1234567.00", units: 300 };
@@ -425,9 +427,22 @@ test("a million in a store's day stays in its column", async ({ page }) => {
     await orders(page, store, [0, 0, 0]);
   }
   await onToday(page);
+  // The display face may come too late (`font-display: optional`), and the
+  // device's is wider: the sums drawn in a wide one, Verdana here or DejaVu
+  // Sans on CI's Linux.
+  await page.addStyleTag({
+    content: '.sum { font-family: Verdana, "DejaVu Sans", sans-serif; }',
+  });
   await expect(column(page, "Ринок")).toContainText("1 234 567,00 грн");
   for (const width of [390, 360, 430]) {
     await page.setViewportSize({ width, height: 741 });
+    const tag = await dayTag(page).boundingBox();
+    const total = await dayTag(page)
+      .locator(".day-total .t-money-hero strong")
+      .boundingBox();
+    expect(total && tag && total.x + total.width).toBeLessThanOrEqual(
+      (tag?.x ?? 0) + (tag?.width ?? 0) + 0.5,
+    );
     for (const name of ["Центр", "Ринок"]) {
       const store = await column(page, name).boundingBox();
       const sum = await column(page, name)
