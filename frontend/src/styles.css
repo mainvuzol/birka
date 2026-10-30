@@ -3857,3 +3857,165 @@ button.day-folded {
   margin-top: -8px;
   padding: 0 16px 10px;
 }
+/* «Чекає на вас» (spec §6.9, S04 #10–17; P0-6, items 3–6): a row tag each,
+   8 apart, its eyelet filled in its kind's colour where the title's first
+   line is, its glyph left of the title, two lines of meta at most, its verb
+   bottom right — never black: seven would shout. */
+.today-waiting,
+.today-empty {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* Its heading, and how old it all is when old, as the day-tag's head. */
+.today-waiting-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+.today-waiting-head h2 {
+  margin: 0;
+  color: var(--pencil);
+}
+.today-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.today-tag-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 74px;
+  box-sizing: border-box;
+  padding: 12px 16px 12px 30px;
+}
+.today-tag-eyelet {
+  position: absolute;
+  top: 19px;
+  left: 14px;
+  width: var(--eyelet);
+  height: var(--eyelet);
+  border-radius: 999px;
+  background: var(--tone);
+}
+.today-tag {
+  --tone: var(--ink);
+}
+.today-tag.tone-warning {
+  --tone: var(--warning);
+}
+.today-tag.tone-online {
+  --tone: var(--online);
+}
+.today-tag.tone-damaged {
+  --tone: var(--damaged);
+}
+.today-tag-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--ink);
+}
+.today-tag-title .icon {
+  margin-top: 3px;
+  color: var(--tone);
+}
+.today-tag-meta {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--pencil);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.today-verb {
+  align-self: flex-end;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+/* A read still read: its tag's place, grey. */
+.today-tag-wait .today-tag-body {
+  justify-content: center;
+  gap: 10px;
+}
+.today-more {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+/* Nothing waits (spec §6.28): a blank tag drawn, the words under it. */
+.today-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 20px;
+  text-align: center;
+}
+.today-empty h2 {
+  margin: 0;
+  font-family: var(--font-text);
+  letter-spacing: 0;
+}
+.today-empty-mark {
+  width: 64px;
+  height: 64px;
+  color: var(--edge);
+}
+.today-backups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 16px 0 0;
+  color: var(--pencil);
+}
+/* «Сьогодні»'s badge (spec §6.3): its open tags on the glyph's top right,
+   ringed in the menu's card so it stands off the open tab's pill. */
+.tab-pill {
+  position: relative;
+}
+.tab-pill[data-badge]::after {
+  content: attr(data-badge);
+  position: absolute;
+  top: -4px;
+  left: calc(50% + 4px);
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--card);
+  color: var(--on-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}

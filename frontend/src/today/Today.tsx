@@ -24,6 +24,8 @@ import {
   useOpenOrders,
 } from "./reads";
 import type { Age, OpenOrders } from "./reads";
+import { useWaiting } from "./waiting";
+import type { Kind, Tag, Waiting as Work } from "./waiting";
 
 const weekdays = [
   "Неділя",
@@ -108,6 +110,23 @@ function useNow(): number {
   return now;
 }
 
+/** «сьогодні о 03:15», «учора о 03:15», «28.10 о 03:15»: when, by the
+ * phone's day. */
+function whenText(iso: string, now: number): string {
+  const at = new Date(iso);
+  const day = (date: Date): string => date.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const time = timeOf(iso);
+  if (day(at) === day(new Date(now))) return `сьогодні о ${time}`;
+  if (day(at) === day(yesterday)) return `учора о ${time}`;
+  const date = at.toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return `${date} о ${time}`;
+}
+
 /** «4 шт.» */
 function units(count: number): string {
   return `${String(count)} шт.`;
@@ -155,7 +174,8 @@ function Parts({ parts }: { parts: readonly string[] }): JSX.Element {
   return (
     <>
       {parts.map((part, at) => (
-        <span key={part}>
+        // Two parts may read the same: two coats alike.
+        <span key={at}>
           {at > 0 && " · "}
           <span className="day-part">{part}</span>
         </span>
@@ -259,6 +279,188 @@ function Stamp({ age, now }: { age: Age; now: number }): JSX.Element {
   );
 }
 
+/** Past this many, the rest fold into «+ ще N» (spec §6.9). */
+const SHOWN_TAGS = 7;
+
+/** Each kind's glyph and colour: the eyelet filled in it, the glyph left of
+ * the title (spec §6.9). */
+const looks: Record<
+  Kind,
+  { icon: "backup" | "parcel" | "damaged" | "paper"; tone: string }
+> = {
+  backups: { icon: "backup", tone: "warning" },
+  parcels: { icon: "parcel", tone: "online" },
+  damaged: { icon: "damaged", tone: "damaged" },
+  openings: { icon: "paper", tone: "ink" },
+};
+
+/** Each kind's one verb, and where it goes. */
+const verbWords: Record<Kind, string> = {
+  backups: "Переглянути",
+  parcels: "Зібрати й відправити",
+  damaged: "Оглянути",
+  openings: "Переглянути й затвердити",
+};
+
+/** A tag of «Чекає на вас» (spec §6.9): its eyelet filled, its title, up to
+ * two lines of meta, and one verb — only where it can be done from here: the
+ * open store's, or the network's backups. Another store's says what waits
+ * there; it is done there (В-Т2 (а)). */
+function TagRow({
+  tag,
+  open,
+  verb,
+  held,
+}: {
+  tag: Tag;
+  open: Store;
+  verb: (() => void) | undefined;
+  held: boolean;
+}): JSX.Element {
+  const title = useId();
+  const look = looks[tag.kind];
+  const here = tag.store === undefined || tag.store.id === open.id;
+  return (
+    <article
+      className={`today-tag tag-row tag-outline tone-${look.tone}`}
+      aria-labelledby={title}
+      tabIndex={-1}
+    >
+      <div className="today-tag-body">
+        <span className="today-tag-eyelet" aria-hidden="true" />
+        <h3 id={title} className="t-row today-tag-title">
+          <Icon name={look.icon} size={16} />
+          <span>{tag.title}</span>
+        </h3>
+        {tag.meta.length > 0 && (
+          <p className="t-meta today-tag-meta">
+            <Parts parts={tag.meta} />
+          </p>
+        )}
+        {here && verb && (
+          <button
+            type="button"
+            className="today-verb"
+            disabled={held}
+            onClick={verb}
+          >
+            {verbWords[tag.kind]}
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/**
+ * «Чекає на вас · N» (spec S04 #10–17; P0-6, items 3–6): the tags, seven and
+ * «+ ще N» for the rest; a place held while a read is still read; «Вас
+ * нічого не чекає.» once every read has answered with nothing; and, for
+ * whoever reads the backups, «Копії в порядку · …» under it all. How old
+ * it all is, the oldest of its reads, is said once for the block, as the
+ * day-tag says it: a read that failed again may have taken its tag with
+ * it, and «nothing waits» is only as new as what was read.
+ */
+function WaitingTags({
+  work,
+  open,
+  verbs,
+  held,
+  now,
+}: {
+  work: Work;
+  open: Store;
+  verbs: Partial<Record<Kind, () => void>>;
+  held: boolean;
+  now: number;
+}): JSX.Element | null {
+  const label = useId();
+  const [all, setAll] = useState(false);
+  const list = useRef<HTMLUListElement>(null);
+  // Unfolded: the cursor on the first tag that was folded.
+  useEffect(() => {
+    if (!all) return;
+    const tags = list.current?.querySelectorAll<HTMLElement>(".today-tag");
+    tags?.item(SHOWN_TAGS).focus();
+  }, [all]);
+  if (!work.asked) return null;
+  const { tags } = work;
+  const folded = !all && tags.length > SHOWN_TAGS;
+  const shown = folded ? tags.slice(0, SHOWN_TAGS) : tags;
+  const empty = tags.length === 0 && !work.unread;
+  const old = work.age.at !== undefined && staleOf(work.age, now);
+  return (
+    <>
+      {empty ? (
+        <section className="today-empty" aria-labelledby={label}>
+          <Icon name="mark-lg" className="today-empty-mark" />
+          <h2 id={label} className="t-row">
+            Вас нічого не чекає.
+          </h2>
+          {old && <Stamp age={work.age} now={now} />}
+        </section>
+      ) : (
+        <section className="today-waiting" aria-labelledby={label}>
+          <div className="today-waiting-head">
+            <h2 id={label} className="t-label">
+              Чекає на вас{tags.length > 0 && ` · ${String(tags.length)}`}
+            </h2>
+            {old && <Stamp age={work.age} now={now} />}
+          </div>
+          <ul ref={list} className="today-tags">
+            {shown.map((tag) => (
+              <li key={tag.key}>
+                <TagRow
+                  tag={tag}
+                  open={open}
+                  verb={verbs[tag.kind]}
+                  held={held}
+                />
+              </li>
+            ))}
+            {work.unread && (
+              // Grey and unread aloud until its read fails.
+              <li
+                className="today-tag-wait"
+                aria-hidden={!work.unreadAge.failed}
+              >
+                <div className="tag-row tag-outline">
+                  <div className="today-tag-body">
+                    <Waiting width="70%" />
+                    <Waiting width="45%" />
+                    {work.unreadAge.failed && (
+                      <Stamp age={work.unreadAge} now={now} />
+                    )}
+                  </div>
+                </div>
+              </li>
+            )}
+          </ul>
+          {folded && (
+            <button
+              type="button"
+              className="today-more"
+              onClick={() => {
+                setAll(true);
+              }}
+            >
+              + ще {tags.length - SHOWN_TAGS}
+            </button>
+          )}
+        </section>
+      )}
+      {work.backupsOk && (
+        <p className="t-meta today-backups">
+          <Icon name="backup" size={16} />
+          <span>
+            Копії в порядку · {whenText(work.backupsOk.at, now)}
+          </span>
+        </p>
+      )}
+    </>
+  );
+}
+
 /** A store's drawer and debts, each by its own read: a line in its place
  * until it comes. */
 function StoreLines({
@@ -358,6 +560,10 @@ export function Today({
   token,
   scopeKey,
   stores,
+  open,
+  readsBackups,
+  verbs,
+  held,
   toOrders,
 }: {
   token: string;
@@ -365,6 +571,14 @@ export function Today({
   scopeKey: string;
   /** Every store of `/me`, with this person's rights in each. */
   stores: readonly Store[];
+  /** The store open in Бірка: its tags' verbs are done here. */
+  open: Store;
+  /** Whether the network's backups are this person's to read. */
+  readsBackups: boolean;
+  /** Where each kind's verb goes, where this person may open it. */
+  verbs: Partial<Record<Kind, () => void>>;
+  /** A kept operation holds every other section: the verbs wait too. */
+  held: boolean;
   /** «Замовлення», where this person reads the open store's orders. */
   toOrders?: (() => void) | undefined;
 }): JSX.Element {
@@ -372,7 +586,9 @@ export function Today({
   const shown = dayStores(stores);
   const drawers = useDrawers(token, shown);
   const debts = useDebts(token, shown);
-  const orders = useOpenOrders(token, scopeKey, shown);
+  const orders = [...useOpenOrders(token, scopeKey, shown).values()];
+  // What waits, read as the tab's badge reads it.
+  const work = useWaiting({ token, scopeKey, stores, open, readsBackups });
   const age = ageOf([
     report,
     ...drawers.values(),
@@ -537,6 +753,13 @@ export function Today({
           </div>
         )}
       </section>
+      <WaitingTags
+        work={work}
+        open={open}
+        verbs={verbs}
+        held={held}
+        now={now}
+      />
     </>
   );
 }

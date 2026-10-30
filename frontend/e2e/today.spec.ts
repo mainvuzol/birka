@@ -1,4 +1,4 @@
-import { test, expect, menu, openStore } from "./fixtures";
+import { test, expect, menu, openStore, section } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -217,6 +217,219 @@ async function orders(
     });
   });
 }
+
+/** A store's parcels to send, oldest first: each order's goods as «Замовлення»
+ * gets them — a model and colour, a size, how many. */
+async function parcels(
+  page: Page,
+  store: string,
+  goods: [string, string, number][][],
+  hasMore = false,
+): Promise<void> {
+  await page.route(`**/api/v1/orders?store_id=${store}&**`, async (route) => {
+    const url = route.request().url();
+    if (!url.includes("status=open") || url.includes("offset=")) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        // Newest first, as the server answers: the tag says the oldest
+        // first.
+        orders: goods
+          .map((items, at) => ({
+            id: `00000000-0000-4000-8000-9${String(at).padStart(11, "0")}`,
+            store_id: store,
+            status: "READY_TO_DISPATCH",
+            created_at: new Date(Date.now() - (goods.length - at) * 60_000)
+              .toISOString(),
+            items: items.map(([display_name, size_label, quantity], n) => ({
+              id: `00000000-0000-4000-8000-8${String(at)}${String(n).padStart(10, "0")}`,
+              display_name,
+              size_label,
+              quantity,
+            })),
+          }))
+          .reverse()
+          .concat([
+            {
+              id: "00000000-0000-4000-8000-700000000000",
+              store_id: store,
+              status: "DISPATCHED",
+              created_at: new Date().toISOString(),
+              items: [
+                {
+                  id: "00000000-0000-4000-8000-710000000000",
+                  display_name: "Вже в дорозі",
+                  size_label: "M",
+                  quantity: 1,
+                },
+              ],
+            },
+          ]),
+        has_more: hasMore,
+      },
+    });
+  });
+}
+
+/** A store's «Брак»: the units awaiting inspection, oldest first, and one
+ * already being looked at, which waits on nobody here. */
+async function damaged(
+  page: Page,
+  store: string,
+  units: [string, string | null][],
+): Promise<void> {
+  const unit = (
+    [name, size]: [string, string | null],
+    at: number,
+    status: string,
+  ): Record<string, unknown> => ({
+    id: `00000000-0000-4000-8000-6${String(at).padStart(11, "0")}`,
+    display_name: name,
+    size,
+    status,
+    returned_at: new Date(Date.now() - (units.length - at) * 86_400_000)
+      .toISOString(),
+    status_by: null,
+    status_at: null,
+    sold_from_location_id: "00000000-0000-4000-8000-500000000000",
+    sold_from_location_name: "Основний",
+    back_to_sold_from: true,
+    note: null,
+  });
+  await page.route(
+    `**/api/v1/damaged-units?store_id=${store}`,
+    async (route) => {
+      await route.fulfill({
+        json: {
+          units: [
+            ...units.map((one, at) => unit(one, at, "AWAITING")).reverse(),
+            unit(["Оглядають", "S"], 99, "INSPECTING"),
+          ],
+        },
+      });
+    },
+  );
+}
+
+/** A store's lists of existing stock: those in review, each its lines;
+ * one approved, and one of a warehouse it shares, kept by another store. */
+async function lists(
+  page: Page,
+  store: string,
+  inReview: number[],
+): Promise<void> {
+  const list = (
+    at: number,
+    status: string,
+    lines: number,
+    keeper = store,
+  ): Record<string, unknown> => {
+    const id = `00000000-0000-4000-8000-4${String(at).padStart(11, "0")}`;
+    const basis = (n: number): Record<string, number> => ({
+      STATED: n,
+      STATED_BY_SIZE: 0,
+      LINE_IMPLIES_ONE: 0,
+      RECOUNTED: 0,
+      OWNER_KNOWLEDGE: 0,
+    });
+    return {
+      snapshot_id: id,
+      command_id: id,
+      store_id: keeper,
+      store_name: "Центр",
+      store_state: "ACTIVE",
+      location_id: "00000000-0000-4000-8000-500000000000",
+      status,
+      source_document_ref: "Зошит",
+      captured_at: null,
+      review_revision: 1,
+      created_at: new Date().toISOString(),
+      rejection_reason: null,
+      decided_at: null,
+      summary: {
+        lines,
+        pending: 0,
+        needs_review: 0,
+        resolved: lines,
+        skipped: 0,
+        allocations: lines,
+        units: lines,
+        lines_differing_from_source: 0,
+        lines_by_basis: basis(lines),
+        units_by_basis: basis(lines),
+        parts: 1,
+        parts_removed: 0,
+        limits: { lines: 5000, allocations: 20000 },
+      },
+      ready_to_approve: true,
+      application: null,
+    };
+  };
+  await page.route(`**/api/v1/snapshots?store_id=${store}&**`, async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          ...inReview.map((lines, at) => list(at, "IN_REVIEW", lines)),
+          list(50, "APPLIED", 30),
+          list(51, "IN_REVIEW", 7, "00000000-0000-4000-8000-300000000000"),
+        ],
+        has_more: false,
+      },
+    });
+  });
+}
+
+/** The night's copy, made today at 03:15. */
+function night(ok: boolean): Record<string, unknown> {
+  const at = new Date();
+  at.setHours(3, 15, 0, 0);
+  return {
+    started_at: new Date(at.getTime() - 120_000).toISOString(),
+    finished_at: at.toISOString(),
+    ok,
+    archive: ok ? "birka-2026.dump" : null,
+    archive_bytes: ok ? 1_048_576 : null,
+    drill_ok: ok ? true : null,
+    restore_seconds: ok ? 4.2 : null,
+    reasons: ok ? [] : ["Немає місця на диску"],
+  };
+}
+
+/** The network's backups: in order by default; `edit` breaks them. */
+async function backups(
+  page: Page,
+  edit: (body: Record<string, unknown>) => void = () => undefined,
+): Promise<void> {
+  await page.route("**/api/v1/backups", async (route) => {
+    const good = night(true);
+    const body: Record<string, unknown> = {
+      state: "OK",
+      checked_at: new Date().toISOString(),
+      due_hours: 26,
+      latest: good,
+      last_good: good,
+      nights: [good],
+      your_last_message: null,
+      server: { looked_at: new Date().toISOString(), open: [], recent: [] },
+    };
+    edit(body);
+    await route.fulfill({ json: body });
+  });
+}
+
+// Nothing waits but what a journey says: «Брак» empty, no list to approve,
+// the backups in order. A journey's own stubs, set later, come first.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/damaged-units?**", async (route) => {
+    await route.fulfill({ json: { units: [] } });
+  });
+  await page.route("**/api/v1/snapshots?**", async (route) => {
+    await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await backups(page);
+});
 
 /** «Центр» and «Ринок», S04's day: «Центр»'s drawer open, «Ринок»'s
  * closed at 20:06 tonight. */
@@ -584,6 +797,9 @@ test("a store that does not trade has no column; one without the debts' right, n
     drawers: 2,
     debts: 1,
     orders: 2,
+    damaged: 2,
+    lists: 2,
+    backups: 1,
   });
 });
 
@@ -616,6 +832,423 @@ test("the parcels' line opens «Замовлення», with «+» when a store 
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
+});
+
+// --- what waits -------------------------------------------------------------
+
+function waiting(page: Page): Locator {
+  return page.getByRole("region", { name: /^Чекає на вас/ });
+}
+
+function tags(page: Page): Locator {
+  return waiting(page).locator(".today-tag");
+}
+
+/** The backups failed last night, and the disk is filling now. */
+async function failedBackups(page: Page): Promise<void> {
+  await backups(page, (body) => {
+    const bad = night(false);
+    body.state = "FAILED";
+    body.latest = bad;
+    body.nights = [bad];
+    body.server = {
+      looked_at: new Date().toISOString(),
+      open: [
+        {
+          kind: "DISK_LOW",
+          reason: "Вільно 3 %",
+          started_at: new Date().toISOString(),
+          told_at: null,
+        },
+      ],
+      recent: [],
+    };
+  });
+}
+
+test("what waits: a tag a kind and a store, in the frame's order, each from its read, the badge its count", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 741 });
+  await twoStores(page);
+  await failedBackups(page);
+  await parcels(page, centre, [
+    [["Лоран шоколад", "M", 1]],
+    [
+      ["Кокон графіт", "S", 2],
+      ["Мишка чорний", "L", 1],
+    ],
+    [["Лагуна персик", "XL", 1]],
+  ]);
+  await parcels(page, market, [[["Мишка чорний", "S", 1]]]);
+  await damaged(page, centre, [
+    ["Кокон графіт", "M"],
+    ["Лагуна персик", "L"],
+    ["Марсель молочний", null],
+  ]);
+  await lists(page, centre, [412]);
+  await lists(page, market, [12, 30]);
+  await onToday(page);
+  await expect(
+    page.getByRole("heading", { name: "Чекає на вас · 6", exact: true }),
+  ).toBeVisible();
+  // The backups first, the network's; then each kind, «Центр», open, first.
+  await expect(tags(page).locator("h3")).toHaveText([
+    "Остання нічна копія не вдалася",
+    "Відправити 3 посилки",
+    "Відправити 1 посилку",
+    "У «Браку» «Центр» 3 речі очікують перевірки",
+    "Затвердьте початкові залишки",
+    "Затвердьте початкові залишки",
+  ]);
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText([
+    "Закінчується місце на диску",
+    // Its goods oldest first, three of them and how many more.
+    "Центр · Лоран шоколад M · Кокон графіт S × 2 · Мишка чорний L · + ще 1",
+    "Ринок · Мишка чорний S",
+    // Two of the three, oldest first; the one looked at waits on nobody.
+    "Кокон графіт M · Лагуна персик L",
+    // A list kept by another store is not this one's to approve.
+    "Центр · 412 рядків",
+    "Ринок · 2 списки",
+  ]);
+  // A verb where it is done from here: «Ринок»'s are done there.
+  await expect(tags(page).locator(".today-verb")).toHaveText([
+    "Переглянути",
+    "Зібрати й відправити",
+    "Оглянути",
+    "Переглянути й затвердити",
+  ]);
+  await expect(tags(page).nth(2).getByRole("button")).toHaveCount(0);
+  await expect(tags(page).nth(5).getByRole("button")).toHaveCount(0);
+  // The badge counts them: drawn on the glyph, said as the tab's
+  // description, the tab's name its own.
+  await expect(tab(page, "Сьогодні")).toHaveAccessibleDescription(
+    "Чекає на вас: 6",
+  );
+  await expect(tab(page, "Сьогодні").locator(".tab-pill")).toHaveAttribute(
+    "data-badge",
+    "6",
+  );
+  // Something is wrong: no line saying the copies are in order, and no
+  // «⚠» on «Сьогодні»'s own blocks — the menu's «Ще ⚠» stays until P1-5.
+  await expect(page.locator(".today-backups")).toHaveCount(0);
+  await expect(waiting(page)).not.toContainText("⚠");
+});
+
+test("opened at «Ринок»: its tags first of their kind, with the verbs; «Центр»'s say what waits there; trouble on the server with the copies in order", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await backups(page, (body) => {
+    body.server = {
+      looked_at: new Date().toISOString(),
+      open: [
+        {
+          kind: "NOT_ANSWERING",
+          reason: "Не відповідає 3 хв",
+          started_at: new Date().toISOString(),
+          told_at: null,
+        },
+      ],
+      recent: [],
+    };
+  });
+  await parcels(page, centre, [[["Лоран шоколад", "M", 1]]]);
+  await parcels(page, market, [[["Мишка чорний", "S", 1]]]);
+  await me(page);
+  await page.goto(owner());
+  await openStore(page, "Ринок");
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
+  await expect(tags(page).locator("h3")).toHaveText([
+    "Проблема на сервері",
+    "Відправити 1 посилку",
+    "Відправити 1 посилку",
+  ]);
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText([
+    "Сервер не відповідає",
+    "Ринок · Мишка чорний S",
+    "Центр · Лоран шоколад M",
+  ]);
+  await expect(tags(page).locator(".today-verb")).toHaveText([
+    "Переглянути",
+    "Зібрати й відправити",
+  ]);
+  await expect(page.locator(".today-backups")).toHaveCount(0);
+});
+
+test("each verb opens its section, and its «←» comes back to «Сьогодні»", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await failedBackups(page);
+  await parcels(page, centre, [[["Лоран шоколад", "M", 1]]]);
+  await damaged(page, centre, [["Кокон графіт", "M"]]);
+  await lists(page, centre, [5]);
+  await onToday(page);
+  const back = page.getByRole("button", { name: "Назад до «Сьогодні»" });
+  for (const [verb, heading] of [
+    ["Переглянути", "Резервні копії"],
+    ["Переглянути й затвердити", "Початкові залишки"],
+    ["Оглянути", "Брак"],
+  ] as const) {
+    await waiting(page).getByRole("button", { name: verb, exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toBeVisible();
+    // The cursor on «Сьогодні», never lost with the verb, as a row of «Ще»
+    // leaves it on «Ще».
+    await expect(tab(page, "Сьогодні")).toBeFocused();
+    await expect(back).toHaveText("← Сьогодні");
+    await back.click();
+    await expect(
+      page.getByRole("heading", { name: "Сьогодні", exact: true }),
+    ).toBeVisible();
+    await expect(tab(page, "Сьогодні")).toBeFocused();
+  }
+  // Left by the menu, the section a tag opened is opened afresh from «Ще»:
+  // «← Ще», as before.
+  await waiting(page).getByRole("button", { name: "Оглянути" }).click();
+  await expect(back).toBeVisible();
+  await tab(page, "Продаж").click();
+  await section(page, "Брак");
+  await expect(
+    page.getByRole("button", { name: "Назад до «Ще»" }),
+  ).toHaveText("← Ще");
+  await tab(page, "Сьогодні").click();
+  await waiting(page)
+    .getByRole("button", { name: "Зібрати й відправити", exact: true })
+    .click();
+  await expect(tab(page, "Замовлення")).toHaveAttribute("aria-current", "page");
+  await expect(tab(page, "Замовлення")).toBeFocused();
+});
+
+test("a tag goes by itself once its work is done, at the next read, and the badge with it", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  let units: [string, string | null][] = [["Кокон графіт", "M"]];
+  await page.route(
+    `**/api/v1/damaged-units?store_id=${centre}`,
+    async (route) => {
+      await route.fulfill({
+        json: {
+          units: units.map(([display_name, size], at) => ({
+            id: `00000000-0000-4000-8000-6${String(at).padStart(11, "0")}`,
+            display_name,
+            size,
+            status: "AWAITING",
+            returned_at: new Date().toISOString(),
+            status_by: null,
+            status_at: null,
+            sold_from_location_id: "00000000-0000-4000-8000-500000000000",
+            sold_from_location_name: "Основний",
+            back_to_sold_from: true,
+            note: null,
+          })),
+        },
+      });
+    },
+  );
+  await onToday(page);
+  await expect(tags(page)).toHaveText([/У «Браку» «Центр» 1 річ очікує/]);
+  await expect(tab(page, "Сьогодні")).toHaveAccessibleDescription(
+    "Чекає на вас: 1",
+  );
+  // Inspected meanwhile: a minute on, back on the tab, it is read again.
+  units = [];
+  await tab(page, "Продаж").click();
+  await page.clock.fastForward("01:01");
+  await tab(page, "Сьогодні").click();
+  await expect(
+    page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
+  ).toBeVisible();
+  await expect(tags(page)).toHaveCount(0);
+  await expect(tab(page, "Сьогодні")).toHaveAccessibleDescription("");
+  await expect(
+    tab(page, "Сьогодні").locator(".tab-pill"),
+  ).not.toHaveAttribute("data-badge");
+});
+
+test("past seven, «+ ще N»: tapped, the rest, the cursor on the first of them; the badge «9+» past nine", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 741 });
+  const old = fixture.network_old_store_id;
+  await report(
+    page,
+    [
+      [centre, "Центр", centreDay],
+      [market, "Ринок", marketDay],
+      [old, "Старий", { sold: "0.00", units: 0 }],
+    ],
+    totalDay,
+  );
+  for (const store of [centre, market, old]) {
+    await drawer(page, store, null);
+    await debts(page, store, "0.00", 0);
+    await parcels(page, store, [[["Лоран шоколад", "M", 1]]]);
+    await damaged(page, store, [["Кокон графіт", "M"]]);
+    await lists(page, store, [3]);
+  }
+  await failedBackups(page);
+  await onToday(page, owner(), (store) => {
+    if (store.id === old) store.state = "ACTIVE";
+  });
+  await expect(
+    page.getByRole("heading", { name: "Чекає на вас · 10", exact: true }),
+  ).toBeVisible();
+  await expect(tags(page)).toHaveCount(7);
+  await expect(tab(page, "Сьогодні").locator(".tab-pill")).toHaveAttribute(
+    "data-badge",
+    "9+",
+  );
+  await expect(tab(page, "Сьогодні")).toHaveAccessibleDescription(
+    "Чекає на вас: 10",
+  );
+  await waiting(page).getByRole("button", { name: "+ ще 3" }).click();
+  await expect(tags(page)).toHaveCount(10);
+  await expect(waiting(page).getByRole("button", { name: /^\+ ще/ })).toHaveCount(
+    0,
+  );
+  // The first that was folded: «Центр»'s list, the lists last of all.
+  await expect(tags(page).nth(7)).toBeFocused();
+  await expect(tags(page).nth(7).locator("h3")).toHaveText(
+    "Затвердьте початкові залишки",
+  );
+  await expect(tags(page).nth(7).locator(".today-tag-meta")).toHaveText(
+    "Центр · 3 рядки",
+  );
+});
+
+test("nothing waiting: «Вас нічого не чекає.», no count, and the copies in order under it", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await onToday(page);
+  await expect(
+    page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/^Чекає на вас/)).toHaveCount(0);
+  await expect(page.locator(".today-backups")).toHaveText(
+    "Копії в порядку · сьогодні о 03:15",
+  );
+  await expect(
+    tab(page, "Сьогодні").locator(".tab-pill"),
+  ).not.toHaveAttribute("data-badge");
+});
+
+test("a read that fails holds its tag's place and says so: nothing is said to be done, and the rest stands", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await page.route(
+    `**/api/v1/damaged-units?store_id=${market}`,
+    async (route) => {
+      await route.fulfill({ status: 500, json: { code: "INTERNAL" } });
+    },
+  );
+  await onToday(page);
+  const place = waiting(page).locator(".today-tag-wait");
+  await expect(place).toBeVisible();
+  await expect(place).toContainText("не вдалося прочитати");
+  await expect(tags(page)).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
+  ).toHaveCount(0);
+  // The day-tag and the copies' line stand.
+  await expect(dayTag(page).locator(".day-total")).toContainText(
+    "12 050,00 грн",
+  );
+  await expect(page.locator(".today-backups")).toBeVisible();
+});
+
+test("a read that fails again: what waits says how old it is by its heading, its tags as they were", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await twoStores(page);
+  await parcels(page, centre, [[["Лоран шоколад", "M", 1]]]);
+  await orders(page, market, [0, 0, 0]);
+  await onToday(page);
+  await expect(tags(page)).toHaveText([/^Відправити 1 посилку/]);
+  const stamp = page.locator(".today-waiting-head .day-stamp");
+  await expect(stamp).toHaveCount(0);
+  // The parcels' read fails a minute on: the tag stays as it was, and the
+  // block says how old.
+  await page.route(`**/api/v1/orders?store_id=${centre}&**`, async (route) => {
+    const url = route.request().url();
+    if (!url.includes("status=open") || url.includes("offset=")) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: 500, json: { code: "INTERNAL" } });
+  });
+  await tab(page, "Продаж").click();
+  await page.clock.fastForward("01:01");
+  await tab(page, "Сьогодні").click();
+  await expect(stamp).toHaveText(/^дані на \d\d:\d\d$/);
+  await expect(tags(page)).toHaveText([/^Відправити 1 посилку/]);
+});
+
+test("«Вас нічого не чекає.» from a read that has failed since says how old", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await onToday(page);
+  const empty = page.locator(".today-empty");
+  await expect(empty).toContainText("Вас нічого не чекає.");
+  await expect(empty.locator(".day-stamp")).toHaveCount(0);
+  await page.route(
+    `**/api/v1/damaged-units?store_id=${market}`,
+    async (route) => {
+      await route.fulfill({ status: 500, json: { code: "INTERNAL" } });
+    },
+  );
+  await tab(page, "Продаж").click();
+  await page.clock.fastForward("01:01");
+  await tab(page, "Сьогодні").click();
+  await expect(empty.locator(".day-stamp")).toHaveText(
+    /^дані на \d\d:\d\d$/,
+  );
+});
+
+test("a manager of one store: no backups and no lists to approve, «Брак» and the parcels by their rights", async ({
+  page,
+}) => {
+  await report(page, [[centre, "Центр", centreDay]], null);
+  await drawer(page, centre, null);
+  await debts(page, centre, "0.00", 0);
+  await parcels(page, centre, [[["Лоран шоколад", "M", 1]]]);
+  await damaged(page, centre, [["Кокон графіт", "M"]]);
+  await lists(page, centre, [5]);
+  const urls = asked(page);
+  await onToday(
+    page,
+    launch(fixture.network_centre_manager_telegram_user_id, "Марко"),
+  );
+  // One store: its tags unnamed.
+  await expect(tags(page).locator("h3")).toHaveText([
+    "Відправити 1 посилку",
+    "У «Браку» «Центр» 1 річ очікує перевірки",
+  ]);
+  await expect(tags(page).first().locator(".today-tag-meta")).toHaveText(
+    "Лоран шоколад M",
+  );
+  await expect(page.locator(".today-backups")).toHaveCount(0);
+  expect(urls.filter((url) => /\/(backups|snapshots)/.test(url))).toEqual([]);
 });
 
 // --- its age, its failures, its reads ---------------------------------------
@@ -708,8 +1341,9 @@ function asked(page: Page): string[] {
   return urls;
 }
 
-/** How many of the day-tag's own reads were asked: the report, each
- * store's drawer, debts and open orders. */
+/** How many of «Сьогодні»'s own reads were asked: the report, each
+ * store's drawer, debts and open orders; its «Брак» and lists to approve;
+ * the network's backups. */
 function dayReads(urls: readonly string[]): Record<string, number> {
   const count = (pattern: RegExp): number =>
     urls.filter((url) => pattern.test(url)).length;
@@ -718,6 +1352,9 @@ function dayReads(urls: readonly string[]): Record<string, number> {
     drawers: count(/^\/api\/v1\/cash\/drawer\?/),
     debts: count(/^\/api\/v1\/credits\/summary\?/),
     orders: count(/^\/api\/v1\/orders\?.*status=open/),
+    damaged: count(/^\/api\/v1\/damaged-units\?/),
+    lists: count(/^\/api\/v1\/snapshots\?/),
+    backups: count(/^\/api\/v1\/backups$/),
   };
 }
 
@@ -731,7 +1368,15 @@ test("at most twenty reads as it opens, none again within a minute, each again a
   await onToday(page);
   await expect(dayTag(page).locator(".day-online")).toBeVisible();
   await expect(dayTag(page).getByText(/^Винні /)).toHaveCount(2);
-  const once = { report: 1, drawers: 2, debts: 2, orders: 2 };
+  const once = {
+    report: 1,
+    drawers: 2,
+    debts: 2,
+    orders: 2,
+    damaged: 2,
+    lists: 2,
+    backups: 1,
+  };
   // The whole app's, as Бірка opens on «Сьогодні», once its reads have
   // settled; a drawer the app reads for its own store is the day-tag's read
   // too.
@@ -754,7 +1399,15 @@ test("at most twenty reads as it opens, none again within a minute, each again a
   await tab(page, "Сьогодні").click();
   await expect
     .poll(() => dayReads(urls))
-    .toEqual({ report: 2, drawers: 4, debts: 4, orders: 4 });
+    .toEqual({
+      report: 2,
+      drawers: 4,
+      debts: 4,
+      orders: 4,
+      damaged: 4,
+      lists: 4,
+      backups: 2,
+    });
 });
 
 test("in Telegram's dark theme the day-tag's debts and an old stamp read at 4.5:1", async ({
