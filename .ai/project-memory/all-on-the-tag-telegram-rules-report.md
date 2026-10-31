@@ -196,7 +196,19 @@ An independent review of the whole change, before the evidence below:
   on a fresh seed all 17 passed. The change there is a buzz alone.
 - `tsc -b` and `eslint .` clean; the build passes — its main chunk
   542.70 kB, with main's warning over 500 kB.
-- GitHub's checks run on the pull request.
+- **On GitHub's runner** (the pull request): two journeys failed there
+  that pass on this Mac, each fixed:
+  - the kept sale's reopening reloaded the page while a route was still
+    answering the warehouses' read — the reload now waits its routes out;
+  - `openings-file.spec.ts:1790`, not touched here: a list saved while
+    «Початкові залишки»'s first read of the lists was still on its way —
+    slow while «Сьогодні» reads at entry — never opened, because a
+    refetch only waits for a read already running, and that one knew
+    nothing of the new list. A bug of the app since the lists were read
+    so: the running read is now let go and the lists read again
+    (`frontend/src/openings/Openings.tsx`); a new journey holds that first
+    read until the list is saved — it failed before the fix, as on
+    GitHub, and passes after. 813 journeys in all.
 
 ## For the owner
 
