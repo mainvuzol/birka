@@ -5,6 +5,7 @@ import { decimal, kopecks, money } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
 import type { CreditTerms } from "@/sales/types";
 import { api } from "@/shared/api";
+import { hideKeyboard } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { phoneDigits, wholePhone } from "./types";
 import type { CustomerPage } from "./types";
@@ -240,6 +241,9 @@ export function TermsFields({
       event.preventDefault();
       if (next) next.focus();
       else {
+        // The sum confirmed: the keyboard goes (spec §4.4; «Усе на бірці»
+        // task list, P1-2).
+        hideKeyboard();
         event.currentTarget.blur();
         done?.();
       }

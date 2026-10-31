@@ -26,6 +26,7 @@ import {
   daysAgo,
   isoDay,
   movementDone,
+  nothing,
   wayName,
   whenOf,
 } from "./format";
@@ -453,8 +454,18 @@ export function Cash({
     };
     const outcome = await send(body);
     if (outcome.kind === "done") {
-      // A buzz in the hand once the server answers, as at the till (P0-3).
-      buzz("success");
+      // A buzz in the hand once the server answers, as at the till (P0-3);
+      // a difference, short or over, a warning, as its colour is («Усе на
+      // бірці» task list, P1-2). A first count has nothing to differ from.
+      const result = outcome.result;
+      buzz(
+        "opening" in result &&
+          !result.opening &&
+          result.difference !== null &&
+          !nothing(result.difference)
+          ? "warning"
+          : "success",
+      );
       recorded(body, outcome.result);
       setCounting("");
       setStep({ name: "closed" });

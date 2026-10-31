@@ -16,6 +16,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
 import { Toast } from "@/shared/Toast";
+import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import {
   STALE_AFTER,
@@ -352,7 +353,12 @@ function TagRow({
               type="button"
               className="today-verb"
               disabled={held}
-              onClick={verb}
+              onClick={() => {
+                // A tag's verb, felt (spec S04; «Усе на бірці» task list,
+                // P1-2).
+                buzz("light");
+                verb();
+              }}
             >
               {words}
             </button>
@@ -440,6 +446,8 @@ function WaitingTags({
     if (event.detail !== 0 && event.timeStamp - seenAt.current < CARRIED_TAP)
       return;
     seenAt.current = event.timeStamp;
+    // «Бачу», felt as a choice, as S04 has it (P1-2).
+    buzz("selection");
     see(scopeKey, id);
     cursor.current = { at };
     setHidden((last) => ({ tag, seen: id, times: (last?.times ?? 0) + 1 }));

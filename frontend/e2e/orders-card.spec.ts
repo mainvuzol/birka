@@ -238,11 +238,15 @@ async function stub(page: Page, server: Server): Promise<void> {
     });
 }
 
+/** The answers' buzzes: a choice's and a tap's are telegram-rules.spec's
+ * («Усе на бірці» task list, P1-2). */
 async function buzzes(page: Page): Promise<object[]> {
   const sent = await page.evaluate(
     () => (window as unknown as { buzzes: string[] }).buzzes,
   );
-  return sent.map((data) => JSON.parse(data) as object);
+  return sent
+    .map((data) => JSON.parse(data) as { type: string })
+    .filter((buzz) => buzz.type === "notification");
 }
 
 async function open(
@@ -790,8 +794,10 @@ test("a step whose answer never came names its step and its order, and is never 
       shown: "Лоран шоколад · M · Нова пошта · ТТН 20451234",
     }),
   ]);
-  // Kept: nothing is said to be recorded, nothing buzzes.
-  expect(await buzzes(page)).toEqual([]);
+  // Kept: nothing is said to be recorded; it is felt once, a warning (spec
+  // §4.4; «Усе на бірці» task list, P1-2).
+  const warned = { type: "notification", notification_type: "warning" };
+  expect(await buzzes(page)).toEqual([warned]);
   await expect(page.getByText(/^Відправлено ·/)).toHaveCount(0);
   await again.click();
   await expect(
@@ -800,6 +806,7 @@ test("a step whose answer never came names its step and its order, and is never 
     }),
   ).toBeVisible();
   expect(await buzzes(page)).toEqual([
+    warned,
     { type: "notification", notification_type: "success" },
   ]);
   // The same command, resent, byte for byte, and nothing only shown in it.
@@ -1792,7 +1799,10 @@ test("a return whose answer never came names its step and its order; checked aga
       hasText: /^Операцію «Прийняти повернення» записано один раз$/,
     }),
   ).toBeVisible();
+  // Kept, it was felt once, a warning (spec §4.4; «Усе на бірці» task
+  // list, P1-2); recorded, a success.
   expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "warning" },
     { type: "notification", notification_type: "success" },
   ]);
   expect(server.sent).toHaveLength(2);

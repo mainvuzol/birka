@@ -17,7 +17,7 @@ import { SendingLine } from "@/shared/Sending";
 import { Banner } from "@/shared/Banner";
 import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { backNoted, useReach } from "@/shared/reach";
-import { buzz } from "@/shared/telegram";
+import { buzz, hideKeyboard } from "@/shared/telegram";
 import { usePanelRoom } from "@/shared/panel";
 import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
@@ -28,7 +28,7 @@ import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useSettled, useStock } from "./StockSearch";
 import { PriceHint, priceText } from "./PriceHint";
 import { setPaper, setSoldBy, usePaper } from "./paper";
-import { forgetBasket, keepBasket, keptBasket } from "./basket";
+import { forgetBasket, keepBasket, keptBasket, outlives } from "./basket";
 import type { Basket, Draft } from "./basket";
 import {
   PaperKind,
@@ -164,7 +164,7 @@ export function Sale({
     const basket = keptBasket(keptAt);
     if (basket === null || basket.draft.length === 0) return null;
     if (basket.moved === moved) return basket;
-    return basket.paper || !paper
+    return !outlives(basket, moved, paper)
       ? null
       : {
           ...basket,
@@ -465,13 +465,20 @@ export function Sale({
     };
     const at = draft.findIndex((d) => stockKey(d.line) === stockKey(line));
     setValidation("");
+    // The search done with, the keyboard goes — unless a new line's price is
+    // to be typed next; and a coat in the basket is felt (spec §4.4; «Усе
+    // на бірці» task list, P1-2).
+    if (item.suggested_price || at >= 0) hideKeyboard();
     if (at >= 0) {
       const held = draft[at];
-      if (held && held.line.quantity < 1000)
+      if (held && held.line.quantity < 1000) {
         change(at, { quantity: held.line.quantity + 1 });
+        buzz("light");
+      }
       return;
     }
     if (draft.length >= 100) return;
+    buzz("light");
     const id = crypto.randomUUID();
     replaceDraft([
       ...draft,
@@ -1341,6 +1348,7 @@ export function Sale({
                             На місці фактично є, шт.
                             <input
                               inputMode="numeric"
+                              enterKeyHint="done"
                               value={present}
                               onChange={(event) => {
                                 setPresent(event.target.value);
@@ -1448,6 +1456,7 @@ export function Sale({
                         disabled={d.line.quantity <= 1}
                         onClick={() => {
                           change(index, { quantity: d.line.quantity - 1 });
+                          buzz("light");
                         }}
                       >
                         −
@@ -1459,6 +1468,7 @@ export function Sale({
                         disabled={d.line.quantity >= 1000}
                         onClick={() => {
                           change(index, { quantity: d.line.quantity + 1 });
+                          buzz("light");
                         }}
                       >
                         +
@@ -1483,6 +1493,7 @@ export function Sale({
                         onKeyDown={(event) => {
                           if (event.key !== "Enter") return;
                           event.preventDefault();
+                          hideKeyboard();
                           closeBasket();
                         }}
                       />

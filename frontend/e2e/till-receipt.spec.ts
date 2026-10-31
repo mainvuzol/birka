@@ -320,12 +320,15 @@ test("Telegram buzzes once the server has answered: success when sold, error whe
       },
     });
   });
+  // The answers' buzzes: a coat's and a choice's are telegram-rules.spec's.
   const buzzes = async () =>
     (
       await page.evaluate(
         () => (window as unknown as { buzzes: string[] }).buzzes,
       )
-    ).map((data) => JSON.parse(data) as unknown);
+    )
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification");
   await onTheTill(page, "8.0");
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await pay(page, "Готівка").click();

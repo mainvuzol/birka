@@ -5114,3 +5114,75 @@ needs; what was seen is this phone's alone (В-Т3 (а)). P0-6 is closed.
   store's news; the drawer's day and the phone's side by side before six;
   a stocktakes read for each warehouse (two stores with two each: 20 reads
   at entry).
+
+## Chosen in chat — 2026-10-31 (Telegram's rules for the build, «Усе на бірці» P1-2)
+
+Chosen in chat on 2026-10-31 («Start P1-2»), after #158: the frame's P1-2,
+every owner question of it as its (а) until answered
+(`all-on-the-tag-telegram-rules-report.md`). No right, rule or figure
+changes: what changes is what Telegram is told — its question before
+closing, the keyboard, the MainButton, the buzz and the screen's turn.
+- **The question before closing** (`web_app_setup_closing_behavior`) is
+  built by В-Т7 (а), against the owner's В7 (а) of 2026-10-26 (navigation
+  task list): on while the till's basket holds goods — on the till, or
+  left for another tab of the same store — while a sale kept on the phone
+  waits to be checked, and while a sum is typed on S21; off otherwise. A
+  basket from paper, gone as the paper switch is turned off on another
+  screen, holds nothing: the question and the lock go with it.
+- **Decided here:**
+  - the sum typed is S21's at the till's «Внесок» and in «Борги»'s debt
+    alike: the same form; off once the payment is taken, on again with the
+    next sum; a payment kept on the phone keeps its sum on S21, and the
+    question with it;
+  - the screen kept upright (`web_app_toggle_orientation_lock`) while the
+    basket holds goods — the spec's «while a basket is open» read as a
+    sale under way, not as its sheet open; Telegram's lock keeps the
+    screen as it is, so it is asked only while the phone is upright: held
+    sideways as the first coat goes in, the screen is not locked so, and
+    it is locked once the phone turns upright (review); the count's lock
+    is «Каса»'s task list's;
+  - the keyboard goes (`web_app_hide_keyboard` where Telegram knows it,
+    and the field lets go of the cursor everywhere — review) on: a size
+    cell at the till when its model has a price, or the coat is already in
+    the basket — a new line without a price opens the sheet with the price
+    in focus; a return's sale found; a
+    debt's customer found; the price confirmed by the keyboard's key; what
+    is paid now confirmed by it. «Каса»'s count and move keep theirs
+    (part 2, the sections' task lists);
+  - every field of part 1 says its key: the reason's fields «enter», a
+    new line; the keypad's sum opens no keyboard and says none;
+  - the MainButton is S22's «Відкрити борг» for a payment's result, at the
+    till's «Внесок» and in «Борги» — the frame's «in a deposit, never» read
+    as the payment's form, as the spec's rule 4 forbids a MainButton in the
+    sale's loop and the payment's form only; a write-off's result keeps both its buttons. In
+    Telegram the screen draws no «Відкрити борг» of its own: one primary
+    a screen (spec §3, P2). In `primary` / `on-primary`, painted again
+    when Telegram's theme turns;
+  - the buzz, by the spec's vocabulary (§4.4):
+    - a choice (`selection_change`): a store at its door, a way of the
+      till («Продати · Повернути · Внесок»), «Бачу» (S04);
+    - a light tap (`impact light`): a coat into the basket by its cell —
+      one tap, one buzz: never a choice too, though S09 names both —
+      «Менше» / «Більше» in the basket, a tag's verb on «Сьогодні»;
+    - a warning: an operation kept on the phone, once, as it is first kept
+      — a sale, an order's step, a return, a payment, every journal's
+      command, a catalog's proposal — never again at a later check still
+      unanswered; and a close short or over by any sum, under a hryvnia
+      too, which wants no reason, in place of its success: as its colour
+      is (review);
+    - success and error as before;
+  - a kept operation's warning replaces «a lost answer buzzes nothing»
+    (returns task list, P2-5) and «kept, no buzz» (orders): the spec and
+    the frame name a kept operation a warning;
+  - Telegram is told only where it names its version, and only what the
+    version knows: the question before closing from 6.2 — the SDK here
+    takes it for any — the screen's turn from 8.0, the keyboard from 9.1,
+    the buzz from 6.1, the MainButton in any; where it names none, nothing,
+    and S22 draws its own «Відкрити борг».
+- **For the owner:** the question before closing — В-Т7 (а) against your
+  В7 (а); S22's MainButton — the frame's «Відкрити борг» against the spec's
+  «Готово»; S22's MainButton at the till's «Внесок», against the frame's
+  «в кассе, возврате и внеске — никогда» if it means the deposit's result
+  too; a kept operation now felt as a warning where it was felt as
+  nothing; a cell felt once, as the coat, where S09 names a choice and a
+  tap.

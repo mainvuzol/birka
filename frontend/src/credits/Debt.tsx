@@ -26,7 +26,7 @@ import {
 } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
-import { buzz } from "@/shared/telegram";
+import { buzz, useAskBeforeClosing } from "@/shared/telegram";
 import { Sum } from "@/shared/Sum";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
@@ -297,6 +297,9 @@ export function Debt({
   }, [allGoods]);
   const cents = kopecks(amount);
   const typed = cents !== null && cents > 0n;
+  // A sum typed and not yet taken: Telegram asks before Бірка closes (spec
+  // §4.4; «Усе на бірці» task list, P1-2).
+  useAskBeforeClosing(takes && paid === null && amount.trim() !== "");
   // Typed, but not a sum read to the kopeck: said in the panel, not left to
   // dead buttons (review, 2026-10-18).
   const unreadable = amount.trim() !== "" && cents === null;
@@ -386,7 +389,8 @@ export function Debt({
       },
     });
     // A buzz in the hand once the server answers, as at the till and in
-    // «Повернення» (P0-5); a lost answer, and one confirmed later, none.
+    // «Повернення» (P0-5); a lost answer is its journal's warning (spec
+    // §4.4; «Усе на бірці» task list, P1-2), one confirmed later, none.
     if (outcome.kind === "done") {
       buzz("success");
       setRecorded((count) => count + 1);
@@ -971,6 +975,7 @@ export function Debt({
                     <label>
                       Чому списуємо
                       <textarea
+                        enterKeyHint="enter"
                         value={reason}
                         maxLength={1000}
                         aria-describedby={hint}

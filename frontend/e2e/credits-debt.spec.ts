@@ -457,7 +457,7 @@ test("a payment's result says what was done, how, the sum large and what is owed
   await expect(page.getByLabel("Ім’я або телефон")).toHaveValue("Окс");
 });
 
-test("Telegram buzzes once the server has answered a payment: success when recorded, error when refused; a lost answer, and its confirmation later, nothing", async ({
+test("Telegram buzzes once the server has answered a payment: success when recorded, error when refused; a lost answer a warning, its confirmation later nothing", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -497,18 +497,32 @@ test("Telegram buzzes once the server has answered a payment: success when recor
     await route.fallback();
   });
   await opened(page, undefined, "8.0");
-  const buzzes = (): Promise<string[]> =>
-    page.evaluate(() => (window as unknown as { buzzes: string[] }).buzzes);
+  // The answers' buzzes: a choice's are telegram-rules.spec's.
+  const buzzes = async (): Promise<object[]> =>
+    (
+      await page.evaluate(
+        () => (window as unknown as { buzzes: string[] }).buzzes,
+      )
+    )
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification");
 
   await page.getByLabel("Сума внеску, грн").fill("400");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
   await expect(page.locator(".paid-result")).toBeVisible();
-  expect((await buzzes()).map((data) => JSON.parse(data) as object)).toEqual([
+  expect(await buzzes()).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
-  await page
-    .getByRole("button", { name: "Відкрити борг", exact: true })
-    .click();
+  // «Відкрити борг»: Telegram's MainButton here («Усе на бірці» task list,
+  // P1-2).
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
   refuse = true;
   await page.getByLabel("Сума внеску, грн").fill("300");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
@@ -517,11 +531,11 @@ test("Telegram buzzes once the server has answered a payment: success when recor
     { type: "notification", notification_type: "success" },
     { type: "notification", notification_type: "error" },
   ];
-  expect((await buzzes()).map((data) => JSON.parse(data) as object)).toEqual(
-    twice,
-  );
+  expect(await buzzes()).toEqual(twice);
 
-  // A lost answer is not an answer; confirmed later, nothing either.
+  // A lost answer is not an answer, but a payment kept on the phone: felt
+  // once, a warning (spec §4.4; «Усе на бірці» task list, P1-2); confirmed
+  // later, nothing.
   refuse = false;
   lose = true;
   await page.getByLabel("Сума внеску, грн").fill("100");
@@ -536,9 +550,10 @@ test("Telegram buzzes once the server has answered a payment: success when recor
   await expect(
     page.getByRole("heading", { name: "Внесок записано один раз" }),
   ).toBeVisible();
-  expect((await buzzes()).map((data) => JSON.parse(data) as object)).toEqual(
-    twice,
-  );
+  expect(await buzzes()).toEqual([
+    ...twice,
+    { type: "notification", notification_type: "warning" },
+  ]);
 });
 
 test("a debt of more goods than one names the first, and all of them on a tap", async ({

@@ -30,7 +30,8 @@ const fixture = JSON.parse(
 const centre = fixture.network_centre_store_id;
 const market = fixture.network_market_store_id;
 
-function launch(who: string, name: string): string {
+/** Opened from Telegram; `version` as its launch data names it, if at all. */
+function launch(who: string, name: string, version?: string): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${who},"first_name":"${name}"}`,
@@ -43,7 +44,9 @@ function launch(who: string, name: string): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
+  if (version) hash.set("tgWebAppVersion", version);
+  return `/#${hash.toString()}`;
 }
 
 const owner = (): string =>
@@ -1738,6 +1741,58 @@ test("«Бачу»: the tag goes, «Бірку сховано.» with «Пове
   await expect(sheet.locator(".today-done-row .t-row")).toHaveText([
     counted,
     short,
+  ]);
+});
+
+test("in Telegram, «Бачу» is felt as a choice and a tag's verb as a light tap; «Сьогодні» opening, nothing (spec S04; «Усе на бірці» task list, P1-2)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  const buzzes = async (): Promise<unknown[]> =>
+    (
+      await page.evaluate(
+        () => (window as unknown as { buzzes: string[] }).buzzes,
+      )
+    ).map((data) => JSON.parse(data) as unknown);
+  await page.clock.install({ time: noon() });
+  await twoStores(page);
+  await failedBackups(page);
+  await closes(page, [shortYesterday]);
+  await onToday(
+    page,
+    launch(fixture.network_owner_telegram_user_id, "Власник", "9.1"),
+  );
+  const short = tags(page).filter({ hasText: "нестача" });
+  await expect(short).toBeVisible();
+  // The store chosen at its door: a choice. The screen opening: nothing.
+  const choice = { type: "selection_change" };
+  expect(await buzzes()).toEqual([choice]);
+  await short.getByRole("button", { name: "Бачу" }).click();
+  await expect(short).toHaveCount(0);
+  expect(await buzzes()).toEqual([choice, choice]);
+  await waiting(page)
+    .getByRole("button", { name: "Переглянути", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Резервні копії", exact: true }),
+  ).toBeVisible();
+  expect(await buzzes()).toEqual([
+    choice,
+    choice,
+    { type: "impact", impact_style: "light" },
   ]);
 });
 

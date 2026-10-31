@@ -1,4 +1,11 @@
-import { isColorDark, on, postEvent, supports } from "@telegram-apps/sdk-react";
+import { useEffect, useRef } from "react";
+import {
+  compareVersions,
+  isColorDark,
+  on,
+  postEvent,
+  supports,
+} from "@telegram-apps/sdk-react";
 
 /** Launch credentials stay in memory: the SDK launch reader persists them. */
 export function telegramInitData(): string | null {
@@ -145,11 +152,16 @@ export function connectTelegram(): () => void {
   const unsubscribe = on("theme_changed", ({ theme_params }) => {
     applyTheme(theme_params);
     paintTelegram();
+    tellMain(true);
   });
   const unwatch = on("viewport_changed", ({ height, is_state_stable }) => {
     keepStableHeight(height, is_state_stable);
   });
   const unpress = on("back_button_pressed", pressBack);
+  const unpressMain = on("main_button_pressed", pressMain);
+  // Turned upright while a basket holds goods: locked then.
+  const turns = uprightNow();
+  turns.addEventListener("change", portrait.settle);
   const version = launchParam("tgWebAppVersion");
   try {
     postEvent("web_app_ready");
@@ -170,6 +182,8 @@ export function connectTelegram(): () => void {
     unsubscribe();
     unwatch();
     unpress();
+    unpressMain();
+    turns.removeEventListener("change", portrait.settle);
   };
 }
 
@@ -247,21 +261,270 @@ function pressBack(): void {
 }
 
 /**
- * A buzz in the hand when the server answers the till's press (redesign
- * P1-1): success once a sale is recorded, error once it is refused. Only
- * inside Telegram, and only where its version has haptics.
+ * A buzz in the hand (redesign P1-1; spec §4.4; «Усе на бірці» task list,
+ * P1-2): `success` once the server records a sale, a payment, a step;
+ * `error` once it refuses; `warning` for an operation kept on the phone and
+ * a drawer's difference; `selection` for a choice — a segment, a store, a
+ * size picked; `light` for a coat into the basket, ±1, a tag's verb. Never
+ * on a scroll, a key or a screen opening. Only inside Telegram, and only
+ * where its version has haptics.
  */
-export function buzz(kind: "success" | "error"): void {
+export type Buzz = "success" | "error" | "warning" | "selection" | "light";
+
+export function buzz(kind: Buzz): void {
   if (!telegramInitData()) return;
   const version = launchParam("tgWebAppVersion");
   try {
     if (!version || !supports("web_app_trigger_haptic_feedback", version))
       return;
-    postEvent("web_app_trigger_haptic_feedback", {
-      type: "notification",
-      notification_type: kind,
-    });
+    if (kind === "selection")
+      postEvent("web_app_trigger_haptic_feedback", {
+        type: "selection_change",
+      });
+    else if (kind === "light")
+      postEvent("web_app_trigger_haptic_feedback", {
+        type: "impact",
+        impact_style: "light",
+      });
+    else
+      postEvent("web_app_trigger_haptic_feedback", {
+        type: "notification",
+        notification_type: kind,
+      });
   } catch {
     /* No Telegram host to buzz. */
   }
+}
+
+/** Telegram's version, inside Telegram: told nothing where it names none,
+ * as its «Назад» and its buzz are not. */
+function telegramVersion(): string | null {
+  return telegramInitData() ? launchParam("tgWebAppVersion") : null;
+}
+
+/** Whether this Telegram knows a method its SDK here does not yet: the
+ * keyboard's (9.1) and the orientation's (8.0) — or takes for any version:
+ * the question before closing (6.2). */
+function knows(since: string): boolean {
+  const version = telegramVersion();
+  return version !== null && compareVersions(version, since) >= 0;
+}
+
+/** A method the SDK here does not name, posted as any other. */
+function postNew(method: string, params?: Record<string, unknown>): void {
+  const post: (method: string, params?: unknown) => void = postEvent;
+  post(method, params);
+}
+
+/** Something Telegram holds: asked for by screens, and told again when what
+ * it may hold by changes. */
+interface Held {
+  hold: (on: boolean) => void;
+  settle: () => void;
+}
+
+/**
+ * Something Telegram holds while any screen asks for it and `may` allows,
+ * told only when it changes, once the screens have settled — a screen and
+ * the next asking in turn never make it blink — and only inside Telegram
+ * that names its version.
+ */
+function held(
+  tell: (on: boolean) => void,
+  may: () => boolean = () => true,
+): Held {
+  let holds = 0;
+  let told = false;
+  let asked = false;
+  const settle = (): void => {
+    if (asked) return;
+    asked = true;
+    queueMicrotask(() => {
+      asked = false;
+      const on = holds > 0 && may();
+      if (on === told || telegramVersion() === null) return;
+      told = on;
+      try {
+        tell(on);
+      } catch {
+        /* No Telegram host to tell. */
+      }
+    });
+  };
+  return {
+    hold: (on: boolean): void => {
+      holds += on ? 1 : -1;
+      settle();
+    },
+    settle,
+  };
+}
+
+/** Held while `on`, by a mounted screen. */
+function useHeld({ hold }: Held, on: boolean): void {
+  useEffect(() => {
+    if (!on) return;
+    hold(true);
+    return () => {
+      hold(false);
+    };
+  }, [hold, on]);
+}
+
+/** Telegram's question before closing came with 6.2, though the SDK here
+ * takes it for any version. */
+const closing = held((on) => {
+  if (knows("6.2"))
+    postEvent("web_app_setup_closing_behavior", { need_confirmation: on });
+});
+
+/**
+ * Telegram asks before Бірка closes (spec §4.4, rule 2; «Усе на бірці» task
+ * list, P1-2; В-Т7 (а)) while something here would be lost or left unknown:
+ * a basket with goods, a payment's sum typed, a sale waiting to be checked.
+ */
+export function useAskBeforeClosing(on: boolean): void {
+  useHeld(closing, on);
+}
+
+/** Telegram's lock keeps the screen as it is, upright or not: asked only
+ * while the phone is upright, and as it turns upright (review,
+ * 2026-10-31). */
+const uprightNow = (): MediaQueryList =>
+  window.matchMedia("(orientation: portrait)");
+
+const portrait = held(
+  (on) => {
+    if (knows("8.0"))
+      postNew("web_app_toggle_orientation_lock", { locked: on });
+  },
+  () => uprightNow().matches,
+);
+
+/** The screen kept upright while a basket is open (spec §4.4, rule 7):
+ * turning the phone never moves the till under the finger. Held sideways,
+ * it is locked once it is upright. */
+export function useLockPortrait(on: boolean): void {
+  useHeld(portrait, on);
+}
+
+/**
+ * The keyboard away (spec §4.4, rule 3): a size cell, a search's result
+ * tapped, a sum confirmed — what was typed is done with. Telegram's own way
+ * where it knows it; and the field lets go of the cursor, which a tap on a
+ * button does not take everywhere.
+ */
+export function hideKeyboard(): void {
+  if (knows("9.1")) {
+    try {
+      postNew("web_app_hide_keyboard");
+    } catch {
+      /* No Telegram host: the field lets go. */
+    }
+  }
+  // The field lets go in Telegram's way too: the cursor put back later
+  // brings the keyboard back (review, 2026-10-31).
+  const field = document.activeElement;
+  if (
+    field instanceof HTMLTextAreaElement ||
+    (field instanceof HTMLInputElement &&
+      !["button", "checkbox", "radio", "submit"].includes(field.type))
+  )
+    field.blur();
+}
+
+/** Whether Telegram's MainButton is here: inside Telegram, any version. */
+function mainButtonHere(): boolean {
+  return telegramVersion() !== null;
+}
+
+/** A screen's one action, as Telegram's MainButton shows it. */
+interface MainAction {
+  text: string;
+  press: () => void;
+}
+
+/** The screens that want the MainButton, in the order they came: the last
+ * is shown. */
+const mains: MainAction[] = [];
+
+/** What Telegram was last told the MainButton says: hidden as the app
+ * opens. */
+let mainShown: string | null = null;
+let mainAsked = false;
+
+/** Told once the screens have settled — a screen mounted twice, or the
+ * next taking it from the last, never makes it blink — and only when it
+ * changes, unless the theme did. */
+function showMain(): void {
+  if (mainAsked) return;
+  mainAsked = true;
+  queueMicrotask(() => {
+    mainAsked = false;
+    tellMain(false);
+  });
+}
+
+function tellMain(repaint: boolean): void {
+  const text = mains.at(-1)?.text ?? null;
+  if ((text === mainShown && !repaint) || !mainButtonHere()) return;
+  if (repaint && text === null) return;
+  mainShown = text;
+  // In the app's `primary` and `on-primary`, read from the theme shown.
+  const color = colourOf("--primary");
+  const textColor = colourOf("--on-primary");
+  try {
+    postEvent(
+      "web_app_setup_main_button",
+      text === null
+        ? { is_visible: false }
+        : {
+            is_visible: true,
+            is_active: true,
+            text,
+            ...(color ? { color } : {}),
+            ...(textColor ? { text_color: textColor } : {}),
+          },
+    );
+  } catch {
+    /* No Telegram host to tell. */
+  }
+}
+
+/** Telegram's MainButton pressed: the shown screen's action. */
+function pressMain(): void {
+  mains.at(-1)?.press();
+}
+
+/**
+ * Telegram's MainButton for a screen's one action (spec §4.4, rules 4 and
+ * 8; «Усе на бірці» task list, P1-2): set as the screen opens, in the app's
+ * `primary` and `on-primary`, cleared as it closes; never on the till, the
+ * return or a payment, and never one that pays. Pressed, `press`. Says
+ * whether it is shown — the screen then draws no button of its own for it;
+ * outside Telegram it does.
+ */
+export function useMainButton(text: string, press: () => void): boolean {
+  const here = mainButtonHere();
+  const latest = useRef(press);
+  useEffect(() => {
+    latest.current = press;
+  });
+  useEffect(() => {
+    if (!here) return;
+    const main: MainAction = {
+      text,
+      press: () => {
+        latest.current();
+      },
+    };
+    mains.push(main);
+    showMain();
+    return () => {
+      const at = mains.indexOf(main);
+      if (at >= 0) mains.splice(at, 1);
+      showMain();
+    };
+  }, [here, text]);
+  return here;
 }
