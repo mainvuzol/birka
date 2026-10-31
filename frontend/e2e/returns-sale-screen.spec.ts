@@ -1,11 +1,14 @@
 import {
   test,
   expect,
+  countTaps,
   expectStub,
   fromPaper,
   openStore,
   section,
   returnUnits,
+  tillWays,
+  toTill,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -284,6 +287,72 @@ async function contrast(element: Locator): Promise<number> {
 
 const panelOf = (page: Page): Locator =>
   page.getByRole("group", { name: "Повернення: сума і спосіб" });
+
+test("a return in four taps from the till: «Повернути» — its field where the till's stood — the sale's row, «Цілі: більше», and the button that hands the money back, its way the sale's («Усе на бірці» task list, P1-3)", async ({
+  page,
+}) => {
+  const { sent } = await oneSale(page, [line("Лоран шоколад", 1)]);
+  // The till sells from its one warehouse, which has its goods: its search
+  // stands under the switch, nothing said over it.
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    const response = await route.fetch();
+    const rows = (await response.json()) as { id: string }[];
+    await route.fulfill({
+      response,
+      json: rows
+        .filter((row) => row.id === fixture.till_location_id)
+        .map((row) => ({
+          ...row,
+          is_active: true,
+          can_sell: true,
+          awaiting_first_stock: false,
+        })),
+    });
+  });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  const ways = tillWays(page);
+  await expect(
+    ways.getByRole("button", { name: "Продати", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  const tillSearch = page.getByRole("searchbox", { name: "Знайти модель" });
+  await expect(tillSearch).toBeVisible();
+  const tillField = await tillSearch.boundingBox();
+  const taps = await countTaps(page);
+  await ways.getByRole("button", { name: "Повернути", exact: true }).click();
+  // The returns' field where the till's stood: switching moves nothing
+  // under the finger.
+  const returnsSearch = page.getByRole("searchbox", {
+    name: "Що повертають?",
+  });
+  await expect(returnsSearch).toBeVisible();
+  const returnsField = await returnsSearch.boundingBox();
+  if (!tillField || !returnsField) throw new Error("not laid out");
+  expect(Math.round(returnsField.y)).toBe(Math.round(tillField.y));
+  expect(returnsField.height).toBe(tillField.height);
+  await page
+    .getByRole("button", { name: /^Оформити повернення: Лоран шоколад · M, / })
+    .click();
+  await page.getByRole("button", { name: "Цілі: більше" }).click();
+  await panelOf(page)
+    .getByRole("button", {
+      name: "Повернути покупцю 3 000,00 грн готівкою",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeVisible();
+  expect(await taps()).toBe(4);
+  expect(sent).toEqual([
+    expect.objectContaining({
+      payment_method: "CASH",
+      lines: [expect.objectContaining({ quantity: 1, condition: "INTACT" })],
+    }),
+  ]);
+});
 
 test("before a tap: nine things to see, nothing to type and nothing to press; a unit counted brings the panel, thirteen", async ({
   page,

@@ -5186,3 +5186,45 @@ closing, the keyboard, the MainButton, the buzz and the screen's turn.
   too; a kept operation now felt as a warning where it was felt as
   nothing; a cell felt once, as the coat, where S09 names a choice and a
   tap.
+
+## Chosen in chat — 2026-10-31 («Повернути» in the new system, «Усе на бірці» P1-3)
+
+Chosen in chat on 2026-10-31 («merged go next»), after #159: the frame's
+P1-3 (`all-on-the-tag-returns-report.md`). No right, rule, word or figure
+changes: what changes is where the returns' words stand and how their rows
+are drawn.
+- **The returns' list is the till's place:** headed «Продаж», as the till
+  and the till's «Внесок» are, «Повернути» pressed under it — for whoever
+  only takes returns too, whose «Продаж» opens them with no switch. Its
+  own «Повернення» goes from the list; the sale's screen keeps it, nested.
+- **Decided here:**
+  - the field is the till's search (spec §6.6), in the till's place under
+    the switch — switching from «Продати» moves nothing while nothing is
+    said over the till's field; «Внесок» keeps its own form until its task:
+    its name «Що повертають?» is read, not seen, and its hint
+    «Модель або колір» is what is seen in it — both the owner's words of
+    2026-10-17, neither changed; the spec's «search «Що повертають?»» read
+    as the field's name. It takes 100 letters, as the server's search of
+    sales does, and empties by its «×» as the till's does;
+  - a row (§6.8) is 64 high at least, its goods the row's title, 17/600 in
+    ink; the hour leads the line under them, with the count and the
+    stickers, as before — the frame's «{Модель} {колір} · {розмір} ·
+    ГГ:ХХ» read as the row's reading order, since a sale of two lines
+    cannot carry its hour after each size; no sum, as before;
+  - the rows keep the app's lists' rhythm — on the page, a line between —
+    as «Борги», «Каса», «Ще» and the orders draw theirs, not on a card of
+    their own (§6.8's card and inset): one list looking unlike the rest
+    would be read as a different thing;
+  - a sale returned whole, which opens nothing, has its goods in pencil,
+    as §6.8's row that takes no tap (review); its sticker says why;
+  - the field's «×» forgets an Enter, as «Очистити» does: the same letters
+    typed again wait for the pause (review);
+  - the sale's screen, its dock over the menu and the result's stub are
+    as P0-2 and P0-4 built them: «Повернення» at 28 with «← До списку»,
+    «Продаж {день, ГГ:ХХ} · {сума}» under it.
+- **A return is 4 taps** from the till, as before (`hot-path-budget-report.md`):
+  «Повернути», the sale's row, «Цілі: більше», «Повернути покупцю …», the
+  way the sale's own.
+- **For the owner:** the row's hour under the goods, where the frame writes
+  it after the size; the rows in the app's lists' rhythm, not on a card;
+  «Що повертають?» read and «Модель або колір» seen, as at the till.

@@ -32,6 +32,7 @@ import {
 import { buzz, hideKeyboard } from "@/shared/telegram";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { SearchField } from "@/shared/SearchField";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
 import { SaleRow, dayOf, dayTitle } from "./SaleRow";
@@ -236,34 +237,36 @@ export function Returns({
       />
     );
 
+  // The till's own heading and place, «Повернути» pressed under it: one
+  // title for the place, the field's name read and its hint seen, the field
+  // where the till's stands («Усе на бірці» task list, P1-3).
   return (
     <>
-      <ScreenHeader title="Повернення" />
+      <ScreenHeader title="Продаж" />
       <section className="returns">
         {mode}
         <form
-          className="search"
+          className="find"
           role="search"
           onSubmit={(event) => {
             event.preventDefault();
             setPressed(query.trim().length >= 2 ? query.trim() : "");
           }}
         >
-          <label className="till-search">
-            Що повертають?
-            <input
-              type="search"
-              enterKeyHint="search"
-              autoComplete="off"
-              placeholder="Модель або колір"
-              ref={field}
-              maxLength={100}
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-              }}
-            />
-          </label>
+          <SearchField
+            label="Що повертають?"
+            placeholder="Модель або колір"
+            maxLength={100}
+            value={query}
+            change={(text) => {
+              // An Enter is for what was typed then: its «×» or a letter
+              // more, and the search waits for the pause again, as after
+              // «Очистити» (review).
+              setQuery(text);
+              setPressed("");
+            }}
+            inputRef={field}
+          />
         </form>
         {away && (
           // Never mixed with this store's: headed, and left in one tap.

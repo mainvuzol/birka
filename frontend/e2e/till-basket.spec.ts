@@ -294,7 +294,9 @@ test("the basket stays while the till is left — «Повернути», «За
   // «Повернути», and back by «Продати».
   const ways = tillWays(page);
   await ways.getByRole("button", { name: "Повернути", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   await ways.getByRole("button", { name: "Продати", exact: true }).click();
   await asItWas(page);
   // «Замовлення», and back by «Продаж» («Усе на бірці» task list, P0-4).

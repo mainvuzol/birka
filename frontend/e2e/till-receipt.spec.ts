@@ -448,7 +448,9 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await toTill(page);
   // «Повернення» read before the sale: its page then is not the one opened.
   await section(page, "Повернення");
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(coat.name);
   const [variant = "", size = ""] = coat.option.split(":");
@@ -612,7 +614,9 @@ test("a return asked from the receipt whose list could not be read opens no sale
     else await route.continue();
   });
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   await expect(page.getByRole("alert")).toBeVisible();
   // The list read again, on the same screen: the list, not that sale.
   fail = false;
@@ -650,7 +654,9 @@ test("a return asked from the receipt and left before its list came opens no sal
     await route.continue();
   });
   await page.getByRole("button", { name: "Оформити повернення" }).click();
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   // Left at once, for the till; the list comes after.
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   release();
