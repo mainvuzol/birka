@@ -419,14 +419,190 @@ async function backups(
   });
 }
 
+const way = (): Record<string, string> => ({
+  came_in: "0.00",
+  went_out: "0.00",
+  corrected: "0.00",
+  net: "0.00",
+});
+
+/** A close of a store's drawer, as `GET /cash/closes` answers it. */
+interface Closing {
+  store: string;
+  name: string;
+  /** The drawer's day it closed. */
+  day: string;
+  at: Date;
+  by: string;
+  /** None for a first count. */
+  difference: string | null;
+  reason: string | null;
+}
+
+/** The closes of every store this person reads the money of. */
+async function closes(
+  page: Page,
+  items: readonly Closing[],
+): Promise<void> {
+  await page.route("**/api/v1/cash/closes?**", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        items: items.map((close, at) => ({
+          id: `00000000-0000-4000-8000-7${String(at).padStart(11, "0")}`,
+          number: at + 1,
+          business_day: close.day,
+          closed_at: close.at.toISOString(),
+          closed_by: close.by,
+          mine: false,
+          store_id: close.store,
+          store_name: close.name,
+          opening: close.difference === null,
+          since: null,
+          counted: "1000.00",
+          expected: close.difference === null ? null : "1000.00",
+          difference: close.difference,
+          card: way(),
+          transfer: way(),
+          unclosed_days: [],
+          reason: close.reason,
+          reason_by: close.reason === null ? null : close.by,
+          reason_required:
+            close.difference !== null &&
+            Math.abs(Number(close.difference)) >= 1,
+          opening_float: "0.00",
+          cash_in: "0.00",
+          cash_out: "0.00",
+          taken_out: "0.00",
+          put_in: "0.00",
+          cash_corrected: "0.00",
+          prepaid_transfer: "0.00",
+          carrier_cod: "0.00",
+          not_stated: way(),
+          explained: "0.00",
+          unexplained: close.difference,
+          explanations: [],
+        })),
+        has_more: false,
+      },
+    });
+  });
+}
+
+interface Warehouse {
+  id: string;
+  name: string;
+  /** The store's «Брак». */
+  damaged?: boolean;
+  paused?: boolean;
+}
+
+/** A store's warehouses. */
+async function warehouses(
+  page: Page,
+  store: string,
+  places: readonly Warehouse[],
+  /** Answered this many ms late. */
+  late = 0,
+): Promise<void> {
+  await page.route(
+    `**/api/v1/stock-locations?store_id=${store}`,
+    async (route) => {
+      await new Promise((done) => setTimeout(done, late));
+      await route.fulfill({
+        json: places.map((place, at) => ({
+          id: place.id,
+          code: `W${String(at)}`,
+          name: place.name,
+          is_active: place.paused !== true,
+          can_sell: place.damaged !== true,
+          can_receive: true,
+          damaged_returns: place.damaged === true,
+          awaiting_first_stock: false,
+        })),
+      });
+    },
+  );
+}
+
+/** A stocktake finished: by whom, when, and what it found. */
+interface Finished {
+  id: string;
+  by: string;
+  at: Date;
+  shortage: number;
+  surplus: number;
+  /** The store it was taken in, when not the one read through. */
+  keeper?: string;
+}
+
+/** A warehouse's stocktakes, read through a store; one open, which is not
+ * news. */
+async function stocktakes(
+  page: Page,
+  store: string,
+  place: Warehouse,
+  finished: readonly Finished[],
+): Promise<void> {
+  const sums = (shortage: number, surplus: number): Record<string, number> => ({
+    counted_positions: 40,
+    unchecked_positions: 0,
+    shortage_units: shortage,
+    shortage_positions: shortage === 0 ? 0 : 1,
+    surplus_units: surplus,
+    surplus_positions: surplus === 0 ? 0 : 1,
+  });
+  await page.route(
+    `**/api/v1/stocktakes?store_id=${store}&location_id=${place.id}`,
+    async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: `${place.id.slice(0, -4)}0099`,
+              location_id: place.id,
+              location_name: place.name,
+              store_id: store,
+              started_by: "Наталя",
+              started_at: new Date().toISOString(),
+              finished_by: null,
+              finished_at: null,
+              sums: sums(0, 0),
+            },
+            ...finished.map((one) => ({
+              id: one.id,
+              location_id: place.id,
+              location_name: place.name,
+              store_id: one.keeper ?? store,
+              started_by: one.by,
+              started_at: new Date(one.at.getTime() - 3_600_000).toISOString(),
+              finished_by: one.by,
+              finished_at: one.at.toISOString(),
+              sums: sums(one.shortage, one.surplus),
+            })),
+          ],
+        },
+      });
+    },
+  );
+}
+
 // Nothing waits but what a journey says: «Брак» empty, no list to approve,
-// the backups in order. A journey's own stubs, set later, come first.
+// no close and no stocktake to tell of, the backups in order. A journey's
+// own stubs, set later, come first.
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/damaged-units?**", async (route) => {
     await route.fulfill({ json: { units: [] } });
   });
   await page.route("**/api/v1/snapshots?**", async (route) => {
     await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await closes(page, []);
+  await page.route("**/api/v1/stocktakes?**", async (route) => {
+    await route.fulfill({ json: { items: [] } });
   });
   await backups(page);
 });
@@ -757,7 +933,7 @@ test("one store trading beside one that does not: its lines named, in a row", as
   await expect(column(page, "Ринок")).toHaveCount(0);
 });
 
-test("a store that does not trade has no column; one without the debts' right, no debts", async ({
+test("a store that does not trade has no column; one without the debts' right, no debts; one without its stock's, no warehouses read", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 741 });
@@ -779,7 +955,7 @@ test("a store that does not trade has no column; one without the debts' right, n
   await onToday(page, owner(), (store) => {
     if (store.id === market)
       store.permissions = store.permissions.filter(
-        (right) => right !== "sale:credit",
+        (right) => right !== "sale:credit" && right !== "inventory:view",
       );
   });
   const tag = dayTag(page);
@@ -800,7 +976,13 @@ test("a store that does not trade has no column; one without the debts' right, n
     damaged: 2,
     lists: 2,
     backups: 1,
+    closes: 1,
+    stocktakes: 1,
   });
+  // «Ринок»'s warehouses are not this person's to read.
+  expect(
+    urls.filter((url) => url.startsWith("/api/v1/stock-locations?")),
+  ).toEqual([`/api/v1/stock-locations?store_id=${centre}`]);
 });
 
 test("a seller has no «Сьогодні»: the till opens first", async ({ page }) => {
@@ -1251,6 +1433,471 @@ test("a manager of one store: no backups and no lists to approve, «Брак» a
   expect(urls.filter((url) => /\/(backups|snapshots)/.test(url))).toEqual([]);
 });
 
+// --- news: what someone else did --------------------------------------------
+
+/** Today at noon, the phone's: «учора» and «сьогодні» are the same whenever
+ * a journey runs, and the drawer's day is the calendar's. */
+function noon(): Date {
+  const at = new Date();
+  at.setHours(12, 0, 0, 0);
+  return at;
+}
+
+/** `days` before today, at that time, by the phone. */
+function daysBack(days: number, hours: number, minutes: number): Date {
+  const at = noon();
+  at.setDate(at.getDate() - days);
+  at.setHours(hours, minutes, 0, 0);
+  return at;
+}
+
+/** «2026-10-30»: the day `days` before today. */
+function dayBack(days: number): string {
+  const at = daysBack(days, 12, 0);
+  return `${String(at.getFullYear())}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
+}
+
+const main: Warehouse = {
+  id: "00000000-0000-4000-8000-510000000000",
+  name: "Основний",
+};
+const own: Warehouse = {
+  id: "00000000-0000-4000-8000-520000000000",
+  name: "Свій",
+};
+const broken: Warehouse = {
+  id: "00000000-0000-4000-8000-530000000000",
+  name: "Брак",
+  damaged: true,
+};
+const shut: Warehouse = {
+  id: "00000000-0000-4000-8000-540000000000",
+  name: "Закритий",
+  paused: true,
+};
+
+/** «Центр»'s drawer short by 120,00 грн at yesterday's close. */
+const shortYesterday: Closing = {
+  store: centre,
+  name: "Центр",
+  day: dayBack(1),
+  at: daysBack(1, 20, 6),
+  by: "Наталя",
+  difference: "-120.00",
+  reason: "Помилилася зі здачею",
+};
+
+function toast(page: Page): Locator {
+  return page.getByRole("status").filter({ hasText: "Бірку сховано." });
+}
+
+/** What this phone keeps of what was seen, under each person's key. */
+async function kept(page: Page): Promise<Record<string, number>[]> {
+  return page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("birka:seen:"))
+      .map(
+        (key) =>
+          JSON.parse(localStorage.getItem(key) ?? "{}") as Record<
+            string,
+            number
+          >,
+      ),
+  );
+}
+
+test("news: a drawer's difference of yesterday or today and a stocktake finished, each a tag with «Бачу», in the store it was of, after the work", async ({
+  page,
+}) => {
+  await page.clock.install({ time: noon() });
+  await page.setViewportSize({ width: 390, height: 741 });
+  await twoStores(page);
+  await parcels(page, centre, [[["Лоран шоколад", "M", 1]]]);
+  await orders(page, market, [0, 1, 0]);
+  await closes(page, [
+    {
+      store: market,
+      name: "Ринок",
+      day: dayBack(0),
+      at: daysBack(0, 11, 40),
+      by: "Тетяна",
+      difference: "50.00",
+      reason: null,
+    },
+    shortYesterday,
+    // Under a hryvnia, and a first count: nothing to tell.
+    {
+      store: centre,
+      name: "Центр",
+      day: dayBack(0),
+      at: daysBack(0, 9, 0),
+      by: "Наталя",
+      difference: "0.50",
+      reason: null,
+    },
+    {
+      store: market,
+      name: "Ринок",
+      day: dayBack(1),
+      at: daysBack(1, 19, 0),
+      by: "Тетяна",
+      difference: null,
+      reason: null,
+    },
+    // A store's two in its kind: the older first.
+    {
+      store: market,
+      name: "Ринок",
+      day: dayBack(1),
+      at: daysBack(1, 21, 0),
+      by: "Тетяна",
+      difference: "-30.00",
+      reason: "Видала решту двічі",
+    },
+  ]);
+  // «Основний» is both stores', its stocktakes taken in «Ринок» and in
+  // «Старий», which no longer trades; «Брак» and a paused warehouse are
+  // never counted. «Центр»'s answer comes last, and «Основний» is still
+  // read through it, the open store.
+  await warehouses(page, centre, [main, broken], 400);
+  await warehouses(page, market, [main, own, shut]);
+  await stocktakes(page, centre, main, [
+    {
+      id: "00000000-0000-4000-8000-800000000001",
+      by: "Тетяна",
+      at: daysBack(1, 18, 30),
+      shortage: 2,
+      surplus: 1,
+      keeper: market,
+    },
+    {
+      id: "00000000-0000-4000-8000-800000000004",
+      by: "Ліда",
+      at: daysBack(0, 8, 0),
+      shortage: 0,
+      surplus: 3,
+      keeper: fixture.network_old_store_id,
+    },
+  ]);
+  await stocktakes(page, market, own, [
+    {
+      id: "00000000-0000-4000-8000-800000000002",
+      by: "Ліда",
+      at: daysBack(0, 10, 15),
+      shortage: 0,
+      surplus: 0,
+    },
+    // The day before yesterday: not news any more.
+    {
+      id: "00000000-0000-4000-8000-800000000003",
+      by: "Ліда",
+      at: daysBack(2, 10, 15),
+      shortage: 1,
+      surplus: 0,
+    },
+  ]);
+  const urls = asked(page);
+  await onToday(page);
+  // In the frame's order: the drawer's after the backups, the stocktakes
+  // last; in each kind, the open store's first, a store not of the day
+  // last, and the oldest first in each.
+  await expect(tags(page).locator("h3")).toHaveText([
+    "У касі «Центр» учора нестача 120,00 грн",
+    "У касі «Ринок» учора нестача 30,00 грн",
+    "У касі «Ринок» сьогодні надлишок 50,00 грн",
+    "Відправити 1 посилку",
+    "Склад «Основний»: інвентаризацію завершено — нестача 2 шт., надлишок 1 шт.",
+    "Склад «Свій»: інвентаризацію завершено — розбіжностей немає",
+    "Склад «Основний»: інвентаризацію завершено — надлишок 3 шт.",
+  ]);
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText([
+    "Наталя · о 20:06 · причина: «Помилилася зі здачею»",
+    "Тетяна · о 21:00 · причина: «Видала решту двічі»",
+    "Тетяна · о 11:40 · причину не вказано",
+    "Центр · Лоран шоколад M",
+    "Ринок · Тетяна · учора о 18:30",
+    "Ринок · Ліда · сьогодні о 10:15",
+    "Старий · Ліда · сьогодні о 08:00",
+  ]);
+  // «Бачу» on each piece of news, «Ринок»'s too: it changes nothing there,
+  // it is only what this phone keeps.
+  await expect(tags(page).locator(".today-verb")).toHaveText([
+    "Бачу",
+    "Бачу",
+    "Бачу",
+    "Зібрати й відправити",
+    "Бачу",
+    "Бачу",
+    "Бачу",
+  ]);
+  // A stocktake is news of what someone else did: its eyelet a ring.
+  await expect(tags(page).nth(4)).toHaveClass(/\bring\b/);
+  await expect(tags(page).nth(0)).not.toHaveClass(/\bring\b/);
+  await expect(tab(page, "Сьогодні").locator(".tab-pill")).toHaveAttribute(
+    "data-badge",
+    "7",
+  );
+  // The warehouse two stores share read once, «Брак» and the paused one
+  // never.
+  expect(
+    urls.filter((url) => url.startsWith("/api/v1/stocktakes?")).sort(),
+  ).toEqual(
+    [
+      `/api/v1/stocktakes?store_id=${centre}&location_id=${main.id}`,
+      `/api/v1/stocktakes?store_id=${market}&location_id=${own.id}`,
+    ].sort(),
+  );
+});
+
+test("«Бачу»: the tag goes, «Бірку сховано.» with «Повернути» for five seconds; seen, it stays gone and stands in «Зроблено сьогодні»", async ({
+  page,
+}) => {
+  await page.clock.install({ time: noon() });
+  await page.setViewportSize({ width: 390, height: 741 });
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 1, 0]);
+  await closes(page, [shortYesterday]);
+  await warehouses(page, centre, [main]);
+  await warehouses(page, market, [own]);
+  await stocktakes(page, centre, main, [
+    {
+      id: "00000000-0000-4000-8000-800000000001",
+      by: "Тетяна",
+      at: daysBack(0, 10, 15),
+      shortage: 0,
+      surplus: 0,
+    },
+  ]);
+  await onToday(page);
+  const short = "У касі «Центр» учора нестача 120,00 грн";
+  const counted =
+    "Склад «Основний»: інвентаризацію завершено — розбіжностей немає";
+  await expect(tags(page).locator("h3")).toHaveText([short, counted]);
+  const badge = tab(page, "Сьогодні").locator(".tab-pill");
+  await expect(badge).toHaveAttribute("data-badge", "2");
+  // Seen: it goes, the cursor on the tag after it, the badge one less.
+  await tags(page).first().getByRole("button", { name: "Бачу" }).click();
+  await expect(tags(page).locator("h3")).toHaveText([counted]);
+  await expect(tags(page).first()).toBeFocused();
+  await expect(badge).toHaveAttribute("data-badge", "1");
+  await expect(toast(page)).toBeVisible();
+  // «Повернути», a moment on: back in its place, the cursor on it.
+  await page.clock.fastForward(1_000);
+  await toast(page).getByRole("button", { name: "Повернути" }).click();
+  await expect(tags(page).locator("h3")).toHaveText([short, counted]);
+  await expect(tags(page).first()).toBeFocused();
+  await expect(toast(page)).toHaveCount(0);
+  await expect(badge).toHaveAttribute("data-badge", "2");
+  // Seen again: held while the cursor is in it, and five seconds after it
+  // leaves, the toast goes, the tag for good.
+  await tags(page).first().getByRole("button", { name: "Бачу" }).click();
+  await toast(page).getByRole("button", { name: "Повернути" }).focus();
+  await page.clock.fastForward(6_000);
+  await expect(toast(page)).toBeVisible();
+  await tags(page).first().focus();
+  await page.clock.fastForward(5_000);
+  await expect(toast(page)).toHaveCount(0);
+  await expect(tags(page).locator("h3")).toHaveText([counted]);
+  // «Зроблено сьогодні · 1 ›»: what was seen today, tied off, and when.
+  const done = waiting(page).getByRole("button", {
+    name: "Зроблено сьогодні · 1",
+    exact: true,
+  });
+  await done.click();
+  const sheet = page.getByRole("dialog", { name: "Зроблено сьогодні" });
+  await expect(sheet.locator(".today-done-row .t-row")).toHaveText([short]);
+  await expect(sheet.locator(".today-done-row .t-meta")).toHaveText([
+    /^Побачили о 12:0\d$/,
+  ]);
+  await expect(sheet.locator(".today-done-row .eyelet-knot")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(done).toBeFocused();
+  // Opened again: still seen.
+  await page.reload();
+  await openStore(page, "Центр");
+  await expect(tags(page).locator("h3")).toHaveText([counted]);
+  await expect(badge).toHaveAttribute("data-badge", "1");
+  // The last one seen: «Вас нічого не чекає.», the cursor on it, and what
+  // was seen under it.
+  await tags(page).first().getByRole("button", { name: "Бачу" }).click();
+  const empty = page.getByRole("heading", {
+    name: "Вас нічого не чекає.",
+    exact: true,
+  });
+  await expect(empty).toBeFocused();
+  await expect(badge).not.toHaveAttribute("data-badge");
+  // Opened while its toast stands: the toast goes, the sheet over it would
+  // hold it out of reach; the latest seen first.
+  await expect(toast(page)).toBeVisible();
+  await page
+    .getByRole("button", { name: "Зроблено сьогодні · 2", exact: true })
+    .click();
+  await expect(toast(page)).toHaveCount(0);
+  await expect(sheet.locator(".today-done-row .t-row")).toHaveText([
+    counted,
+    short,
+  ]);
+});
+
+test("a double tap on «Бачу» sees one tag: its second half is let go, on the tag risen under the finger or on the toast", async ({
+  page,
+}) => {
+  await page.clock.install({ time: noon() });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 1, 0]);
+  // Two tags of one height: the second's «Бачу» rises where the first's was.
+  await closes(page, [
+    shortYesterday,
+    { ...shortYesterday, day: dayBack(0), at: daysBack(0, 9, 6) },
+  ]);
+  await onToday(page);
+  const today = "У касі «Центр» сьогодні нестача 120,00 грн";
+  await expect(tags(page).locator("h3")).toHaveText([
+    "У касі «Центр» учора нестача 120,00 грн",
+    today,
+  ]);
+  const first = tags(page).first().getByRole("button", { name: "Бачу" });
+  const second = tags(page).nth(1).getByRole("button", { name: "Бачу" });
+  const [was, rises] = await Promise.all([
+    first.boundingBox(),
+    second.boundingBox(),
+  ]);
+  await first.dblclick();
+  await expect(tags(page).locator("h3")).toHaveText([today]);
+  // It did rise under the finger.
+  expect((await tags(page).first().getByRole("button").boundingBox())?.y).toBe(
+    was?.y,
+  );
+  expect(rises?.y).not.toBe(was?.y);
+  await expect(tab(page, "Сьогодні").locator(".tab-pill")).toHaveAttribute(
+    "data-badge",
+    "1",
+  );
+  await expect(toast(page)).toBeVisible();
+  await page.clock.fastForward(1_000);
+  await toast(page).getByRole("button", { name: "Повернути" }).click();
+  await expect(tags(page)).toHaveCount(2);
+  // Lower, the toast rises where «Бачу» was: the second half lands on
+  // «Повернути», and is let go too.
+  await page.setViewportSize({ width: 390, height: 741 });
+  await first.scrollIntoViewIfNeeded();
+  await expect(toast(page)).toHaveCount(0);
+  const tapped = await first.boundingBox();
+  await first.dblclick();
+  await expect(tags(page).locator("h3")).toHaveText([today]);
+  await expect(toast(page)).toBeVisible();
+  const action = await toast(page).getByRole("button").boundingBox();
+  expect(
+    tapped !== null &&
+      action !== null &&
+      tapped.y + tapped.height / 2 >= action.y &&
+      tapped.y + tapped.height / 2 <= action.y + action.height,
+  ).toBe(true);
+});
+
+test("before six the drawer's day is still the day before: last night's close is today's, and only the drawer's two days are told", async ({
+  page,
+}) => {
+  const night = noon();
+  night.setHours(3, 0, 0, 0);
+  await page.clock.install({ time: night });
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 1, 0]);
+  await closes(page, [
+    // The drawer's today, the calendar's yesterday.
+    { ...shortYesterday, at: daysBack(1, 22, 10) },
+    {
+      store: market,
+      name: "Ринок",
+      day: dayBack(2),
+      at: daysBack(2, 20, 0),
+      by: "Тетяна",
+      difference: "50.00",
+      reason: null,
+    },
+    // Three drawer's days back: no longer news.
+    { ...shortYesterday, day: dayBack(3), at: daysBack(3, 20, 6) },
+  ]);
+  const urls = asked(page);
+  await onToday(page);
+  await expect(tags(page).locator("h3")).toHaveText([
+    "У касі «Центр» сьогодні нестача 120,00 грн",
+    "У касі «Ринок» учора надлишок 50,00 грн",
+  ]);
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText([
+    "Наталя · о 22:10 · причина: «Помилилася зі здачею»",
+    "Тетяна · о 20:00 · причину не вказано",
+  ]);
+  expect(
+    urls.filter((url) => url.startsWith("/api/v1/cash/closes?")),
+  ).toEqual([
+    `/api/v1/cash/closes?date_from=${dayBack(2)}&date_to=${dayBack(1)}&limit=100`,
+  ]);
+});
+
+test("what was seen is kept on this phone a week, by its id alone, under the organisation and person, then forgotten", async ({
+  page,
+}) => {
+  await page.clock.install({ time: noon() });
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 1, 0]);
+  await closes(page, [shortYesterday]);
+  const whose = page.waitForResponse("**/api/v1/me");
+  await onToday(page);
+  const { organization_id, user_id } = (await (await whose).json()) as {
+    organization_id: string;
+    user_id: string;
+  };
+  await tags(page).first().getByRole("button", { name: "Бачу" }).click();
+  await expect(tags(page)).toHaveCount(0);
+  const key = `birka:seen:${organization_id}:${user_id}`;
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).filter((one) => one.startsWith("birka:seen")),
+    ),
+  ).toEqual([key]);
+  const seenOnce = await kept(page);
+  const id = "close:00000000-0000-4000-8000-700000000000";
+  expect(seenOnce.map((seen) => Object.keys(seen))).toEqual([[id]]);
+  // Its id and when, never what it said.
+  expect(JSON.stringify(seenOnce)).not.toMatch(/Центр|нестача|120/);
+  // One seen six days ago, one seven: the seventh day's is forgotten as
+  // Бірка opens again. The drawer's, seen just before midnight: still
+  // gone, but not done today.
+  const at = seenOnce[0]?.[id] ?? 0;
+  await page.evaluate(
+    ([where, close, seenAt, week]) => {
+      const seen = JSON.parse(localStorage.getItem(where) ?? "{}") as Record<
+        string,
+        number
+      >;
+      seen[close] = new Date(seenAt).setHours(0, 0, 0, 0) - 60_000;
+      seen["stocktake:six-days"] = seenAt - (week / 7) * 6;
+      seen["stocktake:a-week"] = seenAt - week - 60_000;
+      localStorage.setItem(where, JSON.stringify(seen));
+    },
+    [key, id, at, 7 * 24 * 60 * 60_000] as const,
+  );
+  await page.reload();
+  await openStore(page, "Центр");
+  await expect(
+    page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
+  ).toBeVisible();
+  expect((await kept(page)).map((seen) => Object.keys(seen).sort())).toEqual([
+    [id, "stocktake:six-days"].sort(),
+  ]);
+  await expect(tags(page)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Зроблено сьогодні/ }),
+  ).toHaveCount(0);
+});
+
 // --- its age, its failures, its reads ---------------------------------------
 
 test("the report unread: each store's drawer and debts stand, its figures wait", async ({
@@ -1355,6 +2002,8 @@ function dayReads(urls: readonly string[]): Record<string, number> {
     damaged: count(/^\/api\/v1\/damaged-units\?/),
     lists: count(/^\/api\/v1\/snapshots\?/),
     backups: count(/^\/api\/v1\/backups$/),
+    closes: count(/^\/api\/v1\/cash\/closes\?/),
+    stocktakes: count(/^\/api\/v1\/stocktakes\?/),
   };
 }
 
@@ -1376,6 +2025,9 @@ test("at most twenty reads as it opens, none again within a minute, each again a
     damaged: 2,
     lists: 2,
     backups: 1,
+    closes: 1,
+    // The seed's one warehouse, both stores': read once.
+    stocktakes: 1,
   };
   // The whole app's, as Бірка opens on «Сьогодні», once its reads have
   // settled; a drawer the app reads for its own store is the day-tag's read
@@ -1383,6 +2035,11 @@ test("at most twenty reads as it opens, none again within a minute, each again a
   await page.waitForTimeout(500);
   expect(urls.length).toBeLessThanOrEqual(20);
   expect(dayReads(urls)).toEqual(once);
+  // Each store's warehouses: the till reads its own too, so counted here,
+  // before it opens.
+  expect(
+    urls.filter((url) => url.startsWith("/api/v1/stock-locations?")),
+  ).toHaveLength(2);
   // To the till and back, and the app left and come back to: within the
   // minute, nothing is read again.
   await tab(page, "Продаж").click();
@@ -1407,6 +2064,8 @@ test("at most twenty reads as it opens, none again within a minute, each again a
       damaged: 4,
       lists: 4,
       backups: 2,
+      closes: 2,
+      stocktakes: 2,
     });
 });
 

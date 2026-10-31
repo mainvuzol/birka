@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, MouseEvent } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Drawer } from "@/cash/types";
 import { timeOf } from "@/cash/errors";
@@ -9,9 +9,13 @@ import { plural } from "@/openings/types";
 import { kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import type { Figures, StoreFigures } from "@/reports/types";
+import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
+import { CARRIED_TAP } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
+import { Toast } from "@/shared/Toast";
 import { visible } from "@/shared/visible";
 import {
   STALE_AFTER,
@@ -24,7 +28,8 @@ import {
   useOpenOrders,
 } from "./reads";
 import type { Age, OpenOrders } from "./reads";
-import { useWaiting } from "./waiting";
+import { see, unsee } from "./seen";
+import { useWaiting, whenText } from "./waiting";
 import type { Kind, Tag, Waiting as Work } from "./waiting";
 
 const weekdays = [
@@ -108,23 +113,6 @@ function useNow(): number {
     };
   }, []);
   return now;
-}
-
-/** «сьогодні о 03:15», «учора о 03:15», «28.10 о 03:15»: when, by the
- * phone's day. */
-function whenText(iso: string, now: number): string {
-  const at = new Date(iso);
-  const day = (date: Date): string => date.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const time = timeOf(iso);
-  if (day(at) === day(new Date(now))) return `сьогодні о ${time}`;
-  if (day(at) === day(yesterday)) return `учора о ${time}`;
-  const date = at.toLocaleDateString("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-  return `${date} о ${time}`;
 }
 
 /** «4 шт.» */
@@ -282,49 +270,64 @@ function Stamp({ age, now }: { age: Age; now: number }): JSX.Element {
 /** Past this many, the rest fold into «+ ще N» (spec §6.9). */
 const SHOWN_TAGS = 7;
 
-/** Each kind's glyph and colour: the eyelet filled in it, the glyph left of
- * the title (spec §6.9). */
+/** Each kind's glyph and colour: the eyelet in it, the glyph left of the
+ * title (spec §6.9; S04). Filled, it waits on you; a ring, it is news of
+ * what someone else did. */
 const looks: Record<
   Kind,
-  { icon: "backup" | "parcel" | "damaged" | "paper"; tone: string }
+  {
+    icon: "backup" | "warning" | "parcel" | "damaged" | "paper" | "stocktake";
+    tone: string;
+    ring?: true;
+  }
 > = {
   backups: { icon: "backup", tone: "warning" },
+  drawer: { icon: "warning", tone: "warning" },
   parcels: { icon: "parcel", tone: "online" },
   damaged: { icon: "damaged", tone: "damaged" },
   openings: { icon: "paper", tone: "ink" },
+  stocktake: { icon: "stocktake", tone: "offline", ring: true },
 };
 
-/** Each kind's one verb, and where it goes. */
-const verbWords: Record<Kind, string> = {
+/** Each kind of work's one verb, and where it goes. */
+const verbWords: Partial<Record<Kind, string>> = {
   backups: "Переглянути",
   parcels: "Зібрати й відправити",
   damaged: "Оглянути",
   openings: "Переглянути й затвердити",
 };
 
-/** A tag of «Чекає на вас» (spec §6.9): its eyelet filled, its title, up to
- * two lines of meta, and one verb — only where it can be done from here: the
- * open store's, or the network's backups. Another store's says what waits
- * there; it is done there (В-Т2 (а)). */
+/** A tag of «Чекає на вас» (spec §6.9): its eyelet, its title, up to two
+ * lines of meta, and one verb — work's only where it can be done from here:
+ * the open store's, or the network's backups; another store's says what
+ * waits there, done there (В-Т2 (а)). News has «Бачу» wherever it is of:
+ * it is only what this phone keeps. */
 function TagRow({
   tag,
   open,
   verb,
   held,
+  seen,
 }: {
   tag: Tag;
   open: Store;
   verb: (() => void) | undefined;
   held: boolean;
+  /** «Бачу», for news. */
+  seen: (event: MouseEvent) => void;
 }): JSX.Element {
   const title = useId();
   const look = looks[tag.kind];
   const here = tag.store === undefined || tag.store.id === open.id;
+  const words = verbWords[tag.kind];
   return (
     <article
-      className={`today-tag tag-row tag-outline tone-${look.tone}`}
+      className={`today-tag tag-row tag-outline tone-${look.tone}${
+        look.ring ? " ring" : ""
+      }`}
       aria-labelledby={title}
       tabIndex={-1}
+      data-tag={tag.key}
     >
       <div className="today-tag-body">
         <span className="today-tag-eyelet" aria-hidden="true" />
@@ -337,15 +340,23 @@ function TagRow({
             <Parts parts={tag.meta} />
           </p>
         )}
-        {here && verb && (
-          <button
-            type="button"
-            className="today-verb"
-            disabled={held}
-            onClick={verb}
-          >
-            {verbWords[tag.kind]}
+        {tag.seen !== undefined ? (
+          <button type="button" className="today-verb" onClick={seen}>
+            Бачу
           </button>
+        ) : (
+          here &&
+          verb &&
+          words !== undefined && (
+            <button
+              type="button"
+              className="today-verb"
+              disabled={held}
+              onClick={verb}
+            >
+              {words}
+            </button>
+          )
         )}
       </div>
     </article>
@@ -359,17 +370,22 @@ function TagRow({
  * whoever reads the backups, «Копії в порядку · …» under it all. How old
  * it all is, the oldest of its reads, is said once for the block, as the
  * day-tag says it: a read that failed again may have taken its tag with
- * it, and «nothing waits» is only as new as what was read.
+ * it, and «nothing waits» is only as new as what was read. News seen
+ * («Бачу») goes, with «Повернути» for five seconds, and stands in
+ * «Зроблено сьогодні» for the rest of the day.
  */
 function WaitingTags({
   work,
   open,
+  scopeKey,
   verbs,
   held,
   now,
 }: {
   work: Work;
   open: Store;
+  /** Whose «Бачу» this phone keeps. */
+  scopeKey: string;
   verbs: Partial<Record<Kind, () => void>>;
   held: boolean;
   now: number;
@@ -377,6 +393,35 @@ function WaitingTags({
   const label = useId();
   const [all, setAll] = useState(false);
   const list = useRef<HTMLUListElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [doneShown, setDoneShown] = useState(false);
+  // The tag seen last, while its toast may still bring it back; a new
+  // toast each time.
+  const [hidden, setHidden] = useState<{
+    tag: Tag;
+    seen: string;
+    times: number;
+  } | null>(null);
+  // Where the cursor goes as a tag is seen — the one after it, else the one
+  // before, else the heading — or as it comes back: on it.
+  const cursor = useRef<{ at: number } | { key: string } | null>(null);
+  // The last «Бачу»'s tap: the next tag rises under the finger, and a
+  // double tap's second half would hide it too, past its toast's reach
+  // (review, 2026-10-31). A key's press is never one.
+  const seenAt = useRef(-Infinity);
+  useEffect(() => {
+    const to = cursor.current;
+    if (to === null) return;
+    cursor.current = null;
+    const tags = [
+      ...(list.current?.querySelectorAll<HTMLElement>(".today-tag") ?? []),
+    ];
+    const next =
+      "key" in to
+        ? tags.find((tag) => tag.dataset.tag === to.key)
+        : (tags[to.at] ?? tags[to.at - 1]);
+    (next ?? heading.current)?.focus();
+  });
   // Unfolded: the cursor on the first tag that was folded.
   useEffect(() => {
     if (!all) return;
@@ -384,37 +429,69 @@ function WaitingTags({
     tags?.item(SHOWN_TAGS).focus();
   }, [all]);
   if (!work.asked) return null;
-  const { tags } = work;
+  const { tags, done } = work;
   const folded = !all && tags.length > SHOWN_TAGS;
   const shown = folded ? tags.slice(0, SHOWN_TAGS) : tags;
   const empty = tags.length === 0 && !work.unread;
   const old = work.age.at !== undefined && staleOf(work.age, now);
+  const seenOf = (tag: Tag, at: number) => (event: MouseEvent): void => {
+    const id = tag.seen;
+    if (id === undefined) return;
+    if (event.detail !== 0 && event.timeStamp - seenAt.current < CARRIED_TAP)
+      return;
+    seenAt.current = event.timeStamp;
+    see(scopeKey, id);
+    cursor.current = { at };
+    setHidden((last) => ({ tag, seen: id, times: (last?.times ?? 0) + 1 }));
+  };
+  const doneLink = done.length > 0 && (
+    <button
+      type="button"
+      className="today-done"
+      onClick={() => {
+        // What was seen is all there, the last one too: its toast, which
+        // the sheet would cover and hold out of reach, goes.
+        setHidden(null);
+        setDoneShown(true);
+      }}
+    >
+      Зроблено сьогодні · {done.length}
+      <span aria-hidden="true"> ›</span>
+    </button>
+  );
   return (
     <>
       {empty ? (
         <section className="today-empty" aria-labelledby={label}>
           <Icon name="mark-lg" className="today-empty-mark" />
-          <h2 id={label} className="t-row">
+          <h2 ref={heading} id={label} className="t-row" tabIndex={-1}>
             Вас нічого не чекає.
           </h2>
           {old && <Stamp age={work.age} now={now} />}
+          {doneLink}
         </section>
       ) : (
         <section className="today-waiting" aria-labelledby={label}>
           <div className="today-waiting-head">
-            <h2 id={label} className="t-label">
+            <h2 ref={heading} id={label} className="t-label" tabIndex={-1}>
               Чекає на вас{tags.length > 0 && ` · ${String(tags.length)}`}
             </h2>
-            {old && <Stamp age={work.age} now={now} />}
+            {(doneLink !== false || old) && (
+              <span className="today-waiting-side">
+                {doneLink}
+                {old && <Stamp age={work.age} now={now} />}
+              </span>
+            )}
           </div>
           <ul ref={list} className="today-tags">
-            {shown.map((tag) => (
+            {shown.map((tag, at) => (
               <li key={tag.key}>
                 <TagRow
                   tag={tag}
                   open={open}
                   verb={verbs[tag.kind]}
                   held={held}
+                  seen={seenOf(tag, at)}
                 />
               </li>
             ))}
@@ -456,6 +533,45 @@ function WaitingTags({
             Копії в порядку · {whenText(work.backupsOk.at, now)}
           </span>
         </p>
+      )}
+      {doneShown && (
+        <Sheet
+          title="Зроблено сьогодні"
+          close={() => {
+            setDoneShown(false);
+          }}
+          fallback={heading}
+        >
+          <ul className="today-done-list">
+            {done.map(({ tag, at }) => (
+              <li key={tag.key} className="today-done-row">
+                <Eyelet state="knot" size={8} />
+                <div>
+                  <p className="t-row">{tag.title}</p>
+                  <p className="t-meta">
+                    Побачили о {timeOf(new Date(at).toISOString())}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Sheet>
+      )}
+      {hidden && (
+        <Toast
+          key={hidden.times}
+          text="Бірку сховано."
+          action="Повернути"
+          act={() => {
+            unsee(scopeKey, hidden.seen);
+            cursor.current = { key: hidden.tag.key };
+            seenAt.current = -Infinity;
+            setHidden(null);
+          }}
+          gone={() => {
+            setHidden(null);
+          }}
+        />
       )}
     </>
   );
@@ -756,6 +872,7 @@ export function Today({
       <WaitingTags
         work={work}
         open={open}
+        scopeKey={scopeKey}
         verbs={verbs}
         held={held}
         now={now}

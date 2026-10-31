@@ -1,12 +1,14 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api, unreachable } from "@/shared/api";
-import type { Drawer } from "@/cash/types";
+import { cashDay } from "@/cash/format";
+import type { Close, Drawer } from "@/cash/types";
 import type { StoreDebts } from "@/credits/types";
 import type { DamagedUnit } from "@/damaged/types";
 import type { StockList } from "@/openings/types";
 import type { Backups } from "@/backups/types";
-import type { Order, Store } from "@/orders/types";
+import type { StocktakeRecord } from "@/inventory/stocktakeTypes";
+import type { Location, Order, Store } from "@/orders/types";
 import type { SalesReport } from "@/reports/types";
 
 /**
@@ -214,6 +216,84 @@ export function useStockLists(
     })),
   });
   return byStore(shown, reads);
+}
+
+/** The closes of yesterday and today of every store whose money this
+ * person reads (`report:view_financial` there): one read for them all,
+ * under «Каса»'s prefix, so a close there is read again here at once. The
+ * days are the asking's: at 06:00 the key stays, and what was read stands
+ * until the next reading. */
+export function useCloses(
+  token: string,
+  scopeKey: string,
+  enabled: boolean,
+): UseQueryResult<{ items: Close[]; has_more: boolean }> {
+  return useQuery({
+    queryKey: ["cash-closes", { today: scopeKey }],
+    queryFn: () =>
+      // The drawer's days, 06:00 to 06:00, as «Каса» reads them.
+      api<{ items: Close[]; has_more: boolean }>(
+        `/cash/closes?date_from=${cashDay(1)}&date_to=${cashDay(0)}&limit=100`,
+        token,
+      ),
+    enabled,
+    ...often,
+  });
+}
+
+/** Each store's warehouses, where this person reads its stock
+ * (`inventory:view` there). */
+export function useWarehouses(
+  token: string,
+  scopeKey: string,
+  stores: readonly Store[],
+): Map<string, UseQueryResult<Location[]>> {
+  const shown = stores.filter((store) =>
+    store.permissions.includes("inventory:view"),
+  );
+  const reads = useQueries({
+    queries: shown.map((store) => ({
+      queryKey: ["inventory-locations", { today: scopeKey }, store.id],
+      queryFn: () =>
+        api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
+      ...often,
+    })),
+  });
+  return byStore(shown, reads);
+}
+
+/** A warehouse whose stocktakes are read, and the store read through. */
+export interface Counted {
+  store: Store;
+  location: Location;
+}
+
+/** Each warehouse's stocktakes, the open one and the latest: under
+ * «Залишки»'s prefix, so one finished there is read again here at once.
+ * Kept by the warehouse alone: the store it is read through may change as
+ * the stores' warehouses answer, and it is the same warehouse. */
+export function useStocktakes(
+  token: string,
+  scopeKey: string,
+  warehouses: readonly Counted[],
+): Map<string, UseQueryResult<{ items: StocktakeRecord[] }>> {
+  const reads = useQueries({
+    queries: warehouses.map(({ store, location }) => ({
+      queryKey: ["stocktakes", { today: scopeKey }, location.id],
+      queryFn: () =>
+        api<{ items: StocktakeRecord[] }>(
+          `/stocktakes?store_id=${store.id}&location_id=${location.id}`,
+          token,
+        ),
+      ...often,
+    })),
+  });
+  return new Map(
+    warehouses.flatMap(({ location }, at) => {
+      const read = reads[at];
+      return read === undefined ? [] : [[location.id, read] as const];
+    }),
+  );
 }
 
 /** How old what a block shows is: the oldest of its reads' last answers,

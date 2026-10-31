@@ -5069,3 +5069,48 @@ already needs, in the store it is of.
   - «Ще ⚠» stays until P1-5.
 - **Not met:** the frame's two tags over the menu at 390 × 741 — part 1's
   open question of the day-tag's height; a reading for the owner.
+
+## Chosen in chat — 2026-10-31 («Сьогодні», part 3: news, «Бачу», «Зроблено сьогодні», «Усе на бірці» P0-6)
+
+Chosen in chat on 2026-10-31 («go next»), after #157: the frame's P0-6,
+part 3 of 3, every owner question of it as its (а) until answered
+(`all-on-the-tag-today-3-report.md`). No right, rule or figure changes:
+each tag is a read the server already answers, by the right it already
+needs; what was seen is this phone's alone (В-Т3 (а)). P0-6 is closed.
+- **News among «Чекає на вас»'s tags,** in the frame's order: a drawer's
+  difference after the backups, a stocktake finished last. Each goes once
+  seen («Бачу»), with «Бірку сховано.» and «Повернути» for five seconds.
+- **Decided here:**
+  - «Бачу» on every piece of news, another store's too: it changes nothing
+    there, it is only what this phone keeps;
+  - one tag a close and a stocktake, not one a kind and a store;
+  - a close is news when its difference wants a reason (the server's
+    `reason_required`, 1,00 грн or more), of the drawer's yesterday or
+    today, 06:00–06:00, said «учора» / «сьогодні» by that day, in «Каса»'s
+    words; one read of the closes for every store whose money is read;
+  - a stocktake is news finished yesterday or today by the phone's day,
+    told in the store it was taken in — a store not of the day named, after
+    the day's; a shared warehouse read once, through the open store first,
+    once every store's warehouses have answered; «Брак» and a paused
+    warehouse never read;
+  - the meta: «{Ім’я} · о 20:06 · причина: «…»», or «причину не вказано»;
+    a stocktake's «{Магазин} · {Ім’я} · учора о 18:30»;
+  - the drawer's eyelet filled in warning; the stocktake's a ring in
+    offline, as S04;
+  - the toast five seconds, held while the cursor is in it, gone when
+    «Зроблено сьогодні» opens; a double tap's second half let go on «Бачу»
+    and on «Повернути» for 0.7 s, as a sheet's;
+  - seen, the cursor on the tag after it, else before it, else the heading;
+    brought back, on it;
+  - «Зроблено сьогодні · N ›» by the heading, or under «Вас нічого не
+    чекає.», for what was seen since the phone's midnight; its sheet read
+    only, the latest first, a knot and «Побачили о 12:04» each;
+  - this phone keeps `birka:seen:{organisation}:{person}`: ids and when,
+    never what a tag said, forgotten after seven days;
+  - the tab's badge counts only what is not seen;
+  - a close in «Каса» reads every closes list again, «Сьогодні»'s too.
+- **For the owner:** the toast's words — the frame's «Бірку сховано.»
+  against §6.23's «Перенесено в «Зроблено сьогодні»»; «Бачу» on another
+  store's news; the drawer's day and the phone's side by side before six;
+  a stocktakes read for each warehouse (two stores with two each: 20 reads
+  at entry).

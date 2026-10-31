@@ -176,7 +176,8 @@ export function Cash({
 
   function changed(): void {
     void cache.invalidateQueries({ queryKey: ["cash-drawer", store.id] });
-    void cache.invalidateQueries({ queryKey: ["cash-closes", store.id] });
+    // This store's closes, and «Сьогодні»'s of every store.
+    void cache.invalidateQueries({ queryKey: ["cash-closes"] });
     void cache.invalidateQueries({ queryKey: ["cash-close"] });
     void cache.invalidateQueries({ queryKey: ["cash-mine", store.id] });
     void cache.invalidateQueries({ queryKey: ["cash-events", store.id] });
