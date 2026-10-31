@@ -17,6 +17,7 @@ import { useSettled } from "@/sales/StockSearch";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { hideKeyboard } from "@/shared/telegram";
 import { number, plural } from "@/openings/types";
 import { CustomerRow, debtsCount } from "./CustomerRow";
 import { Customer as CustomerDebts } from "./Customer";
@@ -508,6 +509,9 @@ export function Credits({
                     customer={each}
                     here={store.id}
                     open={() => {
+                      // The search done with: the keyboard goes (spec §4.4;
+                      // «Усе на бірці» task list, P1-2).
+                      hideKeyboard();
                       // One debt shown: it is opened; more, and the seller
                       // chooses (credits task list, P0-1).
                       const [only] =

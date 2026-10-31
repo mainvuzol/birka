@@ -599,9 +599,12 @@ test("«Скасувати замовлення» asks first, «Ні, залиш
   const buzzes = await page.evaluate(
     () => (window as unknown as { buzzes: string[] }).buzzes,
   );
-  expect(buzzes.map((data) => JSON.parse(data) as object)).toEqual([
-    { type: "notification", notification_type: "success" },
-  ]);
+  // The answer's buzz: a choice's are telegram-rules.spec's.
+  expect(
+    buzzes
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification"),
+  ).toEqual([{ type: "notification", notification_type: "success" }]);
 });
 
 test("a cancel on its way holds «Ні, залишити» too; refused, it buzzes and brings why to the finger, the order kept (orders task list, P0-4)", async ({
@@ -651,9 +654,12 @@ test("a cancel on its way holds «Ні, залишити» too; refused, it buzz
   const buzzes = await page.evaluate(
     () => (window as unknown as { buzzes: string[] }).buzzes,
   );
-  expect(buzzes.map((data) => JSON.parse(data) as object)).toEqual([
-    { type: "notification", notification_type: "error" },
-  ]);
+  // The answer's buzz: a choice's are telegram-rules.spec's.
+  expect(
+    buzzes
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification"),
+  ).toEqual([{ type: "notification", notification_type: "error" }]);
   await expect(
     page.getByText("До відправлення", { exact: true }),
   ).toBeVisible();

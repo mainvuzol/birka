@@ -1,5 +1,7 @@
+import { create } from "zustand";
 import type { TermsInput } from "@/credits/Terms";
 import type { TillMethod } from "@/shared/payment";
+import { usePaper } from "./paper";
 import type { SaleLine, Shortfall } from "./types";
 
 /** A line of the till's basket. */
@@ -64,8 +66,42 @@ export interface Basket {
  */
 let kept: { at: string; basket: Basket } | null = null;
 
+/** Where a basket with goods is kept, and how it was built, for whoever
+ * must know one is: none while it is empty. */
+const useGoods = create<{ at: string | null; paper: boolean; moved: number }>(
+  () => ({ at: null, paper: false, moved: 0 }),
+);
+
 export function keepBasket(at: string, basket: Basket): void {
   kept = { at, basket };
+  useGoods.setState(
+    basket.draft.length > 0
+      ? { at, paper: basket.paper, moved: basket.moved }
+      : { at: null },
+  );
+}
+
+/**
+ * Whether a basket kept stands once the paper switch has moved meanwhile,
+ * on another screen, however often: as the till's own would leave it — one
+ * built from paper, or any once the paper is off, is gone, never sent
+ * unmarked; one built unmarked, the paper now on, keeps its lines.
+ */
+export function outlives(
+  basket: { paper: boolean; moved: number },
+  moved: number,
+  paper: boolean,
+): boolean {
+  return basket.moved === moved || (!basket.paper && paper);
+}
+
+/** Whether the basket kept under `at` holds goods: on the till, or left
+ * for a while, and not gone with the paper switch since (Telegram asks
+ * before closing, «Усе на бірці» task list, P1-2). */
+export function useBasketGoods(at: string, storeId: string): boolean {
+  const moved = usePaper((state) => state.moved);
+  const paper = usePaper((state) => state.storeId === storeId);
+  return useGoods((state) => state.at === at && outlives(state, moved, paper));
 }
 
 /** The basket kept under `at`, or none. */
@@ -76,4 +112,5 @@ export function keptBasket(at: string): Basket | null {
 /** The store left, or the app closed: nothing is kept. */
 export function forgetBasket(): void {
   kept = null;
+  useGoods.setState({ at: null });
 }

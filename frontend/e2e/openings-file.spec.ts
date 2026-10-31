@@ -1941,6 +1941,76 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
   expect(await fitsWidth(page)).toBe(true);
 });
 
+test("a list saved while the screen's first read of the lists is still on its way is opened: that read, which knows nothing of it, is let go and the lists read again", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.file_narrow_location_id);
+  // The screen's first read of every list, read before the list is saved
+  // and answered only once it is — as «Сьогодні»'s reads at entry can
+  // keep it (CI, 2026-10-31). «Сьогодні» reads the same, first: only the
+  // screen's is held.
+  let saved = (): void => undefined;
+  const save = new Promise<void>((resolve) => {
+    saved = resolve;
+  });
+  let armed = false;
+  let first = true;
+  await page.route(
+    (url) =>
+      url.pathname === "/api/v1/snapshots" &&
+      url.searchParams.get("limit") === "100" &&
+      !url.searchParams.has("location_id") &&
+      !url.searchParams.has("status"),
+    async (route) => {
+      if (!armed || !first) {
+        await route.fallback();
+        return;
+      }
+      first = false;
+      const response = await route.fetch();
+      await save;
+      await route.fulfill({ response }).catch(() => undefined);
+    },
+  );
+  page.on("response", (response) => {
+    if (
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/v1/snapshots" &&
+      response.status() === 201
+    )
+      saved();
+  });
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
+  armed = true;
+  await section(page, "Початкові залишки");
+  await expect(page.getByText("Завантажуємо списки…")).toBeVisible();
+  const form = await newFromFile(page, fixture.file_narrow_location_id);
+  await choose(
+    form,
+    "поперед-списків.json",
+    stockFile(
+      [{ text: `${coat} сірий M 1 шт`, photo: "P.jpg", photo_line: 1 }],
+      {
+        source: "Зошит поперед списків",
+      },
+    ),
+  );
+  await expect(form.getByLabel("Що у файлі")).toContainText(
+    "Файл «поперед-списків.json»",
+  );
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Зошит поперед списків" }),
+  ).toBeVisible();
+  expect(first).toBe(false);
+  await page.unrouteAll({ behavior: "wait" });
+  await noListWaits(page, fixture.file_narrow_location_id);
+});
+
 test("an answer too slow to wait for, its list made meanwhile: another file picked keeps the command, and the list made is opened, never a second", async ({
   page,
 }) => {

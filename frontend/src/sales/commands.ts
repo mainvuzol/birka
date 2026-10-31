@@ -11,6 +11,7 @@ import { isTillMethod } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { countOf, counts, keepCount } from "@/shared/journal";
 import { isSince, sinceOf } from "@/shared/reach";
+import { buzz } from "@/shared/telegram";
 import type {
   CreditTerms,
   EmptyShelf,
@@ -418,6 +419,9 @@ export async function submitSale(
           : 0;
     if (written) {
       keepCount(storageKey, current, misses);
+      // Kept on the phone from now: felt once, as it first is (spec §4.4;
+      // «Усе на бірці» task list, P1-2).
+      if (!previouslyAmbiguous) buzz("warning");
       useSaleCommand.setState({
         error,
         misses,

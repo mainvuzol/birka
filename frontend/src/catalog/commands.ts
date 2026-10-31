@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
+import { buzz } from "@/shared/telegram";
 import type { Decision } from "./types";
 export interface Command {
   path: string;
@@ -215,6 +216,7 @@ export async function submitCatalogCommand(
   useCatalogCommand.setState({ busy: true, error: null, refused: null });
   let ambiguous = Boolean(command.ambiguous);
   let acknowledged = false;
+  let written = false;
   try {
     valid(key, command);
     const saved = loadCatalogCommand(key);
@@ -239,6 +241,7 @@ export async function submitCatalogCommand(
       ...sinceOf(saved?.path === command.path ? saved : null, command),
     };
     localStorage.setItem(key, JSON.stringify(pending));
+    written = true;
     useCatalogCommand.setState({ pending });
     try {
       if (command.path !== base) {
@@ -304,7 +307,10 @@ export async function submitCatalogCommand(
     ) {
       localStorage.removeItem(key);
       useCatalogCommand.setState({ pending: null });
-    }
+    } else if (written && !ambiguous)
+      // Kept on the phone from now: felt once, as it first is (spec §4.4;
+      // «Усе на бірці» task list, P1-2).
+      buzz("warning");
     useCatalogCommand.setState({ error, kept: ambiguous, refused: command });
     return null;
   } finally {

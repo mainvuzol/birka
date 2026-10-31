@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { JSX } from "react";
+import { buzz } from "./telegram";
 
 /**
  * Ways of one section, as segments on a grey field (redesign direction §5,
@@ -45,7 +46,10 @@ export function ModeSwitch<Mode extends string>({
           aria-current={mode === current ? "page" : undefined}
           disabled={disabled}
           onClick={() => {
-            if (mode !== current) choose(mode);
+            if (mode === current) return;
+            // A choice, felt (spec §4.4; «Усе на бірці» task list, P1-2).
+            buzz("selection");
+            choose(mode);
           }}
         >
           {name}

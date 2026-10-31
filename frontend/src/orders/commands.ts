@@ -8,6 +8,7 @@ import {
 } from "@/shared/api";
 import { countOf, counts, keepCount } from "@/shared/journal";
 import { isSince, sinceOf } from "@/shared/reach";
+import { buzz } from "@/shared/telegram";
 import type { Order } from "./types";
 export interface Pending {
   path: string;
@@ -185,6 +186,9 @@ export async function submitPending(
           : 0;
     if (written && !definite) {
       keepCount(key, current, misses);
+      // Kept on the phone from now: felt once, as it first is (spec §4.4;
+      // «Усе на бірці» task list, P1-2).
+      if (!previouslyAmbiguous) buzz("warning");
       useCommand.setState({ error, misses, pending: { ...current, misses } });
     } else useCommand.setState({ error, misses });
     return null;

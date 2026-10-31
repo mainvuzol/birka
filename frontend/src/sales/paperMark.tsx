@@ -211,6 +211,7 @@ export function PaperWhen({
           День з паперу
           <input
             type="date"
+            enterKeyHint="next"
             min={daysAgo(firstDaysSpan - 1)}
             max={daysAgo(0)}
             value={day}
@@ -224,6 +225,7 @@ export function PaperWhen({
         Час з паперу
         <input
           type="time"
+          enterKeyHint="done"
           value={time}
           onChange={(event) => {
             onTime(event.target.value);

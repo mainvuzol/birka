@@ -8,6 +8,7 @@ import type { TillMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { RecordedMark } from "@/shared/Eyelet";
 import { Stub, WaySticker } from "@/shared/Stub";
+import { useMainButton } from "@/shared/telegram";
 import type { Credit } from "./types";
 
 /** Under the way's sticker: what to do with the money (credits task list,
@@ -162,15 +163,47 @@ export function Paid({
           {total}
         </Stub>
       )}
-      {next && (
-        <div className="result-next">
-          <button type="button" onClick={next.back}>
-            {next.backTo}
-          </button>
-          <button type="button" className="quiet" onClick={next.debt}>
-            Відкрити борг
-          </button>
-        </div>
+      {next &&
+        (payment ? (
+          <PaymentNext {...next} />
+        ) : (
+          <div className="result-next">
+            <button type="button" onClick={next.back}>
+              {next.backTo}
+            </button>
+            <button type="button" className="quiet" onClick={next.debt}>
+              Відкрити борг
+            </button>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/**
+ * Where to go from a payment's result (spec S22): «Відкрити борг» is
+ * Telegram's MainButton where it is there — the screen's one action, never
+ * one that pays («Усе на бірці» task list, P1-2) — else the screen's own.
+ */
+function PaymentNext({
+  back,
+  backTo,
+  debt,
+}: {
+  back: () => void;
+  backTo: string;
+  debt: () => void;
+}): JSX.Element {
+  const main = useMainButton("Відкрити борг", debt);
+  return (
+    <div className="result-next">
+      <button type="button" onClick={back}>
+        {backTo}
+      </button>
+      {!main && (
+        <button type="button" className="quiet" onClick={debt}>
+          Відкрити борг
+        </button>
       )}
     </div>
   );

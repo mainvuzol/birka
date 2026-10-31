@@ -303,11 +303,15 @@ async function open(
   await section(page, "+ Нове замовлення");
 }
 
+/** The answers' buzzes: a choice's and a tap's are telegram-rules.spec's
+ * («Усе на бірці» task list, P1-2). */
 async function buzzes(page: Page): Promise<object[]> {
   const sent = await page.evaluate(
     () => (window as unknown as { buzzes: string[] }).buzzes,
   );
-  return sent.map((data) => JSON.parse(data) as object);
+  return sent
+    .map((data) => JSON.parse(data) as { type: string })
+    .filter((buzz) => buzz.type === "notification");
 }
 
 function search(page: Page): Locator {
@@ -802,8 +806,10 @@ test("a new order whose answer never came: checked again with the same command, 
   await expect(banner).toContainText(
     "Лоран шоколад · M · Нова пошта — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
   );
-  // Kept, never refused: no buzz.
-  expect(await buzzes(page)).toEqual([]);
+  // Kept, never refused: felt once, a warning (spec §4.4; «Усе на бірці»
+  // task list, P1-2).
+  const warned = { type: "notification", notification_type: "warning" };
+  expect(await buzzes(page)).toEqual([warned]);
   await retry.click();
   await expect(
     page
@@ -816,6 +822,7 @@ test("a new order whose answer never came: checked again with the same command, 
   expect(stubbed.made[1]).toEqual(stubbed.made[0]);
   expect(stubbed.made[0]).not.toHaveProperty("shown");
   expect(await buzzes(page)).toEqual([
+    warned,
     { type: "notification", notification_type: "success" },
   ]);
 });

@@ -716,7 +716,7 @@ test("a warehouse to choose, for goods from another store's own, is brought abov
   ).toBeDisabled();
 });
 
-test("Telegram buzzes once the server answers a return: an error refused, a success recorded; a kept one confirmed later, nothing — and its banner and notice name it", async ({
+test("Telegram buzzes once the server answers a return: an error refused, a success recorded; a kept one a warning, confirmed later nothing — and its banner and notice name it", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -733,12 +733,15 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
       },
     };
   });
+  // The answers' buzzes: a choice's are telegram-rules.spec's.
   const buzzes = async (): Promise<unknown[]> =>
     (
       await page.evaluate(
         () => (window as unknown as { buzzes: string[] }).buzzes,
       )
-    ).map((data) => JSON.parse(data) as unknown);
+    )
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification");
   const coat = line("Лоран шоколад");
   const other = line("Альпака сіра", 1);
   let answers = 0;
@@ -792,8 +795,8 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
     { type: "notification", notification_type: "success" },
   ]);
 
-  // Another, its answer lost: the banner names it, and its confirmation
-  // later buzzes nothing.
+  // Another, its answer lost: the banner names it, it is felt once, a
+  // warning, and its confirmation later buzzes nothing.
   await page.getByRole("button", { name: "Ще повернення" }).click();
   await page.getByRole("button", { name: /^Оформити повернення: / }).click();
   await returnUnits(page, { intact: 1, line: "Лоран шоколад · M" });
@@ -808,8 +811,13 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
   await expect(banner.locator("p").first()).toHaveText(
     "Повернення: Лоран шоколад · M × 1, Альпака сіра · M × 1 · 6 000,00 грн готівкою — сервер не відповів. Двічі воно не запишеться, і гроші двічі не повернуться. Поки чекаємо, інші дії недоступні.",
   );
-  // A lost answer buzzes nothing: it is not an answer (P2-5).
-  expect(await buzzes()).toHaveLength(2);
+  // A lost answer is not an answer (P2-5), but a return kept on the phone:
+  // a warning (spec §4.4; «Усе на бірці» task list, P1-2).
+  expect(await buzzes()).toEqual([
+    { type: "notification", notification_type: "error" },
+    { type: "notification", notification_type: "success" },
+    { type: "notification", notification_type: "warning" },
+  ]);
   // Hours later, the app opened again: the phone confirms it by itself,
   // and buzzes nothing either.
   await page.reload();

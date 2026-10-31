@@ -16,6 +16,8 @@ import {
   connectTelegram,
   telegramInitData,
   telegramUserId,
+  useAskBeforeClosing,
+  useLockPortrait,
 } from "@/shared/telegram";
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
@@ -54,7 +56,7 @@ import {
 } from "@/sales/commands";
 import type { SaleAttempt } from "@/sales/commands";
 import { clearPaper, setPaper, usePaper } from "@/sales/paper";
-import { forgetBasket } from "@/sales/basket";
+import { forgetBasket, useBasketGoods } from "@/sales/basket";
 import type { PaperView } from "@/sales/paperMark";
 import { markText, paidDuringOutage } from "@/sales/types";
 import { Receive } from "@/inventory/Receive";
@@ -349,6 +351,9 @@ export function App(): JSX.Element {
                 className="store"
                 key={s.id}
                 onClick={() => {
+                  // A choice, felt (spec §4.4; «Усе на бірці» task list,
+                  // P1-2).
+                  buzz("selection");
                   setStoreId(s.id);
                 }}
               >
@@ -1794,6 +1799,16 @@ function Workspace({
     changeStore,
     changeHeld: blocked || (tab === "deposit" && depositTask),
   };
+  // Telegram asks before Бірка closes while the till's basket holds goods —
+  // on the till or left for a while — or a sale waits to be checked; the
+  // screen is kept upright while the basket is open (spec §4.4; «Усе на
+  // бірці» task list, P1-2; В-Т7 (а)).
+  const basketGoods = useBasketGoods(
+    `${store.id}:${String(saleEpoch)}`,
+    store.id,
+  );
+  useAskBeforeClosing(basketGoods || keptSale !== null);
+  useLockPortrait(basketGoods);
   setScreen(tab);
   return (
     <WorkspaceLineContext.Provider value={line}>

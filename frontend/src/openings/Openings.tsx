@@ -115,6 +115,20 @@ export function Openings({
   const warehouse = (id: string): string =>
     visible(locations.data?.find((l) => l.id === id)?.name ?? "склад");
   const open = lists.data?.items.find((l) => l.snapshot_id === openId);
+  const cache = useQueryClient();
+  // A list saved or found is opened once the lists are read again. A read
+  // still on its way — the screen's first, slow while «Сьогодні» reads at
+  // entry — knows nothing of it, and a refetch would only wait for that
+  // one: it is let go first (CI, 2026-10-31).
+  const openOnceRead = (id: string): void => {
+    setCreating(false);
+    void cache
+      .cancelQueries({ queryKey: ["stock-lists", scopeKey, store.id] })
+      .then(() => lists.refetch())
+      .then(() => {
+        setOpenId(id);
+      });
+  };
 
   if (open)
     return (
@@ -166,17 +180,9 @@ export function Openings({
               )}
               blocked={blocked}
               done={(list) => {
-                setCreating(false);
-                void lists.refetch().then(() => {
-                  setOpenId(list.snapshot_id);
-                });
+                openOnceRead(list.snapshot_id);
               }}
-              openList={(id) => {
-                setCreating(false);
-                void lists.refetch().then(() => {
-                  setOpenId(id);
-                });
-              }}
+              openList={openOnceRead}
               cancel={() => {
                 setCreating(false);
               }}

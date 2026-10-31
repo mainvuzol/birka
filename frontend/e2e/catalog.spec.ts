@@ -14,7 +14,7 @@ const fixture = JSON.parse(
     "utf8",
   ),
 ) as Fixture;
-function launch(): string {
+function launch(version?: string): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
@@ -27,7 +27,9 @@ function launch(): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
+  if (version) hash.set("tgWebAppVersion", version);
+  return `/#${hash.toString()}`;
 }
 async function enter(page: Page): Promise<void> {
   await page.goto(launch());
@@ -150,6 +152,73 @@ test("lost proposal response survives reopening with the same UUID", async ({
   ).toBeVisible();
   expect(ids).toHaveLength(2);
   expect(ids[1]).toBe(ids[0]);
+});
+
+test("a proposal kept on the phone is felt once, a warning; its later checks, lost again or answered, nothing (spec §4.4; «Усе на бірці» task list, P1-2)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  // The answers' buzzes: the store's door is a choice.
+  const buzzes = async (): Promise<unknown[]> =>
+    (
+      await page.evaluate(
+        () => (window as unknown as { buzzes: string[] }).buzzes,
+      )
+    )
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification");
+  await page.goto(launch("6.1"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Перевірка каталогу");
+  await draft(page, "Запис, що чекає відповіді");
+  let posts = 0;
+  await page.route("**/api/v1/catalog/match-decisions", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    posts += 1;
+    if (posts === 1) {
+      await route.fetch();
+      await route.abort("failed");
+    } else if (posts === 2) await route.abort("failed");
+    else await route.continue();
+  });
+  // The second check's look at the proposal is lost too: kept still.
+  let looks = 0;
+  await page.route("**/api/v1/catalog/match-decisions/*", async (route) => {
+    if (posts === 2 && looks++ === 0) await route.abort("failed");
+    else await route.continue();
+  });
+  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
+  const again = page.getByRole("button", {
+    name: "Повторити ту саму операцію",
+  });
+  await expect(again).toBeEnabled();
+  const warned = [{ type: "notification", notification_type: "warning" }];
+  expect(await buzzes()).toEqual(warned);
+  await again.click();
+  await expect.poll(() => looks).toBe(1);
+  await expect(again).toBeEnabled();
+  expect(await buzzes()).toEqual(warned);
+  await again.click();
+  await expect(
+    page.getByRole("button", { name: "Підтвердити обраний товар" }),
+  ).toBeVisible();
+  expect(await buzzes()).toEqual(warned);
 });
 
 test("catalog change rejects stale confirmation through real API", async ({

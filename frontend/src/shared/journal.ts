@@ -8,6 +8,7 @@ import {
   unreachable,
 } from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
+import { buzz } from "@/shared/telegram";
 
 /**
  * One stock command, written down before it is sent.
@@ -271,6 +272,9 @@ export function journal<
             : 0;
       if (written) {
         keepCount(storageKey, current, misses);
+        // Kept on the phone from now: felt once, as it first is (spec §4.4;
+        // «Усе на бірці» task list, P1-2).
+        if (!previouslyAmbiguous) buzz("warning");
         use.setState({ error, misses, pending: { ...current, misses } });
       } else use.setState({ error, misses });
       return { kind: "unknown" };

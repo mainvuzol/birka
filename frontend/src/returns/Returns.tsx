@@ -29,7 +29,7 @@ import {
   takenBy,
   usePaperMark,
 } from "@/sales/paperMark";
-import { buzz } from "@/shared/telegram";
+import { buzz, hideKeyboard } from "@/shared/telegram";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { useSettled } from "@/sales/StockSearch";
@@ -349,6 +349,9 @@ export function Returns({
                   sale={sale}
                   here={sale.store_id === store.id}
                   choose={() => {
+                    // The search done with: the keyboard goes (spec §4.4;
+                    // «Усе на бірці» task list, P1-2).
+                    hideKeyboard();
                     setSelected(sale);
                   }}
                   blocked={blocked}
@@ -684,7 +687,8 @@ function ReturnForm({
       },
     });
     // A buzz in the hand once the server answers, as at the till (P2-5); a
-    // lost answer, and a kept return confirmed later, none.
+    // lost answer is its journal's warning (spec §4.4; «Усе на бірці» task
+    // list, P1-2), a kept return confirmed later, none.
     if (outcome.kind === "done") {
       buzz("success");
       setCommandId(crypto.randomUUID());
@@ -830,6 +834,7 @@ function ReturnForm({
               Причина повернення (необов’язково)
               <textarea
                 ref={reasonRef}
+                enterKeyHint="enter"
                 value={reason}
                 maxLength={1000}
                 aria-describedby={`${ids}-reason`}

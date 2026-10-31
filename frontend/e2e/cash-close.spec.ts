@@ -628,7 +628,7 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   );
 });
 
-test("Telegram buzzes once when the close is recorded and once when it is refused, never for a close kept and confirmed later", async ({
+test("Telegram buzzes once when the close is recorded and once when it is refused", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -675,6 +675,53 @@ test("Telegram buzzes once when the close is recorded and once when it is refuse
     { type: "notification", notification_type: "error" },
     { type: "notification", notification_type: "success" },
   ]);
+});
+
+test("a close short or over, by any sum, is felt as a warning, not a success — under a hryvnia too, which wants no reason (spec §4.4; «Усе на бірці» task list, P1-2)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  const state: { now: Drawer; answer: Record<string, unknown> | number } = {
+    now: drawer(),
+    answer: closeOf({
+      expected: "2000.50",
+      difference: "-0.50",
+      reason_required: false,
+    }),
+  };
+  await stubDrawer(page, state);
+  await cash(page, olya, { version: "6.1" });
+  await card(page).click();
+  await field(page).fill("2000");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
+  await confirmClose(page);
+  await expect(
+    page
+      .getByRole("group", { name: "Закриття каси" })
+      .locator(".cash-difference"),
+  ).toHaveText("Нестача 0,50 грн");
+  const buzzes = await page.evaluate(
+    () => (window as unknown as { buzzes: string[] }).buzzes,
+  );
+  // The door's choice before it, if «Оля» chose a store.
+  expect(
+    buzzes
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification"),
+  ).toEqual([{ type: "notification", notification_type: "warning" }]);
 });
 
 /** The WCAG relative luminance of a computed `rgb(…)` colour. */
