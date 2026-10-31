@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, openStore, section, tillWays } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -241,8 +241,25 @@ test("the search runs as it is typed, from two letters; Enter at once; one lette
   await field.fill("альп");
   await field.press("Enter");
   await expect.poll(() => searched("альп")).toBe(true);
-  // Asked with the clock still: by Enter, not the pause. From here the
-  // clock runs as it does (the list is drawn on the query's own timers).
+  // Asked with the clock still: by Enter, not the pause.
+  // The field's «×» forgets that Enter, as «Очистити» does (review): the
+  // same letters typed again wait for the pause, the whole list kept until
+  // it has gone by.
+  await page.getByRole("button", { name: "Очистити пошук" }).click();
+  await expect(field).toHaveValue("");
+  await wait(100);
+  await expect(page.getByRole("article")).toHaveCount(2);
+  await field.fill("альп");
+  await wait(200);
+  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(100);
+      return page.getByRole("article").count();
+    })
+    .toBe(1);
+  // From here the clock runs as it does (the list is drawn on the query's
+  // own timers).
   await page.clock.resume();
   await expect(page.getByRole("article")).toContainText("Альпака сіра · M");
 
@@ -254,7 +271,7 @@ test("the search runs as it is typed, from two letters; Enter at once; one lette
       "За «немає такого» продажів не знайдено. Перевірте назву або очистіть пошук.",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Очистити" }).click();
+  await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(field).toHaveValue("");
   await expect(field).toBeFocused();
   await expect(page.getByRole("article")).toHaveCount(2);
@@ -332,7 +349,7 @@ test("a next page that cannot be read keeps the sales read, and offers to try ag
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("at 360 px only the heading and the field stand above the sales, by day; a row is a target of 44 px; the other stores are under them", async ({
+test("at 360 × 640 the till's heading alone, the field 52 under the switch, its name read and its hint seen; the sales by day in rows of 64, no sum among them; the other stores under them", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -342,6 +359,34 @@ test("at 360 px only the heading and the field stand above the sales, by day; a 
     sale("Деінде беж", ago(9)),
   ]);
   await returns(page);
+  // One heading for the place, the till's («Усе на бірці» task list, P1-3):
+  // «Повернути» pressed under it, and no «Повернення» nor a seen
+  // «Що повертають?» over the field.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(["Продаж"]);
+  await expect(
+    page.getByRole("heading", { name: "Повернення", exact: true }),
+  ).toHaveCount(0);
+  const back = tillWays(page).getByRole("button", {
+    name: "Повернути",
+    exact: true,
+  });
+  await expect(back).toHaveAttribute("aria-current", "page");
+  const search = page.getByRole("searchbox", { name: "Що повертають?" });
+  await expect(search).toHaveAttribute("placeholder", "Модель або колір");
+  // Its name for a screen reader alone: drawn in no more than a pixel.
+  const name = await page.getByText("Що повертають?").boundingBox();
+  if (!name) throw new Error("the field's name is not on the page");
+  expect(name.width).toBeLessThanOrEqual(1);
+  expect(name.height).toBeLessThanOrEqual(1);
+  // The field under the switch, 52 high (spec §6.6).
+  const box = await search.boundingBox();
+  const switched = await back.boundingBox();
+  if (!box || !switched) throw new Error("not laid out");
+  expect(box.height).toBe(52);
+  expect(box.y).toBeGreaterThan(switched.y + switched.height);
+  // As much as the server's search of sales takes.
+  await expect(search).toHaveAttribute("maxlength", "100");
+  await expect(page.locator(".returns")).not.toContainText(/грн|₴/);
   const field = await page.getByLabel("Що повертають?").boundingBox();
   const first = await page.getByRole("article").first().boundingBox();
   const today = await page
@@ -357,9 +402,10 @@ test("at 360 px only the heading and the field stand above the sales, by day; a 
   await expect(page.getByRole("heading", { name: "Сьогодні" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Вчора" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 3 })).toHaveCount(3);
+  // A list row of the spec's, 64 at least (§6.8).
   for (const row of await page.getByRole("article").all()) {
     const box = await row.getByRole("button").boundingBox();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(64);
   }
   // Nothing typed, nothing offered of the other stores (P1-1).
   await expect(page.getByRole("button", { name: "Шукати там" })).toHaveCount(0);
@@ -620,7 +666,7 @@ test("nothing found here says to call the manager for goods sold before Бірк
   ).toBeVisible();
   await expect(before).toHaveCount(0);
   // «Очистити» there: this store's list again.
-  await page.getByRole("button", { name: "Очистити" }).click();
+  await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "В інших магазинах мережі" }),
   ).toHaveCount(0);
@@ -732,5 +778,36 @@ for (const [name, theme, scheme] of [
       page.locator(".sale-day").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // A list row's type (spec §6.8; «Усе на бірці» task list, P1-3): the
+    // goods its title, 17/600; the line under them 14/500.
+    const type = (part: Locator): Promise<string[]> =>
+      part.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.fontSize, style.fontWeight];
+      });
+    expect(await type(page.locator(".sale-goods").first())).toEqual([
+      "17px",
+      "600",
+    ]);
+    expect(await type(page.locator(".sale-meta").first())).toEqual([
+      "14px",
+      "500",
+    ]);
+    // A sale returned whole takes no tap: its goods in pencil, as the line
+    // under them, and still read at 4.5:1.
+    const whole = page
+      .getByRole("article")
+      .filter({ hasText: "Усе вже повернено" });
+    const colour = (part: Locator): Promise<string> =>
+      part.evaluate((node) => getComputedStyle(node).color);
+    expect(await colour(whole.locator(".sale-goods"))).toBe(
+      await colour(whole.locator(".sale-meta")),
+    );
+    expect(await colour(whole.locator(".sale-goods"))).not.toBe(
+      await colour(page.locator(".sale-goods").first()),
+    );
+    expect(await contrast(whole.locator(".sale-goods"))).toBeGreaterThanOrEqual(
+      4.5,
+    );
     await page.screenshot({ path: `test-results/returns-list-${name}.png` });
   });

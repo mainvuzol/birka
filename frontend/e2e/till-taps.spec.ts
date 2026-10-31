@@ -1,4 +1,11 @@
-import { test, expect, openStore, toTill, sellsFrom } from "./fixtures";
+import {
+  test,
+  expect,
+  countTaps,
+  openStore,
+  toTill,
+  sellsFrom,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -146,23 +153,6 @@ async function onTheTill(page: Page): Promise<void> {
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-}
-
-/** Every press from now on: a finger's, typing not counted. */
-async function countTaps(page: Page): Promise<() => Promise<number>> {
-  await page.evaluate(() => {
-    const host = window as unknown as { taps: number };
-    host.taps = 0;
-    document.addEventListener(
-      "pointerdown",
-      () => {
-        host.taps += 1;
-      },
-      true,
-    );
-  });
-  return () =>
-    page.evaluate(() => (window as unknown as { taps: number }).taps);
 }
 
 function cell(page: Page, at: string): Locator {

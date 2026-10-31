@@ -132,6 +132,24 @@ export function storeLine(page: Page): Locator {
   return page.locator(".store-line > p").filter({ visible: true });
 }
 
+/** Every press from now on: a finger's, typing not counted — a path's
+ * taps, as the hot-path budget counts them. */
+export async function countTaps(page: Page): Promise<() => Promise<number>> {
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        host.taps += 1;
+      },
+      true,
+    );
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { taps: number }).taps);
+}
+
 /**
  * The till, as whoever reads the report reaches it as Бірка opens: on
  * «Сьогодні» first (owner decision, 2026-10-26, В3; «Усе на бірці» task
@@ -215,15 +233,17 @@ export async function section(page: Page, name: string): Promise<void> {
       .getByRole("button", { name: "Продаж", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: /^(Продаж|Повернення)$/ }),
+      page.getByRole("heading", { name: "Продаж", exact: true }),
     ).toBeVisible();
     const back = tillWays(page).getByRole("button", {
       name: "Повернути",
       exact: true,
     });
     if ((await back.count()) > 0) await back.click();
+    // The till's heading stays; the field says the place («Усе на бірці»
+    // task list, P1-3).
     await expect(
-      page.getByRole("heading", { name: "Повернення" }),
+      page.getByRole("searchbox", { name: "Що повертають?" }),
     ).toBeVisible();
     return;
   }

@@ -6,7 +6,8 @@ import { Icon } from "./Icon";
  * the magnifier on its left, what to type as its placeholder, and «×» on
  * its right once something is typed, which empties it and keeps the cursor
  * in it. Its name is read aloud and never seen: the placeholder says it.
- * Built for the till; «Повернути» and «Внесок» take it with their tasks.
+ * Built for the till, taken by «Повернути» (P1-3); «Внесок» takes it with
+ * its task.
  */
 export function SearchField({
   label,
@@ -14,12 +15,15 @@ export function SearchField({
   value,
   change,
   inputRef,
+  maxLength = 200,
 }: {
   label: string;
   placeholder: string;
   value: string;
   change: (text: string) => void;
   inputRef: RefObject<HTMLInputElement>;
+  /** What the server takes for this search. */
+  maxLength?: number;
 }): JSX.Element {
   return (
     <div className="search-field">
@@ -29,7 +33,7 @@ export function SearchField({
         <input
           ref={inputRef}
           type="search"
-          maxLength={200}
+          maxLength={maxLength}
           enterKeyHint="search"
           autoComplete="off"
           placeholder={placeholder}

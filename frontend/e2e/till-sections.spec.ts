@@ -315,7 +315,9 @@ test("selling and taking back are one section's two ways: «Продати | П�
   expect(left?.height).toBeGreaterThanOrEqual(44);
   // A tap: the returns, «Продаж» still the menu's mark.
   await back.click();
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   await expect(back).toHaveAttribute("aria-current", "page");
   // The focus on the way now open, never lost to the page.
   await expect(back).toBeFocused();
@@ -526,7 +528,11 @@ test("whoever only takes returns has «Продаж» open them, with no switch 
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
   await tabs(page).filter({ hasText: "Продаж" }).click();
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  // Headed by its tab, as the till is («Усе на бірці» task list, P1-3).
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Продаж");
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   await expect(tabs(page).filter({ hasText: "Продаж" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -541,7 +547,9 @@ test("whoever takes returns and payments but does not sell has «Поверну�
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
   await tabs(page).filter({ hasText: "Продаж" }).click();
-  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
   const ways = page.getByRole("group", { name: "Повернення або внесок" });
   await expect(ways.getByRole("button")).toHaveText(["Повернути", "Внесок"]);
   await ways.getByRole("button", { name: "Внесок", exact: true }).click();

@@ -1550,6 +1550,34 @@ html {
   font-size: 24px;
   color: var(--text-2);
 }
+/* «Повернути»'s rows (spec §6.8; «Усе на бірці» task list, P1-3): 64 high
+   at least, and so their places while read; the goods are the row's title,
+   17/600 in ink, the hour, the count and the stickers under them in
+   pencil. */
+.returns .sale-row {
+  min-height: var(--h-row);
+}
+.returns .sale-goods {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+.returns .sale-meta {
+  font-weight: 500;
+}
+/* A sale returned whole opens nothing: its goods in pencil, as a row that
+   takes no tap (§6.8; review). */
+.returns div.sale-row .sale-goods {
+  color: var(--pencil);
+}
+/* «Повернути»'s field where the till's stands under the switch, so
+   switching from «Продати» moves nothing under the finger while nothing is
+   said over the till's field: the till's is in its form's fieldset, 18
+   lower than a field of its own would be (P1-3). */
+.returns > .find {
+  margin-top: calc(18px + 16px);
+}
 /* One sale's return (returns task list, P0-3): its context in one line,
    each line a tag whose units are counted with «−» and «+», «Пошкоджені» in
    the colour of «Брак». */

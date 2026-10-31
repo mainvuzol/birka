@@ -569,3 +569,28 @@ cursor in (review, 2026-10-17), then the size's cell and a way: four taps,
 where it was two. A seller still opens on the till with the cursor in the
 search: two. The frame's three are counted from the till, and stand.
 Whether the owner wants the two taps back is a reading for the owner.
+
+## Update — 2026-10-31: a return's taps, counted at the till
+
+The frame's P1-3 takes a return's taps as its acceptance: four, as before
+(«возврат 4 → 4», the frame's §13). Its list is the till's place now
+([returns](all-on-the-tag-returns-report.md)); the counter is the page's
+own, every `pointerdown` from the till, its switch on «Продати»
+(`returns-sale-screen.spec.ts`; the sale, its way and the return's answer
+stubbed):
+
+| | taps |
+|---|---|
+| «Повернути» under the till's heading: today's sales | 1 |
+| the sale's row | 1 |
+| «Цілі: більше» — a unit counted, the dock over the menu | 1 |
+| the way back (the sale's own, offered) | 0 |
+| «Повернути покупцю … готівкою» | 1 |
+| **total** | **4** |
+
+- **A sale not among today's first rows** takes the search, and its
+  letters, before the row: five.
+- **A way the sale does not offer** — read and refused, or a sale with
+  none — is a tap more: five (the update of 2026-10-04, above).
+
+No server request changed, so the hot path's cases stand as last measured.
