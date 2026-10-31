@@ -268,14 +268,15 @@ test("a sale kept on the phone is felt once, a warning, and Telegram asks before
   await stubList(page);
   let lose = true;
   let sent = 0;
-  await page.route("**/api/v1/sales", async (route) => {
+  const sales = async (route: Route): Promise<void> => {
     sent += 1;
     if (lose) {
       await route.abort("connectionreset");
       return;
     }
     await route.fulfill({ status: 201, json: sold() });
-  });
+  };
+  await page.route("**/api/v1/sales", sales);
   await onTheTill(page, "9.1");
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await pay(page, "Готівка").click();
@@ -302,7 +303,10 @@ test("a sale kept on the phone is felt once, a warning, and Telegram asks before
 
   // Reopened: the basket is gone with it — it lives in memory alone — and
   // the sale still waits, so Telegram still asks, told once; checked by the
-  // phone itself, still lost, not felt.
+  // phone itself, still lost, not felt. A route answering as the page goes
+  // would be cut off mid-answer: each is waited out, the sale's put back.
+  await page.unrouteAll({ behavior: "wait" });
+  await page.route("**/api/v1/sales", sales);
   await page.reload();
   await openStore(page, "Основний MAIN");
   await expect(
