@@ -3920,6 +3920,15 @@ button.day-folded {
 .today-tag.tone-damaged {
   --tone: var(--damaged);
 }
+.today-tag.tone-offline {
+  --tone: var(--offline);
+}
+/* News of what someone else did (spec §6.9): its eyelet a ring. */
+.today-tag.ring .today-tag-eyelet {
+  box-sizing: border-box;
+  border: 1.5px solid var(--tone);
+  background: transparent;
+}
 .today-tag-title {
   display: flex;
   align-items: flex-start;
@@ -4018,4 +4027,81 @@ button.day-folded {
   font-variant-numeric: tabular-nums;
   line-height: 18px;
   text-align: center;
+}
+/* «Зроблено сьогодні · N ›» at the heading's right (spec S04 #10), and
+   under «Вас нічого не чекає.»: a text button. */
+.today-waiting-side {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.today-done {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+/* By the heading it is 44 to the thumb, the label's line to the page: the
+   first «Бачу» of the day never moves the tags under the finger. */
+.today-waiting-side .today-done {
+  margin-block: -14px;
+}
+/* Its sheet: what was seen today, each tied off with a knot. */
+.today-done-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.today-done-row {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--edge);
+}
+.today-done-row:last-child {
+  border-bottom: 0;
+}
+.today-done-row p {
+  margin: 0;
+}
+.today-done-row .t-meta {
+  color: var(--pencil);
+}
+/* A toast (spec §6.23): over the menu by 16 px, ink on light, its one way
+   back in the thread's colour. */
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--menu-h, 0px) + 16px);
+  left: 16px;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  max-width: 358px;
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 2px 8px 2px 16px;
+  border-radius: var(--r-s);
+  background: var(--inverse);
+  box-shadow: var(--shadow-3);
+  color: var(--on-inverse);
+  font-size: 15px;
+  font-weight: 500;
+}
+.toast-action {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--thread);
+  font-size: 15px;
+  font-weight: 700;
 }

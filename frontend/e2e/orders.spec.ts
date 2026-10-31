@@ -296,6 +296,11 @@ test("a kept order its check cannot settle opens on «Замовлення», no
     .getByRole("button", { name: "Замовлення", exact: true });
   await expect(orders).toHaveAttribute("aria-current", "page");
   await expect(orders).toBeDisabled();
+  // Nothing in flight as the server comes back: an answer after it would
+  // have the order checked by itself before the tap — «Сьогодні»'s reads
+  // at entry among them, its stocktakes once the warehouses have answered
+  // («Усе на бірці» task list, P0-6).
+  await reopened.waitForLoadState("networkidle");
   answered = true;
   await retry.click();
   await expect(reopened.locator(".order-context")).toBeVisible();

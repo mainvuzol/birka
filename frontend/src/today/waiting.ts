@@ -1,28 +1,44 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { serverTitle, troubleText, verdictTitle } from "@/backups/Backups";
 import type { Backups } from "@/backups/types";
+import { differenceOf } from "@/cash/Closed";
+import { timeOf } from "@/cash/errors";
+import { cashDay } from "@/cash/format";
+import type { Close } from "@/cash/types";
 import type { DamagedUnit } from "@/damaged/types";
+import type { StocktakeRecord } from "@/inventory/stocktakeTypes";
 import { plural } from "@/openings/types";
 import type { OrderItem, Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import {
   ageOf,
   dayStores,
+  useCloses,
   useDamaged,
   useNetworkBackups,
   useOpenOrders,
   useStockLists,
+  useStocktakes,
+  useWarehouses,
 } from "./reads";
-import type { Age } from "./reads";
+import type { Age, Counted } from "./reads";
+import { useSeen } from "./seen";
 
 /**
- * The work «Сьогодні» says waits («Усе на бірці» task list, P0-6, items 3–8;
- * spec §6.9), in the frame's order: the backups, the parcels to send,
- * «Брак», the lists of existing stock to approve. Each from a read the
- * server already answers, by its own right in its own store; a tag goes by
- * itself once the work is done, at the next reading.
+ * What «Сьогодні» says waits («Усе на бірці» task list, P0-6, items 3–8;
+ * spec §6.9), in the frame's order: the backups, a drawer's difference, the
+ * parcels to send, «Брак», the lists of existing stock to approve, a
+ * stocktake finished. Each from a read the server already answers, by its
+ * own right in its own store. Work goes by itself once done, at the next
+ * reading; news — a drawer's difference, a stocktake — once seen («Бачу»).
  */
-export type Kind = "backups" | "parcels" | "damaged" | "openings";
+export type Kind =
+  | "backups"
+  | "drawer"
+  | "parcels"
+  | "damaged"
+  | "openings"
+  | "stocktake";
 
 export interface Tag {
   /** One a kind and a store. */
@@ -33,6 +49,14 @@ export interface Tag {
   title: string;
   /** Up to two lines, its parts said with «·» between them. */
   meta: string[];
+  /** News, gone once seen: what this phone keeps of it. */
+  seen?: string;
+}
+
+/** A news tag seen today on this phone, and when. */
+export interface Done {
+  tag: Tag;
+  at: number;
 }
 
 export interface Waiting {
@@ -48,6 +72,36 @@ export interface Waiting {
   /** The backups in order, with no trouble on the server: when the last
    * copy was made. */
   backupsOk: { at: string } | undefined;
+  /** «Зроблено сьогодні»: the news seen today on this phone, the latest
+   * first, of what is still read. */
+  done: Done[];
+}
+
+/** «сьогодні о 03:15», «учора о 03:15», «28.10 о 03:15»: when, by the
+ * phone's day. */
+export function whenText(iso: string, now: number): string {
+  const at = new Date(iso);
+  const day = (date: Date): string => date.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const time = timeOf(iso);
+  if (day(at) === day(new Date(now))) return `сьогодні о ${time}`;
+  if (day(at) === day(yesterday)) return `учора о ${time}`;
+  const date = at.toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return `${date} о ${time}`;
+}
+
+/** Today or yesterday, by the phone's day. */
+function lately(iso: string, now: number): boolean {
+  const at = new Date(iso);
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return [new Date(now), yesterday].some(
+    (day) => day.toDateString() === at.toDateString(),
+  );
 }
 
 /** «Лоран шоколад M», and «× 2» for more than one: a model, its colour and
@@ -71,6 +125,26 @@ function unitGoods(unit: DamagedUnit): string {
   return unit.size === null || unit.size === "UNKNOWN"
     ? `${visible(unit.display_name)} розмір невідомий`
     : `${visible(unit.display_name)} ${visible(unit.size)}`;
+}
+
+/** «нестача 120,00 грн», as «Каса» says it, inside a sentence. */
+function differenceWords(difference: string): string {
+  const { text } = differenceOf(difference);
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/** «— нестача 2 шт., надлишок 1 шт.», or «— розбіжностей немає», as the
+ * stocktake's own result. */
+function stocktakeWords({ sums }: StocktakeRecord): string {
+  const found = [
+    ...(sums.shortage_units > 0
+      ? [`нестача ${String(sums.shortage_units)} шт.`]
+      : []),
+    ...(sums.surplus_units > 0
+      ? [`надлишок ${String(sums.surplus_units)} шт.`]
+      : []),
+  ];
+  return found.length > 0 ? found.join(", ") : "розбіжностей немає";
 }
 
 /** Oldest first: the work waiting longest comes first. */
@@ -136,6 +210,28 @@ export function useWaiting({
   const orders = useOpenOrders(token, scopeKey, shown);
   const damaged = useDamaged(token, shown);
   const lists = useStockLists(token, scopeKey, shown);
+  const closes = useCloses(token, scopeKey, shown.length > 0);
+  const warehouses = useWarehouses(token, scopeKey, shown);
+  // Each warehouse read once, through the first store of the day that sees
+  // it, the open one first: one two stores share is one warehouse. «Брак»
+  // and a paused one are never counted. Counted once every store's
+  // warehouses have answered: which store reads a shared one never hangs on
+  // which answered first.
+  const counted: Counted[] = [];
+  const settled = [...warehouses.values()].every(
+    (read) => read.data !== undefined || read.isError,
+  );
+  for (const store of settled ? shown : [])
+    for (const location of warehouses.get(store.id)?.data ?? [])
+      if (
+        location.is_active &&
+        !location.damaged_returns &&
+        !counted.some((one) => one.location.id === location.id)
+      )
+        counted.push({ store, location });
+  const stocktakes = useStocktakes(token, scopeKey, counted);
+  const seen = useSeen(scopeKey);
+  const now = Date.now();
   // A store is named where the day holds another, or it is not the one
   // open: «Відправити 3 посилки» alone would be read as this store's.
   const named = (store: Store): string[] =>
@@ -235,21 +331,112 @@ export function useWaiting({
     ];
   });
 
+  // A drawer's difference of 1,00 грн or more, yesterday's or today's —
+  // the drawer's days — one tag a close, the open store's first, the oldest
+  // first in each.
+  const today = cashDay(0);
+  // The stores of the day in their order, any other after them.
+  const order = (id: string): number => {
+    const at = shown.findIndex((store) => store.id === id);
+    return at === -1 ? shown.length : at;
+  };
+  const differences = shown.flatMap((store): Tag[] =>
+    (closes.data?.items ?? [])
+      .filter(
+        (close): close is Close & { difference: string } =>
+          close.store_id === store.id &&
+          close.reason_required &&
+          close.difference !== null &&
+          (close.business_day === today ||
+            close.business_day === cashDay(1)),
+      )
+      .sort((a, b) => byAge(a.closed_at, b.closed_at))
+      .map((close) => ({
+        key: `drawer:${close.id}`,
+        kind: "drawer",
+        store,
+        seen: `close:${close.id}`,
+        title: `У касі «${visible(store.name)}» ${
+          close.business_day === today ? "сьогодні" : "учора"
+        } ${differenceWords(close.difference)}`,
+        meta: [
+          visible(close.closed_by),
+          `о ${timeOf(close.closed_at)}`,
+          close.reason === null
+            ? "причину не вказано"
+            : `причина: «${visible(close.reason)}»`,
+        ],
+      })),
+  );
+
+  // A stocktake finished yesterday or today, by the phone's day: in the
+  // store it was taken in — one not of the day too, a paused one — where
+  // this person knows it; else in the one it was read through.
+  const finished = counted
+    .flatMap(({ store, location }) =>
+      (stocktakes.get(location.id)?.data?.items ?? []).flatMap((item) =>
+        item.finished_at !== null && lately(item.finished_at, now)
+          ? [
+              {
+                item,
+                at: item.finished_at,
+                store: stores.find((one) => one.id === item.store_id) ?? store,
+              },
+            ]
+          : [],
+      ),
+    )
+    .sort(
+      (a, b) =>
+        order(a.store.id) - order(b.store.id) || byAge(a.at, b.at),
+    )
+    .map(
+      ({ item, at, store }): Tag => ({
+        key: `stocktake:${item.id}`,
+        kind: "stocktake",
+        store,
+        seen: `stocktake:${item.id}`,
+        title: `Склад «${visible(
+          item.location_name,
+        )}»: інвентаризацію завершено — ${stocktakeWords(item)}`,
+        meta: [
+          ...named(store),
+          ...(item.finished_by === null ? [] : [visible(item.finished_by)]),
+          whenText(at, now),
+        ],
+      }),
+    );
+
   const reads: UseQueryResult[] = [
     ...(backups ? [backups] : []),
+    ...(shown.length > 0 ? [closes] : []),
     ...orders.values(),
     ...damaged.values(),
     ...lists.values(),
+    ...warehouses.values(),
+    ...stocktakes.values(),
   ];
   const unread = reads.filter((read) => read.data === undefined);
   const state = backups?.data;
+  const every = [
+    ...(backups ? backupsTag(backups) : []),
+    ...differences,
+    ...parcels,
+    ...inspect,
+    ...approve,
+    ...finished,
+  ];
+  const seenAt = (tag: Tag): number | undefined =>
+    tag.seen === undefined ? undefined : seen[tag.seen];
+  const midnight = new Date(now).setHours(0, 0, 0, 0);
   return {
-    tags: [
-      ...(backups ? backupsTag(backups) : []),
-      ...parcels,
-      ...inspect,
-      ...approve,
-    ],
+    tags: every.filter((tag) => seenAt(tag) === undefined),
+    done: every
+      .flatMap((tag): Done[] => {
+        const at = seenAt(tag);
+        return at !== undefined && at >= midnight ? [{ tag, at }] : [];
+      })
+      .sort((a, b) => b.at - a.at),
     unread: unread.length > 0,
     unreadAge: ageOf(unread),
     asked: reads.length > 0,
