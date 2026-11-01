@@ -1010,20 +1010,20 @@ test("a store that does not trade is the report's column with its mark, and a li
         centre,
         "Центр",
         {
-          cash: "1125400.00",
-          card: "1118650.00",
-          transfer: "996300.00",
-          money: "3240350.00",
+          cash: "1311125400.00",
+          card: "1311118650.00",
+          transfer: "1310996300.00",
+          money: "3933240350.00",
         },
       ],
       [
         market,
         "Ринок",
         {
-          cash: "1088900.00",
-          card: "1104200.00",
-          transfer: "851750.00",
-          money: "3044850.00",
+          cash: "1311088900.00",
+          card: "1311104200.00",
+          transfer: "1310851750.00",
+          money: "3933044850.00",
         },
       ],
       [
@@ -1066,8 +1066,9 @@ test("a store that does not trade is the report's column with its mark, and a li
   await expect(lines(page, "Ви винні постачальникам").nth(2)).toHaveText(
     "«Старий» в архіві: Нічого не винні",
   );
-  // Three wide stores: the table alone scrolls, the page never; scrolled,
-  // its last store comes whole into sight.
+  // Three wide stores — wider than the phone in any font: the table alone
+  // scrolls, the page never; scrolled, its last store comes whole into
+  // sight.
   const wrap = page.locator(".money-table-wrap");
   expect(
     await wrap.evaluate((node) => node.scrollWidth - node.clientWidth),
