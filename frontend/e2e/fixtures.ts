@@ -78,9 +78,11 @@ const weekday =
 
 /**
  * Into a store's workspace. A person with one store is taken into it as the
- * app opens (redesign P0-1); with two or more, the store is chosen, and this
- * presses its button. It waits for whichever comes: the choice, the
- * workspace's sections, or a store's state that offers only «Оновити».
+ * app opens (redesign P0-1); with two or more, the door asks «Де ви
+ * сьогодні?» (spec S06; «Усе на бірці» task list, P1-4), and this presses
+ * the store's tag, named by its name and code. It waits for whichever
+ * comes: the door, the workspace's sections, or a store's state that offers
+ * only «Оновити».
  */
 export async function openStore(
   page: Page,
@@ -94,6 +96,10 @@ export async function openStore(
       .first(),
   ).toBeVisible();
   if (!(await choice.isVisible())) return;
+  // Asked at the door, whatever was chosen before (В6).
+  await expect(
+    page.getByRole("heading", { name: "Де ви сьогодні?", level: 1 }),
+  ).toBeVisible();
   // The store chosen is the store opened: its name heads the line under
   // the screen's title, «{Магазин} · {Ім’я}» (redesign P1-6; «Усе на
   // бірці» task list, P0-4) — on «Сьогодні», the day of every store, the
@@ -114,12 +120,17 @@ export async function openStore(
 const tabs = ["Продаж", "Замовлення", "Каса"];
 
 /** «Ще»'s rows by the screen they open, where the row's word is not the
- * screen's: «Приймання товару» is «Прийшов товар», «Брак» says how many
- * wait under it. */
-const rows: Record<string, string | RegExp> = {
+ * screen's: «Приймання товару» is «Прийшов товар». */
+const rows: Record<string, string> = {
   Приймання: "Прийшов товар",
-  Брак: /^Брак( |$)/,
 };
+
+/** A row of «Ще» by its label: what waits there is read after it — «Брак
+ * 2 очікують перевірки», «Борги ніхто не винен» («Усе на бірці» task
+ * list, P1-5). */
+export function rowNamed(label: string): RegExp {
+  return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`);
+}
 
 /** «Товар і каталог»'s screens: a list of their own for whoever has two of
  * them or more. */
@@ -196,7 +207,7 @@ export async function more(page: Page): Promise<void> {
   const screen = page.getByRole("heading", { name: "Ще", exact: true });
   if (!(await screen.isVisible()))
     await menu(page)
-      .getByRole("button", { name: /^Ще( ⚠)?$/ })
+      .getByRole("button", { name: /^Ще( — є що перевірити)?$/ })
       .click();
   await expect(screen).toBeVisible();
 }
@@ -252,7 +263,7 @@ export async function section(page: Page, name: string): Promise<void> {
     await more(page);
     await page
       .getByRole("navigation", { name: "Ще" })
-      .getByRole("button", { name: rows[name] ?? name, exact: true })
+      .getByRole("button", { name: rowNamed(rows[name] ?? name) })
       .click();
     await expect(
       page.getByRole("heading", {
@@ -285,7 +296,7 @@ export async function section(page: Page, name: string): Promise<void> {
   }
   await page
     .getByRole("navigation", { name: /^(Ще|Товар і каталог)$/ })
-    .getByRole("button", { name, exact: true })
+    .getByRole("button", { name: rowNamed(name) })
     .click();
 }
 

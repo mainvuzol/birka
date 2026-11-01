@@ -386,8 +386,12 @@ test("browser without Telegram shows entry guidance", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Вхід через Telegram" }),
   ).toBeVisible();
-  // The app's name as the owner writes it (2026-10-15, В4).
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Бірка");
+  // The app's name as the owner writes it (2026-10-15, В4), over the
+  // screen's own title («Усе на бірці» task list, P1-4).
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Вхід через Telegram",
+  );
+  await expect(page.getByText("Бірка", { exact: true })).toBeVisible();
   await expect(page).toHaveTitle("Бірка");
   await expect(
     page.getByRole("button", { name: "+ Нове замовлення" }),
@@ -496,7 +500,7 @@ test("Telegram bridge signals readiness and takes light or dark from the launch 
     `${launch()}&tgWebAppThemeParams=${encodeURIComponent(JSON.stringify({ bg_color: "#eeeeee" }))}`,
   );
   await expect(
-    page.getByRole("heading", { name: "Оберіть магазин" }),
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toBeVisible();
   const state = await page.evaluate(() => ({
     ready: (window as unknown as { hostEvents: string[] }).hostEvents.includes(

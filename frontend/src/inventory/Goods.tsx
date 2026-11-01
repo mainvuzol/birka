@@ -33,5 +33,14 @@ export function DamagedMeta({
   const awaiting = units.data.units.filter(
     (unit) => unit.status === "AWAITING",
   ).length;
-  return <span className="more-meta">{awaitingText(awaiting)}</span>;
+  // Its count the row's one colour, «Брак»'s (spec S07; P1-5).
+  return (
+    <span className="more-meta">
+      {awaiting > 0 ? (
+        <span className="more-count damaged">{awaitingText(awaiting)}</span>
+      ) : (
+        awaitingText(awaiting)
+      )}
+    </span>
+  );
 }

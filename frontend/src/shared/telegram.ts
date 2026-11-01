@@ -24,13 +24,36 @@ function launchParam(name: string): string | null {
  * its own holder, to pass on so they can be given access.
  */
 export function telegramUserId(): number | null {
+  const user = launchUser();
+  return typeof user?.id === "number" ? user.id : null;
+}
+
+/**
+ * The name Telegram knows this account by, «Ольга Руденко», from the same
+ * unverified launch data: shown only to its own holder, on this phone,
+ * never sent anywhere (spec S03; «Усе на бірці» task list, P1-4).
+ */
+export function telegramUserName(): string | null {
+  const user = launchUser();
+  const name = [user?.first_name, user?.last_name]
+    .filter((part): part is string => typeof part === "string")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .join(" ");
+  return name === "" ? null : name;
+}
+
+/** The launch data's `user`, as Telegram passed it: nothing checked. */
+function launchUser(): Record<string, unknown> | null {
   const initData = telegramInitData();
   if (!initData) return null;
   try {
     const user = JSON.parse(
       new URLSearchParams(initData).get("user") ?? "null",
-    ) as { id?: unknown } | null;
-    return typeof user?.id === "number" ? user.id : null;
+    ) as unknown;
+    return typeof user === "object" && user !== null
+      ? (user as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }

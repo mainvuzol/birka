@@ -19,11 +19,15 @@ export interface TabItem {
    * read as: the tab keeps its name. */
   badge?: string;
   badgeWords?: string;
+  /** «Ще»'s: a dot in the warning's colour on its glyph, and these words
+   * after its name — «Ще — є що перевірити» («Усе на бірці» task list,
+   * P1-5). */
+  attention?: string;
 }
 
 /** A tab: its glyph on its pill, its badge on the glyph — drawn, never
  * part of the tab's name or words — its word. What the badge says is read
- * as the tab's description. */
+ * as the tab's description; what a dot says, after its name. */
 function TabButton({ tab }: { tab: TabItem }): JSX.Element {
   const words = useId();
   return (
@@ -43,10 +47,14 @@ function TabButton({ tab }: { tab: TabItem }): JSX.Element {
           className="tab-pill"
           aria-hidden="true"
           data-badge={tab.badge}
+          data-attention={tab.attention === undefined ? undefined : ""}
         >
           <Icon name={tab.icon} />
         </span>
         <span className="tab-label">{tab.label}</span>
+        {tab.attention !== undefined && (
+          <span className="visually-hidden"> — {tab.attention}</span>
+        )}
       </button>
       {tab.badge && (
         <span id={words} hidden>

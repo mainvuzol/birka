@@ -79,14 +79,18 @@ const coats = {
 
 const said = (page: Page) => page.getByRole("status");
 
-test("signing in keeps the till's places, and says «Входимо в магазин…»", async ({
+test("signing in keeps a first screen's places, and says «Входимо в магазин…»", async ({
   page,
 }) => {
   const me = await heldBack(page, "**/api/v1/me");
   await page.goto(launch());
   await expect(said(page)).toHaveText("Входимо в магазин…");
+  // Before the rights, which screen comes first is not known: a title, a
+  // line, a field and three rows, no tag of the till's (spec S02; «Усе на
+  // бірці» task list, P1-4).
   await expect(page.locator(".skeleton-field")).toBeVisible();
-  await expect(page.locator(".placeholder .model-tag")).toHaveCount(3);
+  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
+  await expect(page.locator(".placeholder .model-tag")).toHaveCount(0);
   me.release();
   await openStore(page, "Основний MAIN");
   await toTill(page);

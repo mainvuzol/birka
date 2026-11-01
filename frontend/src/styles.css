@@ -552,7 +552,6 @@ textarea:focus-visible {
   color: var(--text);
   border-color: var(--line-strong);
 }
-.store,
 .order-card {
   display: flex;
   width: 100%;
@@ -560,11 +559,6 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 9px;
   margin: 12px 0;
-}
-.store {
-  background: var(--accent-soft);
-  color: var(--text);
-  align-items: flex-start;
 }
 .order-card {
   background: transparent;
@@ -1438,6 +1432,13 @@ html {
 .line-place {
   display: block;
   margin: 2px 0 0;
+}
+/* The model free in the person's other stores: said, never pressed
+   («Усе на бірці» task list, P2-3). */
+.elsewhere {
+  margin: 8px 0 0;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
 }
 .chips {
   display: flex;
@@ -2328,11 +2329,197 @@ html {
   margin: 0 0 12px;
   font-weight: 600;
 }
+/* The screens before a store (spec S02, S03, S06; «Усе на бірці» task
+   list, P1-4): no menu, a blank tag or the stores' tags on the page. */
+/* «Ви відкрили Бірку як …»: Telegram's name, its initials in a circle
+   (spec §6.26). */
+.opened-as {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  color: var(--pencil);
+}
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--avatar);
+  height: var(--avatar);
+  border-radius: 999px;
+  background: var(--fold);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+}
+/* Over a sign-in that failed, the app's name by its mark. */
+.app-name {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+}
+/* The blank tag (spec S03): the hero's cut top, no thread, its eyelet
+   dashed in the edge's grey — nothing hangs on it yet. */
+.blank-tag {
+  position: relative;
+  padding: 28px 16px 16px;
+}
+.blank-eyelet {
+  position: absolute;
+  top: 14px;
+  left: calc(50% - 6px);
+  box-sizing: border-box;
+  width: var(--eyelet-hero);
+  height: var(--eyelet-hero);
+  border: 1.5px dashed var(--edge);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.blank-tag h1 {
+  margin: 0 0 8px;
+}
+/* «Цей акаунт Telegram не має доступу…»: said at once, but not a fault —
+   body text on the tag, not an alert's box (spec S03). */
+.blank-tag .blank-body {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 22px;
+}
+/* A sign-in that failed: its alert and «Спробувати ще раз» apart. */
+.blank-tag > button:not(.text-button) {
+  margin-top: 16px;
+}
+.blank-tag .perforation {
+  margin: 16px -16px;
+}
+.blank-tag p {
+  margin-top: 0;
+}
+.telegram-id-label {
+  margin: 0 0 4px;
+  color: var(--pencil);
+}
 /* Someone not yet added copies their Telegram ID, or selects it whole where
-   the phone does not let the app copy (redesign P1-3). */
+   the phone does not let the app copy (redesign P1-3): 32/800 in figures
+   of one width, in its groups — their gaps margins, so the digits alone
+   are selected (spec S03). */
 .telegram-id {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 38px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  overflow-wrap: anywhere;
   user-select: all;
   -webkit-user-select: all;
+}
+.telegram-id > span + span {
+  margin-left: 0.3em;
+}
+.blank-tag .t-meta {
+  margin-bottom: 0;
+  color: var(--pencil);
+}
+/* «Скопіювати ID»: the screen's one primary, 52 high, its icon before. */
+.copy-id {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--h-primary);
+  margin: 16px 0 0;
+  border-radius: var(--r-l);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
+.blank-tag .blank-after {
+  margin: 16px 0 0;
+}
+/* A text button, «Спробувати ще раз» (spec §5.5 `button-s`, `link`). */
+.text-button {
+  min-height: var(--touch);
+  margin: 8px 0 0 -4px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 650;
+}
+/* «Де ви сьогодні?» (spec S06's door; P1-4): its line under the title, and
+   a store's tag each — the hero's silhouette 96 high, its eyelet at the
+   top, the whole tag the button; its name 22/700, its code under it, a
+   store that does not trade with its state on a sticker. */
+.door-line {
+  margin: 4px 0 0;
+  color: var(--pencil);
+}
+.door {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.store-tag {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  text-align: left;
+}
+.store-tag-in {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  box-sizing: border-box;
+  /* 96 with the outline's line on each side (spec §6.10). */
+  min-height: 94px;
+  padding: 28px 16px 14px;
+}
+.store-tag-in::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: calc(50% - 6px);
+  box-sizing: border-box;
+  width: var(--eyelet-hero);
+  height: var(--eyelet-hero);
+  border: 1.5px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.store-tag-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 26px;
+  overflow-wrap: anywhere;
+}
+.store-tag-code {
+  color: var(--pencil);
+}
+.store-tag-state {
+  margin-top: 6px;
+}
+.store-tag:active .store-tag-in {
+  background: var(--fold);
 }
 /* «Каса» (cash task list, P0-1..P0-3): where the drawer stands in one line,
    the day's one task as a large dark card, the other tasks as rows; the
@@ -2811,6 +2998,25 @@ html {
 .screen-title .skeleton-title {
   height: 30px;
 }
+/* Бірка opening (spec S02; «Усе на бірці» task list, P1-4): a first
+   screen's places — its title 180 × 34, its line, its search, three rows
+   of 64 — where they will stand. */
+.opening .skeleton-title {
+  width: 180px;
+  height: 34px;
+  margin: 4px 0 0;
+}
+.opening > .skeleton-meta {
+  width: 150px;
+  height: 14px;
+  margin: 9px 0 0;
+}
+.opening .skeleton-field {
+  margin: 18px 0 8px;
+}
+.opening .sale-row {
+  min-height: var(--h-row);
+}
 /* Where an order goes (orders task list, P1-3): its own step, a switch and
    chips as a new order's; its history a row a version, how it went on the
    right; the same waybill's other order its row, opened by a tap. */
@@ -3015,6 +3221,49 @@ html {
   margin-top: 2px;
   font-size: 13px;
   font-weight: 500;
+  color: var(--pencil);
+}
+/* A row of «Ще» (spec S07, §6.8; «Усе на бірці» task list, P1-5): 64 high,
+   its glyph at 24 in ink before the label. */
+.more-row {
+  min-height: var(--h-row);
+}
+.more-row > .icon {
+  color: var(--ink);
+}
+.more-row:disabled > .icon {
+  color: var(--pencil);
+}
+/* What waits there, the row's one colour: who owes in the debts', «Брак»'s
+   units in its own, the lists to approve in ink. */
+.more-count {
+  font-weight: 600;
+  color: var(--ink);
+}
+.more-count.owed {
+  color: var(--owed);
+}
+.more-count.damaged {
+  color: var(--damaged);
+}
+/* «потрібна ваша увага» after a dot in the warning's colour. */
+.more-attention {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.attention-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--warning);
+}
+/* Under the groups: who is signed in, and until when. */
+.more-foot {
+  margin: 24px 0 0;
   color: var(--pencil);
 }
 /* This phone's switch, «Вношу продаж з паперу»: the till's state. */
@@ -4056,6 +4305,19 @@ button.day-folded {
   line-height: 18px;
   text-align: center;
 }
+/* «Ще»'s dot (P1-5): the backups' warning on its glyph's top right, ringed
+   in the menu's card as the badge is. */
+.tab-pill[data-attention]::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: calc(50% + 6px);
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--warning);
+  box-shadow: 0 0 0 2px var(--card);
+}
 /* «Зроблено сьогодні · N ›» at the heading's right (spec S04 #10), and
    under «Вас нічого не чекає.»: a text button. */
 .today-waiting-side {
@@ -4123,6 +4385,10 @@ button.day-folded {
   color: var(--on-inverse);
   font-size: 15px;
   font-weight: 500;
+}
+/* A line alone, no way back: as far from its right edge as its left. */
+.toast-alone {
+  padding: 12px 16px;
 }
 .toast-action {
   min-height: 44px;

@@ -4,6 +4,7 @@ import {
   menu,
   more,
   openStore,
+  rowNamed,
   toTill,
   section,
   storeLine,
@@ -109,7 +110,7 @@ function tabs(page: Page): Locator {
 }
 
 function moreButton(page: Page): Locator {
-  return menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
+  return menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ });
 }
 
 /** What «Ще» holds, by its rows' labels, while its screen is open
@@ -118,19 +119,20 @@ function underMore(page: Page): Locator {
   return page.getByRole("navigation", { name: "Ще" }).locator(".more-label");
 }
 
+/** «Борги»'s row, who owes the store read after it (P1-5). */
+const owing =
+  /^Борги (ніхто не винен|\d+ (людина винна|людини винні|людей винні))$/;
+
 /** «Ще»'s rows themselves. */
 function moreRows(page: Page): Locator {
   return page.getByRole("navigation", { name: "Ще" }).getByRole("button");
 }
 
-/** A row of «Ще» by its label. */
+/** A row of «Ще» by its label, what waits there read after it. */
 function moreRow(page: Page, name: string | RegExp): Locator {
-  return page
-    .getByRole("navigation", { name: "Ще" })
-    .getByRole(
-      "button",
-      typeof name === "string" ? { name, exact: true } : { name },
-    );
+  return page.getByRole("navigation", { name: "Ще" }).getByRole("button", {
+    name: typeof name === "string" ? rowNamed(name) : name,
+  });
 }
 
 /** «Ще»'s groups, by their labels. */
@@ -256,7 +258,7 @@ test("a seller's menu is «Продаж · Замовлення · Каса · �
   // A seller's groups: people, goods, this phone.
   await expect(groups(page)).toHaveText(["Люди", "Товар", "Цей телефон"]);
   await expect(underMore(page)).toHaveText([
-    "Борги",
+    owing,
     "Прийшов товар",
     /^Брак( |$)/,
     "Залишки",
@@ -642,7 +644,10 @@ test("whoever neither sells nor takes money but reads orders opens on them: «З
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  await expect(tabs(page)).toHaveText(["Замовлення", /^Ще( ⚠)?$/]);
+  await expect(tabs(page)).toHaveText([
+    "Замовлення",
+    /^Ще( — є що перевірити)?$/,
+  ]);
   await expect(tabs(page).first()).toHaveAttribute("aria-current", "page");
   await more(page);
   // No debts, no paper switch: neither right is held.
@@ -678,7 +683,7 @@ test("whoever may not read orders nor sell has only «Ще», opens on it, and i
   await expect(
     page.getByText(/Немає права переглядати замовлення/),
   ).toHaveCount(0);
-  await expect(tabs(page)).toHaveText([/^Ще( ⚠)?$/]);
+  await expect(tabs(page)).toHaveText([/^Ще( — є що перевірити)?$/]);
   await expect(tabs(page).first()).toHaveAttribute("aria-current", "page");
   await expect(underMore(page)).toHaveText([
     "Прийшов товар",
@@ -696,7 +701,11 @@ test("whoever sells but may not read orders has no «Замовлення» anyw
   await openStore(page, "Центр CENTRE");
   // The till first, as for whoever sells.
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
-  await expect(tabs(page)).toHaveText(["Продаж", "Каса", /^Ще( ⚠)?$/]);
+  await expect(tabs(page)).toHaveText([
+    "Продаж",
+    "Каса",
+    /^Ще( — є що перевірити)?$/,
+  ]);
   await more(page);
   await expect(moreRow(page, "Замовлення")).toHaveCount(0);
   await moreRow(page, "Борги").click();
@@ -713,7 +722,11 @@ test("whoever holds no right of the drawer has no «Каса»: no tab, no row, 
   await holdingNone(page, ["cash:close", "cash:expense", "report:view_financial"]);
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
-  await expect(tabs(page)).toHaveText(["Продаж", "Замовлення", /^Ще( ⚠)?$/]);
+  await expect(tabs(page)).toHaveText([
+    "Продаж",
+    "Замовлення",
+    /^Ще( — є що перевірити)?$/,
+  ]);
   await more(page);
   await expect(moreRow(page, "Каса")).toHaveCount(0);
   expect(await groups(page).allTextContents()).not.toContain("Гроші");
@@ -730,7 +743,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     "Сьогодні",
     "Продаж",
     "Замовлення",
-    /^Ще( ⚠)?$/,
+    /^Ще( — є що перевірити)?$/,
   ]);
   await atTheBottom(page);
   await more(page);
@@ -741,21 +754,27 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     "Мережа",
     "Цей телефон",
   ]);
+  // Each row its glyph, what waits there under it (P1-5).
   await expect(underMore(page)).toHaveText([
-    "Борги",
+    owing,
     "Прийшов товар",
-    /^Брак( |$)/,
+    /^Брак (нічого не чекає|\d+ (очікує|очікують) перевірки)$/,
     "Залишки",
-    "Товар і каталог перевірка, моделі, початкові залишки",
+    /^Товар і каталог (\d+\+? на затвердження · )?перевірка, моделі, початкові залишки$/,
     "Каса",
     "Звіт про продажі",
     "Накладні",
     "Постачальникам",
     "Магазини",
-    /^Резервні копії( ⚠)?$/,
-    "Змінити магазин",
+    /^Резервні копії (в порядку|потрібна ваша увага)/,
+    "Змінити магазин Основний",
     "Вношу продаж з паперу",
   ]);
+  for (const button of await moreRows(page).all())
+    await expect(button.locator("svg.icon").first()).toHaveAttribute(
+      "width",
+      "24",
+    );
   // 52 px or more each, its label whole; scrolled, never wider than the
   // phone.
   const list = await page.getByRole("navigation", { name: "Ще" }).boundingBox();
@@ -788,7 +807,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     ["Накладні", "Накладні"],
     ["Постачальникам", "Постачальникам"],
     ["Магазини", "Магазини"],
-    [/^Резервні копії( ⚠)?$/, "Резервні копії"],
+    [/^Резервні копії( |$)/, "Резервні копії"],
   ] as const) {
     await moreRow(page, row).click();
     await expect(
@@ -839,7 +858,7 @@ test("a manager's «Ще» is people, goods, money and this phone, with no netwo
     "Сьогодні",
     "Продаж",
     "Замовлення",
-    /^Ще( ⚠)?$/,
+    /^Ще( — є що перевірити)?$/,
   ]);
   await more(page);
   await expect(groups(page)).toHaveText([
@@ -872,7 +891,7 @@ test("«Змінити магазин» is one tap from the line over any screen
   const line = page
     .locator(".store-line")
     .getByRole("button", { name: "Змінити магазин" });
-  const choice = page.getByRole("heading", { name: "Оберіть магазин" });
+  const choice = page.getByRole("heading", { name: "Де ви сьогодні?" });
   // From the till.
   await openStore(page, "Основний MAIN");
   await toTill(page);

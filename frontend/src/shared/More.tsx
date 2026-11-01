@@ -1,11 +1,16 @@
 import type { JSX, ReactNode } from "react";
 import { Back } from "./Back";
+import { Icon } from "./Icon";
+import type { IconName } from "./icons";
 import { ScreenHeader } from "./ScreenHeader";
 
 /** A section under «Ще»: its label, held by its own section's rule. */
 export interface MoreRow {
   key: string;
   label: string;
+  /** Its glyph at 24, before the label (spec S07; «Усе на бірці» task
+   * list, P1-5). */
+  icon: IconName;
   /** Under the label: what waits, or what the row holds — its words, or a
    * line that reads them itself and draws its own `.more-meta`. */
   meta?: ReactNode;
@@ -31,22 +36,26 @@ export interface MoreBack {
 }
 
 /**
- * «Ще», a screen of its own (spec S07; «Усе на бірці» task list, P0-4):
- * every place that is not a tab, by the design's groups in its order — a
- * group with nothing in it not shown — a row each, named as its screen's
- * heading, with its chevron; this phone's switches as switches. A group's
- * own list, «Товар і каталог», is the same screen under its own name, with
- * «← Ще».
+ * «Ще», a screen of its own (spec S07; «Усе на бірці» task list, P0-4,
+ * P1-5): every place that is not a tab, by the design's groups in its order
+ * — a group with nothing in it not shown — a row each, its glyph, named as
+ * its screen's heading, what waits there under it, its chevron; this
+ * phone's switches as switches; at its foot, who is signed in and until
+ * when. A group's own list, «Товар і каталог», is the same screen under its
+ * own name, with «← Ще».
  */
 export function More({
   title = "Ще",
   groups,
   back,
+  foot,
 }: {
   title?: string;
   groups: readonly MoreGroup[];
   /** A group's own list: back to «Ще». */
   back?: MoreBack | undefined;
+  /** Under the groups: «Ви увійшли як … · сесія до …». */
+  foot?: string | undefined;
 }): JSX.Element {
   const shown = groups.filter((group) => group.rows.length > 0);
   return (
@@ -67,10 +76,11 @@ export function More({
                     <button
                       key={row.key}
                       type="button"
-                      className="sale-row"
+                      className="sale-row more-row"
                       disabled={row.disabled}
                       onClick={row.open}
                     >
+                      <Icon name={row.icon} />
                       <span className="more-label">
                         {row.label}
                         {/* Read as two words, not run together. */}
@@ -91,10 +101,11 @@ export function More({
                       type="button"
                       role="switch"
                       aria-checked={row.on}
-                      className="sale-row more-switch"
+                      className="sale-row more-row more-switch"
                       disabled={row.disabled}
                       onClick={row.open}
                     >
+                      <Icon name={row.icon} />
                       <span className="more-label">{row.label}</span>
                       <span className="switch-track" aria-hidden="true">
                         <span className="switch-knob" />
@@ -106,6 +117,7 @@ export function More({
             ))}
           </nav>
         )}
+        {foot !== undefined && <p className="t-meta more-foot">{foot}</p>}
       </section>
     </>
   );

@@ -185,7 +185,7 @@ test("one store opens straight on its first screen, with nothing to change to", 
     page.getByRole("heading", { name: "Сьогодні", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Оберіть магазин" }),
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toHaveCount(0);
   // Nothing to change to, in «Ще» either (navigation task list, P0-4).
   await more(page);
@@ -199,7 +199,7 @@ test("two stores are chosen each time, nothing chosen beforehand, and the day co
 }) => {
   await page.goto(launch());
   await expect(
-    page.getByRole("heading", { name: "Оберіть магазин" }),
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toBeVisible();
   await expect(
     page.getByText("Продажі запишуться на той магазин, у якому ви зараз."),
@@ -219,11 +219,12 @@ test("two stores are chosen each time, nothing chosen beforehand, and the day co
   await expect(
     page
       .getByRole("navigation", { name: "Ще" })
-      .getByRole("button", { name: "Змінити магазин", exact: true }),
+      // The store open now read after it (P1-5).
+      .getByRole("button", { name: "Змінити магазин Основний" }),
   ).toBeVisible();
   await change.click();
   await expect(
-    page.getByRole("heading", { name: "Оберіть магазин" }),
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Основний MAIN" }).click();
   await expect(
@@ -233,7 +234,7 @@ test("two stores are chosen each time, nothing chosen beforehand, and the day co
   await page.goto("about:blank");
   await page.goto(launch());
   await expect(
-    page.getByRole("heading", { name: "Оберіть магазин" }),
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Продаж" })).toHaveCount(0);
 });
@@ -320,7 +321,7 @@ test("a store that cannot be worked in, among two, keeps «Змінити маг
   );
   await page.getByRole("button", { name: "Змінити магазин" }).click();
   await expect(
-    page.getByRole("heading", { name: "Оберіть магазин" }),
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toBeVisible();
 });
 

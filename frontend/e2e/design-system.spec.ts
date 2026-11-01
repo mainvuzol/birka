@@ -197,7 +197,9 @@ test("outside Telegram nothing is painted, nor anything told (P0-1)", async ({
 }) => {
   await hearTelegram(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Бірка" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toBeVisible();
   expect(await told(page)).toEqual([]);
 });
 
@@ -330,7 +332,9 @@ for (const scheme of ["light", "dark"] as const)
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Бірка" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Вхід через Telegram" }),
+    ).toBeVisible();
     await page.evaluate((theme) => {
       document.documentElement.dataset.theme = theme;
     }, scheme);
@@ -376,7 +380,9 @@ test("outside Telegram the device's dark is the dark Telegram gets, and Telegram
 }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Бірка" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toBeVisible();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme");
   const device = await tokensOf(page);
   expect([device["--paper"], device["--card"]]).toEqual(["#0d0e0a", "#181a14"]);
@@ -400,7 +406,7 @@ test("a heading is drawn in the display face, not in what stands after it, once 
   page,
 }) => {
   await page.goto("/");
-  const heading = page.getByRole("heading", { name: "Бірка" });
+  const heading = page.getByRole("heading", { name: "Вхід через Telegram" });
   await expect(heading).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   // `optional` lets a very first open keep the fallback; from then on the
@@ -447,7 +453,7 @@ test("the display face is one file of the app's own, never from the network, and
     if (request.resourceType() === "font") fonts.push(request.url());
   });
   await page.goto("/");
-  const heading = page.getByRole("heading", { name: "Бірка" });
+  const heading = page.getByRole("heading", { name: "Вхід через Telegram" });
   await expect(heading).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   expect(fonts).toHaveLength(1);
@@ -470,7 +476,9 @@ test("a sum keeps «грн» on its line: no-break spaces between thousands and 
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Бірка" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toBeVisible();
   const written = await page.evaluate(async () => {
     const { money } = (await import("/src/orders/types.ts")) as {
       money: (value: string) => string;

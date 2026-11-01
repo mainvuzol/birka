@@ -88,3 +88,32 @@ export function Placeholder({
     </>
   );
 }
+
+/**
+ * Бірка opening, before it knows whose it is (spec S02; «Усе на бірці» task
+ * list, P1-4): grey blocks where a first screen's title, its line, its
+ * search and three rows stand, and no menu — no tab is anyone's until their
+ * rights are read (P7). A screen reader hears that the app is signing in.
+ */
+export function Opening(): JSX.Element {
+  return (
+    <>
+      <p role="status" className="visually-hidden">
+        Входимо в магазин…
+      </p>
+      <div className="placeholder opening" aria-hidden="true">
+        <span className="skeleton skeleton-title" />
+        <span className="skeleton skeleton-meta" />
+        <span className="skeleton skeleton-field" />
+        {Array.from({ length: 3 }, (_, n) => (
+          <div className="sale-row" key={n}>
+            <span className="sale-main">
+              <span className="skeleton skeleton-name" />
+              <span className="skeleton skeleton-meta" />
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}

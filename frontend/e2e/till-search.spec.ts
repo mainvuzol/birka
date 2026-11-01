@@ -99,11 +99,17 @@ const alpacas = Array.from({ length: 100 }, (_, index) =>
 /**
  * The warehouse as the server lists it: in the order given, every word of
  * the search in the name, a hundred rows a page. Returns what was searched.
+ * The seller's other store holds nothing: a search reads it too («Усе на
+ * бірці» task list, P2-3), and is not counted here.
  */
 async function stubList(page: Page, rows: Row[]): Promise<string[]> {
   const asked: string[] = [];
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     const url = new URL(route.request().url());
+    if (url.searchParams.get("store_id") !== fixture.store_id) {
+      await route.fulfill({ json: { items: [], has_more: false } });
+      return;
+    }
     const query = url.searchParams.get("query") ?? "";
     asked.push(query);
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
