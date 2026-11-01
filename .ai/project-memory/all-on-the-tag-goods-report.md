@@ -188,8 +188,12 @@ stocktakes are read by no one until it may be corrected again.
 
 - A real phone: the grid at 360 is proven in Chromium's phone profile in
   both themes, not on a device or in Telegram's own web view.
-- CI's Linux font (DejaVu) is wider than the Mac's: a long warehouse name
-  in the grid's first column is first seen there, on the pull request.
+- CI's text face (Roboto) is wider than the Mac's: on the pull request's
+  first run the grid of six sizes, «?» and «Разом» was a pixel wider than
+  360 there — 1 px to spare on the Mac. Its columns stand 4 px apart now,
+  not 6, which leaves 17 px, and the journey asks for 12 to spare, so a face
+  this tight fails here first. A warehouse name longer than «Основний» in
+  the first column is still first seen there.
 - Two fixes have no journey of their own: the till's search read again
   once a kept correction or count settles, and the till taking its kept
   search once — each is seen only after the app reopens on the till, or a

@@ -331,6 +331,19 @@ test("six sizes, «?» and «Разом» fit a 360 phone without the grid scrol
     expect(
       await wrap.evaluate((node) => node.scrollWidth <= node.clientWidth),
     ).toBe(true);
+    // With room to spare for a phone's text face wider than this one (CI's
+    // Roboto, say): the grid's least width a dozen pixels under its room.
+    expect(
+      await wrap.evaluate((node) => {
+        const table = node.querySelector("table");
+        if (!table) return false;
+        const was = table.style.width;
+        table.style.width = "1px";
+        const least = table.scrollWidth;
+        table.style.width = was;
+        return least <= node.clientWidth - 12;
+      }),
+    ).toBe(true);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,

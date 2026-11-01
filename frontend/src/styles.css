@@ -5338,9 +5338,11 @@ button.money-place-open {
   width: 100%;
   border-collapse: collapse;
 }
+/* Four between the columns: six sizes, «?» and «Разом» fit 360 with room
+   for a phone's text face wider than this Mac's (CI's Roboto, 2026-11-02). */
 .size-grid th,
 .size-grid td {
-  padding: 6px 0 6px 6px;
+  padding: 6px 0 6px 4px;
   text-align: right;
   white-space: nowrap;
 }
