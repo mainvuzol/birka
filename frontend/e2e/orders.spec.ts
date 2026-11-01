@@ -7,7 +7,7 @@ import {
   tapSize,
   waitsFor,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -96,6 +96,20 @@ async function readTheAnswer(page: Page): Promise<void> {
       }),
   );
 }
+/** A sheet over the order's card, once a tap in it is taken: the one that
+ * opened it is let go for a moment. */
+async function sheet(page: Page, name: string): Promise<Locator> {
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  await expect(dialog).toHaveAttribute("data-ready", "");
+  return dialog;
+}
+/** «Відправити», the dock's one button outside Telegram, and its sheet's
+ * «Відправлено» («Усе на бірці» sections task list, P0-3). */
+async function send(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Відправити", exact: true }).click();
+  const sending = await sheet(page, "Відправити");
+  await sending.getByRole("button", { name: "Відправлено" }).click();
+}
 /** «Замовити та зарезервувати», what it did read before the next step
  * (orders task list, P0-5). */
 async function reserve(page: Page): Promise<void> {
@@ -116,9 +130,9 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await reserve(page);
   await expect(page.locator(".order-context")).toBeVisible();
   await expect(
-    page.getByText("До відправлення", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+    page.locator(".knot-string [aria-current='step'] .knot-label"),
+  ).toHaveText("До відправлення");
+  await send(page);
   await expect(
     page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
   ).toBeVisible();
@@ -134,9 +148,10 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   // the seller (owner decisions, 2026-10-04): each way is the step itself
   // (orders task list, P0-3; owner decision, 2026-10-23, В2 (а)).
   const sent = collects(page);
-  const ways = page.getByRole("group", {
-    name: "Клієнт забрав — як оплачено?",
-  });
+  await page
+    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .click();
+  const ways = await sheet(page, "Клієнт забрав — як оплачено?");
   await expect(
     ways.getByRole("group", { name: "Зараз, у магазині" }).getByRole("button"),
   ).toHaveText(["Готівка", "Картка", "Переказ"]);
@@ -146,7 +161,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
       .getByRole("button"),
   ).toHaveText(["Переказ наперед", "Накладений платіж"]);
   await expect(
-    page.getByText("Продаж записуємо, коли покупець забрав товар.", {
+    ways.getByText("Продаж записуємо, коли покупець забрав товар.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -325,7 +340,7 @@ test("goods come back as their own step: the warehouse named, physical confirmat
   await enter(page);
   await draft(page);
   await reserve(page);
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await send(page);
   await expect(
     page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
   ).toBeVisible();
@@ -367,9 +382,7 @@ test("goods come back as their own step: the warehouse named, physical confirmat
       .getByRole("status")
       .filter({ hasText: `Повернено на склад «${warehouse ?? ""}»: 1 шт.` }),
   ).toBeVisible();
-  await expect(page.locator(".order-status .badge")).toHaveText(
-    "Повернено на склад",
-  );
+  await expect(page.locator(".knot-sticker")).toHaveText("Повернено на склад");
   expect(returned).toEqual([
     {
       command_id: expect.any(String) as string,
@@ -543,15 +556,17 @@ test("a step another phone already made impossible: the server refuses it, the o
     data: { command_id: randomUUID() },
   });
   expect(cancelled.status()).toBe(200);
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await send(page);
   const why = page.getByRole("alert");
   await expect(why).toHaveText(
     "Не записано: замовлення вже «Скасовано» — картку оновлено.",
   );
   await expect(why).toBeFocused();
-  await expect(page.locator(".order-status .badge")).toHaveText("Скасовано");
+  // Its sheet closed with it, the card as it is now.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".knot-sticker")).toHaveText("Скасовано");
   await expect(
-    page.getByRole("button", { name: "Відправлено", exact: true }),
+    page.getByRole("button", { name: "Відправити", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -602,10 +617,13 @@ test("an order paid by cash on delivery is collected outside the till", async ({
   await page.getByLabel("Номер ТТН").fill(waybill);
   await page
     .getByRole("list", { name: "Знайдені замовлення" })
-    .getByRole("button")
+    .locator(".order-row")
     .click();
   await page
-    .getByRole("group", { name: "Клієнт забрав — як оплачено?" })
+    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .click();
+  const ways = await sheet(page, "Клієнт забрав — як оплачено?");
+  await ways
     .getByRole("button", { name: "Накладений платіж", exact: true })
     .click();
   await expect(

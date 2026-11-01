@@ -10,13 +10,8 @@ import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { tagOf } from "./Orders";
+import { placesKey } from "./types";
 import type { Location, Order, OrderItem, Store } from "./types";
-
-/** The store's warehouses, read for an order coming back: what each is
- * called (orders task list, P2-4). */
-export function placesKey(storeId: string): readonly unknown[] {
-  return ["order-places", storeId];
-}
 
 /** The warehouses as last read, only while that read stood: one read again
  * and refused — the right to see them gone — names none (review,

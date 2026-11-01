@@ -219,14 +219,19 @@ export interface BackWay {
   /** Drawn on the screen shown: an order's card stays mounted, hidden,
    * under its step's screen. */
   drawn: () => boolean;
+  /** A sheet's: over the screen's whichever came last — a card read, or
+   * mounted afresh, under it (review, 2026-11-01). */
+  over?: boolean;
 }
 
 /** The «←»s mounted, in the order they came: the last drawn is the screen's
- * own, a step's over its card's, «До пошуку» over «← Ще». */
+ * own, a step's over its card's, «До пошуку» over «← Ще» — a sheet's over
+ * them all. */
 const ways: BackWay[] = [];
 
 function wayOut(): BackWay | undefined {
-  return [...ways].reverse().find((way) => way.drawn());
+  const drawn = [...ways].reverse().filter((way) => way.drawn());
+  return drawn.find((way) => way.over === true) ?? drawn[0];
 }
 
 /** Whether Telegram was last told to show its «Назад»: hidden as the app
@@ -461,9 +466,10 @@ function mainButtonHere(): boolean {
   return telegramVersion() !== null;
 }
 
-/** A screen's one action, as Telegram's MainButton shows it. */
+/** A screen's one action, as Telegram's MainButton shows it: its words,
+ * and whether the server is being asked for it. */
 interface MainAction {
-  text: string;
+  read: () => { text: string; progress: boolean; active: boolean };
   press: () => void;
 }
 
@@ -471,10 +477,12 @@ interface MainAction {
  * is shown. */
 const mains: MainAction[] = [];
 
-/** What Telegram was last told the MainButton says: hidden as the app
- * opens. */
+/** What Telegram was last told the MainButton says, and whether it turns:
+ * hidden as the app opens. */
 let mainShown: string | null = null;
 let mainAsked = false;
+/** Whether Telegram was told it turns: said again only once it was. */
+let mainTurned = false;
 
 /** Told once the screens have settled — a screen mounted twice, or the
  * next taking it from the last, never makes it blink — and only when it
@@ -489,22 +497,30 @@ function showMain(): void {
 }
 
 function tellMain(repaint: boolean): void {
-  const text = mains.at(-1)?.text ?? null;
-  if ((text === mainShown && !repaint) || !mainButtonHere()) return;
-  if (repaint && text === null) return;
-  mainShown = text;
+  const main = mains.at(-1)?.read() ?? null;
+  const told =
+    main === null
+      ? null
+      : `${main.text}${main.progress ? "…" : ""}${main.active ? "" : " (held)"}`;
+  if ((told === mainShown && !repaint) || !mainButtonHere()) return;
+  if (repaint && main === null) return;
+  mainShown = told;
   // In the app's `primary` and `on-primary`, read from the theme shown.
   const color = colourOf("--primary");
   const textColor = colourOf("--on-primary");
   try {
     postEvent(
       "web_app_setup_main_button",
-      text === null
+      main === null
         ? { is_visible: false }
         : {
             is_visible: true,
-            is_active: true,
-            text,
+            // Turning while the server is asked (spec §6.4): one press.
+            is_active: main.active && !main.progress,
+            ...(main.progress || mainTurned
+              ? { is_progress_visible: main.progress }
+              : {}),
+            text: main.text,
             ...(color ? { color } : {}),
             ...(textColor ? { text_color: textColor } : {}),
           },
@@ -512,11 +528,16 @@ function tellMain(repaint: boolean): void {
   } catch {
     /* No Telegram host to tell. */
   }
+  if (main !== null) mainTurned = main.progress;
 }
 
-/** Telegram's MainButton pressed: the shown screen's action. */
+/** Telegram's MainButton pressed: the shown screen's action, unless the
+ * server is still asked for it, or it is held. */
 function pressMain(): void {
-  mains.at(-1)?.press();
+  const main = mains.at(-1);
+  if (!main) return;
+  const { progress, active } = main.read();
+  if (active && !progress) main.press();
 }
 
 /**
@@ -525,20 +546,36 @@ function pressMain(): void {
  * `primary` and `on-primary`, cleared as it closes; never on the till, the
  * return or a payment, and never one that pays. Pressed, `press`. Says
  * whether it is shown — the screen then draws no button of its own for it;
- * outside Telegram it does.
+ * outside Telegram it does. `shown` false puts it away while the screen
+ * stays — a sheet of ways over an order's card («Усе на бірці» sections
+ * task list, P0-2); `progress` turns it while the server is asked, its
+ * words kept and its press let go (spec §6.4); `active` false holds it, as
+ * a screen's own button is disabled — another operation kept on the phone.
  */
-export function useMainButton(text: string, press: () => void): boolean {
+export function useMainButton(
+  text: string,
+  press: () => void,
+  {
+    shown = true,
+    progress = false,
+    active = true,
+  }: { shown?: boolean; progress?: boolean; active?: boolean } = {},
+): boolean {
   const here = mainButtonHere();
-  const latest = useRef(press);
+  const latest = useRef({ press, text, progress, active });
   useEffect(() => {
-    latest.current = press;
+    latest.current = { press, text, progress, active };
   });
   useEffect(() => {
-    if (!here) return;
+    if (!here || !shown) return;
     const main: MainAction = {
-      text,
+      read: () => ({
+        text: latest.current.text,
+        progress: latest.current.progress,
+        active: latest.current.active,
+      }),
       press: () => {
-        latest.current();
+        latest.current.press();
       },
     };
     mains.push(main);
@@ -548,6 +585,66 @@ export function useMainButton(text: string, press: () => void): boolean {
       if (at >= 0) mains.splice(at, 1);
       showMain();
     };
-  }, [here, text]);
+  }, [here, shown]);
+  // New words, turning or held: told in place, the screen's turn kept.
+  useEffect(() => {
+    showMain();
+  }, [text, progress, active]);
   return here;
+}
+
+/** One of a native popup's buttons: its id, its words, and whether it is
+ * the one that cannot be undone. */
+export interface PopupChoice {
+  id: string;
+  text: string;
+  destructive?: boolean;
+}
+
+/** Whether Telegram's popup is open: answered once it closes. */
+let popupOpen = false;
+
+/** Whether Telegram's own popup is here: inside Telegram, from 6.2. */
+export function popupHere(): boolean {
+  return knows("6.2");
+}
+
+/**
+ * Telegram's own popup for a yes or no that cannot be undone (spec §4.4,
+ * §6.29; «Усе на бірці» sections task list, P0-2): cancelling an order.
+ * Answers the id of the button pressed, or null once it was closed without
+ * one; null at once where Telegram has none — the screen asks in its own
+ * block there.
+ */
+export function askPopup(
+  title: string,
+  message: string,
+  choices: readonly PopupChoice[],
+): Promise<string | null> {
+  // One at a time, as Telegram opens them: a second tap before it covers
+  // the page asks nothing (review, 2026-11-01).
+  if (!popupHere() || popupOpen) return Promise.resolve(null);
+  popupOpen = true;
+  return new Promise((answer) => {
+    const stop = on("popup_closed", ({ button_id }) => {
+      stop();
+      popupOpen = false;
+      answer(button_id ?? null);
+    });
+    try {
+      postEvent("web_app_open_popup", {
+        title,
+        message,
+        buttons: choices.map((choice) =>
+          choice.destructive
+            ? { id: choice.id, type: "destructive", text: choice.text }
+            : { id: choice.id, type: "default", text: choice.text },
+        ),
+      });
+    } catch {
+      stop();
+      popupOpen = false;
+      answer(null);
+    }
+  });
 }

@@ -83,6 +83,12 @@ export interface Location {
    */
   awaiting_first_stock?: boolean;
 }
+/** The store's warehouses, as an order's rows, its card and its return
+ * read them: what each is called (orders task list, P2-4; «Усе на бірці»
+ * sections task list, P0-1). */
+export function placesKey(storeId: string): readonly unknown[] {
+  return ["order-places", storeId];
+}
 export interface StockOption {
   /** Where it is: the warehouse asked for, or each the store sells from
    * when the till asks for all (sale-slice TZ, P2-5). */

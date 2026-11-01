@@ -288,11 +288,30 @@ async function open(
         postEvent: (event: string, data: string) => void;
       };
       buzzes: string[];
+      mains: Record<string, unknown>[];
+      pressWhen: string | null;
     };
     host.buzzes = [];
+    host.mains = [];
+    host.pressWhen = null;
     host.TelegramWebviewProxy = {
       postEvent: (event, data) => {
         if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+        if (event !== "web_app_setup_main_button") return;
+        // Its MainButton, pressed the moment it says `pressWhen`, as a
+        // double tap's second half would land on it.
+        const told = JSON.parse(data) as Record<string, unknown>;
+        host.mains.push(told);
+        if (host.pressWhen === null || told.text !== host.pressWhen) return;
+        host.pressWhen = null;
+        setTimeout(() => {
+          window.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify({ eventType: "main_button_pressed" }),
+              source: window.parent,
+            }),
+          );
+        }, 0);
       },
     };
   });
@@ -888,37 +907,56 @@ test("a new order is five taps, the search typed: «Замовлення», «+�
   ).toBe(5);
 });
 
-/** Clicks the card's «Відправлено» the moment it is drawn, as a double
- * tap's second half on «Замовити та зарезервувати» would land. */
-async function tapAsDrawn(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const watch = new MutationObserver(() => {
-      const button = [
-        ...document.querySelectorAll<HTMLButtonElement>(".order-panel button"),
-      ].find((each) => each.textContent.trim() === "Відправлено");
-      if (!button) return;
-      watch.disconnect();
-      button.click();
-    });
-    watch.observe(document.body, { childList: true, subtree: true });
-  });
+/** Telegram's MainButton pressed: the moment it says `text`, or now. */
+async function pressMain(page: Page, text?: string): Promise<void> {
+  await page.evaluate((wanted) => {
+    if (wanted !== undefined) {
+      (window as unknown as { pressWhen: string }).pressWhen = wanted;
+      return;
+    }
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  }, text);
 }
 
-test("a double tap on «Замовити та зарезервувати» never sends the parcel: «Відправлено» drawn in its place lets that tap go (orders task list, P0-5; review, 2026-10-24)", async ({
+/** What Telegram's MainButton was last told. */
+async function main(page: Page): Promise<Record<string, unknown> | null> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { mains: Record<string, unknown>[] }).mains.at(
+        -1,
+      ) ?? null,
+  );
+}
+
+test("a double tap on «Замовити та зарезервувати» never sends the parcel: the card's MainButton «Відправити» shown in its place lets that tap go (orders task list, P0-5; review, 2026-10-24; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
   const stubbed = server();
   await open(page, stubbed);
   await chip(page, `${loran}:${sizeM}`).click();
   await carrier(page, "Нова пошта");
-  await tapAsDrawn(page);
+  await pressMain(page, "Відправити");
   await press(page).click();
-  await expect(page.locator(".order-panel button")).toHaveText("Відправлено");
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, text: "Відправити" });
   await pause(page, 300);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(stubbed.steps).toEqual([]);
-  // A moment later, as meant: sent.
+  // A moment later, as meant: its sheet, and sent from it.
   await pause(page, 600);
-  await page.locator(".order-panel button").click();
+  await pressMain(page);
+  const sending = page.getByRole("dialog", { name: "Відправити" });
+  await expect(sending).toHaveAttribute("data-ready", "");
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, text: "Відправлено" });
+  await pressMain(page);
   await expect.poll(() => stubbed.steps).toEqual(["dispatch"]);
 });
 

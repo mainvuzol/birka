@@ -27,6 +27,16 @@ interface Fixture {
   variant_id: string;
   size_id: string;
 }
+// Waybills of this run alone: the shared database keeps the orders of the
+// runs before, and a waybill one of them has is said as one parcel's — the
+// sheet then stays with the warning («Усе на бірці» sections task list,
+// P0-3).
+const run = String(Date.now()).slice(-8);
+const UKRPOSHTA = `05000${run}`;
+const WRITTEN = `204512${run}`;
+const SAVED = `2045${run}`;
+const MEEST = `MEEST-${run}`;
+
 const fixture = JSON.parse(
   readFileSync(
     process.env.BIRKA_E2E_FIXTURE ?? "/tmp/birka-orders-ui-fixture.json",
@@ -54,7 +64,7 @@ function initData(): string {
  * since when. */
 function goes(how: string): RegExp {
   const escaped = how.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${escaped} · з\\s\\d{2}\\.\\d{2}$`);
+  return new RegExp(`^${escaped}$`);
 }
 
 /** What a step did is read before the next is pressed: a tap within 0.7 s
@@ -139,6 +149,20 @@ async function saveShipping(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+/** «Відправити», the dock's one button outside Telegram, its sheet with
+ * what was typed in its field, and «Відправлено» («Усе на бірці» sections
+ * task list, P0-3). */
+async function send(page: Page, written?: string): Promise<Locator> {
+  await page.getByRole("button", { name: "Відправити", exact: true }).click();
+  const sending = page.getByRole("dialog", { name: "Відправити" });
+  // The tap that opened it is let go for a moment.
+  await expect(sending).toHaveAttribute("data-ready", "");
+  if (written !== undefined)
+    await sending.getByLabel(/^(Номер ТТН|Куди і як відправили)/).fill(written);
+  await sending.getByRole("button", { name: "Відправлено" }).click();
+  return sending;
+}
+
 /** When a version was stated, and by whom: «22.10, 14:05 · Оля». */
 const stated = expect.stringMatching(
   /^\d{2}\.\d{2}, \d{2}:\d{2} · Оля$/,
@@ -147,6 +171,10 @@ const stated = expect.stringMatching(
 /** The history of where it went, a row a version (P1-3): what it was, when
  * and by whom, and how it went. */
 async function changes(page: Page): Promise<string[][]> {
+  // Folded until it is opened («Усе на бірці» sections task list, P0-2).
+  const folded = page.getByRole("button", { name: "Історія доставки" });
+  if ((await folded.getAttribute("aria-expanded")) === "false")
+    await folded.click();
   return page
     .getByRole("list", { name: "Історія доставки" })
     .getByRole("listitem")
@@ -221,32 +249,29 @@ test("an order within Ukraine names its carrier, and its waybill when it is sent
   expect(made.bodies).toHaveLength(0);
   await carrier(page, "Укрпошта");
   await reserve(page);
-  await expect(page.locator(".order-context")).toHaveText(
+  await expect(page.locator(".order-goes")).toHaveText(
     goes("Укрпошта · ТТН ще немає"),
   );
   expect(made.bodies).toEqual([
     expect.objectContaining({ destination: "UKRAINE", carrier: "UKRPOSHTA" }),
   ]);
 
-  await page
-    .getByLabel("Номер ТТН (можна дописати пізніше)")
-    .fill(" 0500012345678 ");
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
-  await expect(page.locator(".order-context")).toHaveText(
-    goes("Укрпошта · ТТН 0500012345678"),
+  await send(page, ` ${UKRPOSHTA} `);
+  await expect(page.locator(".order-goes")).toHaveText(
+    goes(`Укрпошта · ТТН ${UKRPOSHTA}`),
   );
   // What the step did, with a buzz (orders task list, P0-2).
   await expect(
-    page.getByText("Відправлено · ТТН 0500012345678", { exact: true }),
+    page.getByText(`Відправлено · ТТН ${UKRPOSHTA}`, { exact: true }),
   ).toBeVisible();
   expect(sent.bodies).toEqual([
-    { command_id: expect.any(String) as string, waybill: "0500012345678" },
+    { command_id: expect.any(String) as string, waybill: UKRPOSHTA },
   ]);
   await expect
     .poll(() => changes(page))
     .toEqual([
       ["Вказано при створенні", stated, "Укрпошта · ТТН ще немає"],
-      ["Вписано при відправленні", stated, "Укрпошта · ТТН 0500012345678"],
+      ["Вписано при відправленні", stated, `Укрпошта · ТТН ${UKRPOSHTA}`],
     ]);
   // Sent with its waybill: changed, never «вписати».
   await expect(
@@ -269,23 +294,22 @@ test("an order abroad says where and how it went, in one line", async ({
     }),
   ).toBeVisible();
   await reserve(page);
-  await expect(page.locator(".order-context")).toHaveText(goes("За кордон"));
+  await expect(page.locator(".order-goes")).toHaveText(goes("За кордон"));
   const [body] = made.bodies as Record<string, unknown>[];
   expect(body?.destination).toBe("ABROAD");
   expect(body).not.toHaveProperty("carrier");
 
+  await page.getByRole("button", { name: "Відправити", exact: true }).click();
+  const sending = page.getByRole("dialog", { name: "Відправити" });
   await expect(
-    page.getByLabel(
+    sending.getByLabel(
       "Куди і як відправили: місто, країна, спосіб (можна дописати пізніше)",
     ),
   ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
-  await page
-    .getByLabel(
-      "Куди і як відправили: місто, країна, спосіб (можна дописати пізніше)",
-    )
-    .fill("Варшава, Польща, Нова пошта Глобал");
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
-  await expect(page.locator(".order-context")).toHaveText(
+  await page.keyboard.type("Варшава, Польща, Нова пошта Глобал");
+  await expect(sending).toHaveAttribute("data-ready", "");
+  await sending.getByRole("button", { name: "Відправлено" }).click();
+  await expect(page.locator(".order-goes")).toHaveText(
     goes("За кордон · Варшава, Польща, Нова пошта Глобал"),
   );
   await expect(page.getByText("Відправлено.", { exact: true })).toBeVisible();
@@ -306,8 +330,8 @@ test("where an order goes is corrected while it is open, as its own step, and ev
   await carrier(page, "Нова пошта");
   await reserve(page);
 
-  // Before it is sent, the waybill's field is over the panel: the row
-  // changes where it goes.
+  // Before it is sent, the waybill is written in «Відправити»'s sheet: the
+  // row changes where it goes.
   await expect(
     page.getByRole("button", { name: "ТТН ще немає — вписати" }),
   ).toHaveCount(0);
@@ -315,7 +339,7 @@ test("where an order goes is corrected while it is open, as its own step, and ev
     .getByRole("button", { name: "Змінити доставку", exact: true })
     .click();
   // Its own screen: its own way back, no card's step under the thumb, nor
-  // the card's field for the waybill.
+  // a field for the waybill but its own.
   await expect(
     page.getByRole("heading", { name: "Доставка", exact: true }),
   ).toBeFocused();
@@ -323,7 +347,7 @@ test("where an order goes is corrected while it is open, as its own step, and ev
     page.getByRole("button", { name: "← До замовлень" }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Відправлено", exact: true }),
+    page.getByRole("button", { name: "Відправити", exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByLabel("Номер ТТН (можна дописати пізніше)"),
@@ -353,35 +377,35 @@ test("where an order goes is corrected while it is open, as its own step, and ev
   const press = page.locator(".pay-panel").getByRole("button");
   await expect(press).toHaveText("Оберіть перевізника");
   await expect(press).toBeDisabled();
-  await where(page, { carrier: "Міст", waybill: "MEEST-777" });
+  await where(page, { carrier: "Міст", waybill: MEEST });
   await saveShipping(page);
   // Saved: back on the card as it now stands.
-  await expect(page.locator(".order-context")).toHaveText(
-    goes("Міст · ТТН MEEST-777"),
+  await expect(page.locator(".order-goes")).toHaveText(
+    goes(`Міст · ТТН ${MEEST}`),
   );
   expect(changed.bodies).toEqual([
     {
       command_id: expect.any(String) as string,
       destination: "UKRAINE",
       carrier: "MEEST",
-      waybill: "MEEST-777",
+      waybill: MEEST,
     },
   ]);
   await expect
     .poll(() => changes(page))
     .toEqual([
       ["Вказано при створенні", stated, "Нова пошта · ТТН ще немає"],
-      ["Змінено", stated, "Міст · ТТН MEEST-777"],
+      ["Змінено", stated, `Міст · ТТН ${MEEST}`],
     ]);
   // Closed, it is no longer changed. Collected, it says how it was paid:
   // every order goes by a carrier, this one paid to it on delivery (owner
   // decisions, 2026-10-04).
   await readTheAnswer(page);
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await send(page);
   await expect(
     page
       .getByRole("status")
-      .filter({ hasText: /^Відправлено · ТТН MEEST-777$/ }),
+      .filter({ hasText: new RegExp(`^Відправлено · ТТН ${MEEST}$`) }),
   ).toBeVisible();
   await readTheAnswer(page);
   await page
@@ -392,7 +416,13 @@ test("where an order goes is corrected while it is open, as its own step, and ev
   ).toBeVisible();
   await readTheAnswer(page);
   await page
-    .getByRole("group", { name: "Клієнт забрав — як оплачено?" })
+    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .click();
+  const ways = page.getByRole("dialog", {
+    name: "Клієнт забрав — як оплачено?",
+  });
+  await expect(ways).toHaveAttribute("data-ready", "");
+  await ways
     .getByRole("button", { name: "Накладений платіж", exact: true })
     .click();
   await expect(
@@ -412,7 +442,7 @@ test("a waybill written after the parcel went: «ТТН ще немає — вп
   await draft(page);
   await carrier(page, "Нова пошта");
   await reserve(page);
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await send(page);
   await expect(
     page
       .getByRole("status")
@@ -436,24 +466,24 @@ test("a waybill written after the parcel went: «ТТН ще немає — вп
   // A tap, the number typed where the cursor already is, a tap: with the
   // two that open «Замовлення» and the one that opens the order, five.
   await write.click();
-  await page.keyboard.type("20451234567890");
+  await page.keyboard.type(WRITTEN);
   await saveShipping(page);
-  await expect(page.locator(".order-context")).toHaveText(
-    goes("Нова пошта · ТТН 20451234567890"),
+  await expect(page.locator(".order-goes")).toHaveText(
+    goes(`Нова пошта · ТТН ${WRITTEN}`),
   );
   expect(changed.bodies).toEqual([
     {
       command_id: expect.any(String) as string,
       destination: "UKRAINE",
       carrier: "NOVA_POSHTA",
-      waybill: "20451234567890",
+      waybill: WRITTEN,
     },
   ]);
   await expect
     .poll(() => changes(page))
     .toEqual([
       ["Вказано при створенні", stated, "Нова пошта · ТТН ще немає"],
-      ["Змінено", stated, "Нова пошта · ТТН 20451234567890"],
+      ["Змінено", stated, `Нова пошта · ТТН ${WRITTEN}`],
     ]);
   await expect(
     page.getByRole("button", { name: "Змінити доставку", exact: true }),
@@ -469,12 +499,11 @@ test("where an order goes saved as it was: back on its card, and a tap carried f
   await draft(page);
   await carrier(page, "Нова пошта");
   await reserve(page);
-  await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("20457777");
-  await page.getByRole("button", { name: "Відправлено", exact: true }).click();
+  await send(page, SAVED);
   await expect(
     page
       .getByRole("status")
-      .filter({ hasText: /^Відправлено · ТТН 20457777$/ }),
+      .filter({ hasText: new RegExp(`^Відправлено · ТТН ${SAVED}$`) }),
   ).toBeVisible();
   await readTheAnswer(page);
   await page
@@ -491,7 +520,9 @@ test("where an order goes saved as it was: back on its card, and a tap carried f
     .click();
   await readTheAnswer(page);
   expect(arrived.bodies).toHaveLength(0);
-  await expect(page.locator(".order-status .badge")).toHaveText("Відправлено");
+  await expect(
+    page.locator(".knot-string [aria-current='step'] .knot-label"),
+  ).toHaveText("Відправлено");
 });
 
 test("one waybill on two orders is saved and named, and orders are found by it", async ({
@@ -507,7 +538,7 @@ test("one waybill on two orders is saved and named, and orders are found by it",
     .fill(`${waybill.slice(0, 4)} ${waybill.slice(4)}`);
   const found = page
     .getByRole("list", { name: "Знайдені замовлення" })
-    .getByRole("button");
+    .locator(".order-row");
   await expect(found).toHaveCount(2);
   await expect(found.first()).toContainText(`Нова пошта · ТТН ${waybill}`);
   // Newest first: the second.
@@ -529,7 +560,7 @@ test("one waybill on two orders is saved and named, and orders are found by it",
   await expect(other).toHaveCount(1);
   await expect(other.locator(".sale-goods")).toHaveText(/^Лоран.* · \S+$/);
   await expect(other.locator(".sale-meta")).toHaveText(/^з\s\d{2}\.\d{2}$/);
-  await expect(other.locator(".badge")).toHaveText("Відправлено");
+  await expect(other.locator(".sticker")).toHaveText("Відправлено");
   await expect(other).not.toContainText(first.slice(0, 8));
   // A tap opens it, and it names this one.
   await other.click();
@@ -583,7 +614,7 @@ test("a correction whose answer is lost is resent unchanged", async ({
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
   await reopen(reopened);
-  await expect(reopened.locator(".order-context")).toHaveText(
+  await expect(reopened.locator(".order-goes")).toHaveText(
     goes("Укрпошта · ТТН 20451111"),
   );
   await expect(
@@ -593,9 +624,5 @@ test("a correction whose answer is lost is resent unchanged", async ({
   ).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toEqual(commands[0]);
-  await expect(
-    reopened
-      .getByRole("list", { name: "Історія доставки" })
-      .getByRole("listitem"),
-  ).toHaveCount(2);
+  await expect.poll(async () => (await changes(reopened)).length).toBe(2);
 });

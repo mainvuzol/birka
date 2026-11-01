@@ -5318,3 +5318,74 @@ right or rule changes, and no word of a refused sign-in or a session's end
   the failed sign-in headed «Вхід через Telegram», «Бірка» over its tag;
   «в порядку, уночі о ГГ:ХХ» said of a copy made by day too (the spec's
   words).
+
+## Chosen in chat — 2026-11-01 («Замовлення» thread, card, send sheet; sections P0-1..P0-3)
+
+Chosen in chat on 2026-11-01 («Yes, start it»), after #161, as one batch:
+the sections task list's P0-1 (S16), P0-2 (S17) and P0-3 (S18)
+(`all-on-the-tag-orders-thread-report.md`). The owner's questions are built
+by (а) / «если нет». No right, no server rule and no word of the money
+changes; a sale is still recorded only by a way's button at «Клієнт
+забрав», nothing chosen first.
+- **The list (S16, P0-1), decided here:**
+  - the string «До відправлення · Відправлено · Прибув на пошту · Клієнт
+    забрав» is the filter, «До відправлення» chosen as it opens; the chosen
+    knot is a ring, the others filled in their colours; each count under
+    its word, its line kept while it is not counted (the open ones are
+    counted once all are read; «Клієнт забрав» never — the server does not
+    count it);
+  - while a waybill is searched the string is hidden, and the rows found
+    carry their stickers and their verbs; the open places carry no sticker
+    (the place says it), «Клієнт забрав» and the cancelled do;
+  - «Скасовані й повернені на склад ›» under «Клієнт забрав», shown when
+    there are any or more pages to read; their own screen, «← До
+    замовлень» back to the link;
+  - those to be sent grouped «Склад «X» · N» and «З кількох складів · N»
+    only when every line's warehouse is named (read by whoever has
+    `inventory:view`); otherwise one list;
+  - a row's verbs: «Відправити» and «Клієнт забрав» open the card with
+    their sheet, a light buzz; «Прибув на пошту» records from the row, the
+    list kept, the toast «Прибув на пошту: {товари}»; a tap within 0.7 s
+    of the list changing is let go;
+  - an empty place says «Тут посилок немає.»; while more open orders are
+    to be read, a place none is in yet says nothing, and a warehouse's
+    heading has no count — as the knots (review, 2026-11-01).
+- **The card (S17, P0-2), decided here:**
+  - its line «замовлено 13.10 · № {8}», without the store: the screen's
+    line already says «{Магазин} · {Ім’я}»;
+  - the string: a cancelled order shows its first knot passed, one come
+    back the first two, no knot its own, the sticker under it; the day
+    under «Відправлено» once it stands there or past it, by the last
+    `DISPATCHED` version;
+  - «Скопіювати ТТН» copies the waybill exactly as written; copied, a
+    `success` buzz and «ТТН скопійовано»; refused, no buzz and the toast
+    «Не вдалося скопіювати — виділіть ТТН і скопіюйте її.», as the way
+    in's ID (2026-10-31);
+  - the MainButton is put away while «Клієнт забрав»'s sheet is open (the
+    ways are never it); outside Telegram the same step is the dock's one
+    button;
+  - the sheets live outside the card, so what was typed survives the card
+    being read again; a step's sheet closes in the render that says what
+    came of it — recorded, kept (the banner says it) or refused as the
+    order moved on meanwhile (the card says what it is now, focused); any
+    other refusal keeps the sheet with why, focused, what was typed kept;
+  - what a step did takes the cursor where nothing else has it; the step
+    is held on the MainButton while another operation is kept, as the
+    dock's button is; Telegram's «Назад» closes a sheet before the card
+    under it (review, 2026-11-01).
+- **«Відправити» (S18, P0-3), decided here:**
+  - «Пишемо як є — з Новою поштою не звіряємо.» only for Нова пошта; other
+    carriers get no line; abroad, its own words and «Без імен і телефонів
+    покупців.»;
+  - a waybill another order has: recorded, a `warning` buzz (not
+    `success`), the sheet kept with the approved block, the MainButton
+    «Готово».
+- **Taps (as the sections task list's scorecard counts them):** an order
+  sent or at the post office is one knot further than before — a waybill
+  written later is five taps from the menu, goods come back seven, «Клієнт
+  забрав» four by the row's verb.
+- **For the owner:** «Тут посилок немає.», «Склад «X» · N», «З кількох
+  складів · N», «замовлено …», «У посилці», «Доставка», «Скопіювати ТТН»,
+  «ТТН скопійовано», «Не вдалося скопіювати — виділіть ТТН і скопіюйте
+  її.», «Пишемо як є — з Новою поштою не звіряємо.», «Відправити»,
+  «Готово», «Прибув на пошту: {товари}».

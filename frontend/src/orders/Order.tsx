@@ -1,28 +1,29 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
-import { methodLabels } from "@/shared/payment";
-import type { PaymentMethod } from "@/shared/payment";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
-import { NoCustomerData } from "@/shared/NoCustomerData";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Sum } from "@/shared/Sum";
 import { Back } from "@/shared/Back";
+import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
-import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
-import type { TermsInput } from "@/credits/Terms";
+import { Toast } from "@/shared/Toast";
+import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
 import { Collected, CollectedLine } from "./Collected";
-import { since, sinceDay, tagOf } from "./Orders";
+import { goesOf } from "./Collect";
+import { KnotString, Sticker, dayOf } from "./Knots";
+import { sinceDay, tagOf, titleOf } from "./Orders";
 import { Returned, byPlace } from "./Returned";
 import { Shipping } from "./Shipping";
 import {
   carrierLabels,
-  collectHint,
   decimal,
   kopecks,
   money,
+  placesKey,
   shippingText,
-  statusLabels,
-  statusPills,
 } from "./types";
 import type {
   Carrier,
@@ -43,25 +44,6 @@ export const actionLabels: Record<string, string> = {
   cancel: "Скасувати замовлення",
   return: "Прийняти повернення",
 };
-
-/** An order as its card's title says it: its first goods, and how many
- * more (orders task list, P0-2). */
-function titleOf(order: Order): string {
-  const [first] = order.items;
-  const more = order.items.length - 1;
-  return first
-    ? `${tagOf(first)}${more > 0 ? ` + ще ${String(more)}` : ""}`
-    : "Замовлення";
-}
-
-/** How it goes, as the card's panel names it: the carrier, or abroad. */
-function goesOf(order: Order): string | null {
-  return order.destination === "ABROAD"
-    ? "За кордон"
-    : order.carrier
-      ? carrierLabels[order.carrier]
-      : null;
-}
 
 /**
  * What a step on an order is about, kept beside it for its banner while its
@@ -119,25 +101,6 @@ export function stepDone(
     : "Відправлено. ТТН можна вписати пізніше.";
 }
 
-/**
- * How an order was paid, chosen at «Клієнт забрав» (owner decisions,
- * 2026-10-04; ADR-0012, B12): at the counter — cash, card or transfer
- * handed over now, as it is pressed (G1, G33) — or in advance by transfer,
- * or cash on delivery through the carrier. Nothing is chosen for the
- * seller; only the cash given now goes into the drawer. In the rows they
- * are said in (orders task list, P0-3).
- */
-const collectWays: readonly {
-  caption: string;
-  ways: readonly PaymentMethod[];
-}[] = [
-  { caption: "Зараз, у магазині", ways: ["CASH", "CARD", "TRANSFER"] },
-  {
-    caption: "Наперед чи перевізнику",
-    ways: ["PREPAID_TRANSFER", "CARRIER_COD"],
-  },
-];
-
 /** A line's sum: its price less its discount, for every unit. */
 function lineSum(item: OrderItem): string {
   const each =
@@ -165,6 +128,12 @@ interface CardProps {
   returnSale?: (() => void) | undefined;
   /** Another order with the same waybill, opened from its row. */
   openOther: (id: string) => void;
+  /** «Відправити» or «Клієнт забрав»: its sheet over the card. */
+  openSheet: (kind: "send" | "collect") => void;
+  /** A sheet is over the card: its MainButton is the sheet's, or none. */
+  sheet: boolean;
+  /** A step is being asked: «Прибув на пошту» turns. */
+  waiting: boolean;
 }
 /**
  * An order's place while it is read (orders task list, P2-2): its line of
@@ -264,12 +233,15 @@ export function OrderDetail(props: CardProps): JSX.Element {
 }
 
 /**
- * One order (orders task list, P0-2): what it is and where it goes on top —
- * its goods as its title, how it goes, since when, its number small, its
- * status; its lines with their sums and «Разом» large; the next step one
- * button in the panel under the thumb, what it needs over the panel; the
- * rare at the foot. «Клієнт забрав» is its five ways, each the step itself
- * (P0-3); collected, the sale said large, then later in a line.
+ * One order (spec S17; «Усе на бірці» sections task list, P0-2): its goods
+ * as its title, when it was ordered and its number small; the string of
+ * places with their days; what is in the parcel and from which warehouse,
+ * «Разом» large; how it goes, its waybill copied with one tap; its history
+ * folded. Its next step Telegram's MainButton, or the dock's one button —
+ * «Відправити» and «Клієнт забрав» open their sheets, «Прибув на пошту»
+ * records. The rare at the foot as links; a cancel asked by Telegram's own
+ * popup, or in its block where there is none. Collected, the sale said
+ * large, then later in a line.
  */
 function Card({
   order,
@@ -278,11 +250,14 @@ function Card({
   store,
   token,
   blocked,
+  waiting,
   action,
   back,
   fixWay,
   returnSale,
   openOther,
+  openSheet,
+  sheet,
   away,
   changeShipping,
   takeBack,
@@ -294,23 +269,33 @@ function Card({
   /** «Товар повернувся на склад», its own step. */
   takeBack: () => void;
 }): JSX.Element {
-  const hint = useId();
-  // Collected and paid in parts, as at the till (owner decision, 2026-10-01).
-  const [credit, setCredit] = useState<TermsInput>(noTerms);
-  const [problem, setProblem] = useState("");
-  // Why the terms were not taken, brought to the finger over the panel
-  // (review, 2026-10-24).
-  const why = useRef<HTMLParagraphElement>(null);
-  useEffect(() => {
-    if (problem) why.current?.focus();
-  }, [problem]);
-  // Shown at once after a step, the next step's buttons stand where the
-  // last was pressed: a tap meant for it, landing on them, is let go
-  // (review, 2026-10-24). The card is mounted afresh on every step.
+  // Shown at once after a step, or back as its sheet closes, the next
+  // step's button stands where the last was pressed: a tap meant for it,
+  // landing on it, is let go (review, 2026-10-24; 2026-11-01). The card is
+  // mounted afresh on every step.
   const [shownAt] = useState(() => performance.now());
-  function late(event: { timeStamp: number }): boolean {
-    return done !== null && event.timeStamp - shownAt < CARRIED_TAP;
+  const sheetGoneAt = useRef(-Infinity);
+  const hadSheet = useRef(sheet);
+  useEffect(() => {
+    if (hadSheet.current && !sheet) sheetGoneAt.current = performance.now();
+    hadSheet.current = sheet;
+  }, [sheet]);
+  function late(at: number): boolean {
+    return (
+      (done !== null && at - shownAt < CARRIED_TAP) ||
+      at - sheetGoneAt.current < CARRIED_TAP
+    );
   }
+  // What a step did takes the cursor where nothing else has it: the button
+  // pressed, or the sheet, went with the card it was on (review,
+  // 2026-11-01).
+  const said = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (done === null || sheet) return;
+    const at = document.activeElement;
+    if (at === null || at === document.body)
+      said.current?.focus({ preventScroll: true });
+  }, [done, sheet]);
   // What a step did is seen with what it was done to: a new order opens
   // here from the foot of its long form (orders task list, P0-5).
   const heading = useRef<HTMLHeadingElement>(null);
@@ -330,51 +315,94 @@ function Card({
       (opened.current === "return" ? returnRow : shippingRow).current?.focus();
     }
   }, [away]);
-  // The waybill, or abroad where and how it went, written as it is sent.
-  const [sentWith, setSentWith] = useState("");
   const mayStep = store.permissions.includes("sale:create");
-  const mayCredit = store.permissions.includes("sale:credit");
   const open = ["READY_TO_DISPATCH", "DISPATCHED", "ARRIVED"].includes(
     order.status,
   );
-  const next = {
-    READY_TO_DISPATCH: "dispatch",
-    DISPATCHED: "arrive",
-    ARRIVED: "collect",
-  }[order.status as "READY_TO_DISPATCH" | "DISPATCHED" | "ARRIVED"];
-  // The panel's step: sent, arrived, or «Клієнт забрав» by its ways. None
+  // The next step: sent, arrived, or «Клієнт забрав» by its ways. None
   // while a rare step is over the card: one press at a time under the thumb
   // (review, 2026-10-23).
-  const panelStep = mayStep && open && away === null ? next : null;
+  const panelStep =
+    mayStep && away === null ? (nextSteps[order.status] ?? null) : null;
   // Sent within Ukraine with no waybill: written later, as it often is
-  // (orders task list, P1-3). Before it is sent, the field over the panel.
+  // (orders task list, P1-3).
   const writeLater =
     order.destination === "UKRAINE" &&
     !order.waybill &&
     order.status !== "READY_TO_DISPATCH";
-  const total = kopecks(order.total) ?? 0n;
-  // In parts, what is paid now and what is left, once the part is a sum
-  // under the whole, as the till's panel says it.
-  const paidNow = credit.inParts ? kopecks(credit.paid) : null;
-  const owing =
-    paidNow !== null && paidNow > 0n && paidNow < total
-      ? { now: paidNow, left: total - paidNow }
-      : null;
-  /** «Клієнт забрав» by a way: in parts, its terms checked first. */
-  function collect(way: PaymentMethod): void {
-    setProblem("");
-    if (!credit.inParts) {
-      action("collect", { payment_method: way });
-      return;
-    }
-    const terms = checkTerms(credit, total);
-    if (typeof terms === "string") setProblem(terms);
-    else action("collect", { payment_method: way, credit: terms });
+  function step(): void {
+    if (blocked || panelStep === null) return;
+    if (panelStep === "arrive") action("arrive");
+    else openSheet(panelStep === "dispatch" ? "send" : "collect");
   }
+  // Telegram's MainButton where it is there (spec §4.4, rule 4); put away
+  // while a sheet is over the card — the ways are never it — and turning
+  // while «Прибув на пошту» is asked.
+  const main = useMainButton(
+    panelStep === null ? "" : nextWords[panelStep],
+    () => {
+      // Telegram's button stands where the last step's was: a second tap
+      // of the press that took it is let go too.
+      if (late(performance.now())) return;
+      step();
+    },
+    {
+      shown: panelStep !== null && !sheet,
+      progress: waiting && panelStep === "arrive",
+      // Held by another kept operation, as the dock's button is.
+      active: !blocked,
+    },
+  );
   const panel = useRef<HTMLDivElement>(null);
-  usePanelRoom(panel, panelStep !== null);
+  usePanelRoom(panel, panelStep !== null && !main);
+  // The warehouses each line left from, for whoever reads the stock: the
+  // list's and the return's read.
+  const mayStock = store.permissions.includes("inventory:view");
+  const warehouses = useQuery({
+    queryKey: placesKey(store.id),
+    queryFn: () =>
+      api<Location[]>(`/stock-locations?store_id=${store.id}`, token),
+    enabled: mayStock,
+    retry: false,
+  });
+  const names = new Map(
+    (warehouses.status === "success" ? warehouses.data : []).map((place) => [
+      place.id,
+      place.name,
+    ]),
+  );
+  const [historyShown, setHistoryShown] = useState(false);
+  const [toast, setToast] = useState<{ text: string; times: number } | null>(
+    null,
+  );
+  const tell = (text: string): void => {
+    setToast((now) => ({ text, times: (now?.times ?? 0) + 1 }));
+  };
+  // Absent outside a secure page, whatever the types say.
+  const clipboard = (navigator as { clipboard?: Partial<Clipboard> }).clipboard;
+  const write = clipboard?.writeText?.bind(clipboard);
+  const waybill = order.destination === "UKRAINE" ? order.waybill : null;
+  const copy =
+    waybill && write !== undefined
+      ? () => {
+          const failed = "Не вдалося скопіювати — виділіть ТТН і скопіюйте її.";
+          try {
+            // Exactly as it was written: the server keeps it so.
+            write(waybill).then(
+              () => {
+                buzz("success");
+                tell("ТТН скопійовано");
+              },
+              () => {
+                tell(failed);
+              },
+            );
+          } catch {
+            tell(failed);
+          }
+        }
+      : null;
   const title = titleOf(order);
-  const goes = goesOf(order);
   return (
     <div hidden={away !== null}>
       <ScreenHeader
@@ -384,28 +412,94 @@ function Card({
         back={
           <Back
             go={back}
-            carried={(event) =>
-              event.timeStamp - backAt.current < CARRIED_TAP
-            }
+            carried={(event) => event.timeStamp - backAt.current < CARRIED_TAP}
           >
             ← До замовлень
           </Back>
         }
       />
       <section className="order">
-        <p className="order-context">
-          {shippingText(order)}
-          {since(order.created_at)}
-        </p>
-        {done && <p role="status">{done}</p>}
-        {/* Its status, and its number small beside it (owner decision,
-            2026-10-23, В1): the context one line at 360 px. */}
-        <p className="order-status">
-          <span className={statusPills[order.status]}>
-            {statusLabels[order.status]}
-          </span>
+        {/* When it was ordered, and its number small beside it (owner
+            decision, 2026-10-23, В1): the store is the screen's line. */}
+        <p className="order-context t-meta">
+          {order.created_at ? `замовлено ${dayOf(order.created_at)} · ` : ""}
           <small className="order-number">№ {order.id.slice(0, 8)}</small>
         </p>
+        {done && (
+          <p role="status" ref={said} tabIndex={-1}>
+            {done}
+          </p>
+        )}
+        <KnotString order={order} />
+        <h3 className="order-section t-label">У посилці</h3>
+        <ul className="order-lines" aria-label="Товар">
+          {order.items.map((item) => {
+            const discounted = kopecks(item.discount_amount) !== 0n;
+            const from = names.get(item.source_location_id);
+            return (
+              <li className="order-line" key={item.id}>
+                <span className="sale-main">
+                  <span className="cash-row-title">{tagOf(item)}</span>
+                  {(item.quantity > 1 || discounted || from !== undefined) && (
+                    <span className="sale-meta">
+                      {[
+                        from === undefined ? null : `склад «${visible(from)}»`,
+                        item.quantity > 1 || discounted
+                          ? `${money(item.unit_price)} за 1 шт.${
+                              discounted
+                                ? ` · знижка ${money(item.discount_amount)} за 1 шт.`
+                                : ""
+                            }`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  )}
+                </span>
+                <span className="history-sum">{lineSum(item)}</span>
+              </li>
+            );
+          })}
+        </ul>
+        {/* Just collected, the sum taken stands large alone (review,
+            2026-10-24). */}
+        {collected === null && (
+          <p className="order-total">
+            Разом <Sum value={money(order.total)} />
+          </p>
+        )}
+        {order.status === "READY_TO_DISPATCH" && (
+          <p className="hint reserve-hint">
+            Товар у резерві — на касі його не продадуть.
+          </p>
+        )}
+        {order.sale_id &&
+          (collected ? (
+            <Collected
+              order={order}
+              kept={collected === "kept"}
+              back={back}
+              fixWay={fixWay}
+              returnSale={returnSale}
+            />
+          ) : (
+            <CollectedLine
+              order={order}
+              fixWay={fixWay}
+              returnSale={returnSale}
+            />
+          ))}
+        <h3 className="order-section t-label">Доставка</h3>
+        <div className="order-delivery">
+          <p className="order-goes">{shippingText(order)}</p>
+          {copy && (
+            <button type="button" className="copy-ttn" onClick={copy}>
+              <Icon name="copy" />
+              Скопіювати ТТН
+            </button>
+          )}
+        </div>
         {order.same_waybill && order.same_waybill.length > 0 && (
           // Saved anyway: several orders may go in one parcel (owner decision,
           // 2026-10-01). Each other order its row, opened by a tap (orders
@@ -433,9 +527,7 @@ function Card({
                           {sinceDay(other.created_at)}
                         </span>
                       )}
-                      <span className={statusPills[other.status]}>
-                        {statusLabels[other.status]}
-                      </span>
+                      <Sticker status={other.status} />
                     </span>
                     <span className="sale-open" aria-hidden="true">
                       ›
@@ -446,106 +538,39 @@ function Card({
             </ul>
           </div>
         )}
-        <ul className="order-lines" aria-label="Товар">
-          {order.items.map((item) => {
-            const discounted = kopecks(item.discount_amount) !== 0n;
-            return (
-              <li className="order-line" key={item.id}>
-                <span className="sale-main">
-                  <span className="cash-row-title">{tagOf(item)}</span>
-                  {(item.quantity > 1 || discounted) && (
-                    <span className="sale-meta">
-                      {money(item.unit_price)} за 1 шт.
-                      {discounted
-                        ? ` · знижка ${money(item.discount_amount)} за 1 шт.`
-                        : ""}
-                    </span>
-                  )}
-                </span>
-                <span className="history-sum">{lineSum(item)}</span>
-              </li>
-            );
-          })}
-        </ul>
-        {/* Just collected, the sum taken stands large alone (review,
-            2026-10-24). */}
-        {collected === null && (
-          <p className="order-total">
-            Разом <Sum value={money(order.total)} />
-          </p>
-        )}
-        {order.status === "READY_TO_DISPATCH" && (
-          <p className="hint reserve-hint">
-            Товар у резерві — на касі його не продадуть.
-          </p>
-        )}
-        {panelStep === "dispatch" && order.destination && (
-          // What the step needs, under the sum and over the panel where it
-          // stands: the waybill, or abroad where and how it went, now or
-          // later.
-          <label className="order-sent-with">
-            {order.destination === "ABROAD"
-              ? "Куди і як відправили: місто, країна, спосіб"
-              : "Номер ТТН"}{" "}
-            (можна дописати пізніше)
-            <input
-              value={sentWith}
-              maxLength={order.destination === "ABROAD" ? 1000 : 64}
-              disabled={blocked}
-              aria-describedby={
-                order.destination === "ABROAD" ? `${hint}-sent` : undefined
-              }
-              onChange={(event) => {
-                setSentWith(event.target.value);
-              }}
-            />
-            {order.destination === "ABROAD" && (
-              <NoCustomerData id={`${hint}-sent`} />
-            )}
-          </label>
-        )}
-        {order.sale_id &&
-          (collected ? (
-            <Collected
-              order={order}
-              kept={collected === "kept"}
-              back={back}
-              fixWay={fixWay}
-              returnSale={returnSale}
-            />
-          ) : (
-            <CollectedLine
-              order={order}
-              fixWay={fixWay}
-              returnSale={returnSale}
-            />
-          ))}
-        {panelStep === "collect" && (
+        {order.shipping_history && order.shipping_history.length > 0 && (
+          // Folded: each version a row once it is opened (orders task list,
+          // P1-3) — what it was, when and by whom; how it went on the right.
           <>
-            <p className="hint">{collectHint}</p>
-            {mayCredit && (
-              <fieldset disabled={blocked}>
-                <legend>Оплата</legend>
-                <TermsFields
-                  value={credit}
-                  change={(value) => {
-                    setCredit(value);
-                    setProblem("");
-                  }}
-                  total={total}
-                  // One line at 360 px, as at the till (credits task list,
-                  // P1-5): the order is this store's, as its words before said.
-                  hint="Решту — у «Боргах» цього магазину."
-                  // The debt's store, by construction.
-                  storeId={order.store_id}
-                  token={token}
-                />
-              </fieldset>
-            )}
-            {problem && (
-              <p role="alert" ref={why} tabIndex={-1}>
-                {problem}
-              </p>
+            <button
+              type="button"
+              className="quiet order-rare shipping-changes-title"
+              aria-expanded={historyShown}
+              onClick={() => {
+                setHistoryShown((shown) => !shown);
+              }}
+            >
+              Історія доставки <span aria-hidden="true">›</span>
+            </button>
+            {historyShown && (
+              <ul className="shipping-changes" aria-label="Історія доставки">
+                {order.shipping_history.map((change, index) => (
+                  <li
+                    className="shipping-change"
+                    key={`${change.at}:${String(index)}`}
+                  >
+                    <span className="sale-main">
+                      <span className="shipping-kind">
+                        {shippingKinds[change.kind]}
+                      </span>
+                      <span className="sale-meta">
+                        {at(change.at)} · {visible(change.by)}
+                      </span>
+                    </span>
+                    <span className="shipping-how">{shippingText(change)}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </>
         )}
@@ -563,46 +588,10 @@ function Card({
             <span aria-hidden="true">›</span>
           </button>
         )}
-        {order.shipping_history && order.shipping_history.length > 0 && (
-          // Each version a row (orders task list, P1-3): what it was, when
-          // and by whom; how it went on the right.
-          <>
-            <h3 className="shipping-changes-title">Історія доставки</h3>
-            <ul className="shipping-changes" aria-label="Історія доставки">
-              {order.shipping_history.map((change, index) => (
-                <li
-                  className="shipping-change"
-                  key={`${change.at}:${String(index)}`}
-                >
-                  <span className="sale-main">
-                    <span className="shipping-kind">
-                      {shippingKinds[change.kind]}
-                    </span>
-                    <span className="sale-meta">
-                      {at(change.at)} · {visible(change.by)}
-                    </span>
-                  </span>
-                  <span className="shipping-how">{shippingText(change)}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {/* At the card's foot, asked first: a cancel is for good, and the
-            reserve is sold at once (orders task list, P0-4). */}
-        {order.status === "READY_TO_DISPATCH" && mayStep && (
-          <CancelOrder
-            blocked={blocked}
-            cancel={() => {
-              action("cancel");
-            }}
-          />
-        )}
         {["DISPATCHED", "ARRIVED"].includes(order.status) &&
           store.permissions.includes("sale:refund") &&
           store.permissions.includes("inventory:receive") && (
-            // Its own step, the last row of the card's foot (orders task list,
-            // P2-4).
+            // Its own step (orders task list, P2-4).
             <button
               type="button"
               className="quiet order-rare"
@@ -613,100 +602,77 @@ function Card({
               Товар повернувся на склад <span aria-hidden="true">›</span>
             </button>
           )}
-        {panelStep === "collect" ? (
-          // «Клієнт забрав»: each way the step itself, nothing chosen first
-          // (owner decision, 2026-10-23, В2 (а)) — at the counter now, or
-          // paid ahead or to the carrier.
-          <div
-            className="pay-panel order-panel"
-            role="group"
-            aria-label="Клієнт забрав — як оплачено?"
-            ref={panel}
-          >
-            <p className="pay-what">
-              {title}
-              {goes ? ` · ${goes}` : ""}
-            </p>
-            <p className="pay-total">
-              {owing ? (
+        {/* At the card's foot, asked first: a cancel is for good, and the
+            reserve is sold at once (orders task list, P0-4). */}
+        {order.status === "READY_TO_DISPATCH" && mayStep && (
+          <CancelOrder
+            blocked={blocked}
+            cancel={() => {
+              action("cancel");
+            }}
+          />
+        )}
+        {panelStep !== null && !main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-panel order-dock" ref={panel}>
+            <button
+              type="button"
+              className="main-mimic"
+              disabled={blocked}
+              onClick={(event) => {
+                if (late(event.timeStamp)) return;
+                step();
+              }}
+            >
+              {waiting && panelStep === "arrive" ? (
                 <>
-                  Зараз <Sum value={money(decimal(owing.now))} /> · винен{" "}
-                  <Sum value={money(decimal(owing.left))} />
+                  <Eyelet state="spin" size={20} />
+                  <span className="visually-hidden">
+                    {nextWords[panelStep]}
+                  </span>
                 </>
               ) : (
-                <>
-                  Разом <Sum value={money(order.total)} />
-                </>
+                nextWords[panelStep]
               )}
-            </p>
-            {collectWays.map(({ caption, ways }, index) => (
-              <div
-                key={caption}
-                role="group"
-                aria-labelledby={`${hint}-ways-${String(index)}`}
-              >
-                <p className="pay-caption" id={`${hint}-ways-${String(index)}`}>
-                  {caption}
-                </p>
-                <div className={`pay-ways${ways.length === 2 ? " two" : ""}`}>
-                  {ways.map((way) => (
-                    <button
-                      type="button"
-                      key={way}
-                      disabled={blocked}
-                      onClick={(event) => {
-                        if (late(event)) return;
-                        collect(way);
-                      }}
-                    >
-                      {methodLabels[way]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            </button>
           </div>
-        ) : (
-          panelStep && (
-            <div className="pay-panel order-panel" ref={panel}>
-              <p className="pay-what">
-                {title}
-                {goes ? ` · ${goes}` : ""}
-              </p>
-              <button
-                type="button"
-                disabled={blocked}
-                onClick={(event) => {
-                  if (late(event)) return;
-                  if (panelStep === "arrive") {
-                    action("arrive");
-                    return;
-                  }
-                  const written = sentWith.trim();
-                  action(
-                    "dispatch",
-                    written
-                      ? order.destination === "ABROAD"
-                        ? { abroad_note: written }
-                        : { waybill: written }
-                      : undefined,
-                  );
-                }}
-              >
-                {actionLabels[panelStep]}
-              </button>
-            </div>
-          )
         )}
       </section>
+      {toast && (
+        <Toast
+          key={toast.times}
+          text={toast.text}
+          gone={() => {
+            setToast(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
+type NextStep = "dispatch" | "arrive" | "collect";
+
+const nextSteps: Partial<Record<Order["status"], NextStep>> = {
+  READY_TO_DISPATCH: "dispatch",
+  DISPATCHED: "arrive",
+  ARRIVED: "collect",
+};
+
+/** The next step as the MainButton says it (spec S17): its sheet's name,
+ * or the step itself. */
+const nextWords: Record<NextStep, string> = {
+  dispatch: "Відправити",
+  arrive: "Прибув на пошту",
+  collect: "Клієнт забрав",
+};
+
 /**
- * «Скасувати замовлення», asked first where it stands: what it does, and
- * that it is for good (orders task list, P0-4). The focus on «Ні,
- * залишити», the safe one.
+ * «Скасувати замовлення», asked first: what it does, and that it is for
+ * good (orders task list, P0-4). Inside Telegram by its own popup, «Так,
+ * скасувати» its destructive button (spec §6.29; «Усе на бірці» sections
+ * task list, P0-2); elsewhere in its block where it stands, the focus on
+ * «Ні, залишити», the safe one.
  */
 function CancelOrder({
   blocked,
@@ -726,10 +692,7 @@ function CancelOrder({
   }, [asking, asked]);
   return asking ? (
     <div className="cancel-ask" role="group" aria-labelledby={question}>
-      <p id={question}>
-        Скасувати замовлення? Резерв звільниться — товар знову можна продати.
-        Відновити замовлення не можна.
-      </p>
+      <p id={question}>Скасувати замовлення? {cancelWords}</p>
       <div className="actions">
         <button type="button" disabled={blocked} onClick={cancel}>
           Так, скасувати
@@ -756,6 +719,15 @@ function CancelOrder({
       ref={ask}
       disabled={blocked}
       onClick={() => {
+        if (popupHere()) {
+          void askPopup("Скасувати замовлення?", cancelWords, [
+            { id: "keep", text: "Ні, залишити" },
+            { id: "cancel", text: "Так, скасувати", destructive: true },
+          ]).then((pressed) => {
+            if (pressed === "cancel") cancel();
+          });
+          return;
+        }
         setAsking(true);
         setAsked(true);
       }}
@@ -764,6 +736,9 @@ function CancelOrder({
     </button>
   );
 }
+
+const cancelWords =
+  "Резерв звільниться — товар знову можна продати. Відновити замовлення не можна.";
 
 const shippingKinds: Record<ShippingChange["kind"], string> = {
   CREATED: "Вказано при створенні",
