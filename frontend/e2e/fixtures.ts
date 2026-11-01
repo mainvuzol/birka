@@ -126,7 +126,7 @@ const rows: Record<string, string> = {
 };
 
 /** A row of «Ще» by its label: what waits there is read after it — «Брак
- * 2 очікують перевірки», «Борги ніхто не винен» («Усе на бірці» task
+ * 2 очікують перевірки», «Покупці ніхто не винен» («Усе на бірці» task
  * list, P1-5). */
 export function rowNamed(label: string): RegExp {
   return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`);

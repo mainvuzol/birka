@@ -233,7 +233,9 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   await openStore(page, "Основний MAIN");
   await more(page);
 
-  await expect(row(page, "Борги")).toHaveAccessibleName("Борги 4 людини винні");
+  await expect(row(page, "Покупці")).toHaveAccessibleName(
+    "Покупці 4 людини винні",
+  );
   await expect(row(page, "Брак")).toHaveAccessibleName(
     "Брак 2 очікують перевірки",
   );
@@ -274,7 +276,7 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   // Each count reads in both themes.
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
-    for (const label of ["Борги", "Брак", "Товар і каталог"])
+    for (const label of ["Покупці", "Брак", "Товар і каталог"])
       expect(
         await contrast(row(page, label).locator(".more-count"), "text"),
       ).toBeGreaterThanOrEqual(4.5);

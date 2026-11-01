@@ -26,13 +26,20 @@ import {
 } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { usePanelRoom } from "@/shared/panel";
-import { buzz, useAskBeforeClosing } from "@/shared/telegram";
+import {
+  askPopup,
+  buzz,
+  popupHere,
+  useAskBeforeClosing,
+  useMainButton,
+} from "@/shared/telegram";
 import { Sum } from "@/shared/Sum";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { Keypad } from "@/shared/Keypad";
 import { SendingLine } from "@/shared/Sending";
 import { Back } from "@/shared/Back";
+import { Sheet } from "@/shared/Sheet";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import {
   PaperFields,
@@ -44,7 +51,7 @@ import {
 import type { PaperBody } from "@/sales/paperMark";
 import { paidDuringOutage } from "@/sales/types";
 import { submitCreditCommand, useCreditCommand } from "./commands";
-import { shortDay, shortWhen } from "./format";
+import { goodsOf, shortDay, shortWhen } from "./format";
 import { Paid } from "./Paid";
 import { askForPhone, erasedCustomer, statusLabels } from "./types";
 import type { Credit, CreditEntry, CustomerPage, Erasure } from "./types";
@@ -54,7 +61,7 @@ import type { Credit, CreditEntry, CustomerPage, Erasure } from "./types";
  * how many open ones keep them. Those are erased by their own term once
  * closed, or by the owner again (owner decision, 2026-10-09; ADR-0015 §5).
  */
-function erasedText(result: Erasure): string {
+export function erasedText(result: Erasure): string {
   const open =
     result.still_open > 0
       ? ` Відкритих боргів цього покупця: ${String(result.still_open)}. З них дані не стирають; коли їх закриють, стерти можна так само.`
@@ -70,7 +77,7 @@ function erasedText(result: Erasure): string {
  * way was asked reads «не вказано», and is never guessed (owner decision,
  * 2026-10-04).
  */
-function entryWhat(entry: CreditEntry): string {
+export function entryWhat(entry: CreditEntry): string {
   if (entry.kind === "PAYMENT")
     return `Внесок · ${
       entry.payment_method
@@ -85,10 +92,13 @@ function entryWhat(entry: CreditEntry): string {
  * payment from paper's mark, and the money a return handed back. The mark
  * is a warning's (credits task list, P2-4).
  */
-function entryMeta(entry: CreditEntry): { text: string; paper?: true }[] {
-  const parts: { text: string; paper?: true }[] = [
-    { text: shortWhen(entry.at) },
-  ];
+export function entryMeta(
+  entry: CreditEntry,
+  when = true,
+): { text: string; paper?: true }[] {
+  const parts: { text: string; paper?: true }[] = when
+    ? [{ text: shortWhen(entry.at) }]
+    : [];
   if (entry.outage)
     parts.push(
       { text: paperText("payment", entry.outage), paper: true },
@@ -159,7 +169,7 @@ const sumUnread = "Вкажіть суму внеску з точністю до
  * «Сплачено 1 000,00 грн з 3 000,00 грн», and what came back or was written
  * off, when anything did: every sum the server's.
  */
-function paidText(credit: Credit): string {
+export function paidText(credit: Credit): string {
   const parts = [`Сплачено ${money(credit.paid)} з ${money(credit.amount)}`];
   if ((kopecks(credit.returned) ?? 0n) > 0n)
     parts.push(
@@ -183,7 +193,7 @@ function lastPaid(credit: Credit): string {
 
 /** How much of the debt is closed, for the bar under what is owed: a look,
  * never a number to read (credits task list, P0-3). */
-function closedShare(credit: Credit): number {
+export function closedShare(credit: Credit): number {
   const amount = kopecks(credit.amount) ?? 0n;
   const owed = kopecks(credit.owed) ?? 0n;
   if (amount <= 0n) return 0;
@@ -193,8 +203,10 @@ function closedShare(credit: Credit): number {
 /**
  * One debt (credits task list, P0-3, P0-4): who, what they took and since
  * when in one line; what they owe, large, and how much of it is paid; the
- * payment's sum under it, and its three ways under the thumb; the history a
- * line an entry; writing off and erasing, the owner's, after it.
+ * history a line an entry; writing off and erasing, the owner's, behind its
+ * ⋯. Its payment is taken on S21, by Telegram's MainButton «Внесок» — the
+ * dock's one button outside Telegram («Усе на бірці» sections task list,
+ * P0-5); opened from the till, it is S21 itself.
  */
 export function Debt({
   store,
@@ -209,6 +221,8 @@ export function Debt({
   back,
   backTo = "До боргів",
   till,
+  deposit,
+  takenAt,
 }: {
   store: Store;
   token: string;
@@ -225,16 +239,19 @@ export function Debt({
   /**
    * Opened from the till's «Внесок» (spec S21; «Усе на бірці» task list,
    * P0-3): the payment alone, its sum on the app's own keypad; writing off
-   * and erasing stay on the debt opened from «Ще» › «Борги». `task` is told while
+   * and erasing stay on the debt opened from «Ще» › «Покупці». `task` is told while
    * the payment's form stands, so the menu steps aside.
    */
   till?: { task: (shown: boolean) => void };
+  /** «Внесок»: S21 on this debt, from «Покупці». */
+  deposit?: () => void;
+  /** Another store's debt, read here: the store that takes its payments
+   * («Усе на бірці» sections task list, P0-5). */
+  takenAt?: string;
 }): JSX.Element {
   const { busy, pending, firstSend } = useCreditCommand();
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [amount, setAmount] = useState("");
-  const [asking, setAsking] = useState(false);
-  const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   // A payment or a write-off recorded: its result, in place of the form
@@ -245,41 +262,53 @@ export function Debt({
   > | null>(null);
   // Every good of the debt, on a tap (owner decision, 2026-10-18).
   const [allGoods, setAllGoods] = useState(false);
-  const [erasing, setErasing] = useState<"ask" | "sending" | null>(null);
+  // An erasure asked of the server: «←» waits for its answer.
+  const [erasing, setErasing] = useState(false);
+  // The ⋯'s sheet over the debt: «Внесок» steps aside.
+  const [acting, setActing] = useState(false);
   const cache = useQueryClient();
-  const hint = useId();
   // Another store's debt, paid here because that one does not trade.
   const elsewhere = credit.store_id !== store.id;
-  // The owner writes off; for a store that does not trade, the network's.
-  const mayWriteOff =
-    credit.store_state === "ACTIVE"
-      ? !readOnly && store.permissions.includes("credit:write_off")
-      : networkOwner;
   const owed = kopecks(credit.owed) ?? 0n;
   const working = busy || pending !== null;
   // What is sent for the first time (spec §6.5; «Усе на бірці» task list,
-  // P0-2): the payment's way turns its ring, the others step back; a
-  // write-off, its own button. A kept one checked again is its stub's to
-  // say, not the dock's.
+  // P0-2): the payment's way turns its ring, the others step back. A kept
+  // one checked again is its stub's to say, not the dock's.
   const sending = busy && firstSend ? pending : null;
   const pressing =
     sending?.body.kind === "payment" ? sending.body.payment_method : null;
-  const writingOff = sending?.body.kind === "write-off";
   // Paper mode: the till's switch (`@/sales/paper`); the paper's time is
   // this payment's own (owner decision, 2026-10-10; ADR-0021).
   const paperMark = usePaperMark(store, token, journalKey, "credit");
-  // A store's owner erases in their store, while it trades (owner,
-  // 2026-10-09); the network's owner anywhere.
-  const erasesHere =
-    !readOnly &&
-    !elsewhere &&
-    store.permissions.includes("credit:erase_customer");
   // A payment is taken here on a debt still owed, in a store that trades.
   const takes = credit.status === "OPEN" && !readOnly;
+  // «Внесок» from «Покупці»: Telegram's MainButton, or outside it the
+  // dock's one button, while the debt is owed here and no result stands.
+  const main = useMainButton(
+    "Внесок",
+    () => {
+      deposit?.();
+    },
+    {
+      shown:
+        !till && takes && deposit !== undefined && paid === null && !acting,
+      active: !blocked && !working,
+    },
+  );
   const panelRef = useRef<HTMLDivElement>(null);
   // Room for the panel while it stands: the result unmounts it, and
   // «Відкрити борг» brings a new one, measured again (review, 2026-10-18).
-  usePanelRoom(panelRef, takes && paid === null);
+  usePanelRoom(
+    panelRef,
+    takes &&
+      paid === null &&
+      (till !== undefined || (deposit !== undefined && !main)),
+  );
+  // Opened from a row far down a list or a card: the debt begins at its
+  // top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   // Back from the result to the debt: the eye and a screen reader begin
   // again at its name, not at the page's top.
   const name = useRef<HTMLHeadingElement>(null);
@@ -300,9 +329,6 @@ export function Debt({
   // A sum typed and not yet taken: Telegram asks before Бірка closes (spec
   // §4.4; «Усе на бірці» task list, P1-2).
   useAskBeforeClosing(takes && paid === null && amount.trim() !== "");
-  // Typed, but not a sum read to the kopeck: said in the panel, not left to
-  // dead buttons (review, 2026-10-18).
-  const unreadable = amount.trim() !== "" && cents === null;
   // The till's: more than the debt shown is never pressed (spec S21; G9,
   // which the server still checks). The ways are dark, and the line says
   // why, with no request.
@@ -363,18 +389,14 @@ export function Debt({
     if (done !== null) result.current?.scrollIntoView({ block: "nearest" });
   }, [done]);
 
-  async function send(
-    body:
-      | {
-          kind: "payment";
-          amount: string;
-          payment_method: TillMethod;
-          elsewhere?: boolean;
-          outage?: PaperBody;
-          goods?: string[];
-        }
-      | { kind: "write-off"; reason: string },
-  ): Promise<void> {
+  async function send(body: {
+    kind: "payment";
+    amount: string;
+    payment_method: TillMethod;
+    elsewhere?: boolean;
+    outage?: PaperBody;
+    goods?: string[];
+  }): Promise<void> {
     setProblem(null);
     setDone(null);
     const outcome = await submitCreditCommand(journalKey, token, {
@@ -396,53 +418,33 @@ export function Debt({
       setRecorded((count) => count + 1);
       setCommandId(crypto.randomUUID());
       setAmount("");
-      setReason("");
-      setAsking(false);
-      setPaid(
-        body.kind === "write-off"
+      setPaid({
+        kind: "payment",
+        amount: body.amount,
+        way: body.payment_method,
+        // The mark as sent, named as it was chosen: the paper's pill as the
+        // history says it (credits task list, P0-5).
+        paper: body.outage
           ? {
-              kind: "write-off",
-              amount: outcome.result.written_off,
-              way: null,
-              paper: null,
-              credit: outcome.result,
-              said: `Борг списано: ${money(outcome.result.written_off)}.`,
+              by_user_id: body.outage.by_user_id,
+              by: paperMark.named?.display_name ?? null,
+              at: body.outage.at,
+              first_days: body.outage.first_days === true,
             }
-          : {
-              kind: "payment",
-              amount: body.amount,
-              way: body.payment_method,
-              // The mark as sent, named as it was chosen: the paper's pill
-              // as the history says it (credits task list, P0-5).
-              paper: body.outage
-                ? {
-                    by_user_id: body.outage.by_user_id,
-                    by: paperMark.named?.display_name ?? null,
-                    at: body.outage.at,
-                    first_days: body.outage.first_days === true,
-                  }
-                : null,
-              credit: outcome.result,
-              said: `${paymentTaken(body.amount, body.payment_method, !!body.outage, body.outage?.first_days === true)} ${
-                outcome.result.status === "SETTLED"
-                  ? "Борг сплачено повністю."
-                  : `Залишок боргу ${money(outcome.result.owed)}.`
-              }`,
-            },
-      );
-      if (body.kind === "payment" && body.outage) paperMark.forgetTime();
+          : null,
+        credit: outcome.result,
+        said: `${paymentTaken(body.amount, body.payment_method, !!body.outage, body.outage?.first_days === true)} ${
+          outcome.result.status === "SETTLED"
+            ? "Борг сплачено повністю."
+            : `Залишок боргу ${money(outcome.result.owed)}.`
+        }`,
+      });
+      if (body.outage) paperMark.forgetTime();
       changed(outcome.result);
     } else if (outcome.kind === "refused") {
       buzz("error");
       setCommandId(crypto.randomUUID());
-      setAsking(false);
-      tell(
-        pressRefusalText(
-          outcome.error,
-          body.kind,
-          body.kind === "payment" ? body.payment_method : undefined,
-        ),
-      );
+      tell(pressRefusalText(outcome.error, "payment", body.payment_method));
       // Refused because the debt moved on — another payment, a return: show
       // it as it is now.
       try {
@@ -455,53 +457,6 @@ export function Debt({
       } catch {
         // What was shown stays; the refusal says what to do.
       }
-    }
-  }
-
-  /**
-   * The owner erases this customer at their request: from every closed debt
-   * of the network under their phone. Not a money command, and the same
-   * whenever repeated, so it is sent directly rather than through the
-   * journal (owner decision, 2026-10-09; ADR-0015).
-   */
-  async function erase(): Promise<void> {
-    setProblem(null);
-    setDone(null);
-    setErasing("sending");
-    try {
-      // A body makes it a POST; the command takes nothing in it.
-      const result = await api<Erasure>(
-        `/credits/${credit.id}/erase-customer`,
-        token,
-        {},
-      );
-      setDone(erasedText(result));
-      changed(result.credit);
-      // The customer is erased in every store of the network.
-      void cache.invalidateQueries({ queryKey: ["credits"] });
-    } catch (error) {
-      tell(
-        inOwnWords(
-          refusalText(error),
-          "Дані покупця не стерто. Спробуйте ще раз.",
-          "Дані покупця не стерто: борг щойно змінився — перегляньте його й спробуйте ще раз.",
-        ),
-      );
-      // Changed in a way it does not name: the debt shown as it is now, as
-      // a refused payment's.
-      if (isConflict(error))
-        try {
-          changed(
-            await api<Credit>(
-              `/credits/${credit.id}${elsewhere ? `?store_id=${store.id}` : ""}`,
-              token,
-            ),
-          );
-        } catch {
-          // What was shown stays; the refusal says what to do.
-        }
-    } finally {
-      setErasing(null);
     }
   }
 
@@ -776,6 +731,13 @@ export function Debt({
       </>
     );
 
+  // The owner's, behind the ⋯ beside the name (spec S20; «Усе на бірці»
+  // sections task list, P0-5).
+  const rights = debtRights(store, credit, {
+    readOnly,
+    networkOwner,
+    mayErase,
+  });
   return (
     <>
       <ScreenHeader
@@ -783,10 +745,49 @@ export function Debt({
         focusable
         title={customerName}
         back={
-          <Back go={back} held={working || erasing === "sending"}>
+          <Back go={back} held={working || erasing}>
             <span aria-hidden="true">← </span>
             {backTo}
           </Back>
+        }
+        aside={
+          paid === null && (
+            <DebtActions
+              store={store}
+              token={token}
+              journalKey={journalKey}
+              blocked={blocked}
+              credit={credit}
+              {...rights}
+              changed={changed}
+              holding={setErasing}
+              written={(result) => {
+                setDone(null);
+                setProblem(null);
+                setPaid({
+                  kind: "write-off",
+                  amount: result.written_off,
+                  way: null,
+                  paper: null,
+                  credit: result,
+                  said: `Борг списано: ${money(result.written_off)}.`,
+                });
+                changed(result);
+              }}
+              erased={(result) => {
+                setProblem(null);
+                setDone(erasedText(result));
+                changed(result.credit);
+                // The customer is erased in every store of the network.
+                void cache.invalidateQueries({ queryKey: ["credits"] });
+              }}
+              refused={(text) => {
+                setDone(null);
+                tell(text);
+              }}
+              opened={setActing}
+            />
+          )
         }
       />
       <section className="credits debt-detail">
@@ -857,44 +858,9 @@ export function Debt({
                 <p className="hint">{paidText(credit)}</p>
               </div>
             )}
-            {takes && (
-              // The payment's sum under what is owed; its ways under the thumb
-              // (P0-4).
-              <fieldset className="pay-in" disabled={blocked || working}>
-                <legend className="visually-hidden">Сума внеску</legend>
-                <div className="pay-amount">
-                  <label>
-                    {/* Named in the field; the panel says the sum typed. */}
-                    <span className="visually-hidden">Сума внеску, грн</span>
-                    <input
-                      inputMode="decimal"
-                      enterKeyHint="done"
-                      placeholder="Сума, грн"
-                      value={amount}
-                      onChange={(event) => {
-                        setAmount(event.target.value);
-                      }}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      setAmount(asInput(credit.owed));
-                    }}
-                  >
-                    Увесь залишок
-                  </button>
-                </div>
-              </fieldset>
-            )}
-            {takes && (
-              // A mode, not the first thing: under the sum (P0-4), a group of its
-              // own.
-              <fieldset className="pay-in" disabled={blocked || working}>
-                <legend className="visually-hidden">Внесок з паперу</legend>
-                <PaperFields mark={paperMark} what="payment" storeId={store.id} />
-              </fieldset>
+            {credit.status === "OPEN" && takenAt !== undefined && (
+              // Another store's debt: paid where it was sold (spec S20).
+              <p className="hint">Внесок приймає «{visible(takenAt)}»</p>
             )}
             {done && (
               <p role="status" ref={result}>
@@ -908,175 +874,351 @@ export function Debt({
             )}
             <h3>Історія</h3>
             <History credit={credit} />
-            {takes && (
-              // Under the thumb (P0-4): the sum to take, and the three ways that
-              // take it — none chosen beforehand, none pressable without a sum.
-              // Before the owner's rare ones, so the keyboard reaches it first; it
-              // rests between them and the history at the end of the page.
-              <div
-                className="pay-panel"
-                role="group"
-                aria-label="Внесок"
-                ref={panelRef}
-              >
-                <p className="pay-total">
-                  {typed ? (
-                    <>
-                      {paperMark.paper && "З паперу · "}Внесок{" "}
-                      <Sum value={money(decimal(cents))} />
-                    </>
-                  ) : unreadable ? (
-                    sumUnread
-                  ) : (
-                    "Впишіть суму внеску"
-                  )}
-                </p>
-                <SendingLine busy={pressing !== null} />
-                <div className="pay-ways">
-                  {tillMethods.map((way) => (
-                    <button
-                      key={way}
-                      type="button"
-                      className={
-                        pressing === null
-                          ? undefined
-                          : pressing === way
-                            ? "pressed"
-                            : "stepped-back"
-                      }
-                      disabled={blocked || working || !paperMark.ready || !typed}
-                      onClick={() => {
-                        pay(way);
-                      }}
-                    >
-                      {pressing === way && <Eyelet state="spin" size={20} />}
-                      {paperMark.paper
-                        ? `З паперу · ${methodLabels[way]}`
-                        : methodLabels[way]}
-                    </button>
-                  ))}
-                </div>
-                {paperMark.paper && (
-                  <p className="pay-seller">{takenBy(paperMark)}</p>
-                )}
+            {takes && deposit && !main && (
+              // Outside Telegram, its MainButton as the dock's one button.
+              <div className="pay-panel order-dock" ref={panelRef}>
+                <button
+                  type="button"
+                  className="main-mimic"
+                  disabled={blocked || working}
+                  onClick={deposit}
+                >
+                  Внесок
+                </button>
               </div>
             )}
-            {/* The owner's, and rare: after the history, never between what is
-            owed and the payment (P0-3). */}
-            {credit.status === "OPEN" && mayWriteOff && (
-              <fieldset className="rare" disabled={blocked || working}>
-                <legend className="visually-hidden">Списання</legend>
-                {asking ? (
-                  <div className="notice">
-                    <p>
-                      Борг {money(credit.owed)} закриється без оплати. Скасувати
-                      це потім не можна.
-                    </p>
-                    <label>
-                      Чому списуємо
-                      <textarea
-                        enterKeyHint="enter"
-                        value={reason}
-                        maxLength={1000}
-                        aria-describedby={hint}
-                        onChange={(event) => {
-                          setReason(event.target.value);
-                        }}
-                      />
-                      <NoCustomerData id={hint} />
-                    </label>
-                    <SendingLine busy={writingOff} />
-                    <div className="actions">
-                      <button
-                        type="button"
-                        className={writingOff ? "pressed" : undefined}
-                        disabled={reason.trim() === "" || working}
-                        onClick={() => {
-                          void send({ kind: "write-off", reason: reason.trim() });
-                        }}
-                      >
-                        {writingOff && <Eyelet state="spin" size={20} />}
-                        Так, списати {money(credit.owed)}
-                      </button>
-                      <button
-                        type="button"
-                        className="quiet"
-                        onClick={() => {
-                          setAsking(false);
-                        }}
-                      >
-                        Скасувати
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      setDone(null);
-                      setProblem(null);
-                      setAsking(true);
-                    }}
-                  >
-                    Списати борг
-                  </button>
-                )}
-              </fieldset>
-            )}
-            {(mayErase || erasesHere) &&
-              credit.status !== "OPEN" &&
-              credit.customer_erased_at === null && (
-                <fieldset
-                  className="rare"
-                  disabled={working || erasing === "sending"}
-                >
-                  <legend className="visually-hidden">Дані покупця</legend>
-                  {erasing ? (
-                    <div className="notice">
-                      <p>
-                        Ім’я й телефон покупця зникнуть з усіх закритих боргів{" "}
-                        {mayErase ? "мережі" : "цього магазину"} з цим телефоном.
-                        Суми лишаються. Скасувати це не можна.
-                      </p>
-                      <div className="actions">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void erase();
-                          }}
-                        >
-                          Так, стерти дані покупця
-                        </button>
-                        <button
-                          type="button"
-                          className="quiet"
-                          onClick={() => {
-                            setErasing(null);
-                          }}
-                        >
-                          Скасувати
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="quiet"
-                      onClick={() => {
-                        setDone(null);
-                        setProblem(null);
-                        setErasing("ask");
-                      }}
-                    >
-                      Стерти дані покупця
-                    </button>
-                  )}
-                </fieldset>
-              )}
           </>
         )}
       </section>
+    </>
+  );
+}
+
+/**
+ * Who may do what to a debt behind its ⋯: the owner writes off; for a
+ * store that does not trade, the network's. A store's owner erases in their
+ * store, while it trades (owner, 2026-10-09); the network's owner anywhere.
+ */
+export function debtRights(
+  store: Store,
+  credit: Credit,
+  {
+    readOnly,
+    networkOwner,
+    mayErase,
+  }: { readOnly: boolean; networkOwner: boolean; mayErase: boolean },
+): { writeOff: boolean; erase: "network" | "store" | null } {
+  const mayWriteOff =
+    credit.store_state === "ACTIVE"
+      ? !readOnly && store.permissions.includes("credit:write_off")
+      : networkOwner;
+  const erasesHere =
+    !readOnly &&
+    credit.store_id === store.id &&
+    store.permissions.includes("credit:erase_customer");
+  return {
+    writeOff: credit.status === "OPEN" && mayWriteOff,
+    erase:
+      credit.status !== "OPEN" && credit.customer_erased_at === null
+        ? mayErase
+          ? "network"
+          : erasesHere
+            ? "store"
+            : null
+        : null,
+  };
+}
+
+/**
+ * What the owner does to one debt, behind its ⋯ (spec S20; «Усе на бірці»
+ * sections task list, P0-5): rare, so first a sheet that names the debt and
+ * holds what may be done. «Списати борг» on one still owed: a sheet that
+ * says what closes, asks why, and «Так, списати …» (owner decision,
+ * 2026-10-01). «Стерти дані покупця» on a closed one: asked in Telegram's
+ * own popup, its yes the destructive one, or outside Telegram in the sheet
+ * (owner decision, 2026-10-09; ADR-0015). Nothing for whoever may do
+ * neither.
+ */
+export function DebtActions({
+  store,
+  token,
+  journalKey,
+  blocked,
+  credit,
+  writeOff,
+  erase,
+  changed,
+  holding,
+  written,
+  erased,
+  refused,
+  opened,
+}: {
+  store: Store;
+  token: string;
+  journalKey: string;
+  blocked: boolean;
+  credit: Credit;
+  /** This person writes this debt off now. */
+  writeOff: boolean;
+  /** Its customer erased from the network's closed debts, or this store's. */
+  erase: "network" | "store" | null;
+  /** The debt as it is now, read again after a refusal. */
+  changed: (credit: Credit) => void;
+  /** An erasure asked: whatever leaves the screen waits for its answer. */
+  holding: (held: boolean) => void;
+  written: (credit: Credit) => void;
+  erased: (result: Erasure) => void;
+  /** A refusal, said on the screen: the sheet is gone. */
+  refused: (text: string) => void;
+  /** A sheet of its own is over the screen: its MainButton steps aside. */
+  opened?: (open: boolean) => void;
+}): JSX.Element | null {
+  const { busy, pending, firstSend } = useCreditCommand();
+  const working = busy || pending !== null;
+  const writingOff = busy && firstSend && pending?.body.kind === "write-off";
+  const [view, setView] = useState<"menu" | "write-off" | "erase" | null>(null);
+  const [reason, setReason] = useState("");
+  const [commandId, setCommandId] = useState(() => crypto.randomUUID());
+  const [erasing, setErasing] = useState(false);
+  const opener = useRef<HTMLButtonElement>(null);
+  const why = useRef<HTMLTextAreaElement>(null);
+  const hint = useId();
+  useEffect(() => {
+    if (view === "write-off") why.current?.focus();
+  }, [view]);
+  const open = view !== null;
+  useEffect(() => {
+    opened?.(open);
+    // Gone with its sheet open — the debt read again into rows — it is
+    // closed: the card's MainButton comes back.
+    return () => {
+      if (open) opened?.(false);
+    };
+  }, [opened, open]);
+  if (!writeOff && erase === null) return null;
+  const elsewhere = credit.store_id !== store.id;
+  const close = (): void => {
+    setView(null);
+  };
+  async function readAgain(): Promise<void> {
+    try {
+      changed(
+        await api<Credit>(
+          `/credits/${credit.id}${elsewhere ? `?store_id=${store.id}` : ""}`,
+          token,
+        ),
+      );
+    } catch {
+      // What was shown stays; the refusal says what to do.
+    }
+  }
+  async function sendWriteOff(): Promise<void> {
+    const outcome = await submitCreditCommand(journalKey, token, {
+      // A new transport key per attempt; the write-off's identity is
+      // `command_id`, which is what makes a late retry safe.
+      key: crypto.randomUUID(),
+      body: {
+        kind: "write-off",
+        store_id: store.id,
+        credit_id: credit.id,
+        command_id: commandId,
+        reason: reason.trim(),
+      },
+    });
+    // A buzz in the hand once the server answers (spec §4.4); a lost
+    // answer is its journal's, kept over every screen.
+    if (outcome.kind === "done") {
+      buzz("success");
+      setCommandId(crypto.randomUUID());
+      setReason("");
+      setView(null);
+      written(outcome.result);
+    } else if (outcome.kind === "refused") {
+      buzz("error");
+      setCommandId(crypto.randomUUID());
+      setView(null);
+      refused(pressRefusalText(outcome.error, "write-off"));
+      // Refused because the debt moved on: shown as it is now.
+      await readAgain();
+    } else setView(null);
+  }
+  async function sendErase(): Promise<void> {
+    setErasing(true);
+    holding(true);
+    try {
+      // A body makes it a POST; the command takes nothing in it. Not a money
+      // command, and the same whenever repeated, so it is sent directly
+      // rather than through the journal.
+      const result = await api<Erasure>(
+        `/credits/${credit.id}/erase-customer`,
+        token,
+        {},
+      );
+      setView(null);
+      erased(result);
+    } catch (error) {
+      setView(null);
+      refused(
+        inOwnWords(
+          refusalText(error),
+          "Дані покупця не стерто. Спробуйте ще раз.",
+          "Дані покупця не стерто: борг щойно змінився — перегляньте його й спробуйте ще раз.",
+        ),
+      );
+      // Changed in a way it does not name: the debt shown as it is now.
+      if (isConflict(error)) await readAgain();
+    } finally {
+      setErasing(false);
+      holding(false);
+    }
+  }
+  const eraseWords = `Ім’я й телефон покупця зникнуть з усіх закритих боргів ${
+    erase === "network" ? "мережі" : "цього магазину"
+  } з цим телефоном. Суми лишаються. Скасувати це не можна.`;
+  return (
+    <>
+      <button
+        type="button"
+        className="debt-more"
+        ref={opener}
+        aria-label="Дії з боргом"
+        aria-haspopup="dialog"
+        disabled={working || erasing}
+        onClick={() => {
+          setView("menu");
+        }}
+      >
+        <Icon name="tab-more" />
+      </button>
+      {view === "menu" && (
+        <Sheet title={goodsOf(credit)} close={close} fallback={opener}>
+          <div className="debt-more-ways">
+            {writeOff && (
+              <button
+                type="button"
+                className="sheet-way"
+                disabled={blocked || working}
+                onClick={() => {
+                  setView("write-off");
+                }}
+              >
+                Списати борг
+              </button>
+            )}
+            {erase !== null && (
+              <button
+                type="button"
+                className="sheet-way danger-way"
+                disabled={working || erasing}
+                onClick={() => {
+                  if (popupHere()) {
+                    setView(null);
+                    void askPopup("Стерти дані покупця?", eraseWords, [
+                      { id: "keep", text: "Скасувати" },
+                      {
+                        id: "erase",
+                        text: "Так, стерти дані покупця",
+                        destructive: true,
+                      },
+                    ]).then((pressed) => {
+                      if (pressed === "erase") void sendErase();
+                    });
+                    return;
+                  }
+                  setView("erase");
+                }}
+              >
+                Стерти дані покупця
+              </button>
+            )}
+          </div>
+        </Sheet>
+      )}
+      {view === "write-off" && (
+        <Sheet
+          title="Списати борг"
+          close={close}
+          fallback={opener}
+          foot={
+            <>
+              <SendingLine busy={writingOff} />
+              <div className="actions">
+                <button
+                  type="button"
+                  className={writingOff ? "pressed" : undefined}
+                  disabled={reason.trim() === "" || blocked || working}
+                  onClick={() => {
+                    void sendWriteOff();
+                  }}
+                >
+                  {writingOff && <Eyelet state="spin" size={20} />}
+                  Так, списати {money(credit.owed)}
+                </button>
+                <button
+                  type="button"
+                  className="quiet"
+                  disabled={writingOff}
+                  onClick={close}
+                >
+                  Скасувати
+                </button>
+              </div>
+            </>
+          }
+        >
+          <p>
+            Борг {money(credit.owed)} закриється без оплати. Скасувати це потім
+            не можна.
+          </p>
+          <label className="write-off-why">
+            Чому списуємо
+            <textarea
+              ref={why}
+              enterKeyHint="enter"
+              value={reason}
+              maxLength={1000}
+              aria-describedby={hint}
+              disabled={writingOff}
+              onChange={(event) => {
+                setReason(event.target.value);
+              }}
+            />
+            <NoCustomerData id={hint} />
+          </label>
+        </Sheet>
+      )}
+      {view === "erase" && (
+        <Sheet
+          title="Стерти дані покупця?"
+          close={close}
+          fallback={opener}
+          foot={
+            <div className="actions">
+              <button
+                type="button"
+                disabled={working || erasing}
+                onClick={() => {
+                  void sendErase();
+                }}
+              >
+                {erasing && <Eyelet state="spin" size={20} />}
+                Так, стерти дані покупця
+              </button>
+              <button
+                type="button"
+                className="quiet"
+                disabled={erasing}
+                onClick={close}
+              >
+                Скасувати
+              </button>
+            </div>
+          }
+        >
+          <p>{eraseWords}</p>
+        </Sheet>
+      )}
     </>
   );
 }

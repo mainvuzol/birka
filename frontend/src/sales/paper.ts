@@ -100,7 +100,7 @@ useReach.subscribe((state, previous) => {
     backNoted();
 });
 
-/** «Хто прийняв» on «Повернення» or in «Борги», for the store in paper mode. */
+/** «Хто прийняв» on «Повернення» or in «Покупці», for the store in paper mode. */
 export function setTakenBy(
   storeId: string,
   kind: "refund" | "credit",

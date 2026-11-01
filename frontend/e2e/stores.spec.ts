@@ -196,6 +196,15 @@ async function damagedAtTheMarket(page: Page): Promise<void> {
   expect(back.status()).toBe(201);
 }
 
+/** The app's keypad: the digits of a sum. */
+async function keyIn(page: Page, sum: string): Promise<void> {
+  for (const one of sum)
+    await page
+      .locator(".keypad")
+      .getByRole("button", { name: one, exact: true })
+      .click();
+}
+
 function card(page: Page, name: string) {
   return page.getByRole("article", { name: `Магазин ${name}` });
 }
@@ -306,9 +315,9 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await expect(
     page.getByRole("button", { name: /^Прийшов товар/ }),
   ).toHaveCount(0);
-  await section(page, "Борги");
-  // The store's own notice says it does not trade; «Борги» says who takes
-  // the payments, once (credits task list, P0-1).
+  await section(page, "Покупці");
+  // The store's own notice says it does not trade; «Покупці» says who
+  // takes the payments, once (credits task list, P0-1).
   await expect(
     page.getByText("Внески приймає будь-який магазин мережі, що працює.", {
       exact: true,
@@ -403,11 +412,8 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     const payments = posts(page, "/payments");
     await openAs(page, hanna);
     await openStore(page, "Центр CENTRE");
-    await section(page, "Борги");
-    // Everyone on the store's own list, paid too; not on another's.
-    await page
-      .getByRole("button", { name: "Показати сплачені й списані" })
-      .click();
+    await section(page, "Покупці");
+    // The store's own list: never another's.
     // The closed stores are asked for only by a whole number, under this
     // store's results for it: never a choice made first (owner decision,
     // 2026-10-18, В2 (а); credits task list, P1-1).
@@ -448,8 +454,9 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
       page.getByRole("heading", { name: "Магазини, що не працюють" }),
     ).toBeFocused();
     // Only what is still owed, so nothing to choose (owner, 2026-10-10).
-    for (const mode of ["Лише ті, хто винен", "Показати сплачені й списані"])
-      await expect(page.getByRole("button", { name: mode })).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "Які борги показати" }),
+    ).toHaveCount(0);
     const found = page.getByRole("button", { name: `Відкрити борг: ${name},` });
     await expect(found).toContainText("Магазин «Ринок»");
     const asked = searches.filter((url) => url.includes("elsewhere=true"));
@@ -473,21 +480,24 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await expect(found).toBeVisible();
     await page.getByRole("button", { name: "У цьому магазині" }).click();
     await expect(
-      page.getByRole("heading", { name: "Борги", exact: true }),
+      page.getByRole("heading", { name: "Покупці", exact: true }),
     ).toBeFocused();
     await expect(search).toHaveValue(phone);
     await expect(
       page.getByText(/^За цим номером у цьому магазині боргів немає/),
     ).toBeVisible();
     await ask.click();
+    // Her card, the closed store's debt on it, and its «Внесок» here
+    // (spec S20, S21).
     await found.click();
+    await page.getByRole("button", { name: "Внесок", exact: true }).click();
     await expect(
       page.getByText(
         "Продано в «Ринок» (заблоковано). Внесок приймаєте ви, борг — за «Ринок».",
         { exact: true },
       ),
     ).toBeVisible();
-    await page.getByLabel("Сума внеску, грн").fill("500");
+    await keyIn(page, "500");
     // Paid by card at «Центр»: its terminal takes it (ADR-0012 §B7 G).
     await page
       .getByRole("group", { name: "Внесок", exact: true })
@@ -514,6 +524,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page
       .getByRole("button", { name: "Відкрити борг", exact: true })
       .click();
+    await page.getByRole("button", { name: /^Історія · \d+/ }).click();
     await expect(
       page.getByRole("list", { name: "Історія боргу" }),
     ).toContainText("прийняв магазин «Центр»");
@@ -525,20 +536,25 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     // taken there, and the network's owner may still write it off.
     await openAs(page, owner);
     await openStore(page, /^Ринок MARKET/);
-    await section(page, "Борги");
+    await section(page, "Покупці");
     // Its whole number: the debt here, and never the closed stores asked
     // for — this store takes no payments (credits task list, P1-1).
     // Once this store has answered for the number itself, not the list
-    // as it opened, which shows the debt too.
-    const answered = page.waitForResponse(
-      (response) =>
-        response.url().includes("/credits/customers?") &&
-        new URL(response.url()).searchParams.get("query") === phone,
-    );
+    // as it opened, which shows the debt too. Its block is the first; the
+    // owner's other stores that trade have their own.
+    const market = page.getByRole("region", { name: "Магазину «Ринок» винні" });
+    const answered = page.waitForResponse((response) => {
+      if (!response.url().includes("/credits/customers?")) return false;
+      const asked = new URL(response.url()).searchParams;
+      return (
+        asked.get("query") === phone &&
+        asked.get("store_id") === fixture.network_market_store_id
+      );
+    });
     await page.getByLabel("Ім’я або телефон").fill(phone);
     await answered;
     await expect(
-      page.getByRole("button", { name: `Відкрити борг: ${name},` }),
+      market.getByRole("button", { name: `Відкрити борг: ${name},` }),
     ).toBeVisible();
     await page.waitForTimeout(300);
     expect(
@@ -547,23 +563,24 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
         .count(),
     ).toBe(0);
     // A whole number owing nothing here: the fact alone, as anyone trading
-    // takes the payment (review, 2026-10-19).
+    // takes the payment (review, 2026-10-19) — among blocks, each says it
+    // found no one.
     await page.getByLabel("Ім’я або телефон").fill(`099${phone.slice(3)}`);
-    await expect(
-      page.getByText("За цим номером у цьому магазині боргів немає.", {
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(market.getByText("Нікого не знайдено.")).toBeVisible();
     await page.getByLabel("Ім’я або телефон").fill(name);
-    await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
+    await market
+      .getByRole("button", { name: `Відкрити борг: ${name},` })
+      .click();
+    // Her card: what is owed here, no «Внесок», and the owner's ⋯ with its
+    // write-off (spec S20).
+    const owed = page.getByRole("region", { name: "Магазину «Ринок» винні" });
+    await expect(owed.locator(".owed-sum")).toHaveText("1 500,00 грн");
     await expect(
-      page.getByLabel("Скільки винні").locator(".owed-sum"),
-    ).toHaveText("1 500,00 грн");
-    await expect(
-      page.getByRole("group", { name: "Внесок", exact: true }),
+      page.getByRole("button", { name: "Внесок", exact: true }),
     ).toHaveCount(0);
+    await owed.getByRole("button", { name: "Дії з боргом" }).click();
     await expect(
-      page.getByRole("button", { name: "Списати борг" }),
+      page.getByRole("dialog").getByRole("button", { name: "Списати борг" }),
     ).toBeVisible();
   } finally {
     await settle(page, fixture.network_market_store_id, "ACTIVE");

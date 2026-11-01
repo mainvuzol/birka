@@ -17,7 +17,7 @@ import type { SalesReport } from "@/reports/types";
  * asked as the screen opens and as the app comes back, never more than once
  * a minute; one that fails keeps what it read before. The report, a
  * drawer and a store's debts are read under the keys their own screens read
- * them by: one asking for both, and what «Каса» or «Борги» learns, «Сьогодні»
+ * them by: one asking for both, and what «Каса» or «Покупці» learns, «Сьогодні»
  * shows.
  */
 export const EVERY = 60_000;

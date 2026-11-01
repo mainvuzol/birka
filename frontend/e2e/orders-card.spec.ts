@@ -1531,7 +1531,7 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
   );
   await expect(page.locator(".order-total")).toHaveCount(0);
   await expect(page.locator(".order-collected .paid-owed")).toHaveText(
-    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Боргах»\.$/,
+    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,
   );
   expect(server.sent).toEqual([
     {

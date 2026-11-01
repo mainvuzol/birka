@@ -500,7 +500,7 @@ export function returnErrorText(error: unknown, misses = 0): string {
 }
 
 /**
- * «Борги»'s own words for why, by the way the payment was pressed: money
+ * «Покупці»'s own words for why, by the way the payment was pressed: money
  * already taken for a debt paid meanwhile goes back (owner decisions,
  * 2026-10-04 and 2026-10-07; ADR-0013 §8). `way` is the kept payment's, null
  * for one kept before the way was asked.
@@ -512,7 +512,7 @@ export function creditErrorText(
   misses = 0,
 ): string {
   const what = kind === "payment" ? "Внесок" : "Списання";
-  // Refused for the right in a store: «Борги»'s own words, never a
+  // Refused for the right in a store: «Покупці»'s own words, never a
   // warehouse's (owner decision, 2026-10-21; words to be confirmed). A
   // write-off's right is the owner's to give back. A closed store's debt,
   // written off by the network's owner alone, names no store: not this.
@@ -565,12 +565,14 @@ export function creditErrorText(
   )
     return why;
   // Resent after the server did not answer: it changed meanwhile, not while
-  // the seller worked; the section named, as the banner may stand over any
-  // tab.
+  // the seller worked; the place named, as the banner may stand over any
+  // tab — a payment's at the till, a write-off's in «Покупці» («Усе на
+  // бірці» sections task list, P2-2; В5 (а)).
+  const where = kind === "payment" ? "у «Продажі» › «Внесок»" : "у «Покупцях»";
   if (why === CONFLICT_TEXT)
-    return `${what} не записано. Дані змінилися, поки сервер не відповідав. Відкрийте борг у «Боргах» і спробуйте ще раз.`;
+    return `${what} не записано. Дані змінилися, поки сервер не відповідав. Відкрийте борг ${where} і спробуйте ще раз.`;
   if (why === INVALID_TEXT)
-    return `${what} не записано. Сервер не прийняв запит. Відкрийте борг у «Боргах» і спробуйте ще раз.`;
+    return `${what} не записано. Сервер не прийняв запит. Відкрийте борг ${where} і спробуйте ще раз.`;
   return `${what} не записано. ${why}`;
 }
 

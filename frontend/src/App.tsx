@@ -938,15 +938,18 @@ function Workspace({
   const canDepositNow = useRef(canDeposit);
   canDepositNow.current = canDeposit;
   // This person's other stores asked for a whole number that owes nothing
-  // here: those that trade, where they take payments too.
+  // here: those that trade, where they take payments too — and «Покупці»'s
+  // other blocks (S19).
   const depositOthers = me.stores.filter(
     (other) =>
       other.id !== store.id &&
       other.state === "ACTIVE" &&
       other.permissions.includes("sale:credit"),
   );
-  // A payment's form open at the till: the menu steps aside (spec S21).
+  // A payment's form open at the till, or from «Покупці»: the menu steps
+  // aside (spec S21).
   const [depositTask, setDepositTask] = useState(false);
+  const paymentForm = (tab === "deposit" || tab === "credits") && depositTask;
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [creditStorageError, setCreditStorageError] = useState(false);
   const creditCommand = useCreditCommand();
@@ -973,7 +976,7 @@ function Workspace({
     kind: "payment" | "write-off";
     way: TillMethod | null;
   }>({ kind: "payment", way: null });
-  // Bumped to remount «Борги» once such a command settles, so no screen
+  // Bumped to remount «Покупці» once such a command settles, so no screen
   // keeps showing the debt as it was before it.
   const [creditEpoch, setCreditEpoch] = useState(0);
   useEffect(() => {
@@ -990,7 +993,7 @@ function Workspace({
         // only for whoever may take payments, never to say they may not
         // (credits task list, P2-1; «Усе на бірці» task list, P0-3) — a
         // payment's; a write-off, never made at the till, and a payment in
-        // a store that does not trade, «Борги».
+        // a store that does not trade, «Покупці».
         if (saved.body.kind === "payment" && canDepositNow.current)
           setTab("deposit");
         else if (canSeeCreditsNow.current) setTab("credits");
@@ -1283,7 +1286,7 @@ function Workspace({
         // What the till and a new order list: reserved, freed or sold
         // (orders task list, P0-5).
         cache.invalidateQueries({ queryKey: ["sale-stock"] }),
-        // Collected in parts, a debt: «Борги» read again (review,
+        // Collected in parts, a debt: «Покупці» read again (review,
         // 2026-10-19).
         cache.invalidateQueries({ queryKey: ["credits", store.id] }),
       ]);
@@ -1787,10 +1790,11 @@ function Workspace({
       forgetsOrder: true,
       ...(cashTab ? { tabbed: true as const } : {}),
     },
-    // «Ще» › «Люди» › «Борги», named as its screen until «Покупці» (S19).
+    // «Ще» › «Люди» › «Покупці» (S19; «Усе на бірці» sections task list,
+    // P0-4).
     {
       tab: "credits",
-      label: "Борги",
+      label: "Покупці",
       icon: "person",
       shown: canSeeCredits,
       disabled: otherThanCredit,
@@ -2168,7 +2172,7 @@ function Workspace({
     store: store.name,
     person: me.display_name,
     changeStore,
-    changeHeld: blocked || (tab === "deposit" && depositTask),
+    changeHeld: blocked || paymentForm,
   };
   // Telegram asks before Бірка closes while the till's basket holds goods —
   // on the till or left for a while — or a sale waits to be checked; the
@@ -2195,7 +2199,7 @@ function Workspace({
           P0-4); out of the way while a payment's form stands at the till,
           a task's screen left by «←» (spec S21; P0-3). */}
       <TabBar
-        away={tab === "deposit" && depositTask}
+        away={paymentForm}
         tabs={[
           ...shown.filter((section) => section.tabbed).map(tabOf),
           ...(hasMore
@@ -2802,10 +2806,10 @@ function Workspace({
         null
       ) : tab === "deposit" ? (
         canDeposit ? (
-          // The same list and debt as «Борги», a payment's alone (spec S08,
+          // The same list and debt as «Покупці», a payment's alone (spec S08,
           // S21; «Усе на бірці» task list, P0-3).
           <Credits
-            // Its own, never «Борги»'s: a debt, a result or a search left
+            // Its own, never «Покупці»'s: a debt, a result or a search left
             // here is not carried there, nor back (review, 2026-10-29).
             key={`deposit:${String(creditEpoch)}`}
             mode={tillModes("deposit")}
@@ -2853,6 +2857,8 @@ function Workspace({
           <Credits
             key={creditEpoch}
             back={moreBack}
+            stores={depositOthers}
+            payTask={setDepositTask}
             store={store}
             token={token}
             journalKey={creditKey}
@@ -2988,7 +2994,7 @@ function Workspace({
             back={cashTab ? undefined : moreBack}
           />
         ) : // The right gone while «Каса» was open: nothing is said of the
-        // rule, as «Борги» (cash task list, P2-1).
+        // rule, as «Покупці» (cash task list, P2-1).
         null
       ) : tab === "report" ? (
         canSeeReport ? (

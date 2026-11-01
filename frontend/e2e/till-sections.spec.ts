@@ -119,9 +119,9 @@ function underMore(page: Page): Locator {
   return page.getByRole("navigation", { name: "Ще" }).locator(".more-label");
 }
 
-/** «Борги»'s row, who owes the store read after it (P1-5). */
+/** «Покупці»'s row, who owes the store read after it (P1-5). */
 const owing =
-  /^Борги (ніхто не винен|\d+ (людина винна|людини винні|людей винні))$/;
+  /^Покупці (ніхто не винен|\d+ (людина винна|людини винні|людей винні))$/;
 
 /** «Ще»'s rows themselves. */
 function moreRows(page: Page): Locator {
@@ -335,7 +335,7 @@ test("selling and taking back are one section's two ways: «Продати | П�
   await expect(sell).toBeFocused();
 });
 
-test("«Замовлення» is a tab of its own and «Борги» a row of «Ще» › «Люди»: the orders a tap, a new order two, the debts two with «← Ще» back; no «Борги | Замовлення» («Усе на бірці» task list, P0-4)", async ({
+test("«Замовлення» is a tab of its own and «Покупці» a row of «Ще» › «Люди»: the orders a tap, a new order two, the debts two with «← Ще» back; no «Борги | Замовлення» («Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -368,11 +368,11 @@ test("«Замовлення» is a tab of its own and «Борги» a row of �
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  // The debts: «Ще», «Борги» — «Ще» marked, «← Ще» back.
+  // The debts: «Ще», «Покупці» — «Ще» marked, «← Ще» back.
   await untapped();
   await moreButton(page).click();
-  await moreRow(page, "Борги").click();
-  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  await moreRow(page, "Покупці").click();
+  await expect(page.getByRole("heading", { name: "Покупці" })).toBeVisible();
   expect(await taps()).toBe(2);
   await expect(moreButton(page)).toHaveAttribute("aria-current", "true");
   await expect(orders).not.toHaveAttribute("aria-current");
@@ -708,8 +708,8 @@ test("whoever sells but may not read orders has no «Замовлення» anyw
   ]);
   await more(page);
   await expect(moreRow(page, "Замовлення")).toHaveCount(0);
-  await moreRow(page, "Борги").click();
-  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
+  await moreRow(page, "Покупці").click();
+  await expect(page.getByRole("heading", { name: "Покупці" })).toBeVisible();
   await expect(
     page.getByRole("group", { name: "Борги або замовлення" }),
   ).toHaveCount(0);
@@ -798,7 +798,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
   });
   // From each row's screen, «← Ще» back to the groups.
   for (const [row, heading] of [
-    ["Борги", "Борги"],
+    ["Покупці", "Покупці"],
     ["Прийшов товар", "Приймання товару"],
     [/^Брак( |$)/, "Брак"],
     ["Залишки", "Залишки"],

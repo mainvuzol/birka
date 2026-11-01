@@ -5389,3 +5389,70 @@ changes; a sale is still recorded only by a way's button at «Клієнт
   «ТТН скопійовано», «Не вдалося скопіювати — виділіть ТТН і скопіюйте
   її.», «Пишемо як є — з Новою поштою не звіряємо.», «Відправити»,
   «Готово», «Прибув на пошту: {товари}».
+
+## Chosen in chat — 2026-11-01 («Покупці», the customer's card, the payments' words; sections P0-4, P0-5, P2-2)
+
+Chosen in chat on 2026-11-01 («Yes, after #162 merges»), after #162, as one
+batch: the sections task list's P0-4 (S19), P0-5 (S20) and P2-2
+(`all-on-the-tag-customers-report.md`). The owner's questions are built by
+(а): В2 the switch «Винні зараз · Сплачені · Списані», В3 the keeping lines
+as the task list words them, В5 «у «Продажі» › «Внесок»». No right, no
+server rule and no sum changes: every figure is the server's, a store at a
+time; nothing is added up on the phone.
+- **«Покупці» (S19, P0-4), decided here:**
+  - the blocks: the open store first, then this person's other stores that
+    trade and where they hold `sale:credit`, in the order `/me` gives them;
+    the stores that do not trade are asked for only by a whole number, as
+    before, under the open store's block;
+  - with more than one block, a block that finds no one says «Нікого не
+    знайдено.»; under «Сплачені» and «Списані», «Сплачених боргів тут
+    немає.» and «Списаних боргів тут немає.»; one block keeps the one
+    store's words as they were;
+  - another trading store's customer opens their card here; that store's
+    debt is read here and paid, written off or erased there: «Внесок
+    приймає «X»», no ⋯ on it;
+  - a row's name for a screen reader still begins «Відкрити борг: …»,
+    though it opens the card (a reading to note).
+- **The card (S20, P0-5), decided here:**
+  - it reads the phone's debts of every status, a read a store; a store's
+    one debt is its block, two and more are rows to its detail;
+  - the owner's ⋯ opens a sheet named by the goods; «Списати борг» is a
+    sheet with its reason and its sum; «Стерти дані покупця» is Telegram's
+    popup, and outside Telegram a sheet with the same words;
+  - the debt's detail has no payment panel any more (the task list's «До
+    S21 — панель…»: S21 exists): «Внесок» is the MainButton, outside
+    Telegram the dock's one button, and opens S21;
+  - S21's «←» names the screen it goes back to — the card by its name, or
+    the debt's detail by the customer's name; the till's chooser and
+    debt keep «← До боргів»;
+  - the history's first line of a debt is «Частинами» with the sale's
+    total; a refused copy says «Не вдалося скопіювати — виділіть номер і
+    скопіюйте його.» with no buzz, as the waybill's;
+  - while S21 stands, a kept payment waiting too, the menu stays aside.
+- **The words (P2-2), decided here:** a refused write-off's words say
+  «Відкрийте борг у «Покупцях» і спробуйте ще раз.» — the write-off is
+  there, not at the till; a payment's say «у «Продажі» › «Внесок»». The
+  till's chooser no longer shows a total across the stores asked.
+- **After the review (2026-11-01), decided here:**
+  - under «Сплачені» or «Списані» a row of two or more debts says how they
+    closed («Сплачено», «Списано»), never «Нічого не винні»: only that
+    status is read, and the customer may owe here now;
+  - a payment or a write-off made on S21 or a debt's detail opened from the
+    card: back on it, nothing it read before is shown — no old sum, no
+    «Внесок» — until it is read again; while the card itself is read again
+    (its own write-off, Telegram back in front), «Внесок» waits;
+  - S21's and the detail's «←» name the customer as the card's heading
+    does (the open store's spelling first);
+  - among the stores that do not trade, «На який борг вносить?» names each
+    debt's store;
+  - the card and a debt open at their top, from wherever the list was
+    scrolled;
+  - the owner's ⋯ gone with its sheet open (the debt read again into rows)
+    gives Telegram's «Внесок» back.
+- **For the owner:** «Покупці», «Ті, хто купує частинами», «Винні зараз ·
+  Сплачені · Списані», «Магазину «X» винні», «Магазин «X»», «Нікого не
+  знайдено.», «Сплачених боргів тут немає.», «Списаних боргів тут
+  немає.», the two keeping lines, «Скопіювати», «Телефон скопійовано»,
+  «Магазин «X»: не винні», «Внесок приймає «X»», «На який борг
+  вносить?», «Ще N», «Стерти дані покупця?», «Відкрийте борг у
+  «Покупцях» і спробуйте ще раз.».

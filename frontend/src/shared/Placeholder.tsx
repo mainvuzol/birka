@@ -22,7 +22,7 @@ export function Placeholder({
   /** «Повернення»'s rows of sales, under a day's heading, in place of the
    * tags (returns task list, P2-3). */
   rows?: number;
-  /** The rows are «Борги»'s customers: a mark, a name and its meta, what is
+  /** The rows are «Покупці»'s customers: a mark, a name and its meta, what is
    * owed on the right, and no day (credits task list, P2-3). */
   debts?: boolean;
   /** A day's heading over the rows; «Каса»'s lists have none (cash task

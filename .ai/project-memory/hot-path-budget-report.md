@@ -631,3 +631,24 @@ post office stands under its own knot, not in the list that opened first
 (business-rules.md, "Chosen in chat — 2026-11-01"). The scorecard's «Клієнт
 забрав» counted four as its target; a sale is unchanged at the till. No
 server request changed, so the hot path's cases stand as last measured.
+
+## Update — 2026-11-01: «Покупці»'s taps, counted from the menu
+
+The sections task list's P0-4 and P0-5
+([«Покупці», the card, the payments' words](all-on-the-tag-customers-report.md))
+ask for the scorecard's debt paths to be counted (sections task list §6).
+The taps from the menu, typing and the keypad's keys not counted:
+
+| path | before | after | how counted |
+|---|---|---|---|
+| who owes, two stores (the owner) | 5 («Ще», «Змінити магазин», the store, «Ще», «Борги») | **2** («Ще», «Покупці»: a block a store) | `till-sections.spec.ts:338`, its counter of presses; `credits-list.spec.ts:401` |
+| a payment from the customer, one debt (a seller) | 5 («Ще», «Борги», the row, the sum's field, a way) | **5** («Ще», «Покупці», the row — the card — «Внесок», a way on S21) | `till-sections.spec.ts:338` for the first two; `credits-list.spec.ts:1032` for the rest |
+| the same, two debts in this store | 6 (the chooser's debt among them) | **6** («На який борг вносить?»'s debt among them) | `credits-list.spec.ts:930` |
+| a payment at the till | 3 («Внесок», the row, a way) | **3**, unchanged | `credits-debt.spec.ts:1296` |
+
+The scorecard counted 7 through «Покупці» as its target; the field is gone
+(S21's keypad), so it stays 5. «Гроші» › «Вам винні клієнти», the target's
+one tap for who owes, waits for the task list's P0-7. No server request
+changed: the card asks `GET /credits/customers` once a store, five at most,
+as the list's blocks ask theirs, and the hot path's cases stand as last
+measured.

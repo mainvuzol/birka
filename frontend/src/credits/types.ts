@@ -161,7 +161,7 @@ export type CreditBody =
 /** As the server: a customer's whole phone, however it is written or
  * pasted, with the invisible marks a phone's contacts add (owner decision,
  * 2026-10-10) — what finds a closed store's customer, and what the till
- * asks «Борги» about. */
+ * asks «Покупці» about. */
 export function wholePhone(text: string): boolean {
   const digits = text.replace(/\D/g, "").length;
   return /^[\d\s()+./\p{Cf}-]+$/u.test(text) && digits >= 10 && digits <= 15;

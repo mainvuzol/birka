@@ -269,10 +269,12 @@ test("text from outside is shown with its hidden characters marked, on every scr
   await page.getByRole("button", { name: "Знайти", exact: true }).click();
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`);
 
-  // «Борги»: the customer, the goods, who sold, and the reason.
-  await open(page, fixture.owner_telegram_user_id, "Оля", "Борги");
+  // «Покупці»: the customer, the goods, who sold, and the reason — the
+  // written off, on her card's history.
+  await open(page, fixture.owner_telegram_user_id, "Оля", "Покупці");
   await page
-    .getByRole("button", { name: "Показати сплачені й списані" })
+    .getByRole("group", { name: "Які борги показати" })
+    .getByRole("button", { name: "Списані", exact: true })
     .click();
   await page.getByLabel("Ім’я або телефон").fill(tag);
   await shownSafely(page, `Марта ${tag}${marks[LRI]}`);
