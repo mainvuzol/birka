@@ -257,11 +257,13 @@ test("a seller's menu is «Продаж · Замовлення · Каса · �
   await expect(tabs(page).first()).not.toHaveAttribute("aria-current");
   // A seller's groups: people, goods, this phone.
   await expect(groups(page)).toHaveText(["Люди", "Товар", "Цей телефон"]);
+  // No «Залишки»: the till's search and a model's detail are the stock's
+  // place; no «Інвентаризація»: a seller does not correct (sections task
+  // list, P0-6, P1-5).
   await expect(underMore(page)).toHaveText([
     owing,
     "Прийшов товар",
     /^Брак( |$)/,
-    "Залишки",
     "Перевірка каталогу",
     "Вношу продаж з паперу",
   ]);
@@ -385,7 +387,7 @@ test("«Замовлення» is a tab of its own and «Покупці» a row 
   ).toBeVisible();
 });
 
-test("the goods are rows of «Ще» › «Товар»: «Прийшов товар», «Брак» and «Залишки», two taps each from the till, «← Ще» back from each; no «Товар» left anywhere («Усе на бірці» task list, P0-4)", async ({
+test("the goods are rows of «Ще» › «Товар»: «Прийшов товар» and «Брак», two taps each from the till, «← Ще» back from each; no «Товар» left anywhere, and with the till no «Залишки» («Усе на бірці» task list, P0-4; sections task list, P0-6)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -396,7 +398,6 @@ test("the goods are rows of «Ще» › «Товар»: «Прийшов тов
   for (const [row, heading] of [
     ["Прийшов товар", "Приймання товару"],
     [/^Брак( |$)/, "Брак"],
-    ["Залишки", "Залишки"],
   ] as const) {
     await tabs(page).filter({ hasText: "Продаж" }).click();
     await untapped();
@@ -413,13 +414,11 @@ test("the goods are rows of «Ще» › «Товар»: «Прийшов тов
       page.getByRole("heading", { name: "Ще", exact: true }),
     ).toBeVisible();
   }
-  // The stock's own screen is «Залишки», its list as before.
-  await moreRow(page, "Залишки").click();
+  // The stock is the till's search's and a model's detail's: no «Залишки».
+  await expect(moreRows(page).filter({ hasText: "Залишки" })).toHaveCount(0);
+  // «Товар» only as «Ще»'s group, never a screen or a tab.
   await expect(
-    page.getByRole("button", { name: "Оновити залишки" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Товар", exact: true }),
+    page.getByRole("heading", { name: "Товар", exact: true, level: 1 }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Товар", exact: true }),
@@ -760,7 +759,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     owing,
     "Прийшов товар",
     /^Брак (нічого не чекає|\d+ (очікує|очікують) перевірки)$/,
-    "Залишки",
+    "Інвентаризація",
     /^Товар і каталог (\d+\+? на затвердження · )?перевірка, моделі, початкові залишки$/,
     // «Каса», the report and «Накладні» are «Гроші»'s (P0-7).
     "Постачальникам",
@@ -800,7 +799,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     ["Покупці", "Покупці"],
     ["Прийшов товар", "Приймання товару"],
     [/^Брак( |$)/, "Брак"],
-    ["Залишки", "Залишки"],
+    ["Інвентаризація", "Інвентаризація"],
     ["Постачальникам", "Постачальникам"],
     ["Магазини", "Магазини"],
     [/^Резервні копії( |$)/, "Резервні копії"],
@@ -925,7 +924,7 @@ test("«Змінити магазин» is one tap from the line over any screen
   // From a screen under «Ще».
   await openStore(page, "Основний MAIN");
   await toTill(page);
-  await section(page, "Залишки");
+  await section(page, "Інвентаризація");
   await line.click();
   await expect(choice).toBeVisible();
   // From «Ще» › «Цей телефон».
@@ -1077,8 +1076,8 @@ test("every screen of a store is headed by its own title, the store and who work
   await headed("Каса", "34px");
   await more(page);
   await headed("Ще", "34px");
-  await moreRow(page, "Залишки").click();
-  await headed("Залишки", "28px");
+  await moreRow(page, "Прийшов товар").click();
+  await headed("Приймання товару", "28px");
   // Its «←» over it.
   const back = await page
     .getByRole("button", { name: "Назад до «Ще»" })

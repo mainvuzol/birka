@@ -2817,15 +2817,26 @@ test.describe("10. a kept operation the phone settles says what became of it", (
   const returnKey = `birka:return-pending:${ids.organization}:${ids.user}:${ids.store}`;
   const item = "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c13";
 
-  /** «Подільський», where this person also holds `more`. */
-  async function holding(page: Page, more: string[]): Promise<void> {
+  /** «Подільський», where this person also holds `more` — and, `till`
+   * false, no till: whoever keeps the stock there, «Залишки» theirs
+   * («Усе на бірці» sections task list, P0-6). */
+  async function holding(
+    page: Page,
+    more: string[],
+    till = true,
+  ): Promise<void> {
     await on(page, "/me", async (route) => {
       await route.fulfill({
         json: {
           ...me,
           stores: me.stores.map((store) => ({
             ...store,
-            permissions: [...store.permissions, ...more],
+            permissions: [
+              ...store.permissions.filter(
+                (permission) => till || permission !== "sale:create",
+              ),
+              ...more,
+            ],
           })),
         },
       });
@@ -2861,7 +2872,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       }),
     });
     await serve(page);
-    await holding(page, ["inventory:view", "inventory:adjust"]);
+    await holding(page, ["inventory:view", "inventory:adjust"], false);
     let status = 500;
     let sent = 0;
     await on(page, "/inventory/adjustments", async (route) => {
@@ -2888,8 +2899,9 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     expect(
       await page.evaluate((key) => localStorage.getItem(key), adjustmentKey),
     ).not.toBeNull();
-    // On «Залишки», «Ще» marked; «Ще»'s rows held, its notice over it
-    // (navigation task list, P0-3; «Усе на бірці» task list, P0-4).
+    // On «Залишки», with no till, «Ще» marked; «Ще»'s rows held, its notice
+    // over it (navigation task list, P0-3; «Усе на бірці» task list, P0-4;
+    // sections task list, P0-6).
     await expect(
       page.getByRole("heading", { name: "Залишки", exact: true }),
     ).toBeVisible();
@@ -3273,49 +3285,66 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toHaveCount(0);
   });
 
-  test("a kept stocktake's count of whoever may read the stock still opens on «Залишки», «Ще» marked («Усе на бірці» task list, P2-1, P0-4)", async ({
-    page,
-  }) => {
-    const key = `birka:stocktake-count-pending:${ids.organization}:${ids.user}:${ids.store}`;
-    await seed(page, {
-      [key]: JSON.stringify({
-        key: randomUUID(),
-        ambiguous: true,
-        since: new Date(Date.now() - 30 * 60_000).toISOString(),
-        body: {
-          store_id: ids.store,
-          command_id: randomUUID(),
-          stocktake_id: stocktake,
-          product_variant_id: ids.variant,
-          size_id: ids.size,
-          counted_quantity: 3,
-          expected_quantity: 5,
-        },
-      }),
-    });
-    await serve(page);
-    await holding(page, ["inventory:view"]);
-    await on(page, `/stocktakes/${stocktake}/counts`, async (route) => {
-      await route.fulfill({
-        status: 500,
-        json: { code: "INTERNAL_ERROR", message: "Refused" },
+  // «Інвентаризація», where it was counted, for whoever may correct the
+  // stock; «Залишки» for whoever only reads it with no till (sections task
+  // list, P0-6, P1-5).
+  for (const who of [
+    {
+      name: "may read the stock, with no till,",
+      rights: [],
+      till: false,
+      opens: "Залишки",
+    },
+    {
+      name: "may correct the stock",
+      rights: ["inventory:adjust"],
+      till: true,
+      opens: "Інвентаризація",
+    },
+  ])
+    test(`a kept stocktake's count of whoever ${who.name} still opens on «${who.opens}», «Ще» marked («Усе на бірці» task list, P2-1, P0-4; sections task list, P1-5)`, async ({
+      page,
+    }) => {
+      const key = `birka:stocktake-count-pending:${ids.organization}:${ids.user}:${ids.store}`;
+      await seed(page, {
+        [key]: JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          since: new Date(Date.now() - 30 * 60_000).toISOString(),
+          body: {
+            store_id: ids.store,
+            command_id: randomUUID(),
+            stocktake_id: stocktake,
+            product_variant_id: ids.variant,
+            size_id: ids.size,
+            counted_quantity: 3,
+            expected_quantity: 5,
+          },
+        }),
       });
+      await serve(page);
+      await holding(page, ["inventory:view", ...who.rights], who.till);
+      await on(page, `/stocktakes/${stocktake}/counts`, async (route) => {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Refused" },
+        });
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      await expect(
+        page.getByRole("button", { name: "Перевірити результат підрахунку" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: who.opens, exact: true }),
+      ).toBeVisible();
+      await expect(
+        menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
+      ).toHaveAttribute("aria-current", "true");
+      await expect(
+        page.getByRole("switch", { name: "Вношу продаж з паперу" }),
+      ).toHaveCount(0);
     });
-    await page.goto(launch());
-    await openStore(page, /Подільський/);
-    await expect(
-      page.getByRole("button", { name: "Перевірити результат підрахунку" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Залишки", exact: true }),
-    ).toBeVisible();
-    await expect(
-      menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
-    ).toHaveAttribute("aria-current", "true");
-    await expect(
-      page.getByRole("switch", { name: "Вношу продаж з паперу" }),
-    ).toHaveCount(0);
-  });
 
   test("a kept delivery met by a conflict that proves nothing is still unconfirmed; refused for its form, recorded nowhere, it says so in the delivery's words (owner decision, 2026-10-25)", async ({
     page,
@@ -3483,7 +3512,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       const stored = keptAdjustment(refusal.kept);
       await seed(page, { [adjustmentKey]: stored });
       await serve(page);
-      await holding(page, ["inventory:view", "inventory:adjust"]);
+      await holding(page, ["inventory:view", "inventory:adjust"], false);
       // The balances of the warehouse shown, read again once refused.
       let reads = 0;
       await on(page, "/catalog/stock-options", async (route) => {
@@ -3535,8 +3564,12 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         { key: kept.key, body: JSON.stringify(kept.body) },
       ]);
       await expect.poll(() => reads).toBe(2);
+      // Nothing waits for it any more.
+      await more(page);
       await expect(
-        page.getByRole("button", { name: "Продаж", exact: true }),
+        page
+          .getByRole("navigation", { name: "Ще" })
+          .getByRole("button", { name: "Прийшов товар", exact: true }),
       ).toBeEnabled();
     });
 

@@ -1,9 +1,13 @@
 import {
   test,
   expect,
+  gridCell,
+  more,
+  openModel,
   openStore,
   refuseOnce,
   section,
+  units,
   waitsFor,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
@@ -50,28 +54,54 @@ function launch(): string {
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
 
-/** The stocktake warehouse, which no other spec sells from or receives into. */
-async function enter(page: Page): Promise<void> {
+const lorans = /^Лоран шоколад 70(?:\.0)? см$/;
+
+async function login(page: Page): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await section(page, "Залишки");
+}
+
+/** The model's detail (spec S23), from the till's search: a correction is
+ * made from its grid («Усе на бірці» sections task list, P0-6). */
+async function enter(
+  page: Page,
+  query = "Лоран",
+  name: string | RegExp = lorans,
+): Promise<void> {
+  await login(page);
+  await openModel(page, query, name);
+}
+
+/** What the grid says the stocktake warehouse holds of M: it is the one no
+ * other spec sells from or receives into. */
+function here(page: Page): Locator {
+  return gridCell(page, fixture.count_location_id, fixture.size_id);
+}
+
+/** «Виправити залишок», its sheet ready for a tap. */
+async function fixSheet(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: "Виправити залишок" }).click();
+  const sheet = page.getByRole("dialog");
+  // A tap carried from the button is let go for a moment.
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** The stocktake warehouse's cell of M, tapped: the correction form. */
+async function correct(page: Page): Promise<void> {
+  const sheet = await fixSheet(page);
+  await sheet
+    .getByRole("button", { name: /^M, Склад перерахунку, в обліку \d+$/ })
+    .click();
+}
+
+/** «Інвентаризація», the stocktake warehouse chosen (sections task list,
+ * P1-5). */
+async function stocktaking(page: Page): Promise<void> {
   await page
-    .getByLabel("Склад для перегляду")
-    .selectOption(fixture.count_location_id);
-}
-
-function row(page: Page, size = "M"): Locator {
-  return page
-    .getByRole("article")
-    .filter({ hasText: `Розмір: ${size}` })
-    .first();
-}
-
-async function onHand(page: Page, size = "M"): Promise<number> {
-  const text = await row(page, size)
-    .getByText(/^На складі:/)
-    .textContent();
-  return Number(/\d+/.exec(text ?? "")?.[0]);
+    .getByRole("group", { name: "Склад" })
+    .getByRole("button", { name: "Склад перерахунку", exact: true })
+    .click();
 }
 
 function adjustments(page: Page): AdjustmentBody[] {
@@ -91,8 +121,8 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
 }) => {
   const sent = adjustments(page);
   await enter(page);
-  const system = await onHand(page);
-  await row(page).getByRole("button", { name: "Виправити залишок" }).click();
+  const system = await units(here(page));
+  await correct(page);
   await expect(page.getByText(`В обліку: ${String(system)}`)).toBeVisible();
   await page.getByRole("radio", { name: "Перерахунок" }).click();
   await page.getByLabel("Фактично на складі, од.").fill(String(system - 2));
@@ -156,12 +186,13 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   await page.getByLabel("Фактично на складі, од.").fill(String(system - 2));
   await page.getByRole("button", { name: "Записати коригування" }).click();
 
+  // The sheet closes; a stub over the grid says it, and the grid is read
+  // again.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText(
     `Перерахунок, облік ${String(system)} → ${String(system - 2)}.`,
   );
-  await expect(
-    row(page).getByText(`На складі: ${String(system - 2)}`, { exact: true }),
-  ).toBeVisible();
+  await expect(here(page)).toHaveText(String(system - 2));
   // The count travels as a change *and* the balance it was worked out from:
   // the refused one first, then the same change as a new command.
   expect(sent).toHaveLength(4);
@@ -185,8 +216,8 @@ test("damaged goods are written off by how many, whatever the balance", async ({
 }) => {
   const sent = adjustments(page);
   await enter(page);
-  const system = await onHand(page);
-  await row(page).getByRole("button", { name: "Виправити залишок" }).click();
+  const system = await units(here(page));
+  await correct(page);
   await page.getByRole("radio", { name: "Пошкоджено" }).click();
   await page.getByLabel("Скільки списати, од.").fill("1");
   await page.getByLabel("Примітка").fill("Пляма на рукаві");
@@ -216,12 +247,14 @@ test("a count made against a balance that has since moved is refused, and asks f
     if (stale)
       for (const item of body.items)
         if (item.size_label === "M") item.quantity += 1;
-    await route.fulfill({ response, json: body });
+    // A read the page dropped meanwhile — the till's, as the model opens —
+    // is answered to no one.
+    await route.fulfill({ response, json: body }).catch(() => undefined);
   });
   await enter(page);
-  const shown = await onHand(page);
+  const shown = await units(here(page));
   stale = false;
-  await row(page).getByRole("button", { name: "Виправити залишок" }).click();
+  await correct(page);
   await page.getByRole("radio", { name: "Перерахунок" }).click();
   await page.getByLabel("Фактично на складі, од.").fill(String(shown - 3));
   await page.getByRole("button", { name: "Записати коригування" }).click();
@@ -234,14 +267,18 @@ test("a count made against a balance that has since moved is refused, and asks f
   await expect(page.getByText(`В обліку: ${String(shown - 1)}`)).toBeVisible();
   await expect(page.getByLabel("Фактично на складі, од.")).toHaveValue("");
   await expect(page.getByText("Незавершене коригування")).toHaveCount(0);
+  // The grid read again as the refusal came may still be on its way: the
+  // page closes without waiting for it.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("goods the system holds none of are found in the catalogue and counted from zero", async ({
   page,
 }) => {
   const sent = adjustments(page);
-  await enter(page);
-  await expect(page.getByText("Розмір: L", { exact: true })).toHaveCount(0);
+  await login(page);
+  await section(page, "Інвентаризація");
+  await stocktaking(page);
   await page
     .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
     .click();
@@ -262,17 +299,30 @@ test("goods the system holds none of are found in the catalogue and counted from
   await expect(page.getByRole("status")).toContainText(
     "L — Перерахунок, облік 0 → 2.",
   );
-  await expect(
-    row(page, "L").getByText("На складі: 2", { exact: true }),
-  ).toBeVisible();
   expect(sent[0]).toMatchObject({ quantity_delta: 2, expected_quantity: 0 });
+  // The model's grid holds it now.
+  await section(page, "Продаж");
+  await openModel(page, "Лоран", lorans);
+  await expect(
+    gridCell(page, fixture.count_location_id, sent[0]?.size_id ?? ""),
+  ).toHaveText("2");
 });
 
 test("found goods that turn out to be held are counted against what is held", async ({
   page,
 }) => {
   await enter(page);
-  const held = await onHand(page);
+  const held = await units(here(page));
+  const name =
+    (await page
+      .getByRole("heading", { level: 1, name: lorans })
+      .textContent()) ?? "";
+  // From the model's ⋯.
+  await page.getByRole("button", { name: "Ще дії з моделлю" }).click();
+  const sheet = page.getByRole("dialog", { name });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: "Інвентаризація" }).click();
+  await stocktaking(page);
   await page
     .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
     .click();
@@ -289,7 +339,8 @@ test("found goods that turn out to be held are counted against what is held", as
     `уже є в обліку цього складу: ${String(held)} од.`,
   );
   await expect(page.getByText(`В обліку: ${String(held)}`)).toBeVisible();
-  await expect(row(page).getByText(`На складі: ${String(held)}`)).toBeVisible();
+  await page.getByRole("button", { name: `Назад до «${name}»` }).click();
+  await expect(here(page)).toHaveText(String(held));
 });
 
 test("a correction whose outcome is unknown blocks the app until it is resent unchanged", async ({
@@ -309,12 +360,20 @@ test("a correction whose outcome is unknown blocks the app until it is resent un
     await route.continue();
   });
   await enter(page);
-  const system = await onHand(page);
-  await row(page).getByRole("button", { name: "Виправити залишок" }).click();
+  const system = await units(here(page));
+  await correct(page);
   await page.getByRole("radio", { name: "Втрачено" }).click();
   await page.getByLabel("Скільки списати, од.").fill("1");
   await page.getByRole("button", { name: "Записати коригування" }).click();
+  // The sheet steps aside: the app's notice is where it is settled.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText("Незавершене коригування")).toBeVisible();
+  // The model's ways that would wait for it wait too, under the notice
+  // (review, 2026-11-01).
+  for (const name of ["Виправити залишок", "Прийшов товар"])
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
   await waitsFor(page, /коригування/);
   // The till waits too: nothing else happens until this is settled.
   await expect(
@@ -352,16 +411,19 @@ test("correcting stock needs inventory:adjust, which a seller does not hold", as
     await route.fulfill({ response, json: body });
   });
   await enter(page);
-  await expect(row(page).getByText(/^На складі:/)).toBeVisible();
+  await expect(here(page)).toBeVisible();
+  for (const name of ["Виправити залишок", "Ще дії з моделлю"])
+    await expect(page.getByRole("button", { name })).toHaveCount(0);
+  // Nor «Інвентаризація», where goods found are counted.
+  await more(page);
   await expect(
-    page.getByRole("button", { name: "Виправити залишок" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Знайшли товар, якого немає в списку" }),
+    page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button", { name: "Інвентаризація", exact: true }),
   ).toHaveCount(0);
 });
 
-test("a reserved balance offers no correction, and a size not known is only reduced", async ({
+test("a reserved balance's cell is held, and a size not known is only reduced", async ({
   page,
 }) => {
   const sent = adjustments(page);
@@ -370,6 +432,7 @@ test("a reserved balance offers no correction, and a size not known is only redu
       json: {
         items: [
           {
+            location_id: fixture.count_location_id,
             product_variant_id: fixture.variant_id,
             size_id: fixture.size_id,
             display_name: "Зарезервований",
@@ -378,33 +441,37 @@ test("a reserved balance offers no correction, and a size not known is only redu
             quantity: 4,
             reserved_quantity: 1,
             available_quantity: 3,
+            suggested_price: null,
           },
           {
+            location_id: fixture.count_location_id,
             product_variant_id: fixture.variant_id,
             size_id: "00000000-0000-4000-8000-000000000000",
-            display_name: "Без розміру",
+            display_name: "Зарезервований",
             size_label: "UNKNOWN",
             size_is_unknown: true,
             quantity: 3,
             reserved_quantity: 0,
             available_quantity: 3,
+            suggested_price: null,
           },
         ],
         has_more: false,
       },
     });
   });
-  await enter(page);
-  const reserved = page
-    .getByRole("article")
-    .filter({ hasText: "Зарезервований" });
-  await expect(reserved.getByText(/Є резерв замовлення/)).toBeVisible();
+  await enter(page, "Зарезервований", "Зарезервований");
+  const sheet = await fixSheet(page);
   await expect(
-    reserved.getByRole("button", { name: "Виправити залишок" }),
-  ).toHaveCount(0);
+    sheet.getByRole("button", {
+      name: "M, Склад перерахунку, в обліку 4, у резерві 1",
+    }),
+  ).toHaveAttribute("aria-disabled", "true");
+  await expect(sheet.getByText(/^Є резерв замовлення/)).toBeVisible();
 
-  const unknown = page.getByRole("article").filter({ hasText: "Без розміру" });
-  await unknown.getByRole("button", { name: "Виправити залишок" }).click();
+  await sheet
+    .getByRole("button", { name: /^розмір невідомий, Склад перерахунку/ })
+    .click();
   await page.getByRole("radio", { name: "Перерахунок" }).click();
   await page.getByLabel("Фактично на складі, од.").fill("5");
   await expect(

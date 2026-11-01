@@ -6,6 +6,7 @@ import type { ApiError } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
+import type { Opened } from "@/inventory/Model";
 import { asInput } from "@/prices/SuggestedPrice";
 import { sizeLabel } from "@/returns/types";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
@@ -113,6 +114,8 @@ export function Sale({
   mode = null,
   keptAt,
   others = [],
+  openModel,
+  typed = "",
 }: {
   store: Store;
   token: string;
@@ -153,6 +156,11 @@ export function Sale({
    * says what is free there under each model (spec S09; «Усе на бірці»
    * task list, P2-3). */
   others?: readonly Store[];
+  /** A model's name on the search opens its detail (spec S23; «Усе на
+   * бірці» sections task list, P0-6), with what was typed to come back to. */
+  openModel?: (opened: Opened, typed: string) => void;
+  /** What the search held as the till was left for a model's detail. */
+  typed?: string;
 }): JSX.Element {
   // Paper mode: the switch and «Хто продав» outlive this screen (`./paper`);
   // the paper's time is this sale's alone.
@@ -184,7 +192,7 @@ export function Sale({
         };
   });
   // What the seller types to find a model (redesign P0-2).
-  const [text, setText] = useState("");
+  const [text, setText] = useState(typed);
   const query = useSettled(text);
   const searchRef = useRef<HTMLInputElement>(null);
   // A line put in the basket with no price to start from: its price field
@@ -1195,6 +1203,13 @@ export function Sale({
                   searchRef={searchRef}
                   under={paperRow}
                   elsewhere={elsewhere}
+                  {...(openModel
+                    ? {
+                        open: (model: Opened) => {
+                          openModel(model, text);
+                        },
+                      }
+                    : {})}
                   failure={
                     stock.error ? (
                       <Failure

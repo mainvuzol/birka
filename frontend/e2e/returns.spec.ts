@@ -553,9 +553,19 @@ test("taking returns needs its own permission", async ({ page }) => {
 test("the «Брак» takes no deliveries, and is named in the stock", async ({
   page,
 }) => {
+  // «Залишки» is for whoever reads the stock with no till («Усе на бірці»
+  // sections task list, P0-6): the seed's «Оля» without hers.
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter((p) => p !== "sale:create");
+    await route.fulfill({ response, json: body });
+  });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await toTill(page);
   await section(page, "Приймання");
   const offered = page.locator(`option[value="${fixture.bin_location_id}"]`);
   await expect(offered).toHaveAttribute("disabled", "");

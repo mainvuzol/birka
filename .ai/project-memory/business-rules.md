@@ -5546,3 +5546,126 @@ places.
   складаємо в одну суму.», «Надійшло», «Тиждень», «Місяць», «Окремо від
   «Разом» — замовлення: …», «З них внески за борг», «Каса · {магазин}»,
   «← Гроші».
+
+## Chosen in chat — 2026-11-01 («Товар»: the model's detail, «Інвентаризація»; sections P0-6, P1-5)
+
+Chosen in chat on 2026-11-01 («go next»), after #164: the sections task
+list's P0-6 (S23) and P1-5 as one step, as its §8 orders
+(`all-on-the-tag-goods-report.md`). В4 is built by (а): the grid is read
+only, a coat is sold from the till's cells. The design's Q-6 stays «if
+no»: no «Відкласти під замовлення», no «Питали в чатах». No right, no
+server rule and no figure changes: every number of the grid is a field
+the server answered, and «Разом» and «Можна продати» are sums of its
+units, never a new meaning.
+- **The way in, decided here:** at the till, «Продати», the model's name
+  on its tag is a button: it opens the model's detail (S23) with «←
+  Продаж», Telegram's «Назад» doing the same; back on the till, its search
+  is what it was and the basket as it was left. Not on the returns',
+  orders' or debts' searches, which pick goods for their own task.
+- **«Залишки», decided here:**
+  - «Ще» › «Товар» › «Залишки» leaves for whoever has the till in the
+    open store (`sale:create` in a store that trades): the till's search,
+    a model a tag, and the model's detail are its place (design §3);
+  - it stays, as it was, for whoever reads the stock there
+    (`inventory:view`) but has no till — no `sale:create`, or a store
+    blocked or archived: without it they would read no stock at all; its
+    stocktake and «Знайшли товар, якого немає в списку» move to
+    «Інвентаризація», for them too;
+  - kept unconfirmed, when the app opens again: a count opens
+    «Інвентаризація», where it was counted, for whoever may correct stock,
+    else «Залишки» where it stays; a correction opens «Залишки» where it
+    stays, as before — its balances are read again once it is settled;
+    with the till, nothing is opened for it: its notice stands over the
+    till, whose search shows the stock.
+- **The model's detail (S23), decided here:**
+  - read as the till reads, by the text its model was found by: the
+    warehouses the store sells from, a hundred rows a page, page after
+    page while its rows may go on (the server lists a model's rows
+    together); each other warehouse the store reads — «Брак», one paused,
+    one it does not sell from — by its own `location_id`, the same text;
+    with no text, the whole list until the model's rows end;
+  - its name in capitals; «Ціна продажу 3 600,00 грн», the price this
+    store's till suggests, or «Ціна продажу не задана»; «Змінити ціну»
+    for `catalog:set_price`, the price editor as it was, in a sheet named
+    by the model;
+  - the grid: the sizes in the server's order, «?» for a size not known
+    (read «розмір невідомий»), «Разом»; a row a warehouse holding any of
+    it, by its name as written: those the store sells from first, each
+    with «з них у резерві» under it where orders hold any; «Брак» with
+    its torn tag; one the store reads but does not sell from, plain; one
+    paused, grey, and «Склад на паузі. Залишки доступні для перегляду.»
+    under the grid; a rule, then «Можна продати» — what is free on the
+    warehouses the store sells from. Nothing in the grid is pressed;
+  - its ways under it, each by its own right: «Прийшов товар»
+    (`inventory:receive`) opens «Прийшов товар» with this model chosen and
+    «← {модель}»; «Виправити залишок» (`inventory:adjust`), where any
+    warehouse that may be corrected holds it (active, receiving, not
+    «Брак»), a sheet named by the model with a cell a size and such a
+    warehouse — its letter, the warehouse and what the system holds — a
+    cell an order holds any of held, «Є резерв замовлення — виправити
+    залишок можна після його видачі або скасування.» under the cells; a
+    tap, the correction form as it was; ⋯ (`inventory:adjust`), a sheet
+    named by the model with «Інвентаризація», which opens it with «←
+    {модель}»;
+  - recorded: the sheet closes, and a stub over the grid says
+    «Коригування записано: … облік 3 → 2.» or «Ціну продажу збережено:
+    {модель}.»; the grid is read again; a correction whose answer is lost
+    closes the sheet too: it is settled from the app's «Незавершене
+    коригування», which the sheet would cover (as a debt's write-off);
+  - whoever sells only: «Прийшов товар» alone;
+  - «Можна продати» is always drawn, «·» under each size where nothing is
+    free; a model no warehouse of the store holds now (sold out since
+    the search, say) says «Зараз цієї моделі немає на складах магазину.»
+    in place of the grid.
+- **«Інвентаризація», decided here:** a screen of its own in «Ще» ›
+  «Товар», after «Брак», for `inventory:adjust`, «← Ще», or «← {модель}»
+  from a model; the warehouses that may be corrected as chips, none
+  chosen while there are two or more, the only one chosen and said
+  «Склад «…»»; the chosen one's stocktakes as they were, and «Знайшли
+  товар, якого немає в списку» (`inventory:receive`) under them, as it
+  was; the block's own «Інвентаризація складу» is the screen's title;
+  with no warehouse that may be corrected, «Немає складу, де цей магазин
+  може виправляти залишки. Зверніться до менеджера.»; «Повернутися до
+  залишків» after a finished stocktake keeps its words (the TZ moves the
+  screen as it is) and leads back to «Інвентаризація».
+- **After the independent review, decided here (2026-11-01):**
+  - a model's name tapped while a new search is still read opens it by
+    the search its tag was found by, not the one typed since;
+  - the sizes' order, for whoever may not read the organization's: the
+    listings' own, merged — the selling one first (the server lists a
+    model's rows by size, then warehouse), a size only another warehouse
+    holds before the first size that follows it there;
+  - a model with no rows says nothing of its price: «Ціна продажу …» is
+    drawn with them, «Змінити ціну» stays;
+  - the focus stays on «Продаж», marked all along, on the way to the
+    model's detail, back, and to and from what it opens — as on «Ще»,
+    «Сьогодні» and «Гроші»;
+  - a kept correction or count, once settled, has the till's search read
+    again too;
+  - while a correction or a count waits, the model's «Прийшов товар» and
+    «Виправити залишок» wait too, as «Ще»'s rows do; a price being saved
+    keeps its sheet open until it is answered;
+  - «Інвентаризація» needs `inventory:view` too, as it reads the warehouse
+    it counts: whoever may correct the stock but not read it has no row,
+    and a kept count does not open it for them;
+  - a count belongs to its warehouse: the only warehouse gone and another
+    the only one now, the count is not drawn on it;
+  - the till's price hint names the place as it is now, as the owner
+    chose after #142: «Ціни продажу ще немає — впишіть домовлену. Ціну для
+    всіх задає менеджер: «Продаж» › назва моделі › «Змінити ціну».» (a
+    manager with no till still sets it in «Залишки»).
+- **For the owner:** a model held only on a warehouse paused or not sold
+  from, or only in «Брак», is not on the till's search, so its detail is
+  not reached: if no, it is read where it sells again, «Брак» in its own
+  section; past stocktakes are read on «Інвентаризація», so whoever reads
+  the stock but may not correct it no longer sees them (under «Залишки»
+  they did): if no, they are a manager's; nor does anyone see the
+  stocktakes of a warehouse paused, not received into, or «Брак»
+  («Інвентаризація» offers only warehouses that may be corrected; under
+  «Залишки» any warehouse's were read): if no, they wait until it may be
+  corrected again; the price hint's new words; «Повернутися до залишків» on
+  «Інвентаризація» — its words wait for stage 2; «Можна продати», «з них у резерві», «Разом», «?», «Ціна
+  продажу …», «Змінити ціну», «← Продаж» on the model, «Інвентаризація»
+  as a row and a title, «Склад «…»», «Зараз цієї моделі немає на складах
+  магазину.», «Немає складу, де цей магазин може виправляти залишки.
+  Зверніться до менеджера.».

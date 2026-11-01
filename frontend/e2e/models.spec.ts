@@ -301,7 +301,7 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   // P0-4).
   await more(page);
   await expect(
-    sections(page).getByRole("button", { name: "Залишки", exact: true }),
+    sections(page).getByRole("button", { name: "Інвентаризація", exact: true }),
   ).toBeDisabled();
   await sections(page)
     .getByRole("button", { name: /^Товар і каталог/ })

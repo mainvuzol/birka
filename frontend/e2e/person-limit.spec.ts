@@ -2,10 +2,12 @@ import {
   test,
   expect,
   fillLine,
+  gridCell,
+  openModel,
   openStore,
-  section,
   tapSize,
   sellsFrom,
+  units,
 } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -217,18 +219,18 @@ test("a correction refused for too many requests keeps its count, and is written
   });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await section(page, "Залишки");
-  await page
-    .getByLabel("Склад для перегляду")
-    .selectOption(fixture.count_location_id);
-  const row = page
-    .getByRole("article")
-    .filter({ hasText: "Розмір: M" })
-    .first();
-  const before = Number(
-    /\d+/.exec((await row.getByText(/^На складі:/).textContent()) ?? "")?.[0],
+  // The model's detail, its stocktake warehouse's M (sections task list,
+  // P0-6).
+  await openModel(page, "Лоран", /^Лоран шоколад 70(?:\.0)? см$/);
+  const before = await units(
+    gridCell(page, fixture.count_location_id, fixture.size_id),
   );
-  await row.getByRole("button", { name: "Виправити залишок" }).click();
+  await page.getByRole("button", { name: "Виправити залишок" }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("button", { name: /^M, Склад перерахунку, в обліку \d+$/ })
+    .click();
   await page.getByRole("radio", { name: "Втрачено" }).click();
   await page.getByLabel("Скільки списати, од.").fill("1");
   await page.getByRole("button", { name: "Записати коригування" }).click();

@@ -70,17 +70,21 @@ export function Receive({
   journalKey,
   blocked,
   back,
+  model = null,
 }: {
   store: Store;
   token: string;
   journalKey: string;
   blocked: boolean;
   /** «← Ще» over the heading: «Ще» › «Товар» › «Прийшов товар» («Усе на
-   * бірці» task list, P0-4). */
+   * бірці» task list, P0-4); «← {модель}» from a model's detail. */
   back?: MoreBack | undefined;
+  /** Opened from a model's detail: that model, chosen (sections task
+   * list, P0-6). */
+  model?: ReceivableVariant | null;
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
-  const [variant, setVariant] = useState<ReceivableVariant | null>(null);
+  const [variant, setVariant] = useState<ReceivableVariant | null>(model);
   const [sizeId, setSizeId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [cost, setCost] = useState("");

@@ -104,6 +104,7 @@ export function PriceEditor({
   scopeKey,
   variantId,
   blocked,
+  onSaving,
   onDone,
   onCancel,
 }: {
@@ -112,6 +113,8 @@ export function PriceEditor({
   scopeKey: string;
   variantId: string;
   blocked: boolean;
+  /** Whether a price is being saved: a sheet keeps it open till it is. */
+  onSaving?: (saving: boolean) => void;
   onDone: (prices: Prices) => void;
   onCancel: () => void;
 }): JSX.Element {
@@ -142,6 +145,7 @@ export function PriceEditor({
       refetch={async () => {
         await prices.refetch();
       }}
+      {...(onSaving ? { onSaving } : {})}
       onDone={onDone}
       onCancel={onCancel}
     />
@@ -156,6 +160,7 @@ function Form({
   blocked,
   prices,
   refetch,
+  onSaving,
   onDone,
   onCancel,
 }: {
@@ -166,6 +171,7 @@ function Form({
   blocked: boolean;
   prices: Prices;
   refetch: () => Promise<void>;
+  onSaving?: (saving: boolean) => void;
   onDone: (prices: Prices) => void;
   onCancel: () => void;
 }): JSX.Element {
@@ -189,6 +195,7 @@ function Form({
 
   async function save(price: string | null): Promise<void> {
     setBusy(true);
+    onSaving?.(true);
     setProblem("");
     try {
       const result = await api<Prices>("/catalog/prices", token, {
@@ -225,6 +232,7 @@ function Form({
       }
     } finally {
       setBusy(false);
+      onSaving?.(false);
     }
   }
 

@@ -3,13 +3,14 @@ import {
   expect,
   basketDone,
   basketSheet,
+  openModel,
   openStore,
   readsOf,
   refuseOnce,
   section,
   sellsFrom,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -17,7 +18,8 @@ import { readFileSync } from "node:fs";
  * The suggested selling price (owner decisions, 2026-10-01; Q-F).
  *
  * The owner and managers set it — shared for every store, or a store's own
- * that overrides it — where goods arrive and on the stock screen; the till
+ * that overrides it — where goods arrive and on a model's detail, opened
+ * from the till's search («Усе на бірці» sections task list, P0-6); the till
  * prefills it and the seller may still agree another. The shared price needs
  * the permission over every till: organization-wide, as the owner holds it,
  * or in every store. The seed's shop has one store and «Оля» holds every
@@ -61,13 +63,13 @@ const owner = { id: fixture.owner_telegram_user_id, name: "Власниця" };
 async function enter(
   page: Page,
   who: { id: string; name: string },
-  tab: string,
+  tab?: string,
 ): Promise<void> {
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData(who.id, who.name) }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
-  await section(page, tab);
+  if (tab !== undefined) await section(page, tab);
 }
 
 async function token(page: Page): Promise<string> {
@@ -129,17 +131,23 @@ async function model(
   };
 }
 
-function row(page: Page, name: string) {
-  return page.getByRole("article").filter({ hasText: name });
+/** The model's detail (spec S23), from the till's search: its hero tag
+ * holds the price. */
+async function detail(page: Page, name: string): Promise<Locator> {
+  await openModel(page, name, new RegExp(name));
+  return page.getByRole("group", { name: new RegExp(name) });
 }
 
-async function stockOf(page: Page): Promise<void> {
-  await page
-    .getByLabel("Склад для перегляду")
-    .selectOption(fixture.returns_location_id);
+/** «Змінити ціну», the price editor in a sheet named by the model. */
+async function priceSheet(page: Page, name: string): Promise<Locator> {
+  await page.getByRole("button", { name: "Змінити ціну", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: new RegExp(name) });
+  // A tap carried from the button is let go for a moment.
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
 }
 
-test("a store's price set on the stock screen is what its till suggests", async ({
+test("a store's price set on a model's detail is what its till suggests", async ({
   page,
 }) => {
   const bearer = await token(page);
@@ -147,33 +155,43 @@ test("a store's price set on the stock screen is what its till suggests", async 
   const unpriced = await model(page, bearer);
   // Its till sells from the warehouse the models are in (P0-5).
   await sellsFrom(page, fixture.returns_location_id);
-  await enter(page, seller, "Залишки");
-  await stockOf(page);
-  await expect(row(page, priced.name)).toContainText("Ціна продажу: не задана");
+  await enter(page, seller);
+  const hero = await detail(page, priced.name);
+  await expect(hero).toContainText("Ціна продажу не задана");
 
-  await row(page, priced.name)
-    .getByRole("button", { name: "Змінити ціну продажу" })
-    .click();
-  await row(page, priced.name)
+  const sheet = await priceSheet(page, priced.name);
+  await sheet
     .getByRole("combobox", { name: "Яку ціну змінюємо" })
     .selectOption("STORE");
-  await row(page, priced.name).getByLabel("Нова ціна, грн").fill("0");
-  await row(page, priced.name)
-    .getByRole("button", { name: "Зберегти ціну" })
-    .click();
-  await expect(row(page, priced.name).getByRole("alert")).toContainText(
-    "більше нуля",
+  await sheet.getByLabel("Нова ціна, грн").fill("0");
+  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
+  await expect(sheet.getByRole("alert")).toContainText("більше нуля");
+  // While it is saved, the sheet stays, though asked to close: its answer
+  // is the sheet's to say (review, 2026-11-01).
+  let answer = (): void => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = () => {
+      resolve();
+    };
+  });
+  await page.route("**/api/v1/catalog/prices", async (route) => {
+    if (route.request().method() === "POST") await answered;
+    await route.fallback();
+  });
+  await sheet.getByLabel("Нова ціна, грн").fill("1850,50");
+  const save = sheet.getByRole("button", { name: "Зберегти ціну" });
+  await save.click();
+  await expect(save).toBeDisabled();
+  await page.locator(".sheet-scrim").click({ position: { x: 20, y: 20 } });
+  await expect(sheet).toBeVisible();
+  answer();
+  // The sheet closes; a stub over the grid says it, and the tag is read
+  // again.
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    `Ціну продажу збережено: ${priced.name}`,
   );
-  await row(page, priced.name).getByLabel("Нова ціна, грн").fill("1850,50");
-  await row(page, priced.name)
-    .getByRole("button", { name: "Зберегти ціну" })
-    .click();
-  await expect(
-    page.getByText(`Ціну продажу збережено: ${priced.name}`),
-  ).toBeVisible();
-  await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1 850,50 грн",
-  );
+  await expect(hero).toContainText("Ціна продажу 1 850,50 грн");
 
   // The till: the price is there before the seller types anything.
   const sent: { lines: { unit_price: string }[] }[] = [];
@@ -297,12 +315,10 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
 }) => {
   const bearer = await token(page);
   const priced = await model(page, bearer);
-  await enter(page, seller, "Залишки");
-  await stockOf(page);
-  await row(page, priced.name)
-    .getByRole("button", { name: "Змінити ціну продажу" })
-    .click();
-  await row(page, priced.name).getByLabel("Нова ціна, грн").fill("1850");
+  await enter(page, seller);
+  const hero = await detail(page, priced.name);
+  const sheet = await priceSheet(page, priced.name);
+  await sheet.getByLabel("Нова ціна, грн").fill("1850");
 
   // Someone else sets the same, shared, price first.
   const elsewhere = await page.request.post("/api/v1/catalog/prices", {
@@ -317,22 +333,15 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
   });
   expect(elsewhere.status()).toBe(200);
 
-  await row(page, priced.name)
-    .getByRole("button", { name: "Зберегти ціну" })
-    .click();
-  await expect(row(page, priced.name).getByRole("alert")).toContainText(
+  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
+  await expect(sheet.getByRole("alert")).toContainText(
     "Цю ціну щойно змінив хтось інший: тепер 1 700,00 грн",
   );
-  await expect(
-    row(page, priced.name).getByText("Зараз: 1 700,00 грн"),
-  ).toBeVisible();
+  await expect(sheet.getByText("Зараз: 1 700,00 грн")).toBeVisible();
   // Now seen, it is saved over.
-  await row(page, priced.name)
-    .getByRole("button", { name: "Зберегти ціну" })
-    .click();
-  await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1 850,00 грн",
-  );
+  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
 });
 
 test("whoever may set only this store's price is told so, and sets that", async ({
@@ -348,36 +357,29 @@ test("whoever may set only this store's price is told so, and sets that", async 
       json: { ...((await response.json()) as object), may_set_shared: false },
     });
   });
-  await enter(page, seller, "Залишки");
-  await stockOf(page);
-  await row(page, priced.name)
-    .getByRole("button", { name: "Змінити ціну продажу" })
-    .click();
+  await enter(page, seller);
+  const hero = await detail(page, priced.name);
+  const sheet = await priceSheet(page, priced.name);
   await expect(
-    row(page, priced.name).getByText(
-      "Ця ціна діятиме лише в магазині «Основний».",
-      { exact: false },
-    ),
+    sheet.getByText("Ця ціна діятиме лише в магазині «Основний».", {
+      exact: false,
+    }),
   ).toBeVisible();
   await expect(
-    row(page, priced.name).getByRole("combobox", { name: "Яку ціну змінюємо" }),
+    sheet.getByRole("combobox", { name: "Яку ціну змінюємо" }),
   ).toHaveCount(0);
   const sent = page.waitForRequest(
     (request) =>
       request.method() === "POST" &&
       request.url().endsWith("/api/v1/catalog/prices"),
   );
-  await row(page, priced.name).getByLabel("Нова ціна, грн").fill("1850");
-  await row(page, priced.name)
-    .getByRole("button", { name: "Зберегти ціну" })
-    .click();
+  await sheet.getByLabel("Нова ціна, грн").fill("1850");
+  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
   expect((await sent).postDataJSON()).toMatchObject({
     applies_to: "STORE",
     suggested_price: "1850.00",
   });
-  await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1 850,00 грн",
-  );
+  await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
 });
 
 test("whoever does not set prices sees them and is offered no change", async ({
@@ -408,15 +410,12 @@ test("whoever does not set prices sees them and is offered no change", async ({
     await route.fulfill({ response, json: me });
   });
 
-  await enter(page, seller, "Залишки");
-  await stockOf(page);
-  await expect(row(page, priced.name)).toContainText(
-    "Ціна продажу: 1 850,00 грн",
+  await enter(page, seller);
+  await expect(await detail(page, priced.name)).toContainText(
+    "Ціна продажу 1 850,00 грн",
   );
   await expect(
-    row(page, priced.name).getByRole("button", {
-      name: "Змінити ціну продажу",
-    }),
+    page.getByRole("button", { name: "Змінити ціну", exact: true }),
   ).toHaveCount(0);
 
   await section(page, "Приймання");

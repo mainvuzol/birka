@@ -1,4 +1,11 @@
-import { test, expect, openStore, section, sellsFrom } from "./fixtures";
+import {
+  test,
+  expect,
+  openModel,
+  openStore,
+  section,
+  sellsFrom,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
@@ -256,11 +263,10 @@ test("text from outside is shown with its hidden characters marked, on every scr
     `${tag}${marks[RLO]}21 шт`,
   );
 
-  // The owner's «Залишки».
-  await open(page, fixture.telegram_user_id, "Оля", "Залишки");
-  await page
-    .getByLabel("Склад для перегляду")
-    .selectOption(fixture.returns_location_id);
+  // The owner's model detail, from the till's search («Усе на бірці»
+  // sections task list, P0-6).
+  await open(page, fixture.telegram_user_id, "Оля", "Продаж");
+  await openModel(page, tag, new RegExp(tag));
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`, `чорний${marks[ZWSP]}`);
 
   // «Моделі».

@@ -318,6 +318,7 @@ export function StockSearch({
   offer,
   under,
   elsewhere,
+  open,
 }: {
   text: string;
   type: (text: string) => void;
@@ -362,6 +363,10 @@ export function StockSearch({
   /** Each model's free units in the person's other stores, a line a store
    * (`useElsewhere`; «Усе на бірці» task list, P2-3). */
   elsewhere?: ReadonlyMap<string, string[]>;
+  /** The model's name opens its detail, its sizes on every warehouse
+   * (spec S23; «Усе на бірці» sections task list, P0-6): the till's alone.
+   * With the search its tag was found by. */
+  open?: (model: { variantId: string; name: string; query: string }) => void;
 }): JSX.Element {
   const models = useMemo(
     () =>
@@ -371,6 +376,10 @@ export function StockSearch({
       ),
     [stock.data, places],
   );
+  // The search the tags shown were found by: while a new one is read, the
+  // last one's (review, 2026-11-01).
+  const shownBy = useRef(query);
+  if (!stock.isPlaceholderData) shownBy.current = query;
   const findRef = useRef<HTMLDivElement>(null);
   usePanelRoom(findRef, sticky, "--find-h");
   const where = warehouse
@@ -435,7 +444,25 @@ export function StockSearch({
               >
                 <div className="model-tag-in">
                   <p className="model-head">
-                    <strong className="model-name">{visible(tag.name)}</strong>
+                    {open ? (
+                      <button
+                        type="button"
+                        className="model-name model-open"
+                        onClick={() => {
+                          open({
+                            variantId: tag.variantId,
+                            name: tag.name,
+                            query: shownBy.current,
+                          });
+                        }}
+                      >
+                        {visible(tag.name)}
+                      </button>
+                    ) : (
+                      <strong className="model-name">
+                        {visible(tag.name)}
+                      </strong>
+                    )}
                     {tag.price && (
                       <span className="model-price">{money(tag.price)}</span>
                     )}

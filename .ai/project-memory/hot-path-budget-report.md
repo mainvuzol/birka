@@ -681,3 +681,30 @@ summary and the suppliers' summary, under the keys «Каса», «Покупц�
 once for the period chosen. With five stores that is at most 27 reads on
 opening, as often as «Сьогодні» reads, none of them the till's; the hot
 path's cases stand as last measured.
+
+## Update — 2026-11-01: «Товар»'s taps, counted from the menu
+
+The sections task list's P0-6 and P1-5
+([«Товар»: the model's detail, «Інвентаризація»](all-on-the-tag-goods-report.md))
+asks for the scorecard's stock paths to be counted (sections task list §6).
+The taps from the menu for whoever holds the till and reads the stock (a
+manager where a right is named), typing not counted:
+
+| path | before | after | how counted |
+|---|---|---|---|
+| a size of a model on every warehouse | ≥ 6 («Ще», «Залишки», a warehouse chosen, then each other warehouse in turn, a page or more each) | **2** («Продаж», the model's name on its search: the grid, a row a warehouse) | `model.spec.ts:496` |
+| what is free to sell of a model | ≥ 6, then added up by the person | **2** («Продаж», the name: «Можна продати» under the grid) | `model.spec.ts:189` |
+| correct a size's balance (`inventory:adjust`) | 6 and the pages to the size («Ще», «Залишки», the warehouse, «Виправити залишок», a reason, «Записати коригування» — the count typed) | **6** («Продаж», the name, «Виправити залишок», the cell, a reason, «Записати коригування») | `correct.spec.ts:119` |
+| change a model's price (`catalog:set_price`) | 5 and the pages to it («Ще», «Залишки», the warehouse, «Змінити ціну продажу», «Зберегти ціну») | **4** («Продаж», the name, «Змінити ціну», «Зберегти ціну») | `price.spec.ts:150` |
+| start a warehouse's stocktake (`inventory:adjust`) | 5 («Ще», «Залишки», the warehouse, «Почати інвентаризацію складу», «Почати інвентаризацію») | **5** («Ще», «Інвентаризація», the warehouse's chip, the same two) | `stocktake.spec.ts:112` |
+| the till's sale | unchanged | unchanged: the name is a way of its own beside the cells | `model.spec.ts:496` |
+
+The journeys named walk each path tap by tap; none keeps a counter of
+presses, as nothing on the way can be typed or chosen twice.
+No server request changed. The model's detail reads as the till does, by
+the text the model was found by: the warehouses the store sells from a
+hundred rows a page, until the model's rows end — one page for a search
+that names a model — and each other warehouse it reads by its own
+address, the same text; the organization's sizes where receiving's right
+reads them. None is the till's own read, which stands as it was: the hot
+path's cases stand as last measured.

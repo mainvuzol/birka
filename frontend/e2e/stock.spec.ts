@@ -29,7 +29,28 @@ function launch(): string {
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
+/**
+ * «Залишки» is for whoever reads the stock with no till in the store: for
+ * anyone else the till's search and a model's detail are the stock's place
+ * («Усе на бірці» sections task list, P0-6). The seed's «Оля» sells, so the
+ * till is taken from her here, with whatever else `without` names.
+ */
+async function noTill(page: Page, without: string[] = []): Promise<void> {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (p) => p !== "sale:create" && !without.includes(p),
+      );
+    await route.fulfill({ response, json: body });
+  });
+}
+
 async function enter(page: Page): Promise<void> {
+  await noTill(page);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await section(page, "Залишки");
@@ -44,8 +65,7 @@ test("stock screen explicitly selects warehouse and shows real API balances with
     if (!["GET", "HEAD"].includes(r.method())) writes.push(r.url());
   });
   await expect(page.getByLabel("Склад для перегляду")).toHaveValue("");
-  // The chosen warehouse's own list: the till, open first, reads the same
-  // address for its own warehouse, and may answer after this one is asked.
+  // The chosen warehouse's own list.
   const chosen = await page
     .getByLabel("Склад для перегляду")
     .locator("option", { hasText: /^Основний склад$/ })
@@ -102,17 +122,7 @@ test("stock screen explicitly selects warehouse and shows real API balances with
 test("without the right to read the stock, «Ще» › «Товар» has no «Залишки», its other rows stay, and nothing is said of the rule (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
-  await page.route("**/api/v1/me", async (route) => {
-    const response = await route.fetch();
-    const body = (await response.json()) as {
-      stores: { permissions: string[] }[];
-    };
-    for (const store of body.stores)
-      store.permissions = store.permissions.filter(
-        (p) => p !== "inventory:view",
-      );
-    await route.fulfill({ response, json: body });
-  });
+  await noTill(page, ["inventory:view"]);
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   // «Ще» › «Товар» without «Залишки»: no stock, and nothing said of the rule
@@ -131,6 +141,21 @@ test("without the right to read the stock, «Ще» › «Товар» has no «
   ).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Склад" })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("whoever has the till reads the stock on its search and a model's detail: «Ще» › «Товар» has no «Залишки» (sections task list, P0-6)", async ({
+  page,
+}) => {
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await more(page);
+  const goods = page.getByRole("navigation", { name: "Ще" });
+  await expect(
+    goods.getByRole("button", { name: "Інвентаризація", exact: true }),
+  ).toBeVisible();
+  await expect(
+    goods.getByRole("button", { name: "Залишки", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("without the stock, receiving and «Брак», no «Товар» in the menu and «Ще» › «Товар» holds the catalogue alone (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
