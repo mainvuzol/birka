@@ -4,10 +4,13 @@ import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
- * One order (orders task list, P0-2): what it is and where it goes on top,
- * its lines with their sums and «Разом» large; the next step one button in
- * the panel under the thumb, a buzz and what it did after it; the rare at
- * the foot. The orders are stubbed.
+ * One order (orders task list, P0-2; «Усе на бірці» sections task list,
+ * P0-2, P0-3): what it is on top, the string of where it stands with its
+ * days, «У посилці» with the sums and «Разом» large, «Доставка» with its
+ * waybill to copy; the next step Telegram's MainButton — «Відправити» a
+ * sheet with the waybill's field, «Клієнт забрав» a sheet of five ways —
+ * a buzz and what it did after it; the rare at the foot. The orders are
+ * stubbed.
  */
 
 interface Fixture {
@@ -21,8 +24,10 @@ const fixture = JSON.parse(
   ),
 ) as Fixture;
 
+/** Inside Telegram 6.1, unless `version` is null: a browser's page, with
+ * no MainButton. */
 function launch(
-  options: { theme?: Record<string, string>; version?: string } = {},
+  options: { theme?: Record<string, string>; version?: string | null } = {},
 ): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
@@ -39,7 +44,8 @@ function launch(
   const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
   if (options.theme)
     hash.set("tgWebAppThemeParams", JSON.stringify(options.theme));
-  hash.set("tgWebAppVersion", options.version ?? "6.1");
+  if (options.version !== null)
+    hash.set("tgWebAppVersion", options.version ?? "6.1");
   return `/#${hash.toString()}`;
 }
 
@@ -143,9 +149,14 @@ async function stub(page: Page, server: Server): Promise<void> {
     (url) => url.pathname === "/api/v1/orders",
     async (route) => {
       server.listReads = (server.listReads ?? 0) + 1;
-      await route.fulfill({
-        json: { orders: [server.order], has_more: false },
-      });
+      // Open or closed, as asked; a waybill's search, either.
+      const asked = new URL(route.request().url()).searchParams.get("status");
+      const closed = ["COLLECTED", "CANCELLED", "RETURNED"].includes(
+        server.order.status,
+      );
+      const listed =
+        asked === null || (asked === "closed") === closed ? [server.order] : [];
+      await route.fulfill({ json: { orders: listed, has_more: false } });
     },
   );
   await page.route("**/api/v1/orders/*", async (route) => {
@@ -249,38 +260,162 @@ async function buzzes(page: Page): Promise<object[]> {
     .filter((buzz) => buzz.type === "notification");
 }
 
-async function open(
-  page: Page,
-  server: Server,
-  theme?: Record<string, string>,
-): Promise<void> {
+/** Telegram heard: all it is told, its buzzes, and what its MainButton was
+ * told — pressed the moment it says `pressWhen`, as a double tap's second
+ * half would land on it. */
+async function hear(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const host = window as unknown as {
       TelegramWebviewProxy: {
         postEvent: (event: string, data: string) => void;
       };
+      told: [string, unknown][];
       buzzes: string[];
+      mains: Record<string, unknown>[];
+      pressWhen: string | null;
     };
+    host.told = [];
     host.buzzes = [];
+    host.mains = [];
+    host.pressWhen = null;
     host.TelegramWebviewProxy = {
       postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
         if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+        if (event !== "web_app_setup_main_button") return;
+        const told = JSON.parse(data) as Record<string, unknown>;
+        host.mains.push(told);
+        if (host.pressWhen === null || told.text !== host.pressWhen) return;
+        host.pressWhen = null;
+        setTimeout(() => {
+          window.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify({ eventType: "main_button_pressed" }),
+              source: window.parent,
+            }),
+          );
+        }, 0);
       },
     };
   });
+}
+
+/** What Telegram's MainButton was last told: nothing, before it was. */
+async function main(page: Page): Promise<Record<string, unknown> | null> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { mains: Record<string, unknown>[] }).mains.at(
+        -1,
+      ) ?? null,
+  );
+}
+
+/** Telegram's MainButton pressed, once it says `text`. */
+async function pressMain(page: Page, text: string): Promise<void> {
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, is_active: true, text });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+}
+
+/** Telegram's MainButton pressed the moment it is told `text`. */
+async function pressAsShown(page: Page, text: string): Promise<void> {
+  await page.evaluate((wanted) => {
+    (window as unknown as { pressWhen: string }).pressWhen = wanted;
+  }, text);
+}
+
+/** Its MainButton put away, or never shown. */
+async function noMain(page: Page): Promise<void> {
+  await expect
+    .poll(async () => (await main(page))?.is_visible ?? false)
+    .toBe(false);
+}
+
+/** A sheet over the card, once a tap in it is taken: the one that opened
+ * it is let go for a moment. */
+async function sheet(page: Page, name: string): Promise<Locator> {
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  await expect(dialog).toHaveAttribute("data-ready", "");
+  return dialog;
+}
+
+/** «Відправити» by the MainButton, its waybill typed, and «Відправлено». */
+async function send(page: Page, waybill?: string): Promise<void> {
+  await pressMain(page, "Відправити");
+  const sending = await sheet(page, "Відправити");
+  if (waybill !== undefined)
+    await sending
+      .getByLabel("Номер ТТН (можна дописати пізніше)")
+      .fill(waybill);
+  await pressMain(page, "Відправлено");
+}
+
+/** «Клієнт забрав» by the MainButton: its five ways. */
+async function ways(page: Page): Promise<Locator> {
+  await pressMain(page, "Клієнт забрав");
+  return sheet(page, "Клієнт забрав — як оплачено?");
+}
+
+/** The order's place on its string, or its sticker once it has none. */
+function standing(page: Page): Locator {
+  return page.locator(
+    ".knot-string [aria-current='step'] .knot-label, .knot-sticker .sticker",
+  );
+}
+
+/** The places it has passed. */
+function passed(page: Page): Locator {
+  return page.locator(".knot-string .knot.done .knot-label");
+}
+
+/** The place an order is listed at, by its knot's word. */
+const placeOf: Record<string, string | null> = {
+  READY_TO_DISPATCH: null,
+  DISPATCHED: "Відправлено",
+  ARRIVED: "Прибув на пошту",
+};
+
+/** «Замовлення», the place the order is at, and its row. */
+async function toOrder(page: Page, status: string): Promise<void> {
+  await section(page, "Замовлення");
+  const place = status in placeOf ? placeOf[status] : "Клієнт забрав";
+  if (place)
+    await page
+      .getByRole("group", { name: "Замовлення", exact: true })
+      .getByRole("button", { name: new RegExp(`^${place}`) })
+      .click();
+  if (status === "CANCELLED" || status === "RETURNED")
+    await page
+      .getByRole("button", { name: "Скасовані й повернені на склад" })
+      .click();
+  await page.locator(".order-row").first().click();
+}
+
+async function open(
+  page: Page,
+  server: Server,
+  theme?: Record<string, string>,
+  version?: string | null,
+): Promise<void> {
+  await hear(page);
   await stub(page, server);
   await page.goto("about:blank");
-  await page.goto(launch(theme ? { theme } : {}));
+  await page.goto(
+    launch({
+      ...(theme ? { theme } : {}),
+      ...(version !== undefined ? { version } : {}),
+    }),
+  );
   await openStore(page, "Основний MAIN");
-  await section(page, "Замовлення");
-  // A closed one under «Показати завершені».
-  if (
-    !["READY_TO_DISPATCH", "DISPATCHED", "ARRIVED"].includes(
-      server.order.status,
-    )
-  )
-    await page.getByRole("button", { name: "Показати завершені" }).click();
-  await page.locator(".order-row").first().click();
+  await toOrder(page, server.order.status);
   // Nothing in flight before a step is lost: an answer after it is the
   // server back, and the step is checked by itself — «Сьогодні»'s reads at
   // entry among them («Усе на бірці» task list, P0-6).
@@ -299,32 +434,65 @@ async function readTheAnswer(page: Page): Promise<void> {
   );
 }
 
+/** A rare step's panel under the thumb; outside Telegram, the card's dock
+ * too. */
 function panel(page: Page): Locator {
   return page.locator(".order-panel");
 }
 
-test("an order to send fits the phone: its goods as its title, how it goes, its sum, the waybill's field and «Відправлено» under the thumb (orders task list, P0-2)", async ({
+test("an order to send fits the phone: its goods as its title, when it was ordered and its number small, the string with its day, «У посилці», «Доставка», and «Відправити» Telegram's MainButton («Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   const ready = order();
   await open(page, { order: ready, sent: [] });
-  await expect(
-    page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
-  ).toBeVisible();
+  const title = page.getByRole("heading", {
+    name: "Лоран шоколад · M",
+    exact: true,
+  });
+  await expect(title).toBeVisible();
+  // When it was ordered, its number small beside it; the store is the
+  // screen's line (В1).
   await expect(page.locator(".order-context")).toHaveText(
-    `Нова пошта · ТТН ще немає · з\u00a0${short(ready.created_at as string)}`,
+    `замовлено ${short(ready.created_at as string)} · № ${ready.id.slice(0, 8)}`,
   );
-  // Its number small, beside its status (В1).
   await expect(page.locator(".order-number")).toHaveText(
     `№ ${ready.id.slice(0, 8)}`,
   );
+  // Where it stands: to be sent since the day it was ordered, the rest to
+  // come.
+  const knots = page.locator(".knot-string .knot");
+  await expect(knots.locator(".knot-label")).toHaveText([
+    "До відправлення",
+    "Відправлено",
+    "Прибув на пошту",
+    "Клієнт забрав",
+  ]);
+  await expect(standing(page)).toHaveText("До відправлення");
+  await expect(passed(page)).toHaveCount(0);
+  await expect(page.locator(".knot-string .knot-date")).toHaveText([
+    short(ready.created_at as string),
+  ]);
+  for (const later of [1, 2, 3])
+    await expect(knots.nth(later)).toHaveClass(/\bfuture\b/);
+  // What is in it, and how it goes.
   await expect(
-    page.getByText("До відправлення", { exact: true }),
+    page.getByRole("heading", { name: "У посилці", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".order-line .history-sum")).toHaveText(
     "1 200,15 грн",
   );
+  await expect(page.locator(".order-total .sum")).toHaveText("1 200,15 грн");
+  await expect(
+    page.getByRole("heading", { name: "Доставка", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".order-goes")).toHaveText(
+    "Нова пошта · ТТН ще немає",
+  );
+  // No waybill yet: nothing to copy.
+  await expect(
+    page.getByRole("button", { name: "Скопіювати ТТН" }),
+  ).toHaveCount(0);
   // One explanation, and never the money's words before «Клієнт забрав».
   await expect(
     page.getByText("Товар у резерві — на касі його не продадуть."),
@@ -332,26 +500,57 @@ test("an order to send fits the phone: its goods as its title, how it goes, its 
   await expect(page.getByText(/Продаж записуємо/)).toHaveCount(0);
   for (const gone of ["Оновити", "← До списку"])
     await expect(page.getByRole("button", { name: gone })).toHaveCount(0);
-  await expect(panel(page).locator(".pay-what")).toHaveText(
-    "Лоран шоколад · M · Нова пошта",
-  );
-  // All of it at once, without a scroll.
+  // Where it went, folded.
+  await expect(
+    page.getByRole("button", { name: "Історія доставки" }),
+  ).toHaveAttribute("aria-expanded", "false");
+  await expect(
+    page.getByRole("list", { name: "Історія доставки" }),
+  ).toHaveCount(0);
+  // The next step Telegram's own button, in the app's colours: no field and
+  // no panel of the card's own.
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({
+      is_visible: true,
+      is_active: true,
+      text: "Відправити",
+      color: expect.any(String),
+      text_color: expect.any(String),
+    });
+  await expect(page.getByLabel(/Номер ТТН/)).toHaveCount(0);
+  await expect(panel(page)).toHaveCount(0);
+  // Its top at once, without a scroll.
   for (const part of [
-    page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
+    title,
     page.locator(".order-context"),
-    page.locator(".order-status .badge"),
+    page.locator(".knot-string"),
     page.locator(".order-line"),
     page.locator(".order-total"),
-    page.getByLabel("Номер ТТН (можна дописати пізніше)"),
-    panel(page).getByRole("button", { name: "Відправлено" }),
   ])
     await expect(part).toBeInViewport({ ratio: 1 });
-  // The waybill's field over the panel, never under it.
-  const field = await page
-    .getByLabel("Номер ТТН (можна дописати пізніше)")
-    .boundingBox();
-  const bar = await panel(page).boundingBox();
-  expect(field && bar && field.y + field.height <= bar.y).toBe(true);
+  await page.screenshot({ path: "test-results/order-card-send.png" });
+  // The rare at the foot.
+  const cancel = page.getByRole("button", {
+    name: "Скасувати замовлення",
+    exact: true,
+  });
+  await cancel.scrollIntoViewIfNeeded();
+  await expect(cancel).toBeInViewport({ ratio: 1 });
+  // Left: its MainButton put away.
+  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await noMain(page);
+});
+
+test("outside Telegram the MainButton is the dock's one button under the thumb, its room kept, gone under a rare step and back; the sheet's «Відправлено» at its own foot («Усе на бірці» sections task list, P0-2, P0-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = { order: order(), sent: [] };
+  await open(page, server, undefined, null);
+  const step = panel(page).getByRole("button", { name: "Відправити" });
+  await expect(step).toBeInViewport({ ratio: 1 });
+  expect(await main(page)).toBeNull();
   // The panel's height kept clear wherever the page scrolls to — a field
   // the keyboard brings up (`shared/panel.ts`) — and none while it is gone.
   const room = (): Promise<string> =>
@@ -361,10 +560,7 @@ test("an order to send fits the phone: its goods as its title, how it goes, its 
   const height = (await panel(page).boundingBox())?.height ?? 0;
   expect(Math.abs(parseFloat(await room()) - height)).toBeLessThanOrEqual(1);
   // Where it goes changed: its own screen, its own press under the thumb
-  // and its room kept, no second field for the waybill (review,
-  // 2026-10-23; orders task list, P1-3) — and what was typed on the card
-  // kept for it (review, 2026-10-25).
-  await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("2045");
+  // and its room kept (review, 2026-10-23; orders task list, P1-3).
   await page.getByRole("button", { name: "Змінити доставку" }).click();
   await expect(panel(page).getByRole("button")).toHaveText("Зберегти доставку");
   await expect
@@ -375,24 +571,16 @@ test("an order to send fits the phone: its goods as its title, how it goes, its 
       ),
     )
     .toBeLessThanOrEqual(1);
-  await expect(
-    page.getByLabel("Номер ТТН (можна дописати пізніше)"),
-  ).toHaveCount(0);
   // Back: the card's press and its room, the row that opened it in focus.
   await page.getByRole("button", { name: "← Замовлення" }).click();
-  await expect(
-    panel(page).getByRole("button", { name: "Відправлено" }),
-  ).toBeVisible();
+  await expect(step).toBeVisible();
   await expect
     .poll(async () => Math.abs(parseFloat(await room()) - height))
     .toBeLessThanOrEqual(1);
   await expect(
-    page.getByLabel("Номер ТТН (можна дописати пізніше)"),
-  ).toHaveValue("2045");
-  // The rare at the foot, the panel never over the last of them.
-  await expect(
     page.getByRole("button", { name: "Змінити доставку" }),
   ).toBeFocused();
+  // The rare at the foot, the dock never over the last of them.
   const cancel = page.getByRole("button", {
     name: "Скасувати замовлення",
     exact: true,
@@ -402,36 +590,62 @@ test("an order to send fits the phone: its goods as its title, how it goes, its 
   const under = await cancel.boundingBox();
   const over = await panel(page).boundingBox();
   expect(under && over && under.y + under.height <= over.y).toBe(true);
-  // Asked, «Ні, залишити» focused, over the panel.
+  // Asked in the page, «Ні, залишити» focused, over the dock.
   await cancel.click();
   const keep = page.getByRole("button", { name: "Ні, залишити" });
   await expect(keep).toBeFocused();
   const kept = await keep.boundingBox();
   const below = await panel(page).boundingBox();
   expect(kept && below && kept.y + kept.height <= below.y + 1).toBe(true);
+  await keep.click();
+  // «Відправити»: its sheet, the field in focus, «Відправлено» at its foot
+  // under it.
+  await step.click();
+  const sending = await sheet(page, "Відправити");
+  const field = sending.getByLabel("Номер ТТН (можна дописати пізніше)");
+  await expect(field).toBeFocused();
+  const sent = sending.getByRole("button", { name: "Відправлено" });
+  await expect(sent).toBeInViewport({ ratio: 1 });
+  const typed = await field.boundingBox();
+  const pressed = await sent.boundingBox();
+  expect(typed && pressed && typed.y + typed.height <= pressed.y).toBe(true);
+  await page.screenshot({ path: "test-results/order-send-sheet.png" });
+  await field.fill("20451234");
+  await sent.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByText("Відправлено · ТТН 20451234", { exact: true }),
+  ).toBeVisible();
+  await expect(panel(page).getByRole("button")).toHaveText("Прибув на пошту");
+  expect(server.sent).toEqual([
+    {
+      step: "dispatch",
+      body: { command_id: expect.any(String), waybill: "20451234" },
+    },
+  ]);
 });
 
-test("sent with its waybill, then arrived: what is sent is as before, each a buzz and what it did; arrived, no panel and «Клієнт забрав» as before (orders task list, P0-2)", async ({
+test("sent with its waybill by the MainButton, then arrived: what is sent is as before, each a buzz and what it did, the string moved on; arrived, «Клієнт забрав» its sheet (orders task list, P0-2; «Усе на бірці» sections task list, P0-2, P0-3)", async ({
   page,
 }) => {
   const server: Server = { order: order(), sent: [] };
   await open(page, server);
-  await page
-    .getByLabel("Номер ТТН (можна дописати пізніше)")
-    .fill(" 0500012345678 ");
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await send(page, " 0500012345678 ");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // What it did takes the cursor: the sheet went with the card it was on
+  // (review, 2026-11-01).
   await expect(
     page.getByText("Відправлено · ТТН 0500012345678", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Відправлено", { exact: true })).toBeVisible();
+  ).toBeFocused();
+  await expect(standing(page)).toHaveText("Відправлено");
+  await expect(passed(page)).toHaveText(["До відправлення"]);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
   // Sent, nothing held in reserve any more.
   await expect(page.getByText(/^Товар у резерві/)).toHaveCount(0);
-  await expect(panel(page).getByRole("button")).toHaveText("Прибув на пошту");
   await readTheAnswer(page);
-  await panel(page).getByRole("button", { name: "Прибув на пошту" }).click();
+  await pressMain(page, "Прибув на пошту");
   await expect(
     page.getByRole("status").filter({ hasText: /^Прибув на пошту$/ }),
   ).toBeVisible();
@@ -443,21 +657,26 @@ test("sent with its waybill, then arrived: what is sent is as before, each a buz
     },
     { step: "arrive", body: { command_id: expect.any(String) } },
   ]);
-  // Arrived: «Клієнт забрав» by its ways, its money's words on its step.
-  await expect(
-    page.getByRole("group", { name: "Клієнт забрав — як оплачено?" }),
-  ).toBeVisible();
-  await expect(page.getByText(/^Продаж записуємо/)).toBeVisible();
+  await expect(standing(page)).toHaveText("Прибув на пошту");
+  // Arrived: no line on the card; «Клієнт забрав» by its ways, its money's
+  // words in its sheet.
+  await expect(page.getByText(/^Продаж записуємо/)).toHaveCount(0);
+  await readTheAnswer(page);
+  const taking = await ways(page);
+  await expect(taking.getByText(/^Продаж записуємо/)).toBeVisible();
+  // Its ways are never the MainButton.
+  await noMain(page);
 });
 
-test("sent without a waybill says it may come later; refused, a buzz of its own and why brought to the finger (orders task list, P0-2)", async ({
+test("sent without a waybill says it may come later; refused, a buzz of its own and why brought to the finger in the sheet (orders task list, P0-2; «Усе на бірці» sections task list, P0-3)", async ({
   page,
 }) => {
   const server: Server = { order: order(), sent: [], refuse: true };
   await open(page, server);
   const read = server.reads ?? 0;
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
-  const why = page.getByRole("alert");
+  await send(page);
+  const sending = page.getByRole("dialog", { name: "Відправити" });
+  const why = sending.getByRole("alert");
   await expect(why).toBeFocused();
   // The owner's words for a conflict (2026-10-24, after #128; P1-2).
   await expect(why).toHaveText(
@@ -468,11 +687,10 @@ test("sent without a waybill says it may come later; refused, a buzz of its own 
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "error" },
   ]);
-  await expect(
-    page.getByText("До відправлення", { exact: true }),
-  ).toBeVisible();
+  await expect(standing(page)).toHaveText("До відправлення");
   server.refuse = false;
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await pressMain(page, "Відправлено");
+  await expect(sending).toHaveCount(0);
   await expect(
     page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
   ).toBeVisible();
@@ -500,7 +718,7 @@ for (const [pressed, before, now, word] of [
   ["Прибув на пошту", "DISPATCHED", "RETURNED", "Повернено на склад"],
   ["Скасувати замовлення", "READY_TO_DISPATCH", "DISPATCHED", "Відправлено"],
 ] as const)
-  test(`«${pressed}» on an order another phone already made «${word}»: not recorded, said with what it is now, focused; the card and the list read again (orders task list, P1-2)`, async ({
+  test(`«${pressed}» on an order another phone already made «${word}»: not recorded, said with what it is now, focused, its sheet closed; the card and the list read again (orders task list, P1-2)`, async ({
     page,
   }) => {
     const action =
@@ -522,21 +740,26 @@ for (const [pressed, before, now, word] of [
         .getByRole("button", { name: "Скасувати замовлення", exact: true })
         .click();
       await page.getByRole("button", { name: "Так, скасувати" }).click();
-    } else await panel(page).getByRole("button", { name: pressed }).click();
+    } else if (action === "dispatch") await send(page);
+    else await pressMain(page, pressed);
     const why = page.getByRole("alert");
     await expect(why).toHaveText(
       `Не записано: замовлення вже «${word}» — картку оновлено.`,
     );
     await expect(why).toBeFocused();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await buzzes(page)).toEqual([
       { type: "notification", notification_type: "error" },
     ]);
-    // The card as it is now: its pill, and no longer the step pressed.
+    // The card as it is now: where it stands, and no longer the step
+    // pressed.
     await expect.poll(() => server.reads ?? 0).toBeGreaterThan(reads);
-    await expect(page.locator(".order-status .badge")).toHaveText(word);
-    await expect(
-      page.getByRole("button", { name: pressed, exact: true }),
-    ).toHaveCount(0);
+    await expect(standing(page)).toHaveText(word);
+    if (action === "cancel")
+      await expect(
+        page.getByRole("button", { name: pressed, exact: true }),
+      ).toHaveCount(0);
+    else await noMain(page);
     await expect.poll(() => server.listReads ?? 0).toBeGreaterThan(lists);
     // Never the shared words.
     await expect(page.getByText(/поточний статус замовлення/)).toHaveCount(0);
@@ -575,9 +798,7 @@ test("where a closed order goes is not changed: said so, and the card read again
   );
   await expect(why).toBeFocused();
   await expect.poll(() => server.reads ?? 0).toBeGreaterThan(reads);
-  await expect(page.locator(".order-status .badge")).toHaveText(
-    "Клієнт забрав",
-  );
+  await expect(passed(page).last()).toHaveText("Клієнт забрав");
 });
 
 test("a shipping change whose answer never came, resent after the order closed: says which was not recorded, and why (orders task list, P1-2)", async ({
@@ -629,7 +850,7 @@ test("a step whose answer never came, met by a conflict on its check: still unco
 }) => {
   const server: Server = { order: order(), sent: [], lose: true };
   await open(page, server);
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await send(page);
   const retry = page.getByRole("button", {
     name: "Перевірити результат замовлення",
   });
@@ -674,8 +895,7 @@ for (const [what, answer, said] of [
   }) => {
     const server: Server = { order: order(), sent: [], lose: true };
     await open(page, server);
-    await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("НП");
-    await panel(page).getByRole("button", { name: "Відправлено" }).click();
+    await send(page, "НП");
     const retry = page.getByRole("button", {
       name: "Перевірити результат замовлення",
     });
@@ -686,7 +906,72 @@ for (const [what, answer, said] of [
     await expect(retry).toHaveCount(0);
   });
 
-test("a waybill of no digit or Latin letter: said as the field's own fault, the field kept (orders task list, P1-2)", async ({
+test("a waybill another order has: recorded with a warning's buzz, the sheet kept with what to check over the order sent, «Готово» closes it, the card names the other (owner decision, 2026-10-01; «Усе на бірці» sections task list, P0-3)", async ({
+  page,
+}) => {
+  const ready = order();
+  const other = randomUUID();
+  const sent = {
+    status: "DISPATCHED",
+    waybill: "20451234",
+    same_waybill: [
+      {
+        id: other,
+        status: "DISPATCHED",
+        created_at: ago(1),
+        display_name: "Ріо графіт",
+        size_label: "L",
+        quantity: 1,
+        lines: 1,
+      },
+    ],
+  };
+  const server: Server = {
+    order: ready,
+    sent: [],
+    answer: { status: 200, json: { ...ready, ...sent }, becomes: sent },
+  };
+  await open(page, server);
+  await send(page, "20451234");
+  const sending = page.getByRole("dialog", { name: "Відправити" });
+  // Saved anyway: several orders may go in one parcel.
+  await expect(sending.locator(".send-same")).toHaveText(
+    "Ця ТТН є також у замовленні — перевірте, чи це один пакунок.",
+  );
+  await expect(sending.locator(".send-same svg")).toHaveCount(1);
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "warning" },
+  ]);
+  // Sent: the field as it was, nothing more to send from it.
+  await expect(
+    sending.getByLabel("Номер ТТН (можна дописати пізніше)"),
+  ).toHaveJSProperty("readOnly", true);
+  await expect(standing(page)).toHaveText("Відправлено");
+  // «Готово» pressed a while later, and again the moment the card's
+  // «Прибув на пошту» stands in its place: let go (review, 2026-11-01).
+  await wait(page, 800);
+  await pressAsShown(page, "Прибув на пошту");
+  await pressMain(page, "Готово");
+  await expect(sending).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Відправлено/ }),
+  ).toBeFocused();
+  await wait(page, 300);
+  expect(server.sent.map((each) => each.step)).toEqual(["dispatch"]);
+  // Which, on the card.
+  await expect(
+    page
+      .getByRole("list", { name: "Замовлення з цією ТТН" })
+      .locator(".sale-goods"),
+  ).toHaveText("Ріо графіт · L");
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({
+      text: "Прибув на пошту",
+    });
+});
+
+test("a waybill of no digit or Latin letter: said as the field's own fault, the field kept in its sheet (orders task list, P1-2; «Усе на бірці» sections task list, P0-3)", async ({
   page,
 }) => {
   const server: Server = {
@@ -703,10 +988,10 @@ test("a waybill of no digit or Latin letter: said as the field's own fault, the 
   };
   await open(page, server);
   // Its letters Latin, as a waybill's: «НП» alone is none.
-  const field = page.getByLabel("Номер ТТН (можна дописати пізніше)");
-  await field.fill("НП");
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
-  const why = page.getByRole("alert");
+  await send(page, "НП");
+  const sending = page.getByRole("dialog", { name: "Відправити" });
+  const field = sending.getByLabel("Номер ТТН (можна дописати пізніше)");
+  const why = sending.getByRole("alert");
   await expect(why).toHaveText(
     "Номер ТТН має містити цифри або латинські літери. Перевірте його.",
   );
@@ -751,9 +1036,11 @@ test("lines with their sums: two of a coat less its discount, «за 1 шт.» f
   ]);
   await expect(lines.nth(1).locator(".sale-meta")).toHaveCount(0);
   await expect(page.locator(".order-total .sum")).toHaveText("2 360,00 грн");
-  // The panel names it as its title does.
-  await expect(panel(page).locator(".pay-what")).toHaveText(
-    "Лоран шоколад · M × 2 + ще 1 · Нова пошта",
+  // «Відправити» names each line of the parcel.
+  await pressMain(page, "Відправити");
+  const sending = await sheet(page, "Відправити");
+  await expect(sending.locator(".send-parcel")).toHaveText(
+    "У посилці: Лоран шоколад · M × 2, Пальто Ірис · L",
   );
 });
 
@@ -762,8 +1049,9 @@ test("a step whose answer never came names its step and its order, and is never 
 }) => {
   const server: Server = { order: order(), sent: [], lose: true };
   await open(page, server);
-  await page.getByLabel("Номер ТТН (можна дописати пізніше)").fill("20451234");
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await send(page, "20451234");
+  // Kept: the sheet gone, the banner says it.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   const again = page.getByRole("button", {
     name: "Перевірити результат замовлення",
   });
@@ -824,7 +1112,7 @@ test("a step answered whose order could not be read says it is recorded, never t
   const server: Server = { order: order(), sent: [] };
   await open(page, server);
   server.loseRead = true;
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await send(page);
   const again = page.getByRole("button", { name: "Оновити результат" });
   await expect(again).toBeEnabled();
   const banner = page.locator("section.notice", {
@@ -857,24 +1145,69 @@ test("while a step's first press is on its way, no banner says the server did no
     }),
   };
   await open(page, server);
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
+  await pressMain(page, "Відправити");
+  const sending = await sheet(page, "Відправити");
+  // «Відправлено» pressed twice before the first is drawn: one asked, the
+  // sheet kept while it is (review, 2026-11-01).
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, is_active: true, text: "Відправлено" });
+  await page.evaluate(() => {
+    for (let press = 0; press < 2; press += 1)
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+  });
   await expect.poll(() => server.sent.length).toBe(1);
+  await wait(page, 300);
+  await expect(sending).toBeVisible();
   await expect(page.getByText(/сервер не відповів/)).toHaveCount(0);
   await expect(page.locator("section.notice h3")).toHaveCount(0);
+  // Telegram's button turns, its words kept, and takes no second press.
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({
+      is_visible: true,
+      is_active: false,
+      is_progress_visible: true,
+      text: "Відправлено",
+    });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
   release();
   await expect(
     page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
   ).toBeVisible();
+  expect(server.sent).toHaveLength(1);
 });
 
-test("a closed order, and an order seen by whoever may not step it, have no panel (orders task list, P0-2)", async ({
+test("a closed order, and an order seen by whoever may not step it, have no MainButton (orders task list, P0-2)", async ({
   page,
 }) => {
   await open(page, {
     order: order({ status: "COLLECTED", payment_method: "CARD" }),
     sent: [],
   });
-  await expect(page.getByText("Клієнт забрав", { exact: true })).toBeVisible();
+  // Collected: every place passed, its last knot tied.
+  await expect(passed(page)).toHaveText([
+    "До відправлення",
+    "Відправлено",
+    "Прибув на пошту",
+    "Клієнт забрав",
+  ]);
+  await expect(page.locator(".knot-string .knot-loop")).toHaveCount(1);
+  await expect(page.locator(".knot-string [aria-current]")).toHaveCount(0);
+  await expect(page.locator(".order-title")).toBeVisible();
+  await noMain(page);
   await expect(panel(page)).toHaveCount(0);
 
   await page.route("**/api/v1/me", async (route) => {
@@ -900,14 +1233,13 @@ test("a closed order, and an order seen by whoever may not step it, have no pane
   await openStore(page, "Основний MAIN");
   await section(page, "Замовлення");
   await page.locator(".order-row").first().click();
-  await expect(
-    page.getByText("До відправлення", { exact: true }),
-  ).toBeVisible();
+  await expect(standing(page)).toHaveText("До відправлення");
+  await noMain(page);
   await expect(panel(page)).toHaveCount(0);
   await expect(page.getByLabel(/Номер ТТН/)).toHaveCount(0);
 });
 
-test("«Клієнт забрав»: five ways in two rows, each the step itself, nothing chosen first; card, and the sale said large with what to do, the server's sum, a buzz; later a line (orders task list, P0-3)", async ({
+test("«Клієнт забрав»: its sheet of five ways in two rows, each the step itself, nothing chosen first; card, and the sale said large with what to do, the server's sum, a buzz, the string tied; later a line (orders task list, P0-3; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -917,15 +1249,16 @@ test("«Клієнт забрав»: five ways in two rows, each the step itself
     collectedTotal: "1100.00",
   };
   await open(page, server);
-  const ways = page.getByRole("group", {
-    name: "Клієнт забрав — як оплачено?",
-  });
-  await expect(ways.locator(".pay-what")).toHaveText(
+  const taking = await ways(page);
+  await expect(
+    taking.getByRole("heading", { name: "Клієнт забрав — як оплачено?" }),
+  ).toBeVisible();
+  await expect(taking.locator(".pay-what")).toHaveText(
     "Лоран шоколад · M · Нова пошта",
   );
-  await expect(ways.locator(".pay-total")).toHaveText("Разом 1 200,15 грн");
-  const now = ways.getByRole("group", { name: "Зараз, у магазині" });
-  const ahead = ways.getByRole("group", { name: "Наперед чи перевізнику" });
+  await expect(taking.locator(".pay-total")).toHaveText("Разом 1 200,15 грн");
+  const now = taking.getByRole("group", { name: "Зараз, у магазині" });
+  const ahead = taking.getByRole("group", { name: "Наперед чи перевізнику" });
   await expect(now.getByRole("button")).toHaveText([
     "Готівка",
     "Картка",
@@ -935,26 +1268,35 @@ test("«Клієнт забрав»: five ways in two rows, each the step itself
     "Переказ наперед",
     "Накладений платіж",
   ]);
-  // Two rows, each under the thumb's size, all on the screen.
+  // Nothing chosen for the seller.
+  await expect(taking.locator("[aria-pressed='true']")).toHaveCount(0);
+  // Two rows, each under the thumb's size, all on the screen — «Оплата
+  // частинами» under them, the fifth way still in sight.
   const rows = [
     await now.getByRole("button").first().boundingBox(),
     await ahead.getByRole("button").first().boundingBox(),
   ];
   expect(rows[0] && rows[1] && rows[1].y > rows[0].y).toBe(true);
-  for (const way of await ways.getByRole("button").all()) {
+  for (const way of await taking
+    .locator(".collect-ways")
+    .getByRole("button")
+    .all()) {
     expect((await way.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     await expect(way).toBeInViewport({ ratio: 1 });
   }
+  await expect(taking.getByLabel("Оплата частинами")).toBeVisible();
   // One line above them, never the drawer's words.
   await expect(
-    page.getByText("Продаж записуємо, коли покупець забрав товар.", {
+    taking.getByText("Продаж записуємо, коли покупець забрав товар.", {
       exact: true,
     }),
   ).toBeVisible();
+  await page.screenshot({ path: "test-results/order-collect-sheet.png" });
   expect(server.sent).toEqual([]);
   await now.getByRole("button", { name: "Картка", exact: true }).click();
   const heading = page.getByRole("heading", { name: "Продаж записано" });
   await expect(heading).toBeFocused();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator(".order-collected .way-pill")).toHaveText(
     "Картка · Проведіть на терміналі",
   );
@@ -972,20 +1314,26 @@ test("«Клієнт забрав»: five ways in two rows, each the step itself
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
-  await expect(panel(page)).toHaveCount(0);
+  // Tied: nothing is left to do on it.
+  await expect(passed(page).last()).toHaveText("Клієнт забрав");
+  await expect(page.locator(".knot-string .knot-loop")).toHaveCount(1);
+  await noMain(page);
   await page.screenshot({ path: "test-results/order-collected-card.png" });
   // «До замовлень», and the order seen again: a line.
   await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Показати завершені" }).click();
+  await page
+    .getByRole("group", { name: "Замовлення", exact: true })
+    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .click();
   await page.locator(".order-row").first().click();
   await expect(page.getByText("Продаж записано · Картка")).toBeVisible();
   await expect(page.locator(".order-collected")).toHaveCount(0);
 });
 
-test("«Клієнт забрав» is three taps from the menu: «Замовлення», the order and its way (orders task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
+test("«Клієнт забрав» is four taps from the menu: «Замовлення», «Прибув на пошту», its row's «Клієнт забрав» and its way (orders task list, P0-3; «Усе на бірці» sections task list, P0-1)", async ({
   page,
 }) => {
   const server: Server = { order: order({ status: "ARRIVED" }), sent: [] };
@@ -1005,8 +1353,18 @@ test("«Клієнт забрав» is three taps from the menu: «Замовл�
     );
   });
   await section(page, "Замовлення");
-  await page.locator(".order-row").first().click();
   await page
+    .getByRole("group", { name: "Замовлення", exact: true })
+    .getByRole("button", { name: /^Прибув на пошту/ })
+    .click();
+  // The list just changed under the finger: a tap now is let go.
+  await readTheAnswer(page);
+  await page
+    .getByRole("list", { name: "Прибув на пошту" })
+    .getByRole("button", { name: "Клієнт забрав" })
+    .click();
+  const taking = await sheet(page, "Клієнт забрав — як оплачено?");
+  await taking
     .getByRole("group", { name: "Зараз, у магазині" })
     .getByRole("button", { name: "Готівка", exact: true })
     .click();
@@ -1015,60 +1373,77 @@ test("«Клієнт забрав» is three taps from the menu: «Замовл�
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(3);
+  ).toBe(4);
 });
 
-/** Clicks `name` in the panel the moment it is drawn, as a double tap's
- * second half would land: within milliseconds of the step's answer. */
+/** Taps `name` in a sheet the moment it is drawn, as a double tap's
+ * second half would land: within milliseconds of the press that opened it.
+ * A finger's tap, never a key's press. */
 async function tapAsDrawn(page: Page, name: string): Promise<void> {
   await page.evaluate((wanted) => {
     const watch = new MutationObserver(() => {
       const button = [
-        ...document.querySelectorAll<HTMLButtonElement>(".order-panel button"),
+        ...document.querySelectorAll<HTMLButtonElement>(".sheet button"),
       ].find((each) => each.textContent.trim() === wanted);
       if (!button) return;
       watch.disconnect();
-      button.click();
+      button.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }),
+      );
     });
     watch.observe(document.body, { childList: true, subtree: true });
   }, name);
 }
 
-test("a tap meant for the step just taken, landing on the next step's button drawn in its place, is let go (review, 2026-10-24)", async ({
+/** A moment, as the phone's clock counts it. */
+async function wait(page: Page, ms: number): Promise<void> {
+  await page.evaluate(
+    (delay) =>
+      new Promise((done) => {
+        setTimeout(done, delay);
+      }),
+    ms,
+  );
+}
+
+test("a press meant for the step just taken, landing on the MainButton the next step took, is let go; a way tapped as its sheet is drawn too (review, 2026-10-24; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
   const server: Server = { order: order(), sent: [] };
   await open(page, server);
-  // «Відправлено», and «Прибув на пошту» at once in its place.
-  await tapAsDrawn(page, "Прибув на пошту");
-  await panel(page).getByRole("button", { name: "Відправлено" }).click();
-  await expect(panel(page).getByRole("button")).toHaveText("Прибув на пошту");
-  await page.evaluate(
-    () =>
-      new Promise((done) => {
-        setTimeout(done, 300);
-      }),
-  );
+  // «Відправити», and the MainButton pressed again the moment the sheet's
+  // «Відправлено» stands in its place: let go, nothing sent.
+  await pressAsShown(page, "Відправлено");
+  await pressMain(page, "Відправити");
+  await sheet(page, "Відправити");
+  expect(server.sent).toHaveLength(0);
+  // «Відправлено», and the MainButton pressed again the moment it says
+  // «Прибув на пошту».
+  await pressAsShown(page, "Прибув на пошту");
+  await pressMain(page, "Відправлено");
+  await expect(
+    page.getByText("Відправлено. ТТН можна вписати пізніше.", { exact: true }),
+  ).toBeVisible();
+  await wait(page, 300);
   expect(server.sent.map((each) => each.step)).toEqual(["dispatch"]);
-  // Pressed a moment later, as meant: taken.
-  await page.evaluate(
-    () =>
-      new Promise((done) => {
-        setTimeout(done, 700);
-      }),
-  );
+  // Pressed a moment later, as meant: taken — and «Клієнт забрав» pressed
+  // the moment it is shown, let go.
+  await wait(page, 700);
+  await pressAsShown(page, "Клієнт забрав");
+  await pressMain(page, "Прибув на пошту");
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Прибув на пошту$/ }),
+  ).toBeVisible();
+  await wait(page, 300);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await wait(page, 700);
   await tapAsDrawn(page, "Накладений платіж");
-  await panel(page).getByRole("button", { name: "Прибув на пошту" }).click();
+  await pressMain(page, "Клієнт забрав");
   await expect(
     page.getByRole("group", { name: "Наперед чи перевізнику" }),
   ).toBeVisible();
-  await page.evaluate(
-    () =>
-      new Promise((done) => {
-        setTimeout(done, 300);
-      }),
-  );
-  // Never a sale by a tap meant for «Прибув на пошту».
+  await wait(page, 300);
+  // Never a sale by a tap meant for «Клієнт забрав».
   expect(server.sent.map((each) => each.step)).toEqual(["dispatch", "arrive"]);
 });
 
@@ -1081,10 +1456,21 @@ test("a card's «Клієнт забрав» whose answer never came, confirmed 
     lose: true,
   };
   await open(page, server);
-  await page
+  const taking = await ways(page);
+  await taking
     .getByRole("group", { name: "Зараз, у магазині" })
     .getByRole("button", { name: "Картка", exact: true })
     .click();
+  // Kept: the sheet gone, the banner says it, and the step held while it
+  // stands, as the dock's is (review, 2026-11-01).
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({
+      is_visible: true,
+      is_active: false,
+      text: "Клієнт забрав",
+    });
   await page
     .getByRole("button", { name: "Перевірити результат замовлення" })
     .click();
@@ -1105,7 +1491,7 @@ test("a card's «Клієнт забрав» whose answer never came, confirmed 
   expect(server.sent[1]).toEqual(server.sent[0]);
 });
 
-test("«Клієнт забрав» in parts: terms not taken said over the panel, nothing sent; the part paid now large, alone, and what is owed (orders task list, P0-3)", async ({
+test("«Клієнт забрав» in parts: terms not taken said over the ways, nothing sent; the part paid now large, alone, and what is owed (orders task list, P0-3; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1114,24 +1500,25 @@ test("«Клієнт забрав» in parts: terms not taken said over the pane
     sent: [],
   };
   await open(page, server);
-  await page.getByLabel("Оплата частинами").check();
-  await page.getByLabel("Ім’я покупця").fill("Оксана");
-  await page.getByLabel("Телефон покупця").fill("0501234567");
-  await page.getByLabel("Сплачує зараз, грн").fill("3000");
-  const cash = page
+  const taking = await ways(page);
+  await taking.getByLabel("Оплата частинами").check();
+  await taking.getByLabel("Ім’я покупця").fill("Оксана");
+  await taking.getByLabel("Телефон покупця").fill("0501234567");
+  await taking.getByLabel("Сплачує зараз, грн").fill("3000");
+  const cash = taking
     .getByRole("group", { name: "Зараз, у магазині" })
     .getByRole("button", { name: "Готівка", exact: true });
   await cash.click();
-  // Why, at the finger, over the panel — never under it.
-  const why = page.getByRole("alert");
+  // Why, at the finger, over the ways — never under them.
+  const why = taking.getByRole("alert");
   await expect(why).toContainText("Покупець сплачує все одразу");
   await expect(why).toBeFocused();
   const box = await why.boundingBox();
-  const bar = await panel(page).boundingBox();
-  expect(box && bar && box.y + box.height <= bar.y + 1).toBe(true);
+  const first = await taking.locator(".collect-ways").boundingBox();
+  expect(box && first && box.y + box.height <= first.y + 1).toBe(true);
   expect(server.sent).toEqual([]);
-  await page.getByLabel("Сплачує зараз, грн").fill("500");
-  await expect(panel(page).locator(".pay-total")).toHaveText(
+  await taking.getByLabel("Сплачує зараз, грн").fill("500");
+  await expect(taking.locator(".pay-total")).toHaveText(
     /^Зараз 500,00\sгрн · винен 2\s500,00\sгрн$/,
   );
   await cash.click();
@@ -1193,7 +1580,7 @@ function stamp(iso: string): string {
   return `${two(at.getDate())}.${two(at.getMonth() + 1)}, ${two(at.getHours())}:${two(at.getMinutes())}`;
 }
 
-test("where it went, a row a version: what it was, when by the phone's clock and by whom, how it went on the right (orders task list, P1-3)", async ({
+test("where it went, folded, then a row a version: what it was, when by the phone's clock and by whom, how it went on the right; the string's days, ordered and last sent (orders task list, P1-3; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1202,8 +1589,10 @@ test("where it went, a row a version: what it was, when by the phone's clock and
     "2026-02-14T19:41:00.000Z",
     "2026-11-30T23:59:00.000Z",
   ];
+  const created = ago(3);
   await open(page, {
     order: order({
+      created_at: created,
       status: "DISPATCHED",
       destination: "ABROAD",
       carrier: null,
@@ -1240,7 +1629,20 @@ test("where it went, a row a version: what it was, when by the phone's clock and
     }),
     sent: [],
   });
+  // Sent, the day of its last sending under «Відправлено»; none for the
+  // two after, whose days the server keeps not.
+  await expect(standing(page)).toHaveText("Відправлено");
+  await expect(passed(page)).toHaveText(["До відправлення"]);
+  await expect(page.locator(".knot-string .knot-date")).toHaveText([
+    short(created),
+    short(times[1] ?? ""),
+  ]);
+  const folded = page.getByRole("button", { name: "Історія доставки" });
+  await expect(folded).toHaveAttribute("aria-expanded", "false");
   const rows = page.getByRole("list", { name: "Історія доставки" });
+  await expect(rows).toHaveCount(0);
+  await folded.click();
+  await expect(folded).toHaveAttribute("aria-expanded", "true");
   await expect(rows.getByRole("listitem")).toHaveCount(3);
   await expect(rows.locator(".shipping-kind")).toHaveText([
     "Вказано при створенні",
@@ -1264,10 +1666,156 @@ test("where it went, a row a version: what it was, when by the phone's clock and
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
-  // Abroad, sent: nothing to «вписати» — changed.
+  // Abroad, sent: nothing to «вписати» — changed; no waybill to copy.
   await expect(
     page.getByRole("button", { name: "Змінити доставку", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Скопіювати ТТН" }),
+  ).toHaveCount(0);
+  // Folded again.
+  await folded.click();
+  await expect(rows).toHaveCount(0);
+});
+
+test("«Скопіювати ТТН» puts the waybill exactly as it was written on the clipboard, with a buzz and «ТТН скопійовано»; refused, says to copy it by hand («Усе на бірці» sections task list, P0-2)", async ({
+  page,
+}) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Written as it was typed: the server keeps it so.
+  const waybill = "2045 0012 3456 78";
+  await open(page, {
+    order: order({ status: "DISPATCHED", waybill }),
+    sent: [],
+  });
+  await expect(page.locator(".order-goes")).toHaveText(
+    `Нова пошта · ТТН ${waybill}`,
+  );
+  const copy = page.getByRole("button", { name: "Скопіювати ТТН" });
+  expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await copy.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: /^ТТН скопійовано$/ }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    waybill,
+  );
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "success" },
+  ]);
+  // The clipboard refused.
+  await page.addInitScript(() => {
+    Clipboard.prototype.writeText = () =>
+      Promise.reject(new Error("Not allowed"));
+  });
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await toOrder(page, "DISPATCHED");
+  await copy.click();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: /^Не вдалося скопіювати — виділіть ТТН і скопіюйте її\.$/,
+    }),
+  ).toBeVisible();
+  expect(await buzzes(page)).toEqual([]);
+});
+
+test("«Відправити»'s sheet: the parcel by its warehouses, Нова пошта's one line and Укрпошта's none, abroad its note and no customer's data; Enter puts the keyboard away and sends nothing; while typed Telegram asks before closing, and its «Назад» closes the sheet («Усе на бірці» sections task list, P0-3)", async ({
+  page,
+}) => {
+  await warehouses(page);
+  const server: Server = {
+    order: order({
+      items: [
+        { ...item("Кокон графіт", "M"), source_location_id: OWN[0] },
+        { ...item("Ріо графіт", null), source_location_id: NEXT[0] },
+      ],
+    }),
+    sent: [],
+  };
+  // A Telegram that asks before closing: from 6.2.
+  await open(page, server, undefined, "7.0");
+  await pressMain(page, "Відправити");
+  let sending = await sheet(page, "Відправити");
+  await expect(sending).toHaveAccessibleDescription(
+    "У посилці: Кокон графіт · M · склад «Свій», Ріо графіт · розмір невідомий · склад «Сусідній»",
+  );
+  await expect(
+    sending.getByText("Пишемо як є — з Новою поштою не звіряємо.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const field = sending.getByLabel("Номер ТТН (можна дописати пізніше)");
+  await expect(field).toHaveAttribute("enterkeyhint", "done");
+  // Never a number pad: a waybill may hold Latin letters.
+  await expect(field).not.toHaveAttribute("inputmode", /.+/);
+  const closing = (): Promise<unknown[]> =>
+    page.evaluate(() =>
+      (window as unknown as { told: [string, unknown][] }).told
+        .filter(([event]) => event === "web_app_setup_closing_behavior")
+        .map(([, data]) => data),
+    );
+  await field.click();
+  await page.keyboard.type("20451234");
+  await expect.poll(closing).toContainEqual({ need_confirmation: true });
+  await page.keyboard.press("Enter");
+  await expect(field).not.toBeFocused();
+  await wait(page, 300);
+  expect(server.sent).toEqual([]);
+  // Telegram's «Назад»: the sheet closed, nothing sent, the question gone.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(sending).toHaveCount(0);
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual({
+      need_confirmation: false,
+    });
+  await expect(standing(page)).toHaveText("До відправлення");
+  expect(server.sent).toEqual([]);
+  await expect.poll(() => main(page)).toMatchObject({ text: "Відправити" });
+
+  // Укрпошта: no line of Нова пошта's.
+  server.order = order({ carrier: "UKRPOSHTA" });
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await toOrder(page, "READY_TO_DISPATCH");
+  await pressMain(page, "Відправити");
+  sending = await sheet(page, "Відправити");
+  await expect(sending.locator(".send-note")).toHaveCount(0);
+  // Abroad: where and how, never the customer's name or phone.
+  server.order = order({ destination: "ABROAD", carrier: null });
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await toOrder(page, "READY_TO_DISPATCH");
+  await pressMain(page, "Відправити");
+  sending = await sheet(page, "Відправити");
+  const note = sending.getByLabel(
+    "Куди і як відправили: місто, країна, спосіб (можна дописати пізніше)",
+  );
+  await expect(note).toBeFocused();
+  await expect(note).toHaveAccessibleDescription(
+    "Без імен і телефонів покупців.",
+  );
+  await expect(sending.locator(".send-note")).toHaveCount(0);
+  await note.fill("Варшава, Польща, InPost");
+  await pressMain(page, "Відправлено");
+  await expect(sending).toHaveCount(0);
+  expect(server.sent).toEqual([
+    {
+      step: "dispatch",
+      body: {
+        command_id: expect.any(String),
+        abroad_note: "Варшава, Польща, InPost",
+      },
+    },
+  ]);
 });
 
 test("the same waybill's other orders: each its row — its goods as its card's title, since when, its pill; several said so; one kept from before «Замовлення»; a tap opens it at its top (orders task list, P1-3)", async ({
@@ -1336,7 +1884,7 @@ test("the same waybill's other orders: each its row — its goods as its card's 
     `з\u00a0${short(made)}`,
   );
   await expect(rows.nth(1).locator(".sale-meta")).toHaveCount(0);
-  await expect(rows.locator(".badge")).toHaveText([
+  await expect(rows.locator(".sticker")).toHaveText([
     "До відправлення",
     "Відправлено",
   ]);
@@ -1361,9 +1909,7 @@ test("the same waybill's other orders: each its row — its goods as its card's 
   const back = page
     .getByRole("list", { name: "Замовлення з цією ТТН" })
     .getByRole("button");
-  await page.evaluate(() => {
-    window.scrollTo(0, 120);
-  });
+  await back.scrollIntoViewIfNeeded();
   await expect(back).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   await back.click();
@@ -1437,7 +1983,7 @@ test("a tap carried from «Змінити доставку» onto «Зберег
   await expect(page.locator(".order-row").first()).toBeVisible();
 });
 
-test("a waybill written later on a stubbed parcel: four taps from the menu with the typing, the cursor in its field, back on the card with a buzz (orders task list, P1-3; «Усе на бірці» task list, P0-4)", async ({
+test("a waybill written later on a stubbed parcel: five taps from the menu with the typing — «Відправлено» among them — the cursor in its field, back on the card with a buzz (orders task list, P1-3; «Усе на бірці» task list, P0-4; sections task list, P0-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1471,8 +2017,7 @@ test("a waybill written later on a stubbed parcel: four taps from the menu with 
       true,
     );
   });
-  await section(page, "Замовлення");
-  await page.locator(".order-row").first().click();
+  await toOrder(page, "DISPATCHED");
   await page
     .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
     .click();
@@ -1491,7 +2036,7 @@ test("a waybill written later on a stubbed parcel: four taps from the menu with 
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(4);
+  ).toBe(5);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -1506,9 +2051,12 @@ test("a waybill written later on a stubbed parcel: four taps from the menu with 
       },
     },
   ]);
-  await expect(page.locator(".order-context")).toHaveText(
-    /^Нова пошта · ТТН 20451234 · з/,
+  await expect(page.locator(".order-goes")).toHaveText(
+    "Нова пошта · ТТН 20451234",
   );
+  await expect(
+    page.getByRole("button", { name: "Скопіювати ТТН" }),
+  ).toBeVisible();
 });
 
 /** Two warehouses, the store's own and the neighbour's, as
@@ -1560,7 +2108,7 @@ function cameBack(): Stubbed {
   });
 }
 
-test("goods come back as their own step: each warehouse they go back to named, six taps from the menu with the typing, the result a sentence a warehouse with a buzz (orders task list, P2-4; «Усе на бірці» task list, P0-4)", async ({
+test("goods come back as their own step: each warehouse they go back to named, seven taps from the menu with the typing — «Відправлено» among them — the result a sentence a warehouse with a buzz (orders task list, P2-4; «Усе на бірці» task list, P0-4; sections task list, P0-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1595,8 +2143,7 @@ test("goods come back as their own step: each warehouse they go back to named, s
       true,
     );
   });
-  await section(page, "Замовлення");
-  await page.locator(".order-row").first().click();
+  await toOrder(page, "DISPATCHED");
   const row = page.getByRole("button", { name: "Товар повернувся на склад" });
   await row.click();
   await expect(
@@ -1633,7 +2180,7 @@ test("goods come back as their own step: each warehouse they go back to named, s
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(6);
+  ).toBe(7);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -1759,9 +2306,7 @@ test("a return refused as changed keeps its screen, the reason and the tick; one
     becomes: { status: "RETURNED" },
   };
   await take.click();
-  await expect(page.locator(".order-status .badge")).toHaveText(
-    "Повернено на склад",
-  );
+  await expect(standing(page)).toHaveText("Повернено на склад");
   await expect(
     page.getByRole("heading", { name: "Товар повернувся на склад" }),
   ).toHaveCount(0);
@@ -1956,6 +2501,31 @@ async function contrast(element: Locator): Promise<number> {
   });
 }
 
+/** The string's words at 360 px: each inside its own column, none over the
+ * next, «Відправлено» on one line — never broken (review, 2026-11-01). */
+async function apart(page: Page): Promise<void> {
+  await expect(page.locator(".knots .knot-label")).toHaveCount(4);
+  const words = await page.locator(".knots .knot-label").evaluateAll((labels) =>
+    labels.map((label) => {
+      const box = label.getBoundingClientRect();
+      return {
+        text: label.textContent,
+        left: box.left,
+        right: box.left + label.scrollWidth,
+        high: box.height,
+      };
+    }),
+  );
+  expect(words).toHaveLength(4);
+  for (const [at, word] of words.entries()) {
+    const next = words[at + 1];
+    if (next) expect(word.right).toBeLessThanOrEqual(next.left);
+  }
+  expect(
+    words.find((word) => word.text === "Відправлено")?.high,
+  ).toBeLessThanOrEqual(17);
+}
+
 for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
@@ -1964,21 +2534,55 @@ for (const [name, theme] of [
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
-    await open(page, { order: order(), sent: [] }, theme);
+    await warehouses(page);
+    await open(
+      page,
+      {
+        order: order({
+          items: [
+            { ...item("Лоран шоколад", "M"), source_location_id: OWN[0] },
+          ],
+        }),
+        sent: [],
+      },
+      theme,
+    );
+    await apart(page);
     for (const part of [
       page.locator(".order-title"),
       page.locator(".order-context"),
+      page.locator(".order-number"),
+      page.locator(".knot-string .knot-label").first(),
+      page.locator(".knot-string .knot-label").last(),
+      page.locator(".knot-string .knot-date"),
+      page.locator(".order-section").first(),
       page.locator(".order-line .cash-row-title"),
+      page.locator(".order-line .sale-meta"),
       page.locator(".order-line .history-sum"),
       page.locator(".order-total"),
-      panel(page).locator(".pay-what"),
-      panel(page).getByRole("button"),
+      page.locator(".order-goes"),
+      page.getByRole("button", { name: "Історія доставки" }),
+      page.getByRole("button", { name: "Скасувати замовлення", exact: true }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/order-card-${name}.png` });
+    // «Відправити»'s sheet.
+    await pressMain(page, "Відправити");
+    const sending = await sheet(page, "Відправити");
+    for (const part of [
+      sending.getByRole("heading", { name: "Відправити" }),
+      sending.locator(".send-parcel"),
+      sending.locator(".send-field"),
+      sending.locator(".send-note"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/order-send-${name}.png` });
   });
 
 for (const [name, theme] of [
@@ -1990,16 +2594,17 @@ for (const [name, theme] of [
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
     await open(page, { order: order({ status: "ARRIVED" }), sent: [] }, theme);
-    const ways = page.getByRole("group", {
-      name: "Клієнт забрав — як оплачено?",
-    });
+    const taking = await ways(page);
     for (const part of [
-      ways.locator(".pay-what"),
-      ways.locator(".pay-total"),
-      ways.locator(".pay-caption").first(),
-      ways.locator(".pay-caption").last(),
-      ways.getByRole("button", { name: "Готівка", exact: true }),
-      ways.getByRole("button", { name: "Накладений платіж", exact: true }),
+      taking.getByRole("heading", { name: "Клієнт забрав — як оплачено?" }),
+      taking.locator(".pay-what"),
+      taking.locator(".pay-total"),
+      taking.locator(".hint"),
+      taking.locator(".pay-caption").first(),
+      taking.locator(".pay-caption").last(),
+      taking.getByRole("button", { name: "Готівка", exact: true }),
+      taking.getByRole("button", { name: "Накладений платіж", exact: true }),
+      taking.getByText("Оплата частинами", { exact: true }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     expect(
@@ -2032,11 +2637,14 @@ for (const [name, theme] of [
       ],
     });
     await open(page, { order: ready, sent: [] }, theme);
+    await page.getByRole("button", { name: "Історія доставки" }).click();
     for (const part of [
       page.locator(".same-waybill p"),
       page.locator(".same-waybill .sale-goods"),
       page.locator(".same-waybill .sale-meta"),
-      page.locator(".same-waybill .badge"),
+      page.locator(".same-waybill .sticker"),
+      page.locator(".order-goes"),
+      page.getByRole("button", { name: "Скопіювати ТТН" }),
       page.locator(".shipping-changes-title"),
       page.locator(".shipping-kind"),
       page.locator(".shipping-changes .sale-meta"),

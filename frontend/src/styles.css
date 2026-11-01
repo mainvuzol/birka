@@ -3067,6 +3067,390 @@ html {
 .same-waybill li:last-child .sale-row {
   border-bottom: 0;
 }
+/* The string of places (spec §6.24; «Усе на бірці» sections task list,
+   P0-1, P0-2): four knots of 14 on a 2 px thread, a word of 13/600 under
+   each, its columns as wide as their words — «До відправлення» in two
+   lines at 360 px, never a word broken or one over the next (review,
+   2026-11-01). Passed, a knot is filled in its place's colour; where the
+   order stands, a 3 px ring; to come, hollow. On «Замовлення» it is the
+   filter: a 44 button a knot, the chosen one the ring. */
+.knots {
+  --knot-top: 0px;
+  position: relative;
+  display: grid;
+  /* Each column at least its longest word — a knot's 44 is no floor for
+     it — and what is left shared. */
+  grid-template-columns: repeat(4, minmax(min-content, auto));
+  justify-content: space-between;
+  gap: 0 6px;
+  margin: 12px 0 4px;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: normal;
+}
+.knots::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--knot-top) + 6px);
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--hairline);
+}
+.knot {
+  --tone: var(--ink);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--pencil);
+}
+/* Narrower than the spec's 360 px, a word breaks rather than push the
+   page sideways. */
+@media (max-width: 359px) {
+  .knots {
+    grid-template-columns: repeat(4, minmax(0, auto));
+    overflow-wrap: anywhere;
+  }
+}
+.knot.tone-online {
+  --tone: var(--online);
+}
+.knot.tone-transit {
+  --tone: var(--transit);
+}
+.knot.tone-paid {
+  --tone: var(--paid);
+}
+.knot-dot {
+  position: relative;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.knot-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.knot-count {
+  display: block;
+  min-height: 16px;
+  margin-top: -6px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 16px;
+}
+.knot-date {
+  margin-top: -4px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.knot.done .knot-dot,
+.knot-filter .knot .knot-dot {
+  border-color: var(--tone);
+  background: var(--tone);
+}
+.knot.current .knot-dot,
+.knot-filter .knot[aria-pressed="true"] .knot-dot {
+  border: 3px solid var(--tone);
+  background: var(--paper);
+}
+.knot.done,
+.knot.current,
+.knot-filter .knot[aria-pressed="true"] {
+  color: var(--ink);
+}
+/* Collected: its last knot tied, the loop to its right on the thread. */
+.knot-loop {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 1px);
+  width: 14px;
+  height: 12px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--paid);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.knot-filter {
+  --knot-top: 8px;
+  margin: 8px 0 4px;
+}
+.knot-filter .knot {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  margin: 0;
+  padding: var(--knot-top) 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.knot-sticker {
+  margin: 8px 0 0;
+}
+/* An order's status as a printed sticker (spec §6.18): 28 high, its glyph
+   and its word in its colour, on its colour's ground. */
+.sticker {
+  --tone: var(--ink);
+  --tone-bg: var(--fold);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-xs);
+  background: var(--tone-bg);
+  color: var(--tone);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.sticker.tone-online {
+  --tone: var(--online);
+  --tone-bg: var(--online-bg);
+}
+.sticker.tone-transit {
+  --tone: var(--transit);
+  --tone-bg: var(--transit-bg);
+}
+.sticker.tone-paid {
+  --tone: var(--paid);
+  --tone-bg: var(--paid-bg);
+}
+.sticker.tone-offline {
+  --tone: var(--offline);
+  --tone-bg: var(--offline-bg);
+}
+/* An order a row tag (spec §6.9): 76 high, its eyelet at 14 × 19 by
+   whose turn it is — filled, a ring, a knot — its goods 17/600, how it
+   goes in `meta`, its verb bottom right. The whole tag opens the card; the
+   verb stands over that. */
+.order-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.order-tag {
+  --tone: var(--ink);
+}
+.order-tag.tone-online {
+  --tone: var(--online);
+}
+.order-tag.tone-transit {
+  --tone: var(--transit);
+}
+.order-tag.tone-paid {
+  --tone: var(--paid);
+}
+.order-tag.tone-offline {
+  --tone: var(--offline);
+}
+.order-tag-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  min-height: calc(var(--h-tag) - 2px);
+  padding: 12px 16px 12px 30px;
+}
+.order-tag-eyelet {
+  position: absolute;
+  top: 19px;
+  left: 14px;
+  box-sizing: border-box;
+  width: var(--eyelet);
+  height: var(--eyelet);
+  border-radius: 999px;
+}
+.order-tag.filled .order-tag-eyelet {
+  background: var(--tone);
+}
+.order-tag.ring .order-tag-eyelet {
+  border: 1.5px solid var(--tone);
+}
+.order-tag.tied .order-tag-eyelet .eyelet {
+  position: absolute;
+  inset: 0;
+}
+/* On a tag row the thread's loop hangs under its eyelet, in the row's
+   margin, clear of the words beside it (2026-11-01). */
+.order-tag.tied .eyelet-loop {
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%) rotate(90deg);
+}
+.order-tag.tone-offline .eyelet-loop {
+  stroke: var(--offline);
+}
+.order-tag .order-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: inherit;
+  text-align: left;
+}
+.order-tag .order-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.order-tag .order-row:focus-visible {
+  outline: none;
+}
+.order-tag .order-row:focus-visible::after {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+.order-tag-title {
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+.order-tag-meta {
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.tag-verb {
+  position: relative;
+  z-index: 1;
+}
+/* Those to be sent by the warehouse they are taken from (S16): a label
+   in `meta` 600 over each. */
+.order-place-label {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  color: var(--pencil);
+}
+.orders-none {
+  margin: 16px 0;
+}
+/* The card's two sections, «У посилці» and «Доставка» (S17): a label
+   over each; the waybill as written, «Скопіювати ТТН» beside it, 44. */
+.order-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  color: var(--pencil);
+}
+.order-section {
+  margin: 20px 0 4px;
+  color: var(--pencil);
+}
+.order-delivery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.order-goes {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+.copy-ttn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch);
+  padding: 0 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.copy-ttn .icon {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+.shipping-changes-title[aria-expanded] span {
+  display: inline-block;
+  transition: transform var(--dur-base) var(--ease-standard);
+}
+.shipping-changes-title[aria-expanded="true"] span {
+  transform: rotate(90deg);
+}
+/* The MainButton's place outside Telegram (spec §6.4): 50 high, radius
+   10, the primary; turning while the server is asked. */
+.order-dock .main-mimic,
+.sheet-foot .main-mimic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--h-main-button);
+  border-radius: var(--r-tg);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
+.main-mimic .eyelet-spin {
+  border-color: var(--on-primary);
+  border-top-color: transparent;
+}
+/* «Відправити» (S18): what is in the parcel, the waybill's field 52 in
+   the fold, written as typed, the line under it. */
+.send-parcel {
+  margin: 0 0 12px;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.send-field input {
+  min-height: var(--h-search);
+  background: var(--fold);
+}
+.send-field input.ttn {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.send-note {
+  margin: 8px 0 0;
+  color: var(--pencil);
+}
+.send-same {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.send-same .icon {
+  margin-top: 2px;
+  color: var(--warning);
+}
+/* «Клієнт забрав — як оплачено?» (S17): the sum, the two rows of ways,
+   «Оплата частинами» under them. */
+.collect-parts {
+  margin: 20px 0 0;
+}
 /* The goods come back (orders task list, P2-4): which warehouse each goes
    back to, a line a warehouse, then the reason and the units in hand. */
 .returned-places {
@@ -4226,7 +4610,8 @@ button.day-folded {
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
-.today-verb {
+.today-verb,
+.tag-verb {
   align-self: flex-end;
   min-height: 44px;
   margin-top: 4px;

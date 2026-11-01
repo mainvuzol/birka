@@ -187,6 +187,19 @@ const notTakenTexts: Record<CashBody["command"], string> = {
  */
 export const collectNeedsMethod = "Вкажіть, як оплачено замовлення.";
 
+/** A step refused as its order already moved on — from another phone,
+ * say: the order is no longer where the step is taken. */
+export function movedOn(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  const { reason, status, action } = error.details;
+  return (
+    reason === undefined &&
+    typeof action === "string" &&
+    typeof status === "string" &&
+    Object.hasOwn(statusLabels, status)
+  );
+}
+
 /**
  * Why an order command was not recorded, in the order's words (orders task
  * list, P1-2), as the clause after «Не записано:»; null for a refusal it
@@ -194,15 +207,9 @@ export const collectNeedsMethod = "Вкажіть, як оплачено зам�
  */
 function orderReason(error: unknown, live: boolean): string | null {
   if (!(error instanceof ApiError)) return null;
-  const { reason, status, action } = error.details;
-  // Already moved on — from another phone, say: what it is now, by its
-  // pill's word.
-  if (
-    reason === undefined &&
-    typeof action === "string" &&
-    typeof status === "string" &&
-    Object.hasOwn(statusLabels, status)
-  )
+  const { reason, status } = error.details;
+  // Already moved on: what it is now, by its pill's word.
+  if (movedOn(error))
     return `замовлення вже «${statusLabels[status as Status]}»${live ? " — картку оновлено" : ""}.`;
   if (reason === "ORDER_CLOSED")
     return "замовлення вже закрито, доставку більше не змінюють.";

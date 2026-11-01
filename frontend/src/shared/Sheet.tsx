@@ -38,7 +38,8 @@ export function Sheet({
   const sheet = useRef<HTMLDivElement>(null);
   const shut = useRef(close);
   shut.current = close;
-  // Telegram's «Назад» closes it while it is open: the last way mounted.
+  // Telegram's «Назад» closes it while it is open: over the screen's way,
+  // whenever that came.
   useEffect(() => {
     const way: BackWay = {
       go: () => {
@@ -46,6 +47,7 @@ export function Sheet({
       },
       held: false,
       drawn: () => true,
+      over: true,
     };
     return addBackWay(way);
   }, []);

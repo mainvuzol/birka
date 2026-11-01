@@ -610,3 +610,24 @@ The frame's P1-4 and P2-3 ([entry, door, «Ще»](all-on-the-tag-entry-more-rep
   «Центр», four more reads a search.
 
 No server request changed, so the hot path's cases stand as last measured.
+
+## Update — 2026-11-01: «Замовлення»'s taps, counted from the menu
+
+The sections task list's P0-1, P0-2 and P0-3
+([the thread, the card, «Відправити»](all-on-the-tag-orders-thread-report.md))
+ask for the scorecard's orders paths to be counted (sections task list §6).
+The taps from the menu, typing not counted:
+
+| path | before | after | how counted |
+|---|---|---|---|
+| a parcel sent with its waybill | 5 (the orders, the order, the field, «Відправлено») | **3** («Замовлення», the row's «Відправити» — the field in focus — the MainButton «Відправлено») | `orders-list.spec.ts:717` |
+| «Прибув на пошту» | 4 | **3** («Замовлення», the knot «Відправлено», the row's «Прибув на пошту») | `orders-list.spec.ts:629` |
+| «Клієнт забрав», a way | 3 («Замовлення», the order, its way) | **4** («Замовлення», the knot «Прибув на пошту», the row's «Клієнт забрав», its way) | `orders-card.spec.ts:1309`, its counter of presses |
+| a waybill written later | 4 | **5** («Відправлено» among them) | `orders-card.spec.ts:1951`, the same |
+| goods come back | 6 | **7** («Відправлено» among them) | `orders-card.spec.ts:2076`, the same |
+
+The last three are one knot further than before: an order sent or at the
+post office stands under its own knot, not in the list that opened first
+(business-rules.md, "Chosen in chat — 2026-11-01"). The scorecard's «Клієнт
+забрав» counted four as its target; a sale is unchanged at the till. No
+server request changed, so the hot path's cases stand as last measured.

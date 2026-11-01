@@ -33,6 +33,8 @@ import {
   stepShown,
 } from "@/orders/Order";
 import { placesRead } from "@/orders/Returned";
+import { Send } from "@/orders/Send";
+import { Collect } from "@/orders/Collect";
 import { chargeOnce } from "@/orders/Collected";
 import { NewOrder, shortOf } from "@/orders/NewOrder";
 import { Orders, Unread, freshOrdersView } from "@/orders/Orders";
@@ -136,6 +138,7 @@ import { loadCashCommand, useCashCommand } from "@/cash/commands";
 import {
   adjustmentErrorText,
   creditErrorText,
+  movedOn,
   orderErrorText,
   receiptErrorText,
   returnErrorText,
@@ -756,9 +759,21 @@ function Workspace({
   // A section a tag of «Сьогодні» opened goes back there: «← Сьогодні».
   const [fromToday, setFromToday] = useState<Tab | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // «Замовлення» as it was left: what was typed, the closed shown (review,
+  // «Замовлення» as it was left: what was typed, the place chosen (review,
   // 2026-10-23); afresh when «Замовлення» is chosen again.
   const [ordersView, setOrdersView] = useState<OrdersView>(freshOrdersView);
+  // An order's step sheet over its card («Усе на бірці» sections task
+  // list, P0-2, P0-3): «Відправити» or «Клієнт забрав», from the card's
+  // MainButton or the row's verb — the row as read, until the card is.
+  // Kept apart from the card, which is mounted afresh as it is read: what
+  // was typed in it stays.
+  const [orderSheet, setOrderSheet] = useState<{
+    id: string;
+    kind: "send" | "collect";
+  } | null>(null);
+  const [opening, setOpening] = useState<Order | null>(null);
+  // The sheet's step refused: why, in the sheet, over what was typed.
+  const [sheetRefused, setSheetRefused] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const key = `birka:pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const catalogKey = `birka:catalog-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -1142,7 +1157,17 @@ function Workspace({
   useEffect(() => {
     if (stepRefused > 0) orderAlert.current?.focus();
   }, [stepRefused]);
-  async function run(command: Pending, resent = false): Promise<void> {
+  /** An order's command sent, and the order it came back with. `stay`:
+   * a step taken from its row, the list kept («Усе на бірці» sections task
+   * list, P0-1). */
+  async function run(
+    command: Pending,
+    resent = false,
+    stay = false,
+  ): Promise<Order | null> {
+    // One at a time: a second press while the first is asked does nothing,
+    // its sheet and what was said kept (review, 2026-11-01).
+    if (useCommand.getState().busy) return null;
     setOrderResent(resent ? command.label : null);
     setOrderDone(null);
     setCollected(null);
@@ -1167,6 +1192,13 @@ function Workspace({
         : command.orderId
           ? (command.path.split("/").at(-1) ?? "")
           : "";
+    // The step's sheet over its card («Усе на бірці» sections task list,
+    // P0-2, P0-3), closed in the render that says what came of it: the
+    // sale, the banner or why then takes the cursor, nothing over them.
+    const fromSheet = step === "dispatch" || step === "collect";
+    const closeSheet = (): void => {
+      setOrderSheet((open) => (open?.id === command.orderId ? null : open));
+    };
     if (
       !order &&
       step !== "" &&
@@ -1178,6 +1210,12 @@ function Workspace({
       // its line marked on its screen (P0-5).
       buzz("error");
       setStepRefused((count) => count + 1);
+      // From its sheet: kept, why over what was typed — unless the order
+      // moved on meanwhile, which its card says.
+      if (fromSheet) {
+        if (movedOn(settled.error)) closeSheet();
+        else setSheetRefused(true);
+      }
       if (step === "reserve" && tab === "new") setNewRefused(settled.error);
       if (command.orderId) {
         void cache.invalidateQueries({
@@ -1190,8 +1228,15 @@ function Workspace({
           refetchType: "all",
         });
       }
-    }
+    } else if (!order && fromSheet) closeSheet();
     if (order) {
+      // Sent with a waybill another order has: its sheet stays with the
+      // warning.
+      if (
+        fromSheet &&
+        !(step === "dispatch" && (order.same_waybill?.length ?? 0) > 0)
+      )
+        closeSheet();
       // Reserved, sent, arrived or cancelled: a buzz, and what it did on
       // the order (orders task list, P0-2, P0-4, P0-5); a step kept and
       // confirmed later, that it was recorded once (P1-1) — a new order
@@ -1207,8 +1252,14 @@ function Workspace({
               (stepDone(step, order, placesRead(cache, store.id)) ??
               (resent && step === "reserve" ? once : null));
       if (text !== null) {
-        buzz("success");
-        setOrderDone({ id: order.id, text });
+        // Sent with a waybill another order has: recorded, and a warning
+        // («Усе на бірці» sections task list, P0-3).
+        buzz(
+          step === "dispatch" && (order.same_waybill?.length ?? 0) > 0
+            ? "warning"
+            : "success",
+        );
+        if (!stay) setOrderDone({ id: order.id, text });
       }
       // Collected: a sale, said as the till says one (orders task list,
       // P0-3).
@@ -1217,9 +1268,11 @@ function Workspace({
         setCollected({ id: order.id, kept: resent });
       }
       cache.setQueryData(["order", store.id, order.id], order);
-      setOrderEpoch((epoch) => epoch + 1);
-      setSelectedId(order.id);
-      setTab("list");
+      if (!stay) {
+        setOrderEpoch((epoch) => epoch + 1);
+        setSelectedId(order.id);
+        setTab("list");
+      }
       await Promise.all([
         // Read now, though the list is not shown: back on it, the order is
         // where it is now (review, 2026-10-23).
@@ -1235,6 +1288,7 @@ function Workspace({
         cache.invalidateQueries({ queryKey: ["credits", store.id] }),
       ]);
     }
+    return order;
   }
   /*
    * Each kept operation's check: what its banner's button does, and what the
@@ -1397,6 +1451,79 @@ function Workspace({
   }
   function checkOrder(): void {
     if (pending) void run(pending, true);
+  }
+  // A sheet left over a card that is gone: closed with it.
+  useEffect(() => {
+    if (tab !== "list") setOrderSheet(null);
+  }, [tab]);
+  /**
+   * The step's sheet over the open order («Усе на бірці» sections task
+   * list, P0-2, P0-3): closed by `run` once its step is recorded — a
+   * waybill another order has kept with its warning — and once its answer
+   * is lost, when the banner says it; refused, kept with why.
+   */
+  function stepSheet(): JSX.Element | null {
+    const sheet = orderSheet;
+    const order = detail.data ?? (opening?.id === selectedId ? opening : null);
+    if (
+      tab !== "list" ||
+      sheet === null ||
+      order === null ||
+      sheet.id !== order.id
+    )
+      return null;
+    const close = (): void => {
+      setOrderSheet(null);
+      setSheetRefused(false);
+    };
+    const take = (action: "dispatch" | "collect", extra?: object): void => {
+      setSheetRefused(false);
+      const body = { command_id: crypto.randomUUID(), ...extra };
+      void run({
+        path: `/orders/${order.id}/${action}`,
+        body,
+        label: actionLabels[action] ?? action,
+        orderId: order.id,
+        shown: stepShown(order, body),
+      });
+    };
+    const refusal =
+      sheetRefused && error !== null
+        ? orderErrorText(
+            error,
+            orderResent,
+            pending !== null && !pending.acknowledged,
+            orderMisses,
+            pending?.label ?? null,
+            pending?.acknowledged === true,
+          )
+        : null;
+    return sheet.kind === "send" ? (
+      <Send
+        order={order}
+        store={store}
+        token={token}
+        blocked={blocked}
+        waiting={busy}
+        refusal={refusal}
+        send={(extra) => {
+          take("dispatch", extra);
+        }}
+        close={close}
+      />
+    ) : (
+      <Collect
+        order={order}
+        store={store}
+        token={token}
+        blocked={blocked}
+        refusal={refusal}
+        collect={(extra) => {
+          take("collect", extra);
+        }}
+        close={close}
+      />
+    );
   }
   const returnUnsettled =
     returnStorageError || returnCommand.busy || returnCommand.pending !== null;
@@ -2504,8 +2631,10 @@ function Workspace({
         </section>
       )}
       {error !== null &&
-        // A new order short of stock: said on its line (P0-5).
-        !(error === newRefused && shortOf(error) !== null) && (
+        // A new order short of stock: said on its line (P0-5); a step
+        // refused in its sheet, there.
+        !(error === newRefused && shortOf(error) !== null) &&
+        !(sheetRefused && orderSheet !== null) && (
           <p role="alert" ref={orderAlert} tabIndex={-1}>
             {orderErrorText(
               error,
@@ -2935,6 +3064,7 @@ function Workspace({
                 <Back
                   go={() => {
                     setSelectedId(null);
+                    setOrderSheet(null);
                     setOrderDone(null);
                     setCollected(null);
                   }}
@@ -2990,8 +3120,15 @@ function Workspace({
               store={store}
               token={token}
               blocked={blocked}
+              waiting={busy}
+              sheet={orderSheet?.id === detail.data.id}
+              openSheet={(kind) => {
+                setOrderSheet({ id: detail.data.id, kind });
+                setSheetRefused(false);
+              }}
               back={() => {
                 setSelectedId(null);
+                setOrderSheet(null);
                 setOrderDone(null);
                 setCollected(null);
               }}
@@ -3032,6 +3169,7 @@ function Workspace({
               // The same waybill's other order, opened at its top.
               openOther={(id) => {
                 setSelectedId(id);
+                setOrderSheet(null);
                 setOrderDone(null);
                 setCollected(null);
                 window.scrollTo(0, 0);
@@ -3046,17 +3184,34 @@ function Workspace({
           blocked={blocked}
           view={ordersView}
           change={setOrdersView}
-          open={(order) => {
+          open={(order, then) => {
             setSelectedId(order.id);
+            setOpening(order);
+            setOrderSheet(then ? { id: order.id, kind: then } : null);
+            setSheetRefused(false);
             setOrderDone(null);
             setCollected(null);
           }}
+          arrive={(order) =>
+            run(
+              {
+                path: `/orders/${order.id}/arrive`,
+                body: { command_id: crypto.randomUUID() },
+                label: actionLabels.arrive ?? "Прибув на пошту",
+                orderId: order.id,
+                shown: stepShown(order),
+              },
+              false,
+              true,
+            ).then((recorded) => recorded !== null)
+          }
           create={() => {
             setTab("new");
             setSelectedId(null);
           }}
         />
       )}
+      {stepSheet()}
     </WorkspaceLineContext.Provider>
   );
 }

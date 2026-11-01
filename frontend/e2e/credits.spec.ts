@@ -303,7 +303,9 @@ test("a sale paid in parts leaves the rest owed, and «Борги» takes it unt
   // Where the next payments go: the row's button (owner decision after
   // #141, 2026-10-26).
   await expect(
-    page.getByText("Наступні внески — у «Продажі» › «Внесок».", { exact: true }),
+    page.getByText("Наступні внески — у «Продажі» › «Внесок».", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(sales.bodies).toHaveLength(1);
   // The way travels at the top of the body; the terms are as they were.
@@ -1358,6 +1360,30 @@ async function arrived(page: Page): Promise<Coat & { order: string }> {
   return { ...coat, order };
 }
 
+/** An arrived order's card from «Замовлення» — at «Прибув на пошту» on
+ * its string — and «Клієнт забрав»'s sheet, the dock's one button outside
+ * Telegram («Усе на бірці» sections task list, P0-1, P0-2). */
+async function collectSheet(page: Page, model: string): Promise<Locator> {
+  await section(page, "Замовлення");
+  await page
+    .getByRole("group", { name: "Замовлення", exact: true })
+    .getByRole("button", { name: /^Прибув на пошту/ })
+    .click();
+  await page.getByRole("button", { name: new RegExp(model) }).click();
+  await expect(
+    page.locator(".knot-string [aria-current='step'] .knot-label"),
+  ).toHaveText("Прибув на пошту");
+  await page
+    .getByRole("button", { name: "Клієнт забрав", exact: true })
+    .click();
+  const sheet = page.getByRole("dialog", {
+    name: "Клієнт забрав — як оплачено?",
+  });
+  // The tap that opened it is let go for a moment.
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
 test("an order collected may be paid in parts, by the till's rules", async ({
   page,
 }) => {
@@ -1369,14 +1395,9 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await openStore(page, "Основний MAIN");
   await toTill(page);
   // The till opens first (redesign P0-1); the order is in «Замовлення».
-  await section(page, "Замовлення");
-  await page.getByRole("button", { name: new RegExp(model) }).click();
-  await expect(
-    page.getByText("Прибув на пошту", { exact: true }),
-  ).toBeVisible();
-
   await page.setViewportSize({ width: 360, height: 740 });
-  await page.getByLabel("Оплата частинами").check();
+  const sheet = await collectSheet(page, model);
+  await sheet.getByLabel("Оплата частинами").check();
   // One line at 360 px (credits task list, P1-5).
   const means = page.getByText("Решту — у «Боргах» цього магазину.", {
     exact: true,
@@ -1418,11 +1439,9 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await page.getByLabel("Сплачує зараз, грн").fill("3000");
   // The part paid now, in cash at the counter (ADR-0012 G2, G33): the way
   // is the step itself (orders task list, P0-3).
-  const collect = page
-    .getByRole("group", { name: "Клієнт забрав — як оплачено?" })
-    .getByRole("button", { name: "Готівка", exact: true });
+  const collect = sheet.getByRole("button", { name: "Готівка", exact: true });
   await collect.click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(sheet.getByRole("alert")).toContainText(
     "Покупець сплачує все одразу (3 000,00 грн) — це звичайний продаж.",
   );
   expect(collected.bodies).toEqual([]);
@@ -1430,7 +1449,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await page.getByLabel("Сплачує зараз, грн").fill("500");
   await expect(page.getByText("Лишиться винен 2 500,00 грн")).toBeVisible();
   // As the till's panel says it.
-  await expect(page.locator(".order-panel .pay-total")).toHaveText(
+  await expect(sheet.locator(".pay-total")).toHaveText(
     /^Зараз 500,00\sгрн · винен 2\s500,00\sгрн$/,
   );
   await collect.click();
@@ -1476,14 +1495,10 @@ test("an order collected without paying in parts stays an ordinary sale", async 
   await openStore(page, "Основний MAIN");
   await toTill(page);
   // The till opens first (redesign P0-1); the order is in «Замовлення».
-  await section(page, "Замовлення");
-  await page.getByRole("button", { name: new RegExp(model) }).click();
   // How it was paid is asked, never guessed: nothing is preselected, and
   // nothing is sent until a way is pressed (owner decision, 2026-10-04;
   // orders task list, P0-3).
-  const paid = page.getByRole("group", {
-    name: "Клієнт забрав — як оплачено?",
-  });
+  const paid = (await collectSheet(page, model)).locator(".collect-ways");
   await expect(paid.getByRole("button")).toHaveCount(5);
   for (const way of await paid.getByRole("button").all())
     await expect(way).not.toHaveAttribute("aria-pressed");
@@ -1572,9 +1587,9 @@ test("paying in parts needs its own permission", async ({ page }) => {
     page.getByRole("group", { name: "Борги або замовлення" }),
   ).toHaveCount(0);
   await more(page);
-  await expect(
-    page.getByRole("button", { name: /^Борги( |$)/ }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Борги( |$)/ })).toHaveCount(
+    0,
+  );
 });
 
 test("collecting an order in parts needs the same permission", async ({
@@ -1594,12 +1609,11 @@ test("collecting an order in parts needs the same permission", async ({
   await openStore(page, "Основний MAIN");
   await toTill(page);
   // The till opens first (redesign P0-1); the order is in «Замовлення».
-  await section(page, "Замовлення");
-  await page.getByRole("button", { name: new RegExp(model) }).click();
-  await expect(
-    page.getByRole("group", { name: "Клієнт забрав — як оплачено?" }),
-  ).toBeVisible();
-  await expect(page.getByLabel("Оплата частинами")).toHaveCount(0);
+  const sheet = await collectSheet(page, model);
+  await expect(sheet.locator(".collect-ways").getByRole("button")).toHaveCount(
+    5,
+  );
+  await expect(sheet.getByLabel("Оплата частинами")).toHaveCount(0);
 });
 
 /** Pay off what is left of a debt, through the API. */
@@ -1959,7 +1973,11 @@ async function onCreditAtTheOther(
           unit_price: "1500.00",
         },
       ],
-      credit: { customer_name: name, customer_phone: phone, paid_now: "1000.00" },
+      credit: {
+        customer_name: name,
+        customer_phone: phone,
+        paid_now: "1000.00",
+      },
       payment_method: "CASH",
     },
   });
@@ -1977,9 +1995,9 @@ test.describe("«Продаж» › «Внесок»: payments on debts from the
     await searchField(page).fill(name);
     await expect(rows(page)).toHaveCount(1);
     await customerRow(page, name).click();
-    await expect(
-      page.getByRole("navigation", { name: "Розділи" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Розділи" })).toHaveCount(
+      0,
+    );
     await keyIn(page, "500");
     await paying(page).getByRole("button", { name: "Картка" }).click();
     const paid = page.locator(".paid-result");

@@ -136,6 +136,15 @@ async function oneOrder(page: Page): Promise<void> {
   });
 }
 
+/** The list's «Відправлено», where the one order stands: the list opens at
+ * «До відправлення» («Усе на бірці» sections task list, P0-1). */
+async function toSent(page: Page): Promise<void> {
+  await page
+    .getByRole("group", { name: "Замовлення" })
+    .getByRole("button", { name: /^Відправлено/ })
+    .click();
+}
+
 test("an order's card and the step over it show Telegram's «Назад»; pressed, it goes back as their «←» does, and on the list it is hidden again", async ({
   page,
 }) => {
@@ -145,6 +154,7 @@ test("an order's card and the step over it show Telegram's «Назад»; press
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Замовлення");
+  await toSent(page);
   await expect(page.locator(".order-row").first()).toBeVisible();
   // A tab's first screen: Telegram's own «Закрити», never told otherwise.
   expect(await backs(page)).toEqual([]);
@@ -389,6 +399,7 @@ test("a Telegram before 6.1 is told nothing of «Назад», on an order's car
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Замовлення");
+  await toSent(page);
   await page.locator(".order-row").first().click();
   await expect(
     page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
