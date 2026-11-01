@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ComponentProps, JSX } from "react";
+import type { ComponentProps, JSX, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryObserverResult } from "@tanstack/react-query";
 import { api, ApiError, errorText, inOwnWords } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { keptCashText, keptText, useAutoCheck } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
-import { Placeholder } from "@/shared/Placeholder";
+import { Opening } from "@/shared/Placeholder";
+import { Icon } from "@/shared/Icon";
+import { Toast } from "@/shared/Toast";
 import { Banner } from "@/shared/Banner";
 import { Kept, Settled } from "@/shared/Kept";
 import {
@@ -16,6 +19,7 @@ import {
   connectTelegram,
   telegramInitData,
   telegramUserId,
+  telegramUserName,
   useAskBeforeClosing,
   useLockPortrait,
 } from "@/shared/telegram";
@@ -44,6 +48,13 @@ import { ScreenHeader, WorkspaceLineContext } from "@/shared/ScreenHeader";
 import type { WorkspaceLine } from "@/shared/ScreenHeader";
 import type { TabItem } from "@/shared/TabBar";
 import { More } from "@/shared/More";
+import {
+  ApprovalsLine,
+  BackupsLine,
+  DebtsLine,
+  useAwaitingApproval,
+} from "@/shared/MoreLines";
+import type { IconName } from "@/shared/icons";
 import type { MoreBack, MoreGroup, MoreRow } from "@/shared/More";
 import { Catalog } from "@/catalog/Catalog";
 import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
@@ -129,6 +140,7 @@ import {
   receiptErrorText,
   returnErrorText,
   saleErrorText,
+  timeOf,
 } from "@/cash/errors";
 import "./styles.css";
 
@@ -162,86 +174,206 @@ type Tab =
    * screens or more («Усе на бірці» task list, P0-4). */
   | "catalogue";
 
+/** The token, and when the session it opens ends by this phone's clock. */
+interface Session {
+  token: string;
+  /** The moment the sign-in was asked, plus the session's length: never
+   * later than the server ends it. Null when the server names no length. */
+  until: number | null;
+}
+
 /**
  * Signs in with the launch data Telegram signed, once. The token it gives is
  * what every later request carries: a seller stays signed in for 12 hours
  * after opening the app (owner decision, 2026-10-03). The launch data itself
  * is taken for an hour only, so sending it again later would end a session
- * that still has hours to run.
+ * that still has hours to run. How long the session lasts is kept, for
+ * «Ще»'s foot to say until when («Усе на бірці» task list, P1-5).
  */
-async function signIn(): Promise<string> {
+async function signIn(): Promise<Session> {
   const initData = telegramInitData();
   if (!initData) throw new Error("TELEGRAM_REQUIRED");
-  const auth = await api<{ access_token: string }>(
+  const asked = Date.now();
+  const auth = await api<{ access_token: string; expires_in?: unknown }>(
     "/auth/telegram",
     undefined,
     { init_data: initData },
   );
-  return auth.access_token;
+  return {
+    token: auth.access_token,
+    until:
+      typeof auth.expires_in === "number" &&
+      auth.expires_in > 0 &&
+      // A length no session has says no end, rather than break «Ще».
+      auth.expires_in <= 366 * 24 * 3600
+        ? asked + auth.expires_in * 1000
+        : null,
+  };
 }
+
+/** «5820 114 377»: threes from the right, a lone first digit kept with the
+ * next three, so the ID is not read as a phone number's groups. */
+export function idGroups(id: number): string[] {
+  const digits = String(id);
+  const groups: string[] = [];
+  let end = digits.length;
+  while (end > 0) {
+    groups.unshift(digits.slice(Math.max(0, end - 3), end));
+    end -= 3;
+  }
+  if (groups.length > 1 && groups[0]?.length === 1)
+    groups.splice(0, 2, `${groups[0]}${groups[1] ?? ""}`);
+  return groups;
+}
+
+/** «ОР» of «Ольга Руденко»: the first letters of the first two words. */
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter((word) => word !== "")
+    .slice(0, 2)
+    .map((word) => Array.from(word)[0] ?? "")
+    .join("")
+    .toLocaleUpperCase("uk-UA");
+}
+
 /**
- * Someone the shop has not added yet (redesign P1-3). People are added on
- * the server, by their Telegram ID, on the owner's word (owner decision,
- * 2026-10-01); the ID is often taken for a phone number, so it says it is
- * not, and is copied with one tap where the phone lets the app copy, or
- * selected whole where it does not.
+ * The blank tag (spec S03; «Усе на бірці» task list, P1-4): the hero tag's
+ * cut top, no thread, its eyelet dashed — nothing hangs on it yet. The
+ * screens before a store: no access yet, a sign-in that failed.
  */
-function NoAccess({ readAgain }: { readAgain: () => void }): JSX.Element {
+function BlankTag({ children }: { children: ReactNode }): JSX.Element {
+  return (
+    <div className="tag-hero tag-outline blank">
+      <div className="blank-tag">
+        <span className="blank-eyelet" aria-hidden="true" />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Someone the shop has not added yet (redesign P1-3; spec S03, «Усе на
+ * бірці» task list, P1-4). People are added on the server, by their
+ * Telegram ID, on the owner's word (owner decision, 2026-10-01); the ID is
+ * often taken for a phone number, so it says it is not, stands large in
+ * its groups, and is copied — its digits — with one tap where the phone
+ * lets the app copy, or selected whole where it does not. No menu, no
+ * MainButton: nothing here is anyone's yet.
+ */
+function NoAccess({
+  checkAgain,
+}: {
+  /** Read again; true while there is still no access. */
+  checkAgain: () => Promise<boolean>;
+}): JSX.Element {
   const id = telegramUserId();
-  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  const name = telegramUserName();
+  const [toast, setToast] = useState<{ text: string; times: number } | null>(
+    null,
+  );
+  const tell = (text: string): void => {
+    setToast((now) => ({ text, times: (now?.times ?? 0) + 1 }));
+  };
   // Absent outside a secure page, whatever the types say.
   const clipboard = (navigator as { clipboard?: Partial<Clipboard> }).clipboard;
   const write = clipboard?.writeText?.bind(clipboard);
+  const failed = "Не вдалося скопіювати — виділіть ID і скопіюйте його.";
   const copy =
     id !== null && write !== undefined
       ? () => {
           try {
             write(String(id)).then(
               () => {
-                setCopied("yes");
+                buzz("success");
+                tell("ID скопійовано");
               },
               () => {
-                setCopied("no");
+                tell(failed);
               },
             );
           } catch {
-            setCopied("no");
+            tell(failed);
           }
         }
       : null;
   return (
-    <main>
-      <h1>Бірка</h1>
-      <h2>Доступу ще немає</h2>
-      <p role="alert">
-        Цей акаунт Telegram не має доступу до жодного магазину.
-      </p>
-      {id !== null ? (
-        <p>
-          Ваш Telegram ID: <strong className="telegram-id">{id}</strong> — це не
-          номер телефону. Надішліть його власнику магазину. Коли вас додадуть,
-          закрийте застосунок і відкрийте його знову кнопкою в боті.
-        </p>
-      ) : (
-        <p>
-          Не вдалося прочитати ваш Telegram ID. Відкрийте застосунок кнопкою в
-          боті вашого магазину.
+    <main className="before-store">
+      {name !== null && (
+        <p className="t-meta opened-as">
+          <span className="avatar" aria-hidden="true">
+            {initialsOf(name)}
+          </span>
+          <span>Ви відкрили Бірку як {visible(name)}</span>
         </p>
       )}
-      {copy && (
-        <button className="quiet" onClick={copy}>
-          Скопіювати ID
+      <BlankTag>
+        <h1 className="t-title-l">Доступу ще немає</h1>
+        <p role="alert" className="blank-body">
+          Цей акаунт Telegram не має доступу до жодного магазину.
+        </p>
+        <div className="perforation" aria-hidden="true" />
+        {id !== null ? (
+          <>
+            <p className="t-label telegram-id-label">Ваш Telegram ID</p>
+            <p className="telegram-id">
+              {/* Apart by their margins, not by spaces: what is selected
+                  is the digits alone. */}
+              {idGroups(id).map((group, at) => (
+                <span key={at}>{group}</span>
+              ))}
+            </p>
+            <p className="t-meta">
+              Це не номер телефону. Надішліть його власнику магазину.
+            </p>
+            {copy && (
+              <button type="button" className="copy-id" onClick={copy}>
+                <Icon name="copy" />
+                Скопіювати ID
+              </button>
+            )}
+          </>
+        ) : (
+          <p>
+            Не вдалося прочитати ваш Telegram ID. Відкрийте застосунок кнопкою в
+            боті вашого магазину.
+          </p>
+        )}
+        <p className="t-meta blank-after">
+          Коли вас додадуть, закрийте застосунок і відкрийте його знову кнопкою
+          в боті.
+        </p>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => {
+            void checkAgain().then((still) => {
+              if (still)
+                tell(
+                  "Доступу поки немає. Попросіть власника магазину додати ваш ID.",
+                );
+            });
+          }}
+        >
+          Спробувати ще раз
         </button>
-      )}
-      {/* Present from the start, so a reader hears it filled. */}
-      <p role="status">
-        {copied === "yes"
-          ? "ID скопійовано."
-          : copied === "no"
-            ? "Не вдалося скопіювати — виділіть ID і скопіюйте його."
-            : ""}
+      </BlankTag>
+      {/* Present from the start, so a reader hears it filled (review,
+          2026-11-01): the toast's own words are not read twice. */}
+      <p role="status" className="visually-hidden">
+        {toast?.text ?? ""}
       </p>
-      <button onClick={readAgain}>Спробувати ще раз</button>
+      {toast && (
+        <Toast
+          key={toast.times}
+          text={toast.text}
+          live={false}
+          gone={() => {
+            setToast(null);
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -255,7 +387,7 @@ export function App(): JSX.Element {
     staleTime: Infinity,
     gcTime: 0,
   });
-  const token = session.data;
+  const token = session.data?.token;
   // Who this person is, and what each store lets them do: read with the
   // token, and read again whenever that may have changed.
   const me = useQuery({
@@ -276,47 +408,78 @@ export function App(): JSX.Element {
    * Telegram signs them in again, and so does reloading the page within its
    * launch data's hour; ending the lost phone's Telegram session stops both.
    */
+  function reread(): Promise<QueryObserverResult> {
+    return token === undefined ? session.refetch() : me.refetch();
+  }
   function readAgain(): void {
-    void (token === undefined ? session.refetch() : me.refetch());
+    void reread();
+  }
+  // «Спробувати ще раз» on «Доступу ще немає» in flight: the screen stays
+  // while it reads — a sign-in read again has nothing to show meanwhile —
+  // and says, if so, that there is still no access (spec S03).
+  const [asking, setAsking] = useState(false);
+  async function checkAgain(): Promise<boolean> {
+    setAsking(true);
+    try {
+      const read = await reread();
+      return read.error instanceof ApiError && read.error.code === "NO_ACCESS";
+    } finally {
+      setAsking(false);
+    }
   }
   const failure = session.error ?? me.error;
   // Named while drawn, before anything below can throw: a note of a broken
   // screen says which. A store's own screens name themselves.
   setScreen(me.data === undefined ? "sign-in" : "store-choice");
-  if (failure instanceof ApiError && failure.code === "NO_ACCESS")
-    return <NoAccess readAgain={readAgain} />;
+  if (
+    (failure instanceof ApiError && failure.code === "NO_ACCESS") ||
+    asking
+  )
+    return <NoAccess checkAgain={checkAgain} />;
+  // A sign-in that failed: the same blank tag, its words as they were
+  // («Усе на бірці» task list, P1-4; К12), the app's name over it, where
+  // «Доступу ще немає» says whose Telegram opened it (owner, 2026-10-15,
+  // В4) — the screen's own title its heading.
   if (failure)
     return (
-      <main>
-        <h1>Бірка</h1>
-        <h2>Вхід через Telegram</h2>
-        <p role="alert">
-          {failure.message === "TELEGRAM_REQUIRED"
-            ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
-            : token === undefined &&
-                failure instanceof ApiError &&
-                failure.status === 401
-              ? // Launch data refused — taken for an hour only, or not
-                // signed by the shop's bot — is answered by opening the app
-                // from the bot again, which also finds any command kept
-                // from an earlier opening (redesign P1-3).
-                "Відкрийте застосунок знову кнопкою в боті вашого магазину."
-              : // Never an order's words at the door (owner decision,
-                // 2026-10-25).
-                inOwnWords(
-                  errorText(failure),
-                  "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
-                  "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
-                )}
+      <main className="before-store">
+        <p className="opened-as app-name">
+          <span className="avatar" aria-hidden="true">
+            <Icon name="mark" />
+          </span>
+          <span>Бірка</span>
         </p>
-        <button onClick={readAgain}>Спробувати ще раз</button>
+        <BlankTag>
+          <h1 className="t-title-l">Вхід через Telegram</h1>
+          <p role="alert">
+            {failure.message === "TELEGRAM_REQUIRED"
+              ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
+              : token === undefined &&
+                  failure instanceof ApiError &&
+                  failure.status === 401
+                ? // Launch data refused — taken for an hour only, or not
+                  // signed by the shop's bot — is answered by opening the app
+                  // from the bot again, which also finds any command kept
+                  // from an earlier opening (redesign P1-3).
+                  "Відкрийте застосунок знову кнопкою в боті вашого магазину."
+                : // Never an order's words at the door (owner decision,
+                  // 2026-10-25).
+                  inOwnWords(
+                    errorText(failure),
+                    "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+                    "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+                  )}
+          </p>
+          <button onClick={readAgain}>Спробувати ще раз</button>
+        </BlankTag>
       </main>
     );
+  // Before the rights are read, a first screen's places and no menu (spec
+  // S02; «Усе на бірці» task list, P1-4).
   if (token === undefined || me.data === undefined)
     return (
       <main>
-        <h1>Бірка</h1>
-        <Placeholder said="Входимо в магазин…" field />
+        <Opening />
       </main>
     );
   // One store needs no choice: the app opens on it (redesign, P0-1). With
@@ -333,37 +496,53 @@ export function App(): JSX.Element {
       : undefined;
   return (
     <main>
-      {!store && (
-        <header>
-          <h1>Бірка</h1>
-          <span>{visible(me.data.display_name)}</span>
-        </header>
-      )}
       {!store ? (
-        <section>
-          <h2>Оберіть магазин</h2>
-          <p>Продажі запишуться на той магазин, у якому ви зараз.</p>
-          {me.data.stores.length === 0 ? (
-            <p>Доступних магазинів немає. Зверніться до адміністратора.</p>
-          ) : (
-            me.data.stores.map((s) => (
-              <button
-                className="store"
-                key={s.id}
-                onClick={() => {
-                  // A choice, felt (spec §4.4; «Усе на бірці» task list,
-                  // P1-2).
-                  buzz("selection");
-                  setStoreId(s.id);
-                }}
-              >
-                {visible(s.name)}
-                <small>{visible(s.code)}</small>
-                {s.state !== "ACTIVE" && <small>{stateText(s)}</small>}
-              </button>
-            ))
-          )}
-        </section>
+        // The door (spec S06, its door variant; «Усе на бірці» task list,
+        // P1-4; Q-1 «if not»): the question at every opening, nothing
+        // chosen beforehand, nothing remembered (В6) — a store's tag each,
+        // the whole tag its button, its code under its name (К18).
+        <>
+          <header className="screen-header">
+            <div className="screen-title">
+              <h1>Де ви сьогодні?</h1>
+            </div>
+            <p className="t-meta door-line">
+              Продажі запишуться на той магазин, у якому ви зараз.
+            </p>
+          </header>
+          <section className="door">
+            {me.data.stores.length === 0 ? (
+              <p>Доступних магазинів немає. Зверніться до адміністратора.</p>
+            ) : (
+              me.data.stores.map((s) => (
+                <button
+                  type="button"
+                  className="store-tag tag-hero tag-outline"
+                  key={s.id}
+                  onClick={() => {
+                    // A choice, felt (spec §4.4; «Усе на бірці» task list,
+                    // P1-2).
+                    buzz("selection");
+                    setStoreId(s.id);
+                  }}
+                >
+                  <span className="store-tag-in">
+                    <span className="store-tag-name">{visible(s.name)}</span>
+                    <span className="t-meta store-tag-code">
+                      {visible(s.code)}
+                    </span>
+                    {/* Its state in its words, as before, on a sticker. */}
+                    {s.state !== "ACTIVE" && (
+                      <span className="badge store-tag-state">
+                        {stateText(s)}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))
+            )}
+          </section>
+        </>
       ) : store.state !== "ACTIVE" && store.permissions.length === 0 ? (
         // Its own people learn the state and since when, never why (owner
         // decision, 2026-10-01).
@@ -390,6 +569,7 @@ export function App(): JSX.Element {
           store={asShown(store)}
           token={token}
           me={me.data}
+          sessionUntil={session.data?.until ?? null}
           changeStore={changeStore}
           storesChanged={readAgain}
         />
@@ -401,12 +581,15 @@ function Workspace({
   store,
   token,
   me,
+  sessionUntil,
   changeStore,
   storesChanged,
 }: {
   store: Store;
   token: string;
   me: Me;
+  /** When this phone's session ends, by its clock; null when unknown. */
+  sessionUntil: number | null;
   /** Absent when the person has one store: there is nothing to change to. */
   changeStore: (() => void) | undefined;
   /** The owner changed a store's state: what the app knows is read again. */
@@ -557,6 +740,10 @@ function Workspace({
     backups.data !== undefined &&
     (backups.data.state !== "OK" ||
       (backups.data.server?.open.length ?? 0) > 0);
+  // The lists of existing stock that wait for this person's approval here:
+  // «Початкові залишки»'s line on «Ще», and «Товар і каталог»'s («Усе на
+  // бірці» task list, P1-5).
+  const awaitingApproval = useAwaitingApproval(store, token, reportKey);
   // What waits on «Сьогодні», read here too for its tab's badge: the same
   // reads, none where «Сьогодні» is not this person's.
   const work = useWaiting({
@@ -1400,6 +1587,9 @@ function Workspace({
   const sections: {
     tab: Tab;
     label: string;
+    /** Its glyph as a row of «Ще» (spec S07; «Усе на бірці» task list,
+     * P1-5); a tab's is the menu's own. */
+    icon: IconName;
     shown: boolean;
     disabled: boolean;
     forgetsOrder?: true;
@@ -1415,6 +1605,7 @@ function Workspace({
     {
       tab: "today",
       label: "Сьогодні",
+      icon: "tab-today",
       shown: canSeeReport,
       disabled: blocked,
       forgetsOrder: true,
@@ -1431,6 +1622,7 @@ function Workspace({
           ? "returns"
           : "deposit",
       label: "Продаж",
+      icon: "tab-sell",
       shown:
         store.permissions.includes("sale:create") || canReturn || canDeposit,
       disabled: blocked,
@@ -1447,6 +1639,7 @@ function Workspace({
     {
       tab: "list",
       label: "Замовлення",
+      icon: "tab-orders",
       shown: canSeeOrders,
       disabled: blocked,
       forgetsOrder: true,
@@ -1461,6 +1654,7 @@ function Workspace({
     {
       tab: "cash",
       label: "Каса",
+      icon: "drawer",
       shown: canSeeCash,
       disabled: otherThanCash,
       forgetsOrder: true,
@@ -1470,6 +1664,7 @@ function Workspace({
     {
       tab: "credits",
       label: "Борги",
+      icon: "person",
       shown: canSeeCredits,
       disabled: otherThanCredit,
     },
@@ -1477,66 +1672,77 @@ function Workspace({
     {
       tab: "receive",
       label: "Прийшов товар",
+      icon: "arrived",
       shown: canReceive,
       disabled: otherThanReceipt,
     },
     {
       tab: "damaged",
       label: "Брак",
+      icon: "damaged",
       shown: canSeeDamaged,
       disabled: blocked,
     },
     {
       tab: "stock",
       label: "Залишки",
+      icon: "stocktake",
       shown: canSeeStock,
       disabled: otherThanAdjustment,
     },
     {
       tab: "catalog",
       label: "Перевірка каталогу",
+      icon: "check",
       shown: store.permissions.includes("catalog:confirm"),
       disabled: blocked,
     },
     {
       tab: "openings",
       label: "Початкові залишки",
+      icon: "paper",
       shown: canSeeOpenings,
       disabled: blocked,
     },
     {
       tab: "backups",
-      label: `Резервні копії${backupsNeedYou ? " ⚠" : ""}`,
+      label: "Резервні копії",
+      icon: "backup",
       shown: canSeeBackups,
       disabled: blocked,
     },
     {
       tab: "suppliers",
       label: "Постачальникам",
+      icon: "supplier",
       shown: canReturnToSupplier,
       disabled: otherThanSuppliers,
     },
     {
       tab: "invoices",
       label: "Накладні",
+      icon: "supplier",
       shown: canSeeInvoices,
       disabled: otherThanInvoices,
     },
     {
       tab: "models",
       label: "Моделі",
+      icon: "edit",
       shown: canCorrect,
       disabled: otherThanCorrections,
     },
     {
       tab: "report",
       label: "Звіт про продажі",
+      icon: "report",
       shown: canSeeReport,
       disabled: blocked,
     },
     {
       tab: "stores",
       label: "Магазини",
+      icon: "stores",
       shown: canManageStores,
       disabled: otherThanStores,
     },
@@ -1632,13 +1838,20 @@ function Workspace({
     );
   };
   const rest = shown.filter((section) => !section.tabbed);
+  // What waits under each row, its count the row's one colour (spec S07;
+  // «Усе на бірці» task list, P1-5): «Брак»'s units, as its tile said; who
+  // owes the store; the lists to approve; the backups.
+  const metaOf: Partial<Record<Tab, JSX.Element>> = {
+    credits: <DebtsLine store={store} token={token} />,
+    damaged: <DamagedMeta store={store} token={token} />,
+    openings: <ApprovalsLine count={awaitingApproval} />,
+    backups: <BackupsLine backups={backups.data} needYou={backupsNeedYou} />,
+  };
   const rowOf = (section: (typeof sections)[number]): MoreRow => ({
     key: section.tab,
     label: section.label,
-    // «Брак»'s row says how many units wait, as its tile did.
-    ...(section.tab === "damaged"
-      ? { meta: <DamagedMeta store={store} token={token} /> }
-      : {}),
+    icon: section.icon,
+    ...(metaOf[section.tab] ? { meta: metaOf[section.tab] } : {}),
     disabled: section.disabled,
     open: () => {
       setTab(section.tab);
@@ -1665,9 +1878,20 @@ function Workspace({
           {
             key: "catalogue",
             label: "Товар і каталог",
-            meta: catalogueRows
-              .map((row) => catalogueWords[row.key] ?? "")
-              .join(", "),
+            icon: "catalogue" as const,
+            // What waits in it first, then what it holds.
+            meta: (
+              <ApprovalsLine
+                count={
+                  catalogueRows.some((row) => row.key === "openings")
+                    ? awaitingApproval
+                    : null
+                }
+                then={catalogueRows
+                  .map((row) => catalogueWords[row.key] ?? "")
+                  .join(", ")}
+              />
+            ),
             // Held only when all it holds is: «Моделі» stays reachable while
             // its own correction waits.
             disabled: catalogueRows.every((row) => row.disabled),
@@ -1678,6 +1902,14 @@ function Workspace({
           },
         ];
   const paperOn = usePaper((state) => state.storeId === store.id);
+  // The person's other stores whose stock a search reads too: trading, and
+  // with the right to read stock there («Усе на бірці» task list, P2-3).
+  const stockElsewhere = me.stores.filter(
+    (other) =>
+      other.id !== store.id &&
+      other.state === "ACTIVE" &&
+      other.permissions.includes("inventory:view"),
+  );
   // «Ще»'s groups, in the design's order (spec S07; «Усе на бірці» task
   // list, P0-4): people, goods, money, the network, this phone.
   const moreGroups: MoreGroup[] = [
@@ -1696,6 +1928,9 @@ function Workspace({
               {
                 key: "change",
                 label: "Змінити магазин",
+                icon: "stores" as const,
+                // The store open now (spec S07).
+                meta: visible(store.name),
                 disabled: blocked,
                 open: changeStore,
               },
@@ -1707,6 +1942,7 @@ function Workspace({
               {
                 key: "paper",
                 label: "Вношу продаж з паперу",
+                icon: "paper" as const,
                 on: paperOn,
                 disabled: blocked,
                 open: () => {
@@ -1718,6 +1954,14 @@ function Workspace({
       ],
     },
   ];
+  // «Ще»'s foot: who is signed in, and until when by this phone's clock —
+  // the sign-in's moment and the session's length (spec S07; «Усе на
+  // бірці» task list, P1-5). No role: the server names none (К8).
+  const signedInAs = `Ви увійшли як ${visible(me.display_name)}${
+    sessionUntil === null
+      ? ""
+      : ` · сесія до ${timeOf(new Date(sessionUntil).toISOString())}`
+  }`;
   // «Ще» is shown when it holds anything (§4а).
   const hasMore = moreGroups.some((group) => group.rows.length > 0);
   // The focus stays on «Ще», never lost to the page, as the screen under it
@@ -1831,8 +2075,13 @@ function Workspace({
             ? [
                 {
                   key: "more",
-                  label: `Ще${backupsNeedYou ? " ⚠" : ""}`,
+                  label: "Ще",
                   icon: "tab-more" as const,
+                  // The backups' dot on its glyph, read with its name
+                  // («Усе на бірці» task list, P1-5).
+                  ...(backupsNeedYou
+                    ? { attention: "є що перевірити" }
+                    : {}),
                   current:
                     tab === "more" ? true : inMore ? ("true" as const) : false,
                   disabled: sending,
@@ -2302,6 +2551,7 @@ function Workspace({
             store={store}
             token={token}
             userId={me.user_id}
+            others={stockElsewhere}
             journalKey={saleKey}
             searchFirst={searchFirst}
             blocked={
@@ -2526,7 +2776,7 @@ function Workspace({
         // («Усе на бірці» task list, P2-1).
         null
       ) : tab === "more" ? (
-        <More groups={moreGroups} />
+        <More groups={moreGroups} foot={signedInAs} />
       ) : tab === "catalogue" ? (
         <More
           title="Товар і каталог"

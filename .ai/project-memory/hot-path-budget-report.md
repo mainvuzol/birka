@@ -594,3 +594,19 @@ stubbed):
   none — is a tap more: five (the update of 2026-10-04, above).
 
 No server request changed, so the hot path's cases stand as last measured.
+
+## Update — 2026-10-31: the door, and other stores' units under the till's search
+
+The frame's P1-4 and P2-3 ([entry, door, «Ще»](all-on-the-tag-entry-more-report.md)):
+- **The door** is a tap, as «Оберіть магазин» was: a store's tag. Whoever
+  has one store goes straight in, as before. No tap counted here changes.
+- **The till's search** asks each of the person's other trading stores
+  where they read the stock once a search — `GET /catalog/stock-options`
+  with that store, the case measured at the 300 ms budget — beside the
+  till's own read, never before it: the tags come with the till's own
+  answer, and a store's line under them with that store's. Nothing is
+  asked while nothing is typed, and a search's answer stands a minute. A
+  seller of one store asks nothing more; the seed's network owner, at
+  «Центр», four more reads a search.
+
+No server request changed, so the hot path's cases stand as last measured.

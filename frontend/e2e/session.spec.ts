@@ -136,8 +136,12 @@ test("the owner changes a store's state over an hour after opening the app, and 
       .click();
     await expect(card.getByText("Заблоковано", { exact: true })).toBeVisible();
 
-    // What the app knows of the stores is read again, with the token.
+    // What the app knows of the stores is read again, with the token: the
+    // door's question again (spec S06; «Усе на бірці» task list, P1-4).
     await changeStore(page);
+    await expect(
+      page.getByRole("heading", { name: "Де ви сьогодні?", level: 1 }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /^Ринок MARKET/ }),
     ).toContainText("Заблоковано власником з");

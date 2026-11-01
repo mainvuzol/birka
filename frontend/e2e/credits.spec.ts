@@ -1573,7 +1573,7 @@ test("paying in parts needs its own permission", async ({ page }) => {
   ).toHaveCount(0);
   await more(page);
   await expect(
-    page.getByRole("button", { name: "Борги", exact: true }),
+    page.getByRole("button", { name: /^Борги( |$)/ }),
   ).toHaveCount(0);
 });
 

@@ -177,7 +177,9 @@ test("while a sale is being sent, «Ще» is held as the row is: its answer is 
   });
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
-  const more = sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
+  const more = sections(page).getByRole("button", {
+    name: /^Ще( — є що перевірити)?$/,
+  });
   await expect(more).toBeEnabled();
   await pay(page, "Готівка").click();
   await expect(more).toBeDisabled();

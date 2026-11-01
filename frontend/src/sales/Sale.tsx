@@ -25,7 +25,7 @@ import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { submitSale, useSaleCommand } from "./commands";
-import { StockSearch, useSettled, useStock } from "./StockSearch";
+import { StockSearch, useElsewhere, useSettled, useStock } from "./StockSearch";
 import { PriceHint, priceText } from "./PriceHint";
 import { setPaper, setSoldBy, usePaper } from "./paper";
 import { forgetBasket, keepBasket, keptBasket, outlives } from "./basket";
@@ -112,6 +112,7 @@ export function Sale({
   searchFirst = false,
   mode = null,
   keptAt,
+  others = [],
 }: {
   store: Store;
   token: string;
@@ -148,6 +149,10 @@ export function Sale({
    * how many kept sales have settled (navigation task list, P0-5).
    */
   keptAt: string;
+  /** The person's other trading stores whose stock they read: a search
+   * says what is free there under each model (spec S09; «Усе на бірці»
+   * task list, P2-3). */
+  others?: readonly Store[];
 }): JSX.Element {
   // Paper mode: the switch and «Хто продав» outlive this screen (`./paper`);
   // the paper's time is this sale's alone.
@@ -356,6 +361,17 @@ export function Sale({
     enabled: !locations.isError && !waiting && (!searchAll || ready.length > 0),
   });
   const listed = (stock.data?.pages ?? []).flatMap((page) => page.items);
+  const sellingHere = useMemo(
+    () => new Set(sellable.map((location) => location.id)),
+    [sellable],
+  );
+  const elsewhere = useElsewhere({
+    others,
+    token,
+    journalKey,
+    query,
+    here: sellingHere,
+  });
   const mayFindInCatalog = mayReadLabel && !paper;
   const sizes = useQuery({
     queryKey: ["sale-sizes", journalKey, store.id],
@@ -1178,6 +1194,7 @@ export function Sale({
                   sticky
                   searchRef={searchRef}
                   under={paperRow}
+                  elsewhere={elsewhere}
                   failure={
                     stock.error ? (
                       <Failure

@@ -1116,9 +1116,17 @@ test("what waits: a tag a kind and a store, in the frame's order, each from its 
     "6",
   );
   // Something is wrong: no line saying the copies are in order, and no
-  // «⚠» on «Сьогодні»'s own blocks — the menu's «Ще ⚠» stays until P1-5.
+  // «⚠» anywhere — the menu's «Ще» has a dot (P1-5).
   await expect(page.locator(".today-backups")).toHaveCount(0);
   await expect(waiting(page)).not.toContainText("⚠");
+  await expect(
+    page.getByRole("navigation", { name: "Розділи" }),
+  ).not.toContainText("⚠");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Розділи" })
+      .getByRole("button", { name: "Ще — є що перевірити" }),
+  ).toBeVisible();
 });
 
 test("opened at «Ринок»: its tags first of their kind, with the verbs; «Центр»'s say what waits there; trouble on the server with the copies in order", async ({

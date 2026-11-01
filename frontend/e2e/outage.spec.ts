@@ -2872,7 +2872,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Залишки", exact: true }),
     ).toBeVisible();
     await expect(
-      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+      menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
     ).toHaveAttribute("aria-current", "true");
     await more(page);
     await expect(
@@ -3033,7 +3033,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     // to: its row is held by every journal but its own, as «Каса»'s
     // («Усе на бірці» task list, P0-4; review, 2026-10-29).
     await expect(
-      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+      menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
     ).toHaveAttribute("aria-current", "true");
     await page.getByRole("button", { name: "Назад до «Ще»" }).click();
     await expect(
@@ -3288,7 +3288,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Залишки", exact: true }),
     ).toBeVisible();
     await expect(
-      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+      menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
     ).toHaveAttribute("aria-current", "true");
     await expect(
       page.getByRole("switch", { name: "Вношу продаж з паперу" }),
@@ -4852,7 +4852,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         if (answer === "unproven") await expect(paper).toBeDisabled();
         else await expect(paper).toBeEnabled();
         await expect(
-          page.getByRole("button", { name: "Борги", exact: true }),
+          page.getByRole("button", { name: /^Борги( |$)/ }),
         ).toHaveCount(0);
         // Neither debts nor orders: no «Замовлення» in the menu (navigation
         // task list, P0-2; «Усе на бірці» task list, P0-4).
@@ -5095,7 +5095,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Борги", exact: true }),
     ).toBeVisible();
     await expect(
-      menu(page).getByRole("button", { name: /^Ще( ⚠)?$/ }),
+      menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
     ).toHaveAttribute("aria-current", "true");
     await expect(tillWays(page)).toHaveCount(0);
   });
@@ -5332,6 +5332,14 @@ test.describe("11. the stub «Корінець»: every press says what became o
     await expect(check).toHaveText(asked);
 
     // Over another screen, a banner with the same words; the button plain.
+    // «Борги» says who owes as «Ще» opens («Усе на бірці» task list, P1-5):
+    // the server gone, its read gets no answer — any answer is the server
+    // back (ADR-0013 §4.3).
+    await on(page, "/credits/summary", async (route) => {
+      if (server.ready === "ok")
+        await route.fulfill({ json: { owed: "0.00", customers: 0, debts: 0 } });
+      else await route.abort("connectionreset");
+    });
     await more(page);
     const banner = page.locator("section.banner-kept");
     await expect(

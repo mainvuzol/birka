@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { money } from "@/orders/types";
@@ -81,6 +81,76 @@ export function useStock({
       before,
     ) => (before?.queryKey[3] === (locationId ?? "all") ? previous : undefined),
   });
+}
+
+/**
+ * What a search finds in the person's other stores (spec S09, the owner's;
+ * «Усе на бірці» task list, P2-3): each trading store where they read the
+ * stock (`inventory:view` there), asked once a search with the till's own
+ * request — the server lets it read what that store sells from, «Свій»
+ * only with a right there. Per model, a line a store, «Ще в магазині
+ * «Ринок»: M 1 · L 1», its free units by size: a warehouse this till sells
+ * from is on the tag already, held units are not free, and a store whose
+ * answer did not end within its hundred rows says nothing — no number is
+ * made up. Nothing while nothing is typed.
+ */
+export function useElsewhere({
+  others,
+  token,
+  journalKey,
+  query,
+  here,
+}: {
+  others: readonly Store[];
+  token: string;
+  journalKey: string;
+  query: string;
+  /** The warehouses this till lists. */
+  here: ReadonlySet<string>;
+}): Map<string, string[]> {
+  const reads = useQueries({
+    queries: others.map((other) => ({
+      queryKey: ["sale-stock-elsewhere", journalKey, other.id, query],
+      queryFn: () =>
+        api<StockPage>(
+          `/catalog/stock-options?store_id=${other.id}&limit=${String(pageSize)}&query=${encodeURIComponent(query)}`,
+          token,
+        ),
+      enabled: query !== "",
+      retry: false,
+      // Once a search: not asked again as the app comes back to the front.
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const lines = new Map<string, string[]>();
+  others.forEach((other, at) => {
+    const read = reads[at];
+    // Read again and failed, its last answer is no longer said (review,
+    // 2026-11-01).
+    if (query === "" || read === undefined || read.isError) return;
+    const page = read.data;
+    if (page === undefined || page.has_more) return;
+    const byModel = new Map<string, Map<string, number>>();
+    for (const item of page.items) {
+      if (here.has(item.location_id) || item.available_quantity <= 0) continue;
+      const sizes =
+        byModel.get(item.product_variant_id) ?? new Map<string, number>();
+      const size = item.size_is_unknown
+        ? "розмір невідомий"
+        : visible(item.size_label);
+      sizes.set(size, (sizes.get(size) ?? 0) + item.available_quantity);
+      byModel.set(item.product_variant_id, sizes);
+    }
+    for (const [model, sizes] of byModel)
+      lines.set(model, [
+        ...(lines.get(model) ?? []),
+        `Ще в магазині «${visible(other.name)}»: ${[...sizes]
+          .map(([size, free]) => `${size} ${String(free)}`)
+          .join(" · ")}`,
+      ]);
+  });
+  return lines;
 }
 
 /** A model's «бирка»: its name, its price, a cell per size held. */
@@ -247,6 +317,7 @@ export function StockSearch({
   failure,
   offer,
   under,
+  elsewhere,
 }: {
   text: string;
   type: (text: string) => void;
@@ -288,6 +359,9 @@ export function StockSearch({
   /** What stands under the search, over the list: the till's paper switch
    * (spec S08; «Усе на бірці» task list, P0-5). */
   under?: ReactNode;
+  /** Each model's free units in the person's other stores, a line a store
+   * (`useElsewhere`; «Усе на бірці» task list, P2-3). */
+  elsewhere?: ReadonlyMap<string, string[]>;
 }): JSX.Element {
   const models = useMemo(
     () =>
@@ -389,6 +463,12 @@ export function StockSearch({
                       ? — розмір невідомий
                     </p>
                   )}
+                  {/* Said, never pressed: sold there, not here. */}
+                  {elsewhere?.get(tag.variantId)?.map((line) => (
+                    <p className="t-meta elsewhere" key={line}>
+                      {line}
+                    </p>
+                  ))}
                 </div>
               </div>
             ))}

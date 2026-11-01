@@ -609,7 +609,9 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
 
   /** «Ще», which holds «Резервні копії» and is marked as it is (P1-6). */
   function tab(page: Page) {
-    return sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
+    return sections(page).getByRole("button", {
+      name: /^Ще( — є що перевірити)?$/,
+    });
   }
 
   async function open(page: Page): Promise<void> {
@@ -646,12 +648,14 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     await open(page);
     // Marked as backups are while something needs the owner: «Ще», and the
     // section under it.
-    await expect(tab(page)).toHaveText("Ще ⚠");
+    await expect(tab(page)).toHaveAccessibleName("Ще — є що перевірити");
     await more(page);
     const backups = sections(page).getByRole("button", {
       name: /^Резервні копії/,
     });
-    await expect(backups).toHaveAccessibleName("Резервні копії ⚠");
+    await expect(backups).toHaveAccessibleName(
+      "Резервні копії потрібна ваша увага",
+    );
     // «Ще» is a screen of its own (navigation task list, P0-4): back to the
     // section from it.
     await backups.click();

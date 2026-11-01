@@ -41,7 +41,9 @@ function tab(page: Page) {
 
 /** «Ще», which holds the section and is marked as it is (redesign P1-6). */
 function moreTab(page: Page) {
-  return sections(page).getByRole("button", { name: /^Ще( ⚠)?$/ });
+  return sections(page).getByRole("button", {
+    name: /^Ще( — є що перевірити)?$/,
+  });
 }
 
 const hour = 3_600_000;
@@ -77,10 +79,17 @@ test("the owner is shown last night's failed copy, and why Telegram did not say 
   page,
 }) => {
   await enter(page, fixture.owner_telegram_user_id);
-  // Seen before «Ще» is opened.
-  await expect(moreTab(page)).toHaveText("Ще ⚠");
+  // Seen before «Ще» is opened: a dot on its glyph, read with its name
+  // («Усе на бірці» task list, P1-5).
+  await expect(moreTab(page)).toHaveAccessibleName("Ще — є що перевірити");
+  await expect(moreTab(page).locator(".tab-pill")).toHaveAttribute(
+    "data-attention",
+    "",
+  );
   await more(page);
-  await expect(tab(page)).toHaveAccessibleName("Резервні копії ⚠");
+  await expect(tab(page)).toHaveAccessibleName(
+    "Резервні копії потрібна ваша увага",
+  );
   await tab(page).click();
 
   const verdict = page.locator('[data-state="FAILED"]');
@@ -151,8 +160,21 @@ test("copies in order leave the tab unmarked and say when and how big", async ({
   await expect(verdict.getByRole("heading")).toHaveText("Копії в порядку");
   // Read once the state has arrived: before it, the tab is unmarked anyway.
   await expect(moreTab(page)).toHaveText("Ще");
+  await expect(moreTab(page).locator(".tab-pill")).not.toHaveAttribute(
+    "data-attention",
+  );
   await more(page);
-  await expect(tab(page)).toHaveAccessibleName("Резервні копії");
+  // In order: when the last copy ended, by this phone's clock (P1-5).
+  await expect(tab(page)).toHaveAccessibleName(
+    `Резервні копії в порядку, уночі о ${await page.evaluate(
+      (at) =>
+        new Date(at).toLocaleTimeString("uk-UA", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      good.finished_at,
+    )}`,
+  );
   // «Ще» is a screen of its own (navigation task list, P0-4): back to the
   // section from it.
   await tab(page).click();
@@ -192,9 +214,11 @@ test("a server never backed up says so plainly", async ({ page }) => {
     nights: [],
   });
   await enter(page, fixture.owner_telegram_user_id);
-  await expect(moreTab(page)).toHaveText("Ще ⚠");
+  await expect(moreTab(page)).toHaveAccessibleName("Ще — є що перевірити");
   await more(page);
-  await expect(tab(page)).toHaveAccessibleName("Резервні копії ⚠");
+  await expect(tab(page)).toHaveAccessibleName(
+    "Резервні копії потрібна ваша увага",
+  );
   await tab(page).click();
   await expect(
     page

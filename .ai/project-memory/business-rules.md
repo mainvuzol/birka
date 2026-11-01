@@ -5228,3 +5228,93 @@ are drawn.
 - **For the owner:** the row's hour under the goods, where the frame writes
   it after the size; the rows in the app's lists' rhythm, not on a card;
   «Що повертають?» read and «Модель або колір» seen, as at the till.
+
+## Chosen in chat — 2026-10-31 (the way in, the door, «Ще»'s lines, other stores' units; «Усе на бірці» P1-4, P1-5, P2-3)
+
+Chosen in chat on 2026-10-31 («merged, go next»), after #160, as one batch
+(«in next iterations we can do more voluminous lists of points»): the
+frame's P1-4, P1-5 and P2-3 (`all-on-the-tag-entry-more-report.md`). No
+right or rule changes, and no word of a refused sign-in or a session's end
+(К12).
+- **The way in (P1-4), decided here:**
+  - the name over «Доступу ще немає» is Telegram's first and last name from
+    the launch data, read on the phone and sent nowhere, its initials in
+    the avatar; with no name, the line is not shown;
+  - the ID in threes from the right, a lone first digit joined to the next
+    («5820 114 377», as the frame writes it); the groups stand apart by
+    their margins, so what is copied or selected is the digits alone;
+  - copied: a «success» buzz and the toast «ID скопійовано» (the app's
+    toast with no action, 4 s); refused: the current words «Не вдалося
+    скопіювати — виділіть ID і скопіюйте його.», as a toast; a phone with
+    no clipboard has no button, and one tap selects the ID whole;
+  - «Спробувати ще раз» reads the sign-in again with the screen kept as it
+    is; still no access, the toast «Доступу поки немає. Попросіть власника
+    магазину додати ваш ID.»; access given meanwhile, the app goes on;
+  - a failed sign-in: the same blank tag, headed by its own title «Вхід
+    через Telegram» (an h2 under «Бірка» before), its words as they were;
+    «Бірка» stays on the screen as the line over the tag, the app's mark
+    beside it (owner, 2026-10-15, В4);
+  - opening (S02): a first screen's places — a title, a line, a field,
+    three rows — with «Входимо в магазин…» read, and no menu; once the
+    rights are read, the first tab's places under the real menu, as before.
+    Signing in no longer shows the till's three tags (2026-10-17, «how it
+    is carried out»): before the rights, the first screen may be
+    «Сьогодні», the door or the till;
+  - the door: «Де ви сьогодні?» (h1), «Продажі запишуться на той магазин,
+    у якому ви зараз.», a big tag a store — 96 high at least, its eyelet,
+    the whole tag pressable, the name 22/700 and its code under it, a store
+    that does not trade with its state's sticker; nothing chosen
+    beforehand, nothing remembered (В6). The person's name no longer heads
+    the door: every screen after it says it in «{Магазин} · {Ім’я}»;
+  - the session's end is the sign-in's moment plus the answer's
+    `expires_in`, kept with the token; with no `expires_in`, or one no
+    session has (over a year), no end is said.
+- **«Ще»'s lines (P1-5), decided here:**
+  - a glyph at 24 on every row, the switch too, from P0-1's set; the
+    backups' row named plainly «Резервні копії»;
+  - «Борги»: «{N} людина винна / людини винні / людей винні» — the frame's
+    «{N} винні», said with its noun — in the debts' colour, `customers` of
+    the open store's `GET /credits/summary`; none, «ніхто не винен», as
+    «Борги» says «Зараз ніхто не винен»;
+  - «Брак»: «{N} очікують перевірки» in «Брак»'s colour, as its tile said;
+  - «Початкові залишки» and «Товар і каталог» that holds it: «{N} на
+    затвердження» in ink — lists in review kept by the open store, a shared
+    warehouse's in the store that keeps it, for whoever holds
+    `snapshot:approve` there; «{N}+» when the read's hundred lists did not
+    end, as «Сьогодні»'s parcels say theirs (review); «Товар і каталог»
+    then says what it holds, after « · »; none known to wait, nothing said;
+  - «Резервні копії»: «в порядку, уночі о ГГ:ХХ», the last copy's end by
+    this phone's clock, or a dot in the warning's colour and «потрібна
+    ваша увага» whenever the backups' screen has something to say (owner,
+    2026-10-03); the same dot on «Ще» in the menu, its name read «Ще — є
+    що перевірити»; no «⚠» anywhere in the app;
+  - «Змінити магазин» says the store open now;
+  - the foot: «Ви увійшли як {ім’я} · сесія до ГГ:ХХ», no role (К8); with
+    no known end, the name alone;
+  - a count being read is a grey place; a read that fails says nothing —
+    no number is made up.
+- **Other stores' units (P2-3), decided here:**
+  - the line names the store undeclined, «Ще в магазині «Ринок»: M 1 ·
+    L 1»: the frame's «Ще в «Ринку»» needs a case the app cannot make of
+    any store's name — as «Усього винні магазину «X»» (P0-3);
+  - asked: each of the person's other stores that trades (`ACTIVE`) where
+    they hold `inventory:view`, once a typed search (two letters, the
+    pause) and store, with the till's own request — the server lets it read
+    what that store sells from, «Свій» only with a right there; nothing is
+    asked while nothing is typed, and a search's answer stands a minute,
+    not asked again as the app comes back to the front;
+  - counted: free units only (`available_quantity` above nothing), summed
+    by size in the server's order, a size not known «розмір невідомий»; a
+    warehouse this till sells from is left out — its units are on the tag
+    already (a warehouse two stores share);
+  - a store whose answer does not end within its hundred rows, or fails,
+    says nothing: no number is made up;
+  - the line stands under a model's tag the till lists, in pencil, and is
+    never pressed. A model the open store holds none of has no tag, so no
+    line.
+- **For the owner:** the store's name undeclined in «Ще в магазині
+  «Ринок»»; a model this store has none of shows no other store's line
+  (it has no tag here); «{N} людини винні» for the frame's «{N} винні»;
+  the failed sign-in headed «Вхід через Telegram», «Бірка» over its tag;
+  «в порядку, уночі о ГГ:ХХ» said of a copy made by day too (the spec's
+  words).
