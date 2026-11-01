@@ -5456,3 +5456,93 @@ time; nothing is added up on the phone.
   «Магазин «X»: не винні», «Внесок приймає «X»», «На який борг
   вносить?», «Ще N», «Стерти дані покупця?», «Відкрийте борг у
   «Покупцях» і спробуйте ще раз.».
+
+## Chosen in chat — 2026-11-01 («Гроші»: where the money is now, what came in; sections P0-7)
+
+Chosen in chat on 2026-11-01 («Yes, start «Гроші»»), after #163: the
+sections task list's P0-7 (S29) alone (`all-on-the-tag-money-report.md`).
+The design's open questions are built as «if no»: Q-1 (the drawer and the
+invoices are the open store's), Q-9 (kopecks everywhere), Q-10 (no Face
+ID), Q-11 (no «У перевізника», no «Передоплати…»). No right, no server
+rule and no sum changes: every figure is a field the server answered, a
+store at a time; the phone adds nothing up — not the stores, not the
+places.
+- **The tab, decided here:**
+  - «Гроші» is a tab of whoever holds `report:view_financial` in the open
+    store, between «Замовлення» and «Ще», «Сьогодні · Продаж · Замовлення
+    · Гроші · Ще»; its glyph is the spec's `tab-money`;
+  - for them «Каса», «Звіт про продажі» and «Накладні» leave «Ще» ›
+    «Гроші» and are opened from «Гроші»; «Постачальникам» stays in «Ще» ›
+    «Гроші» (frame task list, §2а row 11); the screens opened from «Гроші»
+    say «← Гроші» and mark its tab;
+  - whoever reads no report keeps «Каса» as a tab and «Накладні» in «Ще»,
+    as before; in a store that does not trade, whoever has «Гроші» opens
+    «Каса» from it too — never a sixth tab.
+- **«Де гроші зараз», decided here:**
+  - the stores are the report's: where this person holds
+    `report:view_financial`, by code, one that does not trade with
+    «заблоковано» or «в архіві»; each place says a line a store, the
+    store named even when there is one;
+  - «У касах»: the last close's counted cash, «учора порахували 5 380,00
+    грн о 20:06» or «сьогодні порахували …»; a close older than yesterday,
+    «21.10 порахували …»; none yet, «Каса ще не рахувалась»; «Сьогоднішня
+    готівка — після вечірнього підрахунку.» while a drawer of them is not
+    closed today; «Видано сьогодні» lists each cash taken out in today's
+    drawer day — «Ринок» · Кур’єру постачальника 1 040,00 грн · 11:30 —
+    and nothing put in;
+  - «Картка сьогодні · звірте з чеком» and «Перекази сьогодні»: today's
+    report's card and transfer, as «Звіт про продажі» counts them;
+  - «Вам винні клієнти»: each store where this person takes payments
+    (`sale:credit`), «Винні 8 400,00 грн · 4 покупці» or «Ніхто не
+    винен»; its name opens «Покупці» where the open store has
+    `sale:credit`;
+  - «Ви винні постачальникам»: each store whose invoices this person reads
+    (`supplier:debt`), «38 000,00 грн · 3 накладні» or «Нічого не винні»;
+    its name opens the open store's «Накладні» where it has
+    `supplier:debt`;
+  - how old it is: «● наживо · 11:40» or «дані на 11:32» beside «Де гроші
+    зараз», as on «Сьогодні»'s day-tag; a place older than five minutes,
+    or whose last asking failed, says so itself; one never read, its
+    plate and «Спробувати ще раз», the others standing. Read as
+    «Сьогодні» reads: as the screen opens and comes back, at most once a
+    minute, under the keys «Каса», «Покупці» and «Накладні» read them by.
+- **«Надійшло», decided here:**
+  - «Сьогодні · Вчора · Тиждень · Місяць» (the report's «Цей тиждень»,
+    «Цей місяць» stay there): from Monday and from the 1st to the server's
+    `today`, as the report counts; held until today's report has answered;
+  - a table, the ways down, the stores across: «Готівка», «Картка»,
+    «Переказ», «Не вказано» only where a store has any, «Разом»; the
+    figures without «грн», which heads the table once, kopecks always;
+  - «Окремо від «Разом» — замовлення: переказ наперед … · накладений
+    платіж … («Центр»)» a store where its orders brought any; «З них
+    внески за борг: «Центр» 500,00 грн» the stores with any.
+- **The rows, decided here:** «Звіт про продажі» opens on the period
+  chosen; «Закриття» and «Каса · {магазин}» are the open store's, «Каса»
+  by its own right as before.
+- **After the review, decided here:**
+  - «Видано сьогодні» leaves out cash recorded late against an earlier
+    close (`for_close_id`, B6.3): it left before that close's count and is
+    that close's, read in «Закриття»;
+  - the line about tonight's count waits only for the stores that trade:
+    one blocked or archived closes no day;
+  - «Покупці» opened from «Гроші» marks «Гроші» too, as its other screens;
+  - a place's name, held while another screen's operation waits, is a
+    button held, as its row in «Ще» is — not plain words;
+  - a period kept while today's report is forgotten and cannot be read
+    again: «Надійшло» says so with «Спробувати ще раз», never a wait
+    without end — its period's read is the day's own until today is
+    known;
+  - the right to read the report gone while «Гроші», «Закриття» or the
+    report is open: the first screen this person has, as «Сьогодні» does;
+  - «Гроші» is held as «Ще» is, only while a first send is in flight: it
+    is the only way to «Каса» for whoever reads the report, a reason owed
+    after a close included (G12); its ways keep their sections' holds.
+- **For the owner:** «Гроші», «Де гроші зараз», «У касах», «учора
+  порахували … о …», «сьогодні порахували … о …», «21.10 порахували … о
+  …», «Сьогоднішня готівка — після вечірнього підрахунку.», «Видано
+  сьогодні», «Картка сьогодні · звірте з чеком», «Перекази сьогодні»,
+  «Вам винні клієнти», «Винні … · N покупці», «Ви винні постачальникам»,
+  «N накладних», «Нічого не винні», «Кожне місце окремо — ніколи не
+  складаємо в одну суму.», «Надійшло», «Тиждень», «Місяць», «Окремо від
+  «Разом» — замовлення: …», «З них внески за борг», «Каса · {магазин}»,
+  «← Гроші».

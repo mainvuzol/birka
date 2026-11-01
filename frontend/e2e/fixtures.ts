@@ -116,8 +116,26 @@ export async function openStore(
 /** The bottom menu's tabs, each for whoever may open it; every other place
  * is under «Ще» («Усе на бірці» task list, P0-4). «Повернення» is
  * «Продаж»'s other way (navigation task list, P0-1); «Каса» is a tab for
- * whoever reads no report, a row of «Ще» › «Гроші» for whoever does. */
+ * whoever reads no report, a row of «Гроші» for whoever does. */
 const tabs = ["Продаж", "Замовлення", "Каса"];
+
+/** The screens «Гроші» opens for whoever has it, by the way to each there
+ * («Усе на бірці» sections task list, P0-7): «Каса · {магазин}», the report's
+ * row, the suppliers' place. */
+const fromMoney: Record<string, (page: Page) => Locator> = {
+  Каса: (page) =>
+    page
+      .getByRole("navigation", { name: "Гроші" })
+      .getByRole("button", { name: /^Каса · / }),
+  "Звіт про продажі": (page) =>
+    page
+      .getByRole("navigation", { name: "Гроші" })
+      .getByRole("button", { name: "Звіт про продажі" }),
+  Накладні: (page) =>
+    page
+      .getByRole("article", { name: "Ви винні постачальникам" })
+      .getByRole("button", { name: "Ви винні постачальникам" }),
+};
 
 /** «Ще»'s rows by the screen they open, where the row's word is not the
  * screen's: «Приймання товару» is «Прийшов товар». */
@@ -285,6 +303,18 @@ export async function section(page: Page, name: string): Promise<void> {
   const tab = menu(page).getByRole("button", { name, exact: true });
   if (tabs.includes(name) && (await tab.count()) > 0) {
     await tab.click();
+    return;
+  }
+  const money = menu(page).getByRole("button", { name: "Гроші", exact: true });
+  const way = fromMoney[name];
+  if (way && (await money.count()) > 0) {
+    if (
+      !(await page
+        .getByRole("heading", { name: "Гроші", exact: true })
+        .isVisible())
+    )
+      await money.click();
+    await way(page).click();
     return;
   }
   await more(page);

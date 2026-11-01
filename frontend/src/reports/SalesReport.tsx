@@ -133,15 +133,18 @@ export function SalesReport({
   token,
   scopeKey,
   back,
+  period = null,
 }: {
   token: string;
   scopeKey: string;
-  /** «← Ще» over the heading: a section opened from «Ще» (navigation task
-   * list, P0-4). */
+  /** «← Гроші» over the heading, or «← Ще» (navigation task list, P0-4;
+   * «Усе на бірці» sections task list, P0-7). */
   back?: MoreBack | undefined;
+  /** The days it opens on: «Надійшло»'s period on «Гроші». */
+  period?: Range | null;
 }): JSX.Element {
   // None is today, as the server counts it where the stores are.
-  const [range, setRange] = useState<Range | null>(null);
+  const [range, setRange] = useState<Range | null>(period);
   const [storeId, setStoreId] = useState("");
   const [offset, setOffset] = useState(0);
   const report = useQuery({

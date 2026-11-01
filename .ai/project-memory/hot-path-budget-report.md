@@ -652,3 +652,32 @@ one tap for who owes, waits for the task list's P0-7. No server request
 changed: the card asks `GET /credits/customers` once a store, five at most,
 as the list's blocks ask theirs, and the hot path's cases stand as last
 measured.
+
+## Update — 2026-11-01: «Гроші»'s taps, counted from the menu
+
+The sections task list's P0-7
+([«Гроші»: where the money is now, what came in](all-on-the-tag-money-report.md))
+asks for the scorecard's money paths to be counted (sections task list §6).
+The taps from the menu for whoever reads the store's reports (the owner, a
+manager), typing not counted:
+
+| path | before | after | how counted |
+|---|---|---|---|
+| where the money is now, two stores (the owner) | ≥ 12 and a change of store (the scorecard's count: the report, «Каса», the debts and «Накладні» apart, a store at a time) | **1** («Гроші»: the drawers, card, transfers, who owes, what is owed, a line a store) | `money.spec.ts:468` |
+| who owes, two stores (the owner) | 2 («Ще», «Покупці») | **1** («Гроші»: the sum and the count a store); 2 to the list («Вам винні клієнти») | `money.spec.ts:468`, `:616` |
+| what came in this month | 3 («Ще», «Звіт про продажі», «Цей місяць») | **2** («Гроші», «Місяць»: ways down, stores across) | `money.spec.ts:811` |
+| «Каса» | 2 («Ще», «Каса») | **2** («Гроші», «Каса · Центр») | `money.spec.ts:616` |
+| «Накладні» | 2 («Ще», «Накладні») | **2** («Гроші», «Ви винні постачальникам») | `money.spec.ts:616` |
+| «Закриття» | 3 («Ще», «Каса», «Закриття») | **2** («Гроші», «Закриття») | `money.spec.ts:616` |
+| the till's sale, a seller | unchanged | unchanged: a cashier has no «Гроші», «Каса» stays a tab of their own | `money.spec.ts:1113` |
+
+The scorecard's «Де гроші зараз» counted one tap as its target; it is one.
+The journeys named walk each path tap by tap; none keeps a counter of
+presses, as nothing on the way can be typed or chosen twice.
+No server request changed. «Гроші» reads, a store at a time and each by its
+own right: the drawer and its last close, today's movements, the debts'
+summary and the suppliers' summary, under the keys «Каса», «Покупці» and
+«Накладні» read them by; and the network's report once for the day and
+once for the period chosen. With five stores that is at most 27 reads on
+opening, as often as «Сьогодні» reads, none of them the till's; the hot
+path's cases stand as last measured.
