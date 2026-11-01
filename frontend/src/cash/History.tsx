@@ -73,10 +73,14 @@ export function History({
   store,
   token,
   back,
+  backTo = "Каса",
 }: {
   store: Store;
   token: string;
   back: () => void;
+  /** The screen it goes back to: «Каса», or «Гроші» («Усе на бірці»
+   * sections task list, P0-7). */
+  backTo?: "Каса" | "Гроші";
 }): JSX.Element {
   // One year, fixed while the screen is open: every page is of the same list.
   const [period] = useState(() => ({
@@ -169,8 +173,12 @@ export function History({
       <ScreenHeader
         title="Закриття"
         back={
-          <Back go={back} label="Назад до каси">
-            <span aria-hidden="true">← </span>Каса
+          <Back
+            go={back}
+            label={backTo === "Каса" ? "Назад до каси" : "Назад до «Гроші»"}
+          >
+            <span aria-hidden="true">← </span>
+            {backTo}
           </Back>
         }
       />

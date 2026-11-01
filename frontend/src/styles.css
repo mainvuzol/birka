@@ -5092,3 +5092,154 @@ button.day-folded {
   font-size: 15px;
   font-weight: 700;
 }
+/* «Гроші» (spec S29; «Усе на бірці» sections task list, P0-7): where the
+   money is now, a tag a place — its glyph and its name, a line a store —
+   and what came in, the ways down and the stores across; nothing wider
+   than the phone at 360 with two stores. */
+.money {
+  margin: 12px 0 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* Four periods across 328: at 15, «Сьогодні» whole in its way. */
+.money-in .mode-switch button {
+  font-size: 15px;
+}
+.money-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+.money-head h2 {
+  margin: 0;
+  color: var(--pencil);
+}
+.money-place + .money-place {
+  margin-top: 8px;
+}
+.money-place-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px 12px 20px;
+}
+.money-place-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--ink);
+}
+.money-place-title .icon {
+  margin-top: 3px;
+}
+/* A place's name is the way to its screen, 44 high without making the
+   tag taller. */
+button.money-place-open {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  margin: -11px 0;
+  padding: 11px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.money-place-open .sale-open {
+  margin-left: auto;
+}
+.money-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.money-line {
+  overflow-wrap: anywhere;
+}
+.money-store {
+  font-weight: 600;
+}
+.money-store .badge {
+  padding: 0 6px;
+  font-size: 13px;
+}
+.money-note,
+.money-subhead,
+.money-outside,
+.money-rule {
+  margin: 0;
+  color: var(--pencil);
+}
+.money-subhead {
+  margin-top: 4px;
+  font-weight: 600;
+}
+.money-rule {
+  margin-top: 10px;
+}
+.money-outside {
+  margin-top: 6px;
+}
+/* Three stores or more may be wider than the phone: the table alone
+   scrolls, the page never. */
+.money-table-wrap {
+  overflow-x: auto;
+}
+.money-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.money-table th,
+.money-table td {
+  padding: 6px 0 6px 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: right;
+  white-space: nowrap;
+}
+.money-table thead th {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--pencil);
+  white-space: normal;
+  vertical-align: bottom;
+}
+.money-table th[scope="row"],
+.money-table .money-unit {
+  padding-left: 0;
+  vertical-align: bottom;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--pencil);
+}
+.money-table tbody tr {
+  border-top: 1px solid var(--edge);
+}
+.money-total th[scope="row"],
+.money-total td {
+  font-weight: 700;
+  color: var(--ink);
+}
+.money-table-wait {
+  display: grid;
+  gap: 12px;
+  padding: 6px 0;
+}
+.money-rows {
+  margin-top: 8px;
+}

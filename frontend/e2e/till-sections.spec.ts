@@ -732,7 +732,7 @@ test("whoever holds no right of the drawer has no «Каса»: no tab, no row, 
   expect(await groups(page).allTextContents()).not.toContain("Гроші");
 });
 
-test("the owner's menu is «Сьогодні · Продаж · Замовлення · Ще» at 360 px; «Ще» holds five groups in the design's order, «Каса» among the money, «← Ще» back from each («Усе на бірці» task list, P0-4)", async ({
+test("the owner's menu is «Сьогодні · Продаж · Замовлення · Гроші · Ще» at 360 px; «Ще» holds five groups in the design's order, only «Постачальникам» among the money, «← Ще» back from each («Усе на бірці» task list, P0-4; sections task list, P0-7)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -743,6 +743,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     "Сьогодні",
     "Продаж",
     "Замовлення",
+    "Гроші",
     /^Ще( — є що перевірити)?$/,
   ]);
   await atTheBottom(page);
@@ -761,9 +762,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     /^Брак (нічого не чекає|\d+ (очікує|очікують) перевірки)$/,
     "Залишки",
     /^Товар і каталог (\d+\+? на затвердження · )?перевірка, моделі, початкові залишки$/,
-    "Каса",
-    "Звіт про продажі",
-    "Накладні",
+    // «Каса», the report and «Накладні» are «Гроші»'s (P0-7).
     "Постачальникам",
     "Магазини",
     /^Резервні копії (в порядку|потрібна ваша увага)/,
@@ -802,9 +801,6 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     ["Прийшов товар", "Приймання товару"],
     [/^Брак( |$)/, "Брак"],
     ["Залишки", "Залишки"],
-    ["Каса", "Каса"],
-    ["Звіт про продажі", "Звіт про продажі"],
-    ["Накладні", "Накладні"],
     ["Постачальникам", "Постачальникам"],
     ["Магазини", "Магазини"],
     [/^Резервні копії( |$)/, "Резервні копії"],
@@ -845,7 +841,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
   }
 });
 
-test("a manager's «Ще» is people, goods, money and this phone, with no network («Усе на бірці» task list, P0-4)", async ({
+test("a manager's «Ще» is people, goods, money and this phone, with no network; «Гроші» a tab, «Каса» in it («Усе на бірці» task list, P0-4; sections task list, P0-7)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -858,6 +854,7 @@ test("a manager's «Ще» is people, goods, money and this phone, with no netwo
     "Сьогодні",
     "Продаж",
     "Замовлення",
+    "Гроші",
     /^Ще( — є що перевірити)?$/,
   ]);
   await more(page);
@@ -869,10 +866,16 @@ test("a manager's «Ще» is people, goods, money and this phone, with no netwo
   ]);
   await expect(moreRow(page, "Магазини")).toHaveCount(0);
   await expect(moreRow(page, /^Резервні копії/)).toHaveCount(0);
-  await expect(moreRow(page, "Каса")).toBeVisible();
+  await expect(moreRow(page, "Каса")).toHaveCount(0);
+  await tabs(page).filter({ hasText: "Гроші" }).click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Гроші" })
+      .getByRole("button", { name: "Каса · Центр" }),
+  ).toBeVisible();
 });
 
-test("whoever may not pay suppliers' invoices has no «Накладні» («Усе на бірці» task list, P0-4)", async ({
+test("whoever may not pay suppliers' invoices has no «Накладні», nor their place on «Гроші» («Усе на бірці» task list, P0-4; sections task list, P0-7)", async ({
   page,
 }) => {
   await holdingNone(page, ["supplier:debt"]);
@@ -881,7 +884,18 @@ test("whoever may not pay suppliers' invoices has no «Накладні» («У�
   await toTill(page);
   await more(page);
   await expect(moreRow(page, "Накладні")).toHaveCount(0);
-  await expect(moreRow(page, "Звіт про продажі")).toBeVisible();
+  await tabs(page).filter({ hasText: "Гроші" }).click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Гроші" })
+      .getByRole("button", { name: "Звіт про продажі" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "Вам винні клієнти" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "Ви винні постачальникам" }),
+  ).toHaveCount(0);
 });
 
 test("«Змінити магазин» is one tap from the line over any screen of a store, for whoever has two, and in «Ще» › «Цей телефон» («Усе на бірці» task list, P0-4)", async ({

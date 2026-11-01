@@ -534,11 +534,27 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   await expect(
     page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
-  // Its own section stays open under «Ще», every other is held (P1-6).
-  await more(page);
+  // Its own section stays open — on «Гроші» for whoever has it — every
+  // other is held (P1-6; «Усе на бірці» sections task list, P0-7).
+  await sections(page)
+    .getByRole("button", { name: "Гроші", exact: true })
+    .click();
   await expect(
-    sections(page).getByRole("button", { name: "Накладні", exact: true }),
+    page
+      .getByRole("article", { name: "Ви винні постачальникам" })
+      .getByRole("button", { name: "Ви винні постачальникам" }),
   ).toBeEnabled();
+  await expect(
+    page
+      .getByRole("article", { name: "Вам винні клієнти" })
+      .getByRole("button", { name: "Вам винні клієнти" }),
+  ).toBeDisabled();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Гроші" })
+      .getByRole("button", { name: "Закриття" }),
+  ).toBeDisabled();
+  await more(page);
   await expect(
     sections(page).getByRole("button", { name: "Залишки", exact: true }),
   ).toBeDisabled();

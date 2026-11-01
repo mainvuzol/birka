@@ -37,7 +37,11 @@ export interface OpenOrders {
   has_more: boolean;
 }
 
-const often = { staleTime: EVERY, gcTime: KEPT, retry: false } as const;
+export const often = {
+  staleTime: EVERY,
+  gcTime: KEPT,
+  retry: false,
+} as const;
 
 /** Today's sales of every store this person reads the report in, as «Звіт
  * про продажі» reads today's. */

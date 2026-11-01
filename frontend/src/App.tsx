@@ -114,6 +114,9 @@ import {
   useCorrectionCommand,
 } from "@/catalog/modelCommands";
 import { SalesReport } from "@/reports/SalesReport";
+import { History } from "@/cash/History";
+import { Money } from "@/money/Money";
+import type { Period } from "@/money/reads";
 import { Today } from "@/today/Today";
 import { useWaiting } from "@/today/waiting";
 import {
@@ -171,6 +174,11 @@ type Tab =
   | "report"
   | "models"
   | "cash"
+  /** Where the money is now, and what came in: a tab for whoever reads the
+   * report (spec S29; «Усе на бірці» sections task list, P0-7). */
+  | "money"
+  /** «Гроші» › «Закриття»: the open store's closes. */
+  | "closes"
   /** «Ще»'s own screen, its groups (navigation task list, P0-4). */
   | "more"
   /** «Ще» › «Товар» › «Товар і каталог», for whoever has two of its
@@ -758,6 +766,14 @@ function Workspace({
   });
   // A section a tag of «Сьогодні» opened goes back there: «← Сьогодні».
   const [fromToday, setFromToday] = useState<Tab | null>(null);
+  // So from «Гроші»: «← Гроші»; and «Надійшло»'s period, kept while the
+  // report opened on it stands («Усе на бірці» sections task list, P0-7).
+  const [fromMoney, setFromMoney] = useState<Tab | null>(null);
+  const [moneyPeriod, setMoneyPeriod] = useState<Period>("today");
+  const [reportRange, setReportRange] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // «Замовлення» as it was left: what was typed, the place chosen (review,
   // 2026-10-23); afresh when «Замовлення» is chosen again.
@@ -1706,10 +1722,13 @@ function Workspace({
         )
       : null;
   // «Каса» is a tab for whoever counts the drawer and reads no report; for
-  // whoever reads one it is «Ще» › «Гроші» › «Каса» until «Гроші» is built
-  // (S29; the frame's В2 (а)). Over a store that does not trade, a tab for
-  // whoever the network's rights open it to, to close the day (§4а).
-  const cashTab = canSeeCash && (!trading || !canSeeReport);
+  // whoever reads one it is «Гроші» › «Каса · {магазин}» (S29; the frame's
+  // В2 (а); «Усе на бірці» sections task list, P0-7) — in a store that does
+  // not trade too, never a sixth tab. Over such a store, a tab for whoever
+  // else the network's rights open it to, to close the day (§4а).
+  const cashTab = canSeeCash && !canSeeReport;
+  // The screens «Гроші» opens and stands for, for whoever has it.
+  const moneyScreens: readonly Tab[] = ["cash", "report", "invoices", "closes"];
   // The sections (redesign P1-6), each by the same right as before: the
   // menu's tabs (spec §6.2; «Усе на бірці» task list, P0-4), and every other
   // under «Ще», two taps away. An order left open is forgotten by the
@@ -1779,6 +1798,22 @@ function Workspace({
         setSelectedId(null);
         setOrdersView(freshOrdersView);
       },
+      tabbed: true,
+    },
+    // «Гроші», for whoever reads the report: «Каса», «Звіт про продажі»,
+    // «Накладні» and «Закриття» are opened from it, and marked with it
+    // (spec S29; «Усе на бірці» sections task list, P0-7). Held as «Ще» is:
+    // only while a first send is in flight, each of its ways by its own
+    // section's rule.
+    {
+      tab: "money",
+      label: "Гроші",
+      icon: "tab-money",
+      shown: canSeeReport,
+      disabled: sending,
+      // «Покупці» too, while opened from it.
+      also:
+        fromMoney === "credits" ? [...moneyScreens, "credits"] : moneyScreens,
       tabbed: true,
     },
     {
@@ -1902,7 +1937,9 @@ function Workspace({
       ? { ref: todayButton }
       : section.tab === "list"
         ? { ref: ordersButton }
-        : {}),
+        : section.tab === "money"
+          ? { ref: moneyButton }
+          : {}),
     icon:
       section.tab === "today"
         ? "tab-today"
@@ -1910,7 +1947,9 @@ function Workspace({
           ? "tab-orders"
           : section.tab === "cash"
             ? "tab-drawer"
-            : "tab-sell",
+            : section.tab === "money"
+              ? "tab-money"
+              : "tab-sell",
     current: standsFor(section),
     disabled: section.disabled,
     open: () => {
@@ -2049,7 +2088,16 @@ function Workspace({
       title: "Товар",
       rows: [...rowsOf(["receive", "damaged", "stock"]), ...catalogueRow],
     },
-    { title: "Гроші", rows: rowsOf(["cash", "report", "invoices", "suppliers"]) },
+    // For whoever has «Гроші», only «Постачальникам» stays here (the
+    // frame's §2а, row 11).
+    {
+      title: "Гроші",
+      rows: rowsOf(
+        canSeeReport
+          ? ["suppliers"]
+          : ["cash", "report", "invoices", "suppliers"],
+      ),
+    },
     { title: "Мережа", rows: rowsOf(["stores", "backups"]) },
     {
       title: "Цей телефон",
@@ -2116,9 +2164,28 @@ function Workspace({
     held: sending || blocked,
     to: "Сьогодні",
   };
-  /** The «←» of a section in «Ще»: back where it was opened from. */
+  // So on «Гроші», for whoever comes back to it.
+  const moneyButton = useRef<HTMLButtonElement>(null);
+  const toMoney = (): void => {
+    setTab("money");
+    moneyButton.current?.focus();
+  };
+  const moneyBack: MoreBack = { go: toMoney, held: sending, to: "Гроші" };
+  /** A section opened from «Гроші», «← Гроші» over it. */
+  const fromMoneyTo = (section: Tab) => (): void => {
+    setTab(section);
+    setFromMoney(section);
+    moneyButton.current?.focus();
+  };
+  /** The «←» of a section in «Ще»: back where it was opened from — «Гроші»'s
+   * own screens there for whoever has it, whatever opened them. */
   const backOf = (section: Tab): MoreBack =>
-    fromToday === section ? todayBack : moreBack;
+    fromToday === section
+      ? todayBack
+      : fromMoney === section ||
+          (canSeeReport && moneyScreens.includes(section))
+        ? moneyBack
+        : moreBack;
   /** A tag's verb: its section, with «← Сьогодні». */
   const fromTag = (section: Tab) => (): void => {
     setTab(section);
@@ -2135,6 +2202,8 @@ function Workspace({
   // Back on «Сьогодні» or on «Ще», a section is opened afresh from there.
   useEffect(() => {
     if (tab === "today" || tab === "more") setFromToday(null);
+    if (tab === "today" || tab === "more" || tab === "money")
+      setFromMoney(null);
   }, [tab]);
   // Opened on «Замовлення» with no till to open first, by whoever may not
   // read them: the first section shown instead (orders task list, P2-1) —
@@ -2151,6 +2220,13 @@ function Workspace({
       setTab((now) => (now === "list" ? firstShown : now));
     if (tab === "today" && !canSeeReport && firstShown !== undefined)
       setTab((now) => (now === "today" ? firstShown : now));
+    // And with «Гроші» and the screens it stands for.
+    if (
+      (tab === "money" || tab === "closes" || tab === "report") &&
+      !canSeeReport &&
+      firstShown !== undefined
+    )
+      setTab((now) => (now === tab ? firstShown : now));
   }, [tab, canSeeOrders, canSeeReport, firstShown]);
   // A first send is its dock's to say: an attempt is shown as kept only
   // once its answer is lost, or while it is checked again («Усе на бірці»
@@ -2856,7 +2932,7 @@ function Workspace({
         canSeeCredits ? (
           <Credits
             key={creditEpoch}
-            back={moreBack}
+            back={backOf("credits")}
             stores={depositOthers}
             payTask={setDepositTask}
             store={store}
@@ -2964,7 +3040,7 @@ function Workspace({
             networkOwner={me.organization_permissions.includes(
               "supplier:write_off",
             )}
-            back={moreBack}
+            back={backOf("invoices")}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
@@ -2991,14 +3067,73 @@ function Workspace({
             networkOwner={me.organization_permissions.includes("store:manage")}
             fix={cashFix}
             fixSeen={fixSeen}
-            back={cashTab ? undefined : moreBack}
+            back={cashTab ? undefined : backOf("cash")}
           />
         ) : // The right gone while «Каса» was open: nothing is said of the
         // rule, as «Покупці» (cash task list, P2-1).
         null
+      ) : tab === "money" ? (
+        canSeeReport ? (
+          <Money
+            token={token}
+            scopeKey={reportKey}
+            stores={me.stores}
+            period={moneyPeriod}
+            choose={setMoneyPeriod}
+            held={sending}
+            toCustomers={
+              canSeeCredits
+                ? { go: fromMoneyTo("credits"), disabled: otherThanCredit }
+                : undefined
+            }
+            toInvoices={
+              canSeeInvoices
+                ? { go: fromMoneyTo("invoices"), disabled: otherThanInvoices }
+                : undefined
+            }
+            toReport={{
+              disabled: blocked,
+              open: (range) => {
+                setReportRange(range);
+                fromMoneyTo("report")();
+              },
+            }}
+            rows={[
+              {
+                key: "closes",
+                label: "Закриття",
+                icon: "clock",
+                disabled: otherThanCash,
+                open: fromMoneyTo("closes"),
+              },
+              ...(canSeeCash
+                ? [
+                    {
+                      key: "cash",
+                      label: `Каса · ${visible(store.name)}`,
+                      icon: "drawer" as const,
+                      disabled: otherThanCash,
+                      open: fromMoneyTo("cash"),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
+      ) : tab === "closes" ? (
+        canSeeReport ? (
+          <History store={store} token={token} back={toMoney} backTo="Гроші" />
+        ) : null
       ) : tab === "report" ? (
         canSeeReport ? (
-          <SalesReport token={token} scopeKey={reportKey} back={moreBack} />
+          <SalesReport
+            token={token}
+            scopeKey={reportKey}
+            back={backOf("report")}
+            period={reportRange}
+          />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
         null
