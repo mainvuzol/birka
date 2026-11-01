@@ -2053,8 +2053,9 @@ test.describe("9. what to do with money after the outage", () => {
     details: { reason: "NOT_OWED", recorded: false },
   };
 
-  /** «Борги», stubbed: one customer, one debt; payments refused NOT_OWED. */
-  async function debts(page: Page): Promise<string[]> {
+  /** «Покупці», stubbed: one customer, one debt; payments refused NOT_OWED,
+   * or, with `left`, as more than the `left` still owed. */
+  async function debts(page: Page, left?: string): Promise<string[]> {
     const payments: string[] = [];
     await on(page, "/credits/customers", async (route) => {
       await route.fulfill({
@@ -2079,9 +2080,12 @@ test.describe("9. what to do with money after the outage", () => {
       });
     });
     await on(page, `/credits/${ids.credit}`, async (route) => {
-      // Paid off meanwhile, by a colleague.
+      // Paid off, or paid in part, meanwhile, by a colleague.
       await route.fulfill({
-        json: { ...credit, status: "SETTLED", paid: "3000.00", owed: "0.00" },
+        json:
+          left === undefined
+            ? { ...credit, status: "SETTLED", paid: "3000.00", owed: "0.00" }
+            : { ...credit, paid: "2500.00", owed: left },
       });
     });
     await on(
@@ -2089,10 +2093,38 @@ test.describe("9. what to do with money after the outage", () => {
       `/credits/${ids.credit}/payments`,
       async (route, request) => {
         payments.push(request.postData() ?? "");
-        await route.fulfill({ status: 422, json: notOwed });
+        await route.fulfill({
+          status: 422,
+          json:
+            left === undefined
+              ? notOwed
+              : {
+                  ...notOwed,
+                  details: {
+                    reason: "MORE_THAN_OWED",
+                    owed: left,
+                    recorded: false,
+                  },
+                },
+        });
       },
     );
     return payments;
+  }
+
+  /** «Покупці» › the customer's card › «Внесок»: the till's S21, its sum
+   * keyed in. */
+  async function payOnCard(page: Page, sum: string): Promise<void> {
+    await section(page, "Покупці");
+    await page
+      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+      .click();
+    await page.getByRole("button", { name: "Внесок", exact: true }).click();
+    for (const one of sum)
+      await page
+        .locator(".keypad")
+        .getByRole("button", { name: one, exact: true })
+        .click();
   }
 
   // The money goes back the way it came, never another: cash from the
@@ -2102,31 +2134,27 @@ test.describe("9. what to do with money after the outage", () => {
     {
       button: "Готівка",
       said: "За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю. Поки не повернули, вони зайві в касі: при закритті вкажіть причину.",
-      more: "Це більше, ніж винні: залишок боргу 2 000,00 грн. Прийміть 2 000,00 грн, а решту поверніть покупцю.",
+      more: "Це більше, ніж винні: залишок боргу 500,00 грн. Прийміть 500,00 грн, а решту поверніть покупцю.",
     },
     {
       button: "Картка",
       said: "За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю на картку через термінал. На касу це не впливає.",
-      more: "Це більше, ніж винні: залишок боргу 2 000,00 грн. Прийміть 2 000,00 грн, а решту поверніть покупцю на картку через термінал.",
+      more: "Це більше, ніж винні: залишок боргу 500,00 грн. Прийміть 500,00 грн, а решту поверніть покупцю на картку через термінал.",
     },
     {
       button: "Переказ",
       said: "За цим продажем уже нічого не винні — внесок не записано. Якщо гроші вже взяли, поверніть їх покупцю переказом. На касу це не впливає.",
-      more: "Це більше, ніж винні: залишок боргу 2 000,00 грн. Прийміть 2 000,00 грн, а решту поверніть покупцю переказом.",
+      more: "Це більше, ніж винні: залишок боргу 500,00 грн. Прийміть 500,00 грн, а решту поверніть покупцю переказом.",
     },
   ]) {
-    test(`«Борги»: a payment by ${way.button} refused as not owed says to give the money back`, async ({
+    test(`«Покупці»: a payment by ${way.button} refused as not owed says to give the money back`, async ({
       page,
     }) => {
       await serve(page);
       await debts(page);
       await page.goto(launch());
       await openStore(page, /Подільський/);
-      await section(page, "Борги");
-      await page
-        .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
-        .click();
-      await page.getByLabel("Сума внеску, грн").fill("500");
+      await payOnCard(page, "500");
       await page
         .getByRole("group", { name: "Внесок", exact: true })
         .getByRole("button", { name: way.button, exact: true })
@@ -2134,24 +2162,22 @@ test.describe("9. what to do with money after the outage", () => {
       await expect(page.getByRole("alert")).toHaveText(way.said);
     });
 
-    test(`«Борги»: more than is owed by ${way.button} says to take what is owed and give the rest back`, async ({
+    // Over what is owed, the keypad stops it before it is sent: here a
+    // colleague took a part meanwhile, and the server says so.
+    test(`«Покупці»: more than is owed by ${way.button} says to take what is owed and give the rest back`, async ({
       page,
     }) => {
       await serve(page);
-      const payments = await debts(page);
+      const payments = await debts(page, "500.00");
       await page.goto(launch());
       await openStore(page, /Подільський/);
-      await section(page, "Борги");
-      await page
-        .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
-        .click();
-      await page.getByLabel("Сума внеску, грн").fill("2500");
+      await payOnCard(page, "1000");
       await page
         .getByRole("group", { name: "Внесок", exact: true })
         .getByRole("button", { name: way.button, exact: true })
         .click();
       await expect(page.getByRole("alert")).toHaveText(way.more);
-      expect(payments).toEqual([]);
+      expect(payments).toHaveLength(1);
     });
   }
 
@@ -2203,7 +2229,7 @@ test.describe("9. what to do with money after the outage", () => {
       ).toBeNull();
     });
 
-  test("«Борги»: a kept card payment the phone confirms says not to charge the card twice", async ({
+  test("«Покупці»: a kept card payment the phone confirms says not to charge the card twice", async ({
     page,
   }) => {
     await seed(page, {
@@ -2254,7 +2280,7 @@ test.describe("9. what to do with money after the outage", () => {
     expect(payments).toHaveLength(1);
   });
 
-  test("«Борги»: a kept card payment typed from paper the phone confirms never says to charge the card, and is resent with its mark", async ({
+  test("«Покупці»: a kept card payment typed from paper the phone confirms never says to charge the card, and is resent with its mark", async ({
     page,
   }) => {
     const outage = { by_user_id: null, at: null };
@@ -2381,7 +2407,7 @@ test.describe("9. what to do with money after the outage", () => {
       said: "Списання боргу — сервер не відповів. Двічі воно не запишеться. Поки чекаємо, інші дії недоступні.",
     },
   ])
-    test(`«Борги»: a kept payment's banner ${kept.what} (credits task list, P1-2)`, async ({
+    test(`«Покупці»: a kept payment's banner ${kept.what} (credits task list, P1-2)`, async ({
       page,
     }) => {
       await seed(page, {
@@ -2457,7 +2483,7 @@ test.describe("9. what to do with money after the outage", () => {
       body: { kind: "payment", amount: "500.00", payment_method: "CARD" },
       status: 409,
       recorded: false,
-      said: "Внесок не записано. Дані змінилися, поки сервер не відповідав. Відкрийте борг у «Боргах» і спробуйте ще раз.",
+      said: "Внесок не записано. Дані змінилися, поки сервер не відповідав. Відкрийте борг у «Продажі» › «Внесок» і спробуйте ще раз.",
       kept: null,
     },
     {
@@ -2465,11 +2491,11 @@ test.describe("9. what to do with money after the outage", () => {
       body: { kind: "write-off", reason: "виїхав" },
       status: 422,
       recorded: false,
-      said: "Списання не записано. Сервер не прийняв запит. Відкрийте борг у «Боргах» і спробуйте ще раз.",
+      said: "Списання не записано. Сервер не прийняв запит. Відкрийте борг у «Покупцях» і спробуйте ще раз.",
       kept: null,
     },
   ])
-    test(`«Борги»: ${refused.what}, in the debt's words, never an order's (credits task list, P2-2)`, async ({
+    test(`«Покупці»: ${refused.what}, in the debt's words, never an order's (credits task list, P2-2)`, async ({
       page,
     }) => {
       // Every alert's words, as each is drawn: never, even for a moment,
@@ -2556,7 +2582,7 @@ test.describe("9. what to do with money after the outage", () => {
       }
     });
 
-  test("«Борги»: a kept payment answered «not found» three times in a row asks for a manager (owner decision, 2026-10-19)", async ({
+  test("«Покупці»: a kept payment answered «not found» three times in a row asks for a manager (owner decision, 2026-10-19)", async ({
     page,
   }) => {
     await seed(page, {
@@ -2614,7 +2640,7 @@ test.describe("9. what to do with money after the outage", () => {
     await expect(said).toHaveText(unconfirmed);
   });
 
-  test("«Борги»: a payment refused because the store that sold trades again says to pass the paper to a manager", async ({
+  test("«Покупці»: a payment refused because the store that sold trades again says to pass the paper to a manager", async ({
     page,
   }) => {
     await serve(page);
@@ -2636,11 +2662,7 @@ test.describe("9. what to do with money after the outage", () => {
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);
-    await section(page, "Борги");
-    await page
-      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
-      .click();
-    await page.getByLabel("Сума внеску, грн").fill("500");
+    await payOnCard(page, "500");
     await page
       .getByRole("group", { name: "Внесок", exact: true })
       .getByRole("button", { name: "Готівка", exact: true })
@@ -2650,7 +2672,7 @@ test.describe("9. what to do with money after the outage", () => {
     );
   });
 
-  test("«Борги»: a kept write-off refused on resend as not owed says the write-off was not recorded, with no money to give back", async ({
+  test("«Покупці»: a kept write-off refused on resend as not owed says the write-off was not recorded, with no money to give back", async ({
     page,
   }) => {
     await seed(page, {
@@ -2693,7 +2715,7 @@ test.describe("9. what to do with money after the outage", () => {
     expect(writeOffs).toHaveLength(1);
   });
 
-  test("«Борги»: a kept transfer payment refused on resend as more than owed says to send the rest back by transfer", async ({
+  test("«Покупці»: a kept transfer payment refused on resend as more than owed says to send the rest back by transfer", async ({
     page,
   }) => {
     await seed(page, {
@@ -2748,7 +2770,7 @@ test.describe("9. what to do with money after the outage", () => {
     expect(payments).toHaveLength(1);
   });
 
-  test("«Борги»: a kept payment refused on resend as not owed says the same, not an order's words", async ({
+  test("«Покупці»: a kept payment refused on resend as not owed says the same, not an order's words", async ({
     page,
   }) => {
     await seed(page, {
@@ -4677,7 +4699,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(page.getByText(/Немає права/)).toHaveCount(0);
   });
 
-  /** A payment or a write-off of «Борги», kept, its answer never heard. */
+  /** A payment or a write-off of a debt, kept, its answer never heard. */
   function keptDebt(kind: "payment" | "write-off"): string {
     return JSON.stringify({
       key: randomUUID(),
@@ -4748,7 +4770,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
   // Whoever may no longer take payments, or write off, is answered what
   // their own command recorded, or that nothing was, and the till is freed —
   // as a kept return (owner decisions, 2026-10-18 and 2026-10-21). Their
-  // phone never turns to «Борги» (credits task list, P2-1).
+  // phone never turns to «Покупці» (credits task list, P2-1).
   for (const [kind, path, what, right] of [
     [
       "payment",
@@ -4764,7 +4786,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ],
   ] as const)
     for (const answer of ["recorded", "nothing", "unproven"] as const)
-      test(`a kept ${kind} on a phone whose person may no longer open «Борги», answered ${answer}, says so over the till, never «Немає доступу до боргів» (owner decision, 2026-10-21)`, async ({
+      test(`a kept ${kind} on a phone whose person may no longer open «Покупці», answered ${answer}, says so over the till, never «Немає доступу до боргів» (owner decision, 2026-10-21)`, async ({
         page,
       }) => {
         await seed(page, { [creditKey]: keptDebt(kind) });
@@ -4842,7 +4864,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
           expect(await kept()).not.toBeNull();
         }
         // The till beneath it — free once settled, held while kept — never
-        // «Борги».
+        // «Покупці».
         await expect(
           page.getByRole("heading", { name: "Продаж", exact: true }),
         ).toBeVisible();
@@ -4852,7 +4874,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         if (answer === "unproven") await expect(paper).toBeDisabled();
         else await expect(paper).toBeEnabled();
         await expect(
-          page.getByRole("button", { name: /^Борги( |$)/ }),
+          page.getByRole("button", { name: /^Покупці( |$)/ }),
         ).toHaveCount(0);
         // Neither debts nor orders: no «Замовлення» in the menu (navigation
         // task list, P0-2; «Усе на бірці» task list, P0-4).
@@ -5075,7 +5097,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("a kept write-off, never made at the till, turns to «Ще» › «Борги» on a phone whose person may take payments, never to «Продаж» › «Внесок» (review, 2026-10-29; «Усе на бірці» task list, P0-4)", async ({
+  test("a kept write-off, never made at the till, turns to «Ще» › «Покупці» on a phone whose person may take payments, never to «Продаж» › «Внесок» (review, 2026-10-29; «Усе на бірці» task list, P0-4)", async ({
     page,
   }) => {
     await seed(page, { [creditKey]: keptDebt("write-off") });
@@ -5092,7 +5114,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       page.getByRole("heading", { name: "Списання ще не підтверджено" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Борги", exact: true }),
+      page.getByRole("heading", { name: "Покупці", exact: true }),
     ).toBeVisible();
     await expect(
       menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
@@ -5332,7 +5354,7 @@ test.describe("11. the stub «Корінець»: every press says what became o
     await expect(check).toHaveText(asked);
 
     // Over another screen, a banner with the same words; the button plain.
-    // «Борги» says who owes as «Ще» opens («Усе на бірці» task list, P1-5):
+    // «Покупці» says who owes as «Ще» opens («Усе на бірці» task list, P1-5):
     // the server gone, its read gets no answer — any answer is the server
     // back (ADR-0013 §4.3).
     await on(page, "/credits/summary", async (route) => {

@@ -53,7 +53,7 @@ export function checkTerms(
 
 /**
  * What this number already owes the store, or that a debt of it was written
- * off: one line under the phone, read as «Борги» reads it (owner decision,
+ * off: one line under the phone, read as «Покупці» reads it (owner decision,
  * 2026-10-18, В4 (а); credits task list, P1-5). It only tells — the seller
  * decides, nothing is refused; a read that fails says nothing, and the sale
  * goes on. Only for the number in the field, once it is whole.

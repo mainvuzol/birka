@@ -12,11 +12,11 @@ import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
- * One debt in «Борги» (credits task list, P0-3, P0-4): who and what in one
- * line, what is owed first and large with how much of it is paid, the
- * history a row an entry; the payment's sum under it and its three ways
- * under the thumb, none pressable without a sum. The store's debts are
- * stubbed.
+ * One debt in «Покупці» (credits task list, P0-3, P0-4; spec S20, S21):
+ * who and what in one line, what is owed first and large with how much of
+ * it is paid, the history a row an entry; «Внесок» opens S21, the payment's
+ * sum on the app's keypad and its three ways under the thumb; the owner's
+ * write-off and erasing behind the debt's ⋯. The store's debts are stubbed.
  */
 
 interface Fixture {
@@ -122,8 +122,24 @@ function debt(extra: Record<string, unknown> = {}): Debt {
   };
 }
 
-/** The list holds this one debt; payments are answered as `paid` says, and
- * every body sent is kept. */
+/** Her other debt here, a scarf: her card lists both, each opening its
+ * own detail. */
+function aside(): Debt {
+  return debt({
+    goods: ["Шарф «Затишок»"],
+    amount: "500.00",
+    paid: "0.00",
+    returned: "0.00",
+    cash_back: "0.00",
+    owed: "500.00",
+    opened_at: `${String(thisYear)}-09-20T10:00:00Z`,
+    last_payment_at: null,
+    entries: [],
+  });
+}
+
+/** «Основний»'s list holds this one debt — with `also`, her others; payments
+ * are answered as `paid` says, and every body sent is kept. */
 async function serve(
   page: Page,
   one: Debt,
@@ -133,26 +149,39 @@ async function serve(
     ...one,
     paid: (Number(one.paid) + Number(body.amount)).toFixed(2),
   }),
+  also: readonly Debt[] = [],
 ): Promise<unknown[]> {
   const sent: unknown[] = [];
   await page.route("**/api/v1/credits/summary?**", async (route) => {
+    const here =
+      new URL(route.request().url()).searchParams.get("store_id") ===
+      fixture.store_id;
     await route.fulfill({
-      json: { owed: String(one.owed), customers: 1, debts: 1 },
+      json: here
+        ? { owed: String(one.owed), customers: 1, debts: 1 + also.length }
+        : { owed: "0.00", customers: 0, debts: 0 },
     });
   });
   await page.route("**/api/v1/credits/customers?**", async (route) => {
+    const here =
+      new URL(route.request().url()).searchParams.get("store_id") ===
+      fixture.store_id;
+    const credits = [one, ...also];
     await route.fulfill({
       json: {
-        items: [
-          {
-            phone_digits: "0671234567",
-            customer_name: one.customer_name,
-            customer_phone: one.customer_phone,
-            owed: one.owed,
-            open_debts: one.status === "OPEN" ? 1 : 0,
-            credits: [one],
-          },
-        ],
+        items: here
+          ? [
+              {
+                phone_digits: "0671234567",
+                customer_name: one.customer_name,
+                customer_phone: one.customer_phone,
+                owed: one.owed,
+                open_debts: credits.filter((each) => each.status === "OPEN")
+                  .length,
+                credits,
+              },
+            ]
+          : [],
         has_more: false,
       },
     });
@@ -165,6 +194,17 @@ async function serve(
   return sent;
 }
 
+/** The debt among her two: her card lists them, and this one opens. */
+async function serveDebt(
+  page: Page,
+  one: Debt,
+  paid?: (body: { amount: string }) => Debt,
+): Promise<unknown[]> {
+  return serve(page, one, paid, [aside()]);
+}
+
+/** «Ще» › «Покупці», her row, her card, and the debt's row (spec S19,
+ * S20): its detail. */
 async function opened(
   page: Page,
   theme?: Record<string, string>,
@@ -173,25 +213,67 @@ async function opened(
   await page.goto(launch(theme, version));
   await openStore(page, "Основний MAIN");
   await toTill(page);
-  await section(page, "Борги");
-  await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+  await section(page, "Покупці");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page
+    .getByRole("list", { name: "Борги в магазині «Основний»" })
+    .getByRole("button", { name: /^Відкрити борг: Лоран/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+  ).toBeVisible();
 }
 
+/** S21's form: the keypad and the three ways. */
 function panel(page: Page): Locator {
   return page.getByRole("group", { name: "Внесок", exact: true });
 }
 
-test("«Ще» › «Борги» opened again on a debt brings the debts' first screen («Усе на бірці» task list, P0-4)", async ({
+/** A key of the app's keypad: a digit, «Кома» or «Стерти». */
+function key(page: Page, name: string): Locator {
+  return page.locator(".keypad").getByRole("button", { name, exact: true });
+}
+
+async function keyIn(page: Page, keys: string): Promise<void> {
+  for (const one of keys) await key(page, one === "," ? "Кома" : one).click();
+}
+
+/** The detail's «Внесок»: outside Telegram, the dock's one button. */
+function deposit(page: Page): Locator {
+  return page.getByRole("button", { name: "Внесок", exact: true });
+}
+
+/** The owner's ⋯ on the debt, and one of its ways, once the sheet takes
+ * taps: a tap carried from the ⋯ is let go. */
+async function act(page: Page, way: string): Promise<void> {
+  await page.getByRole("button", { name: "Дії з боргом" }).click();
+  const menu = page.getByRole("dialog");
+  await expect(menu).toHaveAttribute("data-ready", "");
+  await menu.getByRole("button", { name: way, exact: true }).click();
+}
+
+/** «Списати борг» behind the ⋯, its reason, and its «Так, списати …». */
+async function writeOff(page: Page, sum: string): Promise<void> {
+  await act(page, "Списати борг");
+  const sheet = page.getByRole("dialog", { name: "Списати борг" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByLabel("Чому списуємо").fill("виїхала");
+  await sheet.getByRole("button", { name: `Так, списати ${sum}` }).click();
+}
+
+test("«Ще» › «Покупці» opened again on a debt brings the list's first screen («Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
-  await serve(page, debt());
+  await serveDebt(page, debt());
   await opened(page);
-  await expect(panel(page)).toBeVisible();
-  await section(page, "Борги");
-  await expect(page.getByRole("heading", { name: "Борги" })).toBeVisible();
-  await expect(panel(page)).toHaveCount(0);
+  await expect(page.locator(".debt-detail")).toBeVisible();
+  await section(page, "Покупці");
   await expect(
-    page.getByRole("button", { name: /^Відкрити борг: / }),
+    page.getByRole("heading", { name: "Покупці", level: 1 }),
+  ).toBeVisible();
+  await expect(page.locator(".debt-detail")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Відкрити борг: Оксана/ }),
   ).toBeVisible();
 });
 
@@ -199,12 +281,9 @@ test("a debt says who and what in one line, what is owed first and large, how mu
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
-  await serve(page, debt());
+  await serveDebt(page, debt());
   await opened(page);
 
-  await expect(
-    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
-  ).toBeVisible();
   await expect(page.locator(".debt-context")).toHaveText(
     "067 123 45 67 · Лоран шоколад · M + ще 1 · з 01.10",
   );
@@ -242,26 +321,29 @@ test("a debt says who and what in one line, what is owed first and large, how mu
     "500,00 грн",
     "500,00 грн",
   ]);
-  // The panel never hides the last of it.
+  // «Внесок» never hides the last of it.
   const last = rows.last();
   await last.scrollIntoViewIfNeeded();
   const row = await last.boundingBox();
-  const below = await panel(page).boundingBox();
+  const below = await page.locator(".order-dock").boundingBox();
   if (!row || !below) throw new Error("not laid out");
   expect(row.y + row.height).toBeLessThanOrEqual(below.y + 1);
-  // The owner's, and rare: after the history (P0-3).
-  const writeOff = await page
-    .getByRole("button", { name: "Списати борг" })
-    .boundingBox();
-  if (!writeOff) throw new Error("not laid out");
-  expect(writeOff.y).toBeGreaterThan(row.y);
+  // The owner's, and rare: behind the ⋯ by the name (spec S20); no
+  // payment's form here, S21 is (P0-5).
+  await expect(
+    page.getByRole("button", { name: "Дії з боргом" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Списати борг" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByLabel(/^Сума/)).toHaveCount(0);
 });
 
-test("a usual debt at 360 × 640 shows who, what is owed, and the payment's sum and ways without scrolling, none under the panel", async ({
+test("a usual debt at 360 × 640 shows who, what is owed, and «Внесок» without scrolling", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
-  await serve(
+  await serveDebt(
     page,
     debt({
       goods: ["Лоран шоколад · M"],
@@ -277,27 +359,15 @@ test("a usual debt at 360 × 640 shows who, what is owed, and the payment's sum 
     page.getByRole("heading", { level: 1 }),
     page.locator(".debt-context"),
     owed.locator(".owed-sum"),
-    page.getByLabel("Сума внеску, грн"),
-    page.getByRole("button", { name: "Увесь залишок" }),
-    panel(page).getByRole("button", { name: "Готівка" }),
-    panel(page).getByRole("button", { name: "Переказ" }),
+    deposit(page),
   ])
     await expect(part).toBeInViewport();
-  // …and none of it under the panel.
-  const under = await panel(page).boundingBox();
-  const field = await page.getByLabel("Сума внеску, грн").boundingBox();
-  const whole = await page
-    .getByRole("button", { name: "Увесь залишок" })
-    .boundingBox();
-  if (!under || !field || !whole) throw new Error("not laid out");
-  expect(field.y + field.height).toBeLessThanOrEqual(under.y);
-  expect(whole.y + whole.height).toBeLessThanOrEqual(under.y);
 });
 
 test("nothing written off or returned is said unless it is, and what is written off is", async ({
   page,
 }) => {
-  await serve(
+  await serveDebt(
     page,
     debt({
       paid: "1000.00",
@@ -314,7 +384,7 @@ test("nothing written off or returned is said unless it is, and what is written 
   await expect(page.locator(".owed-sum")).toHaveText("2 000,00 грн");
   await page.unroute("**/api/v1/credits/customers?**");
   await page.unroute("**/api/v1/credits/summary?**");
-  await serve(
+  await serveDebt(
     page,
     debt({
       status: "WRITTEN_OFF",
@@ -336,73 +406,13 @@ test("nothing written off or returned is said unless it is, and what is written 
   );
 });
 
-test("the payment's sum is typed under what is owed, and its three ways wait under the thumb for one", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 360, height: 640 });
-  const sent = await serve(page, debt());
-  await opened(page);
-
-  // Nothing typed: nothing to press, and nothing sent.
-  await expect(panel(page).locator(".pay-total")).toHaveText(
-    "Впишіть суму внеску",
-  );
-  await expect(panel(page).getByRole("button")).toHaveText([
-    "Готівка",
-    "Картка",
-    "Переказ",
-  ]);
-  for (const way of await panel(page).getByRole("button").all())
-    await expect(way).toBeDisabled();
-  await page.getByLabel("Сума внеску, грн").fill("0");
-  await expect(
-    panel(page).getByRole("button", { name: "Готівка" }),
-  ).toBeDisabled();
-  // Typed, but not a sum to the kopeck: said, never left to dead buttons.
-  for (const unread of ["12,345", "500 грн"]) {
-    await page.getByLabel("Сума внеску, грн").fill(unread);
-    await expect(panel(page).locator(".pay-total")).toHaveText(
-      "Вкажіть суму внеску з точністю до копійок.",
-    );
-    await expect(
-      panel(page).getByRole("button", { name: "Готівка" }),
-    ).toBeDisabled();
-  }
-
-  // The whole of what is owed, in one tap, the keyboard left closed.
-  await page.getByRole("button", { name: "Увесь залишок" }).click();
-  await expect(page.getByLabel("Сума внеску, грн")).toHaveValue("1234,56");
-  await expect(page.getByLabel("Сума внеску, грн")).not.toBeFocused();
-  await expect(panel(page).locator(".pay-total")).toHaveText(
-    "Внесок 1 234,56 грн",
-  );
-  // What the panel says is what is sent.
-  await page.getByLabel("Сума внеску, грн").fill("400");
-  await expect(panel(page).locator(".pay-total")).toHaveText(
-    "Внесок 400,00 грн",
-  );
-  await panel(page).getByRole("button", { name: "Картка" }).click();
-  await expect(
-    page.getByText("Внесок 400,00 грн прийнято карткою.", { exact: false }),
-  ).toBeVisible();
-  expect(sent).toHaveLength(1);
-  expect(sent[0]).toEqual({
-    amount: "400.00",
-    command_id: expect.any(String) as string,
-    payment_method: "CARD",
-  });
-  await expect(
-    page.getByText("Внесок 400,00 грн прийнято карткою.", { exact: false }),
-  ).toBeVisible();
-});
-
-test("a payment's result says what was done, how, the sum large and what is owed by the server; then the list as searched, or the debt read again", async ({
+test("«Внесок» on a debt opens S21 on it: the sum keyed in, a way, the result in the debt's words and the server's owed; then the debt again, and back by her name to the list as searched", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   const one = debt();
   // The server's answer: what is owed after is its own, never worked out.
-  await serve(page, one, (body) => ({
+  const sent = await serveDebt(page, one, (body) => ({
     ...one,
     paid: (Number(one.paid) + Number(body.amount)).toFixed(2),
     owed: "777.00",
@@ -410,10 +420,25 @@ test("a payment's result says what was done, how, the sum large and what is owed
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await toTill(page);
-  await section(page, "Борги");
+  await section(page, "Покупці");
   await page.getByLabel("Ім’я або телефон").fill("Окс");
-  await page.getByRole("button", { name: /^Відкрити борг: / }).click();
-  await page.getByLabel("Сума внеску, грн").fill("400");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page
+    .getByRole("list", { name: "Борги в магазині «Основний»" })
+    .getByRole("button", { name: /^Відкрити борг: Лоран/ })
+    .click();
+  await deposit(page).click();
+
+  // S21 on this debt: what she took, the keypad, the menu aside.
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "Лоран шоколад · M",
+  );
+  await expect(page.getByRole("navigation", { name: "Розділи" })).toHaveCount(
+    0,
+  );
+  for (const way of ["Готівка", "Картка", "Переказ"])
+    await expect(panel(page).getByRole("button", { name: way })).toBeDisabled();
+  await keyIn(page, "400");
   await panel(page).getByRole("button", { name: "Переказ" }).click();
 
   const paid = page.locator(".paid-result");
@@ -432,28 +457,36 @@ test("a payment's result says what was done, how, the sum large and what is owed
   await expect(
     paid.getByText("Залишок боргу 777,00 грн", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText(
-      "Внесок 400,00 грн прийнято переказом. Залишок боргу 777,00 грн.",
-    ),
-  ).toBeAttached();
+  expect(sent).toEqual([
+    {
+      amount: "400.00",
+      command_id: expect.any(String) as string,
+      payment_method: "TRANSFER",
+    },
+  ]);
   // In place of the form: nothing to pay again under it.
   await expect(panel(page)).toHaveCount(0);
-  await expect(page.getByLabel("Сума внеску, грн")).toHaveCount(0);
 
-  // The debt again, as the server answered it, begun at its name.
+  // The debt again, as the server answered it.
   await page
     .getByRole("button", { name: "Відкрити борг", exact: true })
     .click();
   await expect(page.locator(".owed-sum")).toHaveText("777,00 грн");
-  await expect(
-    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
-  ).toBeFocused();
-  await page.getByLabel("Сума внеску, грн").fill("100");
+  await keyIn(page, "100");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
   await expect(paid.locator(".way-pill")).toHaveText("Готівка");
-  // The list, as it was searched.
-  await paid.getByRole("button", { name: "До боргів" }).click();
+  // Back by her name: the debt, then her card, then the list as searched.
+  await paid
+    .getByRole("button", { name: "Оксана Петренко", exact: true })
+    .click();
+  // The detail as the server answered, nothing of S21 left on it.
+  await expect(page.locator(".debt-detail:not(.debt-till)")).toBeVisible();
+  await expect(page.locator(".paid-result")).toHaveCount(0);
+  await expect(page.locator(".owed-sum")).toHaveText("777,00 грн");
+  await page
+    .getByRole("button", { name: "Оксана Петренко", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Покупці", exact: true }).click();
   await expect(page.getByLabel("Ім’я або телефон")).toHaveValue("Окс");
 });
 
@@ -477,7 +510,7 @@ test("Telegram buzzes once the server has answered a payment: success when recor
   const one = debt();
   let refuse = false;
   let lose = false;
-  await serve(page, one);
+  await serveDebt(page, one);
   await page.route(`**/api/v1/credits/${one.id}/payments`, async (route) => {
     if (lose) {
       await route.abort("connectionreset");
@@ -506,25 +539,30 @@ test("Telegram buzzes once the server has answered a payment: success when recor
     )
       .map((data) => JSON.parse(data) as { type: string })
       .filter((buzz) => buzz.type === "notification");
+  // Telegram's MainButton, «Внесок» on the debt, «Відкрити борг» on its
+  // result («Усе на бірці» task list, P1-2).
+  const mainButton = async (): Promise<void> => {
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  };
+  await expect(deposit(page)).toHaveCount(0);
+  await mainButton();
 
-  await page.getByLabel("Сума внеску, грн").fill("400");
+  await keyIn(page, "400");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
   await expect(page.locator(".paid-result")).toBeVisible();
   expect(await buzzes()).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
-  // «Відкрити борг»: Telegram's MainButton here («Усе на бірці» task list,
-  // P1-2).
-  await page.evaluate(() => {
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: JSON.stringify({ eventType: "main_button_pressed" }),
-        source: window.parent,
-      }),
-    );
-  });
+  await mainButton();
   refuse = true;
-  await page.getByLabel("Сума внеску, грн").fill("300");
+  await keyIn(page, "300");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
   await expect(page.getByRole("alert")).toContainText("Це більше, ніж винні");
   const twice = [
@@ -538,7 +576,10 @@ test("Telegram buzzes once the server has answered a payment: success when recor
   // later, nothing.
   refuse = false;
   lose = true;
-  await page.getByLabel("Сума внеску, грн").fill("100");
+  await key(page, "Стерти").click();
+  await key(page, "Стерти").click();
+  await key(page, "Стерти").click();
+  await keyIn(page, "100");
   await panel(page).getByRole("button", { name: "Готівка" }).click();
   await expect(
     page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
@@ -559,7 +600,7 @@ test("Telegram buzzes once the server has answered a payment: success when recor
 test("a debt of more goods than one names the first, and all of them on a tap", async ({
   page,
 }) => {
-  await serve(page, debt());
+  await serveDebt(page, debt());
   await opened(page);
   await expect(page.getByRole("list", { name: "Товари боргу" })).toHaveCount(0);
   const more = page.getByRole("button", { name: "+ ще 1" });
@@ -573,66 +614,7 @@ test("a debt of more goods than one names the first, and all of them on a tap", 
   await expect(page.getByRole("button", { name: "+ ще 1" })).toHaveCount(0);
 });
 
-test("more than is owed is said above the panel, in view, and nothing is sent", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 360, height: 640 });
-  const sent = await serve(page, debt());
-  await opened(page);
-  await page.getByLabel("Сума внеску, грн").fill("5000");
-  // Tapped where the thumb finds it with the page at its top, where the
-  // refusal would come below the fold: it is brought into view.
-  await page.evaluate(() => {
-    window.scrollTo(0, 0);
-  });
-  const way = await panel(page)
-    .getByRole("button", { name: "Переказ" })
-    .boundingBox();
-  if (!way) throw new Error("not laid out");
-  await page.mouse.click(way.x + way.width / 2, way.y + way.height / 2);
-  const told = page.getByRole("alert");
-  await expect(told).toHaveText(
-    "Це більше, ніж винні: залишок боргу 1 234,56 грн. Прийміть 1 234,56 грн, а решту поверніть покупцю переказом.",
-  );
-  await expect(told).toBeInViewport();
-  const said = await told.boundingBox();
-  const under = await panel(page).boundingBox();
-  if (!said || !under) throw new Error("not laid out");
-  expect(said.y + said.height).toBeLessThanOrEqual(under.y + 1);
-  expect(sent).toHaveLength(0);
-});
-
-test("after a payment, the debt opened again keeps the panel's room: more than is owed is said above it", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 360, height: 640 });
-  const sent = await serve(page, debt());
-  await opened(page);
-  await page.getByLabel("Сума внеску, грн").fill("100");
-  await panel(page).getByRole("button", { name: "Готівка" }).click();
-  await page
-    .getByRole("button", { name: "Відкрити борг", exact: true })
-    .click();
-  await page.getByLabel("Сума внеску, грн").fill("5000");
-  await page.evaluate(() => {
-    window.scrollTo(0, 0);
-  });
-  const way = await panel(page)
-    .getByRole("button", { name: "Переказ" })
-    .boundingBox();
-  if (!way) throw new Error("not laid out");
-  await page.mouse.click(way.x + way.width / 2, way.y + way.height / 2);
-  const told = page.getByRole("alert");
-  await expect(told).toContainText("Це більше, ніж винні");
-  await expect(told).toBeInViewport();
-  const said = await told.boundingBox();
-  const under = await panel(page).boundingBox();
-  if (!said || !under) throw new Error("not laid out");
-  expect(said.y + said.height).toBeLessThanOrEqual(under.y + 1);
-  expect(sent).toHaveLength(1);
-});
-
-test("the owner's write-off, at the end of a long history, says what was done where it is seen", async ({
+test("the owner's write-off behind the ⋯, at the end of a long history, asks why in a sheet and says what was done where it is seen", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -650,8 +632,10 @@ test("the owner's write-off, at the end of a long history, says what was done wh
     outage: null,
   }));
   const one = { ...long, entries: [...(long.entries as object[]), ...many] };
-  await serve(page, one);
+  await serveDebt(page, one);
+  const sent: unknown[] = [];
   await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    sent.push(route.request().postDataJSON());
     await route.fulfill({
       json: {
         ...one,
@@ -663,9 +647,22 @@ test("the owner's write-off, at the end of a long history, says what was done wh
     });
   });
   await opened(page);
-  await page.getByRole("button", { name: "Списати борг" }).click();
-  await page.getByLabel("Чому списуємо").fill("виїхала");
-  await page.getByRole("button", { name: "Так, списати 1 234,56 грн" }).click();
+  // The ⋯'s sheet names the debt, and holds what may be done to it.
+  await page.getByRole("button", { name: "Дії з боргом" }).click();
+  const menu = page.getByRole("dialog", { name: "Лоран шоколад · M + ще 1" });
+  await expect(menu.getByRole("button")).toHaveText(["Списати борг"]);
+  await expect(menu).toHaveAttribute("data-ready", "");
+  await menu.getByRole("button", { name: "Списати борг" }).click();
+  const sheet = page.getByRole("dialog", { name: "Списати борг" });
+  await expect(sheet).toContainText(
+    "Борг 1 234,56 грн закриється без оплати. Скасувати це потім не можна.",
+  );
+  // No reason, nothing to press.
+  const yes = sheet.getByRole("button", { name: "Так, списати 1 234,56 грн" });
+  await expect(yes).toBeDisabled();
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByLabel("Чому списуємо").fill("виїхала");
+  await yes.click();
   // Its result, in view: what was done, and the sum written off (P0-5).
   const done = page.locator(".paid-result");
   await expect(
@@ -673,6 +670,8 @@ test("the owner's write-off, at the end of a long history, says what was done wh
   ).toBeInViewport();
   await expect(done.locator(".hand-back-sum")).toHaveText("1 234,56 грн");
   await expect(page.getByText("Борг списано: 1 234,56 грн.")).toBeAttached();
+  await expect(sheet).toHaveCount(0);
+  expect(sent).toEqual([expect.objectContaining({ reason: "виїхала" })]);
 });
 
 for (const [kind, status, said] of [
@@ -697,7 +696,7 @@ for (const [kind, status, said] of [
     page,
   }) => {
     const one = debt();
-    await serve(page, one);
+    await serveDebt(page, one);
     await page.route(
       `**/api/v1/credits/${one.id}/${kind === "payment" ? "payments" : "write-off"}`,
       async (route) => {
@@ -713,15 +712,10 @@ for (const [kind, status, said] of [
     );
     await opened(page);
     if (kind === "payment") {
-      await page.getByLabel("Сума внеску, грн").fill("100");
+      await deposit(page).click();
+      await keyIn(page, "100");
       await panel(page).getByRole("button", { name: "Готівка" }).click();
-    } else {
-      await page.getByRole("button", { name: "Списати борг" }).click();
-      await page.getByLabel("Чому списуємо").fill("виїхала");
-      await page
-        .getByRole("button", { name: "Так, списати 1 234,56 грн" })
-        .click();
-    }
+    } else await writeOff(page, "1 234,56 грн");
     await expect(page.getByRole("alert")).toHaveText(said);
     // «Замовлення»'s «+» aside: the debt never says it.
     await expect(page.locator(".debt-detail")).not.toContainText("замовлення");
@@ -730,7 +724,7 @@ for (const [kind, status, said] of [
 test("a closed debt says how it closed and when, and takes no payment", async ({
   page,
 }) => {
-  await serve(
+  await serveDebt(
     page,
     debt({
       status: "SETTLED",
@@ -748,14 +742,14 @@ test("a closed debt says how it closed and when, and takes no payment", async ({
   await expect(page.getByRole("group", { name: "Скільки винні" })).toHaveCount(
     0,
   );
-  await expect(panel(page)).toHaveCount(0);
-  await expect(page.getByLabel("Сума внеску, грн")).toHaveCount(0);
+  await expect(deposit(page)).toHaveCount(0);
+  await expect(page.locator(".keypad")).toHaveCount(0);
 });
 
 test("another store's debt says once where it was sold and who takes the payment", async ({
   page,
 }) => {
-  await serve(
+  await serveDebt(
     page,
     debt({
       store_id: randomUUID(),
@@ -819,16 +813,15 @@ for (const [name, theme, scheme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
 ] as const)
-  test(`in the ${name} theme a debt's sums, its phone, its history and the panel read at 4.5:1`, async ({
+  test(`in the ${name} theme a debt's sums, its phone, its history, its ⋯ and «Внесок» read at 4.5:1`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 740 });
-    await serve(page, debt());
+    await serveDebt(page, debt());
     await opened(page, theme);
     expect(
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
-    await page.getByLabel("Сума внеску, грн").fill("400");
     for (const part of [
       page.locator(".owed-sum"),
       page.locator(".owed-count"),
@@ -836,8 +829,8 @@ for (const [name, theme, scheme] of [
       page.locator(".history-what").first(),
       page.locator(".history-meta").first(),
       page.locator(".history-sum").first(),
-      panel(page).locator(".pay-total"),
       page.locator(".debt-context a"),
+      deposit(page),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     // The phone to call in the theme's accent, never the browser's blue,
@@ -846,7 +839,29 @@ for (const [name, theme, scheme] of [
       "color",
       await accentText(page),
     );
+    // The ⋯ a 44 target, read as the text is.
+    const more = page.getByRole("button", { name: "Дії з боргом" });
+    const box = await more.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(await contrast(more)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `test-results/credits-debt-${name}.png` });
+    await more.click();
+    await expect(page.getByRole("dialog")).toHaveAttribute("data-ready", "");
+    await page.getByRole("button", { name: "Списати борг" }).click();
+    const sheet = page.getByRole("dialog", { name: "Списати борг" });
+    await expect(sheet).toHaveAttribute("data-ready", "");
+    await sheet.getByLabel("Чому списуємо").fill("виїхала");
+    for (const part of [
+      sheet.getByRole("heading", { name: "Списати борг" }),
+      sheet.getByText(/^Борг 1\s234,56/),
+      sheet.getByRole("button", { name: "Так, списати 1 234,56 грн" }),
+      sheet.getByRole("button", { name: "Скасувати" }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({
+      path: `test-results/credits-write-off-${name}.png`,
+    });
   });
 
 for (const [name, theme] of [
@@ -857,7 +872,7 @@ for (const [name, theme] of [
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 740 });
-    await serve(page, debt());
+    await serveDebt(page, debt());
     await opened(page, theme);
     const more = page.locator(".more-goods");
     expect(await contrast(more)).toBeGreaterThanOrEqual(4.5);
@@ -865,7 +880,8 @@ for (const [name, theme] of [
     expect(
       await contrast(page.locator(".debt-goods li").first()),
     ).toBeGreaterThanOrEqual(4.5);
-    await page.getByLabel("Сума внеску, грн").fill("400");
+    await deposit(page).click();
+    await keyIn(page, "400");
     await panel(page).getByRole("button", { name: "Картка" }).click();
     const paid = page.locator(".paid-result");
     for (const part of [
@@ -883,7 +899,7 @@ test("a payment and a write-off sent: the pressed one turns its ring, the paymen
 }) => {
   await page.clock.install();
   const one = debt();
-  await serve(page, one);
+  await serveDebt(page, one);
   let answer: (() => void) | undefined;
   const held = new Promise<void>((done) => {
     answer = done;
@@ -900,7 +916,8 @@ test("a payment and a write-off sent: the pressed one turns its ring, the paymen
     });
   });
   await opened(page);
-  await page.getByLabel("Сума внеску, грн").fill("400");
+  await deposit(page).click();
+  await keyIn(page, "400");
   const card = panel(page).getByRole("button", { name: "Картка", exact: true });
   await card.click();
   await expect(card).toHaveClass(/\bpressed\b/);
@@ -935,8 +952,14 @@ test("a payment and a write-off sent: the pressed one turns its ring, the paymen
       json: { ...one, status: "WRITTEN_OFF", owed: "0.00" },
     });
   });
-  await paid.getByRole("button", { name: "Відкрити борг" }).click();
+  await paid
+    .getByRole("button", { name: "Оксана Петренко", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Дії з боргом" }).click();
+  // A sheet takes taps a moment after it rises.
+  await page.clock.runFor(800);
   await page.getByRole("button", { name: "Списати борг" }).click();
+  await page.clock.runFor(800);
   await page.getByLabel("Чому списуємо").fill("виїхала");
   const writeOff = page.getByRole("button", { name: /^Так, списати / });
   await writeOff.click();
@@ -948,6 +971,283 @@ test("a payment and a write-off sent: the pressed one turns its ring, the paymen
     page.locator(".paid-result").getByRole("heading", { name: "Борг списано" }),
   ).toBeVisible();
   await expect(page.locator(".eyelet-spin")).toHaveCount(0);
+});
+
+test("the owner erases a closed debt's customer behind the ⋯: outside Telegram a sheet, its words, and the debt kept with every sum", async ({
+  page,
+}) => {
+  const one = debt({
+    status: "SETTLED",
+    owed: "0.00",
+    paid: "2500.00",
+    closed_at: `${String(thisYear)}-10-14T09:00:00Z`,
+  });
+  await serveDebt(page, one);
+  const sent: unknown[] = [];
+  await page.route(
+    `**/api/v1/credits/${one.id}/erase-customer`,
+    async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({
+        json: {
+          erased: 1,
+          still_open: 1,
+          network: false,
+          credit: {
+            ...one,
+            customer_name: null,
+            customer_phone: null,
+            customer_erased_at: `${String(thisYear)}-10-20T09:00:00Z`,
+          },
+        },
+      });
+    },
+  );
+  await opened(page);
+  await act(page, "Стерти дані покупця");
+  const sheet = page.getByRole("dialog", { name: "Стерти дані покупця?" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("button", { name: "Так, стерти дані покупця", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Дані покупця стерто із закритих боргів цього магазину: 1.",
+  );
+  expect(sent).toEqual([{}]);
+});
+
+test("inside a Telegram that has its own popup, «Стерти дані покупця» asks there — «Так, стерти дані покупця» the destructive one — and only that erases (spec S20)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data?: string) => void;
+      };
+      popups: unknown[];
+    };
+    host.popups = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_open_popup" && data)
+          host.popups.push(JSON.parse(data));
+      },
+    };
+  });
+  const one = debt({
+    status: "SETTLED",
+    owed: "0.00",
+    paid: "2500.00",
+    closed_at: `${String(thisYear)}-10-14T09:00:00Z`,
+  });
+  await serveDebt(page, one);
+  const sent: unknown[] = [];
+  await page.route(
+    `**/api/v1/credits/${one.id}/erase-customer`,
+    async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({
+        json: {
+          erased: 1,
+          still_open: 1,
+          network: false,
+          credit: {
+            ...one,
+            customer_name: null,
+            customer_phone: null,
+            customer_erased_at: `${String(thisYear)}-10-20T09:00:00Z`,
+          },
+        },
+      });
+    },
+  );
+  const popups = (): Promise<unknown[]> =>
+    page.evaluate(() => (window as unknown as { popups: unknown[] }).popups);
+  const closed = async (button?: string): Promise<void> => {
+    await page.evaluate((id) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            eventType: "popup_closed",
+            eventData: id === undefined ? {} : { button_id: id },
+          }),
+          source: window.parent,
+        }),
+      );
+    }, button);
+  };
+  const asked = {
+    title: "Стерти дані покупця?",
+    message:
+      "Ім’я й телефон покупця зникнуть з усіх закритих боргів цього магазину з цим телефоном. Суми лишаються. Скасувати це не можна.",
+    buttons: [
+      { id: "keep", type: "default", text: "Скасувати" },
+      {
+        id: "erase",
+        type: "destructive",
+        text: "Так, стерти дані покупця",
+      },
+    ],
+  };
+  await opened(page, undefined, "7.0");
+  await act(page, "Стерти дані покупця");
+  await expect.poll(popups).toEqual([asked]);
+  // Asked there, not in the page.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await closed("keep");
+  await page.waitForTimeout(300);
+  expect(sent).toEqual([]);
+  // Closed without a button: nothing either.
+  await act(page, "Стерти дані покупця");
+  await expect.poll(popups).toEqual([asked, asked]);
+  await closed();
+  await page.waitForTimeout(300);
+  expect(sent).toEqual([]);
+  await act(page, "Стерти дані покупця");
+  await expect.poll(popups).toEqual([asked, asked, asked]);
+  await closed("erase");
+  await expect(page.getByRole("status")).toContainText(
+    "Дані покупця стерто із закритих боргів цього магазину: 1.",
+  );
+  expect(sent).toEqual([{}]);
+});
+
+test("written off on her card, «Внесок» waits while the card is read again: nothing is paid on what was owed before (review, 2026-11-01)", async ({
+  page,
+}) => {
+  const one = debt();
+  await serve(page, one);
+  const done = {
+    ...one,
+    status: "WRITTEN_OFF",
+    owed: "0.00",
+    written_off: one.owed,
+    closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+  };
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    await route.fulfill({ json: done });
+  });
+  // Once written off, the card's read waits.
+  let written = false;
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    const asked = new URL(route.request().url()).searchParams;
+    if (!written || asked.get("store_id") !== fixture.store_id) {
+      await route.fallback();
+      return;
+    }
+    await held;
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            phone_digits: "0671234567",
+            customer_name: one.customer_name,
+            customer_phone: one.customer_phone,
+            owed: "0.00",
+            open_debts: 0,
+            credits: [done],
+          },
+        ],
+        has_more: false,
+      },
+    });
+  });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  const pay = deposit(page);
+  await expect(pay).toBeEnabled();
+  await act(page, "Списати борг");
+  const sheet = page.getByRole("dialog", { name: "Списати борг" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await page.getByLabel("Чому списуємо").fill("виїхала");
+  written = true;
+  await sheet.getByRole("button", { name: /^Так, списати / }).click();
+  await expect(page.getByRole("status")).toContainText("Борг списано");
+  await expect(pay).toBeDisabled();
+  release();
+  await expect(pay).toHaveCount(0);
+  await expect(page.locator(".customer-debt .badge")).toHaveText("Списано");
+});
+
+test("the owner's ⋯ open on her card when it is read again into two debts: the sheet goes with it, and Telegram's «Внесок» comes back (review, 2026-11-01)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data?: string) => void;
+      };
+      mains: unknown[];
+    };
+    host.mains = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_main_button" && data)
+          host.mains.push(JSON.parse(data));
+      },
+    };
+  });
+  const one = debt();
+  const scarf = aside();
+  await serve(page, one);
+  // Read again — Telegram back in front — a second debt of hers has come.
+  let two = false;
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    const asked = new URL(route.request().url()).searchParams;
+    if (!two || asked.get("store_id") !== fixture.store_id) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            phone_digits: "0671234567",
+            customer_name: one.customer_name,
+            customer_phone: one.customer_phone,
+            owed: (Number(one.owed) + Number(scarf.owed)).toFixed(2),
+            open_debts: 2,
+            credits: [one, scarf],
+          },
+        ],
+        has_more: false,
+      },
+    });
+  });
+  const main = (): Promise<unknown> =>
+    page.evaluate(() =>
+      (window as unknown as { mains: unknown[] }).mains.at(-1),
+    );
+  await page.goto(launch(undefined, "7.0"));
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+  ).toBeVisible();
+  await expect.poll(main).toMatchObject({ is_visible: true, text: "Внесок" });
+  await page.getByRole("button", { name: "Дії з боргом" }).click();
+  await expect(page.getByRole("dialog")).toHaveAttribute("data-ready", "");
+  await expect.poll(main).toMatchObject({ is_visible: false });
+  two = true;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(
+    page
+      .getByRole("list", { name: "Борги в магазині «Основний»" })
+      .getByRole("listitem"),
+  ).toHaveCount(2);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(main).toMatchObject({ is_visible: true, text: "Внесок" });
 });
 
 test.describe("«Продаж» › «Внесок»: a payment on a debt from the till, its sum on the app's keypad («Усе на бірці» task list, P0-3; spec S08, S21, S22)", () => {
@@ -965,17 +1265,6 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       page.getByRole("heading", { name: "Продаж", level: 1 }),
     ).toBeVisible();
-  }
-
-  /** A key of the app's keypad: a digit, «Кома» or «Стерти». */
-  function key(page: Page, name: string): Locator {
-    return page
-      .locator(".keypad")
-      .getByRole("button", { name, exact: true });
-  }
-
-  async function keyIn(page: Page, keys: string): Promise<void> {
-    for (const one of keys) await key(page, one === "," ? "Кома" : one).click();
   }
 
   /** A debt of one coat: 3 000, 1 000 paid, 2 000 owed. */
@@ -1057,7 +1346,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(owed.locator(".owed-count")).toHaveText(
       "Сплачено 1 000,00 грн з 3 000,00 грн · останній внесок 12.10",
     );
-    // No write-off nor erasing here: they are the debt's from «Борги».
+    // No write-off nor erasing here: they are the debt's from «Покупці».
     await expect(
       page.getByRole("button", { name: "Списати борг" }),
     ).toHaveCount(0);
@@ -1337,7 +1626,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     expect(asked).not.toContain(fixture.second_store_id);
   });
 
-  test("the till's «Внесок» and «Ще» › «Борги» are two screens: a stub left at the till is never «Борги»'s, nor a debt opened there the till's (review, 2026-10-29; «Усе на бірці» task list, P0-4)", async ({
+  test("the till's «Внесок» and «Ще» › «Покупці» are two screens: a stub left at the till is never «Покупці»'s, nor S21 opened there the till's (review, 2026-10-29; «Усе на бірці» task list, P0-4; sections task list, P0-5)", async ({
     page,
   }) => {
     await serve(page, coat());
@@ -1348,19 +1637,28 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       page.getByRole("heading", { name: "Внесок записано" }),
     ).toBeFocused();
-    await section(page, "Борги");
+    await section(page, "Покупці");
     await expect(
-      page.getByRole("heading", { name: "Борги", level: 1 }),
+      page.getByRole("heading", { name: "Покупці", level: 1 }),
     ).toBeVisible();
     await expect(page.locator(".paid-result")).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: /^Відкрити борг: / }),
-    ).toBeVisible();
 
-    // And back: a debt opened in «Борги», with its sum typed, stays there.
+    // And back: S21 opened from her card, with its sum keyed in, is
+    // «Покупці»'s — left by its «←», back to her card.
     await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await page.getByRole("button", { name: "Внесок", exact: true }).click();
     await expect(panel(page)).toBeVisible();
-    await page.getByLabel("Сума внеску, грн").fill("300");
+    await keyIn(page, "300");
+    await page
+      .getByRole("button", { name: "Оксана Петренко", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+    ).toBeVisible();
+    // The task left, the menu is back.
+    await expect(
+      page.getByRole("navigation", { name: "Розділи" }),
+    ).toBeVisible();
     await section(page, "Продаж");
     await tillWays(page)
       .getByRole("button", { name: "Внесок", exact: true })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -8,7 +8,10 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { InfiniteData } from "@tanstack/react-query";
+import type {
+  InfiniteData,
+  UseInfiniteQueryResult,
+} from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
@@ -16,26 +19,55 @@ import type { Store } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
+import { Icon } from "@/shared/Icon";
+import { ModeSwitch } from "@/shared/ModeSwitch";
+import { Toast } from "@/shared/Toast";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { hideKeyboard } from "@/shared/telegram";
 import { number, plural } from "@/openings/types";
 import { CustomerRow, debtsCount } from "./CustomerRow";
-import { Customer as CustomerDebts } from "./Customer";
+import { Customer as CustomerCard } from "./Customer";
+import { Debts } from "./Debts";
 import { Debt, refusalText } from "./Debt";
 import { askForPhone, erasedCustomer, wholePhone } from "./types";
-import type { Credit, Customer, CustomerPage, StoreDebts } from "./types";
+import type {
+  Credit,
+  CreditStatus,
+  Customer,
+  CustomerPage,
+  StoreDebts,
+} from "./types";
 
 const pageSize = 20;
 
+/** «Винні зараз · Сплачені · Списані»: one status at a time, as the server
+ * selects them (owner decision, 2026-11-01, В2 (а)). */
+const statuses: readonly { mode: CreditStatus; label: string }[] = [
+  { mode: "OPEN", label: "Винні зараз" },
+  { mode: "SETTLED", label: "Сплачені" },
+  { mode: "WRITTEN_OFF", label: "Списані" },
+];
+
+/** A customer of a phone, opened on their card. */
+type Phoned = Customer & { phone_digits: string };
+
 /**
- * A store's debts: sales paid in parts (owner decisions, 2026-10-01).
+ * Sales paid in parts (owner decisions, 2026-10-01): «Покупці» in «Ще» ›
+ * «Люди» (spec S19; «Усе на бірці» sections task list, P0-4), and the
+ * till's «Внесок».
  *
  * The customer took the goods and pays the rest when they can; there is no
- * schedule. A seller finds the customer by name or phone — one phone is one
- * customer, with all their debts and what they owe in all — and takes a
- * payment on the debt they choose, here, in the store that sold. The owner
- * may write off a debt that will not be paid, saying why. Returns lower a
- * debt from «Повернення». The store sees what it is owed in all.
+ * schedule. One phone is one customer, with all their debts. «Покупці» is a
+ * block a store where this person takes payments — the open one first,
+ * then the others that trade — each with what it is owed, as the server
+ * summed it for that store alone, never added to another's; «Ім’я або
+ * телефон» searches in each, and «Винні зараз · Сплачені · Списані» chooses
+ * which debts. A row opens the customer's card (S20), where the payment is
+ * taken in the store that sold. The owner may write off a debt that will
+ * not be paid, saying why. Returns lower a debt from «Повернення».
+ *
+ * At the till, «Внесок» lists those who owe this store, and opens a debt
+ * for its payment alone (spec S08, S21).
  *
  * While the store that sold is blocked or archived, any store that trades
  * finds its debts by the customer's whole phone, only those still owed, and
@@ -65,6 +97,8 @@ export function Credits({
   mode = null,
   back,
   till,
+  stores = [],
+  payTask,
 }: {
   store: Store;
   token: string;
@@ -90,8 +124,7 @@ export function Credits({
    * «Продати · Повернути · Внесок».
    */
   mode?: JSX.Element | null;
-  /** «← Ще» over the heading: «Ще» › «Люди» › «Борги» until «Покупці»
-   * (S19; «Усе на бірці» task list, P0-4). */
+  /** «← Ще» over the heading: «Ще» › «Люди» › «Покупці» (S19). */
   back?: MoreBack | undefined;
   /**
    * The till's «Внесок» (spec S08, S21; «Усе на бірці» task list, P0-3):
@@ -101,6 +134,14 @@ export function Credits({
    * here; `task` is told while a payment's form stands.
    */
   till?: { task: (shown: boolean) => void; others: readonly Store[] };
+  /**
+   * «Покупці»'s other blocks: this person's other stores that trade and
+   * where they take payments, in the order the server gives them.
+   */
+  stores?: readonly Store[];
+  /** Told while S21's form stands, opened from «Покупці»: the menu steps
+   * aside, as at the till. */
+  payTask?: (shown: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
   // What the seller types, searched once they pause, from two letters, as
@@ -111,12 +152,31 @@ export function Credits({
   const typed = useSettled(query);
   const [pressed, setPressed] = useState("");
   const search = pressed !== "" && pressed === query.trim() ? pressed : typed;
-  const [owedOnly, setOwedOnly] = useState(true);
-  const [selected, setSelected] = useState<Credit | null>(null);
-  // A customer of more than one debt, whose debts are shown to choose from.
-  const [chosen, setChosen] = useState<
-    (Customer & { phone_digits: string }) | null
-  >(null);
+  const [status, setStatus] = useState<CreditStatus>("OPEN");
+  // A debt's detail, read in the store it is in.
+  const [selected, setSelected] = useState<{
+    credit: Credit;
+    store: Store;
+  } | null>(null);
+  // At the till, a customer of more than one debt, whose debts are shown
+  // to choose from.
+  const [chosen, setChosen] = useState<Phoned | null>(null);
+  // In «Покупці», a customer's card, from the block that listed them; once
+  // a payment or a write-off changed a debt of theirs, read afresh, and
+  // named as its heading names them.
+  const [card, setCard] = useState<{
+    first: Phoned;
+    from: Store;
+    elsewhere: boolean;
+    afresh?: true;
+    name?: string;
+  } | null>(null);
+  // S21 on a debt, from «Покупці»'s card or a debt's detail.
+  const [paying, setPaying] = useState<Credit | null>(null);
+  // What a card did, said once it had nothing left to show.
+  const [toast, setToast] = useState<{ text: string; times: number } | null>(
+    null,
+  );
   // Whose debts: this store's, or those of the stores that do not trade.
   const [elsewhere, setElsewhere] = useState(false);
   // Other stores' customers are found by their whole phone, never browsed;
@@ -126,47 +186,43 @@ export function Credits({
   // credits task list, P1-1); a number changed there into anything else is
   // not asked.
   const searched = !elsewhere || wholePhone(search);
-  const openOnly = owedOnly || elsewhere;
+  // One list: the till's, or the stores' that do not trade — only those
+  // still owed. «Покупці» reads a list a block.
+  const single = till !== undefined || elsewhere;
   // Twenty at a time, each page under those read (credits task list, P0-2):
   // the server takes fifty at most, and a growing `limit` broke the list
   // after forty.
   const customers = useInfiniteQuery({
-    queryKey: ["credits", store.id, "customers", elsewhere, search, openOnly],
+    queryKey: ["credits", store.id, "customers", elsewhere, search],
     queryFn: ({ pageParam }) =>
       api<CustomerPage>(
-        `/credits/customers?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}${
-          openOnly ? "&status=OPEN" : ""
-        }${search ? `&query=${encodeURIComponent(search)}` : ""}${
-          elsewhere ? "&elsewhere=true" : ""
-        }`,
+        `/credits/customers?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}&status=OPEN${
+          search ? `&query=${encodeURIComponent(search)}` : ""
+        }${elsewhere ? "&elsewhere=true" : ""}`,
         token,
       ),
     initialPageParam: 0,
     getNextPageParam: (last: CustomerPage, pages: CustomerPage[]) =>
       last.has_more ? pages.length * pageSize : undefined,
-    enabled: searched,
+    enabled: single && searched,
     retry: false,
     // A search typed keeps the list in place until the new one comes, as at
-    // the till; never this store's for the other stores', nor the owed for
-    // all.
+    // the till; never this store's for the other stores'.
     placeholderData: (
       previous: InfiniteData<CustomerPage, number> | undefined,
       before,
-    ) =>
-      before?.queryKey[3] === elsewhere && before.queryKey[5] === openOnly
-        ? previous
-        : undefined,
+    ) => (before?.queryKey[3] === elsewhere ? previous : undefined),
   });
-  // A debt opened meanwhile moves the pages' edge: a customer read twice is
-  // shown once.
+  // A whole number, the one in the field: what the closed stores and the
+  // till's other stores are asked for, once it is answered here.
+  const asked = wholePhone(search) && search === query.trim();
   // Asked for once this store has answered for the number in the field —
   // never under its loading, its refusal, the rows of a search before it,
   // nor for a number typed before the one shown (review, 2026-10-19).
   const askElsewhere =
-    !readOnly &&
+    till !== undefined &&
     !elsewhere &&
-    wholePhone(search) &&
-    search === query.trim() &&
+    asked &&
     customers.isSuccess &&
     !customers.isPlaceholderData;
   // Each switch brings the eye and a screen reader to what it opened: the
@@ -179,13 +235,11 @@ export function Credits({
     switched.current = false;
     (elsewhere ? elsewhereHeading : heading).current?.focus();
   }, [elsewhere]);
-  const listed = [
-    ...new Map(
-      (customers.data?.pages ?? [])
-        .flatMap((page) => page.items)
-        .map((customer) => [keyOf(customer), customer]),
-    ).values(),
-  ];
+  const toElsewhere = (): void => {
+    switched.current = true;
+    setElsewhere(true);
+  };
+  const listed = unique(customers.data?.pages ?? []);
   // A whole number that owes nothing here, at the till: the same question
   // to each other store of this person's that trades and where they take
   // payments. Found, its row says where the payment is taken, and opens
@@ -195,8 +249,7 @@ export function Credits({
     till !== undefined &&
     others.length > 0 &&
     !elsewhere &&
-    wholePhone(search) &&
-    search === query.trim() &&
+    asked &&
     customers.isSuccess &&
     !customers.isPlaceholderData &&
     listed.length === 0;
@@ -221,24 +274,46 @@ export function Credits({
           .map((customer) => ({ other, customer })),
       )
     : [];
-  // The till names no store's total: what is owed is on each row.
-  const summary = useQuery({
-    queryKey: ["credits", store.id, "summary"],
-    queryFn: () =>
-      api<StoreDebts>(`/credits/summary?store_id=${store.id}`, token),
-    enabled: till === undefined,
-    retry: false,
-  });
-  // Refused, and not read since: said so, and held so while read again —
-  // its button stays, waiting (review, 2026-10-21).
-  const unread = summary.data === undefined && summary.errorUpdateCount > 0;
   const leave = useCallback(() => {
     setChosen(null);
   }, []);
+  const named = useCallback((name: string) => {
+    setCard((now) => (now && now.name !== name ? { ...now, name } : now));
+  }, []);
+  // A debt changed under the card, while it is not shown: what it read is
+  // gone, so it shows nothing it read before — no old sums, no «Внесок» on
+  // them — until read again (S20).
+  const cardChanged = (): void => {
+    if (!card) return;
+    cache.removeQueries({ queryKey: ["credits", store.id, "card"] });
+    setCard({ ...card, afresh: true });
+  };
+  const leaveCard = useCallback((said?: string) => {
+    setCard(null);
+    if (said !== undefined)
+      setToast((now) => ({ text: said, times: (now?.times ?? 0) + 1 }));
+  }, []);
+  const clear = (): void => {
+    setQuery("");
+    setPressed("");
+    field.current?.focus();
+  };
+  const blockStores = [
+    store,
+    ...stores.filter((other) => other.id !== store.id),
+  ];
+  // Opened from a customer's card, back to it, by their name.
+  const cardName = card
+    ? (card.name ?? visible(card.first.customer_name ?? erasedCustomer))
+    : null;
 
-  if (selected)
+  if (paying)
+    // S21 from «Покупці» (spec S21): the payment alone, on the app's
+    // keypad, the menu aside; back where it was opened. Its own, never the
+    // detail's: back on the detail, nothing of S21 stays.
     return (
       <Debt
+        key={`pay:${paying.id}`}
         store={store}
         token={token}
         journalKey={journalKey}
@@ -246,116 +321,153 @@ export function Credits({
         readOnly={readOnly}
         networkOwner={networkOwner}
         mayErase={mayErase}
-        credit={selected}
+        credit={paying}
         changed={(credit) => {
-          setSelected(credit);
+          setPaying(credit);
+          setSelected((now) =>
+            now?.credit.id === credit.id ? { ...now, credit } : now,
+          );
+          cardChanged();
+          void cache.invalidateQueries({ queryKey: ["credits", store.id] });
+        }}
+        back={() => {
+          setPaying(null);
+        }}
+        // Named as the screen it goes back to: the debt's detail, or the
+        // card, by the name each is headed with.
+        backTo={
+          selected
+            ? visible(selected.credit.customer_name ?? erasedCustomer)
+            : (cardName ?? visible(paying.customer_name ?? erasedCustomer))
+        }
+        till={{ task: payTask ?? noTask }}
+      />
+    );
+
+  if (selected) {
+    // Another store's debt, that trades: read here, paid there (owner
+    // decision, 2026-10-01); its owner's ⋯ is there too.
+    const other = selected.store.id !== store.id;
+    return (
+      <Debt
+        key={`debt:${selected.credit.id}`}
+        store={selected.store}
+        token={token}
+        journalKey={journalKey}
+        blocked={blocked}
+        readOnly={readOnly || other}
+        networkOwner={networkOwner && !other}
+        mayErase={mayErase && !other}
+        credit={selected.credit}
+        changed={(credit) => {
+          setSelected({ ...selected, credit });
+          cardChanged();
           void cache.invalidateQueries({ queryKey: ["credits", store.id] });
         }}
         back={() => {
           setSelected(null);
         }}
-        // Opened from a customer's card, back to it, by their name.
-        {...(chosen
-          ? { backTo: visible(chosen.customer_name ?? erasedCustomer) }
-          : {})}
-        {...(till ? { till: { task: till.task } } : {})}
+        {...(till
+          ? {
+              till: { task: till.task },
+              ...(chosen
+                ? { backTo: visible(chosen.customer_name ?? erasedCustomer) }
+                : {}),
+            }
+          : {
+              backTo: cardName ?? "Покупці",
+              ...(other
+                ? { takenAt: selected.store.name }
+                : {
+                    deposit: () => {
+                      setPaying(selected.credit);
+                    },
+                  }),
+            })}
       />
     );
+  }
 
   if (chosen)
     return (
-      <CustomerDebts
+      <Debts
         store={store}
         token={token}
         first={chosen}
-        openOnly={openOnly}
+        openOnly
         elsewhere={elsewhere}
         choose={(credit) => {
-          setSelected(credit);
+          setSelected({ credit, store });
         }}
         back={leave}
       />
     );
+
+  if (card)
+    return (
+      <CustomerCard
+        store={store}
+        stores={blockStores}
+        token={token}
+        journalKey={journalKey}
+        blocked={blocked}
+        readOnly={readOnly}
+        networkOwner={networkOwner}
+        mayErase={mayErase}
+        first={card.first}
+        from={card.from}
+        elsewhere={card.elsewhere}
+        afresh={card.afresh === true}
+        named={named}
+        choose={(credit, from) => {
+          setSelected({ credit, store: from });
+        }}
+        deposit={setPaying}
+        back={leaveCard}
+      />
+    );
+
+  // A row of «Покупці»: the customer's card; an erased one, who stands
+  // alone, their one debt.
+  const openCard =
+    (from: Store, inElsewhere: boolean) =>
+    (each: Customer): void => {
+      // The search done with: the keyboard goes (spec §4.4; «Усе на бірці»
+      // task list, P1-2).
+      hideKeyboard();
+      const phone = each.phone_digits;
+      const [only] = each.credits;
+      if (phone !== null)
+        setCard({
+          first: { ...each, phone_digits: phone },
+          from,
+          elsewhere: inElsewhere,
+        });
+      else if (only) setSelected({ credit: only, store: from });
+    };
+  // A row of the till's: one debt shown, it is opened; more, and the seller
+  // chooses (credits task list, P0-1).
+  const openAtTill = (each: Customer): void => {
+    hideKeyboard();
+    const [only] = each.credits.length === 1 ? each.credits : [];
+    const phone = each.phone_digits;
+    if (only) setSelected({ credit: only, store });
+    // An erased customer stands alone: one debt each.
+    else if (phone !== null) setChosen({ ...each, phone_digits: phone });
+  };
 
   return (
     <>
       <ScreenHeader
         ref={heading}
         focusable
-        title={till ? "Продаж" : "Борги"}
+        title={till ? "Продаж" : "Покупці"}
         back={back && <BackToMore back={back} />}
       />
-      <section className="credits">
+      <section className={till ? "credits" : "credits customers"}>
         {mode}
-        {readOnly && (
-          // The store's own notice says it does not trade; this says who
-          // takes the payments (credits task list, P0-1).
-          <p className="hint">
-            Внески приймає будь-який магазин мережі, що працює.
-          </p>
-        )}
-        {till ? null : !elsewhere && summary.data ? (
-          <div
-            className="owed-card"
-            role="group"
-            aria-label="Скільки винні магазину"
-          >
-            <p className="owed-what">Магазину винні</p>
-            <p className="owed-sum">
-              <Sum value={money(summary.data.owed)} />
-            </p>
-            <p className="owed-count">
-              {number(summary.data.customers)}{" "}
-              {plural(summary.data.customers, "покупець", "покупці", "покупців")}{" "}
-              · {debtsCount(summary.data.debts)}
-            </p>
-          </div>
-        ) : (
-          !elsewhere &&
-          (summary.isPending || summary.isError) && (
-            // Its place while it is read, in its own lines' heights, so the
-            // field under it does not move when it comes (credits task list,
-            // P2-3); and kept when it cannot be read, saying so, with a way
-            // to read it again (owner decision, 2026-10-21).
-            <div
-              className={`owed-card owed-place${unread ? " owed-failed" : ""}`}
-              {...(unread
-                ? { role: "group", "aria-label": "Скільки винні магазину" }
-                : { "aria-hidden": true })}
-            >
-              <p className="owed-what">Магазину винні</p>
-              <div className="owed-lines">
-                {/* Grey lines the size of the figures to come; what sizes
-                    them is never seen, nor read (review, 2026-10-21). */}
-                <p className="owed-sum" aria-hidden="true">
-                  <strong className="sum skeleton-line">
-                    <span>00 000</span>
-                  </strong>
-                </p>
-                <p className="owed-count" aria-hidden="true">
-                  <span className="skeleton-line">
-                    <span>00 000 · 00 000</span>
-                  </span>
-                </p>
-                {unread && (
-                  // Over the lines, never below them: nothing moves.
-                  <div className="owed-retry">
-                    <p role="alert">Не вдалося прочитати</p>
-                    <button
-                      type="button"
-                      className="quiet"
-                      disabled={summary.isFetching}
-                      onClick={() => {
-                        void summary.refetch();
-                      }}
-                    >
-                      Спробувати ще раз
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )
+        {!till && (
+          <p className="hint credits-context">Ті, хто купує частинами</p>
         )}
         {elsewhere && (
           // Never mixed with this store's: headed, and left in one tap, the
@@ -400,7 +512,46 @@ export function Credits({
             />
           </label>
         </form>
-        {!searched ? (
+        {!till && !elsewhere && (
+          <ModeSwitch
+            label="Які борги показати"
+            modes={statuses}
+            current={status}
+            choose={setStatus}
+            disabled={false}
+            filters
+          />
+        )}
+        {!single ? (
+          <>
+            {blockStores.map((each) => (
+              <Block
+                key={each.id}
+                store={each}
+                here={store}
+                token={token}
+                status={status}
+                search={search}
+                alone={blockStores.length === 1}
+                readOnly={each.id === store.id && readOnly}
+                {...(each.id === store.id && sell ? { sell } : {})}
+                blocked={blocked}
+                open={openCard(each, false)}
+                clear={clear}
+                // Under the open store's block, for a whole number it has
+                // answered (P1-1), in a store that trades.
+                {...(each.id === store.id && !readOnly && asked
+                  ? { ask: toElsewhere }
+                  : {})}
+              />
+            ))}
+            <p className="hint credits-kept">
+              Покупець з’являється тут, коли купує частинами. Ім’я й телефон
+              боргу зберігаємо рік після того, як його закрито, і 3 роки після
+              списання.
+            </p>
+          </>
+        ) : !searched ? (
           <p>{askForPhone}</p>
         ) : customers.isPending ||
           (customers.isPlaceholderData && listed.length === 0) ? (
@@ -440,30 +591,12 @@ export function Credits({
             </div>
           ) : search ? (
             <div className="empty">
-              <p>
-                {!wholePhone(search)
-                  ? `За «${visible(search)}» боргів не знайдено. Перевірте ім’я або введіть номер телефону.`
-                  : readOnly
-                    ? // Anyone trading takes it: the fact alone (review,
-                      // 2026-10-19).
-                      "За цим номером у цьому магазині боргів немає."
-                    : // A whole number owes nothing here: the rule, and the
-                      // closed stores asked for under it (P1-1).
-                      "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали."}
-              </p>
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  setQuery("");
-                  setPressed("");
-                  field.current?.focus();
-                }}
-              >
+              <p>{notFound(search, false)}</p>
+              <button type="button" className="quiet" onClick={clear}>
                 Очистити
               </button>
             </div>
-          ) : owedOnly && !readOnly ? (
+          ) : (
             // The first weeks: where a debt begins, and a way there (credits
             // task list, P1-4). «Продаж» is the till; «Каса» is the drawer.
             <div className="empty">
@@ -477,84 +610,14 @@ export function Credits({
                 </button>
               )}
             </div>
-          ) : (
-            <p>
-              {owedOnly
-                ? "Зараз ніхто не винен цьому магазину."
-                : "У цьому магазині ще не продавали частинами."}
-            </p>
           )
         ) : (
-          <>
-            {customers.isError && !customers.isFetchNextPageError && (
-              // Read again and refused: the rows below are as they were, and
-              // that is said (ADR-0011).
-              <div role="alert">
-                <p>{refusalText(customers.error)}</p>
-                <button
-                  type="button"
-                  disabled={customers.isFetching}
-                  onClick={() => {
-                    void customers.refetch();
-                  }}
-                >
-                  Спробувати ще раз
-                </button>
-              </div>
-            )}
-            <div role="list" aria-label="Хто винен">
-              {listed.map((each) => (
-                <div role="listitem" key={keyOf(each)}>
-                  <CustomerRow
-                    customer={each}
-                    here={store.id}
-                    open={() => {
-                      // The search done with: the keyboard goes (spec §4.4;
-                      // «Усе на бірці» task list, P1-2).
-                      hideKeyboard();
-                      // One debt shown: it is opened; more, and the seller
-                      // chooses (credits task list, P0-1).
-                      const [only] =
-                        each.credits.length === 1 ? each.credits : [];
-                      const phone = each.phone_digits;
-                      if (only) setSelected(only);
-                      // An erased customer stands alone: one debt each.
-                      else if (phone !== null)
-                        setChosen({ ...each, phone_digits: phone });
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            {customers.isFetchNextPageError ? (
-              // The next page could not be read: those read stay.
-              <div role="alert">
-                <p>{refusalText(customers.error)}</p>
-                <button
-                  type="button"
-                  disabled={customers.isFetching}
-                  onClick={() => {
-                    void customers.fetchNextPage();
-                  }}
-                >
-                  Спробувати ще раз
-                </button>
-              </div>
-            ) : (
-              customers.hasNextPage && (
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={customers.isFetching}
-                  onClick={() => {
-                    void customers.fetchNextPage();
-                  }}
-                >
-                  Показати ще
-                </button>
-              )
-            )}
-          </>
+          <Rows
+            customers={customers}
+            listed={listed}
+            here={store.id}
+            open={till ? openAtTill : openCard(store, true)}
+          />
         )}
         {askElsewhere && (
           // Under this store's results for a whole number, and under none:
@@ -562,30 +625,359 @@ export function Credits({
           <button
             type="button"
             className="quiet elsewhere-ask"
-            onClick={() => {
-              switched.current = true;
-              setElsewhere(true);
-            }}
+            onClick={toElsewhere}
           >
             Борг магазину, що зараз не працює? Шукати за цим номером
           </button>
         )}
-        {!elsewhere && !till && (
-          // Under the list, and under an empty one: the paid and written off
-          // are asked for, never shown first (credits task list, P0-1).
-          <button
-            type="button"
-            className="quiet owed-mode"
-            onClick={() => {
-              setOwedOnly(!owedOnly);
-            }}
-          >
-            {owedOnly ? "Показати сплачені й списані" : "Лише ті, хто винен"}
-          </button>
-        )}
       </section>
+      {toast && (
+        <Toast
+          key={toast.times}
+          text={toast.text}
+          gone={() => {
+            setToast(null);
+          }}
+        />
+      )}
     </>
   );
+}
+
+/** S21 opened where nothing steps aside. */
+function noTask(): void {
+  // Nothing to tell.
+}
+
+/**
+ * One store's block of «Покупці» (spec S19; «Усе на бірці» sections task
+ * list, P0-4): «Магазину «Центр» винні» in capitals, what it is owed as the
+ * server summed it for that store, in the debt's colour with its glyph, and
+ * «4 покупці · 5 боргів»; under «Сплачені» and «Списані», «Магазин
+ * «Центр»» alone. Then its customers twenty at a time, read from that
+ * store alone, and its own «Показати ще». What is owed, unread, keeps its
+ * place and says so, with a way to read it again (owner decision,
+ * 2026-10-21).
+ */
+function Block({
+  store,
+  here,
+  token,
+  status,
+  search,
+  alone,
+  readOnly,
+  sell,
+  blocked,
+  open,
+  clear,
+  ask,
+}: {
+  store: Store;
+  /** The open store. */
+  here: Store;
+  token: string;
+  status: CreditStatus;
+  search: string;
+  /** The only block: the words of one store's list, as before. */
+  alone: boolean;
+  readOnly: boolean;
+  sell?: () => void;
+  blocked: boolean;
+  open: (customer: Customer) => void;
+  clear: () => void;
+  /** The closed stores asked for the number searched, under this block. */
+  ask?: () => void;
+}): JSX.Element {
+  const headingId = useId();
+  const name = visible(store.name);
+  const customers = useInfiniteQuery({
+    queryKey: ["credits", here.id, "block", store.id, status, search],
+    queryFn: ({ pageParam }) =>
+      api<CustomerPage>(
+        `/credits/customers?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}&status=${status}${
+          search ? `&query=${encodeURIComponent(search)}` : ""
+        }`,
+        token,
+      ),
+    initialPageParam: 0,
+    getNextPageParam: (last: CustomerPage, pages: CustomerPage[]) =>
+      last.has_more ? pages.length * pageSize : undefined,
+    retry: false,
+    // A search typed keeps the rows in place until the new ones come; never
+    // one status's for another's.
+    placeholderData: (
+      previous: InfiniteData<CustomerPage, number> | undefined,
+      before,
+    ) => (before?.queryKey[4] === status ? previous : undefined),
+  });
+  const owedNow = status === "OPEN";
+  const summary = useQuery({
+    queryKey: ["credits", store.id, "summary"],
+    queryFn: () =>
+      api<StoreDebts>(`/credits/summary?store_id=${store.id}`, token),
+    enabled: owedNow,
+    retry: false,
+  });
+  // Refused, and not read since: said so, and held so while read again —
+  // its button stays, waiting (review, 2026-10-21).
+  const unread = summary.data === undefined && summary.errorUpdateCount > 0;
+  const listed = unique(customers.data?.pages ?? []);
+  const answered = customers.isSuccess && !customers.isPlaceholderData;
+  const label = owedNow ? `Магазину «${name}» винні` : `Магазин «${name}»`;
+  return (
+    <section className="credits-block" aria-labelledby={headingId}>
+      <div className="credits-block-head">
+        <h3 id={headingId} className="t-label">
+          {label}
+        </h3>
+        {owedNow &&
+          (summary.data ? (
+            <div
+              className="block-owed"
+              role="group"
+              aria-label={`Скільки винні магазину «${name}»`}
+            >
+              <p className="owed-sum">
+                <Icon name="owed" size={20} />
+                <Sum value={money(summary.data.owed)} />
+              </p>
+              <p className="owed-count">
+                {number(summary.data.customers)}{" "}
+                {plural(
+                  summary.data.customers,
+                  "покупець",
+                  "покупці",
+                  "покупців",
+                )}{" "}
+                · {debtsCount(summary.data.debts)}
+              </p>
+            </div>
+          ) : (
+            // Its place while it is read, in its own lines' heights, so
+            // the rows under it do not move when it comes (credits task
+            // list, P2-3); and kept when it cannot be read, saying so.
+            <div
+              className={`block-owed owed-place${unread ? " owed-failed" : ""}`}
+              {...(unread
+                ? {
+                    role: "group",
+                    "aria-label": `Скільки винні магазину «${name}»`,
+                  }
+                : { "aria-hidden": true })}
+            >
+              <div className="owed-lines">
+                {/* Grey lines the size of the figures to come; what sizes
+                    them is never seen, nor read (review, 2026-10-21). */}
+                <p className="owed-sum" aria-hidden="true">
+                  <strong className="sum skeleton-line">
+                    <span>00 000</span>
+                  </strong>
+                </p>
+                <p className="owed-count" aria-hidden="true">
+                  <span className="skeleton-line">
+                    <span>00 000 · 00 000</span>
+                  </span>
+                </p>
+                {unread && (
+                  // Over the lines, never below them: nothing moves.
+                  <div className="owed-retry">
+                    <p role="alert">Не вдалося прочитати</p>
+                    <button
+                      type="button"
+                      className="quiet"
+                      disabled={summary.isFetching}
+                      onClick={() => {
+                        void summary.refetch();
+                      }}
+                    >
+                      Спробувати ще раз
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+      </div>
+      {readOnly && (
+        // The store's own notice says it does not trade; this says who
+        // takes the payments (credits task list, P0-1).
+        <p className="hint">
+          Внески приймає будь-який магазин мережі, що працює.
+        </p>
+      )}
+      {customers.isPending ||
+      (customers.isPlaceholderData && listed.length === 0) ? (
+        // The rows' places while they are read (credits task list, P2-3).
+        <Placeholder said="Завантажуємо борги…" rows={alone ? 3 : 1} debts />
+      ) : !customers.data ? (
+        <div role="alert">
+          <p>{refusalText(customers.error)}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void customers.refetch();
+            }}
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      ) : listed.length === 0 ? (
+        search ? (
+          alone ? (
+            <div className="empty">
+              <p>{notFound(search, readOnly)}</p>
+              <button type="button" className="quiet" onClick={clear}>
+                Очистити
+              </button>
+            </div>
+          ) : (
+            <p className="hint">Нікого не знайдено.</p>
+          )
+        ) : status === "SETTLED" ? (
+          <p className="hint">Сплачених боргів тут немає.</p>
+        ) : status === "WRITTEN_OFF" ? (
+          <p className="hint">Списаних боргів тут немає.</p>
+        ) : store.id === here.id && !readOnly ? (
+          // The first weeks: where a debt begins, and a way there (credits
+          // task list, P1-4). «Продаж» is the till; «Каса» is the drawer.
+          <div className="empty">
+            <p>
+              Зараз ніхто не винен. Борг з’являється, коли продають частинами.
+            </p>
+            {sell && (
+              // Held as the till's own button is, while a kept command waits.
+              <button type="button" disabled={blocked} onClick={sell}>
+                Новий продаж
+              </button>
+            )}
+          </div>
+        ) : (
+          <p>Зараз ніхто не винен цьому магазину.</p>
+        )
+      ) : (
+        <Rows
+          customers={customers}
+          listed={listed}
+          here={store.id}
+          label={alone ? "Хто винен" : `Хто винен магазину «${name}»`}
+          open={open}
+        />
+      )}
+      {ask && answered && (
+        // Under this store's results for a whole number, and under none:
+        // the same number among the stores that do not trade (P1-1).
+        <button type="button" className="quiet elsewhere-ask" onClick={ask}>
+          Борг магазину, що зараз не працює? Шукати за цим номером
+        </button>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A list's rows, read again and refused over them, and its «Показати ще»:
+ * twenty more, or the page that could not be read asked again, those read
+ * staying (ADR-0011).
+ */
+function Rows({
+  customers,
+  listed,
+  here,
+  label = "Хто винен",
+  open,
+}: {
+  customers: UseInfiniteQueryResult<InfiniteData<CustomerPage>>;
+  listed: readonly Customer[];
+  here: string;
+  label?: string;
+  open: (customer: Customer) => void;
+}): JSX.Element {
+  return (
+    <>
+      {customers.isError && !customers.isFetchNextPageError && (
+        // Read again and refused: the rows below are as they were, and that
+        // is said (ADR-0011).
+        <div role="alert">
+          <p>{refusalText(customers.error)}</p>
+          <button
+            type="button"
+            disabled={customers.isFetching}
+            onClick={() => {
+              void customers.refetch();
+            }}
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      )}
+      <div role="list" aria-label={label}>
+        {listed.map((each) => (
+          <div role="listitem" key={keyOf(each)}>
+            <CustomerRow
+              customer={each}
+              here={here}
+              open={() => {
+                open(each);
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      {customers.isFetchNextPageError ? (
+        // The next page could not be read: those read stay.
+        <div role="alert">
+          <p>{refusalText(customers.error)}</p>
+          <button
+            type="button"
+            disabled={customers.isFetching}
+            onClick={() => {
+              void customers.fetchNextPage();
+            }}
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      ) : (
+        customers.hasNextPage && (
+          <button
+            type="button"
+            className="quiet"
+            disabled={customers.isFetching}
+            onClick={() => {
+              void customers.fetchNextPage();
+            }}
+          >
+            Показати ще
+          </button>
+        )
+      )}
+    </>
+  );
+}
+
+/** What a search found nothing for says: a name, or a whole number. */
+function notFound(search: string, readOnly: boolean): string {
+  return !wholePhone(search)
+    ? `За «${visible(search)}» боргів не знайдено. Перевірте ім’я або введіть номер телефону.`
+    : readOnly
+      ? // Anyone trading takes it: the fact alone (review, 2026-10-19).
+        "За цим номером у цьому магазині боргів немає."
+      : // A whole number owes nothing here: the rule, and the closed stores
+        // asked for under it (P1-1).
+        "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.";
+}
+
+/** A debt opened meanwhile moves the pages' edge: a customer read twice is
+ * shown once. */
+function unique(pages: readonly CustomerPage[]): Customer[] {
+  return [
+    ...new Map(
+      pages
+        .flatMap((page) => page.items)
+        .map((customer) => [keyOf(customer), customer]),
+    ).values(),
+  ];
 }
 
 /** One customer's place in the list: their phone, or their erased debt. */

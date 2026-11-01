@@ -171,8 +171,9 @@ export function Collect({
             }}
             total={total}
             // One line at 360 px, as at the till (credits task list,
-            // P1-5): the order is this store's, as its words before said.
-            hint="Решту — у «Боргах» цього магазину."
+            // P1-5): where the next payments are taken («Усе на бірці»
+            // sections task list, P2-2; В5 (а)).
+            hint="Решту — у «Продажі» › «Внесок»."
             // The debt's store, by construction.
             storeId={order.store_id}
             token={token}

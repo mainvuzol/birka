@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 /**
  * Returns and debt payments typed from paper (owner decision, 2026-10-10;
  * ADR-0021), against the real server: the till's switch «з паперу» on
- * «Повернення» and «Борги», the mark naming who took it and the paper's
+ * «Повернення» and «Внесок», the mark naming who took it and the paper's
  * hour, the money never handed over or charged a second time, and the mark
  * in «Звіт» and in the debt's history.
  */
@@ -34,6 +34,25 @@ const fixture = JSON.parse(
     "utf8",
   ),
 ) as Fixture;
+
+/** «Покупці» › the customer found by name › their card's «Внесок»: the
+ * till's S21 on their one debt. */
+async function payOnCard(page: Page, name: string): Promise<void> {
+  await section(page, "Покупці");
+  await page.getByLabel("Ім’я або телефон").fill(name);
+  await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
+  await page.getByRole("button", { name: "Внесок", exact: true }).click();
+  await expect(page.getByLabel("Сума, грн")).toBeVisible();
+}
+
+/** The app's keypad: the digits of a sum. */
+async function keyIn(page: Page, sum: string): Promise<void> {
+  for (const one of sum)
+    await page
+      .locator(".keypad")
+      .getByRole("button", { name: one, exact: true })
+      .click();
+}
 
 /** Telegram's launch data for a person the seed knows, signed. */
 function initData(telegramUserId: string, name: string): string {
@@ -254,12 +273,10 @@ test("a card payment typed from paper never says to charge the card, and the deb
   const sent = bodiesOf(page, "/payments");
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
-  await section(page, "Борги");
-  await page.getByLabel("Ім’я або телефон").fill(name);
-  await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
+  await payOnCard(page, name);
   // Ticked, nothing is paid until the series says which paper it is.
   await page.getByLabel("Вношу внесок з паперу").check();
-  await page.getByLabel("Сума внеску, грн").fill("300");
+  await keyIn(page, "300");
   await expect(
     page
       .getByRole("group", { name: "Внесок", exact: true })
@@ -272,7 +289,6 @@ test("a card payment typed from paper never says to charge the card, and the deb
   await page
     .getByRole("combobox", { name: "Хто прийняв" })
     .selectOption({ label: "Ганна" });
-  await page.getByLabel("Сума внеску, грн").fill("300");
   // Said once, in the band; under the ways, who took it, in one line
   // (credits task list, P0-4).
   await expect(page.getByText(/на терміналі нічого не проводьте/i)).toHaveCount(
@@ -280,7 +296,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
   );
   const panel = page.getByRole("group", { name: "Внесок", exact: true });
   await expect(panel.locator(".pay-seller")).toHaveText("Хто прийняв: Ганна");
-  await expect(panel).toContainText("З паперу · Внесок 300,00 грн");
+  await expect(page.getByLabel("Сума, грн")).toHaveValue("300");
   await panel.getByRole("button", { name: "З паперу · Картка" }).click();
 
   await expect(
@@ -300,6 +316,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
   await page
     .getByRole("button", { name: "Відкрити борг", exact: true })
     .click();
+  await page.getByRole("button", { name: /^Історія · \d+/ }).click();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "Внесок під час збою · хто прийняв: Ганна · внесено: Ліда",
   );
@@ -311,7 +328,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
   });
 });
 
-test("the switch is one for the store: ticked on «Повернення», the till and «Борги» are in paper mode too, a name chosen at the till is not taken for a return, and unticked at the till it is off everywhere", async ({
+test("the switch is one for the store: ticked on «Повернення», the till and a debt's «Внесок» are in paper mode too, a name chosen at the till is not taken for a return, and unticked at the till it is off everywhere", async ({
   page,
 }) => {
   const name = `Перемикач ${randomUUID().slice(0, 6)}`;
@@ -341,16 +358,16 @@ test("the switch is one for the store: ticked on «Повернення», the t
     "",
   );
 
-  // «Борги»: the same.
-  await section(page, "Борги");
-  await page.getByLabel("Ім’я або телефон").fill(name);
-  await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
+  // A debt's «Внесок»: the same; back on the card, the menu again.
+  await payOnCard(page, name);
   await expect(page.getByLabel("Вношу внесок з паперу")).toBeChecked();
   await expect(
     page
       .getByRole("group", { name: "Внесок", exact: true })
       .getByRole("button", { name: "З паперу · Готівка" }),
   ).toBeVisible();
+  await page.getByRole("button", { name, exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Розділи" })).toBeVisible();
 
   // Unticked at the till: off on «Повернення».
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
@@ -455,14 +472,12 @@ test("the first days' paper: a return and a payment typed from it are «з па�
     first_days: true,
   });
 
-  // «Борги»: the series is the first days' paper there too.
-  await section(page, "Борги");
-  await page.getByLabel("Ім’я або телефон").fill(name);
-  await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
+  // A debt's «Внесок»: the series is the first days' paper there too.
+  await payOnCard(page, name);
   await expect(
     page.getByRole("radio", { name: "Перші дні, до затвердження залишків" }),
   ).toBeChecked();
-  await page.getByLabel("Сума внеску, грн").fill("300");
+  await keyIn(page, "300");
   await page
     .getByRole("group", { name: "Внесок", exact: true })
     .getByRole("button", { name: "З паперу · Картка" })
@@ -480,6 +495,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
   await page
     .getByRole("button", { name: "Відкрити борг", exact: true })
     .click();
+  await page.getByRole("button", { name: /^Історія · \d+/ }).click();
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "Внесок з паперу · внесено: Ліда",
   );

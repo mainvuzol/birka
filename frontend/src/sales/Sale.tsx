@@ -707,7 +707,7 @@ export function Sale({
       setPaperTime("");
       setYesterday(false);
       // The next customer is someone else, and looks for something else.
-      // Sold in parts, «Борги» — and what a number owes, said here — are
+      // Sold in parts, «Покупці» — and what a number owes, said here — are
       // read again (review, 2026-10-19).
       if (outcome.kind === "sold" && credit.inParts)
         void cache.invalidateQueries({ queryKey: ["credits", store.id] });
@@ -1589,10 +1589,10 @@ export function Sale({
                   value={credit}
                   change={setCredit}
                   total={total}
-                  // One line at 360 px (credits task list, P1-5): the task
-                  // list's «Решту покупець доплачує в «Боргах» цього
-                  // магазину.» takes two.
-                  hint="Решту — у «Боргах» цього магазину."
+                  // One line at 360 px (credits task list, P1-5), and where
+                  // the next payments are taken: the till's «Внесок» («Усе
+                  // на бірці» sections task list, P2-2; В5 (а)).
+                  hint="Решту — у «Продажі» › «Внесок»."
                   storeId={store.id}
                   token={token}
                   done={closeBasket}

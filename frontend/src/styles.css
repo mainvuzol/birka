@@ -1681,6 +1681,9 @@ html {
   font-size: 14px;
   color: var(--text-2);
 }
+/* A customer's two letters (spec §6.26; «Усе на бірці» sections task
+   list, P0-4): a circle of 40 in the fold, the initials in the display
+   face at 0.4 of it, in ink. */
 .debt-mark {
   display: inline-flex;
   flex-shrink: 0;
@@ -1689,9 +1692,11 @@ html {
   width: 40px;
   height: 40px;
   border-radius: 999px;
-  background: var(--debt-bg);
-  color: var(--debt);
-  font-weight: 750;
+  background: var(--fold);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
 }
 .debt-name {
   font-size: 17px;
@@ -1702,7 +1707,10 @@ html {
   white-space: nowrap;
 }
 .debt-owed {
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   color: var(--debt);
@@ -1941,10 +1949,309 @@ html {
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.rare {
-  margin: 16px 0 0;
+/* A customer's row (spec §6.8): their two letters, the name and what is
+   owed on one line, the phone and goods under both — never under the sum
+   alone, so a number is never squeezed into it at 360 px. A row with no
+   mark, a debt's, starts at its edge. */
+.debt-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "mark name owed open"
+    "mark meta meta open";
+  column-gap: 12px;
+  row-gap: 4px;
+}
+.debt-row:not(:has(.debt-mark)) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "name owed open"
+    "meta meta open";
+}
+.debt-row > .sale-main {
+  display: contents;
+}
+.debt-row .debt-mark {
+  grid-area: mark;
+}
+.debt-row .debt-name,
+.debt-row .skeleton-name {
+  grid-area: name;
+}
+.debt-row .sale-meta,
+.debt-row .skeleton-meta {
+  grid-area: meta;
+}
+.debt-row > .debt-owed,
+.debt-row > .badge,
+.debt-row > .skeleton-owed {
+  grid-area: owed;
+  justify-self: end;
+}
+.debt-row > .sale-open {
+  grid-area: open;
+}
+/* «Покупці» and the customer's card on the page itself, as the spec draws
+   them (S19, S20): the rows and blocks the width of the screen less its
+   gutters. */
+section.credits.customers,
+section.credits.customer-card {
+  margin: 12px 0 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* «Покупці» (spec S19; «Усе на бірці» sections task list, P0-4): the
+   context under the heading, then a block a store — its label in capitals,
+   under it what the store is owed in the debt's colour with its glyph and
+   how many owe, the same two lines while read or unread, so nothing moves —
+   and the line on how long a name and phone are kept. */
+.credits-context {
+  margin: 0 0 12px;
+}
+.credits-block {
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.credits-block-head {
+  margin: 0 0 8px;
+}
+.credits-block-head h3 {
+  margin: 0;
+  color: var(--pencil);
+}
+.block-owed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
+  min-height: 44px;
+  margin-top: 2px;
+}
+.block-owed p {
+  margin: 0;
+}
+.block-owed .owed-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.block-owed .owed-sum .sum {
+  font-size: 24px;
+  letter-spacing: 0;
+}
+.block-owed .owed-count {
+  margin: 0;
+}
+.block-owed .owed-lines {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: 44px;
+}
+.credits-kept,
+.customer-kept {
+  margin: 24px 0 0;
+}
+/* The customer's card (spec S20, §6.20; P0-5): two letters of 48, the
+   phone as written and «Скопіювати»; a block a store on a card, what is
+   owed there large with its glyph; the owner's ⋯ beside its label. */
+.customer-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  margin: 4px 0 4px;
+}
+.customer-reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.debt-mark.customer-mark {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+.customer-phone {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.customer-block {
+  margin: 12px 0 0;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-l);
+  background: var(--card);
+}
+.customer-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  margin: -8px -8px 0 0;
+}
+.customer-block h3 {
+  margin: 0;
+  color: var(--pencil);
+}
+.customer-block p {
+  margin: 0;
+}
+.customer-owed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.customer-owed .sum {
+  font-size: 44px;
+  line-height: 48px;
+  letter-spacing: -0.01em;
+}
+.customer-block .debt-bar {
+  margin: 6px 0 2px;
+}
+.customer-debt {
+  margin-top: 6px;
+}
+.customer-debt p + p {
+  margin-top: 4px;
+}
+.customer-none {
+  margin: 12px 0 0;
+}
+.debt-more {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch);
+  height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-l);
+  background: transparent;
+  color: var(--ink);
+}
+.debt-more-ways {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+.sheet-way {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  text-align: left;
+}
+.danger-way {
+  color: var(--danger);
+}
+.write-off-why {
+  display: block;
+  margin-top: 12px;
+}
+.write-off-why textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  margin-top: 6px;
+}
+/* Clear of the focus ring around the reason. */
+.write-off-why .hint {
+  display: block;
+  margin-top: 8px;
+}
+/* «ІСТОРІЯ» (spec §6.21): the day in a column of 52, a thread of hairline
+   with an eyelet a line — filled once recorded, a knot where a debt
+   closed — the store, what it was, who and the goods, its sum on the
+   right. */
+.customer-history-title {
+  margin: 24px 0 4px;
+  color: var(--pencil);
+}
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.timeline-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 16px minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: start;
+  padding: 8px 0;
+}
+.timeline-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(44px + 8px + 8px - 0.75px);
+  width: 1.5px;
+  background: var(--hairline);
+}
+.timeline-day {
+  padding-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pencil);
+  font-variant-numeric: tabular-nums;
+}
+.timeline-node {
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  width: 8px;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--success);
+}
+.timeline-node.knot {
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px var(--paid);
+}
+.timeline-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.timeline-store,
+.timeline-meta {
+  font-size: 14px;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.timeline-what {
+  font-size: 16px;
+  font-weight: 600;
+}
+.timeline-sum {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.timeline-row:focus {
+  outline-offset: 2px;
+}
+.history-more {
+  min-height: var(--touch);
+  margin-top: 4px;
 }
 /* A payment's result (credits task list, P0-5), and once confirmed later,
    compact (P1-2): the return's result block, its sum large. */
@@ -2183,7 +2490,8 @@ html {
   color: var(--pencil);
   font-weight: 650;
 }
-.mode-switch button[aria-current="page"] {
+.mode-switch button[aria-current="page"],
+.mode-switch button[aria-pressed="true"] {
   background: var(--card);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--edge);

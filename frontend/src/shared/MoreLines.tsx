@@ -24,7 +24,7 @@ export function owingText(count: number): string {
   return `${String(count)} ${plural(count, "людина винна", "людини винні", "людей винні")}`;
 }
 
-/** «Борги»: how many people owe the open store now, «Борги»'s own read
+/** «Покупці»: how many people owe the open store now, «Покупці»'s own read
  * (`GET /credits/summary`), in the debts' colour; never the network's. */
 export function DebtsLine({
   store,
@@ -42,7 +42,7 @@ export function DebtsLine({
       <span className="more-count owed">{owingText(count)}</span>
     </span>
   ) : (
-    // As «Борги» says «Зараз ніхто не винен».
+    // As «Покупці» says «Зараз ніхто не винен».
     <span className="more-meta">ніхто не винен</span>
   );
 }

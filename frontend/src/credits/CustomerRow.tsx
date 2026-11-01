@@ -3,7 +3,8 @@ import type { JSX } from "react";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import { number, plural } from "@/openings/types";
-import { goodsOf } from "./format";
+import { Icon } from "@/shared/Icon";
+import { goodsOf, initialsOf } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
 import type { Customer } from "./types";
 
@@ -12,21 +13,14 @@ export function debtsCount(count: number): string {
   return `${number(count)} ${plural(count, "борг", "борги", "боргів")}`;
 }
 
-/** The customer's first letter, for the row's mark; «—» once erased. A
- * letter alone hides and turns nothing, so it is taken from the name as
- * typed, past any invisible mark (review, 2026-10-18). */
-function initialOf(name: string | null): string {
-  if (name === null) return "—";
-  const letter = /\p{L}/u.exec(name);
-  return letter ? letter[0].toLocaleUpperCase("uk-UA") : "—";
-}
-
 /**
- * One customer in «Борги»'s list (credits task list, P0-1): who, their
- * phone, and with one debt its goods; what they owe in all, as the server
- * summed it, in the debt's colour. Never a sale's sum or a payment's way.
- * The whole row opens the debt, or the customer's debts when there are more;
- * read while the till waits, as before, the debt's own commands held.
+ * One customer in a store's list (credits task list, P0-1; spec §6.8): their
+ * two letters, who, their phone, and with one debt its goods; what they owe
+ * the store, as the server summed it, in the debt's colour with its glyph.
+ * Never a sale's sum or a payment's way. The whole row opens the customer's
+ * card in «Покупці» («Усе на бірці» sections task list, P0-4); at the till,
+ * the debt, or the customer's debts when there are more; read while the
+ * till waits, as before, the debt's own commands held.
  *
  * Found at the till in another store of this person's, it opens nothing and
  * says where the payment is taken (spec S08; «Усе на бірці» task list,
@@ -48,11 +42,18 @@ export function CustomerRow({
   const [only] = customer.credits.length === 1 ? customer.credits : [];
   const away = customer.credits.find((credit) => credit.store_id !== here);
   const owes = customer.open_debts > 0;
-  // Nothing owed: one debt says how it closed; more, that nothing is owed.
+  // Nothing owed among those read: debts that closed alike say how; others,
+  // that nothing is owed. Under «Сплачені» or «Списані» only that status is
+  // read, so the customer may still owe here.
+  const [first] = customer.credits;
+  const alike =
+    first && customer.credits.every((credit) => credit.status === first.status)
+      ? first
+      : undefined;
   const closed = owes
     ? null
-    : only
-      ? statusLabels[only.status]
+    : alike
+      ? statusLabels[alike.status]
       : "Нічого не винні";
   const said = owes
     ? `винні ${money(customer.owed)}`
@@ -61,7 +62,7 @@ export function CustomerRow({
   const inside = (
     <>
       <span className="debt-mark" aria-hidden="true">
-        {initialOf(customer.customer_name)}
+        {initialsOf(customer.customer_name)}
       </span>
       <span className="sale-main">
         <span className="debt-name">{name}</span>
@@ -93,11 +94,14 @@ export function CustomerRow({
         </span>
       </span>
       {owes ? (
-        <span className="debt-owed">{money(customer.owed)}</span>
+        <span className="debt-owed">
+          <Icon name="owed" size={16} />
+          {money(customer.owed)}
+        </span>
       ) : (
         <span
           className={
-            only?.status === "SETTLED" ? "badge paid" : "badge neutral"
+            alike?.status === "SETTLED" ? "badge paid" : "badge neutral"
           }
         >
           {closed}

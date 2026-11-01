@@ -147,7 +147,7 @@ function owes(debts: StoreDebts): boolean {
 }
 
 /** «Винні 8 400,00 грн · 4 людини» — this store's alone, never the
- * network's; «Ніхто не винен», as «Борги» says «Зараз ніхто не винен». */
+ * network's; «Ніхто не винен», as «Покупці» says «Зараз ніхто не винен». */
 function owedParts(debts: StoreDebts): string[] {
   return owes(debts)
     ? [

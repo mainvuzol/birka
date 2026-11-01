@@ -31,7 +31,7 @@ export function chargeOnce(amount: string): string {
 /** What is owed after it, in parts: from the server's answer. */
 export function owedText(order: Order): string | null {
   return order.credit
-    ? `Покупець винен ${money(order.credit.owed)}. Наступні внески — у «Боргах».`
+    ? `Покупець винен ${money(order.credit.owed)}. Наступні внески — у «Продажі» › «Внесок».`
     : null;
 }
 
