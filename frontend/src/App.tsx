@@ -43,6 +43,9 @@ import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
+import { Model } from "@/inventory/Model";
+import type { Opened } from "@/inventory/Model";
+import { Stocktaking } from "@/inventory/Stocktaking";
 import { DamagedMeta } from "@/inventory/Goods";
 import { TabBar } from "@/shared/TabBar";
 import { Back } from "@/shared/Back";
@@ -158,6 +161,11 @@ type Tab =
   | "new"
   | "catalog"
   | "stock"
+  /** A model's sizes on every warehouse, from its name on the till's
+   * search (spec S23; «Усе на бірці» sections task list, P0-6). */
+  | "model"
+  /** «Ще» › «Товар» › «Інвентаризація» (sections task list, P1-5). */
+  | "stocktaking"
   | "sale"
   | "receive"
   | "returns"
@@ -769,6 +777,12 @@ function Workspace({
   // So from «Гроші»: «← Гроші»; and «Надійшло»'s period, kept while the
   // report opened on it stands («Усе на бірці» sections task list, P0-7).
   const [fromMoney, setFromMoney] = useState<Tab | null>(null);
+  // A model's detail, from the till's search: what found it, and what the
+  // search held, to come back to; and the screen it opened, «← {модель}»
+  // over it (sections task list, P0-6).
+  const [model, setModel] = useState<Opened | null>(null);
+  const [tillTyped, setTillTyped] = useState("");
+  const [fromModel, setFromModel] = useState<Tab | null>(null);
   const [moneyPeriod, setMoneyPeriod] = useState<Period>("today");
   const [reportRange, setReportRange] = useState<{
     from: string;
@@ -796,18 +810,28 @@ function Workspace({
   const saleKey = `birka:sale-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [catalogStorageError, setCatalogStorageError] = useState(false);
   const [saleStorageError, setSaleStorageError] = useState(false);
-  // «Ще» › «Товар»: «Залишки», «Прийшов товар» and «Брак», each by its own
-  // right («Усе на бірці» task list, P0-4).
+  // «Ще» › «Товар»: «Прийшов товар», «Брак» and «Інвентаризація», each by
+  // its own right («Усе на бірці» task list, P0-4; sections task list,
+  // P1-5); «Залишки» only for whoever reads the stock with no till here —
+  // anyone else's is the till's search and a model's detail (P0-6).
   const canSeeStock = store.permissions.includes("inventory:view");
+  // A stocktake reads the warehouse it counts: whoever may correct the
+  // stock but not read it has none (review, 2026-11-01).
+  const canStocktake =
+    canSeeStock && store.permissions.includes("inventory:adjust");
+  const stockListed = canSeeStock && !store.permissions.includes("sale:create");
   const canReceive = store.permissions.includes("inventory:receive");
   const canSeeDamaged = store.permissions.includes("damaged:handle");
   // Read, not watched, as `canReturnNow`: a kept delivery, correction or
   // count turns to its screen only for whoever may open it; anyone else's
-  // banner stands over any tab («Усе на бірці» task list, P2-1).
+  // banner stands over any tab («Усе на бірці» task list, P2-1). With the
+  // till, a correction's is its search, which opens first anyway.
   const canReceiveNow = useRef(canReceive);
   canReceiveNow.current = canReceive;
-  const canSeeStockNow = useRef(canSeeStock);
-  canSeeStockNow.current = canSeeStock;
+  const canStocktakeNow = useRef(canStocktake);
+  canStocktakeNow.current = canStocktake;
+  const stockListedNow = useRef(stockListed);
+  stockListedNow.current = stockListed;
   const receiptKey = `birka:receipt-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [receiptStorageError, setReceiptStorageError] = useState(false);
   const receiptCommand = useReceiptCommand();
@@ -844,14 +868,15 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        if (canSeeStockNow.current) setTab("stock");
+        // Its balances are read again once it is settled.
+        if (stockListedNow.current) setTab("stock");
         loadedFromDisk("adjustment");
       }
     } catch {
       setAdjustmentStorageError(true);
     }
   }, [adjustmentKey, loadedFromDisk]);
-  // A stocktake's count (ADR-0022): the stock screen's own, as a correction.
+  // A stocktake's count (ADR-0022): «Інвентаризація»'s own, as a correction.
   const countKey = `birka:stocktake-count-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [countStorageError, setCountStorageError] = useState(false);
   const [countSettled, setCountSettled] = useState<CountResult | null>(null);
@@ -866,7 +891,8 @@ function Workspace({
         misses: saved?.misses ?? 0,
       });
       if (saved) {
-        if (canSeeStockNow.current) setTab("stock");
+        if (canStocktakeNow.current) setTab("stocktaking");
+        else if (stockListedNow.current) setTab("stock");
         loadedFromDisk("count");
       }
     } catch {
@@ -1437,6 +1463,9 @@ function Workspace({
         void cache.invalidateQueries({
           queryKey: ["inventory-stock"],
         });
+        // The till's search too: a correction may be made from a model's
+        // detail, a tap from it (review, 2026-11-01).
+        void cache.invalidateQueries({ queryKey: ["sale-stock"] });
       } else if (outcome.kind === "refused") {
         // Proven to have recorded nothing — the balance moved since the
         // count, say: settled, and it says so rather than vanishing, with
@@ -1465,6 +1494,7 @@ function Workspace({
         void cache.invalidateQueries({ queryKey: ["stocktake-positions"] });
         void cache.invalidateQueries({ queryKey: ["stocktakes"] });
         void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
+        void cache.invalidateQueries({ queryKey: ["sale-stock"] });
       }
     });
   }
@@ -1780,7 +1810,8 @@ function Workspace({
       ...(store.permissions.includes("sale:create")
         ? { forgetsOrder: true as const }
         : {}),
-      also: ["returns", "deposit"],
+      // A model's detail too, and what it opened.
+      also: ["returns", "deposit", "model", ...(fromModel ? [fromModel] : [])],
       tabbed: true,
     },
     // «Замовлення», a tab of its own: its list, its card and «+ Нове
@@ -1834,7 +1865,7 @@ function Workspace({
       shown: canSeeCredits,
       disabled: otherThanCredit,
     },
-    // «Ще» › «Товар»: «Залишки» until the model's own screen (S23).
+    // «Ще» › «Товар» (spec S07).
     {
       tab: "receive",
       label: "Прийшов товар",
@@ -1850,10 +1881,17 @@ function Workspace({
       disabled: blocked,
     },
     {
+      tab: "stocktaking",
+      label: "Інвентаризація",
+      icon: "stocktake",
+      shown: canStocktake,
+      disabled: otherThanAdjustment,
+    },
+    {
       tab: "stock",
       label: "Залишки",
       icon: "stocktake",
-      shown: canSeeStock,
+      shown: stockListed,
       disabled: otherThanAdjustment,
     },
     {
@@ -1939,7 +1977,9 @@ function Workspace({
         ? { ref: ordersButton }
         : section.tab === "money"
           ? { ref: moneyButton }
-          : {}),
+          : section.tab === "sale"
+            ? { ref: saleButton }
+            : {}),
     icon:
       section.tab === "today"
         ? "tab-today"
@@ -2086,7 +2126,10 @@ function Workspace({
     { title: "Люди", rows: rowsOf(["credits"]) },
     {
       title: "Товар",
-      rows: [...rowsOf(["receive", "damaged", "stock"]), ...catalogueRow],
+      rows: [
+        ...rowsOf(["receive", "damaged", "stocktaking", "stock"]),
+        ...catalogueRow,
+      ],
     },
     // For whoever has «Гроші», only «Постачальникам» stays here (the
     // frame's §2а, row 11).
@@ -2171,6 +2214,32 @@ function Workspace({
     moneyButton.current?.focus();
   };
   const moneyBack: MoreBack = { go: toMoney, held: sending, to: "Гроші" };
+  // So on a model's detail, and on what it opened: «Продаж» marked all
+  // along, the focus stays on it (review, 2026-11-01).
+  const saleButton = useRef<HTMLButtonElement>(null);
+  const tillBack: MoreBack = {
+    go: () => {
+      setTab("sale");
+      saleButton.current?.focus();
+    },
+    held: sending,
+    to: "Продаж",
+  };
+  /** A screen the model's detail opens, or the detail itself. */
+  const fromModelTo = (section: Tab): void => {
+    setTab(section);
+    saleButton.current?.focus();
+  };
+  const modelBack = (section: Tab): MoreBack =>
+    fromModel === section && model
+      ? {
+          go: () => {
+            fromModelTo("model");
+          },
+          held: sending,
+          to: visible(model.name),
+        }
+      : moreBack;
   /** A section opened from «Гроші», «← Гроші» over it. */
   const fromMoneyTo = (section: Tab) => (): void => {
     setTab(section);
@@ -2205,6 +2274,15 @@ function Workspace({
     if (tab === "today" || tab === "more" || tab === "money")
       setFromMoney(null);
   }, [tab]);
+  // Anywhere but the model and what it opened, its way back is forgotten,
+  // and the search it held: the till takes it as it opens, once — opened
+  // afresh, a kept sale settled say, it starts with none (review,
+  // 2026-11-01).
+  useEffect(() => {
+    if (tab === "model" || tab === fromModel) return;
+    setFromModel(null);
+    setTillTyped("");
+  }, [tab, fromModel]);
   // Opened on «Замовлення» with no till to open first, by whoever may not
   // read them: the first section shown instead (orders task list, P2-1) —
   // unless a kept operation turned to its own tab meanwhile (review,
@@ -2763,6 +2841,16 @@ function Workspace({
             others={stockElsewhere}
             journalKey={saleKey}
             searchFirst={searchFirst}
+            typed={tillTyped}
+            {...(canSeeStock
+              ? {
+                  openModel: (opened: Opened, typed: string) => {
+                    setModel(opened);
+                    setTillTyped(typed);
+                    fromModelTo("model");
+                  },
+                }
+              : {})}
             blocked={
               storageError ||
               catalogStorageError ||
@@ -2804,7 +2892,15 @@ function Workspace({
             store={store}
             token={token}
             journalKey={receiptKey}
-            back={moreBack}
+            back={modelBack("receive")}
+            model={
+              fromModel === "receive" && model
+                ? {
+                    product_variant_id: model.variantId,
+                    display_name: model.name,
+                  }
+                : null
+            }
             blocked={
               storageError ||
               catalogStorageError ||
@@ -2826,13 +2922,12 @@ function Workspace({
         // («Усе на бірці» task list, P2-1).
         null
       ) : tab === "stock" ? (
-        canSeeStock ? (
+        stockListed ? (
           <Stock
             store={store}
             token={token}
             scopeKey={key}
             journalKey={adjustmentKey}
-            countKey={countKey}
             blocked={
               otherThanAdjustment || adjustmentStorageError || countStorageError
             }
@@ -2841,6 +2936,43 @@ function Workspace({
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
         null
+      ) : tab === "model" ? (
+        model && canSeeStock ? (
+          <Model
+            key={`${model.variantId}:${model.query}`}
+            store={store}
+            token={token}
+            scopeKey={key}
+            journalKey={adjustmentKey}
+            opened={model}
+            blocked={
+              otherThanAdjustment || adjustmentStorageError || countStorageError
+            }
+            back={tillBack}
+            receive={() => {
+              fromModelTo("receive");
+              setFromModel("receive");
+            }}
+            stocktake={() => {
+              fromModelTo("stocktaking");
+              setFromModel("stocktaking");
+            }}
+          />
+        ) : null
+      ) : tab === "stocktaking" ? (
+        canStocktake ? (
+          <Stocktaking
+            store={store}
+            token={token}
+            scopeKey={key}
+            journalKey={adjustmentKey}
+            countKey={countKey}
+            blocked={
+              otherThanAdjustment || adjustmentStorageError || countStorageError
+            }
+            back={modelBack("stocktaking")}
+          />
+        ) : null
       ) : tab === "returns" ? (
         canReturn ? (
           <Returns

@@ -201,6 +201,63 @@ export async function toTill(page: Page): Promise<void> {
       .click();
 }
 
+/**
+ * A model's detail (spec S23; «Усе на бірці» sections task list, P0-6):
+ * the till, its search settled on `query`, and the model's name on its
+ * tag — «Ще товари» read until the tag is listed.
+ */
+export async function openModel(
+  page: Page,
+  query: string,
+  name: string | RegExp,
+): Promise<void> {
+  await toTill(page);
+  const answered = page.waitForResponse(
+    (response) =>
+      response.url().includes("/catalog/stock-options?") &&
+      new URL(response.url()).searchParams.get("query") === query,
+  );
+  await page.getByRole("searchbox", { name: "Знайти модель" }).fill(query);
+  await answered;
+  const open = page
+    .getByRole("group", { name, exact: typeof name === "string" })
+    .locator("button.model-open")
+    .first();
+  const more = page.getByRole("button", { name: "Ще товари" });
+  while (!(await open.isVisible()) && (await more.isVisible())) {
+    await more.click();
+    await expect(
+      open.or(more.and(page.locator("button:enabled"))).first(),
+    ).toBeVisible();
+  }
+  await open.click();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name,
+      exact: typeof name === "string",
+    }),
+  ).toBeVisible();
+}
+
+/** One cell of a model's grid: a size's units at a warehouse, «total» for
+ * «Разом»; `held`, its row of «з них у резерві». */
+export function gridCell(
+  page: Page,
+  locationId: string,
+  sizeId: string,
+  held = false,
+): Locator {
+  return page.locator(
+    `table.size-grid tr[data-${held ? "held" : "location"}="${locationId}"] td[data-size="${sizeId}"]`,
+  );
+}
+
+/** What a model's grid shows in a cell, «·» read as none. */
+export async function units(cell: Locator): Promise<number> {
+  return Number(/\d+/.exec((await cell.textContent()) ?? "")?.[0] ?? "0");
+}
+
 /** The bottom menu (spec §6.2; «Усе на бірці» task list, P0-4). */
 export function menu(page: Page): Locator {
   return page.getByRole("navigation", { name: "Розділи" });
@@ -276,7 +333,12 @@ export async function section(page: Page, name: string): Promise<void> {
     ).toBeVisible();
     return;
   }
-  if (name === "Залишки" || name === "Приймання" || name === "Брак") {
+  if (
+    name === "Залишки" ||
+    name === "Приймання" ||
+    name === "Брак" ||
+    name === "Інвентаризація"
+  ) {
     // «Ще» › «Товар», then the row asked for (P0-4).
     await more(page);
     await page

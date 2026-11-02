@@ -92,7 +92,7 @@ test("someone the shop has not added sees their Telegram ID, and is let in once 
     String(stranger),
   );
   await openStore(page, "Основний MAIN");
-  await section(page, "Залишки");
+  await section(page, "Інвентаризація");
   await expect(
     page.getByText("Доступ до магазину закрито. Зверніться до власника."),
   ).toBeVisible();

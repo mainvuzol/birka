@@ -1,6 +1,10 @@
 import {
   test,
   expect,
+  gridCell,
+  menu,
+  more,
+  openModel,
   openStore,
   readsOf,
   refuseOnce,
@@ -12,8 +16,10 @@ import { readFileSync } from "node:fs";
 
 /**
  * A stocktake of a whole warehouse (owner decisions, 2026-10-10; ADR-0022),
- * against the real server. Each journey has a warehouse of its own: a
- * stocktake stays open until it is finished, and one is open per warehouse.
+ * against the real server, on «Ще» › «Товар» › «Інвентаризація» («Усе на
+ * бірці» sections task list, P1-5). Each journey has a warehouse of its
+ * own: a stocktake stays open until it is finished, and one is open per
+ * warehouse.
  */
 
 interface Fixture {
@@ -57,11 +63,15 @@ function launch(): string {
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
 
+/** «Інвентаризація», the warehouse chosen by its name, as a chip. */
 async function enter(page: Page, location: string): Promise<void> {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
-  await section(page, "Залишки");
-  await page.getByLabel("Склад для перегляду").selectOption(location);
+  await section(page, "Інвентаризація");
+  await page
+    .getByRole("group", { name: "Склад" })
+    .getByRole("button", { name: location, exact: true })
+    .click();
 }
 
 /** Start the warehouse's stocktake, saying first what it means. */
@@ -103,7 +113,7 @@ test("a warehouse is counted position by position, each difference applied at on
   page,
 }) => {
   const sent = counts(page);
-  await enter(page, fixture.stocktake_location_id);
+  await enter(page, "Склад інвентаризації");
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
   await refuseOnce(page, "**/api/v1/stocktakes", 422);
@@ -282,12 +292,6 @@ test("a warehouse is counted position by position, each difference applied at on
   );
   await done.getByRole("button", { name: "Повернутися до залишків" }).click();
 
-  await expect(
-    page
-      .getByRole("article")
-      .filter({ hasText: "Розмір: M" })
-      .getByText(`На складі: ${String(system - 2)}`, { exact: true }),
-  ).toBeVisible();
   const section = page.getByRole("region", { name: "Інвентаризація складу" });
   await section.getByText("Попередні інвентаризації").click();
   await section
@@ -298,6 +302,12 @@ test("a warehouse is counted position by position, each difference applied at on
   await expect(differences.getByRole("listitem")).toHaveCount(2);
   await expect(differences).toContainText(" — −2 од. (пораховано");
   await expect(differences).toContainText(" — +1 од. (пораховано 1, Оля)");
+  // The model's grid holds what was counted.
+  await menu(page).getByRole("button", { name: "Продаж", exact: true }).click();
+  await openModel(page, "Лоран", /^Лоран шоколад 70(?:\.0)? см$/);
+  await expect(
+    gridCell(page, fixture.stocktake_location_id, fixture.size_id),
+  ).toHaveText(String(system - 2));
 });
 
 test("a position sold while it was counted is refused and counted again, alone", async ({
@@ -316,7 +326,7 @@ test("a position sold while it was counted is refused and counted again, alone",
         if (item.size_label === "M") item.quantity += 1;
     await route.fulfill({ response, json: body });
   });
-  await enter(page, fixture.recount_location_id);
+  await enter(page, "Склад, де рахують знову");
   await begin(page);
   const shown = await onRecord(page);
   stale = false;
@@ -361,7 +371,7 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
     }
     await route.continue();
   });
-  await enter(page, fixture.kept_count_location_id);
+  await enter(page, "Склад, де підрахунок губиться");
   await begin(page);
   const system = await onRecord(page);
   await line(page)
@@ -393,32 +403,40 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   ).toBeEnabled();
 });
 
-test("a stocktake is offered only to whoever may correct stock", async ({
+test("a stocktake is offered only to whoever may correct stock, and read it", async ({
   page,
 }) => {
-  await page.route("**/api/v1/me", async (route) => {
-    const response = await route.fetch();
-    const body = (await response.json()) as {
-      stores: { permissions: string[] }[];
-    };
-    for (const store of body.stores)
-      store.permissions = store.permissions.filter(
-        (p) => p !== "inventory:adjust",
-      );
-    await route.fulfill({ response, json: body });
-  });
-  await enter(page, fixture.stocktake_location_id);
-  const section = page.getByRole("region", { name: "Інвентаризація складу" });
-  await expect(
-    section.getByRole("heading", { name: "Інвентаризація складу" }),
-  ).toBeVisible();
-  await expect(page.getByText(/^На складі:/).first()).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Почати інвентаризацію складу" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Продовжити інвентаризацію" }),
-  ).toHaveCount(0);
+  // Either right taken: a stocktake reads the warehouse it counts (review,
+  // 2026-11-01).
+  for (const right of ["inventory:adjust", "inventory:view"]) {
+    await page.unrouteAll({ behavior: "wait" });
+    await page.route("**/api/v1/me", async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        stores: { permissions: string[] }[];
+      };
+      for (const store of body.stores)
+        store.permissions = store.permissions.filter((p) => p !== right);
+      await route.fulfill({ response, json: body });
+    });
+    // Opened afresh: its rights read again.
+    await page.goto("about:blank");
+    await page.goto(launch());
+    await openStore(page, "Основний MAIN");
+    // No «Інвентаризація» in «Ще» › «Товар»; its other rows stay (sections
+    // task list, P1-5).
+    await more(page);
+    const goods = page.getByRole("navigation", { name: "Ще" });
+    await expect(
+      goods.getByRole("button", { name: "Прийшов товар", exact: true }),
+    ).toBeVisible();
+    await expect(
+      goods.getByRole("button", { name: "Інвентаризація", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Почати інвентаризацію складу" }),
+    ).toHaveCount(0);
+  }
 });
 
 test("a balance read again is the one a count is made against", async ({
@@ -438,7 +456,7 @@ test("a balance read again is the one a count is made against", async ({
     await route.fulfill({ response, json: body });
   });
   const sent = counts(page);
-  await enter(page, fixture.refresh_location_id);
+  await enter(page, "Склад, де облік оновлюється");
   await begin(page);
   const shown = await onRecord(page);
   stale = false;

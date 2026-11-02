@@ -49,6 +49,7 @@ export function Correction({
   onDone,
   onCancel,
   onRefused,
+  onLost,
 }: {
   store: Store;
   token: string;
@@ -60,6 +61,9 @@ export function Correction({
   onCancel: () => void;
   /** The balances may be stale: read them again. */
   onRefused: () => void;
+  /** The answer lost: the app's notice, kept over every screen, settles
+   * it. */
+  onLost?: () => void;
 }): JSX.Element {
   // Where the count is judged from. It starts as what the list showed and is
   // replaced by what the server saw under its lock when the two disagree.
@@ -154,7 +158,7 @@ export function Correction({
       if (outcome.error.code !== "TOO_MANY_REQUESTS") setCount("");
       setTried(false);
       onRefused();
-    }
+    } else onLost?.();
   }
 
   const working = blocked || busy || pending !== null;

@@ -5,10 +5,10 @@ import { readFileSync } from "node:fs";
 
 /**
  * Telegram's «Назад» (direction §6.8; «Усе на бірці» task list, P1-1): a
- * screen opened from another — an order's card, a step over it, «Залишки»
- * under «← Ще», S21 — has Telegram show its «Назад», and pressed it does
- * what the screen's «←» does; a tab's first screen has it hidden, Telegram
- * offering «Закрити» there. Where a screen has two ways back, the inner
+ * screen opened from another — an order's card, a step over it,
+ * «Інвентаризація» under «← Ще», S21 — has Telegram show its «Назад», and
+ * pressed it does what the screen's «←» does; a tab's first screen has it
+ * hidden, Telegram offering «Закрити» there. Where a screen has two ways back, the inner
  * one. Hidden while the «←» is held — a payment in flight or kept on the
  * phone. A Telegram before 6.1 is told nothing of it.
  */
@@ -199,9 +199,9 @@ test("a screen of «Ще» shows Telegram's «Назад» and pressed it is «�
   await page.goto(launch("8.0"));
   await openStore(page, "Основний MAIN");
   await toTill(page);
-  await section(page, "Залишки");
+  await section(page, "Інвентаризація");
   await expect(
-    page.getByRole("heading", { name: "Залишки", level: 1 }),
+    page.getByRole("heading", { name: "Інвентаризація", level: 1 }),
   ).toBeVisible();
   await expect.poll(() => backs(page)).toEqual([true]);
 

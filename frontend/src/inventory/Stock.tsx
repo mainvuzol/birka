@@ -9,15 +9,10 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import { PriceEditor } from "@/prices/SuggestedPrice";
-import { CatalogPicker } from "./CatalogPicker";
 import { Correction } from "./Correction";
 import type { Corrected } from "./Correction";
-import { Stocktake, Stocktakes } from "./Stocktake";
-import { useAdjustmentCommand } from "./adjustmentCommands";
 import { reasonLabels } from "./adjustmentTypes";
-import type { ReceivableVariant, SizeOption } from "./receiptTypes";
 import { useCountCommand } from "./stocktakeCommands";
-import type { StocktakeRecord } from "./stocktakeTypes";
 
 const pageSize = 50;
 
@@ -26,22 +21,22 @@ const pageSize = 50;
  * the place to correct one.
  *
  * Correcting lives beside the balance it corrects: a manager looking at a
- * wrong number fixes it from there. Goods found that the list cannot show,
- * because the system holds none, are picked from the catalogue instead.
+ * wrong number fixes it from there.
  *
  * Each model shows the price this store's till suggests, and whoever holds
  * `catalog:set_price` changes it from here (owner decision, 2026-10-01).
  *
- * A stocktake of the whole warehouse starts here too, and counting replaces
- * the list until the person leaves it (owner decisions, 2026-10-10;
- * ADR-0022).
+ * Only for whoever reads the stock but has no till in the store — no
+ * `sale:create`, or a store that does not trade: for anyone else the till's
+ * search and a model's detail are the stock's place (sections task list,
+ * P0-6). A stocktake, and goods found that the list cannot show, are on
+ * «Інвентаризація» (P1-5).
  */
 export function Stock({
   store,
   token,
   scopeKey,
   journalKey,
-  countKey,
   blocked,
   back,
 }: {
@@ -49,8 +44,6 @@ export function Stock({
   token: string;
   scopeKey: string;
   journalKey: string;
-  /** Where a stocktake's count is kept until it is settled. */
-  countKey: string;
   blocked: boolean;
   /** «← Ще» over the heading: «Ще» › «Товар» › «Залишки» until the model's
    * own screen («Усе на бірці» task list, P0-4). */
@@ -61,24 +54,13 @@ export function Stock({
   const [refreshing, setRefreshing] = useState(false);
   const [selectionLost, setSelectionLost] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [finding, setFinding] = useState(false);
   const [corrected, setCorrected] = useState<Corrected | null>(null);
   const [pricing, setPricing] = useState<string | null>(null);
   const [priced, setPriced] = useState<string | null>(null);
-  const [counting, setCounting] = useState<StocktakeRecord | null>(null);
-  // A correction and a count each wait for the other to settle.
-  const adjustment = useAdjustmentCommand();
+  // A correction waits for a count to settle.
   const countCommand = useCountCommand();
   const correcting =
     blocked || countCommand.busy || countCommand.pending !== null;
-  // A count not yet settled holds the finish, a new start and a return to
-  // counting too: the sums would be frozen without it (review, 2026-10-10).
-  const countingBlocked =
-    blocked ||
-    adjustment.busy ||
-    adjustment.pending !== null ||
-    countCommand.busy ||
-    countCommand.pending !== null;
   const allowed = store.permissions.includes("inventory:view");
   const canAdjust = store.permissions.includes("inventory:adjust");
   const canPrice = store.permissions.includes("catalog:set_price");
@@ -121,14 +103,11 @@ export function Stock({
       setOffset(0);
       setSelectionLost(true);
       setEditing(null);
-      setFinding(false);
-      setCounting(null);
     }
   }, [locationId, locations.isSuccess, selected]);
 
   function done(result: Corrected): void {
     setEditing(null);
-    setFinding(false);
     setCorrected(result);
     void stock.refetch();
   }
@@ -200,11 +179,9 @@ export function Stock({
                   setOffset(0);
                   setSelectionLost(false);
                   setEditing(null);
-                  setFinding(false);
                   setCorrected(null);
                   setPricing(null);
                   setPriced(null);
-                  setCounting(null);
                 }}
               >
                 <option value="">Оберіть склад</option>
@@ -239,38 +216,7 @@ export function Stock({
                     Цей магазин не може виправляти залишки на цьому складі.
                   </p>
                 )}
-                {counting && (
-                  <Stocktake
-                    store={store}
-                    token={token}
-                    scopeKey={scopeKey}
-                    journalKey={countKey}
-                    blocked={countingBlocked}
-                    location={selected}
-                    record={counting}
-                    onLeave={() => {
-                      setCounting(null);
-                      void stock.refetch();
-                    }}
-                  />
-                )}
-                {!counting && !selected.damaged_returns && (
-                  <Stocktakes
-                    store={store}
-                    token={token}
-                    scopeKey={scopeKey}
-                    blocked={countingBlocked}
-                    location={selected}
-                    canCount={adjustable}
-                    onCount={(record) => {
-                      setCounting(record);
-                      setEditing(null);
-                      setFinding(false);
-                      setCorrected(null);
-                    }}
-                  />
-                )}
-                {!counting && corrected && (
+                {corrected && (
                   <p role="status">
                     Коригування записано: {visible(corrected.target.name)} ·{" "}
                     {visible(corrected.target.size)} —{" "}
@@ -279,10 +225,10 @@ export function Stock({
                     {corrected.adjustment.quantity_after}.
                   </p>
                 )}
-                {!counting && priced && (
+                {priced && (
                   <p role="status">Ціну продажу збережено: {visible(priced)}.</p>
                 )}
-                {counting ? null : refreshing || stock.isPending ? (
+                {refreshing || stock.isPending ? (
                   <p role="status">Завантажуємо залишки…</p>
                 ) : stock.error ? (
                   <Failure
@@ -407,7 +353,6 @@ export function Stock({
                                 setEditing(
                                   `${item.product_variant_id}:${item.size_id}`,
                                 );
-                                setFinding(false);
                                 setCorrected(null);
                               }}
                             >
@@ -436,38 +381,6 @@ export function Stock({
                         Наступні товари
                       </button>
                     </div>
-                    {adjustable &&
-                      store.permissions.includes("inventory:receive") &&
-                      (finding ? (
-                        <FoundGoods
-                          store={store}
-                          token={token}
-                          scopeKey={scopeKey}
-                          journalKey={journalKey}
-                          blocked={correcting}
-                          locationId={selected.id}
-                          onDone={done}
-                          onCancel={() => {
-                            setFinding(false);
-                          }}
-                          onRefused={() => {
-                            void stock.refetch();
-                          }}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="quiet"
-                          disabled={blocked}
-                          onClick={() => {
-                            setFinding(true);
-                            setEditing(null);
-                            setCorrected(null);
-                          }}
-                        >
-                          Знайшли товар, якого немає в списку
-                        </button>
-                      ))}
                   </>
                 )}
               </>
@@ -476,113 +389,6 @@ export function Stock({
         )}
       </section>
     </>
-  );
-}
-
-/**
- * Goods on the shelf that the system holds none of here.
- *
- * Offered as a count against zero, so if the model and size turn out to be
- * held after all — on another page of the list, or received meanwhile — the
- * server refuses it as `STOCK_CHANGED` and says how many, and the form carries
- * on as an ordinary stocktake against that. "Size not known" is never offered:
- * the organization's sizes exclude it.
- */
-function FoundGoods({
-  store,
-  token,
-  scopeKey,
-  journalKey,
-  blocked,
-  locationId,
-  onDone,
-  onCancel,
-  onRefused,
-}: {
-  store: Store;
-  token: string;
-  scopeKey: string;
-  journalKey: string;
-  blocked: boolean;
-  locationId: string;
-  onDone: (corrected: Corrected) => void;
-  onCancel: () => void;
-  onRefused: () => void;
-}): JSX.Element {
-  const [variant, setVariant] = useState<ReceivableVariant | null>(null);
-  const [sizeId, setSizeId] = useState("");
-  const sizes = useQuery({
-    queryKey: ["receive-sizes", scopeKey, store.id],
-    queryFn: () =>
-      api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
-    retry: false,
-  });
-  const size = sizes.data?.find((option) => option.size_id === sizeId);
-
-  return (
-    <section className="notice">
-      <h3>Товар, якого немає в списку</h3>
-      <p className="hint">
-        Знайдіть модель у каталозі й оберіть розмір. Якщо товар уже є в обліку
-        цього складу, сервер скаже, скільки саме.
-      </p>
-      <CatalogPicker
-        store={store}
-        token={token}
-        scopeKey={scopeKey}
-        variant={variant}
-        onVariant={setVariant}
-      />
-      <label>
-        Розмір
-        <select
-          value={sizeId}
-          onChange={(event) => {
-            setSizeId(event.target.value);
-          }}
-        >
-          <option value="">Оберіть розмір</option>
-          {(sizes.data ?? []).map((option) => (
-            <option key={option.size_id} value={option.size_id}>
-              {visible(option.code)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {sizes.error && (
-        <Failure
-          error={sizes.error}
-          retry={() => {
-            void sizes.refetch();
-          }}
-        />
-      )}
-      {variant && size ? (
-        <Correction
-          key={`${variant.product_variant_id}:${size.size_id}`}
-          store={store}
-          token={token}
-          journalKey={journalKey}
-          blocked={blocked}
-          locationId={locationId}
-          target={{
-            product_variant_id: variant.product_variant_id,
-            size_id: size.size_id,
-            name: variant.display_name,
-            size: size.code,
-            sizeIsUnknown: false,
-            quantity: 0,
-          }}
-          onDone={onDone}
-          onCancel={onCancel}
-          onRefused={onRefused}
-        />
-      ) : (
-        <button type="button" className="quiet" onClick={onCancel}>
-          Скасувати
-        </button>
-      )}
-    </section>
   );
 }
 

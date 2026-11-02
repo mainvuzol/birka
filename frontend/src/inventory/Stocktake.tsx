@@ -166,8 +166,9 @@ export function Stocktakes({
   }
 
   return (
+    // Its heading is the screen's own title, «Інвентаризація» (sections
+    // task list, P1-5).
     <section aria-label="Інвентаризація складу">
-      <h3>Інвентаризація складу</h3>
       {list.isPending ? (
         <p role="status">Завантажуємо інвентаризації…</p>
       ) : list.error ? (

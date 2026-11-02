@@ -5243,3 +5243,197 @@ button.money-place-open {
 .money-rows {
   margin-top: 8px;
 }
+/* The model's name on the till's tag opens its detail (sections task
+   list, P0-6): the name itself, underlined faintly, 44 high to the touch. */
+.model-open {
+  min-height: 44px;
+  margin: -10px 0;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--edge);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+/* A model's detail (spec S23, §6.10, §6.14): its hero tag hangs from the
+   head by its thread, the name in capitals, the price, then the grid — a
+   row a warehouse, a column a size, «Разом» last, nothing pressed. The
+   figures in the display face, the one that ships, so they take the same
+   room on every phone. */
+.model-screen {
+  margin: 12px 0 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.model-hang {
+  position: relative;
+  padding-top: 12px;
+}
+.model-hang::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(50% - 0.75px);
+  z-index: 1;
+  width: 1.5px;
+  height: calc(12px + 20px);
+  background: var(--thread-line);
+}
+.model-hero {
+  position: relative;
+  padding: 28px 16px 16px;
+}
+.hero-eyelet {
+  position: absolute;
+  top: 14px;
+  left: calc(50% - 6px);
+  box-sizing: border-box;
+  width: var(--eyelet-hero);
+  height: var(--eyelet-hero);
+  border: 1.5px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.model-hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.model-hero-name {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 42px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.model-price-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+.model-price-row p {
+  margin: 0;
+}
+.model-price-row button {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.size-grid-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+.size-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+/* Four between the columns: six sizes, «?» and «Разом» fit 360 with room
+   for a phone's text face wider than this Mac's (CI's Roboto, 2026-11-02). */
+.size-grid th,
+.size-grid td {
+  padding: 6px 0 6px 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+.size-grid td,
+.size-grid thead th {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.size-grid td {
+  font-size: 18px;
+  line-height: 22px;
+}
+.size-grid thead th {
+  font-size: 20px;
+  line-height: 24px;
+  vertical-align: bottom;
+}
+.size-grid thead .grid-total {
+  font-family: var(--font-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--pencil);
+}
+/* A warehouse's name wraps between its words, never inside one. */
+.size-grid th[scope="row"] {
+  padding-left: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 19px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+.size-grid th[scope="row"] .icon {
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+.size-grid tbody tr:not(.grid-held) {
+  border-top: 1px solid var(--hairline);
+}
+.size-grid .grid-zero {
+  color: var(--pencil);
+}
+.size-grid .grid-held th,
+.size-grid .grid-held td {
+  padding-top: 0;
+  color: var(--online);
+}
+.size-grid .grid-held th {
+  font-size: 14px;
+}
+.size-grid .grid-damaged th,
+.size-grid .grid-damaged td {
+  color: var(--damaged);
+}
+.size-grid .grid-paused th,
+.size-grid .grid-paused td {
+  color: var(--pencil);
+}
+.size-grid tfoot tr {
+  border-top: 2px solid var(--ink);
+}
+.size-grid tfoot th[scope="row"] {
+  font-weight: 700;
+  color: var(--ink);
+}
+.grid-note,
+.grid-none {
+  margin: 8px 0 0;
+  color: var(--pencil);
+}
+.grid-none {
+  margin-top: 12px;
+}
+.model-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.model-ways button {
+  flex: 1 1 auto;
+}
+.fix-held {
+  margin: 12px 0 0;
+}
+/* «Інвентаризація» (sections task list, P1-5): the warehouses as chips
+   over their stocktakes, or the only one said. */
+.stocktaking > .chips,
+.stocktaking-place {
+  margin: 0 0 16px;
+}
