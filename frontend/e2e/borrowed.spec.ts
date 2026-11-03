@@ -4,6 +4,11 @@ import {
   more,
   openStore,
   readsOf,
+  receiveModel,
+  receiveUnits,
+  receiveWay,
+  receiveWayDone,
+  recordReceipt,
   refuseOnce,
   section,
 } from "./fixtures";
@@ -173,42 +178,80 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
 }) => {
   const coat = await aModel(page);
   const supplier = await aSupplier(page);
+  const other = await aSupplier(page);
   const receipts = posts(page, /\/inventory\/receipts$/);
   await openAs(page, hanna);
   await section(page, "Приймання");
-  await page.getByLabel("Пошук у каталозі").fill(coat.model);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("radio", { name: new RegExp(coat.model) }).click();
-  await page.getByRole("combobox", { name: "Розмір" }).selectOption("M");
-  await page.getByLabel("Кількість").fill("3");
-  await page
-    .getByRole("combobox", { name: "Як надійшов", exact: true })
-    .selectOption("BORROWED");
+  // The store's only warehouse that takes deliveries: said, not offered.
+  await expect(page.locator(".receive-place")).toHaveText(/^Склад «.+»$/);
+  await receiveModel(page, coat.model);
+  await receiveUnits(page, "M", 3);
+  // How it came, in «Як надійшов» (sections task list, P1-4).
+  let way = await receiveWay(page);
+  await way
+    .getByRole("group", { name: "Як надійшов", exact: true })
+    .getByRole("button", { name: "Позичено", exact: true })
+    .click();
   // Whose goods is asked as soon as they are borrowed.
   await expect(
-    page.getByRole("combobox", { name: "Постачальник", exact: true }),
+    way.getByRole("combobox", { name: "Постачальник", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Додати до поставки" }).click();
+  // A supplier being added is kept while the sheet is closed.
+  await way.getByRole("button", { name: "+ Новий постачальник" }).click();
+  await way.getByLabel("Назва постачальника").fill("Ще не додано");
+  await receiveWayDone(way);
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
   await expect(
     page.getByText(
       "Вкажіть ціну за одиницю, домовлену з постачальником: її сплатять, коли товар продадуть.",
     ),
   ).toBeVisible();
-  await page.getByLabel("Домовлена ціна за од., грн").fill("1500");
-  await page.getByRole("button", { name: "Додати до поставки" }).click();
-  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  way = await receiveWay(page);
+  await expect(way.getByLabel("Назва постачальника")).toHaveValue(
+    "Ще не додано",
+  );
+  await way.getByRole("button", { name: "Скасувати" }).click();
+  await way.getByLabel("Домовлена ціна за шт., грн").fill("1500");
+  await receiveWayDone(way);
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
+  await recordReceipt(page, 3).click();
   await expect(
     page.getByText("Оберіть постачальника, чий це товар."),
   ).toBeVisible();
   expect(receipts.bodies).toHaveLength(0);
-  await page
+  // Another supplier's goods are another delivery: refused for the first,
+  // the second goes under a new identity.
+  way = await receiveWay(page);
+  await way
+    .getByRole("combobox", { name: "Постачальник", exact: true })
+    .selectOption({ label: other.name });
+  await receiveWayDone(way);
+  await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
+  await recordReceipt(page, 3).click();
+  await expect(page.getByText(/^Нічого не прийнято\./)).toBeVisible();
+  way = await receiveWay(page);
+  await way
     .getByRole("combobox", { name: "Постачальник", exact: true })
     .selectOption({ label: supplier.name });
-  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  await receiveWayDone(way);
   await expect(
-    page.getByRole("heading", { name: "Товар прийнято" }),
+    page.getByRole("button", {
+      name: `Як надійшов: Позичено · ціна не вказана · ${supplier.name}`,
+    }),
   ).toBeVisible();
-  expect(receipts.bodies).toEqual([
+  await recordReceipt(page, 3).click();
+  await expect(
+    page.getByRole("heading", {
+      name: /^Прийшло 3 шт\. · склад «.+» · Позичено$/,
+    }),
+  ).toBeVisible();
+  const [refused, taken] = receipts.bodies as {
+    command_id: string;
+    supplier_id: string;
+  }[];
+  expect(refused?.supplier_id).toBe(other.id);
+  expect(taken?.command_id).not.toBe(refused?.command_id);
+  expect(receipts.bodies.slice(1)).toEqual([
     expect.objectContaining({
       supplier_id: supplier.id,
       lines: [
@@ -342,12 +385,11 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
 test("a seller takes only the shop's own goods", async ({ page }) => {
   await openAs(page, lida);
   await section(page, "Приймання");
+  const way = await receiveWay(page);
   await expect(
-    page.getByRole("heading", { name: "Приймання товару" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("combobox", { name: "Як надійшов", exact: true }),
+    way.getByRole("group", { name: "Як надійшов", exact: true }),
   ).toHaveCount(0);
+  await receiveWayDone(way);
   await more(page);
   await expect(
     page.getByRole("button", { name: "Постачальникам", exact: true }),

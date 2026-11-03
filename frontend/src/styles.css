@@ -5437,3 +5437,127 @@ button.money-place-open {
 .stocktaking-place {
   margin: 0 0 16px;
 }
+/* «Прийшов товар» (spec S24; sections task list, P1-4) on the page
+   itself: the warehouse as chips or said in a line, the chosen model with
+   «Змінити», its selling price in one row, the organization's sizes as
+   steppers two to a row — the letter at 24, its buttons 44 — and one row
+   for the sheet that keeps how it came. A size's code longer than three
+   stands over its stepper. */
+section.receive,
+section.receive-list {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.receive-place {
+  margin: 4px 0 12px;
+}
+.receive-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 8px;
+}
+.receive-model p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.receive-model button {
+  flex: none;
+}
+.receive .price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 8px 0;
+}
+.receive .price > p {
+  margin: 0;
+}
+.receive .price > button {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.receive .price > :not(p, button) {
+  flex-basis: 100%;
+}
+.receive-sizes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.receive-size {
+  display: grid;
+  grid-template-columns: minmax(28px, auto) 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 2px;
+}
+.receive-size.long {
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+}
+.receive-size.long .receive-size-code {
+  grid-column: 1 / -1;
+}
+.receive-size-code {
+  padding-right: 2px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 26px;
+  overflow-wrap: anywhere;
+}
+.receive-size button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 22px;
+}
+/* Held at 0 or at the most, not disabled: the cursor stays on it. */
+.receive-size button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.receive-size input {
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.receive-way {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: 8px 0;
+  text-align: left;
+}
+.receive-way span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.receive-way .icon {
+  flex: none;
+  color: var(--pencil);
+}
+.receive-total {
+  margin: 12px 0 0;
+  font-weight: 600;
+}
+.receive-list h2 {
+  margin: 0;
+}

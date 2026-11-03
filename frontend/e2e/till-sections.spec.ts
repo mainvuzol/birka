@@ -396,7 +396,7 @@ test("the goods are rows of «Ще» › «Товар»: «Прийшов тов
   await expect(page.getByRole("heading", { name: "Продаж" })).toBeVisible();
   const { taps, untapped } = await counting(page);
   for (const [row, heading] of [
-    ["Прийшов товар", "Приймання товару"],
+    ["Прийшов товар", "Прийшов товар"],
     [/^Брак( |$)/, "Брак"],
   ] as const) {
     await tabs(page).filter({ hasText: "Продаж" }).click();
@@ -797,7 +797,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
   // From each row's screen, «← Ще» back to the groups.
   for (const [row, heading] of [
     ["Покупці", "Покупці"],
-    ["Прийшов товар", "Приймання товару"],
+    ["Прийшов товар", "Прийшов товар"],
     [/^Брак( |$)/, "Брак"],
     ["Інвентаризація", "Інвентаризація"],
     ["Постачальникам", "Постачальникам"],
@@ -1077,7 +1077,7 @@ test("every screen of a store is headed by its own title, the store and who work
   await more(page);
   await headed("Ще", "34px");
   await moreRow(page, "Прийшов товар").click();
-  await headed("Приймання товару", "28px");
+  await headed("Прийшов товар", "28px");
   // Its «←» over it.
   const back = await page
     .getByRole("button", { name: "Назад до «Ще»" })

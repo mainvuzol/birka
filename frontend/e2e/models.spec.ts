@@ -5,6 +5,10 @@ import {
   more,
   openStore,
   readsOf,
+  receiveInto,
+  receiveModel,
+  receiveUnits,
+  recordReceipt,
   refuseOnce,
   section,
   sections,
@@ -915,18 +919,10 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
     else await route.continue();
   });
   await enter(page, "Приймання");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
-  await page.getByLabel("Пошук у каталозі").fill(name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("radio", { name: new RegExp(name) }).click();
-  await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "M" });
-  await page.getByLabel("Кількість").fill("1");
-  await page.getByRole("button", { name: "Додати до поставки" }).click();
-  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  await receiveInto(page, "Склад повернень");
+  await receiveModel(page, name);
+  await receiveUnits(page, "M", 1);
+  await recordReceipt(page, 1).click();
   await expect(page.getByText("Незавершене приймання")).toBeVisible();
   await waitsFor(page, /приймання/);
   // Meanwhile a manager retires the model.

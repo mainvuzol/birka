@@ -942,6 +942,9 @@ function Workspace({
   // and pressed again would answer it once more without saying it may have
   // been paid out already.
   const [returnsEpoch, setReturnsEpoch] = useState(0);
+  // A kept delivery proven recorded: «Прийшов товар» afresh, its list gone
+  // with it — edited, it would be recorded again (review, 2026-11-03).
+  const [receiveEpoch, setReceiveEpoch] = useState(0);
   // A sale whose receipt offered its own return: «Повернення» opens on it
   // (redesign P1-2).
   const [returnOf, setReturnOf] = useState<string | null>(null);
@@ -1377,6 +1380,8 @@ function Workspace({
       // the warehouse reopens (owner, 2026-10-08).
       if (outcome.kind === "refused")
         useReceiptCommand.setState({ error: outcome.error });
+      else if (outcome.kind === "done")
+        setReceiveEpoch((epoch) => epoch + 1);
     });
   }
   function checkReturn(): void {
@@ -2889,6 +2894,7 @@ function Workspace({
       ) : tab === "receive" ? (
         canReceive ? (
           <Receive
+            key={receiveEpoch}
             store={store}
             token={token}
             journalKey={receiptKey}

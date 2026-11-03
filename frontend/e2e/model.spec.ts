@@ -761,10 +761,10 @@ test("«Прийшов товар» opens receiving with the model chosen, and �
   });
   await page.getByRole("button", { name: "Прийшов товар" }).click();
   await expect(
-    page.getByRole("heading", { name: "Приймання товару", level: 1 }),
+    page.getByRole("heading", { name: "Прийшов товар", level: 1 }),
   ).toBeVisible();
   await expect(
-    page.getByText(`Обрано: ${name}`, { exact: true }),
+    page.getByRole("button", { name: `Змінити модель ${name}`, exact: true }),
   ).toBeVisible();
   await expect(tab).toHaveAttribute("aria-current", "page");
   await expect(tab).toBeFocused();

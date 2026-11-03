@@ -1,4 +1,14 @@
-import { test, expect, more, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  more,
+  openStore,
+  receiveInto,
+  receiveModel,
+  receiveUnits,
+  recordReceipt,
+  section,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -709,18 +719,10 @@ test("nothing is received into a warehouse while its list waits, and it is once 
 
   async function receiveOne(): Promise<void> {
     await section(page, "Приймання");
-    await page
-      .getByRole("combobox", { name: "Склад", exact: true })
-      .selectOption(fixture.waiting_location_id);
-    await page.getByLabel("Пошук у каталозі").fill("лоран шоколад");
-    await page.getByRole("button", { name: "Знайти" }).click();
-    await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
-    await page
-      .getByRole("combobox", { name: "Розмір" })
-      .selectOption({ label: "M" });
-    await page.getByLabel("Кількість").fill("1");
-    await page.getByRole("button", { name: "Додати до поставки" }).click();
-    await page.getByRole("button", { name: "Прийняти на склад" }).click();
+    await receiveInto(page, "Склад, що чекає");
+    await receiveModel(page, "лоран шоколад", /Лоран шоколад/);
+    await receiveUnits(page, "M", 1);
+    await recordReceipt(page, 1).click();
   }
 
   await receiveOne();
@@ -749,6 +751,8 @@ test("nothing is received into a warehouse while its list waits, and it is once 
 
   await receiveOne();
   await expect(
-    page.getByRole("heading", { name: "Товар прийнято" }),
+    page.getByRole("heading", {
+      name: "Прийшло 1 шт. · склад «Склад, що чекає» · Закупівля",
+    }),
   ).toBeVisible();
 });

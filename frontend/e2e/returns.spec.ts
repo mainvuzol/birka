@@ -567,9 +567,15 @@ test("the «Брак» takes no deliveries, and is named in the stock", async ({
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await section(page, "Приймання");
-  const offered = page.locator(`option[value="${fixture.bin_location_id}"]`);
-  await expect(offered).toHaveAttribute("disabled", "");
-  await expect(offered).toContainText("брак, лише для повернень");
+  // Only the warehouses that take deliveries are chips (sections task
+  // list, P1-4).
+  const chips = page.getByRole("group", { name: "Склад", exact: true });
+  await expect(
+    chips.getByRole("button", { name: "Каса-склад", exact: true }),
+  ).toBeVisible();
+  await expect(
+    chips.getByRole("button", { name: "Брак", exact: true }),
+  ).toHaveCount(0);
   await section(page, "Залишки");
   await expect(
     page.locator(`option[value="${fixture.bin_location_id}"]`),
