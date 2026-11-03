@@ -7,6 +7,7 @@ import {
   openModel,
   openStore,
   sections,
+  shippedFace,
   tapSize,
   toTill,
   units,
@@ -282,6 +283,7 @@ test("six sizes, «?» and «Разом» fit a 360 phone without the grid scrol
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
+  await shippedFace(page);
   const letters: Letter[] = ["XS", "S", "M", "L", "XL", "XXL", "?"];
   await shelves(page, {
     locations: [
@@ -325,6 +327,7 @@ test("six sizes, «?» and «Разом» fit a 360 phone without the grid scrol
   await expect(table.locator(`tfoot td[data-size="${sizeIds.M}"]`)).toHaveText(
     String(12 + 2 * 13),
   );
+  await page.evaluate(() => document.fonts.ready);
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     const wrap = page.locator(".size-grid-wrap");

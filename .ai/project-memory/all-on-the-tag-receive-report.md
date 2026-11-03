@@ -142,6 +142,14 @@ only one.
   (ADR-0013 §4.3). It and its sibling at 1143 now take either, as
   `credits.spec.ts` does; both pass four times over, and with the tap held
   past the phone's 10 s probe the resend by itself passes too.
+- On CI's third run, `model.spec.ts:281` (#165's grid at 360, failing on
+  main's own run of `9d11b16` too): CI's last frame drew «КОКОН ГРАФІТ»
+  and the grid in the fallback face, so «Разом» was cut. The face is
+  `optional`; the file came 8 ms after the page, but a busy runner let the
+  first paint pass it by. Held back 600 ms here, the journey fails the
+  same way; `shippedFace` (fixtures.ts) adds the same file as `block`, the
+  journey waits for the fonts, and it passes so, held back or not, five
+  times over. The 360 steppers here fit in the fallback too.
 - `tsc -b`, eslint over `src` and `e2e`, and the build: clean. Prettier:
   clean in every hunk of this change (main's own unformatted lines are
   left as they were).
@@ -167,5 +175,9 @@ longer listed with why it takes nothing.
   long model name, a line of 22 px.
 - The MainButton's turning while a delivery is sent is not checked by a
   journey.
+- #165's grid at 360 (not this change): a first open that misses the
+  display face draws it in the device's face, and in Roboto «Разом» goes
+  past the edge — the grid scrolls within its frame, the page does not.
+  The journey now proves the shipped face only.
 - A kept delivery proven recorded opens the screen afresh, but says nothing
   of it there: the app's notice going is what says it, as before.

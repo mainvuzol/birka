@@ -679,3 +679,23 @@ export async function expectStub(
   else await expect(stub.locator(".stub-say")).toHaveText(say);
   if (sum !== undefined) await expect(stub.locator(".stub-sum")).toHaveText(sum);
 }
+
+/**
+ * The display face drawn from the first paint, for a journey that measures
+ * what fits in it. The app's face is `optional` (styles.css): a till never
+ * redraws its sum when the face comes late, so on a busy runner a page may
+ * keep the fallback for good — CI's frame of #166 drew «КОКОН ГРАФІТ» and
+ * the grid in it. The same file, added by the page as `block`, is the one
+ * drawn; the journey waits for `document.fonts.ready` before it measures.
+ */
+export async function shippedFace(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const face = new FontFace(
+      "Fira Sans Extra Condensed",
+      'url("/src/assets/fonts/fira-sans-extra-condensed-800.woff2") format("woff2")',
+      { weight: "800", style: "normal", display: "block" },
+    );
+    document.fonts.add(face);
+    void face.load();
+  });
+}
