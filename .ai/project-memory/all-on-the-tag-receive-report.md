@@ -136,6 +136,12 @@ only one.
   journey sells the first line two at a time. Named «Прийом друга …», after
   «Лоран», `receive.spec.ts` and `sale.spec.ts` run together on a fresh
   seed pass, 20 of 20.
+- On CI's second run, `models.spec.ts:1093`, a catalogue journey this
+  change does not touch, waited on «Повторити ту саму операцію» after the
+  phone, answered by another read, had resent the operation by itself
+  (ADR-0013 §4.3). It and its sibling at 1143 now take either, as
+  `credits.spec.ts` does; both pass four times over, and with the tap held
+  past the phone's 10 s probe the resend by itself passes too.
 - `tsc -b`, eslint over `src` and `e2e`, and the build: clean. Prettier:
   clean in every hunk of this change (main's own unformatted lines are
   left as they were).
