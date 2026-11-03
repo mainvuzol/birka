@@ -130,9 +130,12 @@ only one.
 
 - Every journey on a fresh seed, on the Mac (2026-11-03): 872 of 874 pass
   in 17.7 minutes. `backups.spec.ts:78` fails only on this Mac, as on every
-  batch before; CI runs it. `sale.spec.ts:122` was refused 409 late in the
-  run, the shared seed's stock spent: on a fresh seed its file passes, 8 of
-  8.
+  batch before; CI runs it. `sale.spec.ts:122` was refused 409, on CI too:
+  «two models in one delivery» left its second model, named «Друга …»,
+  with one unit at the till, first in the till's list by name, and that
+  journey sells the first line two at a time. Named «Прийом друга …», after
+  «Лоран», `receive.spec.ts` and `sale.spec.ts` run together on a fresh
+  seed pass, 20 of 20.
 - `tsc -b`, eslint over `src` and `e2e`, and the build: clean. Prettier:
   clean in every hunk of this change (main's own unformatted lines are
   left as they were).

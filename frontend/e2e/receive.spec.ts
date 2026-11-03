@@ -597,7 +597,9 @@ test("two models in one delivery: «Додати ще модель» lists the f
     data: { init_data: initData() },
   });
   const { access_token } = (await auth.json()) as { access_token: string };
-  const other = `Друга ${randomUUID().slice(0, 8)}`;
+  // After «Лоран» in the till's list, which is by name: the sale journeys
+  // sell its first line two at a time, and this one is left with one.
+  const other = `Прийом друга ${randomUUID().slice(0, 8)}`;
   const created = await page.request.post("/api/v1/catalog/products", {
     headers: {
       Authorization: `Bearer ${access_token}`,
