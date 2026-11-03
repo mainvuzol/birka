@@ -3011,7 +3011,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       );
     });
 
-  test("a kept delivery of whoever may not read orders opens on «Приймання товару», never on the first section instead (orders task list, P2-1; review, 2026-10-25), «Ще» marked, its screen always come back to (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
+  test("a kept delivery of whoever may not read orders opens on «Прийшов товар», never on the first section instead (orders task list, P2-1; review, 2026-10-25), «Ще» marked, its screen always come back to (navigation task list, P0-3; «Усе на бірці» task list, P0-4)", async ({
     page,
   }) => {
     const key = `birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`;
@@ -3058,7 +3058,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await page.goto(launch());
     await openStore(page, /Подільський/);
     await expect(
-      page.getByRole("heading", { name: "Приймання товару" }),
+      page.getByRole("heading", { name: "Прийшов товар" }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Ще", exact: true }),
@@ -3079,7 +3079,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(row).toBeEnabled();
     await row.click();
     await expect(
-      page.getByRole("heading", { name: "Приймання товару" }),
+      page.getByRole("heading", { name: "Прийшов товар" }),
     ).toBeVisible();
   });
 

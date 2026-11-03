@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { JSX } from "react";
+import type { Dispatch, JSX, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
@@ -11,13 +11,28 @@ import type { Supplier } from "./types";
 export function useSuppliers(
   store: Store,
   token: string,
+  enabled = true,
 ): UseQueryResult<Supplier[]> {
   return useQuery({
     queryKey: ["suppliers", store.id],
     queryFn: () => api<Supplier[]>(`/suppliers?store_id=${store.id}`, token),
+    enabled,
     retry: false,
   });
 }
+
+/** «+ Новий постачальник» as it is being typed. */
+export interface SupplierDraft {
+  adding: boolean;
+  name: string;
+  phone: string;
+}
+
+export const noSupplierDraft: SupplierDraft = {
+  adding: false,
+  name: "",
+  phone: "",
+};
 
 /**
  * A supplier picked from the network's list, or added on the spot (owner
@@ -30,18 +45,22 @@ export function SupplierPicker({
   value,
   change,
   disabled,
+  kept,
 }: {
   store: Store;
   token: string;
   value: string;
   change: (supplierId: string) => void;
   disabled: boolean;
+  /** The new supplier as typed, kept by a screen whose sheet may close
+   * before it is added («Прийшов товар»'s «Як надійшов»). */
+  kept?: [SupplierDraft, Dispatch<SetStateAction<SupplierDraft>>];
 }): JSX.Element {
   const cache = useQueryClient();
   const suppliers = useSuppliers(store, token);
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const own = useState(noSupplierDraft);
+  const [draft, setDraft] = kept ?? own;
+  const { adding, name, phone } = draft;
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -56,14 +75,12 @@ export function SupplierPicker({
       });
       await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });
       change(added.id);
-      setAdding(false);
-      setName("");
-      setPhone("");
+      setDraft(noSupplierDraft);
     } catch (error) {
       if (error instanceof ApiError && error.details.reason === "DUPLICATE") {
         await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });
         change(String(error.details.supplier_id));
-        setAdding(false);
+        setDraft((now) => ({ ...now, adding: false }));
         setNote(
           `«${visible(String(error.details.name))}» уже є у списку — обрано його.`,
         );
@@ -110,7 +127,8 @@ export function SupplierPicker({
               value={name}
               maxLength={200}
               onChange={(event) => {
-                setName(event.target.value);
+                const typed = event.target.value;
+                setDraft((now) => ({ ...now, name: typed }));
               }}
             />
           </label>
@@ -121,7 +139,8 @@ export function SupplierPicker({
               maxLength={40}
               inputMode="tel"
               onChange={(event) => {
-                setPhone(event.target.value);
+                const typed = event.target.value;
+                setDraft((now) => ({ ...now, phone: typed }));
               }}
             />
           </label>
@@ -139,7 +158,7 @@ export function SupplierPicker({
               type="button"
               className="quiet"
               onClick={() => {
-                setAdding(false);
+                setDraft((now) => ({ ...now, adding: false }));
               }}
             >
               Скасувати
@@ -153,7 +172,7 @@ export function SupplierPicker({
           disabled={disabled}
           onClick={() => {
             setNote(null);
-            setAdding(true);
+            setDraft((now) => ({ ...now, adding: true }));
           }}
         >
           + Новий постачальник

@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, openStore, receiveModel, section } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -56,16 +56,18 @@ async function createWithSize(
   await expect(page.getByText(`Збережений товар: ${name}.`)).toBeVisible();
 }
 
-/** The sizes «Приймання» offers for a model. */
+/** The sizes «Прийшов товар» offers for a model, a stepper each. */
 async function receivableSizes(page: Page, name: string): Promise<string[]> {
   await open(page, "Приймання");
-  await page.getByLabel("Пошук у каталозі").fill(name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("radio", { name: new RegExp(name) }).click();
+  await receiveModel(page, name);
   return page
-    .getByRole("combobox", { name: "Розмір" })
-    .locator("option")
-    .allTextContents();
+    .getByRole("group", { name: /^Розмір / })
+    .evaluateAll((groups) =>
+      groups.map(
+        (group) =>
+          group.getAttribute("aria-label")?.replace(/^Розмір /, "") ?? "",
+      ),
+    );
 }
 
 test("a size typed «м» under another system is the shop's M, and says so", async ({

@@ -5669,3 +5669,92 @@ units, never a new meaning.
   as a row and a title, «Склад «…»», «Зараз цієї моделі немає на складах
   магазину.», «Немає складу, де цей магазин може виправляти залишки.
   Зверніться до менеджера.».
+
+## Chosen in chat — 2026-11-03 («Прийшов товар»; sections P1-4)
+
+Chosen in chat on 2026-11-03 («Yes, start P1-4»), after #165: the sections
+task list's P1-4 (S24) (`all-on-the-tag-receive-report.md`). The design's
+Q-6 stays «if no»: no «Питали в чатах», no tag on «Сьогодні». No right, no
+server rule and no figure changes: a delivery is still one record of every
+line, one note and one `command_id`, with the supplier only when owed; a
+changed list or another supplier is another delivery, as before.
+- **The screen, decided here:** «Прийшов товар» heads it (was «Приймання
+  товару»), «← Ще» or «← {модель}» as before; the hint «Оберіть склад, куди
+  фізично надійшов товар…» goes, the chips say it.
+- **The warehouse, decided here:** only those that take deliveries here —
+  active, received into, not «Брак» — as chips, none chosen while there are
+  two or more, the only one chosen and said «Склад «…»»; a paused one, one
+  not received into and «Брак» are no longer listed (they were, greyed,
+  with why); none, «Немає складу, куди цей магазин може приймати товар.
+  Зверніться до менеджера.» as before.
+- **The model, decided here:** the catalogue's search as before until one
+  is chosen; then its name and «Змінити» (read «Змінити модель {назва}»),
+  which clears what was counted of it and its price, and gives the search
+  back, the cursor in it; the cursor goes to the name once chosen. From a
+  model's detail it is chosen already. Its selling price as before, in one
+  row with «Задати ціну продажу» / «Змінити ціну продажу» (words kept).
+- **The sizes, decided here:** the organization's, a stepper each, two to a
+  row: the code at 24, «−» and «+» at 44, the count between them, which may
+  also be typed (thirty of a size are not thirty taps) — digits only, at
+  most 10000; a light tap felt on «+»; a code longer than three stands
+  over its stepper.
+- **How it came, decided here:** one row, «Закупівля · ціна не вказана ›»,
+  then the price «1 850,50 грн за шт.», the supplier's name once one is
+  chosen for goods owed, and the note; it opens the sheet «Як надійшов»:
+  the kinds as chips, for `supplier:debt` only; «Закупівельна ціна за шт.,
+  грн (необов’язково)», or «Домовлена ціна за шт., грн» with «обов’язково»
+  in it for goods owed; the supplier and the approved line «Позичене й під
+  реалізацію сплачують…» while this kind or any listed line is owed; «Примітка
+  (накладна, постачальник)»; «Готово». Closed any way, it keeps what was
+  typed; Telegram's MainButton is put away under it.
+- **«Додати ще модель», decided here:** the counted sizes go into «У
+  поставці» (rows «2 шт. · Закупівля · 1 850,50 грн за шт.» and «Прибрати
+  {модель}», a list as before), the model, its counts and its price are
+  cleared and the search takes the cursor; the kind, the supplier and the
+  note stay. Held while nothing of the model is counted. The checks are
+  the old ones in the old words (the price's form, the agreed price, a
+  line already listed); past the server's 200 lines, new words: «В одній
+  поставці — до 200 рядків. Запишіть цю, а решту прийміть окремою
+  поставкою.».
+- **Recording, decided here:** «2 шт. · склад «Каса-склад»» under it (meta,
+  600; «2 шт.» with none chosen), «Закупівельна вартість» and «Рядків без
+  ціни» for the listed lines as before; Telegram's MainButton «Записати
+  прихід · N шт.» — what is listed and what is counted — held at 0, with
+  no warehouse, while blocked or sending, turning while sent; outside
+  Telegram, the dock's one button. Pressed, what is counted joins the list
+  and the whole list goes as one delivery; refused, the list is kept and
+  sent again is the same delivery; recorded, «success» is felt. Telegram
+  asks before Бірка closes while anything is counted or listed.
+- **Recorded, decided here:** the heading «Прийшло 5 шт. · склад
+  «Каса-склад» · Закупівля» with the check, the cursor on it — the kinds
+  joined «, » when the delivery holds more than one; the recorded stub
+  with a line a lot, «Лоран шоколад · M», «+5 · тепер на складі 40 · 1
+  850,50 грн за шт.», and «Закупівельна вартість …»; «Прийняти ще» keeps
+  the warehouse, the kind, the supplier, the model and its price, as
+  before. «од.» is «шт.» on every line of the screen.
+- **The hot path:** a model in two sizes, «M 2, L 1», from the screen: a
+  warehouse, the search's field, «Знайти», the model, three «+», the
+  button — 8 taps (7 with one warehouse); it was 14.
+- **After the independent review, decided here (2026-11-03):**
+  - the warehouses and the sizes, read again and refused (back from
+    another chat on a poor line), stay as they were read: what is counted
+    and the warehouse chosen stay in sight, since the button records them;
+    «Повторити завантаження» only where nothing was read;
+  - a price that is not money: «Готово» says «Закупівельну ціну вкажіть у
+    гривнях, до копійок, наприклад 1850,50.» in the sheet and keeps it open;
+    closed another way, the row says «ціна з помилкою»;
+  - «−» at 0 and «+» at 10000 are held, not disabled, so the cursor stays
+    on them;
+  - «Прибрати» is read with its line's size (and price): a model's sizes
+    are lines of their own; the row is read «Як надійшов: …»;
+  - a new supplier being typed is kept while the sheet is closed;
+  - a kept delivery proven recorded by the app's check opens «Прийшов
+    товар» afresh: its list, edited, would have been recorded again (as on
+    the screen before);
+  - a line taken out, or another warehouse chosen, clears what was said.
+- **For the owner:** «Закупівельна ціна за шт., грн (необов’язково)» (the
+  TZ marks it for approval); «Прийшло N шт. · склад «…» · {вид}»; «Записати
+  прихід · N шт.»; «Додати ще модель»; «У поставці»; «Змінити»; «Готово»;
+  «ціна з помилкою»; «шт.» for «од.»; the 200 lines' words; a count typed
+  as well as stepped; paused, not-received-into and «Брак» warehouses no
+  longer listed with why: if no to any, as the TZ says or as it was.

@@ -1,15 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorText, inOwnWords } from "@/shared/api";
+import { Eyelet, RecordedMark } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
+import { usePanelRoom } from "@/shared/panel";
+import { Sheet } from "@/shared/Sheet";
+import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
 import { SuggestedPrice } from "@/prices/SuggestedPrice";
-import { SupplierPicker } from "@/suppliers/Picker";
+import {
+  SupplierPicker,
+  noSupplierDraft,
+  useSuppliers,
+} from "@/suppliers/Picker";
 import { CatalogPicker } from "./CatalogPicker";
 import { submitReceipt, useReceiptCommand } from "./receiptCommands";
 import { acquisitionLabels, paidWhenSold } from "./receiptTypes";
@@ -27,6 +37,11 @@ interface Draft {
   size: string;
 }
 
+/** A delivery's lines at most, as the server takes them. */
+const LINES = 200;
+/** One line's units at most, as the server takes them. */
+const UNITS = 10000;
+
 /** A delivery refused: what the server named, or in the delivery's words —
  * never an order's; the list kept either way. */
 function receiptRefusal(error: unknown): string {
@@ -39,8 +54,19 @@ function receiptRefusal(error: unknown): string {
   return own === said ? `${said} Список збережено — нічого не прийнято.` : own;
 }
 
+/** «склад «Основний»»: the name as written, never declined. */
+function warehouseWords(name: string): string {
+  return `склад «${visible(name)}»`;
+}
+
 /**
- * The back door.
+ * The back door, «Прийшов товар» (spec S24; «Усе на бірці» sections task
+ * list, P1-4): the warehouse it came into as chips, the model from the
+ * catalogue, the organization's sizes as steppers — «S − 2 +» — and how it
+ * came, its price and the note in a sheet behind one row; Telegram's
+ * MainButton «Записати прихід · N шт.» records it. A delivery still holds
+ * several models in one record: «Додати ще модель» puts the counted sizes in
+ * the list and clears the model.
  *
  * Differs from the till in what it searches. The till offers what a warehouse
  * holds, because it can only sell that; a delivery is usually of something the
@@ -63,7 +89,6 @@ function receiptRefusal(error: unknown): string {
  * at a price agreed for each (owner decisions, 2026-10-01). They are marked
  * sold, or sent back, from «Постачальникам».
  */
-
 export function Receive({
   store,
   token,
@@ -85,18 +110,24 @@ export function Receive({
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [variant, setVariant] = useState<ReceivableVariant | null>(model);
-  const [sizeId, setSizeId] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  // The chosen model's units of each size, by the size's id.
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [cost, setCost] = useState("");
   const [acquisition, setAcquisition] = useState<Acquisition>("PURCHASE");
-  // Whose goods, when any are borrowed or under consignment.
+  // Whose goods, when any are borrowed or under consignment; one being
+  // added kept while the sheet is closed.
   const [supplierId, setSupplierId] = useState("");
+  const supplierDraft = useState(noSupplierDraft);
   const keepsSuppliers = store.permissions.includes("supplier:debt");
   const [notes, setNotes] = useState("");
   const [draft, setDraft] = useState<Draft[]>([]);
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [validation, setValidation] = useState("");
   const [refusal, setRefusal] = useState<unknown>(null);
+  // «Як надійшов»'s sheet, open; the price it holds, said wrong on
+  // «Готово».
+  const [details, setDetails] = useState(false);
+  const [costWrong, setCostWrong] = useState(false);
   const [received, setReceived] = useState<{
     receipt: Receipt;
     names: Draft[];
@@ -116,9 +147,12 @@ export function Receive({
       api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
     retry: false,
   });
+  // The supplier's name on the row, once one is chosen.
+  const suppliers = useSuppliers(store, token, supplierId !== "");
 
   // A store's «Брак» takes damaged returns, not deliveries: offering it here
   // would put new goods where nothing sells (owner decision, 2026-10-01).
+  // A paused warehouse, or one that takes none, is not offered at all.
   const receivable = (locations.data ?? []).filter(
     (location) =>
       location.is_active && location.can_receive && !location.damaged_returns,
@@ -132,85 +166,153 @@ export function Receive({
   }, [locationId, onlyWarehouse]);
 
   useEffect(() => {
+    // A warehouse that no longer takes deliveries is chosen no more.
     if (
       locationId &&
       locations.isSuccess &&
-      !locations.data.some((location) => location.id === locationId)
+      !locations.data.some(
+        (location) =>
+          location.id === locationId &&
+          location.is_active &&
+          location.can_receive &&
+          !location.damaged_returns,
+      )
     )
       setLocationId("");
   }, [locationId, locations.isSuccess, locations.data]);
+
+  // Where the cursor goes once the model changes: its name once chosen,
+  // the catalogue's field once cleared.
+  const modelName = useRef<HTMLParagraphElement>(null);
+  const picker = useRef<HTMLDivElement>(null);
+  const focusNext = useRef<"model" | "search" | null>(null);
+  useEffect(() => {
+    const next = focusNext.current;
+    focusNext.current = null;
+    if (next === "model") modelName.current?.focus();
+    else if (next === "search") picker.current?.querySelector("input")?.focus();
+  }, [variant]);
 
   // A different list is a different delivery.
   function replaceDraft(next: Draft[]): void {
     setDraft(next);
     setCommandId(crypto.randomUUID());
     setRefusal(null);
+    setValidation("");
   }
 
-  function add(): void {
-    const count = Number(quantity);
-    const size = sizes.data?.find((option) => option.size_id === sizeId);
+  function chooseModel(next: ReceivableVariant | null): void {
+    focusNext.current = next ? "model" : "search";
+    setVariant(next);
+    setCounts({});
+    // A new model starts without the previous one's price.
+    setCost("");
+    setValidation("");
+  }
+
+  const counted = variant
+    ? (sizes.data ?? []).filter((size) => (counts[size.size_id] ?? 0) > 0)
+    : [];
+  const countedUnits = counted.reduce(
+    (sum, size) => sum + (counts[size.size_id] ?? 0),
+    0,
+  );
+
+  /** A size's units from what they are now: two quick taps are two. */
+  function count(size: SizeOption, next: (units: number) => number): void {
+    setCounts((now) => ({
+      ...now,
+      [size.size_id]: Math.min(
+        Math.max(next(now[size.size_id] ?? 0), 0),
+        UNITS,
+      ),
+    }));
+    setValidation("");
+  }
+
+  /** The counted sizes as the delivery's lines, the way and at the price
+   * the sheet says; null, with the reason said, when they may not go in. */
+  function take(): Draft[] | null {
+    if (!variant || counted.length === 0) return [];
     const stated = cost.trim();
     const cents = stated ? kopecks(stated) : null;
     if (stated && cents === null) {
       setValidation(
         "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
       );
-      return;
+      return null;
     }
     if (paidWhenSold(acquisition) && (cents === null || cents <= 0n)) {
       setValidation(
         "Вкажіть ціну за одиницю, домовлену з постачальником: її сплатять, коли товар продадуть.",
       );
-      return;
+      return null;
     }
+    const lines = counted.map((size) => ({
+      line: {
+        product_variant_id: variant.product_variant_id,
+        size_id: size.size_id,
+        quantity: counts[size.size_id] ?? 0,
+        acquisition_type: acquisition,
+        unit_cost: cents === null ? null : decimal(cents),
+      },
+      name: variant.display_name,
+      size: size.code,
+    }));
     if (
-      !variant ||
-      !size ||
-      !/^\d+$/.test(quantity) ||
-      count < 1 ||
-      count > 10000
-    ) {
-      setValidation("Оберіть товар, розмір і кількість від 1 до 10000.");
-      return;
-    }
-    const line: ReceiptLine = {
-      product_variant_id: variant.product_variant_id,
-      size_id: size.size_id,
-      quantity: count,
-      acquisition_type: acquisition,
-      unit_cost: cents === null ? null : decimal(cents),
-    };
-    if (
-      draft.some(
-        (d) =>
-          d.line.product_variant_id === line.product_variant_id &&
-          d.line.size_id === line.size_id &&
-          d.line.acquisition_type === line.acquisition_type &&
-          d.line.unit_cost === line.unit_cost,
+      lines.some(({ line }) =>
+        draft.some(
+          (d) =>
+            d.line.product_variant_id === line.product_variant_id &&
+            d.line.size_id === line.size_id &&
+            d.line.acquisition_type === line.acquisition_type &&
+            d.line.unit_cost === line.unit_cost,
+        ),
       )
     ) {
       setValidation(
         "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
       );
-      return;
+      return null;
     }
-    replaceDraft([
-      ...draft,
-      { line, name: variant.display_name, size: size.code },
-    ]);
-    setQuantity("1");
-    setSizeId("");
-    setValidation("");
+    if (draft.length + lines.length > LINES) {
+      setValidation(
+        `В одній поставці — до ${String(LINES)} рядків. Запишіть цю, а решту прийміть окремою поставкою.`,
+      );
+      return null;
+    }
+    return lines;
+  }
+
+  /** The model's counted sizes into the list; the next model afresh. */
+  function addModel(): void {
+    const lines = take();
+    if (!lines) return;
+    replaceDraft([...draft, ...lines]);
+    chooseModel(null);
   }
 
   async function send(): Promise<void> {
     setRefusal(null);
-    const owed = draft.some((d) => paidWhenSold(d.line.acquisition_type));
+    const lines = take();
+    if (!lines) return;
+    const all = [...draft, ...lines];
+    if (all.length === 0) return;
+    const owed = all.some((d) => paidWhenSold(d.line.acquisition_type));
     if (owed && !supplierId) {
       setValidation("Оберіть постачальника, чий це товар.");
       return;
     }
+    // The counted sizes join the list as it is sent: refused, it is kept,
+    // and sent again it is the same delivery.
+    let id = commandId;
+    if (lines.length > 0) {
+      id = crypto.randomUUID();
+      setDraft(all);
+      setCommandId(id);
+      setCounts({});
+    }
+    setValidation("");
     const warehouse =
       locations.data?.find((location) => location.id === locationId)?.name ??
       "";
@@ -222,15 +324,16 @@ export function Receive({
       body: {
         store_id: store.id,
         location_id: locationId,
-        command_id: commandId,
-        lines: draft.map((d) => d.line),
+        command_id: id,
+        lines: all.map((d) => d.line),
         notes: trimmed ? trimmed : null,
         // Only when owed for once sold, so a purchase is sent as before.
         ...(owed ? { supplier_id: supplierId } : {}),
       },
     });
     if (outcome.kind === "done") {
-      setReceived({ receipt: outcome.result, names: draft, warehouse });
+      buzz("success");
+      setReceived({ receipt: outcome.result, names: all, warehouse });
       setDraft([]);
       setNotes("");
       setCommandId(crypto.randomUUID());
@@ -240,32 +343,70 @@ export function Receive({
   }
 
   const working = busy || pending !== null;
-  const units = draft.reduce((sum, d) => sum + d.line.quantity, 0);
+  const units =
+    draft.reduce((sum, d) => sum + d.line.quantity, 0) + countedUnits;
   const costed = draft
     .map((d) => ({ quantity: d.line.quantity, unit_cost: d.line.unit_cost }))
     .filter((line) => line.unit_cost !== null);
+  const warehouse = receivable.find((location) => location.id === locationId);
+  const words = `Записати прихід · ${String(units)} шт.`;
+  const ready = units > 0 && warehouse !== undefined && !blocked && !working;
+  const press = (): void => {
+    if (ready) void send();
+  };
+  // The screen's one action, Telegram's: put away under the sheet and once
+  // the delivery is recorded.
+  const main = useMainButton(words, press, {
+    shown: !received && !details,
+    progress: busy,
+    active: ready,
+  });
+  const dock = useRef<HTMLDivElement>(null);
+  usePanelRoom(dock, !received && !main);
+  // Anything counted and not yet recorded: Telegram asks before Бірка
+  // closes (spec §4.4).
+  useAskBeforeClosing(!received && units > 0);
+  const detailsRow = useRef<HTMLButtonElement>(null);
+  // The result's heading takes the cursor: the button pressed is gone.
+  const done = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (received) done.current?.focus();
+  }, [received]);
 
-  if (received)
+  if (received) {
+    const kinds = [
+      ...new Set(
+        received.names.map((d) => acquisitionLabels[d.line.acquisition_type]),
+      ),
+    ];
+    const came = received.receipt.lines.reduce(
+      (sum, line) => sum + line.quantity_received,
+      0,
+    );
     return (
-      <>
-        <ScreenHeader pushed title="Товар прийнято" />
-        <section>
-          <p>
-            {visible(received.warehouse)} · позицій:{" "}
-            {received.receipt.lines.length} · одиниць:{" "}
-            {received.receipt.lines.reduce((s, l) => s + l.quantity_received, 0)}
-          </p>
+      <section className="receipt receive-done">
+        <ScreenHeader
+          ref={done}
+          focusable
+          className="result-title t-sheet"
+          title={
+            <>
+              <RecordedMark />
+              {`Прийшло ${String(came)} шт. · ${warehouseWords(received.warehouse)} · ${kinds.join(", ")}`}
+            </>
+          }
+        />
+        <Stub state="recorded">
           {received.receipt.lines.map((line, index) => (
-            <div className="line" key={line.stock_lot_id}>
+            <p className="stub-line" key={line.stock_lot_id}>
               <strong>
                 {visible(received.names[index]?.name ?? "Товар")} ·{" "}
                 {visible(received.names[index]?.size ?? "")}
               </strong>
-              <span>
-                +{line.quantity_received} · тепер на складі {line.quantity_after}
-                {line.unit_cost !== null && ` · ${money(line.unit_cost)} за од.`}
-              </span>
-            </div>
+              <br />+{line.quantity_received} · тепер на складі{" "}
+              {line.quantity_after}
+              {line.unit_cost !== null && ` · ${money(line.unit_cost)} за шт.`}
+            </p>
           ))}
           {received.receipt.lines.some((line) => line.unit_cost !== null) && (
             <p className="total">
@@ -284,6 +425,8 @@ export function Receive({
               </strong>
             </p>
           )}
+        </Stub>
+        <div className="result-next">
           <button
             type="button"
             onClick={() => {
@@ -292,252 +435,394 @@ export function Receive({
           >
             Прийняти ще
           </button>
-        </section>
-      </>
+        </div>
+      </section>
     );
+  }
+
+  const owing =
+    paidWhenSold(acquisition) ||
+    draft.some((d) => paidWhenSold(d.line.acquisition_type));
+  const stated = kopecks(cost.trim());
+  const supplier = owing
+    ? suppliers.data?.find((one) => one.id === supplierId)
+    : undefined;
+  // «Закупівля · ціна не вказана ›»: what the sheet holds, in one row.
+  const way = [
+    acquisitionLabels[acquisition],
+    !cost.trim()
+      ? "ціна не вказана"
+      : stated === null
+        ? "ціна з помилкою"
+        : `${money(decimal(stated))} за шт.`,
+    supplier ? visible(supplier.name) : null,
+    notes.trim() ? visible(notes.trim()) : null,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
 
   return (
     <>
       <ScreenHeader
-        title="Приймання товару"
+        title="Прийшов товар"
         back={back && <BackToMore back={back} />}
       />
-      <section className="goods-part">
-        <p className="hint">
-          Оберіть склад, куди фізично надійшов товар. Шукайте в каталозі — зокрема
-          те, чого зараз немає на складі.
-        </p>
+      <section className="goods-part receive">
         <fieldset disabled={blocked || working}>
-          <legend>Поставка</legend>
+          <legend className="visually-hidden">Поставка</legend>
           {locations.isPending ? (
             <p role="status">Завантажуємо склади…</p>
-          ) : locations.error ? (
+          ) : locations.data === undefined ? (
             <Failure
               error={locations.error}
               retry={() => {
                 void locations.refetch();
               }}
             />
+          ) : receivable.length === 0 ? (
+            <p>
+              Немає складу, куди цей магазин може приймати товар. Зверніться до
+              менеджера.
+            </p>
+          ) : onlyWarehouse ? (
+            <p className="t-row receive-place">
+              Склад «{visible(onlyWarehouse.name)}»
+            </p>
           ) : (
-            <label>
-              Склад
-              <select
-                value={locationId}
-                onChange={(event) => {
-                  setLocationId(event.target.value);
-                }}
-              >
-                {!onlyWarehouse && <option value="">Оберіть склад явно</option>}
-                {locations.data.map((location) => (
-                  <option
-                    key={location.id}
-                    value={location.id}
-                    disabled={
-                      !location.is_active ||
-                      !location.can_receive ||
-                      location.damaged_returns
-                    }
-                  >
-                    {visible(location.name)}
-                    {!location.is_active
-                      ? " — на паузі"
-                      : location.damaged_returns
-                        ? " — брак, лише для повернень"
-                        : !location.can_receive
-                          ? " — без права приймання"
-                          : ""}
-                  </option>
-                ))}
-              </select>
-              {receivable.length === 0 && (
-                <span>
-                  Немає складу, куди цей магазин може приймати товар. Зверніться
-                  до менеджера.
-                </span>
-              )}
-            </label>
-          )}
-          <CatalogPicker
-            store={store}
-            token={token}
-            scopeKey={journalKey}
-            variant={variant}
-            onVariant={(picked) => {
-              setVariant(picked);
-              // A new model starts without the previous one's price.
-              setCost("");
-            }}
-          />
-          <label>
-            Розмір
-            <select
-              value={sizeId}
-              onChange={(event) => {
-                setSizeId(event.target.value);
-              }}
-            >
-              <option value="">Оберіть розмір</option>
-              {(sizes.data ?? []).map((size) => (
-                <option key={size.size_id} value={size.size_id}>
-                  {visible(size.code)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="fields">
-            <label>
-              Кількість
-              <input
-                inputMode="numeric"
-                value={quantity}
-                onChange={(event) => {
-                  setQuantity(event.target.value);
-                }}
-              />
-            </label>
-            <label>
-              {paidWhenSold(acquisition)
-                ? "Домовлена ціна за од., грн"
-                : "Закупівельна ціна за од., грн"}
-              <input
-                inputMode="decimal"
-                placeholder={
-                  paidWhenSold(acquisition) ? "обов’язково" : "не обов’язково"
-                }
-                value={cost}
-                onChange={(event) => {
-                  setCost(event.target.value);
-                }}
-              />
-            </label>
-          </div>
-          {variant && (
-            <SuggestedPrice
-              key={variant.product_variant_id}
-              store={store}
-              token={token}
-              scopeKey={journalKey}
-              variantId={variant.product_variant_id}
-              blocked={blocked}
-            />
-          )}
-          {keepsSuppliers && (
-            <label>
-              Як надійшов
-              <select
-                value={acquisition}
-                onChange={(event) => {
-                  setAcquisition(event.target.value as Acquisition);
-                }}
-              >
-                {(Object.keys(acquisitionLabels) as Acquisition[]).map((key) => (
-                  <option key={key} value={key}>
-                    {acquisitionLabels[key]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {(paidWhenSold(acquisition) ||
-            draft.some((d) => paidWhenSold(d.line.acquisition_type))) && (
-            <>
-              <SupplierPicker
-                store={store}
-                token={token}
-                value={supplierId}
-                change={(next) => {
-                  setSupplierId(next);
-                  // Another supplier's goods are another delivery.
-                  setCommandId(crypto.randomUUID());
-                }}
-                disabled={blocked || working}
-              />
-              <p className="hint">
-                Позичене й під реалізацію сплачують, лише коли продадуть, за
-                домовленою ціною. Продане чи непродане позначають у
-                «Постачальникам».
-              </p>
-            </>
-          )}
-          {sizes.error && (
-            <Failure
-              error={sizes.error}
-              retry={() => {
-                void sizes.refetch();
-              }}
-            />
-          )}
-          <button
-            type="button"
-            className="quiet"
-            disabled={!variant || !sizeId || draft.length >= 200}
-            onClick={add}
-          >
-            Додати до поставки
-          </button>
-          {validation && <p role="alert">{validation}</p>}
-          {draft.map((d, index) => (
+            // Chosen by the person, never by the screen (owner decision,
+            // 2026-10-01): two or more, none chosen.
             <div
-              className="line"
-              key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
+              className="chips receive-place"
+              role="group"
+              aria-label="Склад"
             >
-              <strong>
-                {visible(d.name)} · {visible(d.size)}
-              </strong>
-              <span>
-                {d.line.quantity} од. ·{" "}
-                {acquisitionLabels[d.line.acquisition_type]}
-                {d.line.unit_cost !== null &&
-                  ` · ${money(d.line.unit_cost)} за од.`}
-              </span>
+              {receivable.map((location) => (
+                <button
+                  type="button"
+                  className="chip"
+                  key={location.id}
+                  aria-pressed={location.id === locationId}
+                  onClick={() => {
+                    setLocationId(location.id);
+                    setValidation("");
+                  }}
+                >
+                  {visible(location.name)}
+                </button>
+              ))}
+            </div>
+          )}
+          {variant ? (
+            <div className="receive-model">
+              <p className="t-row" ref={modelName} tabIndex={-1}>
+                {visible(variant.display_name)}
+              </p>
               <button
                 type="button"
                 className="quiet"
+                aria-label={`Змінити модель ${visible(variant.display_name)}`}
                 onClick={() => {
-                  replaceDraft(draft.filter((_, i) => i !== index));
+                  chooseModel(null);
                 }}
               >
-                Прибрати {visible(d.name)}
+                Змінити
               </button>
             </div>
-          ))}
-          <label>
-            Примітка (накладна, постачальник)
-            <input
-              value={notes}
-              maxLength={1000}
-              onChange={(event) => {
-                setNotes(event.target.value);
-              }}
-            />
-          </label>
-          <p className="total">
-            Разом <strong>{units} од.</strong>
-          </p>
-          {costed.length > 0 && (
-            <p className="total">
-              Закупівельна вартість{" "}
-              <strong>{money(decimal(purchaseValue(costed)))}</strong>
-            </p>
+          ) : (
+            <div ref={picker}>
+              <CatalogPicker
+                store={store}
+                token={token}
+                scopeKey={journalKey}
+                variant={variant}
+                onVariant={(picked) => {
+                  if (picked) chooseModel(picked);
+                }}
+              />
+            </div>
           )}
-          {costed.length > 0 && costed.length < draft.length && (
-            <p className="hint">
-              Рядків без ціни: {draft.length - costed.length}. Їх вартість не
-              враховано.
-            </p>
+          {variant && (
+            <>
+              <SuggestedPrice
+                key={variant.product_variant_id}
+                store={store}
+                token={token}
+                scopeKey={journalKey}
+                variantId={variant.product_variant_id}
+                blocked={blocked}
+              />
+              {sizes.isPending ? (
+                <p role="status">Завантажуємо розміри…</p>
+              ) : sizes.data === undefined ? (
+                <Failure
+                  error={sizes.error}
+                  retry={() => {
+                    void sizes.refetch();
+                  }}
+                />
+              ) : (
+                <div className="receive-sizes">
+                  {sizes.data.map((size) => {
+                    const got = counts[size.size_id] ?? 0;
+                    const code = visible(size.code);
+                    return (
+                      <div
+                        className={
+                          code.length > 3 ? "receive-size long" : "receive-size"
+                        }
+                        role="group"
+                        aria-label={`Розмір ${code}`}
+                        key={size.size_id}
+                      >
+                        <span className="receive-size-code" aria-hidden="true">
+                          {code}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Менше"
+                          // Held, not disabled: the cursor stays on it at 0.
+                          aria-disabled={got <= 0}
+                          onClick={() => {
+                            if (got > 0) count(size, (units) => units - 1);
+                          }}
+                        >
+                          −
+                        </button>
+                        <input
+                          // Typed as well: thirty of a size are not thirty
+                          // taps.
+                          inputMode="numeric"
+                          aria-label={`${code}, шт.`}
+                          value={String(got)}
+                          onFocus={(event) => {
+                            event.target.select();
+                          }}
+                          onChange={(event) => {
+                            const digits = event.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 5);
+                            count(size, () => Number(digits || "0"));
+                          }}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Більше"
+                          aria-disabled={got >= UNITS}
+                          onClick={() => {
+                            if (got >= UNITS) return;
+                            count(size, (units) => units + 1);
+                            buzz("light");
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
           <button
+            ref={detailsRow}
             type="button"
-            disabled={draft.length === 0 || !locationId}
+            className="quiet receive-way"
+            aria-haspopup="dialog"
             onClick={() => {
-              void send();
+              setDetails(true);
             }}
           >
-            Прийняти на склад
+            <span>
+              <span className="visually-hidden">Як надійшов: </span>
+              {way}
+            </span>
+            <Icon name="chevron-right" size={20} />
           </button>
+          {variant && (
+            <button
+              type="button"
+              className="quiet"
+              disabled={counted.length === 0}
+              onClick={addModel}
+            >
+              Додати ще модель
+            </button>
+          )}
+          {draft.length > 0 && (
+            <section className="receive-list" aria-label="У поставці">
+              <h2 className="t-label">У поставці</h2>
+              {draft.map((d, index) => (
+                <div
+                  className="line"
+                  key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
+                >
+                  <strong>
+                    {visible(d.name)} · {visible(d.size)}
+                  </strong>
+                  <span>
+                    {d.line.quantity} шт. ·{" "}
+                    {acquisitionLabels[d.line.acquisition_type]}
+                    {d.line.unit_cost !== null &&
+                      ` · ${money(d.line.unit_cost)} за шт.`}
+                  </span>
+                  <button
+                    type="button"
+                    className="quiet"
+                    // A model's sizes are lines of their own.
+                    aria-label={`Прибрати ${visible(d.name)} · ${visible(d.size)}${d.line.unit_cost !== null ? ` · ${money(d.line.unit_cost)}` : ""}`}
+                    onClick={() => {
+                      replaceDraft(draft.filter((_, i) => i !== index));
+                    }}
+                  >
+                    Прибрати {visible(d.name)}
+                  </button>
+                </div>
+              ))}
+              {costed.length > 0 && (
+                <p className="total">
+                  Закупівельна вартість{" "}
+                  <strong>{money(decimal(purchaseValue(costed)))}</strong>
+                </p>
+              )}
+              {costed.length > 0 && costed.length < draft.length && (
+                <p className="hint">
+                  Рядків без ціни: {draft.length - costed.length}. Їх вартість
+                  не враховано.
+                </p>
+              )}
+            </section>
+          )}
+          <p className="t-meta receive-total">
+            {warehouse
+              ? `${String(units)} шт. · ${warehouseWords(warehouse.name)}`
+              : `${String(units)} шт.`}
+          </p>
+          {validation && <p role="alert">{validation}</p>}
         </fieldset>
         {refusal !== null && <p role="alert">{receiptRefusal(refusal)}</p>}
+        {!main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-dock" ref={dock}>
+            <button
+              type="button"
+              className="main-mimic"
+              disabled={!ready && !busy}
+              aria-disabled={busy || undefined}
+              onClick={press}
+            >
+              {busy ? (
+                <>
+                  <Eyelet state="spin" size={20} />
+                  <span className="visually-hidden">{words}</span>
+                </>
+              ) : (
+                words
+              )}
+            </button>
+          </div>
+        )}
       </section>
+      {details && (
+        <Sheet
+          title="Як надійшов"
+          close={() => {
+            setDetails(false);
+          }}
+          fallback={detailsRow}
+          foot={
+            <button
+              type="button"
+              className="sheet-done"
+              onClick={() => {
+                // A price typed that is not money is said here, where it
+                // is mended.
+                if (cost.trim() && kopecks(cost.trim()) === null)
+                  setCostWrong(true);
+                else setDetails(false);
+              }}
+            >
+              Готово
+            </button>
+          }
+        >
+          <fieldset disabled={blocked || working} className="receive-details">
+            {keepsSuppliers && (
+              <div className="chips" role="group" aria-label="Як надійшов">
+                {(Object.keys(acquisitionLabels) as Acquisition[]).map(
+                  (key) => (
+                    <button
+                      type="button"
+                      className="chip"
+                      key={key}
+                      aria-pressed={acquisition === key}
+                      onClick={() => {
+                        setAcquisition(key);
+                        setValidation("");
+                      }}
+                    >
+                      {acquisitionLabels[key]}
+                    </button>
+                  ),
+                )}
+              </div>
+            )}
+            <label>
+              {paidWhenSold(acquisition)
+                ? "Домовлена ціна за шт., грн"
+                : "Закупівельна ціна за шт., грн (необов’язково)"}
+              <input
+                inputMode="decimal"
+                placeholder={paidWhenSold(acquisition) ? "обов’язково" : "0,00"}
+                value={cost}
+                aria-invalid={costWrong || undefined}
+                onChange={(event) => {
+                  setCost(event.target.value);
+                  setCostWrong(false);
+                  setValidation("");
+                }}
+              />
+            </label>
+            {costWrong && (
+              <p role="alert">
+                Закупівельну ціну вкажіть у гривнях, до копійок, наприклад
+                1850,50.
+              </p>
+            )}
+            {owing && (
+              <>
+                <SupplierPicker
+                  store={store}
+                  token={token}
+                  value={supplierId}
+                  change={(next) => {
+                    setSupplierId(next);
+                    setValidation("");
+                    // Another supplier's goods are another delivery.
+                    setCommandId(crypto.randomUUID());
+                  }}
+                  disabled={blocked || working}
+                  kept={supplierDraft}
+                />
+                <p className="hint">
+                  Позичене й під реалізацію сплачують, лише коли продадуть, за
+                  домовленою ціною. Продане чи непродане позначають у
+                  «Постачальникам».
+                </p>
+              </>
+            )}
+            <label>
+              Примітка (накладна, постачальник)
+              <input
+                value={notes}
+                maxLength={1000}
+                onChange={(event) => {
+                  setNotes(event.target.value);
+                }}
+              />
+            </label>
+          </fieldset>
+        </Sheet>
+      )}
     </>
   );
 }

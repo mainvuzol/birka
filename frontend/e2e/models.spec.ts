@@ -5,6 +5,10 @@ import {
   more,
   openStore,
   readsOf,
+  receiveInto,
+  receiveModel,
+  receiveUnits,
+  recordReceipt,
   refuseOnce,
   section,
   sections,
@@ -915,18 +919,10 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
     else await route.continue();
   });
   await enter(page, "Приймання");
-  await page
-    .getByRole("combobox", { name: "Склад", exact: true })
-    .selectOption(fixture.returns_location_id);
-  await page.getByLabel("Пошук у каталозі").fill(name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("radio", { name: new RegExp(name) }).click();
-  await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "M" });
-  await page.getByLabel("Кількість").fill("1");
-  await page.getByRole("button", { name: "Додати до поставки" }).click();
-  await page.getByRole("button", { name: "Прийняти на склад" }).click();
+  await receiveInto(page, "Склад повернень");
+  await receiveModel(page, name);
+  await receiveUnits(page, "M", 1);
+  await recordReceipt(page, 1).click();
   await expect(page.getByText("Незавершене приймання")).toBeVisible();
   await waitsFor(page, /приймання/);
   // Meanwhile a manager retires the model.
@@ -1128,16 +1124,19 @@ test("a product whose creation answer was lost settles when it was refused", asy
     .getByRole("button", { name: "Створити та пов’язати товар" })
     .click();
   await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
-  await page
+  // Pressed — unless the phone, answered meanwhile by another read, resends
+  // it by itself first (ADR-0013 §4.3): either way, the same operation.
+  const kept = page.getByText(
+    "Операцію каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
+    { exact: true },
+  );
+  const pressed = page
     .getByRole("button", { name: "Повторити ту саму операцію" })
-    .click();
+    .click()
+    .catch(() => undefined);
+  await Promise.race([pressed, kept.waitFor()]);
   await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
-  await expect(
-    page.getByText(
-      "Операцію каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(kept).toBeVisible();
   expect(attempts).toBe(2);
 });
 
@@ -1177,13 +1176,17 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
     .getByRole("button", { name: "Створити та пов’язати товар" })
     .click();
   await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Повторити ту саму операцію" })
-    .click();
+  // Pressed — unless the phone, answered meanwhile by another read, resends
+  // it by itself first (ADR-0013 §4.3): either way, the same operation.
   const kept = page.getByText(
     "Операцію каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
     { exact: true },
   );
+  const pressed = page
+    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .click()
+    .catch(() => undefined);
+  await Promise.race([pressed, kept.waitFor()]);
   await expect(kept).toBeVisible();
   expect(attempts).toBe(2);
   // A kept operation's refusal says what was not recorded until the next

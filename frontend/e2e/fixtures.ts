@@ -137,8 +137,9 @@ const fromMoney: Record<string, (page: Page) => Locator> = {
       .getByRole("button", { name: "Ви винні постачальникам" }),
 };
 
-/** «Ще»'s rows by the screen they open, where the row's word is not the
- * screen's: «Приймання товару» is «Прийшов товар». */
+/** «Ще»'s rows by the screen they open, where a journey still calls it by
+ * its old name: «Приймання» is «Прийшов товар» (sections task list,
+ * P1-4). */
 const rows: Record<string, string> = {
   Приймання: "Прийшов товар",
 };
@@ -346,10 +347,7 @@ export async function section(page: Page, name: string): Promise<void> {
       .getByRole("button", { name: rowNamed(rows[name] ?? name) })
       .click();
     await expect(
-      page.getByRole("heading", {
-        name: name === "Приймання" ? "Приймання товару" : name,
-        exact: true,
-      }),
+      page.getByRole("heading", { name: rows[name] ?? name, exact: true }),
     ).toBeVisible();
     return;
   }
@@ -423,6 +421,64 @@ export async function refuseOnce(
             }
           : { code: "CONFLICT", message: "Conflict", details },
     });
+  });
+}
+
+/** «Прийшов товар»: the warehouse's chip, where two or more take
+ * deliveries and none is chosen (sections task list, P1-4). */
+export async function receiveInto(page: Page, name: string): Promise<void> {
+  await page
+    .getByRole("group", { name: "Склад", exact: true })
+    .getByRole("button", { name, exact: true })
+    .click();
+}
+
+/** «Прийшов товар»: a model from the catalogue, chosen. */
+export async function receiveModel(
+  page: Page,
+  query: string,
+  model: RegExp = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+): Promise<void> {
+  await page.getByLabel("Пошук у каталозі").click();
+  await page.getByLabel("Пошук у каталозі").fill(query);
+  await page.getByRole("button", { name: "Знайти" }).click();
+  await page.getByRole("radio", { name: model }).click();
+}
+
+/** «Прийшов товар»: a size's stepper, «S − 2 +». */
+export function receiveSize(page: Page, code: string): Locator {
+  return page.getByRole("group", { name: `Розмір ${code}`, exact: true });
+}
+
+/** «Прийшов товар»: a size's units, typed. */
+export async function receiveUnits(
+  page: Page,
+  code: string,
+  units: number,
+): Promise<void> {
+  await receiveSize(page, code).getByLabel(`${code}, шт.`).fill(String(units));
+}
+
+/** «Прийшов товар»'s «Як надійшов», opened from its row: a tap in it is
+ * taken once the one that opened it is let go. */
+export async function receiveWay(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: /^Як надійшов: / }).click();
+  const sheet = page.getByRole("dialog", { name: "Як надійшов" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** «Як надійшов» closed by «Готово», what it holds kept. */
+export async function receiveWayDone(sheet: Locator): Promise<void> {
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
+/** «Записати прихід · N шт.», the dock's one button outside Telegram. */
+export function recordReceipt(page: Page, units: number): Locator {
+  return page.getByRole("button", {
+    name: `Записати прихід · ${String(units)} шт.`,
+    exact: true,
   });
 }
 
@@ -622,4 +678,24 @@ export async function expectStub(
   if (say === null) await expect(stub.locator(".stub-say")).toHaveCount(0);
   else await expect(stub.locator(".stub-say")).toHaveText(say);
   if (sum !== undefined) await expect(stub.locator(".stub-sum")).toHaveText(sum);
+}
+
+/**
+ * The display face drawn from the first paint, for a journey that measures
+ * what fits in it. The app's face is `optional` (styles.css): a till never
+ * redraws its sum when the face comes late, so on a busy runner a page may
+ * keep the fallback for good — CI's frame of #166 drew «КОКОН ГРАФІТ» and
+ * the grid in it. The same file, added by the page as `block`, is the one
+ * drawn; the journey waits for `document.fonts.ready` before it measures.
+ */
+export async function shippedFace(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const face = new FontFace(
+      "Fira Sans Extra Condensed",
+      'url("/src/assets/fonts/fira-sans-extra-condensed-800.woff2") format("woff2")',
+      { weight: "800", style: "normal", display: "block" },
+    );
+    document.fonts.add(face);
+    void face.load();
+  });
 }

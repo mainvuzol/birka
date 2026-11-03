@@ -6,6 +6,7 @@ import {
   openModel,
   openStore,
   readsOf,
+  receiveModel,
   refuseOnce,
   section,
   sellsFrom,
@@ -251,9 +252,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
 }) => {
   const priced = await model(page, await token(page));
   await enter(page, owner, "Приймання");
-  await page.getByLabel("Пошук у каталозі").fill(priced.name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("radio", { name: new RegExp(priced.name) }).click();
+  await receiveModel(page, priced.name);
   await expect(page.getByText("Ціна продажу: не задана")).toBeVisible();
 
   await page.getByRole("button", { name: "Задати ціну продажу" }).click();
@@ -419,9 +418,7 @@ test("whoever does not set prices sees them and is offered no change", async ({
   ).toHaveCount(0);
 
   await section(page, "Приймання");
-  await page.getByLabel("Пошук у каталозі").fill(priced.name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("radio", { name: new RegExp(priced.name) }).click();
+  await receiveModel(page, priced.name);
   await expect(
     page.getByText("Ціна продажу: 1 850,00 грн — ціна магазину «Основний»"),
   ).toBeVisible();
