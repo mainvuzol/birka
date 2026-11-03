@@ -1,13 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { JSX, ReactNode } from "react";
+import type { JSX, ReactNode, RefObject } from "react";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
+import { Eyelet } from "@/shared/Eyelet";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
-import { usePanelRoom } from "@/shared/panel";
+import { Sheet } from "@/shared/Sheet";
 import { buzz } from "@/shared/telegram";
-import { Back } from "@/shared/Back";
-import { ScreenHeader } from "@/shared/ScreenHeader";
 import { cashErrorText, dayOf } from "./errors";
 import { movementDone } from "./format";
 import { directionOf, movementLabels } from "./types";
@@ -21,48 +20,51 @@ import type {
 } from "./types";
 
 /**
- * Cash taken out, or put in for change (B5; cash task list, P1-2): what for
- * as chips, nothing chosen until the person chooses, then the sum large, the
- * cursor already in it, and «Видати 150,00 грн» in the panel under the
- * thumb — «Каса», «Видати з каси», a chip, the sum, the button. Cash put in
- * has one kind: the field is the first thing, and the cursor is in it.
+ * Cash taken out, or put in for change (B5; cash task list, P1-2), in a
+ * sheet over the screen it was opened from (spec §6.29; «Усе на бірці»
+ * sections task list, P1-1) — «Каса», or the count, whose sum stays: what
+ * for as chips, nothing chosen until the person chooses, then the sum, the
+ * cursor already in it, and the app's «Видати 150,00 грн» under it, never
+ * Telegram's MainButton — it moves money. Cash put in has one kind: the
+ * field is the first thing, and the cursor is in it.
  *
  * Recorded when it moves: the newest close the form read is sent with it,
  * so a record that reaches the server after a colleague's close is put on
  * that close, where the cash left. Whoever holds `cash:correct` may name an
  * earlier close for cash moved and forgotten: it explains that close and
- * changes no expected sum now (G7).
+ * changes no expected sum now (G7). Its answer lost, the sheet stays with
+ * «Каса»'s banner in it, what was typed kept, until it is known.
  */
 export function Move({
   store,
   drawer,
   direction,
-  from,
   closes,
   kept,
   disabled,
   send,
+  fallback,
   back,
 }: {
   store: Store;
   drawer: Drawer;
   direction: "OUT" | "IN";
-  /** Where it was opened from, and goes back to. */
-  from: "main" | "count";
   closes: CloseBrief[];
-  /** «Каса»'s kept command's banner and words. */
+  /** «Каса»'s kept command's banner and words: the screen behind is out of
+   * reach while the sheet stands. */
   kept: ReactNode;
   disabled: boolean;
   send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
-  /** Back where it came from: what was recorded, or null. */
+  /** Where the cursor goes when what opened it waits for an answer. */
+  fallback: RefObject<HTMLElement>;
+  /** Closed: what was recorded, or null. */
   back: (done: string | null) => void;
 }): JSX.Element {
   const hint = useId();
   const id = useId();
   const wrong = useId();
   const field = useRef<HTMLInputElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  usePanelRoom(panel, true);
+  const [sending, setSending] = useState(false);
   const kinds = drawer.movement_kinds.filter(
     (kind) => directionOf(kind) === direction,
   );
@@ -86,8 +88,9 @@ export function Move({
   }, [kinds.length]);
 
   async function record(): Promise<void> {
-    if (kind === null || sum === null) return;
+    if (kind === null || sum === null || sending) return;
     setProblem(null);
+    setSending(true);
     const outcome = await send({
       command: "movement",
       store_id: store.id,
@@ -98,39 +101,45 @@ export function Move({
       after_close_id: drawer.last_close?.id ?? null,
       ...(forClose === "" ? {} : { for_close_id: forClose }),
     });
+    setSending(false);
     if (outcome.kind === "done") {
       // A buzz in the hand once the server answers, as at the close.
       buzz("success");
       back(movementDone(outcome.result as Movement));
     } else if (outcome.kind === "refused") {
-      // Said over the panel, what was typed kept, the cursor back in it.
+      // Said in the sheet, what was typed kept, the cursor back in it.
       buzz("error");
       setProblem(cashErrorText(outcome.error, false, "movement"));
       requestAnimationFrame(() => field.current?.focus());
     }
-    // Unknown: the form stays, held under «Каса»'s banner, what was typed
+    // Unknown: the sheet stays, held under «Каса»'s banner, what was typed
     // kept — refused later, it is there to record again; confirmed, «Каса»
-    // leaves it (review, 2026-10-22).
+    // closes it (review, 2026-10-22).
   }
 
   const verb = direction === "OUT" ? "Видати" : "Внести";
   return (
-    <>
-      <ScreenHeader
-        title={direction === "OUT" ? "Видати з каси" : "Внести в касу"}
-        back={
-          <Back
-            go={() => {
-              back(null);
-            }}
-            label={from === "count" ? "Назад до підрахунку" : "Назад до каси"}
-          >
-            <span aria-hidden="true">← </span>
-            {from === "count" ? "Підрахунок" : "Каса"}
-          </Back>
-        }
-      />
-      <section className="cash-move">
+    <Sheet
+      title={direction === "OUT" ? "Видати з каси" : "Внести в касу"}
+      close={() => {
+        if (!sending) back(null);
+      }}
+      fallback={fallback}
+      foot={
+        <button
+          type="button"
+          className="sheet-done cash-move-button"
+          disabled={disabled || sending || kind === null || sum === null}
+          onClick={() => {
+            void record();
+          }}
+        >
+          {sending && <Eyelet state="spin" size={20} />}
+          {sum === null ? verb : `${verb} ${money(decimal(sum))}`}
+        </button>
+      }
+    >
+      <div className="cash-move">
         {kept}
         {direction === "OUT" && (
           <div className="chips" role="group" aria-label="Кому чи на що">
@@ -229,19 +238,7 @@ export function Move({
           </label>
         )}
         {problem && <p role="alert">{problem}</p>}
-        <div className="pay-panel" ref={panel}>
-          <button
-            type="button"
-            className="cash-panel-button"
-            disabled={disabled || kind === null || sum === null}
-            onClick={() => {
-              void record();
-            }}
-          >
-            {sum === null ? verb : `${verb} ${money(decimal(sum))}`}
-          </button>
-        </div>
-      </section>
-    </>
+      </div>
+    </Sheet>
   );
 }

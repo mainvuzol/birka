@@ -50,18 +50,46 @@ export async function waitsFor(page: Page, heading: RegExp): Promise<void> {
   ).toContainText("Поки чекаємо, інші дії недоступні.");
 }
 
-/** «Так, закрити», pressed as a person presses it: the sum read first. It
- * stands where «Закрити касу» stood, and a tap there sooner than 0.7 s after
- * «Закрити касу» is let go as a double tap's second half («Усе на бірці»
- * sections task list, P1-2). */
+/** The count's question «Закрити касу: у касі …?» (spec S27; «Усе на
+ * бірці» sections task list, P1-2), once it takes taps: a tap sooner than
+ * 0.7 s after «Закрити касу» is let go as a double tap's second half. */
+export async function closeSheet(page: Page): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: /^Закрити касу: у касі / });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** «Так, закрити», pressed as a person presses it: the sum read first in
+ * the sheet «Закрити касу» opened — the sheet's own button, or Telegram's
+ * MainButton where it is. */
 export async function confirmClose(page: Page): Promise<void> {
-  await page.evaluate(
-    () =>
-      new Promise((done) => {
-        setTimeout(done, 800);
+  const sheet = await closeSheet(page);
+  const yes = sheet.getByRole("button", { name: "Так, закрити" });
+  if ((await yes.count()) > 0) {
+    await yes.click();
+    return;
+  }
+  // Inside Telegram, its MainButton: the sheet draws none of its own.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
       }),
-  );
-  await page.getByRole("button", { name: "Так, закрити" }).click();
+    );
+  });
+}
+
+/** «Видати з каси» or «Внести в касу», a sheet over «Каса» or the count
+ * (spec §6.29; «Усе на бірці» sections task list, P1-1), once it takes
+ * taps. */
+export async function moveSheet(
+  page: Page,
+  title: "Видати з каси" | "Внести в касу",
+): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: title });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
 }
 
 /** A sum of the server's, «1850.00», as the app writes it: «1 850,00 грн»,

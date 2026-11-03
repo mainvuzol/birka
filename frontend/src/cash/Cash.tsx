@@ -9,6 +9,7 @@ import { Placeholder } from "@/shared/Placeholder";
 import { useAutoCheck } from "@/shared/reach";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
+import { Icon } from "@/shared/Icon";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
@@ -103,8 +104,6 @@ type Step =
   // The count (cash task list, P0-2), and the close's result (P0-3).
   | { name: "count" }
   | { name: "closed" }
-  // From the count, cash taken out is recorded and the count comes back.
-  | { name: "move"; direction: "OUT" | "IN"; then?: "count" }
   | { name: "fix"; chosen: FixTarget | null }
   | { name: "correct" }
   | { name: "history" };
@@ -118,6 +117,7 @@ export function Cash({
   fix,
   fixSeen,
   back,
+  task,
 }: {
   store: Store;
   token: string;
@@ -132,6 +132,8 @@ export function Cash({
   /** «← Ще» over the heading, for whoever reads the report: «Ще» › «Гроші»
    * › «Каса» until «Гроші» (S29; «Усе на бірці» task list, P0-4). */
   back?: MoreBack | undefined;
+  /** The menu steps aside while the count stands (spec S26). */
+  task: (shown: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, error, misses } = useCashCommand();
@@ -150,9 +152,12 @@ export function Cash({
   const [result, setResult] = useState<Close | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  // What the count's field holds: kept while cash taken out is recorded from
-  // it, and given back (cash task list, P0-2).
+  // What the count's field holds: kept while cash taken out is recorded over
+  // it (cash task list, P0-2).
   const [counting, setCounting] = useState("");
+  // Cash taken out or put in: a sheet over «Каса» or the count («Усе на
+  // бірці» sections task list, P1-1).
+  const [moving, setMoving] = useState<"OUT" | "IN" | null>(null);
   // Which command the journal's error is about, to say what was not
   // recorded: beside the journal, since the error outlives this screen.
   const lastCommand = useCashLastCommand((state) => state.command);
@@ -267,22 +272,36 @@ export function Cash({
   const close = result?.id === shownId ? result : (shown.data ?? result);
   // A reason owed opens its result once, by itself: on a close just
   // answered, and when «Каса» opens on one owed from before (G12).
+  // Never over a sheet still open: «Каса»'s own task waits for no reason,
+  // and the result opens once the sheet goes (review, 2026-11-03).
   const opened = useRef<string | null>(null);
+  const sheetOpen = moving !== null;
+  // Where the cursor goes once a sheet closes on a row that waits for its
+  // answer (review, 2026-11-03).
+  const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (owedId === null || opened.current === owedId) return;
+    if (owedId === null || opened.current === owedId || sheetOpen) return;
     opened.current = owedId;
     setStep((now) => (now.name === "main" ? { name: "closed" } : now));
-  }, [owedId]);
+  }, [owedId, sheetOpen]);
+  // A sheet goes with the screen it stood over.
+  useEffect(() => {
+    if (step.name !== "main" && step.name !== "count") setMoving(null);
+  }, [step.name]);
   // The count is left when the drawer can no longer be read — the server
   // out of reach, whose words «Каса» says (G26) — or it says the count is no
-  // longer due (review, 2026-10-21).
+  // longer due (review, 2026-10-21). Not while cash taken out is recorded
+  // over it, nor while the drawer is read again: the sum waits for the
+  // sheet to go and for that read, as it did for the screen (review,
+  // 2026-11-03).
+  const holding = sheetOpen || drawer.isFetching;
   useEffect(() => {
-    if (step.name !== "count") return;
+    if (step.name !== "count" || holding) return;
     if (drawer.error || (drawer.data && !isDue(drawer.data))) {
       setCounting("");
       setStep({ name: "main" });
     }
-  }, [step.name, drawer.error, drawer.data]);
+  }, [step.name, holding, drawer.error, drawer.data]);
 
   /** The kept command, resent as it is: by its button, or by itself. */
   function check(): void {
@@ -308,17 +327,15 @@ export function Cash({
           setStep({ name: "closed" });
         // Confirmed under a form still open: back where the form came from,
         // its words shown and nothing left there to press again (review,
-        // 2026-10-22).
-        else
+        // 2026-10-22); a sheet goes.
+        else {
+          setMoving(null);
           setStep((now) =>
-            now.name === "move"
-              ? now.then === "count"
-                ? { name: "count" }
-                : { name: "main" }
-              : now.name === "fix" || now.name === "correct"
-                ? { name: "main" }
-                : now,
+            now.name === "fix" || now.name === "correct"
+              ? { name: "main" }
+              : now,
           );
+        }
       } else if (outcome.kind === "refused")
         // Proven to have recorded nothing: the journal is settled, and the
         // refusal says what to do instead.
@@ -374,26 +391,30 @@ export function Cash({
     </>
   );
 
-  if (step.name === "move" && drawer.data)
-    return (
+  // The sheet stands over «Каса» or the count; the screen behind is out of
+  // reach, so «Каса»'s banner is in it.
+  const moveSheet =
+    moving !== null && drawer.data ? (
       <Move
+        key={moving}
         store={store}
         drawer={drawer.data}
-        direction={step.direction}
+        direction={moving}
         closes={
           recent.data?.items ??
           (drawer.data.last_close ? [drawer.data.last_close] : [])
         }
-        from={step.then === "count" ? "count" : "main"}
         kept={kept}
         disabled={working}
         send={send}
+        fallback={heading}
         back={(text) => {
-          setStep(step.then === "count" ? { name: "count" } : { name: "main" });
+          setMoving(null);
           setDone(text);
         }}
       />
-    );
+    ) : null;
+  const behind = moveSheet ? null : kept;
   if (step.name === "fix")
     return (
       <FixStep
@@ -481,37 +502,47 @@ export function Cash({
     return outcome.kind;
   }
 
-  if (step.name === "count" && data && !drawer.error && isDue(data))
+  // Behind a sheet, or while the drawer is read again, the count stays as
+  // it is: the read decides.
+  if (
+    step.name === "count" &&
+    data &&
+    (holding || (!drawer.error && isDue(data)))
+  )
     return (
-      <Count
-        typed={counting}
-        setTyped={setCounting}
-        kept={kept}
-        done={done}
-        problem={problem}
-        disabled={working}
-        reading={drawer.isFetching}
-        takeOut={
-          data.movement_kinds.some((kind) => directionOf(kind) === "OUT")
-            ? () => {
-                setDone(null);
-                setProblem(null);
-                // The newest close is read again: what the movement names
-                // as the one it came after.
-                void drawer.refetch();
-                setStep({ name: "move", direction: "OUT", then: "count" });
-              }
-            : null
-        }
-        close={closeWith}
-        back={() => {
-          setProblem(null);
-          setDone(null);
-          // Kept only on the way to cash taken out and back.
-          setCounting("");
-          setStep({ name: "main" });
-        }}
-      />
+      <>
+        <Count
+          typed={counting}
+          setTyped={setCounting}
+          kept={behind}
+          done={done}
+          problem={problem}
+          disabled={working}
+          reading={drawer.isFetching}
+          takeOut={
+            data.movement_kinds.some((kind) => directionOf(kind) === "OUT")
+              ? () => {
+                  setDone(null);
+                  setProblem(null);
+                  // The newest close is read again: what the movement names
+                  // as the one it came after.
+                  void drawer.refetch();
+                  setMoving("OUT");
+                }
+              : null
+          }
+          close={closeWith}
+          back={() => {
+            setProblem(null);
+            setDone(null);
+            // Kept only while cash taken out is recorded over it.
+            setCounting("");
+            setStep({ name: "main" });
+          }}
+          task={task}
+        />
+        {moveSheet}
+      </>
     );
   // A close just answered, or one whose reason is owed: its result (cash
   // task list, P0-3). A reason owed holds the other tabs, never «Каса»'s
@@ -538,10 +569,15 @@ export function Cash({
           };
           const outcome = await send(body);
           if (outcome.kind === "done") {
+            // The stub knots, a buzz in the hand («Усе на бірці» sections
+            // task list, P1-3).
+            buzz("success");
             recorded(body, outcome.result);
             setStep({ name: "closed" });
-          } else if (outcome.kind === "refused")
+          } else if (outcome.kind === "refused") {
+            buzz("error");
             setProblem(cashErrorText(outcome.error, false, "reason"));
+          }
         }}
         retry={() => {
           void shown.refetch();
@@ -568,6 +604,8 @@ export function Cash({
   return (
     <>
       <ScreenHeader
+        ref={heading}
+        focusable
         title="Каса"
         back={back && <BackToMore back={back} />}
       />
@@ -581,7 +619,7 @@ export function Cash({
             <ContextPlaceholder size="Каса відкрита · останнє закриття 00.00, 00:00 · Олена" />
           )
         )}
-        {kept}
+        {behind}
         {done && <p role="status">{done}</p>}
         {problem && <p role="alert">{problem}</p>}
         {drawer.isPending ? (
@@ -616,11 +654,13 @@ export function Cash({
         ) : data === undefined ? null : (
           <>
             {due ? (
-              // The day's one task, large (cash task list, P0-1): what the
-              // drawer should hold is said only after the count (G32).
+              // The day's one task, an ink tag (cash task list, P0-1; spec
+              // §6.11; «Усе на бірці» sections task list, P1-1): dark in
+              // either theme, the whole tag one button. What the drawer
+              // should hold is said only after the count (G32).
               <button
                 type="button"
-                className="cash-card"
+                className="cash-card tag-row"
                 aria-label={opening ? "Перший підрахунок" : "Закрити касу"}
                 aria-describedby={cardHint}
                 disabled={working || reading}
@@ -638,13 +678,16 @@ export function Cash({
                   });
                 }}
               >
-                <span className="cash-card-title" aria-hidden="true">
-                  {opening ? "Перший підрахунок" : "Закрити касу"}
-                </span>
-                <span className="cash-card-hint" id={cardHint}>
-                  {opening
-                    ? "Запишемо, скільки в касі зараз"
-                    : "Скільки мало бути — покажемо після підрахунку"}
+                <span className="cash-card-face">
+                  <span className="cash-card-title" aria-hidden="true">
+                    <span className="cash-card-eyelet" />
+                    {opening ? "Перший підрахунок" : "Закрити касу"}
+                  </span>
+                  <span className="cash-card-hint" id={cardHint}>
+                    {opening
+                      ? "Запишемо, скільки в касі зараз"
+                      : "Скільки мало бути — покажемо після підрахунку"}
+                  </span>
                 </span>
               </button>
             ) : (
@@ -686,8 +729,9 @@ export function Cash({
                   disabled={working}
                   open={() => {
                     setDone(null);
+                    setProblem(null);
                     void drawer.refetch();
-                    setStep({ name: "move", direction: "OUT" });
+                    setMoving("OUT");
                   }}
                 />
               )}
@@ -698,8 +742,9 @@ export function Cash({
                   disabled={working}
                   open={() => {
                     setDone(null);
+                    setProblem(null);
                     void drawer.refetch();
-                    setStep({ name: "move", direction: "IN" });
+                    setMoving("IN");
                   }}
                 />
               )}
@@ -750,6 +795,7 @@ export function Cash({
           </>
         )}
       </section>
+      {moveSheet}
     </>
   );
 }
@@ -777,7 +823,8 @@ function contextOf(drawer: Drawer): string {
     : `Останнє закриття ${when}`;
 }
 
-/** One of «Каса»'s tasks, a row with what it is for (cash task list, P0-1). */
+/** One of «Каса»'s tasks, a row with what it is for and its chevron (cash
+ * task list, P0-1; spec §6.8; «Усе на бірці» sections task list, P1-1). */
 function Row({
   title,
   hint,
@@ -805,9 +852,7 @@ function Row({
           {hint}
         </span>
       </span>
-      <span className="sale-open" aria-hidden="true">
-        ›
-      </span>
+      <Icon name="chevron-right" size={16} />
     </button>
   );
 }

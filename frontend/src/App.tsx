@@ -994,7 +994,11 @@ function Workspace({
   // A payment's form open at the till, or from «Покупці»: the menu steps
   // aside (spec S21).
   const [depositTask, setDepositTask] = useState(false);
-  const paymentForm = (tab === "deposit" || tab === "credits") && depositTask;
+  // And while the cash is counted («Усе на бірці» sections task list, P1-2).
+  const [cashTask, setCashTask] = useState(false);
+  const taskScreen =
+    ((tab === "deposit" || tab === "credits") && depositTask) ||
+    (tab === "cash" && cashTask);
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [creditStorageError, setCreditStorageError] = useState(false);
   const creditCommand = useCreditCommand();
@@ -2325,13 +2329,13 @@ function Workspace({
       ? null
       : creditCommand.pending;
   // The line under every screen's title: «Змінити магазин» held, too, while
-  // a payment's form stands at the till: «←» is its only way out (spec
-  // S21; review, 2026-10-29).
+  // a payment's form stands at the till or the cash is counted: «←» is its
+  // only way out (spec S21, S26; review, 2026-10-29).
   const line: WorkspaceLine = {
     store: store.name,
     person: me.display_name,
     changeStore,
-    changeHeld: blocked || paymentForm,
+    changeHeld: blocked || taskScreen,
   };
   // Telegram asks before Бірка closes while the till's basket holds goods —
   // on the till or left for a while — or a sale waits to be checked; the
@@ -2355,10 +2359,11 @@ function Workspace({
         </Banner>
       )}
       {/* The menu at the bottom (spec §6.2; «Усе на бірці» task list,
-          P0-4); out of the way while a payment's form stands at the till,
-          a task's screen left by «←» (spec S21; P0-3). */}
+          P0-4); out of the way while a payment's form stands at the till
+          or the cash is counted, a task's screen left by «←» (spec S21,
+          S26; P0-3). */}
       <TabBar
-        away={paymentForm}
+        away={taskScreen}
         tabs={[
           ...shown.filter((section) => section.tabbed).map(tabOf),
           ...(hasMore
@@ -3206,6 +3211,7 @@ function Workspace({
             fix={cashFix}
             fixSeen={fixSeen}
             back={cashTab ? undefined : backOf("cash")}
+            task={setCashTask}
           />
         ) : // The right gone while «Каса» was open: nothing is said of the
         // rule, as «Покупці» (cash task list, P2-1).

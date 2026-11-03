@@ -36,7 +36,7 @@ export function DrawerPlaceholder({ card }: { card: boolean }): JSX.Element {
       </p>
       <div className="placeholder" aria-hidden="true">
         {card && (
-          <div className="cash-card cash-card-skeleton">
+          <div className="cash-card cash-card-skeleton tag-row">
             <span className="cash-card-title">Закрити касу</span>
             <span className="cash-card-hint">
               Скільки мало бути — покажемо після підрахунку

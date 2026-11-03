@@ -1,11 +1,13 @@
 import {
   changeStore,
+  closeSheet,
   confirmClose,
   test,
   expect,
   fillLine,
   menu,
   more,
+  moveSheet,
   openStore,
   tapSize,
   section,
@@ -299,6 +301,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // Cash for bags, recorded before the count. A seller records expenses
     // and a supplier's courier, nothing else (G34).
     await page.getByRole("button", { name: "Видати з каси" }).click();
+    await moveSheet(page, "Видати з каси");
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
     await expect(kinds.getByRole("button")).toHaveCount(2);
     await kinds
@@ -402,12 +405,11 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await page
       .getByRole("button", { name: "Закрити касу", exact: true })
       .click();
-    await expect(page.locator(".pay-panel .pay-total")).toHaveText(
-      "Закрити касу: у касі 2 000,00 грн?",
+    const question = await closeSheet(page);
+    await expect(question).toHaveAccessibleName(
+      /^Закрити касу: у касі 2\s000,00\sгрн\?$/,
     );
-    await expect(page.locator(".pay-panel .pay-what")).toHaveText(
-      "Змінити потім не можна.",
-    );
+    await expect(question).toContainText("Змінити потім не можна.");
     const closed = page.waitForResponse(isClose);
     await confirmClose(page);
     const response = await closed;
@@ -661,6 +663,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // only now: against that close, which it explains (G7).
     await page.getByRole("button", { name: "Назад до каси" }).click();
     await page.getByRole("button", { name: "Видати з каси" }).click();
+    await moveSheet(page, "Видати з каси");
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
     await expect(kinds.getByRole("button")).toHaveCount(3);
     await kinds.getByRole("button", { name: "Власнику", exact: true }).click();

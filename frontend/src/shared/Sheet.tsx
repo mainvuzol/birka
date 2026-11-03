@@ -27,7 +27,9 @@ export function Sheet({
   said,
   children,
 }: {
-  title: string;
+  /** Its name; the confirmation's carries its sum large («Закрити касу: у
+   * касі 5 260,00 грн?», spec S27). */
+  title: ReactNode;
   close: () => void;
   fallback?: RefObject<HTMLElement>;
   foot?: ReactNode;

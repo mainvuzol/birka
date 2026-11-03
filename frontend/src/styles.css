@@ -2840,32 +2840,100 @@ section.credits.customer-card {
   font-size: 14px;
   color: var(--text-2);
 }
+/* «Каса» (spec S25; «Усе на бірці» sections task list, P1-1) on the page
+   itself: the line, the ink tag, the rows the screen's width less its
+   gutters. */
+section.cash {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* The ink tag (spec §6.11; «Усе на бірці» sections task list, P1-1): the
+   row tag's silhouette at least 112 high, `inverse` in either theme within
+   its 1 px `inverse-edge` — the edge the cut shape's fill, the face 1 px
+   inside it — the title 24/800 in the thread's lime, its eyelet a ring by
+   the title's first line, the line under it in `inverse-pencil`. */
 .cash-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  position: relative;
+  display: block;
   width: 100%;
-  min-height: 72px;
+  min-height: 112px;
   margin: 4px 0 14px;
-  padding: 16px 18px;
-  border: 1px solid var(--dark-card-line);
-  border-radius: 20px;
-  background: var(--dark-card);
-  color: var(--on-dark-card);
+  padding: 1px;
+  border: 0;
+  border-radius: 0;
+  background: var(--inverse-edge);
   text-align: left;
 }
+/* Its focus ring over the face, in the thread's lime: the face would paint
+   over the tag's own ring, and ink is lost on ink (review, 2026-11-03). */
+.cash-card:focus-visible {
+  outline: none;
+}
+.cash-card:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  outline: 3px solid var(--thread);
+  outline-offset: -4px;
+  pointer-events: none;
+}
+.cash-card-face {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-height: 110px;
+  padding: 16px 16px 16px 30px;
+  background: var(--inverse);
+  color: var(--on-inverse);
+  clip-path: polygon(
+    9px 0,
+    100% 0,
+    100% 100%,
+    9px 100%,
+    0 calc(100% - 9px),
+    0 9px
+  );
+}
 .cash-card-title {
-  font-size: 22px;
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 24px;
   font-weight: 800;
+  line-height: 26px;
+  color: var(--thread);
+}
+.cash-card-eyelet {
+  position: absolute;
+  top: 9px;
+  left: -16px;
+  box-sizing: border-box;
+  width: var(--eyelet);
+  height: var(--eyelet);
+  border: 1.5px solid var(--inverse-pencil);
+  border-radius: 999px;
 }
 .cash-card-hint {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 19px;
+  color: var(--inverse-pencil);
+}
+/* Its rows (spec §6.8): 64 high, the title 17/600 in ink, what it is for
+   under it in pencil, the chevron 16 in pencil. */
+.cash-rows .cash-row {
+  min-height: var(--h-row);
+}
+.cash-row > .icon {
+  color: var(--pencil);
 }
 .cash-row-title {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .cash .sale-meta,
 .cash-closed .history-meta {
@@ -2880,6 +2948,9 @@ section.credits.customer-card {
 /* A quiet line, not a button: cash out first, so the field, the reminders
    and the panel stand together on a small screen. */
 .cash-first {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 44px;
   margin: 0;
   padding: 0;
@@ -2934,6 +3005,59 @@ section.credits.customer-card {
   min-height: 54px;
   border-radius: 15px;
 }
+/* The count (spec S26; «Усе на бірці» sections task list, P1-2) on the
+   page itself: the reminders, then the dock with the app's keypad and
+   «Закрити касу». At 360 × 640 the keys come down to 44, so the dock fits
+   under the reminders unscrolled. */
+section.cash-count {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.cash-count .hint {
+  margin-top: 6px;
+  line-height: 1.4;
+}
+.count-dock {
+  margin-top: 10px;
+}
+.count-dock .cash-panel-button {
+  margin-top: 10px;
+}
+@media (max-height: 700px) {
+  .count-dock {
+    --h-key: 44px;
+  }
+  .count-dock .keypad-sum {
+    height: 64px;
+    margin: 6px 0;
+  }
+}
+/* «Закрити касу: у касі 5 260,00 грн?» (spec S27): the sum in money-xl on
+   a line of its own, «Скасувати» under MainButton's place. */
+.count-ask {
+  display: block;
+  margin-top: 8px;
+}
+.count-ask .sum {
+  font-size: 56px;
+  line-height: 56px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.count-warn {
+  margin: 8px 0 0;
+  color: var(--pencil);
+}
+.count-foot {
+  display: grid;
+  gap: 8px;
+}
+.count-foot .quiet {
+  min-height: var(--touch);
+}
 .pay-confirm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2971,6 +3095,36 @@ section.credits.customer-card {
 .cash-slip {
   margin: 4px 0 8px;
 }
+/* The close's stub (spec S28, §6.30; «Усе на бірці» sections task list,
+   P1-3): «Мало бути» and «Порахували» in money-l, the difference a sticker
+   — the warning's with its triangle, to the kopeck the accent's with its
+   knot — then the perforation and the slip. The eyelet keeps its corner. */
+.stub .cash-figures {
+  margin-right: 32px;
+}
+.stub .cash-sum .sum {
+  font-size: 32px;
+  line-height: 34px;
+  letter-spacing: 0;
+}
+.cash-sticker {
+  margin: 10px 0 0;
+}
+.stub .cash-figures .sticker {
+  min-height: 32px;
+  line-height: 24px;
+}
+.sticker.cash-difference.warn {
+  --tone: var(--warning);
+  --tone-bg: var(--warning-bg);
+}
+.sticker.cash-difference.match {
+  --tone: var(--paid);
+  --tone-bg: var(--paid-bg);
+}
+.stub .cash-slip {
+  margin: 0;
+}
 .cash-today p {
   margin: 0;
 }
@@ -2989,15 +3143,14 @@ section.credits.customer-card {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* The quick reasons as chips between the question and the field (spec
+   S28; «Усе на бірці» sections task list, P1-3). */
 .reason-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  margin: 8px 0;
 }
-.reason-chips button {
-  min-height: 44px;
-  padding: 8px 14px;
-  border-radius: 999px;
+.reason-chips .chip {
+  min-height: var(--touch);
+  padding: 8px 12px;
   font-size: 15px;
 }
 /* A reason owed, on «Каса»'s main screen: its close, and the way to it. */
@@ -3101,7 +3254,12 @@ section.credits.customer-card {
 /* «Каса»'s places while read (cash task list, P2-2): the card's own size,
    its words unseen; an operation's pill and ways. */
 .cash-card-skeleton {
-  border-color: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 16px 16px 16px 30px;
   background: var(--skeleton);
 }
 .cash-card-skeleton > span {

@@ -43,6 +43,8 @@ export const ScreenHeader = forwardRef<
     /** What the line names first, where it is not the store: «Сьогодні»'s
      * day, for whoever reads the network there. */
     lead?: string;
+    /** What the line says after the person: the count's time (spec S26). */
+    after?: string;
   }
 >(function ScreenHeader(
   {
@@ -54,6 +56,7 @@ export const ScreenHeader = forwardRef<
     focusable = false,
     className,
     lead,
+    after,
   },
   ref,
 ) {
@@ -85,6 +88,7 @@ export const ScreenHeader = forwardRef<
         <div className="store-line">
           <p className="t-meta">
             {lead ?? visible(line.store)} · {visible(line.person)}
+            {after !== undefined && ` · ${after}`}
           </p>
           {line.changeStore && (
             <button

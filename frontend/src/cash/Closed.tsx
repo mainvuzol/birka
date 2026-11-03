@@ -2,10 +2,14 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
 import { errorText } from "@/shared/api";
+import { RecordedMark } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
+import { Perforation, Stub } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
+import { useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -45,7 +49,10 @@ export function differenceOf(difference: string): {
 /**
  * «Мало бути» and «Порахували» large, the difference on its own line (cash
  * task list, P0-3): the notebook's column of three figures. Every figure is
- * the server's; nothing is summed here.
+ * the server's; nothing is summed here. Just counted, they are the stub's
+ * and the difference its sticker (spec S28; «Усе на бірці» sections task
+ * list, P1-3): a shortage or a surplus the warning's with its triangle, to
+ * the kopeck the accent's with its knot. Read later, a card.
  */
 function Figures({
   close,
@@ -55,13 +62,10 @@ function Figures({
   /** Just counted: what comes next is said; read later, it is not. */
   now: boolean;
 }): JSX.Element {
+  const kind = now ? "cash-figures" : "owed-card cash-figures";
   if (isOpening(close))
     return (
-      <div
-        className="owed-card cash-figures"
-        role="group"
-        aria-label="Підрахунок"
-      >
+      <div className={kind} role="group" aria-label="Підрахунок">
         <p className="owed-what">Порахували</p>
         <p className="cash-sum">
           <Sum value={money(close.counted)} />
@@ -73,11 +77,7 @@ function Figures({
     );
   const difference = differenceOf(close.difference ?? "0.00");
   return (
-    <div
-      className="owed-card cash-figures"
-      role="group"
-      aria-label="Закриття каси"
-    >
+    <div className={kind} role="group" aria-label="Закриття каси">
       <div className="cash-figure">
         <p className="owed-what">Мало бути</p>
         <p className="cash-sum">
@@ -90,9 +90,23 @@ function Figures({
           <Sum value={money(close.counted)} />
         </p>
       </div>
-      <p className={`cash-difference ${difference.match ? "match" : "warn"}`}>
-        {difference.text}
-      </p>
+      {now ? (
+        <p className="cash-sticker">
+          <span
+            className={`sticker cash-difference ${difference.match ? "match" : "warn"}`}
+          >
+            <Icon
+              name={difference.match ? "eyelet-knot" : "warning"}
+              size={16}
+            />
+            {difference.text}
+          </span>
+        </p>
+      ) : (
+        <p className={`cash-difference ${difference.match ? "match" : "warn"}`}>
+          {difference.text}
+        </p>
+      )}
     </div>
   );
 }
@@ -246,8 +260,20 @@ export function CloseBody({
 }): JSX.Element {
   return (
     <>
-      <Figures close={close} now={now} />
-      <Slip close={close} />
+      {now ? (
+        // The close's stub (spec §6.30): knotted once nothing is left to
+        // do, filled while its reason is owed.
+        <Stub state={reason ? "settled" : "recorded"}>
+          <Figures close={close} now />
+          <Perforation />
+          <Slip close={close} />
+        </Stub>
+      ) : (
+        <>
+          <Figures close={close} now={false} />
+          <Slip close={close} />
+        </>
+      )}
       {close.unclosed_days.length > 0 && (
         <p>{unclosedText(close.unclosed_days)}</p>
       )}
@@ -305,9 +331,12 @@ const outageReasons = [
 ] as const;
 
 /**
- * Why the count differs, written only by whoever counted (G12): the field
- * and the quick reasons on the screen, its button in the panel under the
- * thumb. The cursor is not put in the field: the figures are read first.
+ * Why the count differs, written only by whoever counted (G12; spec S28;
+ * «Усе на бірці» sections task list, P1-3): the question, the quick reasons
+ * as chips — the one pressed is the one in the field — the field, and
+ * Telegram's MainButton «Записати причину», held until something is
+ * written; outside Telegram, the dock's button. The cursor is not put in
+ * the field: the figures are read first.
  */
 function ReasonForm({
   disabled,
@@ -317,30 +346,45 @@ function ReasonForm({
   send: (reason: string) => Promise<void>;
 }): JSX.Element {
   const [reason, setReason] = useState("");
+  const [sending, setSending] = useState(false);
+  const field = useId();
   const hint = useId();
   const panel = useRef<HTMLDivElement>(null);
-  usePanelRoom(panel, true);
+  // Mounted: a late answer to a sheet gone changes nothing (set again on
+  // a remount, as React's strict mode does).
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const written = reason.trim();
+  function write(): void {
+    if (disabled || sending || written === "") return;
+    setSending(true);
+    void send(written).finally(() => {
+      if (live.current) setSending(false);
+    });
+  }
+  const main = useMainButton("Записати причину", write, {
+    progress: sending,
+    active: !disabled && written !== "",
+  });
+  usePanelRoom(panel, !main);
+  const line = "Поки причину не записано, інші розділи недоступні.";
   return (
     <>
       <fieldset className="cash-reason-form" disabled={disabled}>
-        <label>
-          Чому не збігається? (обов’язково)
-          <textarea
-            value={reason}
-            maxLength={1000}
-            aria-describedby={hint}
-            onChange={(event) => {
-              setReason(event.target.value);
-            }}
-          />
-          <NoCustomerData id={hint} />
-        </label>
-        <div className="reason-chips">
+        <label htmlFor={field}>Чому не збігається? (обов’язково)</label>
+        {/* Under the question, so a reader hears them after it. */}
+        <div className="chips reason-chips">
           {outageReasons.map((text) => (
             <button
               key={text}
               type="button"
-              className="quiet"
+              className="chip"
+              aria-pressed={reason === text}
               onClick={() => {
                 setReason(text);
               }}
@@ -349,33 +393,45 @@ function ReasonForm({
             </button>
           ))}
         </div>
-      </fieldset>
-      {/* The section's own child, so it stays under the thumb however long
-          what comes before it — the owner's period figures (review,
-          2026-10-21). */}
-      <div className="pay-panel" ref={panel}>
-        <p className="pay-what">
-          Поки причину не записано, інші розділи недоступні.
-        </p>
-        <button
-          type="button"
-          className="cash-panel-button"
-          disabled={disabled || reason.trim() === ""}
-          onClick={() => {
-            void send(reason.trim());
+        <textarea
+          id={field}
+          value={reason}
+          maxLength={1000}
+          aria-describedby={hint}
+          onChange={(event) => {
+            setReason(event.target.value);
           }}
-        >
-          Записати причину
-        </button>
-      </div>
+        />
+        <NoCustomerData id={hint} />
+      </fieldset>
+      {main ? (
+        <p className="hint">{line}</p>
+      ) : (
+        // The section's own child, so it stays under the thumb however long
+        // what comes before it — the owner's period figures (review,
+        // 2026-10-21).
+        <div className="pay-panel" ref={panel}>
+          <p className="pay-what">{line}</p>
+          <button
+            type="button"
+            className="cash-panel-button"
+            disabled={disabled || sending || written === ""}
+            onClick={write}
+          >
+            Записати причину
+          </button>
+        </div>
+      )}
     </>
   );
 }
 
 /**
- * The close's result (cash task list, P0-3): «Касу закрито», its figures
- * large, the card's and the transfer's rows, and the reason under the thumb
- * when one is owed; then «Готово», back to «Каса».
+ * The close's result (cash task list, P0-3; spec S28; «Усе на бірці»
+ * sections task list, P1-3): the check in its eyelet and «Касу закрито»,
+ * the close's stub — its figures large, its sticker, a perforation, the
+ * card's and the transfer's rows — and the reason under the thumb when one
+ * is owed; then «Готово», back to «Каса».
  */
 export function Closed({
   close,
@@ -411,7 +467,10 @@ export function Closed({
   finish: () => void;
 }): JSX.Element {
   const heading = useRef<HTMLHeadingElement>(null);
+  // It begins at its top: the count's dock may have left the page scrolled
+  // («Усе на бірці» sections task list, P1-3).
   useEffect(() => {
+    window.scrollTo(0, 0);
     heading.current?.focus();
   }, []);
   return (
@@ -420,10 +479,14 @@ export function Closed({
         ref={heading}
         focusable
         pushed
+        className="result-title"
         title={
-          close && isOpening(close)
-            ? "Перший підрахунок записано"
-            : "Касу закрито"
+          <>
+            {close && <RecordedMark />}
+            {close && isOpening(close)
+              ? "Перший підрахунок записано"
+              : "Касу закрито"}
+          </>
         }
         back={
           owedId !== null && (
@@ -433,7 +496,8 @@ export function Closed({
           )
         }
       />
-      <section className="cash-closed">
+      {/* On the page itself, as every result (spec §6.30). */}
+      <section className="cash-closed receipt">
         {close ? (
           // Which close: its day, and its store when it is another's — a
           // reason owed is the closer's in any store (review, 2026-10-21).
