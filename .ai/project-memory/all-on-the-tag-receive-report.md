@@ -150,6 +150,11 @@ only one.
   same way; `shippedFace` (fixtures.ts) adds the same file as `block`, the
   journey waits for the fonts, and it passes so, held back or not, five
   times over. The 360 steppers here fit in the fallback too.
+- On CI's fourth run, `orders-new.spec.ts:807` met the same race as
+  `models.spec.ts:1093`: «Перевірити результат замовлення» went before
+  the tap, the order checked by itself. It races them now too; its file
+  passes, 15 of 15, and with the tap held 13 s the check by itself passes,
+  two sends of one command.
 - `tsc -b`, eslint over `src` and `e2e`, and the build: clean. Prettier:
   clean in every hunk of this change (main's own unformatted lines are
   left as they were).

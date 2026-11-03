@@ -829,12 +829,14 @@ test("a new order whose answer never came: checked again with the same command, 
   // task list, P1-2).
   const warned = { type: "notification", notification_type: "warning" };
   expect(await buzzes(page)).toEqual([warned]);
-  await retry.click();
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: /^Зарезервовано: 1 шт\. Чекає відправлення\.$/ }),
-  ).toBeVisible();
+  // Pressed — unless the phone, answered meanwhile by another read, checks
+  // it by itself first (ADR-0013 §4.3): either way, the same command.
+  const reserved = page
+    .getByRole("status")
+    .filter({ hasText: /^Зарезервовано: 1 шт\. Чекає відправлення\.$/ });
+  const pressed = retry.click().catch(() => undefined);
+  await Promise.race([pressed, reserved.waitFor()]);
+  await expect(reserved).toBeVisible();
   expect(stubbed.made).toHaveLength(2);
   expect(stubbed.made[1]?.command_id).toBe(stubbed.made[0]?.command_id);
   // Byte for byte, and nothing only shown in it (P1-1).
