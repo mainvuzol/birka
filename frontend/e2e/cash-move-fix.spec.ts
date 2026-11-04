@@ -1,17 +1,13 @@
-import {
-  test,
-  expect,
-  openStore,
-  section,
-} from "./fixtures";
+import { test, expect, moveSheet, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
- * «Каса»'s cash taken out and put in (cash task list, P1-2), and a way of
- * payment changed (P1-3): what for as chips, the sum large, the button
- * under the thumb; the seller's operations as rows, never a sum nor a way
+ * «Каса»'s cash taken out and put in (cash task list, P1-2), in a sheet
+ * over «Каса» («Усе на бірці» sections task list, P1-1), and a way of
+ * payment changed (P1-3): what for as chips, the sum large, the sheet's
+ * button under it; the seller's operations as rows, never a sum nor a way
  * (G32), one operation's sum large, its way a pill, the ways as the till's
  * buttons. The drawer is stubbed, so each answer is the one each journey
  * asks for.
@@ -336,7 +332,13 @@ function panelButton(page: Page): Locator {
   return page.locator(".pay-panel button");
 }
 
-test("«Видати з каси»: what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «Видати 150,00 грн» under the thumb — four taps and the sum (cash task list, P1-2)", async ({
+/** The take-out sheet's own button, «Видати 150,00 грн»: never Telegram's
+ * MainButton, as it moves money. */
+function moveButton(page: Page): Locator {
+  return page.locator(".cash-move-button");
+}
+
+test("«Видати з каси»: a sheet over «Каса», what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «Видати 150,00 грн» the sheet's own button — four taps and the sum (cash task list, P1-2; «Усе на бірці» sections task list, P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -348,9 +350,14 @@ test("«Видати з каси»: what for as chips, nothing chosen; the chip 
   await page
     .getByRole("button", { name: "Видати з каси", exact: true })
     .click();
+  await moveSheet(page, "Видати з каси");
   await expect(
     page.getByRole("heading", { name: "Видати з каси" }),
   ).toBeVisible();
+  // Over «Каса», which stands behind it.
+  await expect(
+    page.getByRole("heading", { name: "Каса", exact: true }),
+  ).toBeAttached();
   const kinds = page.getByRole("group", { name: "Кому чи на що" });
   await expect(kinds.getByRole("button")).toHaveCount(2);
   // Nothing chosen for them, and nothing to press.
@@ -358,12 +365,12 @@ test("«Видати з каси»: what for as chips, nothing chosen; the chip 
     await expect(chip).toHaveAttribute("aria-pressed", "false");
     expect((await chip.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
   }
-  await expect(panelButton(page)).toHaveText("Видати");
-  await expect(panelButton(page)).toBeDisabled();
+  await expect(moveButton(page)).toHaveText("Видати");
+  await expect(moveButton(page)).toBeDisabled();
   // A sum without a kind is not to be sent either.
   await sum(page).fill("150");
-  await expect(panelButton(page)).toHaveText("Видати 150,00 грн");
-  await expect(panelButton(page)).toBeDisabled();
+  await expect(moveButton(page)).toHaveText("Видати 150,00 грн");
+  await expect(moveButton(page)).toBeDisabled();
   // The seller's two kinds in one row at 360 px.
   const [spent, courier] = await Promise.all(
     ["Витрати", "Кур’єру постачальника"].map((name) =>
@@ -381,30 +388,30 @@ test("«Видати з каси»: what for as chips, nothing chosen; the chip 
   // A sum still being typed is never said to be wrong; nothing is no sum.
   await sum(page).fill("150,");
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(panelButton(page)).toHaveText("Видати 150,00 грн");
+  await expect(moveButton(page)).toHaveText("Видати 150,00 грн");
   await sum(page).fill("150,555");
   await expect(page.getByRole("alert")).toHaveText(
     "Вкажіть суму з точністю до копійок.",
   );
-  await expect(panelButton(page)).toBeDisabled();
+  await expect(moveButton(page)).toBeDisabled();
   await sum(page).fill("0");
-  await expect(panelButton(page)).toBeDisabled();
+  await expect(moveButton(page)).toBeDisabled();
   await sum(page).fill("150");
   await page.getByLabel("На що (необов’язково)").fill("пакети");
-  // The field and the panel together at 360×640, the panel's button 54 px
-  // tall at the bottom.
+  // The field and the sheet's button together at 360×640, the button 52 px
+  // tall at its foot.
   const field = await page.locator(".count-field").boundingBox();
-  const panel = await page.locator(".pay-panel").boundingBox();
-  const button = await panelButton(page).boundingBox();
-  if (!field || !panel || !button) throw new Error("not laid out");
+  const button = await moveButton(page).boundingBox();
+  if (!field || !button) throw new Error("not laid out");
   expect(field.y).toBeGreaterThanOrEqual(0);
-  expect(field.y + field.height).toBeLessThanOrEqual(panel.y);
-  expect(panel.y + panel.height).toBeLessThanOrEqual(640);
-  expect(button.height).toBeGreaterThanOrEqual(54);
-  await panelButton(page).click();
+  expect(field.y + field.height).toBeLessThanOrEqual(button.y);
+  expect(button.y + button.height).toBeLessThanOrEqual(640);
+  expect(button.height).toBeGreaterThanOrEqual(52);
+  await moveButton(page).click();
   await expect(
     page.getByText("Записано: Витрати, 150,00 грн.", { exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Каса", exact: true }),
   ).toBeVisible();
@@ -435,6 +442,7 @@ test("«Внести в касу»: one kind, nothing to choose, the cursor in �
   await page
     .getByRole("button", { name: "Внести в касу", exact: true })
     .click();
+  await moveSheet(page, "Внести в касу");
   await expect(
     page.getByRole("heading", { name: "Внести в касу" }),
   ).toBeVisible();
@@ -475,12 +483,13 @@ test("cash taken out and refused is said over the panel, the sum kept and the cu
   await page
     .getByRole("button", { name: "Видати з каси", exact: true })
     .click();
+  await moveSheet(page, "Видати з каси");
   await page
     .getByRole("group", { name: "Кому чи на що" })
     .getByRole("button", { name: "Витрати", exact: true })
     .click();
   await sum(page).fill("150");
-  await panelButton(page).click();
+  await moveButton(page).click();
   await expect(page.getByRole("alert")).toHaveText(
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\./,
   );
@@ -489,7 +498,7 @@ test("cash taken out and refused is said over the panel, the sum kept and the cu
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "error" },
   ]);
-  await panelButton(page).click();
+  await moveButton(page).click();
   await expect(
     page.getByText("Записано: Витрати, 150,00 грн.", { exact: true }),
   ).toBeVisible();
@@ -514,12 +523,13 @@ test("cash taken out and unanswered: the form held under «Каса»'s banner w
   await page
     .getByRole("button", { name: "Видати з каси", exact: true })
     .click();
+  await moveSheet(page, "Видати з каси");
   await page
     .getByRole("group", { name: "Кому чи на що" })
     .getByRole("button", { name: "Витрати", exact: true })
     .click();
   await sum(page).fill("150");
-  await panelButton(page).click();
+  await moveButton(page).click();
   // Refused on its check: still the form, what was typed in it.
   await expect(page.getByRole("alert")).toHaveText(
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\./,
@@ -528,11 +538,11 @@ test("cash taken out and unanswered: the form held under «Каса»'s banner w
     page.getByRole("heading", { name: "Видати з каси" }),
   ).toBeVisible();
   await expect(sum(page)).toHaveValue("150");
-  await expect(panelButton(page)).toBeEnabled();
+  await expect(moveButton(page)).toBeEnabled();
   expect(server.sent.movements).toHaveLength(2);
   expect(server.sent.movements[1]).toEqual(server.sent.movements[0]);
   // Pressed again: a new command, held under the banner, nothing to press.
-  await panelButton(page).click();
+  await moveButton(page).click();
   await expect(
     page.getByRole("heading", { name: "Видачу ще не підтверджено" }),
   ).toBeVisible();
@@ -544,7 +554,7 @@ test("cash taken out and unanswered: the form held under «Каса»'s banner w
   );
   await expect(sum(page)).toHaveValue("150");
   await expect(sum(page)).toBeDisabled();
-  await expect(panelButton(page)).toBeDisabled();
+  await expect(moveButton(page)).toBeDisabled();
   await expect.poll(() => server.sent.movements.length).toBe(4);
   expect(server.sent.movements[2]?.command_id).not.toBe(
     server.sent.movements[0]?.command_id,
@@ -555,11 +565,52 @@ test("cash taken out and unanswered: the form held under «Каса»'s banner w
       exact: true,
     }),
   ).toBeVisible();
+  // The sheet gone while its row waited for the answer: the cursor on
+  // «Каса»'s title or back on the row, never lost (review, 2026-11-03).
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.activeElement?.matches("h1, .cash-row") === true,
+      ),
+    )
+    .toBe(true);
   await expect(
     page.getByRole("heading", { name: "Каса", exact: true }),
   ).toBeVisible();
   expect(server.sent.movements).toHaveLength(5);
   expect(server.sent.movements[4]).toEqual(server.sent.movements[2]);
+});
+
+test("cash taken out and unanswered, its sheet closed while its row waits for the answer: the cursor on «Каса»'s title, never lost (review, 2026-11-03)", async ({
+  page,
+}) => {
+  const server = await stub(page, {
+    now: drawer(),
+    method: sale,
+    // Lost, then the server fails the phone's own check: kept.
+    answers: ["lost", 500],
+  });
+  await open(page);
+  await cash(page);
+  const row = page.getByRole("button", { name: "Видати з каси", exact: true });
+  await row.click();
+  await moveSheet(page, "Видати з каси");
+  await page
+    .getByRole("group", { name: "Кому чи на що" })
+    .getByRole("button", { name: "Витрати", exact: true })
+    .click();
+  await sum(page).fill("150");
+  await moveButton(page).click();
+  await expect(
+    page.getByRole("heading", { name: "Видачу ще не підтверджено" }),
+  ).toBeVisible();
+  await expect.poll(() => server.sent.movements.length).toBe(2);
+  await page.locator(".sheet-scrim").click({ position: { x: 20, y: 20 } });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(row).toBeDisabled();
+  await expect(
+    page.getByRole("heading", { name: "Каса", exact: true }),
+  ).toBeFocused();
 });
 
 test("«Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a sum or a way; one operation's sum large, its way a pill, the ways as buttons — five taps (cash task list, P1-3)", async ({
@@ -798,6 +849,7 @@ for (const [name, theme] of [
     await page
       .getByRole("button", { name: "Видати з каси", exact: true })
       .click();
+    await moveSheet(page, "Видати з каси");
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
     await kinds.getByRole("button", { name: "Витрати", exact: true }).click();
     await sum(page).fill("150");
@@ -805,11 +857,13 @@ for (const [name, theme] of [
       kinds.getByRole("button", { name: "Витрати", exact: true }),
       kinds.getByRole("button", { name: "Кур’єру постачальника", exact: true }),
       sum(page),
-      panelButton(page),
+      moveButton(page),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `test-results/cash-move-${name}.png` });
-    await page.getByRole("button", { name: "Назад до каси" }).click();
+    // «Назад» (Escape here) closes the sheet.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page
       .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
       .click();

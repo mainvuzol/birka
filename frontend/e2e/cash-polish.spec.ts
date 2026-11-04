@@ -1,9 +1,4 @@
-import {
-  test,
-  expect,
-  openStore,
-  section,
-} from "./fixtures";
+import { test, expect, moveSheet, openStore, section } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -255,6 +250,7 @@ for (const [path, name, notTaken] of [
       await page
         .getByRole("button", { name: "Видати з каси", exact: true })
         .click();
+      await moveSheet(page, "Видати з каси");
       await page
         .getByRole("group", { name: "Кому чи на що" })
         .getByRole("button", { name: "Витрати", exact: true })
@@ -314,6 +310,7 @@ test("a note the server cannot keep says so in «Каса»'s words, what was ty
   await page
     .getByRole("button", { name: "Видати з каси", exact: true })
     .click();
+  await moveSheet(page, "Видати з каси");
   await page
     .getByRole("group", { name: "Кому чи на що" })
     .getByRole("button", { name: "Витрати", exact: true })

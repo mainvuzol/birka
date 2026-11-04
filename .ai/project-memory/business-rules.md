@@ -5758,3 +5758,97 @@ changed list or another supplier is another delivery, as before.
   «ціна з помилкою»; «шт.» for «од.»; the 200 lines' words; a count typed
   as well as stepped; paused, not-received-into and «Брак» warehouses no
   longer listed with why: if no to any, as the TZ says or as it was.
+
+## Chosen in chat — 2026-11-03 («Каса»: the count, its result, the drawer; sections P1-2, P1-3, P1-1)
+
+Chosen in chat on 2026-11-03 («Yes, start «Каса»»), after #166: the
+sections task list's P1-2, P1-3 and P1-1 as one task (S25–S28)
+(`all-on-the-tag-cash-report.md`). The design's questions stay «if no». No
+right, no server rule and no figure changes: the count is still blind
+(G32), one close a day, its moment «Так, закрити» (G31), the newest close
+it names (`after_close_id`); the reason is still only the closer's (G12)
+and holds every other tab as before; every figure on the result is the
+server's. The approved words of «Каса» (2026-10-21/22) stay, where the
+spec's differ: «Видано й внесено після закриття», «Чому не збігається?
+(обов’язково)», «Поки причину не записано, інші розділи недоступні.»,
+«Причину записано. Власник отримає повідомлення.», no «День зав’язано».
+- **The count (S26), decided here:** a task's screen — the menu steps
+  aside while it stands, the phone is kept upright, and Telegram asks
+  before Бірка closes while a sum is typed. Under «Підрахунок каси» the
+  line «{Магазин} · {Ім’я} · 20:06», the phone's time, read again each
+  minute. The approved reminders as they were («Спершу запишіть видане з
+  каси ›» a line that opens the sheet below); the question «Скільки
+  готівки в касі зараз» over the app's keypad (`Keypad`, spec §6.25): the
+  phone's keyboard never opens, a computer's still types; a key that would
+  make it not money does nothing, so «Вкажіть суму з точністю до копійок.»
+  is never said here. The dock holds the question, the keypad's display
+  with the sum (56) and «Закрити касу», held until a figure is typed (0 is
+  one). «Впишіть суму» / «У касі 2 000,00 грн» (approved 2026-10-21) are no
+  longer said: the display shows the sum, the confirmation says it with
+  «грн», and at 360 × 640 the line would push the dock over the reminders.
+  There the keys come down to 44 (60 elsewhere), the screen on the page
+  itself, not in a card.
+- **The confirmation (S27), decided here:** «Закрити касу» opens a sheet
+  named «Закрити касу: у касі 5 260,00 грн?» — «Закрити касу: у касі»,
+  the sum large with its «?», «Змінити потім не можна.», the app's
+  «Скасувати», and Telegram's MainButton «Так, закрити» (turning while the
+  server answers; outside Telegram, the sheet's own button). A tap sooner
+  than 0.7 s after it opened is let go, and a key held from «Закрити
+  касу» too; «Скасувати», «Назад», the scrim or Escape close it, the sum
+  kept, the cursor back on «Закрити касу». Refused: the sheet goes, why is
+  said over the dock, the sum kept; unknown: «Каса» holds it in its banner
+  as before; recorded: the result.
+- **The result (S28), decided here:** the check in its eyelet and «Касу
+  закрито» (or «Перший підрахунок записано»); the stub (spec §6.30):
+  «Мало бути» and «Порахували» (`money-l`), the sticker «Нестача X» or
+  «Надлишок X» (`warning`, the triangle) or «Збіглося до копійки» (the
+  accent, the knot) — the first count one figure and «З цієї суми почнемо
+  наступного разу.»; a perforation; the card's and the transfer's rows as
+  they were, «… · звірте з чеком терміналу». The stub's eyelet is knotted
+  once nothing is owed — no difference to explain, or its reason written —
+  filled while a reason is owed. The owner's period figures under it as
+  they were. A close read in «Закриття» keeps its card: the stub is the
+  close just made.
+- **The reason, decided here:** the approved question; the three quick
+  reasons as chips, the one in the field pressed; the field; «Поки
+  причину не записано, інші розділи недоступні.»; Telegram's MainButton
+  «Записати причину» (held while the field is empty, turning while it is
+  sent; outside Telegram, the dock's button). «← Каса» stays while it is
+  owed (approved). Written: «Причину записано. …» as before, the stub
+  knots, «success» is felt, «Готово». The difference shown is felt as a
+  warning, as before.
+- **«Каса» (S25), decided here:** «Закрити касу» / «Перший підрахунок» is
+  the ink tag (spec §6.11): the tag's cut corners, dark in both themes,
+  its edge, an eyelet ring, the title in the thread's lime, the line
+  under it; the whole tag one button. The rows as before, in their order,
+  a chevron each. «Видати з каси» and «Внести в касу» open a sheet with
+  what the screen had — the kinds as chips, the sum, the note, «Коли?»
+  for whoever corrects — and the app's button «Видати 150,00 грн» /
+  «Внести …» under it (never the MainButton: it moves money). From the
+  count, the sheet stands over the count, its sum kept. Recorded: the
+  sheet goes and «Записано: …» is said where it was opened; refused: why,
+  in the sheet, what was typed kept; unknown: the sheet stays with
+  «Каса»'s banner in it, what was typed kept, and goes once it is
+  confirmed. «Видано й внесено після закриття» and its rows as before.
+- **Decided while building:** «Каса», the count and the result stand on
+  the page itself, not in a card, as the other redesigned sections; the
+  ink tag is 112 high at least, its rows 64 with a chevron of 16 in
+  pencil. While the cash is counted «Змінити магазин» is held too, as
+  while a payment's form stands: «←» is the way out. The difference's
+  sticker is the stub's figure, at 20 rather than a status sticker's 14.
+  Inside Telegram, where the MainButton writes the reason, «Поки причину
+  не записано, …» stands as a line, with no dock under it. A reason owed
+  that comes while «Видати з каси» or «Внести в касу» is open does not
+  open its result over the sheet (G12: «Каса»'s own tasks are never
+  held); a sheet goes with the screen it stood over.
+- **After the independent review (2026-11-03):** a reason owed that came
+  while a sheet stood opens its result once the sheet goes, as it would
+  have on «Каса». A refusal of «Закрити касу» is said in the dock over the
+  keypad, never under it at 360 × 640. While cash taken out is recorded
+  over the count, the count stays behind it whatever the drawer's read
+  says, its sum kept, and while the drawer is read again it waits for
+  that read; the sheet gone and the drawer still unread, or the count no
+  longer due, the count is left as before (G26). The count opens
+  with the cursor on its title; a sheet closing on a button that waits
+  for its answer gives it to the screen's title. The ink tag's focus ring
+  is drawn over its face in the thread's lime.

@@ -193,18 +193,21 @@ async function stubDrawer(
 }
 
 /** «Каса», opened as Оля with the kept command already on the phone; its
- * main screen awaited unless `main` is false. */
+ * main screen awaited unless `main` is false — then the app opens «Каса»
+ * by itself, as it does for a kept command, and the count may stand there
+ * before anything is pressed, the menu out of its way («Усе на бірці»
+ * sections task list, P1-2). */
 async function cash(page: Page, main = true): Promise<void> {
   await page.goto("about:blank");
   await page.goto(
     `/#${new URLSearchParams({ tgWebAppData: initData(olya) }).toString()}`,
   );
   await openStore(page, /^Каса CASH/);
+  if (!main) return;
   await section(page, "Каса");
-  if (main)
-    await expect(
-      page.getByRole("heading", { name: "Каса", exact: true }),
-    ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Каса", exact: true }),
+  ).toBeVisible();
 }
 
 function card(page: Page): Locator {
